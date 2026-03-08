@@ -1,0 +1,202 @@
+You are working inside my existing PrimeX ERP codebase (the zip already uploaded). DO NOT start a new project. Fix multi-currency properly like Tally: store foreign currency amounts + convert into base currency + allow some ledgers/banks/customers/vendors to be maintained in USD/foreign currency while reporting remains correct in base currency (BDT). Remove any hardcoded conversion logic.
+
+BUSINESS REQUIREMENTS
+1) A voucher can be entered in a foreign currency (e.g., USD). The voucher must show:
+   - Amounts in foreign currency (FC)
+   - Converted amounts in base currency (BC = tenant base currency; for us usually BDT)
+2) Ledger/Bank/Customer/Vendor accounts may be configured to “Maintain balance in foreign currency” (like Tally foreign currency ledger).
+   - Such ledgers store FC balances as well as BC balances.
+3) All accounting posting and financial statements (Trial Balance, P&L, Balance Sheet) remain consistent in base currency.
+4) When settling foreign receivables/payables, rate differences must post to a Forex Gain/Loss ledger.
+5) UI must not show incorrect totals (currently USD selection still shows BDT due to wrong display logic). Fix immediately.
+
+EXISTING CODEBASE CONTEXT (use it)
+- There is client/src/components/ui/currency-amount-display.tsx that currently multiplies by (exchangeRate * 110) and causes wrong BDT display. REMOVE that hack.
+- shared/schema.ts has vouchers currencyCode/exchangeRate/baseCurrencyAmount but voucher_items do not store FC amounts.
+- There is currency API and convertCurrency helper; use real exchange rates from DB, tenant-scoped.
+- Posting/workflow exists. Use POSTED state to finalize base amounts.
+
+DELIVERABLES
+A) Schema + migration updates for proper multi-currency storage.
+B) Backend APIs updated to support FC entry, conversion, and reporting.
+C) Frontend voucher entry UI updated to input/display FC + BC per line and totals.
+D) Fix display bug (remove hardcoded 110 logic) everywhere.
+E) Implement Forex Gain/Loss on settlement (minimum viable).
+
+--------------------------------------------------------------------------------
+STEP 1 — DEFINE CURRENCY MODEL (TALLY-LIKE)
+Terminology:
+- Base Currency (BC): tenant base currency (e.g., BDT).
+- Foreign Currency (FC): currency of entry (e.g., USD).
+
+Rules:
+- Every voucher line stores FC amounts (if FC differs from BC) and stores computed BC amounts.
+- Ledger postings are stored in BC.
+- Optional: ledger maintains FC balance if configured.
+
+--------------------------------------------------------------------------------
+STEP 2 — DATABASE / SCHEMA CHANGES (shared/schema.ts + migration)
+2.1 voucher_items: add FC columns
+Add these columns to voucher_items:
+- fcCurrencyCode VARCHAR(3) NULL
+- fcDebitAmount NUMERIC(18,6) DEFAULT 0
+- fcCreditAmount NUMERIC(18,6) DEFAULT 0
+- exchangeRate NUMERIC(18,8) NULL  -- rate from fcCurrencyCode -> base currency, captured at entry/post time
+Keep existing:
+- baseCurrencyDebit NUMERIC
+- baseCurrencyCredit NUMERIC
+(If debitAmount/creditAmount exist, keep for backward compatibility but standardize them to base amounts going forward.)
+
+2.2 chart_of_accounts: ledger currency settings (for bank/customer/vendor USD ledgers)
+Add:
+- accountCurrencyCode VARCHAR(3) NULL   -- if set, ledger can be maintained in that currency
+- maintainBalanceInAccountCurrency BOOLEAN DEFAULT false
+- fcOpeningBalance NUMERIC(18,6) NULL
+(Optionally) fcBalance cached is NOT required now; compute from postings + opening.
+
+2.3 Add system settings / base currency (if not already)
+Ensure tenant has baseCurrencyCode (likely exists). If missing, add to tenant settings.
+
+2.4 Add Forex Gain/Loss system ledger
+In seeder (rbacSeeder or accounting seeder), ensure a ledger/account exists:
+- Name: Forex Gain/Loss
+- Type: Indirect Income/Expense (or separate group)
+Store its accountId for postings.
+
+--------------------------------------------------------------------------------
+STEP 3 — REMOVE BROKEN DISPLAY LOGIC
+3.1 Fix CurrencyAmountDisplay
+File: client/src/components/ui/currency-amount-display.tsx
+- Remove any hardcoded multiplier (*110 or similar).
+- The component must accept:
+  - amount (FC or BC)
+  - currencyCode (display currency)
+  - baseAmount + baseCurrencyCode (optional)
+- It should display:
+  - Primary: amount + currencyCode (FC)
+  - Secondary (small): baseAmount + baseCurrencyCode (BC)
+- Use Intl.NumberFormat. Do NOT guess rates; do not convert here unless rate is supplied.
+Conversion must come from backend or a shared convert helper using stored exchangeRate.
+
+3.2 Search for any other hardcoded FX or BDT display, remove it.
+
+--------------------------------------------------------------------------------
+STEP 4 — BACKEND: FX CONVERSION + VOUCHER SAVE CONTRACT
+4.1 Exchange rate source
+- Use tenant exchange rates table and existing API.
+- When saving a voucher with FC:
+  - Capture exchangeRate per line (or at voucher header if single currency for all lines).
+  - Store exchangeRate on each voucher_item (safer for edits, partial FC ledgers).
+
+4.2 Voucher create/update
+Update the API that creates vouchers (where voucher_items are written):
+- Accept per line:
+  { accountId, description, fcCurrencyCode, fcDebitAmount, fcCreditAmount, exchangeRate }
+- Compute:
+  baseCurrencyDebit = fcDebitAmount * exchangeRate (if fcCurrencyCode != base)
+  baseCurrencyCredit = fcCreditAmount * exchangeRate
+- If fcCurrencyCode is null or equals baseCurrency => fc amounts can mirror base for simplicity.
+- Validate balancing in BASE currency (debits == credits).
+
+4.3 Posting step
+On POST action:
+- Lock voucher lines.
+- Ensure baseCurrencyDebit/baseCurrencyCredit are stored.
+- Ledger_postings (if you have a postings table) are written in base currency only.
+
+4.4 Reports
+Update report endpoints to:
+- Continue aggregating in BASE currency.
+- Add optional toggles for showing FC breakdown where meaningful (ledger statement for FC ledgers):
+  - For ledgers with maintainBalanceInAccountCurrency = true, compute FC totals from voucher_items.fc amounts.
+
+--------------------------------------------------------------------------------
+STEP 5 — SUPPORT FOREIGN CURRENCY LEDGERS (BANK/CUSTOMER/VENDOR)
+5.1 Ledger configuration UI + API
+In Chart of Accounts / Ledger creation/edit UI:
+- Add fields:
+  - accountCurrencyCode (dropdown from currencies)
+  - maintainBalanceInAccountCurrency (checkbox)
+  - fcOpeningBalance (if maintainBalance enabled)
+Rules:
+- If maintainBalance is true, accountCurrencyCode is required.
+- If maintainBalance false, accountCurrencyCode must be null.
+
+5.2 Entry behavior
+When user selects an account in a voucher line:
+- If account maintains FC:
+  - default line fcCurrencyCode to accountCurrencyCode
+  - allow entry in that currency
+- If voucher header currencyCode is set:
+  - for non-FC ledgers, allow FC entry only if voucher is FC, but still store FC fields and compute base.
+
+--------------------------------------------------------------------------------
+STEP 6 — FOREX GAIN/LOSS ON SETTLEMENT (MVP)
+We need a minimal realized forex difference implementation for foreign receivables/payables:
+- When a bill/invoice is created in FC, store its base amount using rate at that time.
+- When payment/receipt happens, the payment uses possibly different rate.
+- The difference between original base amount and settlement base amount = forex gain/loss.
+Implementation MVP:
+1) Identify settlement flows:
+   - If you already have bill-wise allocations, integrate there.
+   - If not, implement for simple “Receive/Pay voucher” linked to an invoice reference.
+2) On settlement posting:
+   - Compute base amount at current rate.
+   - Compare to original base amount outstanding being settled.
+   - Post the difference to Forex Gain/Loss ledger automatically as an extra line item so voucher balances.
+
+If bill-wise system is not completed yet, implement a minimal approach:
+- Add optional fields in payment/receipt voucher items:
+  - referenceVoucherId (the invoice being settled)
+  - referenceAllocationBaseAmount
+Then do gain/loss based on allocated portion.
+
+--------------------------------------------------------------------------------
+STEP 7 — FRONTEND: VOUCHER ENTRY UI (FC + BC)
+Update voucher entry page:
+- Voucher header:
+  - Currency dropdown (default base currency)
+  - Exchange rate input (auto-fill from exchange rate table when FC selected)
+  - Option: “Apply single rate to all lines” (default ON)
+- Voucher lines:
+  - Amount input in FC if voucher currency != base OR if ledger maintains FC
+  - Show computed base amount per line (read-only)
+- Totals:
+  - Show total FC (if applicable) + total BC
+- Validation:
+  - Balance check in BC
+- Save payload includes fc + exchangeRate and base amounts (or base computed server-side).
+
+--------------------------------------------------------------------------------
+STEP 8 — MIGRATION + BACKWARD COMPATIBILITY
+- Existing vouchers without FC fields should continue working:
+  - Treat them as base-only (fcCurrencyCode null).
+  - Currency display should just show base.
+- Ensure any queries selecting amounts use baseCurrencyDebit/baseCurrencyCredit for totals.
+
+--------------------------------------------------------------------------------
+STEP 9 — TEST CHECKLIST (must execute)
+1) Create tenant with base currency BDT. Add exchange rate USD->BDT = 110 (real value from rates table).
+2) Create USD Bank ledger: maintainBalanceInAccountCurrency=true, accountCurrencyCode=USD, opening=1000.
+3) Create voucher in USD:
+   - Debit Inventory/Expense (USD 100)
+   - Credit USD Bank (USD 100)
+   - Exchange rate 110
+   Expected:
+   - Lines store fc=100, base=11,000
+   - Totals show USD 100 and BDT 11,000
+4) Trial Balance remains in BDT and includes 11,000 impact.
+5) Ledger statement for USD Bank shows FC balance movement and BC equivalent.
+6) Create USD Sales Invoice (FC) then receive money later at a different rate:
+   - Invoice rate 108
+   - Receipt rate 110
+   Expected:
+   - Forex gain/loss posted automatically to Forex Gain/Loss ledger.
+7) Ensure no UI shows hardcoded BDT conversion; currency display uses stored base values.
+
+OUTPUT REQUIRED
+- List files changed
+- Schema changes summary
+- How to test the 7 steps above in UI
+
+Now implement end-to-end.

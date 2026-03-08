@@ -1,0 +1,129 @@
+Here is a **detailed debugging prompt** you can paste into Cursor or Replit AI to fix the post-registration redirection and login/auth failure issues:
+
+---
+
+### 🧠 **Cursor Prompt: Fix Login and Redirection After Account Registration in primeX ERP**
+
+```
+# 🛠️ Objective:
+Fix two major issues after user account registration in primeX ERP:
+1. After successful registration, user is NOT redirected to dashboard.
+2. Login fails with error:
+```
+
+Failed to execute 'fetch' on 'Window': '/api/auth/login' is not a valid HTTP method.
+
+````
+
+---
+
+## ✅ PART 1: Fix Login Function and HTTP Method Error
+
+### Problem:
+`queryClient.ts` or `apiRequest` is passing the HTTP method as part of the URL instead of in the fetch config.
+
+### Fix `queryClient.ts`:
+Check this function (or equivalent):
+```ts
+export async function apiRequest(url: string, method = 'GET', data?: any) {
+return await fetch(url, {
+ method, // ✅ Ensure method is set here, NOT in URL
+ credentials: 'include', // ⬅️ Important for JWT cookies
+ headers: {
+   'Content-Type': 'application/json',
+ },
+ body: data ? JSON.stringify(data) : undefined,
+});
+}
+````
+
+### Check usage:
+
+In `login.tsx` or wherever `apiRequest('/api/auth/login', 'POST', data)` is called — confirm that the second argument is `"POST"`, not accidentally included inside the URL.
+
+---
+
+## ✅ PART 2: Fix Cookie Auth & Session Persistence
+
+### Issue:
+
+After login or register, session cookie is likely:
+
+* not being set
+* not persisted due to wrong CORS/sameSite/secure config
+
+### Fix backend login response (in `authRoutes.ts`):
+
+```ts
+res.cookie('token', jwtToken, {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'None',
+  maxAge: 86400000,
+});
+res.status(200).json({ success: true });
+```
+
+### Frontend: All `fetch()` or `TanStack Query` requests must include:
+
+```ts
+credentials: 'include'
+```
+
+---
+
+## ✅ PART 3: Redirect to Dashboard After Registration
+
+### In `register.tsx`:
+
+After successful registration and login:
+
+```ts
+navigate('/dashboard'); // or your route path
+```
+
+### Also confirm backend response after registration auto-logs in the user and sets the cookie.
+
+---
+
+## ✅ PART 4: Add Debug Logs
+
+### In `register.tsx` and `login.tsx`, add:
+
+```ts
+console.log('Login response:', res);
+console.log('Registration response:', res);
+```
+
+### In backend `authRoutes.ts`, log token set and payload:
+
+```ts
+console.log('Setting JWT for user:', user.email);
+```
+
+---
+
+## ✅ Bonus: Test Session via `/api/auth/me`
+
+After login, run manually:
+
+```bash
+curl -X GET https://<your-url>/api/auth/me --cookie "token=<JWT>"
+```
+
+Check if valid user data is returned.
+
+---
+
+## ✅ Deliverables:
+
+* Redirects to dashboard after account creation.
+* Login works with valid credentials.
+* Session persists and allows fetching from `/api/auth/me`.
+
+```
+
+---
+
+Let me know if you want me to audit your actual `queryClient.ts` and `register.tsx` or auto-fix your code.
+```

@@ -1,0 +1,174 @@
+Awesome — that recap hits every “must-have” for a real ERP workflow. Before you publish, do **one final verification sweep** to make sure there’s no hidden “looks fine but breaks in production” gap.
+
+Below is a **publish-readiness checklist** + the **exact evidence** you should collect (screenshots/log snippets are fine). If all are ✅, you can confidently ship.
+
+---
+
+## A) Must-pass functional checks (10 minutes)
+
+### 1) Single source of truth sanity
+
+✅ Create 1 new PO/Quotation/Voucher/GRN and confirm:
+
+* `workflowStatus` updates correctly across actions
+* legacy status fields match (sync works)
+* history shows each transition
+
+**Red flag:** UI shows APPROVED but backend still DRAFT due to a sync mismatch.
+
+---
+
+### 2) Workflow version binding
+
+✅ Change workflow definition (for the tenant) *after* creating a document:
+
+* Old document continues using its original workflow instance/version
+* New document uses new version
+
+**Red flag:** old doc suddenly loses an allowed action after config change.
+
+---
+
+### 3) Multi-approval correctness
+
+Test a case where `requiredCount = 2`:
+
+* Approver A approves → doc stays in “pending approvals”
+* Approver B approves → doc moves to APPROVED
+
+Also verify:
+
+* Approver A cannot approve twice
+* Maker cannot be counted as approver (if SoD strict/standard)
+
+**Red flag:** doc becomes APPROVED after first approval.
+
+---
+
+### 4) Lock enforcement
+
+✅ Two users open same doc:
+
+* User 1 gets lockToken, edits allowed
+* User 2 cannot save without token
+* Force unlock works only for superuser + reason is stored in audit log
+
+**Red flag:** someone can update without token (security hole).
+
+---
+
+### 5) Partial posting (GRN)
+
+✅ GRN with 3 lines:
+
+* Post only 1 line → status becomes PARTIALLY_POSTED
+* Post remaining → POSTED
+* Check that posted qty never exceeds ordered qty
+
+**Red flag:** status stays APPROVED or POSTED incorrectly.
+
+---
+
+### 6) Segregation of duties modes
+
+For each mode (STRICT / STANDARD / OFF), verify with same users:
+
+* STRICT blocks maker from check/approve/post
+* STANDARD blocks consecutive control steps
+* OFF allows everything
+
+**Red flag:** mode setting is ignored per doc_type.
+
+---
+
+### 7) Actions endpoint is the UI truth
+
+✅ On a few docs in different statuses, confirm:
+
+* buttons shown in UI exactly match `/actions` response
+* “why in queue” + progress displayed correctly
+
+**Red flag:** frontend has any hardcoded workflow rules.
+
+---
+
+## B) Security + tenant isolation (must do)
+
+### 8) Tenant isolation test
+
+✅ Using two tenants:
+
+* tenant A user cannot read/update tenant B docs even with same IDs
+* approval queue only shows tenant’s own docs
+
+**Red flag:** ID-based access leak.
+
+---
+
+### 9) Audit completeness
+
+✅ Confirm audit log entries exist for:
+
+* status transitions
+* edits (with diff)
+* lock/unlock + force unlock reason
+* permission/role changes
+* workflow config changes
+
+**Red flag:** “silent” changes with no log.
+
+---
+
+## C) Production-hardening checks (fast but important)
+
+### 10) Idempotency / double-click protection
+
+✅ Hit approve/post twice quickly:
+
+* second request should safely fail or be idempotent
+* no duplicate history rows or double posting
+
+**Red flag:** duplicate posting / duplicated workflow history.
+
+---
+
+### 11) Concurrency on approvals
+
+✅ Two approvers approve at the same time (requiredCount=2):
+
+* result should be consistent
+* no race condition that skips requiredCount logic
+
+**Red flag:** doc jumps incorrectly or count becomes wrong.
+
+---
+
+### 12) Performance check (queue)
+
+✅ Approval queue loads fast with 1k docs:
+
+* endpoints should support pagination + filters server-side
+
+**Red flag:** loads all docs and filters in frontend.
+
+---
+
+# One thing to tighten before publish (high value)
+
+Add a **“Break-glass Override”** banner in UI for force unlock / override actions:
+
+* shows who did it, reason, timestamp
+* makes it visible to auditors
+
+You already have the backend; this is just UX clarity.
+
+---
+
+## What I need from you to sign off
+
+Paste these 2 things (copy/paste text is enough):
+
+1. **Example `/documents/:type/:id/actions` response JSON** (one for DRAFT, one for SUBMITTED, one for “pending 2 approvals”)
+2. Your **voucher posting rule**: does POST create ledger entries immediately, and do you block posting in closed period (yes/no)?
+
+Then I’ll tell you exactly whether you’re publish-ready and what the next Phase should be (workflow config UI + history viewer polish, or expanding to Sales Order/GIN, etc.).

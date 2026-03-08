@@ -1,0 +1,284 @@
+Warning: A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components Error Component Stack
+    at input (<anonymous>)
+    at _c (input.tsx:6:6)
+    at chunk-2K77HOHX.js?v=64c4692e:79:13
+    at chunk-2K77HOHX.js?v=64c4692e:56:13
+    at form.tsx:109:9
+    at div (<anonymous>)
+    at form.tsx:78:6
+    at Controller (chunk-4BFJKWC4.js?v=64c4692e:298:35)
+    at FormField (form.tsx:35:6)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Presence (chunk-E4UC4BFD.js?v=64c4692e:24:11)
+    at @radix-ui_react-tabs.js?v=64c4692e:176:13
+    at _c5 (tabs.tsx:41:6)
+    at div (<anonymous>)
+    at chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Provider (chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at @radix-ui_react-tabs.js?v=64c4692e:54:7
+    at form (<anonymous>)
+    at FormProvider (chunk-4BFJKWC4.js?v=64c4692e:102:11)
+    at div (<anonymous>)
+    at QuotationForm (quotation-form.tsx:180:21)
+    at Route (wouter.js?v=64c4692e:323:16)
+    at Switch (wouter.js?v=64c4692e:379:17)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AppRoutes (App.tsx:106:42)
+    at GamificationProvider (gamification-context.tsx:20:40)
+    at OnboardingProvider (onboarding-context.tsx:12:38)
+    at AuthProvider (auth-context.tsx:25:32)
+    at App (<anonymous>)
+    at Provider (chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=64c4692e:65:5)
+    at V (next-themes.js?v=64c4692e:44:25)
+    at J (next-themes.js?v=64c4692e:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=64c4692e:2805:3)
+overrideMethod @ hook.js:608
+printWarning @ chunk-RPCDYKBN.js?v=64c4692e:521
+error @ chunk-RPCDYKBN.js?v=64c4692e:505
+updateWrapper @ chunk-RPCDYKBN.js?v=64c4692e:1968
+updateProperties @ chunk-RPCDYKBN.js?v=64c4692e:7762
+commitUpdate @ chunk-RPCDYKBN.js?v=64c4692e:8419
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17763
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17737
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17896
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17699
+recursivelyTraverseMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17685
+commitMutationEffectsOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:17794
+commitMutationEffects @ chunk-RPCDYKBN.js?v=64c4692e:17663
+commitRootImpl @ chunk-RPCDYKBN.js?v=64c4692e:19347
+commitRoot @ chunk-RPCDYKBN.js?v=64c4692e:19277
+finishConcurrentRender @ chunk-RPCDYKBN.js?v=64c4692e:18805
+performConcurrentWorkOnRoot @ chunk-RPCDYKBN.js?v=64c4692e:18718
+workLoop @ chunk-RPCDYKBN.js?v=64c4692e:197
+flushWork @ chunk-RPCDYKBN.js?v=64c4692e:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=64c4692e:384Understand this error
+quotation-form.tsx:1110 Updating quotation with data: {customerId: 1, inquiryId: 2, styleName: 'shy 02', department: 'womens', projectedQuantity: 1234560, …}customerId: 1department: "womens"inquiryId: 2notes: "Converted from Inquiry INQ-EFDD5811"profitPercentage: "15.00"projectedDeliveryDate: Sat Jul 19 2025 06:00:00 GMT+0600 (Bangladesh Standard Time) {}projectedQuantity: 1234560quotationDate: Tue May 20 2025 06:00:00 GMT+0600 (Bangladesh Standard Time) {}quotedPrice: "0.00"status: "sent"styleName: "shy 02"targetPrice: "1"validUntil: Thu Jun 19 2025 06:00:00 GMT+0600 (Bangladesh Standard Time) {}[[Prototype]]: Object
+queryClient.ts:15 Making PUT request to /api/quotations/4
+queryClient.ts:18 
+            
+            
+           PUT https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/api/quotations/4 400 (Bad Request)
+apiRequest @ queryClient.ts:18
+mutationFn @ quotation-form.tsx:1167
+fn @ @tanstack_react-query.js?v=64c4692e:1189
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+execute @ @tanstack_react-query.js?v=64c4692e:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=64c4692e:2630
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3295
+onSubmit @ quotation-form.tsx:1195
+(anonymous) @ chunk-4BFJKWC4.js?v=64c4692e:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=64c4692e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=64c4692e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=64c4692e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=64c4692e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=64c4692e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=64c4692e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=64c4692e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=64c4692e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=64c4692e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=64c4692e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=64c4692e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=64c4692e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=64c4692e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=64c4692e:5449Understand this error
+queryClient.ts:44 API error (400): Failed to update quotation with related data
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44
+await in apiRequest
+mutationFn @ quotation-form.tsx:1167
+fn @ @tanstack_react-query.js?v=64c4692e:1189
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+execute @ @tanstack_react-query.js?v=64c4692e:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=64c4692e:2630
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3295
+onSubmit @ quotation-form.tsx:1195
+(anonymous) @ chunk-4BFJKWC4.js?v=64c4692e:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=64c4692e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=64c4692e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=64c4692e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=64c4692e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=64c4692e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=64c4692e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=64c4692e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=64c4692e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=64c4692e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=64c4692e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=64c4692e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=64c4692e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=64c4692e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=64c4692e:5449Understand this error
+queryClient.ts:56 API request error: Error: Failed to update quotation with related data
+    at apiRequest (queryClient.ts:51:13)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56
+await in apiRequest
+mutationFn @ quotation-form.tsx:1167
+fn @ @tanstack_react-query.js?v=64c4692e:1189
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+execute @ @tanstack_react-query.js?v=64c4692e:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=64c4692e:2630
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3295
+onSubmit @ quotation-form.tsx:1195
+(anonymous) @ chunk-4BFJKWC4.js?v=64c4692e:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=64c4692e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=64c4692e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=64c4692e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=64c4692e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=64c4692e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=64c4692e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=64c4692e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=64c4692e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=64c4692e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=64c4692e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=64c4692e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=64c4692e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=64c4692e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=64c4692e:5449Understand this error
+quotation-form.tsx:1183 Error updating quotation: Error: Failed to update quotation with related data
+    at apiRequest (queryClient.ts:51:13)
+overrideMethod @ hook.js:608
+onError @ quotation-form.tsx:1183
+execute @ @tanstack_react-query.js?v=64c4692e:1254
+await in execute
+mutate @ @tanstack_react-query.js?v=64c4692e:2630
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3295
+onSubmit @ quotation-form.tsx:1195
+(anonymous) @ chunk-4BFJKWC4.js?v=64c4692e:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=64c4692e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=64c4692e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=64c4692e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=64c4692e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=64c4692e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=64c4692e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=64c4692e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=64c4692e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=64c4692e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=64c4692e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=64c4692e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=64c4692e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=64c4692e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=64c4692e:5449Understand this error

@@ -1,0 +1,144 @@
+You are Replit Agent working inside my PrimeX ERP repo.
+
+GOAL (must follow): Implement a complete “Order Follow-up” lifecycle from Inquiry → Export realization, supporting two tenant types (Buying House vs Manufacturing), and two primary reference keys:
+- Style/Job reference for Merchandising/Production/Costing
+- Export LC / Export Case reference for Commercial/Logistics/Finance/Accounting
+
+IMPORTANT: BEFORE coding, you MUST inspect the existing repo and produce:
+1) a short inventory of existing modules/files/tables/APIs/UI pages that already cover parts of this flow
+2) a gap list: what’s missing or duplicated, what must be refactored
+3) a final decision: what to KEEP as source of truth and what to DEPRECATE (do NOT keep duplicate schemas)
+
+Then implement the missing pieces in a safe incremental way (migrations + API + UI), with tenant isolation and audit logs.
+
+========================================
+A) INSPECTION TASKS (do first)
+========================================
+1) Print repo tree (top level + shared/schema + server/routes + server/services + client/pages/components).
+2) Identify all schema/table definitions related to:
+   - inquiries/styles/jobs
+   - costing/quotations
+   - orders/purchase orders/proforma invoice
+   - BOM + consumption
+   - inventory/GRN/material receive
+   - commercial LC, BTB LC, shipments, documents, FX receipt, settlement
+   - accounting postings (if any)
+3) Check if there are duplicate “Commercial” schemas (example: shared/schema.ts vs shared/schema/commercial.ts).
+   - If duplicates exist, choose ONE to keep as the canonical schema.
+   - Migrate code to the canonical one and mark the other as deprecated (no runtime usage).
+4) Identify how tenants are modeled and ensure all new uniques are tenant-scoped (unique(tenantId, docNo)).
+
+Deliverable after inspection:
+- “What exists” list
+- “What’s missing” list
+- “Keep vs remove/merge” decision
+- Proposed DB changes
+
+STOP and then proceed to implementation automatically (no user questions unless a hard blocker).
+
+========================================
+B) REQUIRED DOMAIN WORKFLOW (must support)
+========================================
+Workflow chain:
+Inquiry received (treated as Style/Job)
+→ Costing
+→ Buyer PO / Sales Order received (one or many)
+→ Combine one/many POs to create Proforma Invoice (PI)
+→ Create BOM (must link to purchasing material PO/requisition)
+→ Receive Export LC (or create Export Case if PI first)
+→ Lien LC to bank + open Back-to-Back LC(s) (BTB)
+→ Materials receive (GRN) + supplier BTB documents receive
+→ BTB LC maturity dates tracked
+→ Manufacture goods
+→ Export shipment
+→ Issue Commercial Invoice + Packing List
+→ Negotiation docs send
+→ FX payment received in Export bank account (foreign currency)
+→ Settlement/disbursement against BTB maturity + CD/local accounts
+→ Post-sell checking profitability required (Style-wise + Export LC-wise)
+
+Two reference systems:
+- Style/Job is the master reference for merch/production/manufacturing
+- Export LC number / Export Case is the master reference for finance/commercial/logistics/accounting
+System must reconcile both and support reporting by either dimension.
+
+========================================
+C) DATA MODEL CHANGES (implement)
+========================================
+1) Create a canonical “Export Case” concept (even if LC is main):
+   - export_cases: (tenantId, id, exportLcNumber nullable, buyerId, bankId, issueDate, expiryDate, value, currency, status, createdAt)
+   - export_case_orders bridge: (tenantId, exportCaseId, orderId, allocationMethod, allocationRatio, locked)
+   - export_case_jobs/styles bridge if styles separate: (tenantId, exportCaseId, jobId/styleId, allocationRatio)
+2) Proforma Invoice:
+   - Ensure PI can link multiple orders and must link to export_case once LC exists.
+3) Document reference system:
+   - document_refs(entityType, entityId, refType, refValue, tenantId)
+   - allow search by Style/PO/PI/LC/BTB/Invoice/BL etc.
+4) BOM governance:
+   - BOM versioning + status (DRAFT/APPROVED/LOCKED)
+   - bom_change_requests with approval workflow, audit log
+   - enforce: consumption/purchase requisition uses LOCKED BOM only
+5) Cash forecast tables:
+   - cash_forecast_scenarios
+   - cash_forecast_lines(date, category, amount, currency, confidence, sourceEntityType, sourceEntityId, tenantId)
+   - generator service to produce rolling 6-month forecast from shipments, FX expectations, BTB maturities, payables, payroll.
+6) Profitability + post-sell checking:
+   - profitability_allocations(exportCaseId, jobId/styleId or orderId, method, ratio, locked, tenantId)
+   - profitability snapshots table to store computed results for fast dashboards (optional)
+7) Ensure all doc numbers are unique per tenant:
+   - replace global unique() with composite unique indexes where needed.
+
+Use Drizzle migrations consistent with repo patterns.
+
+========================================
+D) BACKEND (implement)
+========================================
+1) Create services + routes:
+   - /api/followup/:jobId  (Style-centric)
+   - /api/followup/export-case/:exportCaseId (LC-centric)
+These endpoints must return a unified timeline:
+- inquiry, costing versions, orders, PI, BOM status, LC, BTB, GRNs, production milestones, shipments, invoice/packing, docs, FX receipt, settlement, alerts.
+
+2) Add entity_events:
+   - entity_events(tenantId, entityType, entityId, eventType, payload json, createdBy, createdAt)
+   - Each major action writes an event.
+Timeline uses this plus relational data.
+
+3) Validation rules:
+   - cannot lock BOM without approval
+   - cannot change locked BOM without change_request approval
+   - cannot ship without invoice + packing list approved (if workflow exists)
+   - cannot close export case without FX receipt + settlement allocations (unless override with audit)
+
+========================================
+E) FRONTEND (implement)
+========================================
+1) Create “Order Follow-up” page:
+   - Search bar supports Style/PO/PI/LC/BTB/Invoice/BL
+   - Two tabs: “Style View” and “Export LC View”
+   - Timeline UI showing step status + dates + blockers
+   - Alerts panel: pending approvals, upcoming BTB maturities, material shortages, doc discrepancies, expected FX date vs overdue
+
+2) Profitability pages:
+   - Style profitability
+   - Export LC profitability
+   - Costing vs Actual variance
+Include allocation method selection (FOB share / qty share / SMV share) and lock.
+
+3) Cash Forecast page:
+   - 6-month projected inflow/outflow table
+   - scenario switch (base/optimistic/stress)
+
+Must follow existing UI style/components in repo.
+
+========================================
+F) OUTPUT REQUIREMENTS
+========================================
+After implementation, output:
+1) a concise summary of what you changed
+2) DB migration list
+3) new endpoints + sample payloads
+4) key UI routes added
+5) notes on how to test the full flow end-to-end
+
+Proceed now: inspect → decide keep/merge → implement → summarize.

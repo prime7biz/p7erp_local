@@ -1,0 +1,136 @@
+ Making authenticated request to: /api/auth/me
+ Response status: 200 for /api/auth/me
+ Making authenticated request to: /api/merch/critical-alerts
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/notifications
+index-D5cj-A1b.js:79 Making authenticated request to: /api/workflow-tasks/my-tasks
+index-D5cj-A1b.js:79 Making authenticated request to: /api/dashboard/kpi
+index-D5cj-A1b.js:79 Making authenticated request to: /api/dashboard/recent-orders
+index-D5cj-A1b.js:79 Making authenticated request to: /api/dashboard/ai-insights
+index-D5cj-A1b.js:79 Making authenticated request to: /api/dashboard/tasks
+index-D5cj-A1b.js:79 Making authenticated request to: /api/approvals/stats
+index-D5cj-A1b.js:79 Making authenticated request to: /api/bills/report/overdue
+index-D5cj-A1b.js:79 Making authenticated request to: /api/items
+index-D5cj-A1b.js:79 Making authenticated request to: /api/dashboard/customer-map
+index-D5cj-A1b.js:79 Making authenticated request to: /api/dashboard/order-status-breakdown
+index-D5cj-A1b.js:79 Making authenticated request to: /api/customers
+index-D5cj-A1b.js:79 Making authenticated request to: /api/merch/styles
+index-D5cj-A1b.js:79 Making authenticated request to: /api/dashboard/employee-summary
+index-D5cj-A1b.js:79 Making authenticated request to: /api/dashboard/payroll-summary
+index-D5cj-A1b.js:79 Making authenticated request to: /api/dashboard/revenue-trend
+index-D5cj-A1b.js:79 Response status: 200 for /api/dashboard/tasks
+index-D5cj-A1b.js:79 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+index-D5cj-A1b.js:79 Response status: 200 for /api/dashboard/order-status-breakdown
+/api/dashboard/production-trends?timeRange=monthly:1  Failed to load resource: the server responded with a status of 500 ()
+index-D5cj-A1b.js:79 Response status: 200 for /api/bills/report/overdue
+index-D5cj-A1b.js:79 Response status: 200 for /api/dashboard/payroll-summary
+index-D5cj-A1b.js:79 Response status: 200 for /api/dashboard/recent-orders
+index-D5cj-A1b.js:79 Response status: 200 for /api/items
+index-D5cj-A1b.js:79 Response status: 200 for /api/dashboard/customer-map
+index-D5cj-A1b.js:79 Response status: 200 for /api/merch/styles
+index-D5cj-A1b.js:79 Response status: 200 for /api/dashboard/employee-summary
+index-D5cj-A1b.js:79 Response status: 200 for /api/workflow-tasks/my-tasks
+index-D5cj-A1b.js:79 Response status: 200 for /api/dashboard/revenue-trend
+index-D5cj-A1b.js:79 Response status: 200 for /api/dashboard/kpi
+index-D5cj-A1b.js:79 Response status: 200 for /api/customers
+index-D5cj-A1b.js:79 Response status: 200 for /api/workflow-tasks/notifications
+index-D5cj-A1b.js:79 Response status: 200 for /api/merch/critical-alerts
+index-D5cj-A1b.js:79 Response status: 200 for /api/approvals/stats
+index-D5cj-A1b.js:79 Response status: 200 for /api/dashboard/ai-insights
+index-D5cj-A1b.js:79 Making authenticated request to: /api/purchase-orders
+index-D5cj-A1b.js:79 Response status: 200 for /api/purchase-orders
+index-D5cj-A1b.js:79 Making authenticated request to: /api/grns
+/api/grns:1  Failed to load resource: the server responded with a status of 404 ()
+index-D5cj-A1b.js:79 Response status: 404 for /api/grns
+installHook.js:1 Query error: Error: 404: {"message":"API endpoint not found"}
+    at wE (index-D5cj-A1b.js:79:99037)
+    at async index-D5cj-A1b.js:79:100174
+overrideMethod @ installHook.js:1
+index-D5cj-A1b.js:79 Making authenticated request to: /api/commercial/orders
+index-D5cj-A1b.js:79 Response status: 200 for /api/commercial/orders
+index-D5cj-A1b.js:79 Making authenticated request to: /api/commercial/lcs
+index-D5cj-A1b.js:79 Response status: 200 for /api/commercial/lcs
+index-D5cj-A1b.js:79 Making authenticated request to: /api/btb-lcs
+index-D5cj-A1b.js:79 Response status: 200 for /api/btb-lcs
+index-D5cj-A1b.js:79 Making authenticated request to: /api/production/orders
+index-D5cj-A1b.js:79 Response status: 200 for /api/production/orders
+index-D5cj-A1b.js:79 Making authenticated request to: /api/quality/inspections
+index-D5cj-A1b.js:79 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+index-D5cj-A1b.js:79 Making authenticated request to: /api/workflow-tasks/my-tasks
+index-D5cj-A1b.js:79 Making authenticated request to: /api/workflow-tasks/notifications
+index-D5cj-A1b.js:79 Response status: 200 for /api/quality/inspections
+index-D5cj-A1b.js:79 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+index-D5cj-A1b.js:79 Response status: 200 for /api/workflow-tasks/my-tasks
+index-D5cj-A1b.js:79 Response status: 200 for /api/workflow-tasks/notifications
+index-D5cj-A1b.js:79 Making authenticated request to: /api/hr/employees
+index-D5cj-A1b.js:79 Response status: 200 for /api/hr/employees
+index-D5cj-A1b.js:79 Making authenticated request to: /api/grns
+/api/grns:1  Failed to load resource: the server responded with a status of 404 ()
+index-D5cj-A1b.js:79 Response status: 404 for /api/grns
+installHook.js:1 Query error: Error: 404: {"message":"API endpoint not found"}
+    at wE (index-D5cj-A1b.js:79:99037)
+    at async index-D5cj-A1b.js:79:100174
+overrideMethod @ installHook.js:1
+index-D5cj-A1b.js:79 Making authenticated request to: /api/payroll/runs
+index-D5cj-A1b.js:79 Response status: 200 for /api/payroll/runs
+index-D5cj-A1b.js:79 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+index-D5cj-A1b.js:79 Making authenticated request to: /api/workflow-tasks/my-tasks
+index-D5cj-A1b.js:79 Making authenticated request to: /api/workflow-tasks/notifications
+index-D5cj-A1b.js:79 Response status: 200 for /api/workflow-tasks/my-tasks
+index-D5cj-A1b.js:79 Making authenticated request to: /api/commercial/shipments
+index-D5cj-A1b.js:79 Response status: 200 for /api/workflow-tasks/notifications
+index-D5cj-A1b.js:79 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+index-D5cj-A1b.js:79 Response status: 200 for /api/commercial/shipments
+index-D5cj-A1b.js:79 Making authenticated request to: /api/gate-passes
+/api/gate-passes:1  Failed to load resource: the server responded with a status of 404 ()
+index-D5cj-A1b.js:79 Response status: 404 for /api/gate-passes
+installHook.js:1 Query error: Error: 404: {"message":"API endpoint not found"}
+    at wE (index-D5cj-A1b.js:79:99037)
+    at async index-D5cj-A1b.js:79:100174
+overrideMethod @ installHook.js:1
+index-D5cj-A1b.js:79 Making authenticated request to: /api/delivery-challans
+index-D5cj-A1b.js:79 Response status: 200 for /api/delivery-challans
+installHook.js:1 TypeError: w.filter is not a function
+    at challan-report-D2jT9D3f.js:1:3019
+    at Object.vp [as useMemo] (index-D5cj-A1b.js:39:21358)
+    at V.useMemo (index-D5cj-A1b.js:10:6193)
+    at vt (challan-report-D2jT9D3f.js:1:3003)
+    at Xa (index-D5cj-A1b.js:39:16981)
+    at Wl (index-D5cj-A1b.js:41:3135)
+    at Qp (index-D5cj-A1b.js:41:44654)
+    at Bp (index-D5cj-A1b.js:41:39661)
+    at eg (index-D5cj-A1b.js:41:39589)
+    at Hi (index-D5cj-A1b.js:41:39443)
+overrideMethod @ installHook.js:1
+installHook.js:1 [ErrorBoundary] Uncaught error: TypeError: w.filter is not a function
+    at challan-report-D2jT9D3f.js:1:3019
+    at Object.vp [as useMemo] (index-D5cj-A1b.js:39:21358)
+    at V.useMemo (index-D5cj-A1b.js:10:6193)
+    at vt (challan-report-D2jT9D3f.js:1:3003)
+    at Xa (index-D5cj-A1b.js:39:16981)
+    at Wl (index-D5cj-A1b.js:41:3135)
+    at Qp (index-D5cj-A1b.js:41:44654)
+    at Bp (index-D5cj-A1b.js:41:39661)
+    at eg (index-D5cj-A1b.js:41:39589)
+    at Hi (index-D5cj-A1b.js:41:39443)
+overrideMethod @ installHook.js:1
+installHook.js:1 [ErrorBoundary] Component stack: 
+    at vt (https://prime7erp.com/assets/challan-report-D2jT9D3f.js:1:2879)
+    at G (https://prime7erp.com/assets/index-D5cj-A1b.js:49:3327)
+    at Gg (https://prime7erp.com/assets/index-D5cj-A1b.js:49:4140)
+    at Suspense
+    at div
+    at div
+    at div
+    at npe (https://prime7erp.com/assets/AppArea-Ddwt_6M6.js:317:68352)
+    at Qg (https://prime7erp.com/assets/index-D5cj-A1b.js:49:2689)
+    at u (https://prime7erp.com/assets/index-D5cj-A1b.js:49:6458)
+    at xm (https://prime7erp.com/assets/index-D5cj-A1b.js:79:50811)
+    at ipe (https://prime7erp.com/assets/AppArea-Ddwt_6M6.js:317:80487)
+    at Suspense
+    at ii (https://prime7erp.com/assets/index-D5cj-A1b.js:79:62015)
+    at Ux (https://prime7erp.com/assets/index-D5cj-A1b.js:79:68843)
+    at Qx (https://prime7erp.com/assets/index-D5cj-A1b.js:79:70578)
+    at Hx (https://prime7erp.com/assets/index-D5cj-A1b.js:79:70455)
+    at gE (https://prime7erp.com/assets/index-D5cj-A1b.js:79:98854)
+overrideMethod @ installHook.js:1

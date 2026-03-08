@@ -1,0 +1,159 @@
+Perfect — since `parties.customerId` already exists, you’re **very close**. The key now is: **pick ONE direction for the “official link”** and enforce it everywhere, otherwise you’ll keep getting mismatches.
+
+Right now your schema suggests: **Party → Customer** (because Party has `customerId`).
+So we’ll standardize on that and make CRM always go through Party.
+
+Here’s the exact message you should send to Replit to lock it down, plus the schema tweaks for gatepass/challan linking and stock tracking.
+
+---
+
+## ✅ Send this to Replit (copy-paste)
+
+Great — since `parties.customerId` already exists, we will standardize on **Party → Customer** as the official relationship.
+
+### Decision (non-negotiable)
+
+**Party is canonical master. Customer is CRM profile.**
+
+* A Customer may exist only if there is a Party (customer-type).
+* Accounting always references **Party** (not Customer).
+* CRM always references **Customer**, but Customer must be reachable via Party.
+
+---
+
+# Phase-2: Fix Party ↔ Customer consistency (using existing `parties.customerId`)
+
+## 1) Enforce a single link direction
+
+Keep: `parties.customerId -> customers.id` as the primary link.
+
+Add (if missing):
+
+* `customers.partyId` **OPTIONAL** (only if you need reverse lookup fast).
+  If you add it, enforce a constraint that it matches the Party that points to it (no many-to-many confusion).
+
+Recommended minimal:
+
+* Do **NOT** add `customers.partyId` unless performance/UI needs it.
+* Instead, always resolve customer via Party join.
+
+## 2) Constraints (tenant-safe)
+
+* Ensure **one customer profile per party**:
+
+  * Unique: `(tenant_id, party_id)` if you add `customers.partyId`
+  * OR Unique: `(tenant_id, customerId)` in `parties` (i.e., only one Party can reference a Customer)
+
+Also ensure a Party can be customer-type:
+
+* `parties.type = 'CUSTOMER'` (or tags)
+
+## 3) Creation rules (avoid loops)
+
+### CRM customer creation flow:
+
+* Create Customer
+* Create Party(type=CUSTOMER) with `customerId = customers.id`
+* Return both IDs
+
+### Party creation flow:
+
+* If creating Party as CUSTOMER from accounting module:
+
+  * either (A) create Customer profile automatically (config toggle)
+  * or (B) keep customerId null (accounting-only party)
+
+Add `source` flag to avoid recursion:
+
+* `source='CRM'|'ACCOUNTING'|'MIGRATION'`
+
+## 4) Migration logic (existing mismatch)
+
+You have:
+
+* CRM Customers: 7
+* Parties(customer-type): 11
+
+Migration steps:
+
+1. For each Customer without a linked Party:
+
+   * try match existing customer-type Party by email/phone/name
+   * if matched: set that Party.customerId = Customer.id
+   * else: create new Party(type=CUSTOMER) linking customerId
+2. For each customer-type Party without customerId:
+
+   * keep as accounting-only OR create Customer profile (decide via config)
+3. Produce migration report:
+
+   * created_party_count, linked_party_count, unmatched_party_count
+   * list conflicts (multiple parties match one customer)
+
+CRITICAL: never change Party IDs referenced by vouchers/invoices.
+
+---
+
+# Phase-1 schema: Gate Pass ↔ Challan generic linking
+
+## Gate Pass
+
+Currently: `gate_pass.deliveryChallanId` exists.
+Add:
+
+* `linkedDocType` (enum: DELIVERY_CHALLAN / … future)
+* `linkedDocId` (bigint)
+  Rule:
+* keep `deliveryChallanId` for backward compatibility OR map it to linkedDoc fields.
+
+## Delivery Challan
+
+Add:
+
+* `sourceDocType` (enum: GATE_PASS)
+* `sourceDocId` (bigint)
+  Also add:
+* `isManuallyModified boolean default false` for draft sync control.
+
+Constraints:
+
+* Unique: `(tenant_id, sourceDocType, sourceDocId)` to prevent duplicate DC from same GP.
+
+---
+
+# Phase-3: Inventory tracking (do NOT add stock columns without ledger)
+
+Inventory items “stock tracking columns” should NOT be stored as truth.
+Implement Stock Ledger first, then compute stock views.
+
+Implement:
+
+* `stock_ledger(tenant_id, doc_type, doc_id, warehouse_id, item_id, qty_in, qty_out, rate, value, date)`
+* Current stock = SUM(qty_in - qty_out) grouped
+* Available stock includes reserved/committed (later)
+
+---
+
+# Deliverables per phase
+
+Phase-1: linked docs + idempotency + GP no stock posting
+Phase-2: consistent Party.customerId usage + migration report
+Phase-3: stock ledger + stock view + movement history
+
+---
+
+## Why this is the right “lock”
+
+Because your DB already supports Party→Customer, forcing a “Customer→Party” link too without strict constraints will create **double masters**. So we keep one master link and make everything else derived.
+
+---
+
+If you paste that, Replit can implement without ambiguity.
+
+If you share (paste) just the **model definitions** (or Prisma/Django schemas) for:
+
+* `Party`
+* `Customer`
+* `GatePass`
+* `DeliveryChallan`
+
+…I’ll rewrite the *exact* migrations + constraints + API contracts in your project style (so you can implement in one pass without back-and-forth).

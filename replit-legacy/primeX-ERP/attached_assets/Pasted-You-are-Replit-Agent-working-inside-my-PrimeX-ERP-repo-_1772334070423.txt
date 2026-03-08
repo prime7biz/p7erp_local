@@ -1,0 +1,189 @@
+You are Replit Agent working inside my PrimeX ERP repo.
+
+MISSION (FINAL PRODUCTION ROLLOUT PREP)
+Execute the full rollout preparation in three tracks:
+1) Brand Finalization — apply Prime7 ERP logo everywhere + update theme to brand orange/charcoal
+2) Mock Data Removal — replace ALL mock/hardcoded UI data with real live data from existing APIs (or proper empty states)
+3) Go-Live Safety Hardening — fix shared master data (vendors/customers/parties sync) + add safety guards (idempotency, GL validation, audit/immutability, employee advances to GL)
+
+STRICT RULES
+- Surgical fixes only. NO rewrites. NO route path changes. NO UI restructuring. NO schema primary key changes.
+- Tenant-safe and permission-safe: every query/write must be tenant-scoped and authorized.
+- Replace mocks → real queries; if data doesn’t exist, show empty states (“No data yet”, “Not configured”, “No transactions yet”) instead of fake numbers.
+- Keep backward compatibility: additive changes only unless a mocked endpoint must be replaced.
+- Do not mention file paths for the logo. I will provide the logo image; use it in transparent PNG and create an on-white variant if needed.
+
+========================================================
+STEP 0 — INSPECT FIRST (must do before changing anything)
+========================================================
+A) Branding/theme locations:
+- Find logo usage in sidebar header, auth pages, marketing navbar/footer, favicon, OG meta/title.
+- Find theme tokens (client/src/index.css, tailwind config, shadcn tokens) and any “dev check” that enforces old blue (#3B82F6).
+
+B) Mock/placeholder inventory:
+- Identify every mock/hardcoded dataset and “coming soon” placeholder in these files:
+  client/src/pages/dashboard.tsx
+  client/src/pages/accounts/dashboard.tsx
+  client/src/pages/hr/index.tsx
+  client/src/components/hr/analytics.tsx
+  client/src/components/hr/payroll.tsx
+  client/src/components/hr/attendance.tsx
+  client/src/components/hr/leave.tsx
+  client/src/components/hr/allowances.tsx
+  client/src/components/hr/documents.tsx
+  client/src/pages/reports/reports-static.tsx
+  client/src/pages/reports/report-detail-static.tsx
+  client/src/pages/reports/[id].tsx
+  client/src/pages/inventory/warehouses.tsx
+  client/src/pages/quotations/quotation-view.tsx
+
+C) Cross-module master data:
+- Identify current usage of vendors/customers/parties across PO/GRN, Orders, DC/GP/Stock Ledger, Commercial LC.
+
+D) Safety points:
+- Identify PO/GRN creation routes and current duplicate/idempotency behavior.
+- Identify GRN completion → GL posting logic and whether it validates inventory/COGS accounts.
+- Identify audit/entity_events usage and immutability rules for vouchers, reconciliation, stock adjustments.
+
+After inspection, print a short plan:
+1) What exists already (keep)
+2) What is mocked (replace)
+3) What needs safety hardening
+Then proceed automatically.
+
+========================================================
+PHASE A — BRAND FINALIZATION (Logo + Theme)
+========================================================
+T001: Apply Prime7 ERP logo everywhere
+- Replace current logo references in:
+  Sidebar header (client/src/components/layout/sidebar.tsx)
+  Login/Register (client/src/pages/auth/login.tsx, register.tsx)
+  Marketing navbar/footer (client/src/components/public/navbar.tsx, footer.tsx)
+- Update favicon to a small mark derived from the “7”
+- Update HTML title and OG metadata to “Prime7 ERP” (replace “primeX”)
+- Ensure responsive scaling in mobile sidebar/header.
+Acceptance: Logo visible across app + marketing site; favicon updated; no broken images.
+
+T002: Update theme to brand orange + charcoal
+- Update CSS variables in client/src/index.css:
+  Primary: set to brand orange approx #F97316 (HSL ~ 24 95% 53%)
+  Primary foreground: white
+  Accent: warm orange tint (not green)
+  Sidebar background: charcoal (NOT pure black), e.g. #111827
+  Sidebar active highlight: subtle orange tint
+  Focus ring: orange tint
+- Remove/update any dev check validating old blue (#3B82F6) (client/src/main.tsx if present).
+- Regression check: tables/forms/charts/dialogs readable; severity colors unchanged.
+Acceptance: Calm, professional ERP UI; orange for actions/accents; sidebar charcoal.
+
+========================================================
+PHASE B — REMOVE MOCK DATA (Replace with real API data or empty states)
+========================================================
+T003: Main Dashboard
+Backend (server/routes.ts):
+- /api/dashboard/kpi: replace hardcoded values with tenant-scoped queries:
+  ordersCount from orders
+  revenue from ledger_postings (Income accounts) using existing account type mapping
+  production metrics from production tables OR return 0 + “No data”
+- /api/dashboard/recent-orders: latest 5 real orders
+- /api/dashboard/tasks: real tasks table if exists else []
+- /api/dashboard/production-trends: real trends if exist else empty dataset
+Frontend (client/src/pages/dashboard.tsx):
+- Remove hardcoded numbers; show “No data yet” where applicable.
+- Keep existing real queries (approval stats, overdue bills, negative stock, pending GRN) unchanged.
+Acceptance: No hardcoded numbers; KPIs real; empty states correct.
+
+T004: Accounts Dashboard
+Backend (server/routes/accounting.ts):
+- Create GET /api/accounting/dashboard/metrics:
+  monthly income/expense/netProfit for last 12 months from ledger_postings grouped by month
+  cashIn/cashOut derived from Cash/Bank accounts if mapping exists, else 0 + “Not configured”
+  expenseBreakdown by category/group if available, else []
+- Replace mocked /api/accounting/dashboard/summary with real P&L + Balance Sheet aggregation using existing reporting logic (server/routes/accounting/reportingRoutes.ts).
+- Replace /api/accounting/insights with minimal real insights OR remove insights section.
+Frontend (client/src/pages/accounts/dashboard.tsx):
+- Remove hardcoded arrays and fetch real metrics; show “No transactions yet” if empty.
+Acceptance: Real ledger data or empty state; no mock charts.
+
+T005: HR Dashboard and HR components
+- Replace all mock data in HR pages/components with real endpoints:
+  employees count from /api/hr/employees
+  departments count from /api/hr/departments
+  payroll from /api/payroll/runs and /api/payroll/salary-structures
+  activities from payroll runs or entity_events
+- For modules not implemented (attendance/leave/allowances/documents): show “Not configured” and empty states (NO fake values).
+Acceptance: HR shows only real data; unknown metrics show “—/Not configured”.
+
+T006: Reports
+- Replace reports-static pages with /api/reports/templates
+- Replace report-detail-static with redirect to /reports/[id] or real generated reports from /api/reports/generated
+- Remove fake sales/product/AI data and show “No generated report yet” if empty.
+Acceptance: Real templates/data or empty state.
+
+T007: Remove “Coming Soon” placeholders
+Inventory warehouses:
+- Stock Summary: query /api/stock-ledger/summary?warehouseId=X
+- Movement Details: query /api/stock-ledger?warehouseId=X
+- Replace “Sample Vendor 1/2” with real vendors from /api/vendors or /api/parties (canonical after sync)
+Quotations view:
+- Email: implement using Resend if existing and safe, else show “Feature not available in this release”
+- PDF: use window.print() or existing print layout, else show proper unavailable dialog
+Acceptance: No “coming soon” toasts; real or properly unavailable.
+
+========================================================
+PHASE C — GO-LIVE SAFETY HARDENING + MASTER DATA SYNC
+========================================================
+T008: Vendor/Customer ↔ Parties sync (shared master)
+Create server/services/partySyncService.ts:
+- upsertPartyFromVendor(vendor) and upsertPartyFromCustomer(customer)
+- upsertVendorFromParty(party) and upsertCustomerFromParty(party) when partyType applies
+Matching priority (tenant-scoped, to prevent duplicates):
+1) taxId (if present)
+2) email (normalized)
+3) phone (normalized)
+4) exact name match (trim/lower)
+5) else create new
+Hook into vendor/customer/party create/update routes.
+Run initial sync for existing vendors/customers into parties.
+Commercial LC text fields: leave as-is for now (no route changes).
+Acceptance: same entity visible across modules regardless of table queried.
+
+T009: Idempotency + duplicate checks for PO & GRN creation
+- Add x-request-id support to POST create PO/GRN:
+  if already processed for tenant+route, return existing created record (reuse existing idempotency utility if present).
+- Check PO number and GRN number unique per tenant before insert.
+- Verify GRN completion double-post guard is solid.
+Acceptance: double-click/retry cannot create duplicates.
+
+T010: GL account validation before GRN completion
+Before completing GRN:
+- Validate each line’s stock group has inventoryAccountId and cogsAccountId configured.
+- If missing, return clear error: “Cannot complete GRN: Stock Group ‘X’ missing GL accounts. Configure in Inventory > Stock Groups.”
+Do NOT silently skip GL posting.
+Acceptance: helpful error, no partial posting.
+
+T011: Immutability + audit + employee advances → GL
+- Ensure voucher transitions (DRAFT→SUBMITTED→APPROVED→POSTED) log audit/entity_events.
+- Ensure PO approval, GRN completion, stock adjustment approval log audit entries.
+- Ensure bank reconciliation completion locks reconciled lines and logs audit.
+- Employee advances: auto-generate accounting voucher exactly once:
+  Debit Advance Receivable ledger (from payrollAccountingConfig.advanceReceivableLedgerId)
+  Credit Bank/Cash (selected)
+Acceptance: complete audit trail; advances appear in GL.
+
+========================================================
+PHASE D — DOCS + FINAL OUTPUT
+========================================================
+T012: Update tutorials and replit.md + go-live summary
+- Update tutorials for new reality: no mocks, correct empty states, party sync behavior.
+- Update replit.md: brand update, mock removal, party sync, hardening, readiness notes.
+- Provide final deliverables:
+  1) list of ALL mocks removed (file → replacement → endpoint/source)
+  2) where logo is applied (screens/areas)
+  3) theme token changes (names + hex/HSL)
+  4) new/updated endpoints (method + path + response shape)
+  5) safety hardening summary (idempotency, duplicate checks, GL validation, audit/immutability, employee advances → GL)
+  6) go-live smoke test steps for staff (15–20 steps)
+
+Proceed now:
+Inspect → Phase A (T001–T002) → Phase B (T003–T007) → Phase C (T008–T011) → Phase D (T012) → Summarize.

@@ -1,0 +1,111 @@
+Collecting workspace informationFiltering to most relevant informationBased on the provided excerpts, there are several issues related to authentication in your codebase. Below is a step-by-step analysis and suggestions for debugging and fixing the authentication issues:
+
+---
+
+### **1. Missing or Invalid Token**
+In `server/middleware/auth.ts`, the `authenticate` middleware verifies the token:
+
+```ts
+const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+```
+
+If the token is invalid or expired, it returns:
+
+```ts
+return res.status(401).json({ message: "Invalid or expired token" });
+```
+
+**Suggestions:**
+- Ensure the token is being correctly generated in the login and registration endpoints (e.g., using `createToken`).
+- Verify that the token is being sent in the `Authorization` header or as a cookie in client requests.
+- Add logging to confirm the token's presence and validity during requests.
+
+---
+
+### **2. Token Not Set or Cleared**
+In `server/routes.ts`, the token is set as a cookie during login and registration:
+
+```ts
+res.cookie('token', token, {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict",
+  maxAge: 24 * 60 * 60 * 1000, // 1 day
+  path: "/",
+});
+```
+
+However, in the logout route, the token is cleared:
+
+```ts
+res.clearCookie('token', {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict",
+  path: "/",
+});
+```
+
+**Suggestions:**
+- Ensure the token is properly set during login and not prematurely cleared.
+- Check if the client is sending the token with every request (e.g., in cookies or headers).
+
+---
+
+### **3. Authentication Bypass**
+In `server/index.ts`, authentication is temporarily disabled:
+
+```ts
+app.use((req, res, next) => {
+  // For now, disable all authentication to fix the 401 issues
+  return next();
+});
+```
+
+**Suggestions:**
+- Re-enable authentication middleware once the issues are resolved.
+- Test the app with authentication enabled to ensure proper behavior.
+
+---
+
+### **4. Tenant Validation**
+In `server/middleware/auth.ts`, tenant validation is performed:
+
+```ts
+if (!tenant) {
+  return res.status(403).json({ message: "Tenant not found" });
+}
+if (!tenant.isActive) {
+  return res.status(403).json({ message: "Company account is suspended" });
+}
+```
+
+**Suggestions:**
+- Ensure the tenant ID is correctly associated with the user and included in the token payload.
+- Verify that the tenant exists and is active in the database.
+
+---
+
+### **5. Client-Side Authentication Issues**
+In the attached logs, there are multiple `401 Unauthorized` errors, such as:
+
+```txt
+401 Unauthorized response for /api/dashboard/kpi
+Query error: Error: Authentication required
+```
+
+**Suggestions:**
+- Ensure the client is sending the token with every API request.
+- Check the client-side logic for storing and retrieving the token (e.g., from cookies or local storage).
+- Debug the `AuthProvider` or authentication context to ensure proper initialization and state management.
+
+---
+
+### **6. Debugging Steps**
+- **Add Logging:** Add detailed logging in the `authenticate` middleware to log the token, decoded payload, and any errors.
+- **Test Token Flow:** Use tools like Postman to manually test the login, token generation, and protected routes.
+- **Inspect Client Requests:** Use the browser's developer tools (Network tab) to inspect API requests and ensure the token is being sent.
+
+---
+
+If you need help with a specific part of the authentication flow, let me know!

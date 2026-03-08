@@ -1,0 +1,55 @@
+PHASE 1.1 — AUTH + TENANT ISOLATION (ROUTE MAP + ENFORCE BY DEFAULT)
+
+Part A — Build a Route Protection Map (NO changes yet)
+1) Scan the server entry file(s) where Express app is created and routers are mounted.
+2) Output a table-like list of every mounted route prefix, e.g.
+   - /api/auth -> PUBLIC (why)
+   - /api/dashboard -> ??? (which middleware)
+   - /api/customers -> ??? (which middleware)
+   For each route group include:
+   - file path where it’s mounted
+   - which middleware is applied (authenticate, enforceTenantIsolation, role checks)
+   - whether it should be PUBLIC or PROTECTED
+3) Identify any routes that:
+   - are missing authenticate
+   - do not enforce tenant scoping
+   - manually call authenticate inside handlers (inconsistent pattern)
+
+Part B — Implement “Protected Router by Default”
+Make ALL private APIs protected automatically, with only a small whitelist public.
+
+1) Create a router mounting structure like:
+   - publicRouter mounted at /api/auth (and any other truly public routes)
+   - protectedRouter mounted at /api
+2) protectedRouter MUST apply these globally (in this order):
+   - authenticate
+   - enforceTenantIsolation (or the tenant middleware used in this codebase)
+   - optional: attach req.user, req.tenantId normalization if needed
+3) Then mount protected feature routers under protectedRouter:
+   - /dashboard
+   - /customers
+   - /inventory
+   - /accounting
+   etc.
+
+Part C — Tenant Isolation Enforcement Rules
+1) Ensure enforceTenantIsolation sets/validates tenantId for every protected request.
+2) Add a guard that throws 403/401 if tenantId is missing for protected routes.
+3) Standardize how tenantId is determined (subdomain/header/token) using existing code patterns.
+
+Part D — Minimal RBAC (foundation)
+1) Add a simple middleware `requireRole(...roles)` and apply it to:
+   - user management endpoints
+   - any admin-only endpoints
+(Do not redesign the whole RBAC system yet; just a consistent foundation.)
+
+Part E — Verification Output
+After changes, output:
+1) Updated route map showing PUBLIC vs PROTECTED with middleware list.
+2) List of files changed.
+3) Quick manual test steps executed (or simulated):
+   - GET /api/dashboard/kpi without auth should be 401
+   - GET /api/auth/me with auth should be 200
+   - Cross-tenant request attempt should be 403 (describe how tenant is detected in this app)
+
+Do NOT change business logic or DB schema in this phase. Only routing + middleware enforcement.

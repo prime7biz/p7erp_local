@@ -1,0 +1,142 @@
+PHASE 9.1 — QUALITY MANAGEMENT SYSTEM (Inline + Endline + Final AQL)
+(DHU, defects, rework loop, approvals, traceability)
+
+Goal:
+Make quality fully operational across sewing/finishing/packing:
+- Inline inspections (already started in 8.3) → standardize + expand
+- Endline inspections (per line output)
+- Final inspection (AQL sampling) per order/shipment/packing list
+- Defect library, defect classification, corrective actions
+- Rework loop tracking (bundle/carton level)
+- Dashboards: DHU, top defects, rejection trends, line-wise quality ranking
+
+Part A — Discovery (no breaking changes)
+1) Locate existing QC entities:
+   - defect master (from 8.3 if built)
+   - inline inspection endpoints
+   - bundle/carton/packing list models
+2) Output file paths + what exists vs missing.
+
+Part B — Data Model (minimum viable)
+Create/extend:
+
+1) qc_defects (master) (reuse if exists)
+- id, tenantId, defectCode(unique), defectName
+- process: SEW|FINISH|PACK|FINAL
+- severity LOW|MED|HIGH
+- active boolean
+
+2) qc_inspections
+Unified inspection record for INLINE/ENDLINE/FINAL:
+- id, tenantId
+- type: INLINE|ENDLINE|FINAL
+- department: SEWING|FINISHING|PACKING
+- productionPlanId, lineId(optional)
+- bundleId(optional), cartonId(optional), packingListId(optional), shipmentId(optional)
+- inspectionDateTime
+- inspectedQty
+- defectQty
+- result: PASS|FAIL|HOLD
+- inspectorUserId
+- remarks
+- metadata JSON (AQL fields etc)
+
+3) qc_inspection_defects
+- id, tenantId, inspectionId
+- defectId (qc_defects)
+- count
+
+4) qc_aql_standards (config per tenant)
+- id, tenantId
+- level (I/II/III), aqlValue (1.5/2.5/4.0 etc)
+- sampleSizeRules JSON (or table)
+(If too heavy, implement minimal config JSON in tenant_settings for now.)
+
+5) qc_final_lots
+- id, tenantId
+- relatedType: PACKING_LIST|SHIPMENT|ORDER
+- relatedId
+- lotNo (unique)
+- totalQty, cartonCount
+- sampleSize, allowedDefects
+- foundDefects
+- status: PLANNED|INSPECTING|PASSED|FAILED|REINSPECTION|CLOSED
+- createdBy, timestamps
+
+6) qc_corrective_actions
+- id, tenantId
+- inspectionId or finalLotId
+- actionType: REWORK|REPAIR|REPLACE|SCRAP|TRAINING
+- ownerUserId
+- dueDate
+- status: OPEN|DONE|VERIFIED
+- notes
+
+Part C — Core rules
+1) DHU calculation:
+- DHU% = (total defects / total inspected qty) * 100
+Compute per line/day/plan.
+2) Rework loop:
+- If inspection FAIL/HOLD:
+  - mark related bundle/carton stage to REWORK/HOLD
+  - block sealing/packing list issue if final QC not PASSED (configurable)
+3) Final AQL:
+- Determine sample size based on lot qty + inspection level
+- allowedDefects based on AQL table/config
+- PASS if foundDefects <= allowedDefects
+4) Editing inspections:
+- only allowed within same day by QC lead; older edits require workflow:override + reason + audit
+
+Part D — APIs (minimum)
+Defects:
+- POST /api/qc/defects
+- GET  /api/qc/defects?process=
+Inspections:
+- POST /api/qc/inspections (inline/endline)
+- GET  /api/qc/inspections?date=&type=&lineId=&planId=
+Final AQL:
+- POST /api/qc/final-lots (create from packing list/shipment)
+- POST /api/qc/final-lots/:id/start
+- POST /api/qc/final-lots/:id/record (add defects counts)
+- POST /api/qc/final-lots/:id/complete (PASS/FAIL decision)
+Corrective actions:
+- POST /api/qc/actions
+- PATCH /api/qc/actions/:id
+Dashboards:
+- GET /api/qc/dashboard/summary?date=
+- GET /api/qc/dashboard/top-defects?start=&end=
+- GET /api/qc/dashboard/line-ranking?date=
+
+Part E — Frontend minimum screens
+1) QC Defect master
+2) Inline/Endline inspection entry (fast form)
+3) Final AQL lot screen:
+- auto sample size + allowed defects
+- defect entry + PASS/FAIL
+4) QC dashboards:
+- DHU trend
+- top defects
+- line ranking
+5) Corrective action tracker
+
+Part F — Permissions + audit
+- QC write: qc:write permission
+- Final lot PASS/FAIL: QC_MANAGER role or qc:approve permission
+- Override edits require workflow:override + reason
+- Every PASS/FAIL writes audit_log + workflow_history.
+
+Part G — Verification (proof required)
+Seed/test:
+1) Create defect master (10 defects)
+2) Record inline inspection with defects -> DHU calculated
+3) Create packing list (from 8.4), create final lot from it
+4) Auto compute sample size + allowed defects
+5) Record defects and complete lot -> PASSED or FAILED correctly
+6) If FAILED, block packing list issue or shipment close (based on config)
+7) Show dashboards return expected aggregates
+
+Output:
+- files changed list
+- sample JSON for final lot lifecycle
+- DHU dashboard sample JSON
+- one audit log entry for final PASS/FAIL

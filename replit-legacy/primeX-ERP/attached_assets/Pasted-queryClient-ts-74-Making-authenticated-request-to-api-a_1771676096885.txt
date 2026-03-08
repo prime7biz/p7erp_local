@@ -1,0 +1,58 @@
+queryClient.ts:74 Making authenticated request to: /api/auth/me
+queryClient.ts:82 Response status: 200 for /api/auth/me
+queryClient.ts:74 Making authenticated request to: /api/merch/styles
+queryClient.ts:82 Response status: 200 for /api/merch/styles
+main.tsx:14 [Theme] --primary = "221 83% 53%" (#2563EB) ✅
+stock-ledger-page.tsx:71 Uncaught TypeError: Cannot read properties of undefined (reading 'replace')
+    at getDocTypeBadge (stock-ledger-page.tsx:71:78)
+    at stock-ledger-page.tsx:157:39
+    at Array.map (<anonymous>)
+    at StockLedgerPage (stock-ledger-page.tsx:154:32)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=218c997b:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=218c997b:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=218c997b:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=218c997b:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=218c997b:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=218c997b:3733:39)
+stock-ledger-page.tsx:71 Uncaught TypeError: Cannot read properties of undefined (reading 'replace')
+    at getDocTypeBadge (stock-ledger-page.tsx:71:78)
+    at stock-ledger-page.tsx:157:39
+    at Array.map (<anonymous>)
+    at StockLedgerPage (stock-ledger-page.tsx:154:32)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=218c997b:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=218c997b:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=218c997b:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=218c997b:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=218c997b:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=218c997b:3733:39)
+installHook.js:1 The above error occurred in the <StockLedgerPage> component:
+
+    at StockLedgerPage (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/inventory/stock-ledger-page.tsx:32:35)
+    at Route (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=218c997b:323:16)
+    at Switch (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=218c997b:379:17)
+    at Suspense
+    at div
+    at div
+    at div
+    at AuthenticatedApp (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?t=1771674916684&v=-CMNJ-leuWxl_wXLkcKXU:373:53)
+    at Provider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=218c997b:38:15)
+    at TooltipProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=218c997b:65:5)
+    at App (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?t=1771674916684&v=-CMNJ-leuWxl_wXLkcKXU:1466:42)
+    at V (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=218c997b:44:25)
+    at J (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=218c997b:42:18)
+    at QueryClientProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=218c997b:2805:3)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+overrideMethod @ installHook.js:1
+chunk-RPCDYKBN.js?v=218c997b:9129 Uncaught TypeError: Cannot read properties of undefined (reading 'replace')
+    at getDocTypeBadge (stock-ledger-page.tsx:71:78)
+    at stock-ledger-page.tsx:157:39
+    at Array.map (<anonymous>)
+    at StockLedgerPage (stock-ledger-page.tsx:154:32)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=218c997b:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=218c997b:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=218c997b:15924:22)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=218c997b:19753:22)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=218c997b:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=218c997b:19137:13)

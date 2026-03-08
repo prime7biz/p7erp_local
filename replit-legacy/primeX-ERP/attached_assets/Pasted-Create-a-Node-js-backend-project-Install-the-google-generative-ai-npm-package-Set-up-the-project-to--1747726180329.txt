@@ -1,0 +1,39 @@
+Create a Node.js backend project.Install the google-generative-ai npm package.Set up the project to use environment variables for the Gemini API key.Create an index.js file with the following content:import { GoogleGenerativeAI } from "@google/generative-ai";
+import 'dotenv/config'; // Import dotenv to load environment variables
+
+// Ensure your Gemini API key is set in Replit Secrets as GEMINI_API_KEY
+if (!process.env.GEMINI_API_KEY) {
+  console.error("Error: GEMINI_API_KEY environment variable not set.");
+  console.error("Please add your Gemini API key to Replit Secrets.");
+  console.error("You can get one from https://makersuite.google.com/app/apikey");
+  process.exit(1);
+}
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+async function runGeminiFlash() {
+  try {
+    // The Gemini 1.5 models are versatile and work with the GenerativeModel class
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest"}); // Specify the gemini-1.5-flash-latest model
+
+    const prompt = "Write a short, positive affirmation.";
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    console.log("Response from Gemini 1.5 Flash:");
+    console.log(text);
+
+    // Note: Usage information might be available in the response object depending on the library version and API endpoint.
+    // You may need to inspect the 'response' or 'result' object for detailed usage.
+
+  } catch (error) {
+    console.error("Error calling Gemini API:", error);
+    // More detailed error handling might be needed based on the error structure
+  }
+}
+
+console.log("Attempting to call Gemini 1.5 Flash...");
+runGeminiFlash();
+Add a .gitignore file with node_modules/ and .env to prevent sensitive information and dependencies from being committed if you use version control.Provide instructions on how to add the GEMINI_API_KEY to Replit Secrets, mentioning that the key format looks like AIza....Explain that the code makes a simple text generation call to gemini-1.5-flash-latest and prints the response.

@@ -1,0 +1,94 @@
+Application Name: primeX
+Opening:
+I need your expertise to outline and guide the development of a comprehensive, AI-driven, SaaS-based, multi-tenant ERP solution named primeX, specifically tailored for garments manufacturers and buying houses operating in the garments trade. Please consider the details below and the insights from the provided research document titled 'Gemini Research on ERP.docx' to ensure the solution aligns with industry best practices and cutting-edge AI capabilities."
+Core Request:
+"Generate a detailed project structure, codebase, and development plan for primeX, an AI-driven, SaaS-based, multi-tenant Enterprise Resource Planning (ERP) system. This ERP will serve garments manufacturers and buying houses."
+Target Audience & Business Model:
+•	Primary Users: Garments manufacturers and buying houses.
+•	Software as a Service (SaaS) Model: The solution will be subscription-based with the following packages: 
+o	Package 1 (Trial): 60 days free access.
+o	Package 2 (Standard): 10 users - 25,000 BDT per month.
+o	Package 3 (Professional): 20 users - 50,000 BDT per month.
+o	Package 4 (Enterprise): 30 users - 75,000 BDT per month.
+Registration, Multi-Tenancy, and User Management:
+•	Tenant Registration: 
+o	A single representative from a company will perform the initial signup.
+o	The 'Company Name' field is mandatory during signup and will be the primary key for data separation to ensure strict multi-tenancy. Each company's data must be isolated and secure.
+•	User Management (within a tenancy): 
+o	The initial registrant (admin user) will have access to a user management module within their company's dashboard.
+o	The admin user can create and manage additional users based on the limits of their chosen subscription package.
+o	Implement robust Role-Based Access Control (RBAC). Users created will have specific roles assigned to them (e.g., Merchandiser, Production Manager, Accountant, Buyer, Admin), limiting their access and functionality to relevant modules and data.
+Technology Stack:
+•	Frontend: React (utilize Vite for optimal performance and development experience).
+•	Backend: Django (Python framework).
+•	Database: PostgreSQL.
+Dashboard Design & UI/UX:
+•	Overall Design: Develop a robust, professional, and intuitive dashboard.
+•	Layout: 
+o	Left Sidebar: For primary navigation between modules.
+o	Top Navigation Bar: For user profile, notifications, settings, and potentially global search.
+o	Footer: For copyright information, support links, and versioning.
+o	Main Content Frame: To display the selected module's interface and data.
+•	AI-Powered Reporting Widgets: The main dashboard/landing page should feature dynamic, AI-based reporting widgets. These widgets should provide actionable insights, key performance indicators (KPIs), and predictive analytics relevant to the garments industry (e.g., order fulfillment rates, production efficiency, material usage forecasts, sales trends). Leverage the concepts from the provided research on AI in ERP for apparel. 
+Modules and Submodules to Include:
+Please design and develop the following modules and their respective submodules. For each, generate the necessary code structure, React components, Django models/views/serializers, and advise on specific UI elements, functionalities, and workflows that align with garments industry standards. Consider the integration of AI where beneficial (e.g., predictive analytics in T&A, demand forecasting in orders, quality control pattern recognition).
+•	Merchandising: 
+o	Customers (Profiles, order history, communication logs)
+o	Inquiries (Tracking, status, conversion to quotation)
+o	Quotations (Creation, versioning, approval workflows, AI-assisted pricing based on historical data and material costs) 
+o	Orders (Order entry, tracking, status updates, linking to production, AI for demand forecasting and order prioritization) 
+o	CRM (Contact management, lead tracking, communication history, sales pipeline) 
+o	Buyer Portal (Secure access for buyers to track orders, view product catalogs, download documents)
+o	Sample Development (Request tracking, costing, approvals, versioning, feedback loops) 
+o	T&A (Time and Action) Plan (Activity tracking, critical path management, deadline alerts, AI for predicting potential delays)
+•	Production & Materials: 
+o	Supply Chain Management (Supplier database, procurement, PO management, shipment tracking, AI for supplier performance analysis) 
+o	Inventory (Raw materials, work-in-progress, finished goods, stock levels, valuation, AI for demand forecasting and reorder point optimization) 
+o	Warehouse Management (Multiple warehouse support, bin management, stock transfers, goods receipt, dispatch) 
+o	Production (Overall planning and tracking) 
+	Knitting
+	Dyeing
+	AOP (All Over Print)
+	Cutting (Lay planning, marker efficiency, AI for optimizing fabric usage) 
+	Print
+	Embroidery
+	Sewing (Line balancing, WIP tracking) 
+	Wash
+	Iron
+	Folding
+	Packing (Packing list generation, carton labeling)
+o	Quality Control (QC checkpoints, defect logging, inspection reports, AI for visual defect detection and predictive quality analysis) 
+o	Logistics (Shipment planning, freight management, delivery tracking) 
+•	Support Modules: 
+o	Accounting (General ledger, accounts payable, accounts receivable, financial reporting, Multi currency support)
+o	Commercial (LC management, export/import documentation, shipping bills)
+o	HR & Payroll (Employee database, attendance, leave management, payroll processing in BDT)
+o	Administration (System configuration, general settings)
+o	Supplier Portal (Secure access for suppliers to view POs, submit invoices, update shipment status)
+o	Task Management & Calendar (Team tasks, individual tasks, project timelines, shared calendars, integration with T&A) 
+o	Reports (Standard reports for all modules, custom report builder, AI-driven analytical reports)
+o	BI Dashboards (Customizable dashboards with KPIs, charts, and graphs for data visualization)
+o	Sustainability & Environmental Tracking (Tracking water usage, energy consumption, waste management, compliance reporting – increasingly important in the apparel industry) 
+o	Settings: 
+	Company (Company profile, branding, localization settings)
+	User (User profile management, password changes, preferences)
+Development Guidance and Structure:
+•	API Configuration: 
+o	Provide a comprehensive plan for designing and configuring RESTful APIs for seamless communication between the React frontend and Django backend.
+o	Define API endpoints, request/response structures, and authentication/authorization mechanisms (e.g., JWT).
+•	UI/UX Design and Functionality (Code Generation): 
+o	For every module and submodule listed, generate the foundational React components (including necessary HTML structure and basic CSS styling/placeholders) and Django backend logic (models, views, serializers).
+o	Provide detailed suggestions for page layouts, key UI components to include (e.g., tables, forms, charts), data fields, and user interaction flows. These should align with standard practices and expectations within the garments industry.
+o	Emphasize generating code that supports intuitive navigation and a positive user experience.
+•	File Structure: 
+o	Create the entire application primeX within a parent root folder.
+o	Inside the parent folder, establish two main subfolders: 
+	frontend/: This will house all React and Vite-related files (components, pages, assets, services, etc.).
+	backend/: This will house all Django-related files (apps, models, views, serializers, migrations, etc.).
+o	Propose and generate a detailed and scalable sub-folder structure within both frontend and backend directories to ensure maintainability and organization as the project grows.
+•	Security and Compliance: 
+o	Incorporate security best practices throughout the generated codebase, including data encryption, protection against common web vulnerabilities (XSS, CSRF, SQL injection), and secure API design. Refer to the security sections of the provided ERP research. 
+o	Ensure the generated system architecture allows for compliance with relevant data privacy regulations. 
+Reference Material:
+"Please heavily reference the provided 'Gemini Research on ERP.docx' document for understanding AI applications in apparel ERP, industry-specific challenges, the benefits of AI integration, IoT convergence possibilities, future trends, and security/data privacy considerations. This document should inform the design choices, features, and overall architecture of the ERP system."
+

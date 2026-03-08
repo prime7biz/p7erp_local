@@ -1,0 +1,60 @@
+queryClient.ts:74 Making authenticated request to: /api/auth/me
+queryClient.ts:82 Response status: 200 for /api/auth/me
+main.tsx:14 [Theme] --primary = "221 83% 53%" (#2563EB) ✅
+queryClient.ts:74 Making authenticated request to: /api/parties/summary
+queryClient.ts:82 Response status: 200 for /api/parties/summary
+queryClient.ts:74 Making authenticated request to: /api/merch/styles
+queryClient.ts:82 Response status: 200 for /api/merch/styles
+bom-list.tsx:103 Uncaught TypeError: styles.map is not a function
+    at BomListPage (bom-list.tsx:103:27)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=218c997b:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=218c997b:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=218c997b:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=218c997b:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=218c997b:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=218c997b:3733:39)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=218c997b:19765:15)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=218c997b:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=218c997b:19137:13)
+bom-list.tsx:103 Uncaught TypeError: styles.map is not a function
+    at BomListPage (bom-list.tsx:103:27)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=218c997b:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=218c997b:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=218c997b:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=218c997b:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=218c997b:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=218c997b:3733:39)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=218c997b:19765:15)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=218c997b:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=218c997b:19137:13)
+installHook.js:1 The above error occurred in the <BomListPage> component:
+
+    at BomListPage (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/merchandising/bom-list.tsx:36:39)
+    at Route (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=218c997b:323:16)
+    at Switch (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=218c997b:379:17)
+    at Suspense
+    at div
+    at div
+    at div
+    at AuthenticatedApp (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?v=g0i52u9u9YUXpNvD1NpUS:373:53)
+    at Provider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=218c997b:38:15)
+    at TooltipProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=218c997b:65:5)
+    at App (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?v=g0i52u9u9YUXpNvD1NpUS:1466:42)
+    at V (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=218c997b:44:25)
+    at J (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=218c997b:42:18)
+    at QueryClientProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=218c997b:2805:3)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+overrideMethod @ installHook.js:1
+chunk-RPCDYKBN.js?v=218c997b:9129 Uncaught TypeError: styles.map is not a function
+    at BomListPage (bom-list.tsx:103:27)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=218c997b:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=218c997b:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=218c997b:15924:22)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=218c997b:19753:22)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=218c997b:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=218c997b:19137:13)
+    at renderRootSync (chunk-RPCDYKBN.js?v=218c997b:19116:15)
+    at recoverFromConcurrentError (chunk-RPCDYKBN.js?v=218c997b:18736:28)
+    at performSyncWorkOnRoot (chunk-RPCDYKBN.js?v=218c997b:18879:28)

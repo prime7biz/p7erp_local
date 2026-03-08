@@ -1,0 +1,125 @@
+You are a senior full-stack engineer and accounting-domain expert.
+
+Goal:
+Modify the existing “Accounting” module to behave like Tally ERP (voucher-first, ledger-centric, strict double-entry rules, audit trail, and reporting). We must KEEP existing project structure and UI style, but refactor flows, schemas, validations, APIs, and screens to match Tally-like accounting behavior.
+
+Context:
+- Frontend makes authenticated requests to:
+  /api/accounting/vouchers/types
+  /api/accounting/vouchers/statuses
+  /api/accounting/chart-of-accounts
+  /api/accounting/fiscal-years
+  /api/accounting/fiscal-years/current
+  and POST /api/accounting/vouchers currently returns 400 “Validation error”.
+- Current system is multi-tenant (tenant isolated data). Never leak across tenants.
+
+Non-negotiable Tally-style requirements:
+1) Voucher-first workflow:
+   - Users create vouchers (Journal, Payment, Receipt, Contra, Sales, Purchase, Credit Note, Debit Note).
+   - Voucher numbering per fiscal year + per voucher type + per tenant (configurable prefix).
+   - Voucher date must fall within an open fiscal year.
+
+2) Ledger-centric model:
+   - Every posting hits Ledgers (which map to Chart of Accounts).
+   - Maintain: Ledgers, Groups, Voucher Types, Voucher Entries.
+   - Keep “Chart of Accounts” but add “Groups” like Tally:
+     Primary groups: Capital Account, Loans (Liability), Current Liabilities, Current Assets, Fixed Assets, Investments, Direct Expenses, Indirect Expenses, Direct Income, Indirect Income, Sales, Purchase, Duties & Taxes, Sundry Debtors, Sundry Creditors, Cash-in-Hand, Bank Accounts.
+   - Ledgers belong to a group and can store optional party info (customer/supplier style) for Debtors/Creditors.
+
+3) Double-entry integrity rules:
+   - Voucher must have >= 2 lines.
+   - Exactly balanced: sum(debit) == sum(credit).
+   - Each line must be either debit OR credit (not both).
+   - No negative amounts.
+   - Enforce at API validation level and again at DB/service layer.
+   - Reject invalid payloads with detailed field-level errors.
+
+4) Posting + audit trail:
+   - Voucher has status: Draft → Posted (or Approved) → Cancelled.
+   - Only Posted vouchers impact Ledger balances.
+   - Cancellation should not delete; it should reverse or mark voucher cancelled with preserved lines and audit logs.
+   - Track created_by, updated_by, posted_by, timestamps, and “edit history” log entry.
+
+5) Tally-style reports:
+   - Day Book (voucher register by date)
+   - Ledger Vouchers (ledger drilldown)
+   - Trial Balance
+   - Profit & Loss
+   - Balance Sheet
+   - Cash/Bank book
+   - Outstanding Receivables/Payables (if ledger is Debtor/Creditor with bill references)
+   - Provide APIs + UI pages for each report; allow date range filtering within fiscal year.
+
+6) UX like Tally (web version):
+   - Voucher Entry screen is fast keyboard-driven:
+     - Choose voucher type
+     - Date
+     - Narration
+     - Lines grid (ledger selection, Dr/Cr toggle, amount)
+     - Auto-balance indicator
+     - Save Draft / Post
+   - Ledger creation screen
+   - Group management screen
+   - Voucher list screen (filter by type/date/status)
+
+Implementation tasks:
+A) Backend
+- Inspect existing models/schema for accounting.
+- Add missing tables/entities:
+  - account_groups
+  - ledgers (or extend existing chart-of-accounts)
+  - voucher_types (if not already)
+  - vouchers
+  - voucher_lines
+  - ledger_postings (generated on posting)
+  - audit_logs for vouchers
+- Ensure every table includes tenant_id / schema isolation rules as per the project’s multi-tenant setup.
+- Build service layer:
+  - createVoucher(draft)
+  - postVoucher(voucherId) => validates + generates ledger_postings
+  - cancelVoucher(voucherId) => safe cancellation (no delete)
+- Improve validation errors:
+  Return 400 with JSON:
+  { message: "Validation error", errors: {field: ["reason"], ...}, hint?: "..." }
+
+B) Frontend
+- Fix POST /api/accounting/vouchers 400 by aligning payload with backend contract.
+- Refactor Voucher Form to Tally-style:
+  - Lines grid
+  - Live balance check
+  - Prevent save until valid OR allow Draft save with softer rules, but enforce strict rules on Post.
+- Add screens:
+  - Groups
+  - Ledgers
+  - Voucher Types (basic)
+  - Reports (Trial Balance, P&L, Balance Sheet, Day Book, Ledger)
+- Add proper error rendering:
+  - If backend returns errors, show field-level messages and line-level errors.
+
+C) Testing
+- Add unit tests for voucher validation + posting logic.
+- Add API tests for create/post/cancel.
+- Include multi-tenant isolation tests.
+
+Process (IMPORTANT):
+1) First, scan the codebase and list:
+   - current accounting entities, routes, validators
+   - current voucher payload shape expected by backend
+   - why 400 happens (compare frontend payload vs backend schema)
+2) Then create an incremental plan:
+   Step 1: fix validation visibility + payload mismatch
+   Step 2: introduce ledger/group model
+   Step 3: refactor vouchers to draft/post/cancel
+   Step 4: implement postings + balances
+   Step 5: reports + UI
+3) Implement step-by-step with commits or clearly separated patches.
+
+Output format:
+- Start with “CURRENT STATE FINDINGS”
+- Then “TALLY-LIKE TARGET DESIGN”
+- Then “IMPLEMENTATION PLAN (PHASED)”
+- Then implement code changes.
+- For every changed API, provide example request/response JSON.
+- Do NOT invent endpoints; prefer existing ones and extend them.
+
+Now begin by scanning the repository and explaining why POST /api/accounting/vouchers returns 400, and implement the fix first.

@@ -1,0 +1,113 @@
+Nice — this reply is *very* solid. The only risk now is **Phase-2 (Customer ↔ Party sync)**: if they “sync both ways” without a clean **single source of truth + unique keys**, you’ll get duplicates, broken references, and messy accounting history.
+
+Here’s exactly what you should send back to Replit to lock the design correctly.
+
+---
+
+## ✅ Your reply to Replit (copy-paste)
+
+Your updated plan is correct. Before you implement Phase-2, enforce these **data model rules** so we don’t create duplicates or break accounting references.
+
+### Phase-2 Customer ↔ Party Sync (do it the safe ERP way)
+
+#### 1) Decide canonical entity
+
+* Treat **Party** as the **canonical master** for any entity that can appear in accounting (customer, supplier, employee, etc.).
+* CRM “Customer” becomes a **profile layer** on top of Party.
+* Final rule: **Every CRM customer must have a `party_id`.**
+
+#### 2) Add hard linking (required)
+
+Add fields:
+
+* `customers.party_id` (FK → parties.id, nullable initially for migration, then NOT NULL)
+* Ensure `parties.party_type` includes “CUSTOMER” (or multi-type tags if you support customer+supplier same entity)
+
+Add unique constraints (tenant-safe):
+
+* `customers(tenant_id, party_id)` unique
+* If you keep separate customer code:
+
+  * `parties(tenant_id, party_code)` unique (optional)
+* For emails/phones:
+
+  * Avoid strict uniqueness unless business requires; instead dedupe in migration step.
+
+#### 3) One-direction auto-create (avoid loops)
+
+To prevent infinite sync loops:
+
+* **When CRM creates customer:** create/find Party first → then create Customer with `party_id`
+* **When Party created as CUSTOMER:** auto-create Customer profile only if created from CRM context OR if explicitly requested (toggle/setting).
+* Implement event guard:
+
+  * `source='CRM'|'ACCOUNTING'|'MIGRATION'` to prevent “create triggers create”.
+
+#### 4) Migration plan (existing data)
+
+You currently have:
+
+* Customers: 7
+* Customer-type Parties: 11
+
+Migration steps:
+
+1. For each CRM customer:
+
+   * Try match Party by (priority):
+
+     * exact `party_code` / `customer_code` if exists
+     * exact email
+     * exact phone
+     * exact name + address (soft match)
+2. If match found: set `customers.party_id = party.id`
+3. If no match: create Party (type CUSTOMER) and link
+4. For parties with no linked customer: optionally create CRM customer profiles OR keep them accounting-only (configurable).
+
+Deliver output:
+
+* A migration report table:
+
+  * customer_id, customer_name, matched_party_id, match_method, created_new_party(true/false)
+
+#### 5) UI/UX
+
+* In CRM customer list/details, show linked Party fields:
+
+  * party code, ledger/AR account, credit limit, payment terms, address, tax/VAT
+* In Party screen, show “CRM Profile” section (if exists).
+
+---
+
+## ⚠️ Important accounting rule (don’t break history)
+
+Once vouchers/invoices reference a Party, **never replace Party IDs**.
+Only link CRM customers to the existing Party. Accounting history must remain stable.
+
+---
+
+## Phase-1 + Phase-3 reminder (still required)
+
+* **GP never posts stock**
+* **Only POSTED DC creates stock ledger OUT**
+* Stock Ledger is the single source of truth for stock availability & history.
+
+---
+
+## Deliverables I expect for Phase-2
+
+1. DB migration + FK + constraints
+2. One migration script + report output
+3. Updated create flows (CRM create → Party ensured)
+4. UI linking display
+5. Tests:
+
+   * create CRM customer → party auto-created → linked
+   * create party customer → no loop
+   * migration doesn’t duplicate
+
+---
+
+If you paste this, Replit will implement the sync cleanly like a real ERP.
+
+If you want, paste your **current tables/models for `customers` and `parties`** (or the file paths), and I’ll write the exact **migration SQL + Django/Prisma models + API changes** in the same structure you’re already using.

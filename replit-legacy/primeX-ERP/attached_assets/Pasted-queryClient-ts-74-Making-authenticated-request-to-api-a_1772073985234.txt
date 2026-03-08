@@ -1,0 +1,45 @@
+queryClient.ts:74 Making authenticated request to: /api/auth/me
+queryClient.ts:82 Response status: 200 for /api/auth/me
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/types
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/statuses
+queryClient.ts:74 Making authenticated request to: /api/accounting/chart-of-accounts
+queryClient.ts:74 Making authenticated request to: /api/accounting/account-groups
+queryClient.ts:74 Making authenticated request to: /api/accounting/fiscal-years
+queryClient.ts:74 Making authenticated request to: /api/accounting/fiscal-years/current
+queryClient.ts:74 Making authenticated request to: /api/currencies
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers/statuses
+queryClient.ts:82 Response status: 200 for /api/accounting/account-groups
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers/types
+queryClient.ts:82 Response status: 200 for /api/accounting/chart-of-accounts
+queryClient.ts:82 Response status: 200 for /api/accounting/fiscal-years
+queryClient.ts:82 Response status: 200 for /api/accounting/fiscal-years/current
+queryClient.ts:82 Response status: 200 for /api/currencies
+queryClient.ts:74 Making authenticated request to: /api/accounting/fiscal-years/1/periods
+queryClient.ts:82 Response status: 200 for /api/accounting/fiscal-years/1/periods
+client:560 [vite] server connection lost. Polling for restart...
+8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+main.tsx:14 [Theme] --primary = "217 91% 60%" (#3B82F6) ✅
+queryClient.ts:15 Making POST request to /api/accounting/vouchers
+/api/accounting/vouchers:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+installHook.js:1 API error (400): Validation error - voucherTypeId: Expected number, received null
+overrideMethod @ installHook.js:1
+installHook.js:1 API request error: Error: Validation error - voucherTypeId: Expected number, received null
+    at apiRequest (queryClient.ts:57:13)
+    at async Object.mutationFn (voucher-form.tsx:828:19)
+overrideMethod @ installHook.js:1
+queryClient.ts:15 Making POST request to /api/accounting/vouchers
+/api/accounting/vouchers:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+installHook.js:1 API error (400): Validation error - 0.baseCurrencyDebit: Expected string, received number; 0.baseCurrencyCreditAmount: Expected string, received number; 1.baseCurrencyDebit: Expected string, received number; 1.baseCurrencyCreditAmount: Expected string, received number
+overrideMethod @ installHook.js:1
+installHook.js:1 API request error: Error: Validation error - 0.baseCurrencyDebit: Expected string, received number; 0.baseCurrencyCreditAmount: Expected string, received number; 1.baseCurrencyDebit: Expected string, received number; 1.baseCurrencyCreditAmount: Expected string, received number
+    at apiRequest (queryClient.ts:57:13)
+    at async Object.mutationFn (voucher-form.tsx:828:19)
+overrideMethod @ installHook.js:1
+queryClient.ts:15 Making POST request to /api/accounting/vouchers
+/api/accounting/vouchers:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+installHook.js:1 API error (400): Validation error - 0.baseCurrencyDebit: Expected string, received number; 0.baseCurrencyCreditAmount: Expected string, received number; 1.baseCurrencyDebit: Expected string, received number; 1.baseCurrencyCreditAmount: Expected string, received number
+overrideMethod @ installHook.js:1
+installHook.js:1 API request error: Error: Validation error - 0.baseCurrencyDebit: Expected string, received number; 0.baseCurrencyCreditAmount: Expected string, received number; 1.baseCurrencyDebit: Expected string, received number; 1.baseCurrencyCreditAmount: Expected string, received number
+    at apiRequest (queryClient.ts:57:13)
+    at async Object.mutationFn (voucher-form.tsx:828:19)
+overrideMethod @ installHook.js:1

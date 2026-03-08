@@ -1,0 +1,126 @@
+You are inside my PrimeX ERP full codebase.
+
+GOAL (PHASE 12): “Bank Reconciliation + Statement Import + Auto Matching + Payment Run”
+This phase completes the last-mile for Inquiry→Cash by making bank/cash the system-of-record with real reconciliation.
+
+NON-NEGOTIABLES
+- Do NOT break existing accounting, vouchers, payables, receivables, payroll, LC/loan flows.
+- Strict tenant isolation on every query.
+- Keep posted immutability + reversal rules from Phase 11.
+- Matching must be explainable, auditable, and reversible.
+
+========================================================
+A) BANK & CASH ACCOUNTS (CONFIG)
+========================================================
+1) Ensure “Bank/Cash Accounts” are modeled cleanly:
+   - Each bank account links to a Ledger (GL) and has metadata:
+     bankName, accountNo (masked), branch, currency, openingBalance, isActive
+   - Support multiple accounts per tenant (BDT + USD if needed)
+
+2) Add a mapping rule:
+   - bankAccountId -> ledgerId (required)
+   - default suspense/clearing ledgerId for unmatched transactions
+
+========================================================
+B) BANK STATEMENT IMPORT
+========================================================
+3) Add a “Statement Import” feature (CSV first, extensible later):
+   - Upload CSV with columns mapping UI:
+     date, description, reference, debit, credit, amount, balance, currency
+   - Store raw statement rows in:
+     bank_statement_imports (header)
+     bank_statement_lines (lines)
+   - Prevent duplicates:
+     hash-based unique constraint (tenantId + bankAccountId + date + amount + refHash)
+
+4) UI:
+   - Accounting → Banking → Imports
+   - Import wizard:
+     Upload → Map Columns → Preview → Import
+   - Show import status + errors + duplicate warnings.
+
+========================================================
+C) AUTO MATCHING ENGINE (Explainable)
+========================================================
+5) Implement auto-matching between statement lines and posted vouchers:
+   - Matching targets:
+     - Payment vouchers (AP payments)
+     - Receipt vouchers (AR receipts)
+     - Payroll payments
+     - Loan installments
+     - LC-related bank charges if present
+   - Matching strategy (scored):
+     - exact amount match
+     - date proximity (±3 to ±7 days configurable)
+     - reference substring match (cheque no, invoice no, voucher no)
+     - party name similarity (optional)
+   - Output match candidates with score + reasons.
+
+6) Provide endpoints:
+   - GET /api/banking/imports/:id/matches?minScore=
+   - POST /api/banking/match (link statementLineId ↔ voucherId) with reason/notes
+   - POST /api/banking/unmatch (reversible) with audit reason
+   - POST /api/banking/auto-match (runs engine and proposes matches)
+
+7) Keep audit:
+   - who matched, when, method (AUTO/MANUAL), reason, confidence score.
+
+========================================================
+D) RECONCILIATION WORKFLOW + REPORTS
+========================================================
+8) Add reconciliation sessions:
+   - bank_reconciliations: tenantId, bankAccountId, periodStart, periodEnd, status
+   - bank_reconciliation_items: statementLineId, matchedVoucherId?, status (MATCHED/UNMATCHED/IGNORED), notes
+
+9) Reconciliation UI:
+   - Accounting → Banking → Reconciliation
+   - Screen split view:
+     LEFT: Statement lines (filter unmatched)
+     RIGHT: Matching vouchers list + suggested matches
+   - Actions:
+     - Accept suggested match
+     - Manual match
+     - Mark as bank charge (auto-create voucher using clearing rules)
+     - Ignore (with reason)
+   - Show:
+     - Opening balance, closing balance (from statement)
+     - Book balance (from GL)
+     - Difference + unresolved items count
+
+10) Reports:
+   - Bank Reconciliation Summary (per account, per month)
+   - Unreconciled Transactions Aging
+   - Bank Charges report
+
+========================================================
+E) PAYMENT RUN (AP + Payroll) + BANK EXPORT
+========================================================
+11) Implement “Payment Run”:
+   - Select due vendor bills / payroll due / loan installments
+   - Generate a batch:
+     payment_batches + payment_batch_items
+   - Approvals:
+     - batch approval before posting payments
+   - On approval:
+     - auto-create payment vouchers (posted) referencing batch
+   - Export:
+     - CSV bank transfer file (simple format) OR a generic export template configurable per bank.
+
+========================================================
+F) QA / ACCEPTANCE
+========================================================
+12) Add minimal tests/integration checks:
+   - Import statement creates lines and dedup works
+   - Auto-match produces candidates and does not cross tenants
+   - Manual match writes audit and is reversible
+   - Reconciliation summary numbers compute without error
+   - Payment run generates vouchers and keeps posted immutability
+
+DELIVERABLES
+- Full Banking module pages: Imports, Reconciliation, Payment Runs, Reports
+- Matching engine (explainable + auditable)
+- Reconciliation session storage
+- Bank export from payment batches
+- Summary of schema changes + routes + UI pages added
+
+Now implement Phase 12 end-to-end.

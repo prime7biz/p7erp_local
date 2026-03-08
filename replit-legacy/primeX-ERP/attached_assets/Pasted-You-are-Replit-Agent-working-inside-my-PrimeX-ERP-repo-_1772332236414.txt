@@ -1,0 +1,122 @@
+You are Replit Agent working inside my PrimeX ERP repo.
+
+CONTEXT
+Today we are doing a SOFT START (real users) for Accounting, Finance, and Inventory departments. The team will use EVERYTHING in these departments, including creating Purchase Orders even under “consideration” (draft/unconfirmed) stage. The goal is stability, data integrity, tenant isolation, and preventing irreversible mistakes.
+
+MISSION
+1) Inspect the current implementation and verify end-to-end functionality for:
+   - Inventory: Items/UOM, Warehouses, Purchase Requisition (if exists), Purchase Orders (Draft/Consideration), GRN, Stock Ledger, Stock Valuation, Stock Adjustments/Reconciliation, Material Issue/Consumption Control, Delivery Challan, Gate Pass, Transfers (if exists)
+   - Accounting/Finance: Chart of Accounts, Ledgers/Groups, Opening Balances, Vouchers (J/P/R/CN/DN if exist), Approval workflow, Posting engine, Period lock, Reversal/void, Trial Balance, P&L, Balance Sheet, Multi-currency + FX gain/loss, Cost Centers/Job costing, Bill-wise tracking, Parties
+   - Banking (now under Finance): Bank Accounts, Statement Import, Auto-match, Manual match, Bank Reconciliation, Payment Runs
+
+2) Create a “Go-Live Readiness Checklist” and then implement any critical fixes needed so the system is safe for real use TODAY.
+
+IMPORTANT RULES (must follow)
+- DO NOT rewrite the system. Only small, surgical fixes.
+- DO NOT change any route paths or DB schemas unless absolutely required for correctness/safety.
+- Prefer adding validations/guards, improving idempotency, and preventing duplicate/invalid posting.
+- Ensure every write is tenant-scoped and permission-checked.
+- Ensure posted/approved documents cannot be edited (immutability).
+- Ensure draft/consideration PO workflow is supported without affecting stock/GL until confirmed/received.
+- All critical actions must be atomic (DB transaction) and idempotent where applicable.
+- Every critical action must log an audit entry (entity_events or existing audit system).
+
+========================================================
+STEP 0 — INSPECT (do first; output findings)
+========================================================
+A) Print/inspect:
+- shared/schema.ts (inventory, accounting, vouchers, banks)
+- server/routes (inventory routes, accounting routes, banking routes)
+- server/services (posting engine, stock ledger service, reconciliation, payment run)
+- client pages for Inventory/Finance/Accounting
+
+B) Identify:
+- All document statuses and what triggers stock/GL effects:
+  - PO (draft/consideration/approved/closed?)
+  - GRN
+  - Voucher (draft/approved/posted)
+  - Bank reconciliation
+  - Payment run
+- Where tenantId is derived and enforced
+- How idempotency is handled for posting and stock movements
+- Any known duplication (e.g., double post risk, double GRN risk)
+
+Then produce:
+1) “What works”
+2) “High-risk issues for soft start”
+3) “Fix plan ordered by urgency”
+
+========================================================
+STEP 1 — REQUIRED FUNCTIONALITY TESTS (simulate)
+========================================================
+Create a test script (no external tools needed, just use the app services) and verify these flows:
+
+INVENTORY FLOW TESTS
+1) Create item + UOM + warehouse.
+2) Create Purchase Order in DRAFT/CONSIDERATION:
+   - Must save and appear in list.
+   - Must NOT post stock or accounting entries.
+3) Confirm/approve PO (if feature exists):
+   - Still no stock change until GRN.
+4) Create GRN against PO:
+   - Stock increases in Stock Ledger.
+   - Valuation updated.
+   - If auto-posting to GL exists, ensure it posts exactly once; otherwise ensure it queues for posting.
+5) Create Stock Adjustment/Reconciliation:
+   - Stock ledger reflects adjustment.
+   - If GL posting exists, ensure single posting and correct accounts.
+6) Consumption Control:
+   - Finalize order creates BOM snapshot + reservations.
+   - Material issue reduces stock; must block negative stock unless authorized override.
+7) Create Delivery Challan and Gate Pass:
+   - Ensure these are inventory-managed documents.
+   - Ensure they do not accidentally post accounting unless designed.
+
+ACCOUNTING FLOW TESTS
+8) Create voucher (Journal/Payment/Receipt):
+   - Draft → Approval → Post.
+   - Posting creates ledger entries exactly once.
+   - Posted voucher is immutable.
+9) Period lock:
+   - Posting inside locked period blocked (or override requires reason + audit).
+10) Reversal:
+   - Reverse posted voucher produces correct reversing entry with audit.
+11) Trial Balance / P&L / Balance Sheet:
+   - Runs without errors and balances (Dr=Cr).
+12) Bill-wise tracking & cost center job costing:
+   - A/P & A/R allocations link correctly to bills and cost centers.
+
+BANKING FLOW TESTS
+13) Bank account setup (mapped to ledger).
+14) Statement import:
+   - Lines stored; duplicates handled.
+15) Auto-match + manual match:
+   - Matching links statement line to voucher.
+16) Bank reconciliation:
+   - Reconcile closes statement period; prevents editing reconciled lines.
+17) Payment run:
+   - Create run from payables, approve, process.
+   - Must prevent double-processing; log events.
+
+========================================================
+STEP 2 — CRITICAL FIXES (implement immediately)
+========================================================
+Based on inspection + test results, implement ONLY critical safety fixes needed for today’s soft start, such as:
+- Enforce tenantId filter on every query/write in the above modules.
+- Add permission checks where missing.
+- Ensure PO draft/consideration never triggers stock/GL posting.
+- Add transaction wrappers for GRN creation, voucher posting, reconciliation finalize, payment run process.
+- Add idempotency keys or “already posted” guards to prevent duplicate posting.
+- Strengthen immutability rules for posted/approved docs.
+- Improve validation messages for staff (clear errors).
+
+DO NOT change UI structure unless a blocking bug prevents usage.
+
+========================================================
+STEP 3 — DELIVERABLES (must output)
+========================================================
+1) A “Go-Live Readiness Checklist” for staff (step-by-step with expected outcomes).
+2) A list of critical fixes applied today (file + what changed).
+3) A list of non-critical issues to schedule later.
+4) A short guidance note: “What should staff NOT do today” (risk avoidance).
+Proceed now.

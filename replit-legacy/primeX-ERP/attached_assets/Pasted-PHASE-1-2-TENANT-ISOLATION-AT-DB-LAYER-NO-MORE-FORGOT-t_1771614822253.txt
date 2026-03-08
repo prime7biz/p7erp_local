@@ -1,0 +1,52 @@
+PHASE 1.2 — TENANT ISOLATION AT DB LAYER (NO MORE “FORGOT tenantId” BUGS)
+
+Goal:
+Make tenant scoping impossible to forget by enforcing a standard pattern for all DB queries and write operations.
+
+Part A — Inventory all tenant-scoped tables & query entry points (NO changes yet)
+1) List all DB access entry points:
+   - db client initialization file
+   - repositories/services files
+   - route handlers where db is used directly
+2) Identify which tables are tenant-scoped (have tenantId/orgId/companyId).
+3) Output a list:
+   - table name -> tenant key column
+   - files where the table is queried (top 3 occurrences per table)
+
+Part B — Create a “Tenant DB Helper” (single source of truth)
+1) Create server/utils/tenantScope.ts (or similar) with helpers:
+   - requireTenant(req): returns tenantId or throws 403
+   - withTenant(whereObj, tenantId): merges tenantId into filters safely
+   - assertTenantWrite(payload, tenantId): ensures payload.tenantId matches
+
+2) Add a safe pattern for every query:
+   - READ: always include tenant filter
+   - WRITE: always set tenantId server-side (never trust client)
+   - UPDATE/DELETE: enforce tenant filter in WHERE
+
+Part C — Refactor critical modules first (minimum set)
+Refactor these endpoints to use the helper strictly:
+- /api/customers (list/get/create/update/delete)
+- /api/dashboard/* (where it reads any tenant data)
+- Any “orders / sales / purchase” endpoints if present
+
+Rules:
+- NEVER accept tenantId from client body/query for protected routes
+- Always use tenantId from req (set by enforceTenantIsolation)
+- For UPDATE/DELETE: query must include both { id } AND { tenantId }
+
+Part D — Add safety tests (lightweight)
+1) Add a small test utility or script (no heavy test framework needed) that:
+   - creates a record under tenant A
+   - tries to fetch/update it under tenant B
+   - expects 403 or empty result
+2) If tests already exist, add 2–3 tests only for cross-tenant access.
+
+Part E — Verification output
+After changes, output:
+1) A short “before vs after” example showing one refactored query.
+2) Files changed list.
+3) A cross-tenant proof:
+   - show request under tenant B cannot read tenant A record.
+
+Do NOT redesign schemas yet. Do NOT introduce new tenant column names. Only enforce scoping consistently.

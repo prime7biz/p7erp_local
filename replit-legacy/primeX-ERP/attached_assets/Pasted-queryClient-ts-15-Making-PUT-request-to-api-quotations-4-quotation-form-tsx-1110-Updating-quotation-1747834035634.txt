@@ -1,0 +1,189 @@
+queryClient.ts:15 Making PUT request to /api/quotations/4
+quotation-form.tsx:1110 Updating quotation with data: Object
+queryClient.ts:15 Making PUT request to /api/quotations/3
+hook.js:608 Warning: `value` prop on `input` should not be null. Consider using an empty string to clear the component or `undefined` for uncontrolled components. Error Component Stack
+    at input (<anonymous>)
+    at _c (input.tsx:6:6)
+    at Controller (chunk-4BFJKWC4.js?v=64c4692e:298:35)
+    at FormField (form.tsx:35:6)
+    at td (<anonymous>)
+    at _c13 (table.tsx:87:6)
+    at tr (<anonymous>)
+    at _c9 (table.tsx:57:6)
+    at tbody (<anonymous>)
+    at _c5 (table.tsx:30:6)
+    at table (<anonymous>)
+    at div (<anonymous>)
+    at _c (table.tsx:8:6)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Presence (chunk-E4UC4BFD.js?v=64c4692e:24:11)
+    at @radix-ui_react-tabs.js?v=64c4692e:176:13
+    at _c5 (tabs.tsx:41:6)
+    at div (<anonymous>)
+    at chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Provider (chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at @radix-ui_react-tabs.js?v=64c4692e:54:7
+    at form (<anonymous>)
+    at FormProvider (chunk-4BFJKWC4.js?v=64c4692e:102:11)
+    at div (<anonymous>)
+    at QuotationForm (quotation-form.tsx:180:21)
+    at Route (wouter.js?v=64c4692e:323:16)
+    at Switch (wouter.js?v=64c4692e:379:17)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AppRoutes (App.tsx:106:42)
+    at GamificationProvider (gamification-context.tsx:20:40)
+    at OnboardingProvider (onboarding-context.tsx:12:38)
+    at AuthProvider (auth-context.tsx:25:32)
+    at App (<anonymous>)
+    at Provider (chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=64c4692e:65:5)
+    at V (next-themes.js?v=64c4692e:44:25)
+    at J (next-themes.js?v=64c4692e:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=64c4692e:2805:3)
+overrideMethod @ hook.js:608Understand this error
+quotation-form.tsx:667 Total material cost: 0.00
+quotation-form.tsx:672 Total manufacturing cost: 0.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 0.00
+quotation-form.tsx:693 Cost per piece: 0.00
+quotation-form.tsx:699 Quoted price per piece: 0.00
+quotation-form.tsx:667 Total material cost: 16666.67
+quotation-form.tsx:672 Total manufacturing cost: 0.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 16666.67
+quotation-form.tsx:693 Cost per piece: 0.67
+quotation-form.tsx:699 Quoted price per piece: 0.83
+quotation-form.tsx:667 Total material cost: 166666.67
+quotation-form.tsx:672 Total manufacturing cost: 0.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 166666.67
+quotation-form.tsx:693 Cost per piece: 6.67
+quotation-form.tsx:699 Quoted price per piece: 8.33
+quotation-form.tsx:667 Total material cost: 1666666.67
+quotation-form.tsx:672 Total manufacturing cost: 0.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 1666666.67
+quotation-form.tsx:693 Cost per piece: 66.67
+quotation-form.tsx:699 Quoted price per piece: 83.33
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 0.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 1677083.34
+quotation-form.tsx:693 Cost per piece: 67.08
+quotation-form.tsx:699 Quoted price per piece: 83.85
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 0.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 1677083.34
+quotation-form.tsx:693 Cost per piece: 67.08
+quotation-form.tsx:699 Quoted price per piece: 83.85
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 0.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 1677083.34
+quotation-form.tsx:693 Cost per piece: 67.08
+quotation-form.tsx:699 Quoted price per piece: 83.85
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 0.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 1677083.34
+quotation-form.tsx:693 Cost per piece: 67.08
+quotation-form.tsx:699 Quoted price per piece: 83.85
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 0.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 1677083.34
+quotation-form.tsx:693 Cost per piece: 67.08
+quotation-form.tsx:699 Quoted price per piece: 83.85
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 0.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 1677083.34
+quotation-form.tsx:693 Cost per piece: 67.08
+quotation-form.tsx:699 Quoted price per piece: 83.85
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 375.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 1677458.34
+quotation-form.tsx:693 Cost per piece: 67.10
+quotation-form.tsx:699 Quoted price per piece: 83.87
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 4500.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 1681583.34
+quotation-form.tsx:693 Cost per piece: 67.26
+quotation-form.tsx:699 Quoted price per piece: 84.08
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 45000.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 1722083.34
+quotation-form.tsx:693 Cost per piece: 68.88
+quotation-form.tsx:699 Quoted price per piece: 86.10
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 450000.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 2127083.34
+quotation-form.tsx:693 Cost per piece: 85.08
+quotation-form.tsx:699 Quoted price per piece: 106.35
+quotation-form.tsx:566 Calculating other cost at index 0: Object
+quotation-form.tsx:624 No valid input for cost calculation, setting to 0.00
+quotation-form.tsx:630 Total other cost after this calculation: $0.00
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 450000.00
+quotation-form.tsx:677 Total other cost: 0.00
+quotation-form.tsx:682 Actual cost required: 2127083.34
+quotation-form.tsx:693 Cost per piece: 85.08
+quotation-form.tsx:699 Quoted price per piece: 106.35
+quotation-form.tsx:566 Calculating other cost at index 0: Object
+quotation-form.tsx:621 Using fixed amount directly: $1.00
+quotation-form.tsx:630 Total other cost after this calculation: $1.00
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 450000.00
+quotation-form.tsx:677 Total other cost: 1.00
+quotation-form.tsx:682 Actual cost required: 2127084.34
+quotation-form.tsx:693 Cost per piece: 85.08
+quotation-form.tsx:699 Quoted price per piece: 106.35
+quotation-form.tsx:566 Calculating other cost at index 0: Object
+quotation-form.tsx:621 Using fixed amount directly: $10.00
+quotation-form.tsx:630 Total other cost after this calculation: $10.00
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 450000.00
+quotation-form.tsx:677 Total other cost: 10.00
+quotation-form.tsx:682 Actual cost required: 2127093.34
+quotation-form.tsx:693 Cost per piece: 85.08
+quotation-form.tsx:699 Quoted price per piece: 106.35
+quotation-form.tsx:566 Calculating other cost at index 0: Object
+quotation-form.tsx:621 Using fixed amount directly: $100.00
+quotation-form.tsx:630 Total other cost after this calculation: $100.00
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 450000.00
+quotation-form.tsx:677 Total other cost: 100.00
+quotation-form.tsx:682 Actual cost required: 2127183.34
+quotation-form.tsx:693 Cost per piece: 85.09
+quotation-form.tsx:699 Quoted price per piece: 106.36
+quotation-form.tsx:566 Calculating other cost at index 0: Object
+quotation-form.tsx:621 Using fixed amount directly: $1000.00
+quotation-form.tsx:630 Total other cost after this calculation: $1000.00
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 450000.00
+quotation-form.tsx:677 Total other cost: 1000.00
+quotation-form.tsx:682 Actual cost required: 2128083.34
+quotation-form.tsx:693 Cost per piece: 85.12
+quotation-form.tsx:699 Quoted price per piece: 106.40
+quotation-form.tsx:566 Calculating other cost at index 0: Object
+quotation-form.tsx:621 Using fixed amount directly: $10000.00
+quotation-form.tsx:630 Total other cost after this calculation: $10000.00
+quotation-form.tsx:667 Total material cost: 1677083.34
+quotation-form.tsx:672 Total manufacturing cost: 450000.00
+quotation-form.tsx:677 Total other cost: 10000.00
+quotation-form.tsx:682 Actual cost required: 2137083.34
+quotation-form.tsx:693 Cost per piece: 85.48
+quotation-form.tsx:699 Quoted price per piece: 106.85

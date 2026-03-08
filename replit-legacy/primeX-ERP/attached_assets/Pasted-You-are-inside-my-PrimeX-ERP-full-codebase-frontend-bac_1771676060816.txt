@@ -1,0 +1,217 @@
+You are inside my PrimeX ERP full codebase (frontend + backend), multi-tenant.
+
+GOAL (PHASE 11): “Operational Hardening Pack”
+Implement 4 enterprise-grade upgrades:
+A) Posted-document immutability + Reversal Engine
+B) Reconciliation Reports (Stock vs GL, WIP vs GL, Order Profitability Actual)
+C) Exception Notification Center + Cashflow Calendar (next 90 days)
+D) Background Job Queue (Postgres-based) for heavy tasks (AI, PDFs, reconciliation snapshots)
+
+NON-NEGOTIABLES
+- Do NOT break existing flows.
+- Do NOT change API response shapes unless you update all callers.
+- Strict tenant isolation: every query must filter by tenantId.
+- After POSTED, documents must be immutable (no edits, no deletes). Only reversal/adjustment allowed.
+- Every reversal must be fully auditable and link to original doc.
+- Keep the UI theme and component patterns already used.
+
+========================================================
+A) POSTED DOCUMENT IMMUTABILITY + REVERSAL ENGINE
+========================================================
+1) Identify “posting” entities in this codebase (at minimum):
+   - vouchers/journals (accounting postings)
+   - inventory movements (issues/receipts/transfers)
+   - manufacturing journals / production receipts
+   - jobwork issue/receive
+   - export invoice (AR)
+   - supplier bill (AP)
+   NOTE: If the project uses different names, map them accurately and document.
+
+2) Enforce immutability rules:
+   - If status == POSTED (or equivalent), block UPDATE/DELETE at API level for:
+     - header fields and all lines
+   - Allow only:
+     - VIEW
+     - REVERSE
+     - PRINT / EXPORT
+   - Add consistent error message: "POSTED documents cannot be edited. Please reverse and repost."
+
+3) Implement a Reversal Engine (generic, reusable):
+   - Create server/services/reversalEngine.ts with functions:
+     - reverseVoucher(voucherId, tenantId, userId, reason)
+     - reverseInventoryTransaction(txnId, tenantId, userId, reason)
+     - reverseManufacturingBatch(batchId, tenantId, userId, reason)
+     - reverseJobwork(jobworkId, tenantId, userId, reason)
+     - reverseInvoice(invoiceId, tenantId, userId, reason)  (create credit note / contra)
+     - reverseSupplierBill(billId, tenantId, userId, reason) (debit note / contra)
+   - Each reversal must:
+     a) Create a new document with type = REVERSAL (or credit/debit note where relevant)
+     b) Copy key metadata from original
+     c) Generate opposite lines:
+        - accounting lines: debit/credit swapped
+        - stock moves: qty sign reversed, warehouse reversed if needed
+        - manufacturing: WIP/FG movements reversed
+     d) Link original↔reversal:
+        - original.reversedById
+        - reversal.reversalOfId
+     e) Lock both documents from edits
+     f) Write audit record with reason, user, timestamp, ip (if tracked)
+
+4) Add “reversal-required edit flow”:
+   - On UI for posted docs, replace “Edit” with “Reverse & Create New”:
+     - Step 1: Reverse (requires reason + permission)
+     - Step 2: Clone original into a new DRAFT document user can edit
+     - Maintain links: draft.correctingOfId -> originalId (optional)
+
+5) RBAC:
+   - Introduce permissions:
+     - can_reverse_documents
+     - can_period_override (if period lock exists)
+   - Only authorized roles can reverse.
+   - Record approver if your approval matrix exists; otherwise require “reason” and log.
+
+========================================================
+B) RECONCILIATION REPORTS (THE BIG 3)
+========================================================
+6) Implement backend report endpoints (tenant-scoped, fast):
+   - GET /api/reports/reconcile/stock-vs-gl?asOf=YYYY-MM-DD
+     Returns:
+       - inventoryValuationTotal (from stock valuation)
+       - glInventoryBalanceTotal (from mapped inventory ledgers)
+       - difference
+       - breakdown by inventory category/warehouse (top 20)
+   - GET /api/reports/reconcile/wip-vs-gl?asOf=YYYY-MM-DD
+     Returns:
+       - wipValuationTotal
+       - glWipBalanceTotal
+       - difference
+       - breakdown by department/style/order (top 20)
+   - GET /api/reports/reconcile/order-profitability?from=...&to=...&groupBy=order|style|shipment
+     Returns:
+       - revenue, COGS (actual), commercialCharges, bankCharges, subcontract, overheadAlloc
+       - grossProfit, grossMargin%
+       - top loss-making items
+
+7) Data sources & mapping:
+   - Use existing valuation logic and ledger mapping.
+   - If ledger mapping is missing or scattered, create a single mapping layer:
+     - inventoryCategory -> inventoryLedgerId
+     - wipDepartment -> wipLedgerId
+     - cogs -> cogsLedgerId
+     - scrap/wastage -> wastageLedgerId
+   - Do NOT hardcode ledger IDs; use a tenant-configurable mapping table if not existing.
+
+8) Frontend pages (Reports module):
+   - Add “Reconciliation” section with 3 tabs:
+     - Stock vs GL
+     - WIP vs GL
+     - Order Profitability (Actual)
+   - Each tab includes:
+     - Date filter
+     - Summary cards (Totals + Difference)
+     - ERP-grade table (reuse your ErpTable)
+     - Export CSV button (queued job if large)
+
+========================================================
+C) EXCEPTION NOTIFICATION CENTER + CASHFLOW CALENDAR (90 DAYS)
+========================================================
+9) Create a unified “Exceptions” engine:
+   - Define exception types:
+     - NEGATIVE_STOCK_ATTEMPT_BLOCKED
+     - OVERRIDE_REQUEST_PENDING (BOM/stock/period)
+     - APPROVAL_PENDING_TOO_LONG (older_than_days)
+     - TA_TASK_OVERDUE / TA_TASK_DUE_SOON
+     - LC_MATURITY_DUE_SOON (<=15 days)
+     - UPCOMING_VENDOR_BILLS (<=15 days)
+     - OVERDUE_RECEIVABLES (>X days)
+     - LOAN_INSTALLMENT_DUE_SOON
+     - PAYROLL_DUE_SOON (if schedule exists)
+   - Implement:
+     - server/services/exceptionsService.ts that computes exceptions efficiently with SQL
+     - store results in a table as snapshots OR compute on-demand with caching
+   - Add endpoints:
+     - GET /api/exceptions/summary
+     - GET /api/exceptions/list?type=&status=&from=&to=
+     - POST /api/exceptions/:id/acknowledge
+
+10) Build Notification Center UI:
+   - Topbar bell icon with count
+   - Page: “Exceptions & Alerts”
+     - Filters by type/status
+     - Each item shows:
+       - severity, title, entity link, due date, owner, createdAt
+       - actions: open, acknowledge, assign, request approval (if applicable)
+
+11) Cashflow Calendar (next 90 days):
+   - Endpoint:
+     - GET /api/reports/cashflow/calendar?start=YYYY-MM-DD&days=90
+   - Aggregate these sources into daily buckets:
+     - receivables expected (invoices due / LC proceeds if tracked)
+     - payables expected (supplier bills due / LC maturity)
+     - loan installments due
+     - payroll due
+     - tax/VAT due (if module exists; if not, skip)
+   - Include:
+     - amount, currency, party/bank, reference doc, status
+   - UI:
+     - “Cashflow Calendar” page (list + simple calendar or grouped-by-date table)
+     - Quick filters: only LC, only loans, only payroll, only overdue
+
+========================================================
+D) BACKGROUND JOB QUEUE (POSTGRES-BASED)
+========================================================
+12) Implement Postgres job queue inside existing stack:
+   - Use pg-boss (preferred) or a lightweight custom table-based queue if pg-boss conflicts.
+   - Create server/jobs/ with:
+     - index.ts (init boss/worker)
+     - processors:
+       - reconcileSnapshotProcessor (nightly or on-demand)
+       - exportCsvProcessor (large exports)
+       - pdfProcessor (reports/docs)
+       - aiProcessor (AI suggestions + audits)
+
+13) Refactor heavy operations to jobs:
+   - Reconciliation snapshot generation
+   - Export CSV from large tables
+   - PDF generation if present
+   - AI requests (so UI doesn’t hang)
+   Provide:
+   - POST /api/jobs/enqueue  (internal use per feature)
+   - GET /api/jobs/:id/status
+   - Add UI job status toast + background progress indicator for long tasks
+
+14) Scheduling:
+   - Add a daily job schedule (e.g., 2:30 AM local) for reconciliation snapshots and exception refresh.
+   - If cron isn’t available, implement “on server start + interval” scheduler safely.
+
+========================================================
+QA / ACCEPTANCE TESTS (MUST PASS)
+========================================================
+15) Add minimal automated tests (or integration checks) to validate:
+   - Attempt to edit a POSTED voucher returns 409/403 with correct message
+   - Reversal creates balanced entries and links original↔reversal
+   - Stock vs GL endpoint returns totals without throwing, tenant safe
+   - Exceptions summary returns consistent counts
+   - Job queue can enqueue + mark completed
+
+16) Add a “Phase 11 Verification Checklist” markdown file in /docs:
+   - Step-by-step manual verification for admin and tenant user.
+
+========================================================
+DELIVERABLES
+========================================================
+- Backend:
+  - reversalEngine + route hooks + immutability guards
+  - reconciliation endpoints + mapping tables (if needed)
+  - exceptions service + endpoints
+  - cashflow calendar endpoint
+  - pg-boss job queue + workers + job endpoints
+- Frontend:
+  - Reconciliation pages (3 tabs)
+  - Exceptions & Alerts page + topbar bell
+  - Cashflow Calendar page
+  - Posted-doc UI changes (Reverse & Create New)
+- Final summary:
+  - Files changed, new env vars, migrations added, how to run workers, and how to test.
+
+Now implement Phase 11 end-to-end in this codebase.

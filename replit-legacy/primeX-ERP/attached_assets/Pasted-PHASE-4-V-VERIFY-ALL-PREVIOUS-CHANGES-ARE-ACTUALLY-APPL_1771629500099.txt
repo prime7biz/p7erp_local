@@ -1,0 +1,48 @@
+PHASE 4.V — VERIFY ALL PREVIOUS CHANGES ARE ACTUALLY APPLIED (FRONTEND + BACKEND)
+
+A) FRONTEND THEME LOCK CHECK
+1) Print where the Option-1 palette is defined (CSS variables or tailwind config).
+2) Confirm primary equals #2563EB (not #3B82F6). Show the exact token definitions.
+3) Search for hard-coded blues in client:
+   - grep for: "blue-500" "blue-600" "#3B82F6" "#2563EB" "bg-blue" "text-blue" "border-blue"
+   Output counts + top 20 occurrences with file paths.
+
+B) SIDEBAR BEHAVIOR CHECK
+1) Show the sidebar initial state code that ensures ALL sections collapsed by default.
+2) Confirm active route indicator uses theme primary token (not hard-coded blue classes).
+3) Provide a screenshot or describe the result after hard refresh in a fresh session.
+
+C) DASHBOARD CONTRACT CHECK
+1) Print sample live responses (1–3 rows) from:
+   - /api/dashboard/kpi
+   - /api/dashboard/tasks
+   - /api/dashboard/production-trends
+   - /api/dashboard/recent-orders
+   - /api/dashboard/ai-insights
+2) Show the dashboard helpers/snippets:
+   - getKpiValue/getKpiChange handling array/object
+   - tasks.today/upcoming access
+   - XAxis dataKey="date"
+   - parseMoney() and formatting preventing ৳NaN
+3) Run the dashboard page and confirm no console errors.
+
+D) BACKEND SECURITY CHECK (PHASE 0/1 VERIFY)
+1) Confirm .env is not tracked and .gitignore includes .env and .env.*
+2) Search for any logging of cookies/tokens/response bodies:
+   - grep for: "req.headers.cookie" "Authorization" "capturedJsonResponse" "token" "JWT_SECRET"
+   Output file paths.
+3) Route protection map:
+   - list /api routes and confirm protected router applies authenticate + enforceTenantIsolation by default
+   - verify unauth GET /api/dashboard/kpi returns 401
+
+E) BUILD CHECK
+Run:
+- typecheck
+- build
+- server start
+Report any failing commands with exact error logs.
+
+OUTPUT FORMAT:
+- Provide a concise report section A–E
+- Include file paths + key snippets + grep outputs + sample API JSON
+- No summaries without evidence.

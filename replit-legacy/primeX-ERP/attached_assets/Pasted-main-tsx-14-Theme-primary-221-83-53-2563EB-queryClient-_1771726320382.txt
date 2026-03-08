@@ -1,0 +1,75 @@
+main.tsx:14 [Theme] --primary = "221 83% 53%" (#2563EB) ✅
+queryClient.ts:74 Making authenticated request to: /api/auth/me
+queryClient.ts:82 Response status: 200 for /api/auth/me
+queryClient.ts:74 Making authenticated request to: /api/dashboard/kpi
+queryClient.ts:74 Making authenticated request to: /api/dashboard/recent-orders
+queryClient.ts:74 Making authenticated request to: /api/dashboard/ai-insights
+queryClient.ts:74 Making authenticated request to: /api/dashboard/tasks
+queryClient.ts:74 Making authenticated request to: /api/approvals/stats
+queryClient.ts:74 Making authenticated request to: /api/bills/report/overdue
+queryClient.ts:74 Making authenticated request to: /api/items
+queryClient.ts:82 Response status: 200 for /api/dashboard/kpi
+queryClient.ts:82 Response status: 200 for /api/dashboard/tasks
+queryClient.ts:82 Response status: 200 for /api/dashboard/recent-orders
+queryClient.ts:82 Response status: 200 for /api/approvals/stats
+queryClient.ts:82 Response status: 200 for /api/bills/report/overdue
+queryClient.ts:82 Response status: 200 for /api/items
+queryClient.ts:82 Response status: 200 for /api/dashboard/ai-insights
+queryClient.ts:74 Making authenticated request to: /api/customers
+queryClient.ts:82 Response status: 200 for /api/customers
+inquiries-new.tsx:105 Inquiries data: Array(0)
+inquiries-new.tsx:106 Is loading: true
+inquiries-new.tsx:107 Is error: false
+inquiries-new.tsx:108 Inquiries array check: true
+inquiries-new.tsx:109 Inquiries length: 0
+queryClient.ts:74 Making authenticated request to: /api/inquiries
+queryClient.ts:82 Response status: 200 for /api/inquiries
+inquiries-new.tsx:105 Inquiries data: Array(6)
+inquiries-new.tsx:106 Is loading: false
+inquiries-new.tsx:107 Is error: false
+inquiries-new.tsx:108 Inquiries array check: true
+inquiries-new.tsx:109 Inquiries length: 6
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard/pending-quotations
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard/recent-orders
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard/upcoming-shipments
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard/expiring-lcs
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard/upcoming-shipments
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard/expiring-lcs
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard/pending-quotations
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard/recent-orders
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard
+queryClient.ts:74 Making authenticated request to: /api/parties/summary
+queryClient.ts:82 Response status: 200 for /api/parties/summary
+queryClient.ts:74 Making authenticated request to: /api/document-flow/summary
+queryClient.ts:82 Response status: 200 for /api/document-flow/summary
+queryClient.ts:74 Making authenticated request to: /api/accounting/chart-of-accounts
+queryClient.ts:82 Response status: 200 for /api/accounting/chart-of-accounts
+queryClient.ts:74 Making authenticated request to: /api/warehouses
+queryClient.ts:82 Response status: 200 for /api/warehouses
+queryClient.ts:74 Making authenticated request to: /api/auth/me
+queryClient.ts:82 Response status: 200 for /api/auth/me
+queryClient.ts:74 Making authenticated request to: /api/purchase-orders
+queryClient.ts:74 Making authenticated request to: /api/vendors
+queryClient.ts:82 Response status: 200 for /api/vendors
+queryClient.ts:82 Response status: 200 for /api/purchase-orders
+queryClient.ts:74 Making authenticated request to: /api/grn
+queryClient.ts:82 Response status: 200 for /api/grn
+queryClient.ts:74 Making authenticated request to: /api/process-orders
+queryClient.ts:82 Response status: 200 for /api/process-orders
+queryClient.ts:74 Making authenticated request to: /api/items
+queryClient.ts:82 Response status: 200 for /api/items
+queryClient.ts:74 Making authenticated request to: /api/orders
+queryClient.ts:82 Response status: 200 for /api/orders
+queryClient.ts:74 Making authenticated request to: /api/stock-ledger/summary
+queryClient.ts:74 Making authenticated request to: /api/stock-groups/tree
+queryClient.ts:82 Response status: 200 for /api/stock-groups/tree
+queryClient.ts:82 Response status: 200 for /api/stock-ledger/summary
+queryClient.ts:15 Making POST request to /api/consumption-control/finalize-order/1
+/api/consumption-control/finalize-order/1:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+installHook.js:1 API error (500): insert or update on table "order_bom_snapshot_items" violates foreign key constraint "order_bom_snapshot_items_item_id_fkey"
+overrideMethod @ installHook.js:1
+installHook.js:1 API request error: Error: insert or update on table "order_bom_snapshot_items" violates foreign key constraint "order_bom_snapshot_items_item_id_fkey"
+    at apiRequest (queryClient.ts:57:13)
+    at async Object.mutationFn (consumption-control.tsx:63:19)
+overrideMethod @ installHook.js:1

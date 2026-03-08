@@ -1,0 +1,195 @@
+@import "./styles/print.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 220 14% 96%;
+  --foreground: 222 47% 11%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --primary: 24 95% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --accent: 220 14% 96%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --ring: 24 70% 50%;
+  --radius: 0.5rem;
+  --success: 142 72% 40%;
+  --warning: 38 92% 50%;
+  --chart-1: 24 95% 53%;
+  --chart-2: 217 91% 60%;
+  --chart-3: 142 72% 40%;
+  --chart-4: 263 54% 51%;
+  --chart-5: 190 82% 44%;
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-border: 220 13% 91%;
+  --sidebar-accent: 24 90% 95%;
+  --sidebar-accent-foreground: 24 95% 53%;
+  --sidebar-primary: 24 95% 53%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  }
+  .dark {
+    --background: 222 47% 7%;
+    --foreground: 210 20% 92%;
+    --muted: 220 20% 13%;
+    --muted-foreground: 218 11% 55%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 20% 92%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 20% 92%;
+    --border: 220 20% 18%;
+    --input: 220 20% 18%;
+    --primary: 24 95% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 20% 15%;
+    --secondary-foreground: 210 20% 92%;
+    --accent: 220 20% 15%;
+    --accent-foreground: 210 20% 92%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 98%;
+    --ring: 24 70% 50%;
+    --radius: 0.5rem;
+    --success: 142 72% 40%;
+    --warning: 38 92% 50%;
+    --chart-1: 24 95% 55%;
+    --chart-2: 217 91% 65%;
+    --chart-3: 142 72% 45%;
+    --chart-4: 263 54% 58%;
+    --chart-5: 190 82% 50%;
+    --sidebar-background: 222 47% 7%;
+    --sidebar-foreground: 218 11% 75%;
+    --sidebar-border: 222 30% 14%;
+    --sidebar-accent: 222 30% 14%;
+    --sidebar-accent-foreground: 24 95% 60%;
+    --sidebar-primary: 24 95% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+  }
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+  
+  ::selection {
+    @apply bg-primary/20 text-foreground;
+  }
+  
+  .logo-text {
+    color: hsl(24 95% 53%);
+    font-weight: 700;
+  }
+  
+  .hover-blue:hover {
+    @apply bg-primary/10;
+  }
+  
+  .btn-primary:hover {
+    @apply bg-primary/90;
+  }
+  
+  input:focus, select:focus, textarea:focus {
+    @apply ring-2 ring-primary/30 ring-offset-0;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .text-2xs {
+    font-size: 0.625rem;
+    line-height: 0.875rem;
+  }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  .print-only, .print-header, .print-signature-footer { display: block !important; }
+
+  @page { margin: 0.6cm; size: A4; }
+  body { font-size: 9px !important; color: #000; background: white !important; line-height: 1.3; }
+
+  nav, aside, header, footer, [data-sidebar], .sidebar { display: none !important; }
+  .main-content { margin-left: 0 !important; padding: 0 !important; }
+  .quotation-form-container { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+
+  /* Compact cards */
+  [class*="rounded-lg"], [class*="rounded-xl"] { border-radius: 0 !important; }
+  [class*="shadow"] { box-shadow: none !important; }
+  [class*="CardHeader"], [class*="card-header"] { padding: 4px 8px !important; }
+  [class*="CardContent"], [class*="card-content"] { padding: 4px 8px !important; }
+  [class*="Card"], .border { border: 1px solid #e5e7eb !important; margin-bottom: 4px !important; }
+  .space-y-6 > * + *, .space-y-4 > * + * { margin-top: 4px !important; }
+
+  /* Force multi-column grids */
+  .grid { display: grid !important; }
+  .grid-cols-1 { grid-template-columns: repeat(4, 1fr) !important; }
+  .lg\\:grid-cols-4 { grid-template-columns: repeat(4, 1fr) !important; }
+  .lg\\:grid-cols-2 { grid-template-columns: repeat(2, 1fr) !important; }
+  .md\\:grid-cols-2 { grid-template-columns: repeat(2, 1fr) !important; }
+  .gap-4, .gap-6 { gap: 4px !important; }
+  .gap-3 { gap: 3px !important; }
+
+  /* Compact form fields */
+  label, .text-xs { font-size: 7px !important; margin-bottom: 0 !important; }
+  .text-base { font-size: 10px !important; }
+  .text-sm { font-size: 8px !important; }
+  .text-3xl { font-size: 16px !important; }
+  .text-xl { font-size: 12px !important; }
+  .text-lg { font-size: 11px !important; }
+  .h-9 { height: auto !important; min-height: 18px !important; padding: 1px 4px !important; font-size: 8px !important; }
+  .mb-1 { margin-bottom: 0 !important; }
+  .py-2 { padding-top: 2px !important; padding-bottom: 2px !important; }
+  .p-3, .p-4 { padding: 4px !important; }
+
+  /* Form inputs as plain text */
+  select, input, textarea { border: none !important; background: transparent !important; -webkit-appearance: none; padding: 0 2px !important; font-size: 8px !important; height: auto !important; min-height: unset !important; }
+  [data-radix-popper-content-wrapper] { display: none !important; }
+
+  /* Hide interactive-only elements */
+  button { display: none !important; }
+  button[role="combobox"], [data-slot="select-trigger"] { display: inline-flex !important; border: none !important; background: transparent !important; padding: 0 !important; height: auto !important; font-size: 8px !important; }
+  button[role="combobox"] svg, [data-slot="select-trigger"] svg { display: none !important; }
+  [class*="Switch"], [class*="switch"] { display: none !important; }
+  .no-print, [class*="RefreshCw"] { display: none !important; }
+
+  /* Tables — compact and colored */
+  table { border-collapse: collapse; width: 100%; font-size: 7px !important; }
+  th, td { border: 1px solid #d1d5db; padding: 2px 4px !important; font-size: 7px !important; }
+  thead tr { background: #1F2937 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  thead th { color: white !important; font-weight: bold !important; }
+
+  /* Orange accents */
+  .text-orange-600, .text-orange-700, .text-orange-800 { color: #f97316 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bg-orange-50 { background: #fff7ed !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .border-orange-200, .border-orange-300 { border-color: #fdba74 !important; }
+
+  /* Print orange banner — preserve background colors */
+  .print-orange-banner, .print-orange-banner * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .print-orange-banner { background: #F97316 !important; color: white !important; }
+
+  /* Prevent page breaks in small sections */
+  .print-signature-footer { page-break-inside: avoid !important; }
+}

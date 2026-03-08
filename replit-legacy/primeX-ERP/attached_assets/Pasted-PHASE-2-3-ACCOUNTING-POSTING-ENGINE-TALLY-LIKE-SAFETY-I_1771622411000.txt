@@ -1,0 +1,85 @@
+PHASE 2.3 — ACCOUNTING POSTING ENGINE (TALLY-LIKE SAFETY)
+(Immutable Posted Vouchers + Period Lock + Reversal + Override Trail)
+
+Goal:
+Make accounting ERP-grade:
+- Draft → Approved → Posted workflow
+- Posted vouchers become immutable
+- Changes happen via reversal + new voucher (not editing posted)
+- Period lock prevents backdating without override
+- Every override requires reason + audit trail
+
+Part A — Discover current accounting data model (NO changes yet)
+1) Locate tables/models for:
+   - account groups / chart of accounts / ledgers
+   - vouchers / voucher lines
+   - posting status fields (DRAFT/APPROVED/POSTED) or similar
+   - fiscal periods / period lock tables (if any)
+   - audit/workflow history tables (if any)
+2) Locate endpoints for:
+   - create voucher
+   - approve voucher
+   - post voucher
+   - edit voucher
+   - delete voucher
+3) Output file paths + key snippets.
+
+Part B — Define Voucher Lifecycle (single source of truth)
+Implement enum/status rules:
+- DRAFT: editable
+- SUBMITTED (optional): editable by creator only, not by approvers
+- APPROVED: not editable except via explicit “send back to draft”
+- POSTED: immutable; cannot edit/delete
+
+Add business invariants:
+1) Posted voucher lines must balance (debit == credit).
+2) Voucher must have tenantId always.
+3) Voucher number uniqueness per tenant per type per period.
+4) If voucher is linked to inventory move(s), posting must be atomic with inventory posting state.
+
+Part C — Period Lock (hard rule)
+1) Implement period lock table (if missing):
+   - tenantId, periodStart, periodEnd, isLocked, lockedBy, lockedAt
+2) Posting rule:
+   - cannot POST a voucher dated in a locked period
+3) Override rule:
+   - only with permission workflow:override (TENANT_OWNER/ADMIN)
+   - must include overrideReason
+   - must write audit_log + workflow_history entry
+   - response must record override metadata
+
+Part D — Reversal & Correction pattern (Tally-like)
+1) For any correction to POSTED voucher:
+   - create a REVERSAL voucher (same date or correction date) that negates lines
+   - create a new corrected voucher
+   - link both to original via fields:
+     originalVoucherId, reversalVoucherId, correctedVoucherId
+2) Block direct edits/deletes of POSTED vouchers.
+
+Part E — Idempotent posting
+1) Posting endpoint must accept requestId and be idempotent:
+   - if already posted with same requestId, return prior success
+2) Use existing idempotency_keys table from Phase 2.2 (or create if not existing).
+
+Part F — Validation & Error format
+Standardize errors:
+- PERIOD_LOCKED
+- UNBALANCED_VOUCHER
+- IMMUTABLE_POSTED
+- APPROVAL_REQUIRED
+- NOT_AUTHORIZED
+Return: { success:false, code, message, details }
+
+Part G — Verification
+Add minimal tests/scripts:
+1) Create voucher in locked period → POST fails with PERIOD_LOCKED
+2) Same requestId posting twice → second call returns same result, no duplicate postings
+3) Attempt edit POSTED voucher → IMMUTABLE_POSTED
+4) Correction flow generates reversal + corrected vouchers and links them.
+
+Output:
+- Files changed list
+- Posting endpoint snippet (transaction + validation)
+- Period lock check snippet
+- Reversal creation snippet
+- Sample responses for each error code

@@ -1,0 +1,41 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+
+# Secrets & environment
+.env
+.env.*
+!.env.example
+
+# Keys & certs
+*.pem
+*.key
+
+# Uploads & backups
+server/uploads
+server/backups
+
+# Logs
+*.log
+
+# Cookie dumps & test artifacts
+cookies*.txt
+*cookies*.txt
+*_cookies*.txt
+auth_test*.txt
+final_test*.txt
+fresh_*.txt
+
+# OS & IDE
+.DS_Store
+
+# Uploads & temp
+uploads/
+tmp/
+
+# Push scripts
+push-to-github*
+force-push*

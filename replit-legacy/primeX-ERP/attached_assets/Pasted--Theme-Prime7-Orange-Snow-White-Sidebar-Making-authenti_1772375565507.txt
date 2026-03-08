@@ -1,0 +1,235 @@
+ [Theme] Prime7 Orange + Snow White Sidebar ✅
+ Making authenticated request to: /api/auth/me
+ Response status: 200 for /api/auth/me
+ Making authenticated request to: /api/merch/critical-alerts
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+ Response status: 200 for /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/merch/critical-alerts
+ Making authenticated request to: /api/settings/tenant-settings
+ Making authenticated request to: /api/accounting/vouchers/approval-queue
+ Response status: 200 for /api/settings/tenant-settings
+ Response status: 200 for /api/accounting/vouchers/approval-queue
+ Making authenticated request to: /api/commercial/shipments
+ Making authenticated request to: /api/commercial/export-documents
+ Making authenticated request to: /api/commercial/lcs
+ Making authenticated request to: /api/btb-lcs
+ Making authenticated request to: /api/purchase-orders
+ Response status: 200 for /api/commercial/lcs
+ Response status: 200 for /api/btb-lcs
+ Response status: 200 for /api/commercial/shipments
+ Response status: 200 for /api/commercial/export-documents
+ Response status: 200 for /api/purchase-orders
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+ [vite] server connection lost. Polling for restart...
+8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+ Making authenticated request to: /api/merch/critical-alerts
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+ Response status: 200 for /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications
+ Response status: 200 for /api/merch/critical-alerts
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+ Response status: 200 for /api/workflow-tasks/my-tasks
+/api/workflow-tasks/notifications/stream:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+ Response status: 200 for /api/workflow-tasks/my-tasks
+ Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+/api/workflow-tasks/notifications/stream:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+installHook.js:1 Warning: validateDOMNesting(...): <div> cannot appear as a descendant of <p>. Error Component Stack
+    at div (<anonymous>)
+    at Badge (badge.tsx:30:18)
+    at p (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at MotionComponent (framer-motion.js?v=f6ab941d:945:40)
+    at div (<anonymous>)
+    at chunk-AXMZZQ2X.js?v=f6ab941d:42:13
+    at Presence (chunk-LUE5KDWX.js?v=f6ab941d:24:11)
+    at @radix-ui_react-tabs.js?v=f6ab941d:176:13
+    at _c5 (tabs.tsx:41:6)
+    at div (<anonymous>)
+    at chunk-AXMZZQ2X.js?v=f6ab941d:42:13
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at @radix-ui_react-tabs.js?v=f6ab941d:54:7
+    at div (<anonymous>)
+    at MotionComponent (framer-motion.js?v=f6ab941d:945:40)
+    at DocumentManagement (document-management.tsx:41:3)
+    at div (<anonymous>)
+    at chunk-AXMZZQ2X.js?v=f6ab941d:42:13
+    at Presence (chunk-LUE5KDWX.js?v=f6ab941d:24:11)
+    at @radix-ui_react-tabs.js?v=f6ab941d:176:13
+    at _c5 (tabs.tsx:41:6)
+    at div (<anonymous>)
+    at chunk-AXMZZQ2X.js?v=f6ab941d:42:13
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at @radix-ui_react-tabs.js?v=f6ab941d:54:7
+    at div (<anonymous>)
+    at MotionComponent (framer-motion.js?v=f6ab941d:945:40)
+    at Logistics (index.tsx:44:41)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:17:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+queryClient.ts:74 Making authenticated request to: /api/merch/critical-alerts
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/merch/critical-alerts
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/export-cases
+queryClient.ts:74 Making authenticated request to: /api/btb-lcs/alerts
+queryClient.ts:82 Response status: 200 for /api/export-cases
+queryClient.ts:82 Response status: 200 for /api/btb-lcs/alerts
+installHook.js:1 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. Error Component Stack
+    at DescriptionWarning (chunk-AFNTTUGK.js?v=f6ab941d:333:29)
+    at chunk-AFNTTUGK.js?v=f6ab941d:237:13
+    at chunk-AFNTTUGK.js?v=f6ab941d:160:58
+    at Presence (chunk-LUE5KDWX.js?v=f6ab941d:24:11)
+    at chunk-AFNTTUGK.js?v=f6ab941d:151:64
+    at chunk-2K77HOHX.js?v=f6ab941d:79:13
+    at chunk-2K77HOHX.js?v=f6ab941d:56:13
+    at chunk-AXMZZQ2X.js?v=f6ab941d:42:13
+    at chunk-AFLIZ4FI.js?v=f6ab941d:260:22
+    at Presence (chunk-LUE5KDWX.js?v=f6ab941d:24:11)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at DialogPortal (chunk-AFNTTUGK.js?v=f6ab941d:113:11)
+    at _c3 (dialog.tsx:35:6)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at Dialog (chunk-AFNTTUGK.js?v=f6ab941d:54:5)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at BtbLcsPage (btb-lcs.tsx:22:31)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:17:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+/api/workflow-tasks/notifications/stream:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+/app/commercial/btb-lcs:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+/api/workflow-tasks/notifications/stream:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:74 Making authenticated request to: /api/commercial/shipments
+queryClient.ts:74 Making authenticated request to: /api/commercial/export-documents
+queryClient.ts:74 Making authenticated request to: /api/commercial/lcs
+queryClient.ts:74 Making authenticated request to: /api/purchase-orders
+queryClient.ts:82 Response status: 200 for /api/commercial/lcs
+queryClient.ts:82 Response status: 200 for /api/commercial/shipments
+queryClient.ts:82 Response status: 200 for /api/commercial/export-documents
+queryClient.ts:82 Response status: 200 for /api/purchase-orders
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:74 Making authenticated request to: /api/merch/critical-alerts
+queryClient.ts:82 Response status: 200 for /api/merch/critical-alerts
+queryClient.ts:74 Making authenticated request to: /api/settings/tenant-settings
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/dashboard
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/types
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers
+queryClient.ts:82 Response status: 200 for /api/settings/tenant-settings
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers/types
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers/dashboard
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/settings/users
+queryClient.ts:74 Making authenticated request to: /api/settings/workflow-roles
+queryClient.ts:74 Making authenticated request to: /api/settings/module-roles
+queryClient.ts:74 Making authenticated request to: /api/settings/departments
+queryClient.ts:74 Making authenticated request to: /api/settings/employees-picklist
+queryClient.ts:74 Making authenticated request to: /api/settings/roles
+queryClient.ts:82 Response status: 200 for /api/settings/module-roles
+queryClient.ts:82 Response status: 200 for /api/settings/workflow-roles
+queryClient.ts:82 Response status: 200 for /api/settings/users
+queryClient.ts:82 Response status: 200 for /api/settings/employees-picklist
+queryClient.ts:82 Response status: 200 for /api/settings/departments
+queryClient.ts:82 Response status: 200 for /api/settings/roles
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:15 Making PUT request to /api/settings/users/61
+/api/settings/users/61:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+installHook.js:1 API error (500): Internal Server Error
+overrideMethod @ installHook.js:1
+installHook.js:1 API request error: Error: Internal Server Error
+    at apiRequest (queryClient.ts:57:13)
+overrideMethod @ installHook.js:1

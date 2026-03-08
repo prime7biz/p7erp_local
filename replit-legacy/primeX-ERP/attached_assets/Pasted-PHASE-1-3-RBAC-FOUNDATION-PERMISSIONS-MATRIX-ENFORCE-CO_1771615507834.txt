@@ -1,0 +1,70 @@
+PHASE 1.3 — RBAC FOUNDATION (PERMISSIONS MATRIX + ENFORCE CONSISTENTLY)
+
+Goal:
+Implement a robust role/permission layer so every protected endpoint enforces access rules consistently.
+Keep it minimal-but-correct: roles + permissions + middleware + audit log hooks.
+
+Part A — Discover current roles & auth payload (NO changes yet)
+1) Locate where user roles are defined/stored (DB schema or constants).
+2) Locate what user object is attached to req (req.user) and what fields exist (id, role, tenantId, permissions?).
+3) Print current role list and sample decoded auth payload fields (from code, not logs).
+
+Part B — Define a permissions matrix (single source of truth)
+1) Create server/rbac/permissions.ts:
+   - Define roles: SUPERADMIN (platform), TENANT_OWNER, ADMIN, MANAGER, OFFICER, DATA_ENTRY
+   - Define permissions as string enums (e.g. "customers:read", "customers:write", "inventory:consume", "accounting:post", "workflow:override")
+2) Create server/rbac/rolePermissions.ts mapping each role to permissions.
+   - Keep it realistic for ERP:
+     - DATA_ENTRY: read + create drafts, cannot approve/post/override
+     - OFFICER: can submit/forward, limited edits
+     - MANAGER: can approve within department scope
+     - ADMIN: full tenant ops, except platform actions
+     - TENANT_OWNER: full tenant, including overrides (later we’ll require reason)
+     - SUPERADMIN: platform-level only
+
+Part C — Middleware
+1) Create server/middleware/requirePermission.ts:
+   - requirePermission("perm")
+   - requireAnyPermission(["perm1","perm2"])
+   - requireRole(["ADMIN","TENANT_OWNER"])
+2) Middleware must:
+   - rely on req.user.role (and optional req.user.permissions if already exists)
+   - return 403 with consistent error format
+
+Part D — Apply to critical routes (minimum set)
+Apply permissions to these route groups (do NOT miss):
+- /api/users or /api/admin/users (user management) => ADMIN/TENANT_OWNER only
+- /api/customers:
+  - list/get => customers:read
+  - create/update/delete => customers:write
+- /api/inventory (if exists):
+  - stock read => inventory:read
+  - receive/issue/transfer => inventory:write
+  - consumption => inventory:consume (special)
+- /api/accounting (if exists):
+  - vouchers create => accounting:write
+  - post voucher => accounting:post
+  - period override => workflow:override (later we enforce reason)
+
+Part E — Add “audit event hook” (foundation only)
+1) Create server/utils/audit.ts with function logAudit({tenantId,userId,action,entityType,entityId,metadata})
+2) Call it in at least:
+   - user create/delete
+   - voucher post / override (if endpoints exist)
+   - inventory consume (if exists)
+Do not build UI logs yet—just server logging/DB insert if table exists.
+
+Part F — Verify
+After changes, output:
+1) Role → permissions table (from code)
+2) List of routes updated and which permission each uses
+3) Proof checks:
+   - DATA_ENTRY cannot access admin endpoints (403)
+   - MANAGER can read customers but cannot delete if not allowed
+   - TENANT_OWNER can post voucher if allowed
+
+Constraints:
+- Do NOT change database schema unless absolutely necessary.
+- Do NOT add new UI screens in this phase.
+- Keep error responses consistent: { success:false, message, code }.
+Output files changed + key snippets.

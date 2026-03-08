@@ -1,0 +1,119 @@
+ [Theme] --primary = "217 91% 60%" (#3B82F6) ✅
+ Making authenticated request to: /api/auth/me
+ Response status: 200 for /api/auth/me
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+ Response status: 200 for /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications
+ Making authenticated request to: /api/bank/accounts
+ Making authenticated request to: /api/accounting/chart-of-accounts/bank-ledgers
+ Response status: 200 for /api/bank/accounts
+ Response status: 200 for /api/accounting/chart-of-accounts/bank-ledgers
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+ Response status: 200 for /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+ Response status: 200 for /api/workflow-tasks/notifications
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+ Response status: 200 for /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+ Response status: 200 for /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+installHook.js:1 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. Error Component Stack
+    at DescriptionWarning (chunk-XBNCETSZ.js?v=1dcd1a11:333:29)
+    at chunk-XBNCETSZ.js?v=1dcd1a11:237:13
+    at chunk-XBNCETSZ.js?v=1dcd1a11:160:58
+    at Presence (chunk-E4UC4BFD.js?v=1dcd1a11:24:11)
+    at chunk-XBNCETSZ.js?v=1dcd1a11:151:64
+    at chunk-2K77HOHX.js?v=1dcd1a11:79:13
+    at chunk-2K77HOHX.js?v=1dcd1a11:56:13
+    at chunk-AXMZZQ2X.js?v=1dcd1a11:42:13
+    at chunk-G76BAGTM.js?v=1dcd1a11:260:22
+    at Presence (chunk-E4UC4BFD.js?v=1dcd1a11:24:11)
+    at Provider (chunk-OXZDJRWN.js?v=1dcd1a11:38:15)
+    at DialogPortal (chunk-XBNCETSZ.js?v=1dcd1a11:113:11)
+    at _c3 (dialog.tsx:35:6)
+    at Provider (chunk-OXZDJRWN.js?v=1dcd1a11:38:15)
+    at Dialog (chunk-XBNCETSZ.js?v=1dcd1a11:54:5)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at DashboardContainer (dashboard-container.tsx:13:3)
+    at BankAccountsPage (bank-accounts.tsx:55:21)
+    at Route (wouter.js?v=1dcd1a11:323:16)
+    at Switch (wouter.js?v=1dcd1a11:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:231:3)
+    at Router (wouter.js?v=1dcd1a11:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=1dcd1a11:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=1dcd1a11:65:5)
+    at AppArea (AppArea.tsx:452:42)
+    at Suspense (<anonymous>)
+    at App (App.tsx:76:22)
+    at V (next-themes.js?v=1dcd1a11:44:25)
+    at J (next-themes.js?v=1dcd1a11:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=1dcd1a11:2805:3)
+overrideMethod @ installHook.js:1
+queryClient.ts:74 Making authenticated request to: /api/accounting/account-groups/hierarchy
+queryClient.ts:74 Making authenticated request to: /api/accounting/account-groups
+queryClient.ts:74 Making authenticated request to: /api/currencies
+queryClient.ts:82 Response status: 200 for /api/currencies
+queryClient.ts:82 Response status: 200 for /api/accounting/account-groups
+queryClient.ts:82 Response status: 200 for /api/accounting/account-groups/hierarchy
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:15 Making PUT request to /api/accounting/chart-of-accounts/51
+/api/accounting/chart-of-accounts/51:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+installHook.js:1 API error (500): Failed to update account
+overrideMethod @ installHook.js:1
+installHook.js:1 API request error: Error: Failed to update account
+    at apiRequest (queryClient.ts:57:13)
+overrideMethod @ installHook.js:1
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:15 Making PUT request to /api/accounting/chart-of-accounts/51
+/api/accounting/chart-of-accounts/51:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+installHook.js:1 API error (500): Failed to update account
+overrideMethod @ installHook.js:1
+installHook.js:1 API request error: Error: Failed to update account
+    at apiRequest (queryClient.ts:57:13)
+overrideMethod @ installHook.js:1

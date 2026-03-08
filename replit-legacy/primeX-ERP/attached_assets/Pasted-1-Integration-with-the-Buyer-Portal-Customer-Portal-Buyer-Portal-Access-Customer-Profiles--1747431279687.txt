@@ -1,0 +1,103 @@
+1. Integration with the Buyer Portal (Customer Portal):
+Buyer Portal Access:
+•	Customer Profiles:
+o	Each customer in the CRM Module will have a corresponding Buyer Portal account.
+o	The Buyer Portal will show the following customer details:
+	Order Status
+	Inquiries
+	Quotations
+	Sample Approvals
+Customer Permissions:
+•	Customers can:
+o	View Order Status
+o	Approve or Reject Quotations
+o	Approve or Reject Samples (e.g., Photo, Fit, PP, Shipping Samples)
+o	Approve or Reject Trims/Labels for their orders
+________________________________________
+2. Inquiry, Order, and Quotation Workflow:
+Inquiry & Order Management:
+•	Inquiry Tracking:
+o	When an inquiry is raised, it should be tracked in the CRM Module and shown in the Buyer Portal.
+•	Order Status Updates:
+o	When an order is confirmed, the order status should be updated in both the CRM Module and the Buyer Portal.
+o	The Buyer Portal should display:
+	Order Number
+	Style
+	Quantity
+	Projected Delivery Date
+	Order Status (Pending, In Progress, Shipped, etc.)
+Quotation Approval Process:
+•	Quotation Tracking in CRM:
+o	The CRM Module will track all quotations sent to the customer.
+o	Customers can view and approve/reject quotations directly from the Buyer Portal.
+o	Once approved or rejected, the status of the quotation in the CRM Module should automatically reflect the action.
+Sample Approval Workflow:
+•	Customers will review and approve/reject the following samples in the Buyer Portal:
+o	Photo Sample
+o	Fit Sample
+o	PP Sample
+o	Shipping Sample
+•	The approval status will be reflected in the CRM Module.
+________________________________________
+3. Trims and Label Approval:
+Trims and Label Management:
+•	Customers will approve or reject trims such as:
+o	Labels
+o	Hangtags
+o	Stickers
+•	When trims or labels are sent for approval, they will be displayed for review in the Buyer Portal.
+•	Once the customer approves or rejects, the status in the CRM Module should be updated accordingly.
+________________________________________
+4. Notifications and Alerts:
+Customer Notifications:
+•	Email/SMS Notifications should be triggered for customers when:
+o	A new inquiry or order has been received.
+o	A quotation has been sent for approval.
+o	A sample has been sent for approval.
+o	Trims or labels are pending approval.
+________________________________________
+5. Order and Inquiry Status in Buyer Portal:
+Order and Inquiry Tracking:
+•	Customers should be able to track the status of their orders and inquiries in the Buyer Portal with these statuses:
+o	Inquiry Status: New, In Progress, Converted to Order
+o	Order Status: Pending, In Progress, Shipped, Delivered
+o	Quotation Status: Sent, Approved, Rejected, Pending
+o	Sample Approval Status: Pending, Approved, Rejected
+________________________________________
+6. Syncing Buyer Portal with CRM and Order Modules:
+Real-Time Syncing:
+•	Order Status Updates:
+o	Any update to Order Status (e.g., Pending to Shipped) should automatically reflect in the Buyer Portal.
+•	Quotation and Sample Approval Workflow:
+o	Once a quotation or sample is approved or rejected by the customer, the action should be logged in the CRM Module and automatically updated in the Buyer Portal.
+•	Customer Activity Tracking:
+o	All actions taken by the customer in the Buyer Portal (approvals, rejections, inquiries) should be logged in the CRM Module.
+________________________________________
+7. Reporting and Analytics in CRM:
+Customer Activity Reports:
+•	Sales and Support Teams can generate reports to track:
+o	Number of inquiries raised by each customer.
+o	Number of quotations sent and their approval status.
+o	Sample approvals (number of approved/rejected samples).
+o	Order status and performance tracking.
+________________________________________
+8. Buyer Portal User Interface (UI) Design:
+UI Features:
+•	The Buyer Portal should have a clean and intuitive interface where customers can:
+o	View Orders with order details and status.
+o	View and Approve/Reject Quotations.
+o	Track Samples and approve/reject them.
+o	Approve Trims and Labels.
+o	Review and Track Inquiries with real-time updates.
+o	Communicate with Sales or Support teams via an integrated messaging system.
+________________________________________
+Action Requirements:
+1.	Integration with CRM and Order Management Module:
+o	Integrate the CRM Module and Order Management Module with the Buyer Portal to show real-time updates of orders, quotations, and samples.
+2.	Automatic Syncing of Data:
+o	Ensure status updates between the CRM, Order Management, and Buyer Portal are synced in real-time, allowing for accurate data display.
+3.	Allow Customer Actions:
+o	Ensure the Buyer Portal allows customers to approve or reject key aspects like quotations, samples, and trims.
+4.	User-Friendliness:
+o	Make sure the Buyer Portal is user-friendly, responsive, and secure for customer access.
+

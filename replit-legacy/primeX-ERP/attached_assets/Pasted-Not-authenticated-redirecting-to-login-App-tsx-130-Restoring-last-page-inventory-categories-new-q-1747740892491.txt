@@ -1,0 +1,39 @@
+Not authenticated, redirecting to login
+App.tsx:130 Restoring last page: /inventory/categories/new
+queryClient.ts:15 Making /api/item-categories request to POST
+queryClient.ts:56 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/item-categories' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at Object.mutationFn (category-new.tsx:65:30)
+    at Object.fn (@tanstack_react-query.js?v=64c4692e:1189:29)
+    at run (@tanstack_react-query.js?v=64c4692e:494:49)
+    at Object.start (@tanstack_react-query.js?v=64c4692e:536:9)
+    at _a6.execute (@tanstack_react-query.js?v=64c4692e:1225:56)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56
+await in apiRequest
+mutationFn @ category-new.tsx:65
+fn @ @tanstack_react-query.js?v=64c4692e:1189
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+execute @ @tanstack_react-query.js?v=64c4692e:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=64c4692e:2630
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3295
+onSubmit @ category-new.tsx:95
+(anonymous) @ chunk-4BFJKWC4.js?v=64c4692e:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=64c4692e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=64c4692e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=64c4692e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=64c4692e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=64c4692e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=64c4692e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=64c4692e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=64c4692e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=64c4692e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=64c4692e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=64c4692e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=64c4692e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=64c4692e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=64c4692e:5449Understand this error

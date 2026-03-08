@@ -1,0 +1,45 @@
+Uncaught TypeError: Cannot read properties of null (reading 'length')
+    at src/pages/inquiries-new.tsx?t=1747831104137:762:189
+    at Array.map (<anonymous>)
+    at InquiriesPage (src/pages/inquiries-new.tsx?t=1747831104137:715:40)
+    at renderWithHooks (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:11548:26)
+    at updateFunctionComponent (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:14582:28)
+    at beginWork (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:15924:22)
+    at HTMLUnknownElement.callCallback2 (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:3674:22)
+    at Object.invokeGuardedCallbackDev (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:3699:24)
+    at invokeGuardedCallback (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:3733:39)
+    at beginWork$1 (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:19765:15)Understand this error
+hook.js:608 The above error occurred in the <InquiriesPage> component:
+
+    at InquiriesPage (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/inquiries-new.tsx?t=1747831104137:95:23)
+    at component
+    at Route (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:323:16)
+    at Switch (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:379:17)
+    at div
+    at div
+    at div
+    at AppRoutes (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?t=1747831104137&v=RaUzQp9k1Jxoxn-Vey6Vx:96:42)
+    at GamificationProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/context/gamification-context.tsx:25:40)
+    at OnboardingProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/context/onboarding-context.tsx:20:38)
+    at AuthProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/context/auth-context.tsx:24:32)
+    at App
+    at Provider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at TooltipProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=64c4692e:65:5)
+    at V (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:44:25)
+    at J (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:42:18)
+    at QueryClientProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=64c4692e:2805:3)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+overrideMethod @ hook.js:608Understand this error
+@fs/home/runner/work….js?v=64c4692e:9129 Uncaught TypeError: Cannot read properties of null (reading 'length')
+    at src/pages/inquiries-new.tsx?t=1747831104137:762:189
+    at Array.map (<anonymous>)
+    at InquiriesPage (src/pages/inquiries-new.tsx?t=1747831104137:715:40)
+    at renderWithHooks (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:11548:26)
+    at updateFunctionComponent (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:14582:28)
+    at beginWork (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:15924:22)
+    at beginWork$1 (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:19753:22)
+    at performUnitOfWork (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:19198:20)
+    at workLoopSync (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:19137:13)
+    at renderRootSync (@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=64c4692e:19116:15)Understand this error

@@ -1,0 +1,47 @@
+hook.js:608 Warning: A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components Error Component Stack
+    at input (<anonymous>)
+    at _c (input.tsx:6:6)
+    at form.tsx:109:9
+    at div (<anonymous>)
+    at form.tsx:78:6
+    at FormField (form.tsx:35:6)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at _c5 (tabs.tsx:41:6)
+    at div (<anonymous>)
+    at QuotationForm (quotation-form.tsx:149:21)
+    at AppRoutes (App.tsx:101:42)
+    at GamificationProvider (gamification-context.tsx:20:40)
+    at OnboardingProvider (onboarding-context.tsx:12:38)
+    at AuthProvider (auth-context.tsx:25:32)
+    at App (<anonymous>)
+overrideMethod	@	hook.js:608
+
+queryClient.ts:15 Making POST request to /api/item-categories
+/api/item-categories:1 
+ Failed to load resource: the server responded with a status of 400 (Bad Request)
+hook.js:608 API error (400): Validation error: Expected string, received promise at "categoryId"
+hook.js:608 API request error: Error: Validation error: Expected string, received promise at "categoryId"
+    at apiRequest (queryClient.ts:51:13)
+    at async handleCreateCategory (quotation-form.tsx:550:24)
+queryClient.ts:15 Making POST request to /api/item-subcategories
+queryClient.ts:15 Making POST request to /api/item-categories
+/api/item-categories:1 
+ Failed to load resource: the server responded with a status of 400 (Bad Request)
+hook.js:608 API error (400): Validation error: Expected string, received promise at "categoryId"
+hook.js:608 API request error: Error: Validation error: Expected string, received promise at "categoryId"
+    at apiRequest (queryClient.ts:51:13)
+    at async handleCreateCategory (/src/pages/quotation…747741559708:550:24)
+3
+hook.js:608 Query error: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+queryClient.ts:15 Making POST request to /api/item-categories
+/api/item-categories:1 
+ Failed to load resource: the server responded with a status of 400 (Bad Request)
+hook.js:608 API error (400): Validation error: Expected string, received promise at "categoryId"
+hook.js:608 API request error: Error: Validation error: Expected string, received promise at "categoryId"
+    at apiRequest (queryClient.ts:51:13)
+    at async handleCreateCategory (/src/pages/quotation…747741559708:550:24)

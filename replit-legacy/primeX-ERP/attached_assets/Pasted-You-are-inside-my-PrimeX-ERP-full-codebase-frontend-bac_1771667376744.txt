@@ -1,0 +1,83 @@
+You are inside my PrimeX ERP full codebase (frontend + backend). 
+
+GOAL (PHASE 0): Perform a full “Inquiry → Cash” WORKFLOW AUDIT based on what actually exists in this codebase, then generate a red/green gap report + actionable fix list + next prompt plan. 
+This is NOT a feature build phase; it’s a verification + mapping + evidence phase.
+
+NON-NEGOTIABLES
+- Do NOT refactor or change behavior unless something is broken (build/runtime errors).
+- Do NOT delete modules.
+- Do NOT change API shapes.
+- Your output must be an AUDIT REPORT with evidence (file paths, route names, table names, UI pages).
+- Multi-tenant must remain strict.
+
+WHAT TO AUDIT (END-TO-END CHAIN)
+Audit each step and confirm if it exists, is linked, and posts correctly:
+
+1) Inquiry Receive (CRM/Commercial inquiry)
+2) Quotation (versioning + approval + margin floor)
+3) Order Receive (sales contract / buyer PO)
+4) Style Master (style as base entity) + style components (top/bottom/pack) + size/color support
+5) Consumption / BOM sheet (versioning, freeze, override workflow)
+6) Production Plan (department capacity + line/machine allocation)
+7) Time & Action Plan auto-generated per style route + delivery date
+8) Purchase (PR/PO) from requirement, approval tiers, GRN, supplier bill
+9) Raw material issue/consumption with “no negative stock without approval”
+10) Jobwork conversion (yarn→greige→finish) with challan, yield, costing
+11) Production (WIP→FG) with wastage control + QC holds
+12) Goods movement (transfer/dispatch/returns)
+13) Manufacturing journal auto-generation
+14) Accounting (GL + bill-wise tracking, voucher workflow, period lock)
+15) Pay parties / receive bills (allocations, advances, partials)
+16) Payroll + employee payments (posting + cost center)
+17) Export workflow: PI to buyer, packing list, invoice, shipment docs
+18) Back-to-back LC: supplier PI, open B2B LC, acceptance, maturity tracking, upcoming bills tracker
+19) Bank loan management (schedule, due tracker, interest accrual)
+20) Fixed asset management (capex, depreciation posting)
+21) Inventory management: valuation method, stock vs GL reconciliation, audit trail
+
+PHASE 0 — REQUIRED OUTPUT FORMAT
+A) “WORKFLOW MAP” (one page)
+- Show the ideal document chain as a linked diagram in text:
+  Inquiry → Quotation → Order → Delivery Schedules → BOM → RM Requirement → PR/PO → GRN → Issue → Jobwork/Production → FG → Shipment → Invoice → Receipts
+  + side chains (LC, payroll, loans, FA)
+
+B) “WHAT EXISTS IN THIS CODEBASE” (evidence table)
+For each step above, produce a table with columns:
+- Step Name
+- Status: ✅ Exists / ⚠️ Partial / ❌ Missing
+- Evidence:
+  - Backend: route file path + route prefix + handler name
+  - DB: table names in schema/migrations
+  - Frontend: page path/component name
+- Linkage: which IDs connect it to previous/next step (styleId, orderId, deliveryId, bomId, voucherId, lcId etc.)
+- Posting Impact: inventory impact? accounting impact? approval workflow?
+
+C) “CRITICAL GAPS” (top 15)
+- List the 15 highest-risk gaps that can break real operations (e.g., duplicate style models, missing delivery matrix, no BOM freeze, negative stock without approval, jobwork costing missing, stock vs GL mismatch, LC maturity not tracked, etc.)
+- For each gap: severity (High/Med/Low), affected modules, and exact fix approach.
+
+D) “DATA INTEGRITY CHECKS”
+- Identify missing constraints/indexes:
+  - tenantId indexes, unique constraints, foreign keys, cascade rules, posted-document immutability rules, reversal strategy.
+- Identify places where tenant filters might be missing in queries.
+
+E) “AI INTEGRATION READINESS”
+- List existing AI-related code paths/routes.
+- Validate tenant safety + permissions.
+- Recommend the minimum set of AI hooks to embed in workflow (BOM suggestion, consumption audit, production plan suggestion, auto T&A).
+
+F) “NEXT PROMPTS PLAN”
+- Based on audit results, propose Phase 1–4 prompts that fix the most critical gaps first.
+- Each next prompt must be short, specific, and implementation-ready.
+
+EXECUTION INSTRUCTIONS
+1) Scan repository structure:
+   - frontend/ pages/components
+   - server/ routes/services
+   - shared/schema and migrations
+2) Build a step-by-step evidence map.
+3) If you find runtime-breaking code (undefined imports like db usage), fix only those minimal issues and document what you changed.
+4) Output the audit report in markdown with the required sections A–F.
+5) DO NOT implement missing features in this phase beyond minimal “build fix” changes.
+
+Now execute PHASE 0 audit and produce the report.

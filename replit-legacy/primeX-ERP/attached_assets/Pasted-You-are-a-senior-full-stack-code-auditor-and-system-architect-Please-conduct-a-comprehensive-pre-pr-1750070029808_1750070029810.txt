@@ -1,0 +1,110 @@
+You are a senior full-stack code auditor and system architect. Please conduct a comprehensive pre-production audit of our SaaS-based multi-tenant ERP application, which is built using React (frontend), Node.js (backend), and PostgreSQL (database).
+
+---
+
+🔍 **Application Overview**
+- This is a SaaS ERP platform with **multi-tenant architecture**.
+- Each tenant's data must be strictly isolated (via schema or row-level isolation).
+- New users can select from **four subscription packages** during registration.
+- A **30-day trial period** is available for all new tenants.
+- Each tenant manages users through a **role-based user management system** (admin, manager, officer, data entry).
+- Tenants operate independently with **approval workflow processes** per tenant.
+- We are preparing for **live production rollout** and need a full analysis of both the **codebase** and **system functionality**.
+
+---
+
+🎯 **Objectives**
+Please thoroughly evaluate the following areas and provide a detailed report including:
+- 🔹 Issues discovered
+- 🔹 Recommended improvements
+- 🔹 Final verdict on production readiness
+
+---
+
+### 1️⃣ SECURITY AUDIT (Highest Priority)
+
+**Multi-Tenancy Isolation**
+- Ensure tenant data is completely isolated across all APIs and queries.
+- Identify potential for cross-tenant data leakage or shared access.
+- Validate correct usage of tenant IDs in logic, routes, middleware, and DB layers.
+
+**Authentication & Authorization**
+- Check authentication mechanisms for secure login and session/token handling.
+- Review role-based access control (RBAC) logic — can users escalate privileges or bypass role restrictions?
+- Confirm route protection and access enforcement at controller and UI levels.
+
+**Common Vulnerabilities**
+- Scan for:
+  - SQL Injection
+  - Cross-Site Scripting (XSS)
+  - Cross-Site Request Forgery (CSRF)
+  - Insecure Direct Object References (IDOR)
+- Confirm proper input validation and output encoding.
+- Ensure sensitive data is never exposed in frontend logs or network responses.
+
+**Dependency Security**
+- Audit npm dependencies (frontend & backend) for known vulnerabilities.
+- Recommend safer or maintained alternatives where needed.
+
+---
+
+### 2️⃣ SCALABILITY & PERFORMANCE REVIEW
+
+**Database Efficiency**
+- Analyze PostgreSQL queries for performance bottlenecks.
+- Recommend indexing strategies.
+- Review schema design for scalability with many tenants and millions of records.
+
+**Backend (Node.js) Performance**
+- Identify any blocking operations, memory leaks, or excessive synchronous logic.
+- Evaluate readiness for handling concurrency, load spikes, and growing tenant count.
+
+**Frontend (React) Optimization**
+- Analyze for:
+  - Large bundle size
+  - Inefficient state management
+  - Unnecessary re-renders
+  - Poor use of hooks
+  - Missing lazy-loading or code splitting
+
+---
+
+### 3️⃣ FUNCTIONALITY & BUSINESS LOGIC VALIDATION
+
+**Subscription & Trial System**
+- Validate logic for four packages and 30-day trial countdown.
+- Check correct transition after trial expiration to paid plans.
+- Ensure trial bypassing or renewal loopholes don’t exist.
+
+**User Management & Roles**
+- Test correct creation, assignment, and revocation of roles.
+- Verify RBAC at frontend, API, and DB levels.
+- Confirm role logic is tenant-scoped only.
+
+**Approval Workflows**
+- Validate approval workflow functionality across roles.
+- Ensure workflows align with business rules and can’t be bypassed via API calls.
+
+---
+
+### 4️⃣ CODE QUALITY & BEST PRACTICES
+
+**Code Structure & Maintainability**
+- Review code organization in both frontend and backend.
+- Check for modularity, separation of concerns, and scalability.
+
+**Error Handling & Logging**
+- Evaluate robustness of try/catch logic, logging formats, and log levels.
+- Ensure production logs are meaningful but do not expose sensitive data.
+
+**Environment Configuration**
+- Ensure secrets and environment variables are securely managed and not hardcoded.
+- Validate correct separation between development, staging, and production configurations.
+
+---
+
+✅ Please provide a clear summary with:
+- Detected critical/blocking issues
+- Suggestions for improvement
+- Confirmation whether this codebase is ready for **live deployment**
+

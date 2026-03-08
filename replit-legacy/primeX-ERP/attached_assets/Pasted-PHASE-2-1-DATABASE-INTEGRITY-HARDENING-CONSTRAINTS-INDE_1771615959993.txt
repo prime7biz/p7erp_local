@@ -1,0 +1,72 @@
+PHASE 2.1 — DATABASE INTEGRITY HARDENING (CONSTRAINTS + INDEXES + TENANT SAFETY)
+
+Goal:
+Make the database ERP-grade: prevent duplicate/invalid data, enforce tenant safety, speed up common queries.
+
+Part A — Inventory schema + migrations (NO changes yet)
+1) Locate the DB schema definitions (Drizzle/Prisma/SQL) and the migrations folder.
+2) Output:
+   - list of all tables
+   - identify tenant-scoped tables and their tenant key column (tenantId/orgId/companyId)
+   - identify tables that should have audit/history (vouchers, inventory moves, approvals, users)
+3) Identify missing constraints:
+   - tables without primary keys
+   - missing foreign keys (FK)
+   - columns that should be NOT NULL but are nullable
+   - missing unique constraints (e.g., per-tenant unique codes like customerCode, voucherNo)
+4) Identify missing indexes for common ERP filters:
+   - tenantId
+   - createdAt/date
+   - documentNo/voucherNo
+   - status
+   - foreign keys (customerId, supplierId, itemId, warehouseId)
+
+Part B — Add Tenant Safety Constraints (apply changes)
+For every tenant-scoped table:
+1) Add composite indexes:
+   - (tenantId, id) OR ensure all queries can use (tenantId, primaryKey)
+   - (tenantId, createdAt)
+2) Add per-tenant uniqueness where appropriate:
+   - customers: (tenantId, code) unique (or (tenantId, name) if code absent)
+   - ledgers: (tenantId, name) unique
+   - items/materials: (tenantId, sku/code) unique
+   - vouchers: (tenantId, voucherNo, voucherType) unique
+3) Ensure tenantId is NOT NULL for protected tables.
+
+Part C — Add Referential Integrity (FKs) + safe delete rules
+1) Add FK constraints for key relations:
+   - user.tenantId -> tenants.id
+   - customer.tenantId -> tenants.id
+   - voucher.tenantId -> tenants.id
+   - voucherLines.voucherId -> vouchers.id
+   - inventoryMoves.itemId -> items.id
+   - inventoryMoves.warehouseId -> warehouses.id
+2) Choose delete behavior:
+   - For master data (customers/items/ledgers): RESTRICT delete if referenced
+   - For child rows (voucherLines): CASCADE from parent voucher
+
+Part D — Add Audit Tables (minimum viable)
+If not present, add:
+1) audit_logs table:
+   - id, tenantId, userId, action, entityType, entityId, metadata(json), ip, createdAt
+2) workflow_history table (optional if already exists):
+   - id, tenantId, entityType, entityId, fromStatus, toStatus, action, reason, createdBy, createdAt
+Do NOT build UI. Just DB + server insert hooks if easy.
+
+Part E — Migration & Safety
+1) Generate migrations for all changes.
+2) Ensure migrations are reversible (down migration if supported).
+3) Run migration locally and confirm no runtime errors.
+
+Part F — Verification Output
+Output:
+1) A summary table of constraints/indexes added (table -> change)
+2) The migration file names created
+3) A quick query plan note for one heavy table showing tenantId index is used (if supported)
+
+Constraints:
+- Do not rename columns.
+- Do not remove existing data.
+- Prefer adding constraints/indexes that won’t break existing inserts; if existing bad data exists, add a cleanup migration step first.
+
+Deliver only schema/migrations + minimal server hooks (if needed). No UI changes in this phase.

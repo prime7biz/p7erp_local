@@ -1,0 +1,84 @@
+PHASE 3.1 — FINANCIAL REPORTING ENGINE FOUNDATION
+(Trial Balance + General Ledger + Closing Balance correctness)
+
+Goal:
+Create reliable accounting reports like Tally:
+- Trial Balance (by period)
+- General Ledger (ledger-wise, date range, opening/closing)
+- Report APIs are consistent, tenant-safe, and fast
+
+Part A — Discover current accounting posting sources (NO changes yet)
+1) Locate where voucher postings are stored:
+   - vouchers table
+   - voucher_lines table
+   - any ledger table mapping
+2) Confirm how amounts are stored:
+   - debit/credit columns OR signed amount
+   - currency formatting (must be numeric in DB)
+3) Output paths + snippets for:
+   - voucher schema
+   - voucher line schema
+   - posting status field
+   - ledger table schema
+
+Part B — Define reporting rules (single source of truth)
+Implement these rules in server/accounting/reporting/rules.ts:
+1) Include ONLY POSTED vouchers in reports.
+2) Date range is inclusive: startDate <= voucherDate <= endDate.
+3) Opening balance = sum of POSTED entries before startDate.
+4) Closing balance = opening + period movements.
+5) Tenant-safe always: tenantId filter is mandatory.
+6) If a voucher is reversed/corrected, handle links properly:
+   - reversal is just another posted voucher; reports naturally reflect it
+   - (optional) hide cancelled vouchers if such status exists
+
+Part C — Implement APIs
+1) GET /api/accounting/reports/trial-balance?start=YYYY-MM-DD&end=YYYY-MM-DD
+Return:
+{
+  startDate, endDate,
+  rows: [
+    { ledgerId, ledgerName, groupPath, debit, credit, netDr, netCr }
+  ],
+  totals: { debit, credit }
+}
+2) GET /api/accounting/reports/ledger/:ledgerId?start=...&end=...
+Return:
+{
+  ledgerId, ledgerName,
+  opening: { debit, credit, balanceType, balance },
+  entries: [
+    { date, voucherId, voucherNo, narration, debit, credit, runningBalanceType, runningBalance }
+  ],
+  closing: { ... }
+}
+
+Part D — Performance (indexes + query pattern)
+1) Ensure indexes exist for:
+   - (tenantId, date)
+   - (tenantId, ledgerId)
+   - (tenantId, status, date)
+2) Use aggregate queries (GROUP BY) efficiently:
+   - avoid N+1 queries
+   - avoid pulling all lines when summarizing
+3) Add pagination for ledger entries (limit/offset) if dataset is large.
+
+Part E — Validation & security
+1) Validate start/end dates (end >= start, range limit e.g. <= 2 years unless override).
+2) If ledgerId not found in tenant scope, return 404.
+3) Enforce requirePermission:
+   - trial-balance: accounting:read
+   - ledger report: accounting:read
+
+Part F — Verification
+Add a small seed/dev script (or test) that:
+1) creates 2 ledgers
+2) posts 2 vouchers across different dates
+3) confirms:
+   - trial balance totals debit == credit
+   - ledger opening/closing balances match expected values
+
+Output:
+- files changed list
+- example JSON output from both endpoints using sample data
+- proof that only POSTED vouchers are included

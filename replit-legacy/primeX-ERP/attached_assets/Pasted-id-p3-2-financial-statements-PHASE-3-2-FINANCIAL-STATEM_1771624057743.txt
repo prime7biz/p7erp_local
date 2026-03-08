@@ -1,0 +1,89 @@
+id="p3-2-financial-statements"
+PHASE 3.2 — FINANCIAL STATEMENTS ENGINE
+(P&L + Balance Sheet + Cash Flow) with Hierarchical Groups (Tally-like)
+
+Goal:
+Generate correct, auditable financial statements per tenant:
+- Profit & Loss (Income/Expense)
+- Balance Sheet (Assets/Liabilities/Equity)
+- Cash Flow (direct or indirect; start with indirect if faster)
+All driven by Account Groups + Ledgers, using only POSTED vouchers.
+
+Part A — Discover group hierarchy + ledger mapping (NO changes yet)
+1) Locate account groups + ledgers schema:
+   - group table (id, name, parentId, nature/type)
+   - ledger table (id, name, groupId)
+2) Confirm whether you already have “primary groups” (Assets/Liabilities/Income/Expenses/Equity).
+3) Output file paths + snippets.
+
+Part B — Define statement mapping rules (single source of truth)
+Create server/accounting/reporting/statementRules.ts:
+1) Include ONLY POSTED vouchers.
+2) Each ledger belongs to one group; groups form a tree.
+3) Group “nature” determines which statement bucket it goes to:
+   - Income, Expense → P&L
+   - Asset, Liability, Equity → Balance Sheet
+4) Computation:
+   - Ledger movement = sum(debit-credit) or separate debit/credit depending on schema.
+   - Group total = sum(ledger totals + child group totals).
+5) Dates:
+   - P&L uses period movement (start..end)
+   - Balance Sheet uses closing balances as of end date (opening + movement to end).
+
+Part C — Implement APIs
+1) GET /api/accounting/reports/profit-loss?start=YYYY-MM-DD&end=YYYY-MM-DD
+Return:
+{
+  startDate,endDate,
+  income: { total, groups:[{groupId, name, total, children:[...], ledgers:[...]}] },
+  expenses:{ total, groups:[...] },
+  netProfit: number
+}
+
+2) GET /api/accounting/reports/balance-sheet?asOf=YYYY-MM-DD
+Return:
+{
+  asOfDate,
+  assets:{ total, groups:[...] },
+  liabilities:{ total, groups:[...] },
+  equity:{ total, groups:[...] },
+  checks:{ assetsEqLiabPlusEquityDiff: number }
+}
+
+3) GET /api/accounting/reports/cash-flow?start=...&end=...
+Start with INDIRECT method:
+- Operating: net profit + non-cash adjustments + working capital changes
+- Investing: capex-like outflows (if you can tag ledgers as capex)
+- Financing: loan/equity changes (if you can tag groups/ledgers)
+If tagging does not exist yet, implement a minimal mapping config object that can be refined later.
+
+Part D — Performance & correctness
+1) Add/ensure indexes:
+   - (tenantId, status, date)
+   - (tenantId, ledgerId, date)
+2) Avoid N+1:
+   - query totals per ledger in one grouped query, then build group tree in memory.
+3) Add validation:
+   - date format
+   - range limits
+   - tenant scoping mandatory
+
+Part E — Permissions
+Enforce:
+- P&L: accounting:read
+- Balance Sheet: accounting:read
+- Cash Flow: accounting:read
+
+Part F — Verification
+Create a tiny seed/test script that:
+1) creates ledgers under Income/Expense/Asset/Liability/Equity
+2) posts vouchers affecting each
+3) validates:
+   - P&L netProfit matches expected
+   - Balance sheet check: Assets ≈ Liabilities + Equity (diff = 0 or explain)
+   - Reports exclude non-POSTED vouchers
+
+Output:
+- files changed list
+- sample JSON output for all 3 endpoints
+- proof checks (numbers shown) for a small dataset

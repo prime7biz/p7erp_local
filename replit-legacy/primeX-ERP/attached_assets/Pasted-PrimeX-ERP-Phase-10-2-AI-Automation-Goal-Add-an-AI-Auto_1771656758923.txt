@@ -1,0 +1,96 @@
+PrimeX ERP — Phase 10.2 (AI Automation)
+
+Goal:
+Add an AI Automation engine that lets admins define “When X happens, do Y” workflows (approval nudges, anomaly alerts, report digests). Must be tenant-safe, auditable, and support both event-driven and scheduled automations.
+
+Scope (DO EXACTLY THIS, no extra modules):
+1) Backend app/module:
+- Create backend app: ai_automation
+
+2) Models:
+a) AutomationRule
+- tenant_id
+- name
+- is_enabled
+- trigger_type ENUM: EVENT / SCHEDULE
+- event_key (nullable, e.g., "VOUCHER.CREATED", "PO.APPROVED")
+- schedule_cron (nullable) (store cron string)
+- conditions JSON (simple rule conditions)
+- actions JSON (action list)
+- created_by, updated_by, created_at, updated_at
+
+b) AutomationRun
+- tenant_id
+- rule FK
+- status ENUM: QUEUED/RUNNING/SUCCESS/FAILED
+- started_at, finished_at
+- input_context JSON
+- result JSON
+- error TEXT nullable
+
+c) AutomationNotification
+- tenant_id
+- run FK
+- channel ENUM: IN_APP / EMAIL (EMAIL can be stubbed)
+- recipient_user FK nullable
+- title
+- message
+- created_at
+- is_read (for IN_APP)
+
+3) Trigger bus (event-driven):
+- Implement a lightweight internal event publisher:
+  - publish_event(tenant_id, event_key, payload, actor_user_id)
+- Hook it into existing workflows:
+  - On voucher created + posted + approval status changes -> publish events
+  - On purchase order created + approved -> publish events
+If those hooks don’t exist, add them in the relevant services without breaking current behavior.
+
+4) Rule evaluation:
+- Implement “conditions engine” (simple and safe):
+  - Supported operators: equals, not_equals, gt, gte, lt, lte, in, contains
+  - Conditions apply to payload fields only (no arbitrary DB queries)
+- Implement “actions engine”:
+  - IN_APP notification to selected roles/users
+  - “Create task” placeholder (store notification with type TASK)
+  - “Ask AI to summarize” action uses the Phase 10.1 provider interface (works with mock)
+
+5) Scheduler (scheduled rules):
+- Implement a management command / worker entry that:
+  - Finds rules with trigger_type=SCHEDULE and due (based on cron)
+  - Executes them and writes AutomationRun
+- If the project already has Celery/worker, integrate there; otherwise implement a simple periodic runner that can be called manually in Replit.
+- IMPORTANT: Must be safe to run multiple times (idempotency via (rule_id, time_window) lock key stored in AutomationRun input_context).
+
+6) APIs (DRF):
+- CRUD:
+  - GET/POST /api/automation/rules/
+  - GET/PATCH/DELETE /api/automation/rules/{id}/
+- Runs:
+  - GET /api/automation/rules/{id}/runs/
+  - GET /api/automation/runs/{id}/
+- Notifications:
+  - GET /api/automation/notifications/
+  - POST /api/automation/notifications/{id}/read/
+
+7) Frontend UI:
+- Add sidebar item: “AI Automation”
+- Pages:
+  - Rule list + create/edit form
+  - Runs history
+  - Notifications inbox (in-app)
+- Provide 3 seeded default rules per tenant (enabled=false by default):
+  1) “Voucher posted over threshold -> notify Finance Admin”
+  2) “PO approved but not received in 7 days -> notify Procurement”
+  3) “Daily cash summary at 9:00 -> notify Directors” (schedule cron)
+
+8) Auditability:
+- Every rule change must log who changed it.
+- Every run must store input_context, result, and failure trace (safe string).
+
+Deliverables:
+- Working rule engine + UI
+- Event hooks for voucher + PO flows
+- Scheduler runnable in Replit
+- Seeded default rules
+- Tests: rule evaluation + tenant isolation + notification read

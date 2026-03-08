@@ -1,0 +1,183 @@
+```text
+You are a senior full-stack engineer and accounting + ERP domain expert.
+
+Goal:
+Modify the existing ERP “Accounting” module into a Tally ERP–style Accounting Core for a complete ERP solution. This must be a refactor/extension of the existing codebase (do NOT rebuild from scratch). Keep existing project structure, auth, tenant isolation, and UI theme, but upgrade workflow, data model, validation, approvals, integrations, and reports.
+
+Current context (from logs):
+Frontend calls:
+- /api/auth/me
+- /api/accounting/vouchers/types
+- /api/accounting/vouchers/statuses
+- /api/accounting/chart-of-accounts
+- /api/accounting/fiscal-years
+- /api/accounting/fiscal-years/current
+POST /api/accounting/vouchers currently fails with 400 “Validation error”.
+Fix visibility and payload mismatch first.
+
+Non-negotiable Accounting Core requirements (Tally-like):
+1) Ledger-centric + Group structure
+- Keep Chart of Accounts for compatibility, but add Tally-like Groups + Ledgers.
+- Ledgers belong to Groups; Groups roll up to Primary Groups.
+- Support opening balances per fiscal year per ledger.
+- Voucher entry should select “Ledger” (not raw account); ledger maps internally to chart-of-accounts.
+
+2) Voucher-first workflow
+Voucher Types (minimum):
+- Journal, Payment, Receipt, Contra
+- Sales, Purchase
+- Credit Note, Debit Note
+- Manufacturing Journal (Material Issue, WIP, FG Receipt, Variance)
+- Payroll Journal
+- Commercial/LC/Export-Import journal templates (mapped to Journal with posting profiles)
+
+3) Strict double-entry integrity (enforce at API + service + DB)
+- Voucher must have >= 2 lines
+- sum(debit) == sum(credit)
+- each line has either debit OR credit (not both)
+- no negative amounts
+- date must be within an open fiscal year
+Return detailed 400 errors: { message: "Validation error", errors: {field: ["reason"]} }
+
+4) Posting + immutability + audit trail
+- Voucher lifecycle: Draft → Submitted → Approved → Posted → Cancelled (and Rejected)
+- Only Posted vouchers generate immutable ledger_postings
+- Cancel never deletes; preserve voucher and post reversal entries or mark cancelled with preserved postings, per policy
+- Full audit: created_by, updated_by, submitted_by, approved_by, posted_by, cancelled_by + timestamps + comments
+- Voucher edit history log + approval action log
+
+Approval workflow requirements (configurable per tenant):
+A) Workflow configuration
+- Approval levels per voucher type (1-step or multi-step)
+- Approval rules based on amount threshold, cost center, department, origin module
+- Role-based approvers (Officer → Manager → Director)
+- Maker-checker separation: creator cannot approve own voucher (configurable)
+- Pending aging/SLA indicator
+
+B) Approval APIs + UI
+- Submit voucher for approval
+- Approve / Reject with comment
+- Post only after approvals satisfied
+- Approval queue screen: filters by type/origin/status/date/amount/pending days
+- Voucher timeline view: create → edits → approvals → posting → cancellation
+
+ERP-wide integration requirements (Accounting is the core):
+Other ERP modules must NOT write ledger_postings directly. Implement an Accounting Posting Bridge:
+
+- Each module emits AccountingSourceDocument (origin record) → generates voucher draft
+- Voucher stores originModule, originType, originId, originNumber
+- Posting Profiles/Templates define mapping rules for each transaction type
+- Prevent duplicates with unique constraint: (tenantId, originModule, originType, originId, postingProfileVersion)
+- Every voucher line stores trace refs: ledgerId, source fields, cost center/project, narration
+
+Modules to connect (minimum flows):
+1) Purchase
+Entities: PR, PO, GRN, Purchase Invoice, Purchase Return
+Accounting:
+- Purchase Invoice:
+  Dr Inventory/Expense (+ Input VAT if applicable)
+  Cr Accounts Payable (Supplier ledger)
+- Returns and adjustments supported
+
+2) Sales
+Entities: SO, Delivery/Challan, Sales Invoice, Sales Return, Collections
+Accounting:
+- Sales Invoice:
+  Dr Accounts Receivable (Customer ledger)
+  Cr Sales Revenue
+  Cr VAT/Tax Payable (if applicable)
+- Receipt:
+  Dr Cash/Bank
+  Cr Accounts Receivable
+
+3) Manufacturing
+Entities: BOM, Production Order, Material Issue, WIP, FG Receipt, Variance/Scrap
+Accounting (start with weighted average costing):
+- Material Issue:
+  Dr WIP
+  Cr Raw Material Inventory
+- FG Receipt:
+  Dr Finished Goods Inventory
+  Cr WIP
+- Variances (optional phase): scrap/wastage/efficiency variance ledgers
+
+4) Commercial + Logistics + LC + Export-Import
+Entities: Import LC, Export LC/Docs, BTB LC, Freight, Insurance, Duty/Tax, Clearing/C&F, Shipment, Realization
+Accounting:
+- LC margin, LC liability, bank charges, inventory-in-transit, landed cost build-up
+- Export receivable, export realization, FX gain/loss, bank charges, export incentive receivable
+
+5) HR + Payroll
+Entities: Payroll Run, Salary Sheet, Allowances, Overtime, Deductions, Advances, PF/Tax
+Accounting:
+- Payroll accrual:
+  Dr Salary/Wages expense (split by cost center)
+  Cr Salary Payable
+  Cr Tax/PF/Other payables
+- Payment:
+  Dr Salary Payable
+  Cr Bank
+- Advances and recovery supported
+
+Permissions & controls:
+- Separate permissions for Create Draft, Edit Draft, Submit, Approve, Post, Cancel, View Reports
+- Once Posted, voucher becomes immutable; corrections via reversal voucher or cancellation policy
+- Period/fiscal-year locks to prevent posting into closed periods without elevated permission
+
+Reports (Tally-like + ERP):
+- Day Book (voucher register)
+- Ledger Drilldown (ledger vouchers)
+- Trial Balance
+- Profit & Loss
+- Balance Sheet
+- Cash/Bank book
+- AR/AP Aging (Outstanding receivables/payables)
+- Inventory valuation report (after manufacturing/purchase integration)
+- LC/Trade finance dashboard (open LC, outstanding, landed cost, liabilities)
+
+Implementation process (MANDATORY, no skipping):
+1) Repo scan and CURRENT STATE FINDINGS:
+   - Identify existing accounting models/entities, routes/controllers, validators
+   - Identify current voucher payload expected by backend
+   - Identify frontend payload being sent and why POST /api/accounting/vouchers returns 400
+2) Phase-1: Fix the 400 error first:
+   - Return detailed validation errors from backend
+   - Align frontend payload shape and data types
+   - Add UI rendering for field-level + line-level errors
+3) Continue Phase-2 (IMPORTANT — MUST DO NEXT, even if not executed before):
+   - Implement Account Groups + Ledgers like Tally
+   - Seed default Primary Groups per tenant (Tally-style primary groups)
+   - Update Ledger creation UI
+   - Update Voucher Entry so each line selects “Ledger” (not raw account) while mapping internally to chart-of-accounts
+   - Add Trial Balance API + UI page (with date range + fiscal year filter)
+4) Phase-3: Approval workflow:
+   - Tables, services, endpoints, and approval queue UI
+5) Phase-4: Accounting Posting Bridge:
+   - Source document references, posting profiles, duplicate prevention, traceability
+6) Phase-5: Connect modules end-to-end in this order:
+   - Purchase Invoice → voucher draft → submit/approve/post → impacts Trial Balance
+   - Sales Invoice + Receipt
+   - Payroll Journal
+   - Manufacturing (WIP → FG)
+   - Commercial/LC/Export-Import
+
+Output format:
+- CURRENT STATE FINDINGS
+- TALLY-LIKE TARGET DESIGN
+- PHASED IMPLEMENTATION PLAN
+- CODE CHANGES (with file paths and key diffs)
+- API EXAMPLES (request/response JSON)
+- SEED DATA (groups/ledgers/voucher types)
+
+Constraints:
+- Do NOT invent a new system or restructure folders unnecessarily; extend existing endpoints where possible.
+- Maintain multi-tenant isolation everywhere.
+- Keep UI consistent with current ERP theme and responsive behavior.
+- Add tests for voucher validation + posting + tenant isolation.
+
+Now start:
+1) Scan repository for accounting module and voucher validation logic.
+2) Explain precisely why POST /api/accounting/vouchers returns 400 (payload mismatch or missing fields).
+3) Implement the fix first (backend error details + frontend payload alignment).
+Then proceed immediately to Phase-2 (Groups + Ledgers + Trial Balance).
+```

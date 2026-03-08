@@ -1,0 +1,33 @@
+We have developed a SaaS-based multi-tenant ERP application in Replit using Node.js for the backend, React for the frontend, and PostgreSQL as the database.
+
+Currently, the PostgreSQL database schema is not properly relational, and we need to define the relationships and constraints correctly, especially considering the multi-tenant architecture and the requirement for strict data isolation between tenants.
+
+Here's a breakdown of our multi-tenant model and the uniqueness rules:
+
+1.  **Multi-Tenancy:** The application is designed to serve multiple companies (tenants) from a single instance.
+2.  **Data Isolation:** Data for each tenant must be strictly isolated. A tenant should only be able to access and see their own data.
+3.  **Tenant Uniqueness:** Every tenant (company) is unique across the entire application. This likely means a primary table for tenants with a unique identifier (e.g., `tenant_id`).
+4.  **Tenant-Specific Uniqueness:** The following entities are unique *only within the context of a specific tenant*. This means their uniqueness constraint should be a composite key including the `tenant_id`.
+
+    * **User:** Every user is unique *under every company*. A user record belongs to one tenant.
+    * **Customer:** Every customer is unique *throught out the application from a specific tenant's perspective*. A customer record belongs to one tenant.
+    * **Inquiry:** Every inquiry is unique *throught out the application from a specific tenant's perspective*. An inquiry record belongs to one tenant.
+    * **Order:** Every order is unique *throught out the application from a specific tenant's perspective*. An order record belongs to one tenant.
+    * **Style No.:** Every Style No. is unique *throught out the application from a specific tenant's perspective*. A Style No. record belongs to one tenant.
+    * **Chart of Accounts:** The chart of accounts is unique *throught out the application from a specific tenant's perspective*. Chart of account entries belong to one tenant.
+    * **Supplier:** Every supplier is unique *throught out the application from a specific tenant's perspective*. A supplier record belongs to one tenant.
+    * **Inventory Category:** Inventory categories are unique *throught out the application from a specific tenant's perspective*. Categories belong to one tenant.
+    * **Inventory Subcategory:** Inventory subcategories are unique *throught out the application from a specific tenant's perspective*. Subcategories belong to one tenant and likely link to an Inventory Category within that tenant.
+    * **Items:** Inventory items are unique *throught out the application from a specific tenant's perspective*. Items belong to one tenant and link to a Category and Subcategory within that tenant.
+    * **Warehouse:** Warehouses are unique *throught out the application from a specific tenant's perspective*. Warehouses belong to one tenant.
+
+For all tenant-specific entities listed in point 4, the primary key or a unique constraint should include the `tenant_id` to ensure uniqueness is enforced per tenant and to facilitate data isolation. Foreign keys should also consider the `tenant_id` where relationships exist between tenant-specific tables.
+
+**Please help us understand and define the proper relational database schema for this multi-tenant structure in PostgreSQL within our Replit project. Specifically, we need guidance on:**
+
+* How to structure the tables to enforce the described uniqueness constraints (composite keys including `tenant_id`).
+* How to define foreign key relationships between these tables while respecting tenant isolation.
+* Best practices for implementing data isolation in PostgreSQL for a multi-tenant application like this (e.g., using `tenant_id` in queries, Row Level Security if appropriate).
+* How to represent these relationships and constraints using common Node.js PostgreSQL libraries or ORMs if applicable (like `pg`, Sequelize, or Drizzle).
+
+We want Replit to understand this multi-tenant model and provide suggestions or code examples for our database schema and potentially related backend code to ensure data integrity and isolation.

@@ -1,0 +1,35 @@
+queryClient.ts:74 Making authenticated request to: /api/auth/me
+queryClient.ts:82 Response status: 200 for /api/auth/me
+queryClient.ts:74 Making authenticated request to: /api/dashboard/kpi
+queryClient.ts:74 Making authenticated request to: /api/dashboard/recent-orders
+queryClient.ts:74 Making authenticated request to: /api/dashboard/ai-insights
+queryClient.ts:74 Making authenticated request to: /api/dashboard/tasks
+queryClient.ts:74 Making authenticated request to: /api/approvals/stats
+queryClient.ts:74 Making authenticated request to: /api/bills/report/overdue
+queryClient.ts:82 Response status: 200 for /api/dashboard/kpi
+queryClient.ts:82 Response status: 200 for /api/dashboard/recent-orders
+queryClient.ts:82 Response status: 200 for /api/dashboard/tasks
+queryClient.ts:82 Response status: 200 for /api/bills/report/overdue
+queryClient.ts:82 Response status: 200 for /api/approvals/stats
+queryClient.ts:82 Response status: 200 for /api/dashboard/ai-insights
+queryClient.ts:74 Making authenticated request to: /api/settings/tenant-settings
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/dashboard
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/types
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers
+queryClient.ts:82 Response status: 200 for /api/settings/tenant-settings
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers/dashboard
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers/types
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers
+queryClient.ts:74 Making authenticated request to: /api/settings/users
+queryClient.ts:74 Making authenticated request to: /api/settings/roles
+queryClient.ts:74 Making authenticated request to: /api/settings/departments
+queryClient.ts:82 Response status: 200 for /api/settings/departments
+queryClient.ts:82 Response status: 200 for /api/settings/users
+queryClient.ts:82 Response status: 200 for /api/settings/roles
+queryClient.ts:15 Making PUT request to /api/settings/users/59
+/api/settings/users/59:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+installHook.js:1 API error (500): Internal Server Error
+overrideMethod @ installHook.js:1
+installHook.js:1 API request error: Error: Internal Server Error
+    at apiRequest (queryClient.ts:57:13)
+overrideMethod @ installHook.js:1

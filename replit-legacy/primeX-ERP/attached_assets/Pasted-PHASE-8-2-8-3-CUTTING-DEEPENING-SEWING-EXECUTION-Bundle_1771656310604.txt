@@ -1,0 +1,247 @@
+PHASE 8.2 + 8.3 — CUTTING DEEPENING + SEWING EXECUTION (Bundle/Barcode, Issue-to-Line, Operation Bulletin, Inline QC, DHU, Rework, WIP)
+(Extends Phase 8.1 factory execution core)
+
+========================
+PHASE 8.2 — CUTTING DEEPENING
+========================
+
+Goal:
+Make cutting + bundle flow production-real:
+- Marker/lay planning + cut qty tracking
+- Bundle/roll issuance + barcode-ready bundle IDs
+- Issue bundles to specific sewing lines
+- Bundle scanning optional; manual entry allowed
+- WIP quantities always consistent; cannot issue more than cut
+
+A) Data Model additions/extensions
+1) marker_plans
+- id, tenantId
+- styleId, salesOrderId, productionPlanId
+- markerRef, width, gsm(optional), efficiencyPct(optional)
+- sizeRatio JSON (e.g. {S:10,M:20,...})
+- plannedPcs
+- status DRAFT|APPROVED|IN_USE|CLOSED
+- approvedBy, approvedAt
+
+2) lay_plans
+- id, tenantId
+- markerPlanId
+- layNo (unique per tenant/day)
+- plies, plannedPcs
+- actualPcs
+- fabricRollRefs JSON (optional)
+- status DRAFT|IN_PROGRESS|COMPLETED|CANCELLED
+
+3) cutting_tickets
+- id, tenantId
+- layPlanId
+- ticketNo (unique)
+- size, color
+- plannedQty, cutQty
+- rejectsQty
+- status OPEN|CUT|QC_DONE|CLOSED
+
+4) bundles (extend existing from 8.1)
+Add/ensure fields:
+- bundleNo (unique, human friendly)
+- bundleUid (uuid/ulid)  // barcode payload
+- ticketId (cutting_ticket)
+- lineId (nullable until issued)
+- stage: CUT|ISSUED_TO_SEW|SEWING|FINISHED|REWORK|REJECT|PACKED
+- goodQty, rejectQty, reworkQty (optional counters)
+- issuedAt, issuedBy
+
+5) bundle_issues
+- id, tenantId
+- productionPlanId
+- issueNo (unique)
+- fromDept CUTTING
+- toLineId
+- issueDateTime
+- status DRAFT|POSTED|CANCELLED
+- requestId (idempotency)
+- postedBy, postedAt
+
+6) bundle_issue_lines
+- id, tenantId
+- bundleIssueId
+- bundleId
+- qtyIssued
+
+B) Core rules
+1) You cannot create/issue bundles beyond cutting_tickets.cutQty.
+2) Bundle Issue POST is transactional + idempotent (requestId).
+3) Once a bundle is ISSUED_TO_SEW, cutting cannot reduce its cutQty below issued quantity.
+4) Any correction requires override permission + reason + audit log.
+
+C) APIs (Cutting)
+- POST /api/production/marker-plans
+- POST /api/production/marker-plans/:id/approve
+- POST /api/production/lay-plans
+- POST /api/production/lay-plans/:id/complete
+- POST /api/production/cutting-tickets
+- PATCH /api/production/cutting-tickets/:id (restricted after QC_DONE)
+- POST /api/production/bundles/generate (from ticket -> bundles with uid)
+- POST /api/production/bundle-issues (create)
+- POST /api/production/bundle-issues/:id/post (transaction + requestId)
+- GET  /api/production/bundles?planId=&stage=&lineId=
+- GET  /api/production/cutting/summary?date=&planId=
+
+D) Frontend (Cutting)
+1) Marker Plan builder (ratio, planned pcs, approve)
+2) Lay Plan screen (create, complete)
+3) Cutting Tickets screen (cut qty entry, QC done)
+4) Bundle generator UI (auto bundle size qty, prints bundle UID text)
+5) Issue-to-line UI (select line, pick bundles, post)
+
+E) Verification (8.2)
+Seed/test:
+1) Create plan target 1000
+2) Marker planned 1000, Lay planned 1000, Ticket cutQty 500 for one size/color
+3) Generate bundles total 500
+4) Issue 200 bundles qty to Line A with requestId -> POSTED
+5) Repost same requestId -> no duplicates
+6) Attempt issue > available -> fail with VALIDATION_ERROR
+7) Attempt reduce cutQty below issued -> blocked unless override; override logs audit
+
+
+========================
+PHASE 8.3 — SEWING EXECUTION
+========================
+
+Goal:
+Run sewing like a factory:
+- Operation Bulletin (OB) per style
+- Line loading (assign style/order to line with SMV/targets)
+- Hourly output entry per line (already in 8.1) enhanced with bundle-based inputs
+- Inline QC, DHU, defects, rework loop
+- WIP stage transitions: ISSUED_TO_SEW → SEWING → FINISHED/REWORK/REJECT
+
+A) Data Model
+1) operation_bulletins
+- id, tenantId
+- styleId
+- obVersion (int)
+- status DRAFT|APPROVED|LOCKED
+- totalSmv
+- approvedBy, approvedAt
+- revisionOfObId(optional)
+
+2) operation_bulletin_ops
+- id, tenantId
+- obId
+- opNo, opName
+- smv
+- machineType (SNLS/OL/FLATLOCK etc) optional
+- sequenceNo
+- qcPoints JSON optional
+
+3) line_loads
+- id, tenantId
+- lineId, shiftId
+- productionPlanId, salesOrderId, styleId
+- obId
+- plannedStartDate, plannedEndDate
+- targetPerHour, targetPerDay
+- plannedEfficiencyPct, plannedManpower
+- status ACTIVE|PAUSED|CLOSED
+Rules:
+- changing OB/targets after ACTIVE requires override + reason
+
+4) sewing_bundle_progress
+- id, tenantId
+- bundleId
+- lineLoadId
+- status: RECEIVED|IN_SEWING|FINISHED|REWORK|REJECT
+- goodQty, reworkQty, rejectQty
+- lastUpdatedAt, updatedBy
+
+5) qc_inline_inspections
+- id, tenantId
+- lineId, lineLoadId, bundleId(optional)
+- inspectionTime
+- inspectedQty
+- defectQty
+- defects JSON (defectCode -> count)
+- result PASS|FAIL
+- inspectorUserId
+- remarks
+
+6) defect_master
+- id, tenantId
+- defectCode (unique per tenant)
+- defectName
+- category (stitch/measurement/appearance etc)
+- severity LOW|MED|HIGH
+- active boolean
+
+B) Sewing rules
+1) A line can only produce against an ACTIVE line_load.
+2) Bundle must be ISSUED_TO_SEW and assigned to that line to start sewing.
+3) Inline QC can mark defects; rework moves bundle to REWORK stage.
+4) DHU calculation:
+- DHU% = (totalDefects / totalInspectedQty) * 100
+5) If DHU exceeds threshold (tenant setting), raise an alert.
+
+C) Enhanced APIs (Sewing)
+OB:
+- POST /api/sewing/ob (create)
+- POST /api/sewing/ob/:id/approve
+- POST /api/sewing/ob/:id/revise
+- GET  /api/sewing/ob/style/:styleId (list versions)
+Line loading:
+- POST /api/sewing/line-loads
+- PATCH /api/sewing/line-loads/:id (restricted; override required if ACTIVE)
+- POST /api/sewing/line-loads/:id/close
+Bundle progress:
+- POST /api/sewing/bundles/:bundleId/start (set IN_SEWING)
+- POST /api/sewing/bundles/:bundleId/finish (set FINISHED with good/rework/reject)
+- POST /api/sewing/bundles/:bundleId/rework
+Inline QC:
+- POST /api/qc/inline/inspect
+- GET  /api/qc/inline/summary?date=&lineId=&planId=
+Dashboards:
+- GET /api/sewing/dashboard/lines?date=
+  returns: target vs actual, efficiency proxy, DHU, top defects, WIP counts
+
+D) Frontend (Sewing)
+1) OB builder UI (ops list + SMV total + approve)
+2) Line Load screen (assign plan/style/OB to line, set targets)
+3) Sewing live screen:
+- scan/paste bundle UID OR select from issued list
+- start/finish bundle
+4) Inline QC screen:
+- select line + bundle (optional), enter inspected qty + defects
+5) Sewing dashboard:
+- line performance table (target/actual/DHU/WIP)
+- top defects chart
+
+E) Permissions + audit
+- OB approve: MANAGER/ADMIN
+- Line load create/edit: MANAGER+
+- Hourly entry: OFFICER/DATA_ENTRY
+- QC inspect: QC role (add permission qc:write)
+- Any override requires workflow:override + reason + audit log entry
+
+F) Verification (8.3)
+Seed/test:
+1) Create defect master (5 defects)
+2) Create OB for style (10 operations, total SMV)
+3) Create line load for Line A with target
+4) Issue bundles to Line A (from 8.2)
+5) Start/finish bundle; confirm WIP stage changes and hourly totals match
+6) Submit inline QC with defects; verify DHU and top defects appear
+7) Try editing ACTIVE line load without override -> 403; with override -> allowed + audit log
+
+
+========================
+OUTPUT REQUIRED
+========================
+After implementation output:
+1) Files changed list
+2) Example JSON:
+- marker plan + lay plan + ticket + bundle issue trace
+- OB + line load + bundle progress trace
+- sewing dashboard summary
+3) Proof of idempotency for bundle issue post (same requestId)
+4) One audit log entry for an override action

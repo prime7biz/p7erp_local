@@ -1,0 +1,93 @@
+main.tsx:16 [Theme] Prime7 Orange + Snow White Sidebar ✅
+queryClient.ts:74 Making authenticated request to: /api/auth/me
+queryClient.ts:82 Response status: 200 for /api/auth/me
+queryClient.ts:74 Making authenticated request to: /api/merch/critical-alerts
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/merch/critical-alerts
+quotation-form.tsx:435 Uncaught ReferenceError: Cannot access 'matSubtotal' before initialization
+    at QuotationForm (quotation-form.tsx:435:7)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=f6ab941d:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=f6ab941d:14582:28)
+    at mountLazyComponent (chunk-RPCDYKBN.js?v=f6ab941d:14833:23)
+    at beginWork (chunk-RPCDYKBN.js?v=f6ab941d:15918:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=f6ab941d:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=f6ab941d:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=f6ab941d:3733:39)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=f6ab941d:19765:15)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=f6ab941d:19198:20)
+quotation-form.tsx:435 Uncaught ReferenceError: Cannot access 'matSubtotal' before initialization
+    at QuotationForm (quotation-form.tsx:435:7)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=f6ab941d:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=f6ab941d:14582:28)
+    at mountLazyComponent (chunk-RPCDYKBN.js?v=f6ab941d:14833:23)
+    at beginWork (chunk-RPCDYKBN.js?v=f6ab941d:15918:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=f6ab941d:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=f6ab941d:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=f6ab941d:3733:39)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=f6ab941d:19765:15)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=f6ab941d:19198:20)
+installHook.js:1 The above error occurred in the <QuotationForm> component:
+
+    at QuotationForm (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/quotations/quotation-form.tsx:151:21)
+    at Route (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6ab941d:323:16)
+    at Switch (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6ab941d:379:17)
+    at Suspense
+    at div
+    at div
+    at div
+    at AuthenticatedApp (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/AppArea.tsx:473:3)
+    at Router (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6ab941d:291:17)
+    at Provider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/AppArea.tsx:1795:42)
+    at Suspense
+    at ErrorBoundary (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/components/error-boundary.tsx:13:5)
+    at App (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?v=zL_dMVAqftUvbDntVcLCv:245:22)
+    at V (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=f6ab941d:44:25)
+    at J (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=f6ab941d:2805:3)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary.
+overrideMethod @ installHook.js:1
+installHook.js:1 [ErrorBoundary] Uncaught error: ReferenceError: Cannot access 'matSubtotal' before initialization
+    at QuotationForm (quotation-form.tsx:435:7)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=f6ab941d:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=f6ab941d:14582:28)
+    at mountLazyComponent (chunk-RPCDYKBN.js?v=f6ab941d:14833:23)
+    at beginWork (chunk-RPCDYKBN.js?v=f6ab941d:15918:22)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=f6ab941d:19753:22)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=f6ab941d:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=f6ab941d:19137:13)
+    at renderRootSync (chunk-RPCDYKBN.js?v=f6ab941d:19116:15)
+    at recoverFromConcurrentError (chunk-RPCDYKBN.js?v=f6ab941d:18736:28) Error Component Stack
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+installHook.js:1 [ErrorBoundary] Component stack: 
+    at QuotationForm (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/quotations/quotation-form.tsx:151:21)
+    at Route (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6ab941d:323:16)
+    at Switch (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6ab941d:379:17)
+    at Suspense
+    at div
+    at div
+    at div
+    at AuthenticatedApp (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/AppArea.tsx:473:3)
+    at Router (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6ab941d:291:17)
+    at Provider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/AppArea.tsx:1795:42)
+    at Suspense
+    at ErrorBoundary (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/components/error-boundary.tsx:13:5)
+    at App (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?v=zL_dMVAqftUvbDntVcLCv:245:22)
+    at V (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=f6ab941d:44:25)
+    at J (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1

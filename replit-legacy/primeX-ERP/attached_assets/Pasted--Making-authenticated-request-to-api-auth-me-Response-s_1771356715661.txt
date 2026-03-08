@@ -1,0 +1,200 @@
+ Making authenticated request to: /api/auth/me
+ Response status: 200 for /api/auth/me
+ Making authenticated request to: /api/approvals/stats
+ Response status: 200 for /api/approvals/stats
+ Making authenticated request to: /api/accounting/account-groups/hierarchy
+ Making authenticated request to: /api/accounting/account-groups
+ Response status: 200 for /api/accounting/account-groups
+ Response status: 200 for /api/accounting/account-groups/hierarchy
+accounts:1 Uncaught (in promise) 
+accounts:1 Uncaught (in promise) 
+accounts:1 Uncaught (in promise) 
+accounts:1 Uncaught (in promise) 
+accounts:1 Uncaught (in promise) 
+ Making authenticated request to: /api/settings/tenant-settings
+ Making authenticated request to: /api/accounting/reports/trial-balance?asOfDate=2026-02-17
+ Response status: 200 for /api/settings/tenant-settings
+ Response status: 200 for /api/accounting/reports/trial-balance?asOfDate=2026-02-17
+ Making POST request to /api/ai-insights/trial-balance
+ AI analysis failed: 
+overrideMethod @ installHook.js:1
+queryClient.ts:74 Making authenticated request to: /api/accounting/reports/profit-and-loss?startDate=2026-01-31&endDate=2026-02-27
+queryClient.ts:82 Response status: 200 for /api/accounting/reports/profit-and-loss?startDate=2026-01-31&endDate=2026-02-27
+queryClient.ts:74 Making authenticated request to: /api/accounting/reports/balance-sheet?asOfDate=2026-02-17
+queryClient.ts:82 Response status: 200 for /api/accounting/reports/balance-sheet?asOfDate=2026-02-17
+queryClient.ts:74 Making authenticated request to: /api/accounting/cash-and-bank-accounts
+queryClient.ts:82 Response status: 200 for /api/accounting/cash-and-bank-accounts
+queryClient.ts:74 Making authenticated request to: /api/currencies
+queryClient.ts:82 Response status: 200 for /api/currencies
+queryClient.ts:74 Making authenticated request to: /api/accounting/reports/day-book?startDate=2026-01-31&endDate=2026-02-27
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/types
+queryClient.ts:82 Response status: 200 for /api/accounting/reports/day-book?startDate=2026-01-31&endDate=2026-02-27
+installHook.js:1 Warning: Each child in a list should have a unique "key" prop.
+
+Check the render method of `DayBookPage`. See https://reactjs.org/link/warning-keys for more information. Error Component Stack
+    at DayBookPage (day-book.tsx:56:37)
+    at Route (wouter.js?v=a50cc625:323:16)
+    at Switch (wouter.js?v=a50cc625:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (App.tsx:120:53)
+    at Provider (chunk-OXZDJRWN.js?v=a50cc625:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=a50cc625:65:5)
+    at App (App.tsx:278:42)
+    at V (next-themes.js?v=a50cc625:44:25)
+    at J (next-themes.js?v=a50cc625:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=a50cc625:2805:3)
+overrideMethod @ installHook.js:1
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers/types
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/approval-queue
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers/approval-queue
+queryClient.ts:74 Making authenticated request to: /api/accounting/reports/trial-balance
+queryClient.ts:82 Response status: 200 for /api/accounting/reports/trial-balance
+queryClient.ts:74 Making authenticated request to: /api/accounting/budgets
+queryClient.ts:74 Making authenticated request to: /api/accounting/fiscal-years
+queryClient.ts:82 Response status: 200 for /api/accounting/fiscal-years
+queryClient.ts:82 Response status: 200 for /api/accounting/budgets
+queryClient.ts:74 Making authenticated request to: /api/customers
+queryClient.ts:82 Response status: 200 for /api/customers
+inquiries-new.tsx:105 Inquiries data: Array(0)
+inquiries-new.tsx:106 Is loading: true
+inquiries-new.tsx:107 Is error: false
+inquiries-new.tsx:108 Inquiries array check: true
+inquiries-new.tsx:109 Inquiries length: 0
+queryClient.ts:74 Making authenticated request to: /api/inquiries
+queryClient.ts:82 Response status: 200 for /api/inquiries
+inquiries-new.tsx:105 Inquiries data: Array(6)
+inquiries-new.tsx:106 Is loading: false
+inquiries-new.tsx:107 Is error: false
+inquiries-new.tsx:108 Inquiries array check: true
+inquiries-new.tsx:109 Inquiries length: 6
+installHook.js:1 Warning: validateDOMNesting(...): <div> cannot appear as a descendant of <p>. Error Component Stack
+    at div (<anonymous>)
+    at Badge (badge.tsx:30:18)
+    at OrderStatusBadge (order-view.tsx:61:29)
+    at p (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at chunk-AXMZZQ2X.js?v=a50cc625:42:13
+    at Presence (chunk-E4UC4BFD.js?v=a50cc625:24:11)
+    at @radix-ui_react-tabs.js?v=a50cc625:176:13
+    at _c5 (tabs.tsx:41:6)
+    at div (<anonymous>)
+    at chunk-AXMZZQ2X.js?v=a50cc625:42:13
+    at Provider (chunk-OXZDJRWN.js?v=a50cc625:38:15)
+    at @radix-ui_react-tabs.js?v=a50cc625:54:7
+    at div (<anonymous>)
+    at OrderView (order-view.tsx:83:21)
+    at Route (wouter.js?v=a50cc625:323:16)
+    at Switch (wouter.js?v=a50cc625:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (App.tsx:120:53)
+    at Provider (chunk-OXZDJRWN.js?v=a50cc625:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=a50cc625:65:5)
+    at App (App.tsx:278:42)
+    at V (next-themes.js?v=a50cc625:44:25)
+    at J (next-themes.js?v=a50cc625:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=a50cc625:2805:3)
+overrideMethod @ installHook.js:1
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard/pending-quotations
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard/recent-orders
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard/upcoming-shipments
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard/expiring-lcs
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard/pending-quotations
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard/recent-orders
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard/expiring-lcs
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard/upcoming-shipments
+queryClient.ts:74 Making authenticated request to: /api/manufacturing-orders
+queryClient.ts:82 Response status: 200 for /api/manufacturing-orders
+queryClient.ts:74 Making authenticated request to: /api/accounting/chart-of-accounts
+queryClient.ts:82 Response status: 200 for /api/accounting/chart-of-accounts
+queryClient.ts:74 Making authenticated request to: /api/accounting/reports/profit-and-loss?startDate=2026-01-31&endDate=2026-02-27
+queryClient.ts:82 Response status: 200 for /api/accounting/reports/profit-and-loss?startDate=2026-01-31&endDate=2026-02-27
+queryClient.ts:74 Making authenticated request to: /api/accounting/reports/balance-sheet?asOfDate=2026-02-17
+queryClient.ts:82 Response status: 200 for /api/accounting/reports/balance-sheet?asOfDate=2026-02-17
+queryClient.ts:74 Making authenticated request to: /api/accounting/account-groups/hierarchy
+queryClient.ts:74 Making authenticated request to: /api/accounting/account-groups
+queryClient.ts:82 Response status: 200 for /api/accounting/account-groups
+queryClient.ts:82 Response status: 200 for /api/accounting/account-groups/hierarchy
+queryClient.ts:74 Making authenticated request to: /api/accounting/periods
+queryClient.ts:82 Response status: 200 for /api/accounting/periods
+queryClient.ts:74 Making authenticated request to: /api/rbac/roles
+queryClient.ts:74 Making authenticated request to: /api/rbac/permissions
+queryClient.ts:82 Response status: 200 for /api/rbac/roles
+queryClient.ts:82 Response status: 200 for /api/rbac/permissions
+queryClient.ts:74 Making authenticated request to: /api/settings/users
+queryClient.ts:74 Making authenticated request to: /api/settings/roles
+queryClient.ts:74 Making authenticated request to: /api/settings/departments
+queryClient.ts:82 Response status: 200 for /api/settings/users
+queryClient.ts:82 Response status: 200 for /api/settings/departments
+queryClient.ts:82 Response status: 200 for /api/settings/roles
+queryClient.ts:74 Making authenticated request to: /api/approvals/stats
+queryClient.ts:74 Making authenticated request to: /api/approvals/my-actions
+queryClient.ts:82 Response status: 200 for /api/approvals/stats
+queryClient.ts:82 Response status: 200 for /api/approvals/my-actions
+approval-queue.tsx:443 Uncaught TypeError: action.replace is not a function
+    at approval-queue.tsx:443:45
+    at Array.map (<anonymous>)
+    at approval-queue.tsx:431:74
+    at Array.map (<anonymous>)
+    at ApprovalQueue (approval-queue.tsx:399:36)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=a50cc625:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=a50cc625:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=a50cc625:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=a50cc625:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=a50cc625:3699:24)
+approval-queue.tsx:443 Uncaught TypeError: action.replace is not a function
+    at approval-queue.tsx:443:45
+    at Array.map (<anonymous>)
+    at approval-queue.tsx:431:74
+    at Array.map (<anonymous>)
+    at ApprovalQueue (approval-queue.tsx:399:36)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=a50cc625:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=a50cc625:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=a50cc625:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=a50cc625:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=a50cc625:3699:24)
+installHook.js:1 The above error occurred in the <ApprovalQueue> component:
+
+    at ApprovalQueue (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/approvals/approval-queue.tsx:123:21)
+    at Route (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=a50cc625:323:16)
+    at Switch (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=a50cc625:379:17)
+    at Suspense
+    at div
+    at div
+    at div
+    at AuthenticatedApp (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?t=1771355868382&v=z0eepO3H5wNWTfT96TKVk:206:53)
+    at Provider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=a50cc625:38:15)
+    at TooltipProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=a50cc625:65:5)
+    at App (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?t=1771355868382&v=z0eepO3H5wNWTfT96TKVk:943:42)
+    at V (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=a50cc625:44:25)
+    at J (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=a50cc625:42:18)
+    at QueryClientProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=a50cc625:2805:3)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+overrideMethod @ installHook.js:1
+chunk-RPCDYKBN.js?v=a50cc625:9129 Uncaught TypeError: action.replace is not a function
+    at approval-queue.tsx:443:45
+    at Array.map (<anonymous>)
+    at approval-queue.tsx:431:74
+    at Array.map (<anonymous>)
+    at ApprovalQueue (approval-queue.tsx:399:36)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=a50cc625:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=a50cc625:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=a50cc625:15924:22)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=a50cc625:19753:22)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=a50cc625:19198:20)

@@ -1,0 +1,97 @@
+PHASE 6.1 — QA + OBSERVABILITY + DEPLOYMENT READINESS
+(Smoke tests for critical ERP flows + structured logging + error handling + prod config)
+
+Goal:
+Ensure the ERP is stable, debuggable, and safe to deploy:
+- Critical workflows have smoke tests (API-level)
+- Logs are structured and do not leak secrets/PII
+- Errors are consistent and observable
+- Production config is correct (CORS, cookies, env validation)
+- Database migration discipline is enforced
+
+Part A — Add a “System Health & Readiness” suite
+1) Implement GET /api/health (public) returning:
+   - status: ok
+   - version/commit (if available)
+   - uptime
+2) Implement GET /api/system/readiness (protected: ADMIN/TENANT_OWNER) returning:
+   - tenant settings completeness
+   - ledger mappings completeness
+   - number series completeness
+   - warehouse defaults completeness
+   - pendingPostingCount (inventory/accounting)
+   - period lock status summary
+
+Part B — Standardize error format across server
+1) Implement a global error handler:
+Return always:
+{ success:false, code, message, details, traceId }
+2) Ensure all known business errors use codes:
+AUTH_REQUIRED, NOT_AUTHORIZED, TENANT_REQUIRED,
+CONFIG_INCOMPLETE, PERIOD_LOCKED,
+UNBALANCED_VOUCHER, IMMUTABLE_POSTED,
+APPROVAL_REQUIRED, VALIDATION_ERROR,
+IDEMPOTENCY_REPLAY
+3) Ensure stack traces are hidden in production.
+
+Part C — Add structured logging (safe)
+1) Replace console logs with a structured logger (or consistent JSON logs).
+2) Log fields:
+- traceId, tenantId, userId (if exists), route, status, durationMs
+3) Redact:
+- Authorization headers
+- cookies
+- tokens
+- passwords
+- secrets
+- large payloads
+4) Add requestId + traceId propagation:
+- accept X-Request-Id
+- generate traceId per request if missing
+- include in response headers
+
+Part D — Smoke test scripts for critical flows (API level)
+Create scripts under /scripts/smoke/ (or /tests/smoke/) that run sequentially using a test tenant:
+1) Auth:
+- login -> token
+- /api/auth/me -> 200
+2) Tenant isolation:
+- create record tenant A
+- confirm tenant B cannot read it (403 or empty)
+3) Accounting core:
+- create voucher -> approve -> post
+- verify trial balance totals debit == credit
+4) Inventory:
+- GRN post idempotent (same requestId doesn't duplicate)
+- stock valuation endpoint returns numeric totals
+5) Production:
+- create production order -> approve -> start -> complete
+- verify inventory move trace + voucher link
+6) Sales:
+- create SO -> delivery post -> invoice post -> receipt post
+- verify AR outstanding becomes 0
+Each script must print PASS/FAIL and exit non-zero on failure.
+
+Part E — Runtime & deployment sanity
+1) Add environment validation at startup:
+- required env vars in production: DATABASE_URL, JWT_SECRET, etc.
+- crash fast with clear error if missing
+2) Confirm CORS is correct for your frontend domain(s)
+3) Confirm cookies are:
+- httpOnly
+- sameSite appropriate
+- secure in production
+4) Add a simple rate-limit for auth endpoints (optional but recommended)
+
+Part F — Migration discipline
+1) Ensure migrations are tracked and applied on startup or via command.
+2) Add a command:
+- npm run db:migrate
+- npm run db:status (if possible)
+
+OUTPUT REQUIREMENTS:
+- list of files changed
+- example error response JSON
+- example structured log line
+- instructions to run smoke tests + sample output showing PASS
+- readiness endpoint sample JSON

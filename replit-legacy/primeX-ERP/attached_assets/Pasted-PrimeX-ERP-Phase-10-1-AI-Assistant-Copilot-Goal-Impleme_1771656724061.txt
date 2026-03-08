@@ -1,0 +1,58 @@
+PrimeX ERP — Phase 10.1 (AI Assistant / Copilot)
+
+Goal:
+Implement an in-app AI Assistant that can answer user questions about ERP data (based on permissions), provide guidance (how-to), and generate drafts (notes, emails, voucher narration, etc.) with full audit logging.
+
+Scope (DO EXACTLY THIS, no extra modules):
+1) Backend (create a new app/module):
+- Create backend app: ai_assistant
+- Add models:
+  a) AssistantThread (tenant_id, created_by, title, created_at)
+  b) AssistantMessage (thread FK, role: user/assistant/system, content TEXT, created_by NULL for assistant, created_at)
+  c) AssistantAuditLog (tenant_id, user_id, thread_id, action, metadata JSON, ip_address, created_at)
+
+2) Permissions & tenant isolation:
+- Ensure every query is tenant-scoped.
+- Enforce RBAC: only authenticated users; restrict access to data summaries by role.
+- Add a helper “get_user_data_scope(user)” to limit what the assistant can fetch/summarize.
+
+3) Retrieval Context (safe ERP context):
+- Create a service that builds “context blocks” for the assistant:
+  - Company profile (tenant name, currency, fiscal period)
+  - User role/permissions summary
+  - Optional structured summaries: latest 30 days totals for sales/purchase/receipts/payments (ONLY if user has permission to view those reports)
+- Do NOT dump raw tables. Provide small, aggregated, permission-safe summaries.
+
+4) API endpoints (DRF):
+- POST /api/ai/threads/  -> create thread
+- GET  /api/ai/threads/  -> list threads (tenant/user scoped)
+- GET  /api/ai/threads/{id}/ -> thread + messages
+- POST /api/ai/threads/{id}/messages/ -> send user message, return assistant reply
+- POST /api/ai/suggestions/ -> returns quick prompts based on module/page (e.g., “Show today’s cash position”, “Explain voucher posting workflow”)
+All endpoints must write AssistantAuditLog.
+
+5) AI Provider abstraction:
+- Create provider interface ai_assistant/providers/base.py with method generate_reply(messages, context_blocks) -> string
+- Implement a “mock provider” first (returns deterministic placeholder) so system works without keys.
+- Add config to switch provider via env var (e.g., AI_PROVIDER=mock/openai). If openai is not configured, fallback to mock automatically.
+
+6) Frontend UI:
+- Add sidebar item: “AI Assistant”
+- Create page with:
+  - Thread list (left)
+  - Chat panel (right)
+  - Message composer
+  - “Use current page context” toggle (sends page identifier + module)
+- Use existing design system and keep mobile responsive.
+
+7) Testing:
+- Add minimal tests for:
+  - tenant isolation
+  - RBAC blocking unauthorized report context
+  - message creation + audit log creation
+
+Deliverables:
+- Working endpoints + UI
+- Mock provider enabled by default
+- Clean code, migrations included
+- Update README with how to enable real provider later (without adding keys in repo)

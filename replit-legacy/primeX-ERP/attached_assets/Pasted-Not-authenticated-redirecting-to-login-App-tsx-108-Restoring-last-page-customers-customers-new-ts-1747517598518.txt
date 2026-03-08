@@ -1,0 +1,65 @@
+Not authenticated, redirecting to login
+App.tsx:108 Restoring last page: /customers
+customers-new.tsx:416 Submitting customer data: {customerName: 'primark', country: 'United Kingdom', hasAgent: false, contactPerson: 'helene', email: 'hele@gmail.com', …}
+queryClient.ts:15 Making POST request to /api/customers {customerName: 'primark', country: 'United Kingdom', hasAgent: false, contactPerson: 'helene', email: 'hele@gmail.com', …}
+queryClient.ts:17 
+            
+            
+           POST https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/api/customers 500 (Internal Server Error)
+apiRequest @ queryClient.ts:17
+mutationFn @ customers-new.tsx:316
+fn @ @tanstack_react-query.js?v=f768f31e:1189
+run @ @tanstack_react-query.js?v=f768f31e:494
+start @ @tanstack_react-query.js?v=f768f31e:536
+execute @ @tanstack_react-query.js?v=f768f31e:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=f768f31e:2630
+(anonymous) @ @tanstack_react-query.js?v=f768f31e:3295
+handleCreateCustomer @ customers-new.tsx:417
+(anonymous) @ chunk-4BFJKWC4.js?v=f768f31e:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=f768f31e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=f768f31e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=f768f31e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=f768f31e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=f768f31e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=f768f31e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=f768f31e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=f768f31e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=f768f31e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=f768f31e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=f768f31e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=f768f31e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=f768f31e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=f768f31e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=f768f31e:5449Understand this error
+queryClient.ts:26 API error (500): {"message":"Failed to create customer"}
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:26
+await in apiRequest
+mutationFn @ customers-new.tsx:316
+fn @ @tanstack_react-query.js?v=f768f31e:1189
+run @ @tanstack_react-query.js?v=f768f31e:494
+start @ @tanstack_react-query.js?v=f768f31e:536
+execute @ @tanstack_react-query.js?v=f768f31e:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=f768f31e:2630
+(anonymous) @ @tanstack_react-query.js?v=f768f31e:3295
+handleCreateCustomer @ customers-new.tsx:417
+(anonymous) @ chunk-4BFJKWC4.js?v=f768f31e:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=f768f31e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=f768f31e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=f768f31e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=f768f31e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=f768f31e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=f768f31e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=f768f31e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=f768f31e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=f768f31e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=f768f31e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=f768f31e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=f768f31e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=f768f31e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=f768f31e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=f768f31e:5449Understand this error

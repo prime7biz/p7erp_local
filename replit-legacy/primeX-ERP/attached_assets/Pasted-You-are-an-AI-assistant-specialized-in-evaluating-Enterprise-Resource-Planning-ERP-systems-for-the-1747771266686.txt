@@ -1,0 +1,53 @@
+You are an AI assistant specialized in evaluating Enterprise Resource Planning (ERP) systems for the garment manufacturing industry.
+
+Our company has developed a SaaS-based, multi-tenant ERP application using Node.js for the backend, React for the frontend, and PostgreSQL for the database. We need to assess its compliance with a comprehensive garment factory workflow, identify gaps, and get suggestions for enhancements.
+
+**Our Target Factory Workflow includes the following core stages and operations (some of which can be in-house or subcontracted):**
+
+1.  **Order Reception & Pre-Production Planning:**
+    * Order Intake (Style, Quantity, Sizes, Delivery Date).
+    * Tech Pack & Spec Sheet Management.
+    * Costing (Yarn, Knitting, Dyeing, Fabric, Printing, Embroidery, Washing, Trims, Labor, Overheads, Subcontracting).
+    * Bill of Materials (BOM) Management (Yarn, Fabric, Dyeing, Printing, Embroidery, Trims).
+    * Sampling Tracking (Proto, Fit, Size-Set, PPS) & Approvals (Lab Dips, Strike-Offs, Wash Standards).
+    * Time & Action (T&A) Calendar Management.
+
+2.  **Material Requirement Planning (MRP) & Procurement:**
+    * MRP Calculation for Yarn, Fabric (Greige/Dyed/Printed), Dyes, Chemicals, Printing Inks, Embroidery Threads, Trims.
+    * Inventory Check & Purchase Order (PO) Management.
+    * Supplier Management.
+    * Material Inward & Incoming Quality Control (IQC) for all material types.
+
+3.  **Production Execution & Monitoring (with support for in-house & subcontracting):**
+    * **Knitting:** Work Order, Yarn Issuance, Greige Fabric QC & Inventory.
+    * **Dyeing:** Work Order, Greige Fabric/Yarn Issuance, Dyed Fabric/Yarn QC & Inventory.
+    * **All Over Printing (AOP) / Fabric Printing:** Work Order, Fabric Issuance, Printed Fabric QC & Inventory.
+    * **Cutting:** Work Order, Fabric Issuance, Spreading, Marker (conceptually), Cutting, Cut Panel QC, Bundling.
+    * **Value Addition on Cut Panels (Embroidery, Placement Print):** Work Order, Panel Issuance, Process QC.
+    * **Sewing:** Work Order, Component Issuance, Inline QC, End-of-Line QC.
+    * **Washing (Garment Washing):** Work Order, Garment Issuance, Washed Garment QC.
+    * **Finishing:** Thread Trimming, Pressing, Final Trims, Final Quality Check (FQC).
+
+4.  **Packing & Dispatch:**
+    * Packing (Folding, Tagging, Poly-bagging, Carton Packing).
+    * Internal Final Audit.
+    * Dispatch Documentation (Packing Lists, Delivery Challans).
+    * Finished Goods Inventory Management.
+
+5.  **Subcontractor Management (for any outsourced process):**
+    * Subcontract Order Creation & Tracking.
+    * Material Issuance & Reconciliation with Subcontractors.
+    * QC for Goods Received from Subcontractors.
+    * Subcontractor Bill Processing.
+
+**Considering our tech stack (Node.js, React, PostgreSQL, SaaS multi-tenant architecture), please analyze the following:**
+
+1.  **Compliance Check:** Based on the described workflow, which modules or features commonly found in garment ERPs does our system likely already support, assuming standard ERP functionalities have been developed?
+2.  **Gap Analysis:** Which specific parts of the detailed workflow (especially Knitting, Dyeing, various Printing types, Embroidery, Washing, and comprehensive Subcontracting management for these) might our current ERP *NOT* adequately support or might require significant enhancements?
+3.  **Suggested Additions/Enhancements:**
+    * What new modules or specific features should we prioritize adding to fully cover this workflow?
+    * For the identified gaps (e.g., managing in-house vs. subcontracted specialized processes like dyeing or AOP), what specific functionalities would be needed? (e.g., capacity planning for specialized machines, recipe management for dyeing/washing, artwork versioning for printing/embroidery, detailed WIP tracking for subcontracted items).
+    * Provide brief suggestions on the business logic that would need to be implemented for 2-3 of the most critical missing features.
+    * Suggest key database tables and their essential relationships that would be necessary to support these new features, keeping PostgreSQL in mind. For example, how would `ProductionOrders` link to `SubcontractOrders` or specific `MachineTypes` for Knitting/Dyeing?
+
+Your insights will help us roadmap the future development of our ERP.

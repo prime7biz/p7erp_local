@@ -1,0 +1,126 @@
+You are inside my PrimeX ERP full codebase.
+
+GOAL (PHASE 14): “Quality System + Lab Test + Inline/Final Inspection + CAPA + Returns”
+Build a practical garment-industry QC module that connects to production, inventory lots, shipments, and accounting — without slowing operations.
+
+NON-NEGOTIABLES
+- QC must not be mandatory for every flow, but must be enforceable per buyer/style/process.
+- Strict tenant isolation.
+- Posted docs immutable; use reversal.
+- QC HOLD stock must not be shippable/issuable until released (configurable per item/buyer).
+- Barcode not required.
+
+========================================================
+A) QC CONFIG (BUYER/STYLE/PROCESS RULES)
+========================================================
+1) Create QC configuration tables:
+   - qc_profiles: id, tenantId, name, appliesTo (BUYER|STYLE|CATEGORY), buyerId?, styleId?, itemCategoryId?, isActive
+   - qc_checklists: id, tenantId, qcProfileId, stage (INCOMING|INLINE|FINAL|PACKING|PRE_SHIP), name, version, isActive
+   - qc_checklist_items: id, tenantId, checklistId, parameter, method, toleranceMin?, toleranceMax?, defectType (CRITICAL|MAJOR|MINOR), isRequired
+
+2) UI:
+   - Quality → Profiles
+   - Quality → Checklists (with versioning + duplication)
+   - Allow mapping a buyer/style to a QC profile.
+
+========================================================
+B) QC EVENTS (INCOMING / INLINE / FINAL / PRE-SHIP)
+========================================================
+3) Create QC event tables:
+   - qc_inspections: id, tenantId, stage, referenceType (GRN|JOBWORK_RECEIVE|PRODUCTION_BATCH|PACKING|SHIPMENT),
+     referenceId, styleId?, componentId?, colorwayId?, deliveryId?,
+     warehouseId?, binId?, inventoryLotId?, inspectorUserId,
+     sampleSize, inspectedQty, passQty, failQty, reworkQty, scrapQty,
+     aqlLevel?, result (PASS|FAIL|HOLD), remarks, createdAt
+   - qc_defects: id, tenantId, inspectionId, parameter, defectType, count, notes
+   - qc_actions: id, tenantId, inspectionId, actionType (REWORK|SCRAP|HOLD|RELEASE|RETURN_TO_VENDOR), qty, targetWarehouseId?, notes
+
+4) Integrations:
+   - Incoming QC: tied to GRN / supplier lot(s)
+   - Inline QC: tied to production plan task or batch
+   - Final QC: tied to finished goods lots / packing
+   - Pre-ship QC: tied to shipment/invoice/packing list
+
+========================================================
+C) QC HOLD / RELEASE STOCK CONTROL
+========================================================
+5) Implement stock status buckets:
+   - At minimum per lot:
+     AVAILABLE, QC_HOLD, REWORK, SCRAP (or flags)
+   - Update inventory lots to store:
+     status or segregated qty fields:
+       qtyAvailable, qtyQcHold, qtyRework, qtyScrap
+   - Ensure issue/shipment allocation uses only qtyAvailable unless override permission.
+
+6) Posting rules:
+   - QC HOLD moves qty from available → qc_hold bucket
+   - RELEASE moves qc_hold → available
+   - SCRAP moves to scrap bucket and triggers wastage accounting (if configured)
+   - REWORK holds for reprocessing; optional return to available after rework completion
+
+========================================================
+D) LAB TEST MANAGEMENT (OPTIONAL BUT INDUSTRY USEFUL)
+========================================================
+7) Add lab test tracking:
+   - lab_tests: id, tenantId, referenceType, referenceId, styleId?, lotId?, testType, labName, sentDate, resultDate,
+     status (SENT|RECEIVED|PASS|FAIL), reportFileId? (if file uploads exist), remarks
+   - Link lab tests to buyer compliance requirements if such data exists.
+
+8) UI:
+   - Quality → Lab Tests
+   - Attach PDF report (if uploads exist). If not, store metadata only.
+
+========================================================
+E) CAPA (Corrective & Preventive Action)
+========================================================
+9) Implement CAPA:
+   - capa_cases: id, tenantId, sourceType (QC|CUSTOMER_COMPLAINT|AUDIT),
+     sourceId, severity, rootCause, correctiveAction, preventiveAction,
+     ownerUserId, dueDate, status (OPEN|IN_PROGRESS|DONE|VERIFIED), verificationNotes
+   - CAPA can be created from any failed inspection with one click.
+
+10) UI:
+   - Quality → CAPA
+   - Dashboard widget: open CAPA count, overdue CAPA count
+
+========================================================
+F) RETURNS / CLAIMS (CUSTOMER + VENDOR)
+========================================================
+11) Implement Returns workflow:
+   - customer_returns: id, tenantId, shipmentId/invoiceId, styleId?, qty, reason, status
+   - vendor_returns: id, tenantId, grnId, vendorId, lotId, qty, reason, status
+   - For customer returns:
+     - create stock receipt into QC_HOLD by default
+     - create credit note / adjustment voucher if accounting module supports it
+   - For vendor returns:
+     - create stock issue back to vendor, link to debit note if needed
+
+========================================================
+G) REPORTS + DASHBOARD
+========================================================
+12) Reports:
+   - Defect Pareto (by defectType/parameter)
+   - Fail rate by buyer/style/line/department
+   - QC hold aging
+   - Scrap/rework cost impact (ties into accounting if mapping exists)
+
+13) UI:
+   - Quality Dashboard: Exceptions first (failed inspections, qc hold > X days, open CAPA)
+
+========================================================
+QA / ACCEPTANCE
+========================================================
+14) Tests/checks:
+   - QC HOLD stock cannot be allocated to shipment/issue
+   - Release makes it available again
+   - CAPA created from inspection
+   - Returns create correct stock movement and accounting adjustments (if enabled)
+   - Tenant safety everywhere
+
+DELIVERABLES
+- Full Quality module (profiles, checklists, inspections, lab tests, CAPA, returns)
+- Integration with inventory lots + shipments + production
+- Reports + dashboard
+- Summary of schema, routes, UI pages, and configs
+
+Now implement Phase 14 end-to-end.

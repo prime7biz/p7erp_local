@@ -1,0 +1,194 @@
+Warning: A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components Error Component Stack
+    at input (<anonymous>)
+    at _c (/src/components/ui/input.tsx:20:11)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=64c4692e:79:13
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=64c4692e:56:13
+    at /src/components/ui/form.tsx:130:9
+    at div (<anonymous>)
+    at /src/components/ui/form.tsx:72:6
+    at Controller (chunk-4BFJKWC4.js:298:35)
+    at FormField (/src/components/ui/form.tsx:33:6)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (/src/components/ui/card.tsx:114:12)
+    at div (<anonymous>)
+    at _c (/src/components/ui/card.tsx:20:11)
+    at div (<anonymous>)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Presence (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-E4UC4BFD.js?v=64c4692e:24:11)
+    at @radix-ui_react-tabs.js:176:13
+    at _c5 (/src/components/ui/tabs.tsx:72:12)
+    at div (<anonymous>)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at @radix-ui_react-tabs.js:54:7
+    at form (<anonymous>)
+    at FormProvider (chunk-4BFJKWC4.js:102:11)
+    at div (<anonymous>)
+    at QuotationForm (/src/pages/quotations/quotation-form.tsx:152:21)
+    at Route (/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:323:16)
+    at Switch (/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:379:17)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AppRoutes (App.tsx:106:42)
+    at GamificationProvider (/src/context/gamification-context.tsx:25:40)
+    at OnboardingProvider (/src/context/onboarding-context.tsx:20:38)
+    at AuthProvider (/src/context/auth-context.tsx:24:32)
+    at App (<anonymous>)
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at TooltipProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=64c4692e:65:5)
+    at V (/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:44:25)
+    at J (/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:42:18)
+    at QueryClientProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=64c4692e:2805:3)
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 Warning: `value` prop on `input` should not be null. Consider using an empty string to clear the component or `undefined` for uncontrolled components. Error Component Stack
+    at input (<anonymous>)
+    at _c (/src/components/ui/input.tsx:20:11)
+    at Controller (chunk-4BFJKWC4.js:298:35)
+    at FormField (/src/components/ui/form.tsx:33:6)
+    at td (<anonymous>)
+    at _c13 (/src/components/ui/table.tsx:152:13)
+    at tr (<anonymous>)
+    at _c9 (/src/components/ui/table.tsx:102:12)
+    at tbody (<anonymous>)
+    at _c5 (/src/components/ui/table.tsx:55:12)
+    at table (<anonymous>)
+    at div (<anonymous>)
+    at _c (/src/components/ui/table.tsx:20:11)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (/src/components/ui/card.tsx:114:12)
+    at div (<anonymous>)
+    at _c (/src/components/ui/card.tsx:20:11)
+    at div (<anonymous>)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Presence (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-E4UC4BFD.js?v=64c4692e:24:11)
+    at @radix-ui_react-tabs.js:176:13
+    at _c5 (/src/components/ui/tabs.tsx:72:12)
+    at div (<anonymous>)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at @radix-ui_react-tabs.js:54:7
+    at form (<anonymous>)
+    at FormProvider (chunk-4BFJKWC4.js:102:11)
+    at div (<anonymous>)
+    at QuotationForm (/src/pages/quotations/quotation-form.tsx:152:21)
+    at Route (/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:323:16)
+    at Switch (/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:379:17)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AppRoutes (App.tsx:106:42)
+    at GamificationProvider (/src/context/gamification-context.tsx:25:40)
+    at OnboardingProvider (/src/context/onboarding-context.tsx:20:38)
+    at AuthProvider (/src/context/auth-context.tsx:24:32)
+    at App (<anonymous>)
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at TooltipProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=64c4692e:65:5)
+    at V (/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:44:25)
+    at J (/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:42:18)
+    at QueryClientProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=64c4692e:2805:3)
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 Warning: A component is changing a controlled input to be uncontrolled. This is likely caused by the value changing from a defined to undefined, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components Error Component Stack
+    at input (<anonymous>)
+    at _c (/src/components/ui/input.tsx:20:11)
+    at Controller (chunk-4BFJKWC4.js:298:35)
+    at FormField (/src/components/ui/form.tsx:33:6)
+    at td (<anonymous>)
+    at _c13 (/src/components/ui/table.tsx:152:13)
+    at tr (<anonymous>)
+    at _c9 (/src/components/ui/table.tsx:102:12)
+    at tbody (<anonymous>)
+    at _c5 (/src/components/ui/table.tsx:55:12)
+    at table (<anonymous>)
+    at div (<anonymous>)
+    at _c (/src/components/ui/table.tsx:20:11)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (/src/components/ui/card.tsx:114:12)
+    at div (<anonymous>)
+    at _c (/src/components/ui/card.tsx:20:11)
+    at div (<anonymous>)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Presence (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-E4UC4BFD.js?v=64c4692e:24:11)
+    at @radix-ui_react-tabs.js:176:13
+    at _c5 (/src/components/ui/tabs.tsx:72:12)
+    at div (<anonymous>)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at @radix-ui_react-tabs.js:54:7
+    at form (<anonymous>)
+    at FormProvider (chunk-4BFJKWC4.js:102:11)
+    at div (<anonymous>)
+    at QuotationForm (/src/pages/quotations/quotation-form.tsx:152:21)
+    at Route (/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:323:16)
+    at Switch (/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:379:17)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AppRoutes (App.tsx:106:42)
+    at GamificationProvider (/src/context/gamification-context.tsx:25:40)
+    at OnboardingProvider (/src/context/onboarding-context.tsx:20:38)
+    at AuthProvider (/src/context/auth-context.tsx:24:32)
+    at App (<anonymous>)
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at TooltipProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=64c4692e:65:5)
+    at V (/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:44:25)
+    at J (/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:42:18)
+    at QueryClientProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=64c4692e:2805:3)
+overrideMethod @ hook.js:608Understand this error
+ Total material cost: 0.00
+ Total manufacturing cost: 0.00
+ Total other cost: 0.00
+ Actual cost required: 0.00
+ Cost per piece: 0.00
+ Quoted price per piece: 0.00
+ Total material cost: 0.00
+ Total manufacturing cost: 0.00
+ Total other cost: 0.00
+ Actual cost required: 0.00
+ Cost per piece: 0.00
+ Quoted price per piece: 0.00
+ Total material cost: 2572.00
+ Total manufacturing cost: 0.00
+ Total other cost: 0.00
+ Actual cost required: 2572.00
+ Cost per piece: 0.00
+ Quoted price per piece: 0.00
+ Total material cost: 0.00
+ Total manufacturing cost: 0.00
+ Total other cost: 0.00
+ Actual cost required: 0.00
+ Cost per piece: 0.00
+ Quoted price per piece: 0.00
+ Total material cost: 0.00
+ Total manufacturing cost: 0.00
+ Total other cost: 0.00
+ Actual cost required: 0.00
+ Cost per piece: 0.00
+ Quoted price per piece: 0.00
+ Total material cost: 0.00
+ Total manufacturing cost: 0.00
+ Total other cost: 0.00
+ Actual cost required: 0.00
+ Cost per piece: 0.00
+ Quoted price per piece: 0.00
+ Total material cost: 1028800.00
+ Total manufacturing cost: 0.00
+ Total other cost: 0.00
+ Actual cost required: 1028800.00
+ Cost per piece: 0.83
+ Quoted price per piece: 0.96
+ Total material cost: 10288000.00
+ Total manufacturing cost: 0.00
+ Total other cost: 0.00
+ Actual cost required: 10288000.00
+ Cost per piece: 8.33
+ Quoted price per piece: 9.58
+ Total material cost: 102880000.00
+ Total manufacturing cost: 0.00
+ Total other cost: 0.00
+ Actual cost required: 102880000.00
+ Cost per piece: 83.33
+ Quoted price per piece: 95.83

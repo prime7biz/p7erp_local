@@ -1,0 +1,117 @@
+PHASE 4.1 — PRODUCTION TRANSFORMATION WORKFLOW (Yarn → Greige → Finished)
+(WIP + Subcontract + Cost Roll-up + Inventory + Accounting + Approvals)
+
+Goal:
+Support real garment/textile material flow:
+- RM (yarn) issued to knitting / subcontract → produces Greige fabric
+- Greige issued to dyeing / subcontract → produces Finished fabric
+- Maintain WIP when production spans time
+- Track yields, wastage, process loss
+- Cost roll-up from inputs + process costs
+- Every transformation impacts inventory valuation + accounting vouchers
+- Consumption must-not-fail + approval needed for changes
+
+Part A — Discover current production/inventory model (NO changes yet)
+1) Locate existing modules/tables/endpoints for:
+   - production orders / work orders (if any)
+   - BOM / recipes / consumption rules
+   - inventory moves (issue/receipt)
+   - subcontract / job work (if any)
+   - warehouses/locations (RM store, WIP, FG store)
+   - accounting voucher generation
+2) Output file paths + key snippets.
+
+Part B — Data Model (minimal, ERP-grade)
+Implement (or extend existing) tables:
+1) production_orders:
+   - id, tenantId, type: KNIT|DYE|CUT|SEW|FINISH (start with KNIT & DYE)
+   - inputItemId, outputItemId
+   - plannedInputQty, plannedOutputQty
+   - actualInputQty, actualOutputQty
+   - wastageQty, wastagePct
+   - status: DRAFT|APPROVED|IN_PROGRESS|COMPLETED|CLOSED
+   - warehouseFromId (RM/WIP source), warehouseToId (WIP/FG destination)
+   - subcontractorId (nullable)
+   - processCost (nullable) + currency
+   - createdBy, approvedBy, dates
+2) production_consumptions:
+   - id, tenantId, productionOrderId, itemId, qty, unitCost, totalCost
+   - sourceMoveId (inventory move link)
+3) production_outputs:
+   - id, tenantId, productionOrderId, itemId, qty, unitCost, totalCost
+   - outputMoveId (inventory move link)
+
+Part C — Workflow + approvals (must-not-fail)
+1) DRAFT: editable (planner/data entry)
+2) APPROVED: locks planned consumption (cannot change without approval override)
+3) IN_PROGRESS:
+   - Issues input materials from RM/WIP warehouse (inventory OUT)
+   - Creates WIP layer (optional: WIP warehouse)
+4) COMPLETED:
+   - Receives output material to WIP/FG warehouse (inventory IN)
+   - Calculates yield & wastage
+   - Posts accounting voucher (WIP/Inventory/Process cost)
+5) Override:
+   - If actual consumption differs from approved plan OR stock would go negative:
+     block with code APPROVAL_REQUIRED
+   - Allow override only for workflow:override with overrideReason + audit log
+
+Part D — Inventory valuation integration
+1) All issues/receipts generate inventory moves with:
+   - sourceDocType="PRODUCTION"
+   - sourceDocId=productionOrderId
+   - postingStatus PENDING_POSTING/POSTED
+   - accountingVoucherId linkage
+2) Costing:
+   - Input cost = valuation cost of issued yarn/greige
+   - Add processCost (knitting/dyeing cost, subcontract bill) to output cost
+   - Output unit cost = (total input cost + processCost - scrap value if any) / outputQty
+
+Part E — Accounting integration (Tally-like)
+1) On COMPLETED:
+   - Create voucher lines:
+     - Debit: Output inventory (Greige/Finished) OR WIP inventory
+     - Credit: Input inventory (Yarn/Greige)
+     - Debit: WIP/Production expense for processCost (if process cost is expense) OR capitalize into inventory
+     - Credit: Payable to subcontractor OR cash/bank accrual (if billed later)
+2) Keep it configurable:
+   - mapping table per tenant:
+     - inventoryAssetLedgerId per item category
+     - wipLedgerId
+     - productionExpenseLedgerId
+     - subcontractPayableLedgerId
+
+Part F — APIs (minimum)
+1) POST /api/production/orders (create draft)
+2) POST /api/production/orders/:id/approve
+3) POST /api/production/orders/:id/start (issue inputs; transaction + locking)
+4) POST /api/production/orders/:id/complete (receive outputs; create valuation + voucher; transaction)
+5) GET /api/production/orders?status=&type=&dateRange=
+6) GET /api/production/orders/:id (detail with consumption/output + trace links)
+
+Part G — Traceability & reports
+1) Production order detail must show:
+   - input issues (inventory move ids + costs)
+   - outputs received (inventory move ids + costs)
+   - linked voucher id/no
+   - yield %, wastage %, process loss
+2) Add report:
+   GET /api/reports/production/yield?start=&end=&type=
+   Return totals by type and by item.
+
+Part H — Verification (proof)
+Add a seed/test script:
+1) Yarn stock in: 1000kg @ cost
+2) Create KNIT order: input 500kg yarn → output 450kg greige (10% waste)
+3) Complete it, verify:
+   - inventory moves created correctly
+   - output unit cost matches roll-up
+   - voucher posted/linked
+4) Create DYE order: input 300kg greige → output 285kg finished + processCost
+5) Verify reconciliation inventory vs ledger difference = 0 when posted
+
+Output:
+- files changed list
+- sample JSON for create/approve/start/complete
+- cost calculation example with numbers
+- proof that transactions prevent partial consumption

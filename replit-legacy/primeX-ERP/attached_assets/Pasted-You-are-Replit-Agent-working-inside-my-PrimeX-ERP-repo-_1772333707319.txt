@@ -1,0 +1,111 @@
+You are Replit Agent working inside my PrimeX ERP repo.
+
+OBJECTIVE (Brand Finalization)
+Apply the provided Prime7 ERP logo across the entire application + marketing website, and update the overall color theme to match the logo branding (black + orange). The logo will be provided by me as an image and you must use it in the best possible format:
+- Prefer SVG if we can create/derive a clean vector version
+- Otherwise use PNG with TRANSPARENT background
+- Also generate an ON-WHITE version (for places where transparency or contrast is needed)
+Do NOT mention any file paths in your response. Just implement.
+
+RULES
+- Surgical changes only. No rewrites, no route path changes, no UI restructuring.
+- Use the repo’s existing theming system (Tailwind/CSS variables/shadcn tokens/theme provider). Do not introduce a new styling architecture.
+- Keep the ERP UI calm and readable: orange is for primary actions/accents, not full black backgrounds everywhere.
+- Maintain accessibility: good contrast, visible focus states, readable tables/forms.
+
+========================================================
+STEP 0 — INSPECT (must do first)
+========================================================
+1) Locate where branding currently lives:
+   - App shell layout (sidebar header, top header if exists)
+   - Auth pages (login/register/forgot)
+   - Marketing website header/footer + hero sections
+2) Locate where theme/colors are defined:
+   - tailwind.config, global CSS variables, shadcn theme tokens, theme provider
+3) Identify favicon/manifest/OG image setup if present.
+
+Then proceed automatically.
+
+========================================================
+PHASE A — LOGO IMPLEMENTATION (App + Website)
+========================================================
+A1) Add the provided logo asset(s) into the repo in a standard brand location used by the project.
+- Create/keep these variants:
+  - Primary: SVG (preferred) or transparent PNG
+  - On-white PNG (for white backgrounds/print)
+  - Small mark/favicon (use the “7” mark feel if possible)
+- Ensure transparent background where applicable.
+
+A2) Apply logo in the application (authenticated)
+- Sidebar header: replace text-only branding with logo + “Prime7 ERP” (or existing product title).
+- Top header/navbar (if exists): small logo mark.
+- Login/Register/Forgot/Verify pages: logo prominently placed.
+- Ensure responsive behavior (mobile sidebar).
+
+A3) Apply logo in marketing website (public)
+- Header: logo on left, responsive.
+- Footer: logo + brand text.
+- Replace any placeholder logos.
+
+A4) Browser/social branding
+- Favicon: replace with a small clean mark derived from the logo.
+- PWA manifest icons (if present): update icons.
+- OG image (if present): update to branded image.
+- Page title defaults (if needed): Prime7 ERP.
+
+Acceptance:
+- Logo visible on app shell + auth pages + website header/footer.
+- No broken images and no build errors.
+
+========================================================
+PHASE B — THEME UPDATE (Black + Orange brand)
+========================================================
+GOAL
+Align UI with logo brand:
+- Orange as primary CTA + highlights
+- Neutral light backgrounds for calm ERP readability
+- Charcoal/black for typography and headers
+
+B1) Centralize brand tokens
+- Update the existing theme tokens:
+  - Primary color → brand orange (match logo)
+  - Primary hover/active → darker orange
+  - Focus ring → orange tint
+  - Sidebar active item → subtle orange highlight + border
+- Keep backgrounds light unless dark mode already exists and is stable.
+
+B2) Apply theme to key components (minimal, consistent)
+- Buttons, links, badges, toggles
+- Sidebar active state
+- KPI cards accent
+- Alerts/toasts (ensure severity colors still clear)
+
+B3) Regression checks
+- Verify contrast/readability on:
+  - tables
+  - forms
+  - charts
+  - dialogs/modals
+- Ensure no “black text on dark background” issues.
+
+Acceptance:
+- App + website look consistent with Prime7 ERP branding.
+- Orange is used as accent/primary action; UI remains professional and readable.
+
+========================================================
+PHASE C — DOC UPDATES (Light touch)
+========================================================
+- Update replit.md and any branding docs to reflect:
+  - Prime7 ERP logo applied
+  - Theme updated to brand palette
+Do not include any file path details.
+
+========================================================
+FINAL OUTPUT REQUIRED
+========================================================
+After completion, summarize:
+1) Where the logo is applied (which screens/areas)
+2) What theme tokens/colors were updated (names + hex values)
+3) What favicon/manifest/OG updates were applied
+4) Quick verification checklist (5–10 bullets)
+Proceed now.

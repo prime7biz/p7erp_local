@@ -1,0 +1,118 @@
+You are working on the Prime7ERP codebase. Goal: improve SEO by adding a full public marketing website at the root domain, while keeping the ERP client area under /app (NO subdomain). Implement the following end-to-end with clean architecture, production-ready SEO basics, and a nice modern UI.
+
+NON-NEGOTIABLES
+- No subdomain. Everything must live under prime7erp.com.
+- Public marketing pages must be indexable for SEO.
+- The ERP client area must live under /app/* and must NOT be indexed by search engines.
+- Create sitemap.xml for only public pages (exclude /app/*).
+- Create robots.txt to allow public pages and disallow /app/*.
+
+ASSUMPTIONS / CONSTRAINTS
+- Use Next.js (App Router) for SSR/SSG SEO-friendly pages.
+- Use TailwindCSS for styling.
+- If an existing frontend exists, integrate these pages without breaking current auth/app routes.
+- Keep design calm, modern, “cloud ERP” look, with a garments-industry focus.
+- Add reusable components: Navbar, Footer, CTA section, Feature cards, FAQ accordion, Pricing cards.
+
+ROUTING PLAN (NO SUBDOMAIN)
+Public, indexable routes:
+1) /                  (Landing)
+2) /about             (What we are)
+3) /features          (What we offer)
+4) /garments-erp      (How garments benefit)
+5) /pricing           (Packages)
+6) /how-it-works      (Onboarding steps)
+7) /contact           (Lead + demo form)
+8) /security          (Security + compliance)
+9) /privacy           (Privacy Policy)
+10) /terms            (Terms)
+11) /resources        (Resources/blog index + 3 starter posts)
+
+Client area (NOT indexable):
+- /app/login
+- /app/register
+- /app/* (all existing app routes remain here)
+
+SEO REQUIREMENTS
+1) Add proper <title>, meta description, canonical, OpenGraph tags for every public page.
+2) Add JSON-LD schema where helpful:
+   - Organization schema on / and /about
+   - SoftwareApplication schema on /
+   - FAQPage schema on pages with FAQ section (/, /pricing, /garments-erp)
+3) Generate /sitemap.xml dynamically from the public routes list (exclude /app/*).
+4) Add /robots.txt:
+   - Allow: /
+   - Disallow: /app/
+   - Include: Sitemap: https://prime7erp.com/sitemap.xml (make base URL configurable via env)
+5) Ensure /app pages have noindex:
+   - Add a route-group layout for /app that sets:
+     <meta name="robots" content="noindex, nofollow" />
+   - Also set an X-Robots-Tag header for /app/* if possible.
+
+LANDING PAGE CONTENT (use this structure)
+- Hero: “Garments-focused Cloud ERP for inventory, production, accounting & compliance.”
+- Subtext: mention Tally-style accounting, consumption control with approval, stock valuation connected to accounts, yarn→fabric→finish conversions, WIP, LC/commercial, HR/payroll, reports.
+- Primary CTAs:
+  - “Start Free Trial” -> /app/register
+  - “Login” -> /app/login
+  - “Request Demo” -> /contact
+- Sections:
+  - Problem/Solution for garments (3–5 bullets)
+  - Modules grid (Accounting, Inventory, Production, Merchandising, Commercial/LC, HR, Reports)
+  - Workflow (How it works)
+  - Security/Trust highlights
+  - Pricing teaser
+  - FAQ (6–8 questions)
+  - Footer with links + contact
+
+GARMENTS ERP PAGE (/garments-erp)
+Write content targeted for SEO keywords:
+- “garments ERP”, “RMG ERP Bangladesh”, “Tally accounting ERP”, “garments inventory & production ERP”
+Include:
+- Pain points: consumption shouldn’t fail, approval override, stock valuation must post to accounts, process conversion (yarn→knit→dye→finish), batch/lot, WIP & costing, audit trails.
+- How Prime7ERP solves each
+- Short case-style example flow (no fake numbers, just process)
+- FAQ + FAQ schema
+
+PRICING PAGE (/pricing)
+- Provide 3 plans (Starter, Growth, Enterprise) with user-range hints (10–30, 31–100, 101+)
+- List what’s included and what’s add-on (implementation, training, support tiers)
+- CTA buttons to /contact and /app/register
+(Keep prices as “Contact us” if you don’t have real pricing.)
+
+RESOURCES (/resources)
+- Create an index page and 3 starter articles as static MDX or simple pages:
+  1) “Why consumption control matters in garments ERP”
+  2) “Stock valuation and accounting integration (Tally-style)”
+  3) “WIP, process loss and costing in RMG”
+Ensure each has SEO tags and internal links.
+
+CONTACT PAGE (/contact)
+- Create a simple form (name, company, email, phone, message).
+- The form should submit to an API route:
+  POST /api/leads
+Store leads in DB if backend exists; otherwise store as a JSON file (temporary) but keep interface ready for DB.
+Return success UI.
+Also include WhatsApp/phone/email placeholders.
+
+DESIGN SYSTEM
+- Implement a small style system: primary button, secondary button, card, section spacing.
+- Mobile responsive.
+- Clean typography and spacing.
+- Use a calm professional palette (not black/white only).
+
+DELIVERABLES
+1) All pages implemented under the routes above.
+2) /app route group with noindex meta.
+3) robots.txt + sitemap.xml working.
+4) Navbar links:
+   Product(/features), Garments ERP(/garments-erp), Pricing(/pricing), Resources(/resources), About(/about), Contact(/contact), Login(/app/login), Start Trial(/app/register)
+5) Ensure build passes and no existing /app functionality breaks.
+
+AFTER IMPLEMENTATION
+- Add a README section: “SEO Setup Checklist”
+  - Google Search Console
+  - Sitemap submission
+  - Robots check
+  - Page indexing check
+- Print the final route map and where to edit copy.

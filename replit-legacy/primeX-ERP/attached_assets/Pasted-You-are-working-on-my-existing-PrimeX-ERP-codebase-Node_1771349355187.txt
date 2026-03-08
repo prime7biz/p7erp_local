@@ -1,0 +1,334 @@
+You are working on my existing PrimeX ERP codebase (Node.js + PostgreSQL + Drizzle ORM). The system already uses ROW-LEVEL multi-tenant isolation with `tenant_id` on all business tables. DO NOT introduce schema-per-tenant or rewrite queries. Keep Drizzle and tighten the middleware and auth flows.
+
+IMPORTANT TERMINOLOGY (Use consistently in code, UI, docs):
+1) PLATFORM SUPER ADMIN = the owner/admin of the entire SaaS application (PrimeX team). This user can log into a backend/admin area and can view/manage ALL tenants and their data. Platform Super Admin is NOT tied to any tenant.
+2) TENANT OWNER = the admin user created during tenant registration for a specific company/tenant. This user is the top-level admin inside that tenant workspace (can create users/roles within their own tenant only). Tenant Owner is NOT a platform admin.
+
+From now on, NEVER use “super admin” for tenant users. Use:
+- Platform Super Admin (platform level)
+- Tenant Owner (tenant level)
+
+========================================================
+PART-0: NON-NEGOTIABLE SECURITY & ARCHITECTURE
+========================================================
+- Continue row-level isolation using tenant_id (already implemented).
+- Every tenant-scoped DB query MUST include tenant_id filtering.
+- tenant_id MUST be derived ONLY from JWT on protected routes.
+- NEVER accept tenant_id from client body/query/params for authorization decisions.
+- Keep Drizzle ORM. Make additive changes only (new columns, middleware, endpoints, UI changes).
+- Platform Super Admin must be able to approve tenants before they can use the app.
+
+========================================================
+PART-1: DATABASE MODEL (MINIMAL/ADDITIVE CHANGES)
+========================================================
+
+A) tenants table (or existing equivalent, adapt names but keep fields)
+Add/ensure these columns exist:
+- id (uuid preferred)
+- company_name (text)
+- company_code (text UNIQUE, auto-generated, IMMUTABLE)
+- status (text or enum): PENDING | APPROVED | REJECTED | SUSPENDED
+- created_at, updated_at
+- approved_at (nullable)
+- approved_by_platform_admin_id (nullable)  [references platform admins/users]
+- rejected_reason (nullable)
+
+B) users table (existing)
+Keep existing users table, but ensure it supports both tenant users and platform admin.
+Add/ensure:
+- id
+- tenant_id (nullable ONLY for platform users; required for tenant users)
+- username (text)
+- email (text) (required for Tenant Owner; can be optional for other tenant users if desired)
+- email_verified (boolean default false)
+- password_hash (text)
+- role (text/enum) for tenant roles: TENANT_OWNER | ADMIN | MANAGER | OFFICER | DATA_ENTRY
+- is_platform_super_admin (boolean default false)
+- is_active (boolean default true)
+- created_at
+
+CONSTRAINTS / INDEXES:
+- tenants.company_code UNIQUE
+- users UNIQUE(tenant_id, username)  (for tenant users)
+- users UNIQUE(tenant_id, email) where email is not null (for tenant users)
+- For platform users (tenant_id is NULL), enforce UNIQUE(email) and/or UNIQUE(username)
+
+If your existing role system differs, map TENANT_OWNER to your current highest tenant role.
+
+Optional audit logging (if existing, use it):
+- log platform approvals/rejections
+- log tenant signups
+
+========================================================
+PART-2: TENANT REGISTRATION (CREATES TENANT + TENANT OWNER)
+========================================================
+
+GOAL:
+Tenant signup creates a new tenant with status=PENDING and creates a TENANT OWNER user for that tenant.
+The tenant cannot login until approved by PLATFORM SUPER ADMIN.
+
+Public Route:
+POST /api/public/tenant-signup
+Input:
+- company_name
+- tenant_owner_name
+- tenant_owner_email (required)
+- password
+- plan(optional)
+
+Behavior:
+1) Generate company_code automatically (NO user editing):
+   - sanitize company_name => uppercase letters only
+   - take first 3-5 letters (min 3)
+   - append 3-4 random digits
+   - retry on collision up to 10 times
+2) Create tenant row:
+   - status = PENDING
+   - store generated company_code
+3) Create tenant owner user row:
+   - tenant_id = newly created tenant.id
+   - role = TENANT_OWNER
+   - email = tenant_owner_email (required)
+   - email_verified = false
+   - username:
+       - if user didn’t provide username, auto-set to "owner" or "admin"
+       - ensure UNIQUE within the tenant (append digits if needed)
+   - password_hash = bcrypt hash
+4) Return response:
+   - message: “Tenant registered successfully and pending approval.”
+   - company_code (read-only display)
+   - tenant_status: PENDING
+   - IMPORTANT: Do NOT issue tenant login token here.
+
+Frontend (Tenant Signup page):
+- Remove manual company code input.
+- After success, show generated company code prominently (read-only).
+- Show: “Your tenant is pending approval by PrimeX Platform Admin.”
+
+========================================================
+PART-3: PLATFORM SUPER ADMIN (APP-WIDE) + TENANT APPROVAL
+========================================================
+
+GOAL:
+Platform Super Admin can:
+- login to platform backend/admin area
+- list pending tenants
+- approve/reject tenants
+- optionally suspend tenants later
+
+Platform Admin Auth:
+Implement one of these simplest approaches (choose best fit for existing codebase):
+Option A (Preferred): Seed a platform super admin from environment variables and store in users table:
+- PLATFORM_SUPER_ADMIN_EMAIL
+- PLATFORM_SUPER_ADMIN_PASSWORD
+Rules:
+- platform super admin user has tenant_id = NULL
+- is_platform_super_admin = true
+- role can be "PLATFORM_SUPER_ADMIN" or keep boolean flag
+
+Routes:
+POST /api/platform/auth/login
+Input: email, password
+Output: JWT with claims:
+- user_id
+- is_platform_super_admin=true
+- tenant_id=null
+
+Platform Admin Protected Routes (require is_platform_super_admin):
+GET  /api/platform/tenants?status=PENDING
+GET  /api/platform/tenants/:tenantId
+POST /api/platform/tenants/:tenantId/approve
+POST /api/platform/tenants/:tenantId/reject   body: { reason }
+POST /api/platform/tenants/:tenantId/suspend  body: { reason } (optional)
+
+Approval behavior:
+- set tenants.status = APPROVED
+- set approved_at = now
+- set approved_by_platform_admin_id = platform user id
+- audit log if possible
+
+Reject behavior:
+- set tenants.status = REJECTED
+- set rejected_reason
+- audit log if possible
+
+Suspend behavior (optional):
+- set tenants.status = SUSPENDED
+- audit log
+
+IMPORTANT:
+- Only APPROVED tenants are allowed to login.
+
+========================================================
+PART-4: TENANT LOGIN (COMPANY CODE + USERNAME + PASSWORD)
+========================================================
+
+Tenant Login Route:
+POST /api/auth/login
+Input:
+- company_code
+- username
+- password
+
+Behavior:
+1) Find tenant by company_code
+2) If tenant not found => return “Invalid credentials” (generic)
+3) If tenant.status != APPROVED:
+   - If PENDING => “Company is pending approval”
+   - If REJECTED => “Company registration was rejected”
+   - If SUSPENDED => “Company is suspended, contact support”
+4) Find user by tenant_id + username
+5) Verify password
+6) Issue JWT containing:
+   - tenant_id (required)
+   - user_id
+   - role (TENANT_OWNER/ADMIN/etc.)
+7) Return token + profile
+
+Frontend Login page:
+- fields must be:
+  1) Company Code
+  2) Username
+  3) Password
+- remember last used company code locally
+- show tenant status errors clearly
+
+========================================================
+PART-5: EMAIL VERIFICATION + PASSWORD RESET (TENANT OWNER)
+========================================================
+
+Email verification:
+- POST /api/public/send-verification { email }
+- GET  /api/public/verify-email?token=...
+- Mark users.email_verified=true on success
+
+Password reset:
+- POST /api/public/forgot-password { email }
+- POST /api/public/reset-password { token, new_password }
+- At minimum must work for Tenant Owner (email required).
+- Use secure signed token with expiry.
+
+========================================================
+PART-6: STRICT ROW-LEVEL TENANT ISOLATION (DRIZZLE COMPATIBLE)
+========================================================
+
+MANDATORY:
+- For ALL tenant-protected routes:
+  - verify JWT
+  - derive tenant_id ONLY from JWT
+  - NEVER accept tenant_id from client input
+
+Implement middleware:
+1) authMiddleware:
+- verifies JWT
+- attaches req.auth = { userId, tenantId, role, isPlatformSuperAdmin }
+
+2) tenantScopeMiddleware (apply to all tenant app routes):
+- require req.auth.tenantId
+- expose a helper: req.tenantId
+- provide a repository helper to enforce tenant filters:
+  - e.g., `tenantWhere(table, conditions)` automatically adds `table.tenantId = req.tenantId`
+
+Guardrails:
+- Add dev assertion: throw error in development if a tenant table query is executed without tenant_id filter.
+- Add test cases:
+  - tenant A cannot read tenant B’s records
+  - platform super admin can list tenants and approve/reject
+
+IMPORTANT:
+- Platform Super Admin routes must NOT use tenantScopeMiddleware.
+- Platform Super Admin can access across tenants only through explicitly written admin endpoints that are protected.
+
+========================================================
+PART-7: DEMO ROUTES FOR ISOLATION TESTING
+========================================================
+
+Create a simple tenant table if not present:
+- notes (id, tenant_id, note, created_at)
+
+Routes (tenant-protected):
+- POST /api/app/notes { note }
+- GET  /api/app/notes
+
+Test:
+- Create tenant A + approve
+- Create tenant B + approve
+- Login tenant A, create note
+- Login tenant B, notes must not show A’s note
+
+========================================================
+PART-8: DASHBOARD + UI + THEME IMPROVEMENTS (FRONTEND)
+========================================================
+
+Apply these UI improvements without breaking existing navigation. Keep it calm, modern, premium ERP.
+
+A) Reduce big orange bar height
+- Make plan/status strip slimmer
+- Use orange only as small accent (stripe/icon), not a large filled bar
+
+B) One consistent card language
+- Neutral card background
+- Thin left accent strip
+- Consistent radius/padding/shadow
+- Strong colors only for alerts/errors
+
+C) Dashboard layout: Overview → Exceptions → Actions
+Top Overview KPIs:
+- Today’s Production
+- Shipments Due
+- Pending Approvals
+- Cash Position
+Middle Exceptions:
+- Late Orders
+- Low Stock
+- QA Fails
+- Overdue Invoices
+Bottom:
+- Quick Actions
+- Recent Activity
+
+D) Calm palette
+- Background warm off-white / light sand
+- Text near-black
+- Accent orange for buttons/highlights only
+- Secondary accent teal/indigo for info/links
+- Alerts: success green, warning amber, danger red (low saturation)
+
+E) Sidebar improvements
+- Collapse/expand groups (accordion)
+- Favorites pinned at top (pin/unpin modules)
+- Store favorites in localStorage or user preferences table (simplest)
+- Keep global search visible
+
+========================================================
+DELIVERABLES
+========================================================
+
+Backend:
+- migrations (tenants: company_code, status, approval fields; users: is_platform_super_admin and/or role updates)
+- endpoints:
+  - /api/public/tenant-signup
+  - /api/platform/auth/login (platform super admin)
+  - /api/platform/tenants (list/approve/reject)
+  - /api/auth/login (tenant login with company code)
+  - email verify + forgot/reset password
+- middleware:
+  - authMiddleware
+  - tenantScopeMiddleware
+  - tenant query helper enforcing tenant_id in Drizzle
+- tests proving tenant isolation + approval flow
+
+Frontend:
+- Tenant Signup UI: show generated company code, show PENDING message
+- Login UI: company code + username + password
+- Dashboard restructure + theme update
+- Sidebar collapsible groups + favorites
+
+README:
+- explain roles: Platform Super Admin vs Tenant Owner
+- explain tenant lifecycle: PENDING → APPROVED → (SUSPENDED/REJECTED)
+- explain strict tenant isolation rules
+- how to seed platform super admin via env vars
+- test plan
+
+Now implement all of the above end-to-end in my Replit project, using existing folder structure and Drizzle ORM patterns. Do not introduce schema-per-tenant.

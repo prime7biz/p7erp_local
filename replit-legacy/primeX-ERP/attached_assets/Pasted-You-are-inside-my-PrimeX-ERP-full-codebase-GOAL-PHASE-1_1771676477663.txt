@@ -1,0 +1,169 @@
+You are inside my PrimeX ERP full codebase.
+
+GOAL (PHASE 13A): “Lot/Batch Traceability + Warehouse/Bin + Gate Pass + Full Trace” 
+Barcode/QR must be OPTIONAL and NEVER mandatory. The system must work fully with manual selection/typing.
+
+NON-NEGOTIABLES
+- Do NOT break existing inventory, jobwork, production, QC, export, or accounting postings.
+- Strict tenant isolation on every query.
+- Posted docs remain immutable; use reversal for corrections.
+- Barcode/QR support can exist as OPTIONAL “label code”, but NO workflow may require scanning.
+- UI must support fast manual entry with typeahead + quick allocation.
+
+========================================================
+A) MASTER DATA: WAREHOUSE + BIN/LOCATION
+========================================================
+1) Ensure (or create) tenant-scoped masters:
+   - warehouses (id, tenantId, code, name, address, isActive)
+   - warehouse_bins (id, tenantId, warehouseId, code, name, isActive)
+2) Enforce uniqueness:
+   - (tenantId, code) unique for warehouses
+   - (tenantId, warehouseId, code) unique for bins
+3) Add UI pages:
+   - Inventory → Masters → Warehouses
+   - Inventory → Masters → Bins
+   Include create/edit/disable and search.
+
+========================================================
+B) LOT/BATCH/ROLL TRACEABILITY (OPTIONAL FIELDS, BUT TRACEABILITY MUST WORK)
+========================================================
+4) Create (or enhance) an inventory lots layer (tenant-scoped):
+   - inventory_lots:
+     id, tenantId, itemId,
+     warehouseId, binId,
+     lotNo (optional), rollNo (optional), dyeLot (optional),
+     mfgDate (optional), expDate (optional),
+     qtyOnHand, reservedQty,
+     uomId (if you have UOM), unitCost, valuationMethod,
+     labelCode (optional, auto-generated unique code for printing later),
+     sourceDocType, sourceDocId,
+     createdAt, updatedAt,
+     isActive
+   - Indexes:
+     (tenantId, itemId), (tenantId, warehouseId), (tenantId, labelCode unique), (tenantId, lotNo), (tenantId, rollNo), (tenantId, dyeLot)
+
+5) Update receiving logic (GRN / stock receive / purchase receive):
+   - When goods are received, create inventory_lots automatically.
+   - UI must allow:
+     - “Single lot receive” (default)
+     - “Split into multiple lots/rolls” (optional)
+   - qtyOnHand stored at lot level.
+
+6) Update ALL inventory-impacting movements to support lot allocation:
+   If you already have inventory movement tables, extend them with lots:
+   - inventory_move_lines: add requiresLotAllocation boolean (optional)
+   - inventory_move_lots (new):
+       id, tenantId, moveLineId, inventoryLotId, qty
+   Rules:
+   - For any issue/transfer/jobwork issue/production issue, lot allocations must sum to line qty.
+   - Provide “Auto Allocate” (FIFO/FEFO/Cost) but user can manually override.
+   - If tenant doesn’t want lot tracking, allow “system lot” fallback:
+       For items marked non-traceable, system can allocate from a default lot.
+   - IMPORTANT: Lot tracking should be configurable per item:
+       items.hasLotTracking boolean default false.
+
+========================================================
+C) FAST MANUAL ALLOCATION UX (NO BARCODE REQUIRED)
+========================================================
+7) Build a reusable “Lot Allocation Drawer/Modal” component:
+   - Triggered from any line item (Issue/Transfer/Jobwork/Production/Shipment pick)
+   - Shows available lots filtered by item + warehouse/bin, with columns:
+     lotNo, rollNo, dyeLot, qtyOnHand, reservedQty, availableQty, unitCost, age, warehouse/bin
+   - Actions:
+     - Add allocation qty per lot (editable)
+     - Auto Allocate FIFO button
+     - Allocate by “Closest match” (lotNo/rollNo typed by user)
+   - Keyboard-friendly:
+     - Type to filter
+     - Enter to add
+     - Ctrl/Cmd+Enter to confirm allocations
+   - Validation:
+     - Prevent allocating more than availableQty unless override approval exists (reuse existing override workflow).
+
+8) Add “Item Traceability Settings” UI:
+   - In Item master: toggle “Lot tracking”
+   - If ON: movements require lot allocations
+   - If OFF: system uses non-lot stock bucket (still stored as a default internal lot)
+
+========================================================
+D) GATE PASS / CHALLAN (LOGISTICS DOCUMENT) — INTEGRATED BUT FLEXIBLE
+========================================================
+9) Implement Gate Pass module:
+   - gate_passes: id, tenantId, type (OUT/IN), partyId (optional), vehicle, driver, date, status (DRAFT/APPROVED/CLOSED), remarks
+   - gate_pass_lines: id, tenantId, gatePassId, itemId, inventoryLotId (optional), qty, uomId (optional), fromWarehouseId, toWarehouseId (optional), remarks
+10) Linking rules:
+   - Gate pass can link to:
+     - jobwork order (issue/receive challan)
+     - inter-warehouse transfer
+     - sample dispatch
+     - export pre-shipment dispatch
+   - Gate pass itself should NOT force stock posting by default.
+   - Provide a configuration per tenant:
+     - gatePassPostingMode = "LOG_ONLY" (default) OR "POST_ON_APPROVE"
+   - If POST_ON_APPROVE, approving gate pass creates inventory movement automatically with lot allocations.
+
+========================================================
+E) FULL TRACEABILITY REPORTS (THE MAIN VALUE)
+========================================================
+11) Implement trace endpoints (tenant-safe):
+   - GET /api/trace/lot/:inventoryLotId
+   - GET /api/trace/search?query=lotNo|rollNo|dyeLot|labelCode
+   Output must show:
+   - Received from: supplier/GRN/source doc
+   - Storage history: warehouse/bin changes (movement timeline)
+   - Consumed where: issue/jobwork/production batch/voucher references
+   - Output links: if jobwork/production created new lots, link forward
+   - Shipped where: packing list / invoice / delivery
+
+12) UI:
+   - Inventory → Traceability
+     - Search box (lotNo/rollNo/dyeLot/labelCode)
+     - Result opens a “Trace Timeline” view (events in order with doc links)
+   - Add “View Trace” shortcut on:
+     - GRN details (lot)
+     - Issue/transfer lines
+     - Jobwork receive lines
+     - Shipment/carton selection (if exists)
+
+========================================================
+F) OPTIONAL BARCODE/QR (NOT REQUIRED)
+========================================================
+13) Do NOT add mandatory barcode scanning.
+   - labelCode should be auto-generated unique string for each lot.
+   - Add a simple “Print Lot Label” button (optional) that generates a small PDF/print view with:
+     Item name, lotNo/rollNo/dyeLot, qty, warehouse/bin, labelCode rendered as text and (if easy) QR.
+   - If QR generation library is heavy or risky, skip QR and only print labelCode as text (barcode can be added later).
+
+========================================================
+G) DATA INTEGRITY + PERFORMANCE
+========================================================
+14) Constraints & indexes:
+   - Ensure tenantId indexes exist everywhere.
+   - Prevent negative lot stock.
+   - Ensure reservedQty never exceeds qtyOnHand.
+15) Update posting pipelines:
+   - Any movement posting must update:
+     inventory_lots.qtyOnHand and reservedQty correctly
+   - Ensure Stock vs GL reconciliation still works (Phase 11).
+
+========================================================
+QA / ACCEPTANCE
+========================================================
+16) Add minimal checks/tests:
+   - Receiving creates lots
+   - Issue requires allocation ONLY when item.hasLotTracking = true
+   - Auto allocate FIFO works
+   - Trace timeline returns correct chain
+   - Gate pass in LOG_ONLY does not change stock
+   - Gate pass in POST_ON_APPROVE posts stock correctly
+
+DELIVERABLES
+- Warehouses/Bins masters + UI
+- inventory_lots + lot allocations integrated into movements
+- Lot Allocation UI (manual-first)
+- Gate pass module (log-only default, posting optional)
+- Traceability report UI + APIs
+- Optional label print (no scanning required)
+- Summary of all schema changes, routes, pages, and configs
+
+Now implement Phase 13A end-to-end.

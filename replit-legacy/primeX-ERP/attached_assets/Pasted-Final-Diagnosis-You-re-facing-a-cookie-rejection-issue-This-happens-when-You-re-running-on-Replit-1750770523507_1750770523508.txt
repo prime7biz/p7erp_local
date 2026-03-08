@@ -1,0 +1,128 @@
+Final Diagnosis: You're facing a cookie rejection issue
+This happens when:
+
+You're running on Replit over HTTPS
+
+You're using httpOnly JWT cookies (✅ correct)
+
+But cookies aren't being accepted by the browser due to incorrect SameSite or Secure config
+
+✅ Final Fix Summary
+Here’s exactly what to do step-by-step:
+
+🔧 1. Backend: Set JWT cookie properly in /api/auth/login
+In authRoutes.ts:
+
+ts
+Copy
+Edit
+res.cookie('token', token, {
+  httpOnly: true,
+  secure: true,          // ✅ Must be true on Replit (HTTPS)
+  sameSite: 'None',      // ✅ Required for cross-domain cookies
+  maxAge: 86400000,      // 1 day
+});
+res.status(200).json({ success: true });
+🔧 2. Frontend: Always include credentials
+In queryClient.ts or login.tsx:
+
+ts
+Copy
+Edit
+await fetch('/api/auth/login', {
+  method: 'POST',
+  credentials: 'include',               // ✅ MUST be set
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(credentials)
+});
+Also:
+
+ts
+Copy
+Edit
+await fetch('/api/auth/me', {
+  credentials: 'include'
+});
+🔧 3. Confirm: Did the Cookie Set?
+Open browser DevTools:
+
+Go to Application → Cookies
+
+Check if a token cookie exists for *.janeway.replit.dev
+
+If not: browser rejected it → usually because:
+
+❌ Missing SameSite=None
+❌ Missing secure: true
+❌ Localhost testing with secure: true
+
+🧪 Temporary Debug Tool (Add this once)
+Right after login in backend, log the cookie manually:
+
+ts
+Copy
+Edit
+console.log('Sending token cookie:', token);
+res.cookie('token', token, {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'None',
+  maxAge: 86400000,
+});
+res.status(200).json({ success: true });
+Then open DevTools → Network Tab
+Inspect the Set-Cookie header from /api/auth/login
+
+✅ Cursor Prompt for Final Fix
+php
+Copy
+Edit
+# 🔧 Cursor Prompt: Fix Cookie Not Persisting on Replit → Causes /api/auth/me 401
+
+## ✅ Update /api/auth/login Route
+```ts
+res.cookie('token', token, {
+  httpOnly: true,
+  secure: true,       // ✅ Must be true for Replit (HTTPS)
+  sameSite: 'None',   // ✅ Needed for cookie to be sent cross-origin
+  maxAge: 86400000,
+});
+res.status(200).json({ success: true });
+✅ Frontend Fixes
+In login fetch or apiRequest:
+ts
+Copy
+Edit
+fetch('/api/auth/login', {
+  method: 'POST',
+  credentials: 'include', // ✅ Required
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ email, password })
+});
+After login, fetch auth/me:
+ts
+Copy
+Edit
+const res = await fetch('/api/auth/me', { credentials: 'include' });
+if (res.ok) navigate('/dashboard');
+✅ Debug in DevTools
+Network tab → inspect /api/auth/login → look for Set-Cookie
+
+Application tab → Cookies → ensure token is stored
+
+✅ Expected Outcome
+Cookie is set after login
+
+/api/auth/me works and returns user
+
+Redirect to /dashboard happens
+
+yaml
+Copy
+Edit
+
+---
+
+Would you like me to generate a minimal working login + `/auth/me` API + React login component that does this

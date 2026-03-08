@@ -1,0 +1,188 @@
+Build the plan and close the gaps **before publishing**. The items you listed (race conditions, idempotency, audit diffs, pagination) are exactly the kind that look fine in testing but bite you the moment 5–10 people start using it.
+
+Here’s a **tight, implementation-ready plan** Replit can execute. It’s designed to be minimal changes with maximum safety.
+
+---
+
+## Phase A — Fix race conditions + double-click (highest priority)
+
+### A1) Make workflow actions atomic (DB transaction)
+
+**Goal:** Two concurrent approvals can’t both “win”.
+
+**Approach (Postgres):**
+
+* Wrap `performAction()` in a DB transaction.
+* Lock the target document row: `SELECT ... FOR UPDATE`
+* Re-check current `workflowStatus` and approval progress *inside the transaction*.
+* Insert workflow history and update document status in the same transaction.
+
+✅ Acceptance:
+
+* Two approvals in parallel never skip requiredCount.
+* Status ends correct; count is exact.
+
+---
+
+### A2) Add idempotency / de-dup guard for workflow history
+
+**Goal:** Double-click doesn’t create duplicate history entries.
+
+**Two good options (you can do both):**
+
+**Option 1 (fast + strong): unique constraint**
+Add a unique index to prevent duplicates like:
+
+* `(tenant_id, doc_type, doc_id, action, from_status, to_status, actor_id, request_id)`
+  Where `request_id` is a UUID generated client-side per click.
+
+**Option 2 (server-side): action nonce**
+
+* Store `last_action_hash` or `last_action_at` per doc.
+* Reject same action from same actor within 1–2 seconds unless request_id differs.
+
+✅ Acceptance:
+
+* Double-click results in 1 history row.
+* API returns same result for retry (or clean “already processed”).
+
+---
+
+## Phase B — Tenant isolation verification (quick but must-do)
+
+### B1) Add automated tests
+
+* Create tenant A doc, attempt read/update with tenant B token → must be 404/403
+* Approval queue for tenant B must not include tenant A docs
+
+✅ Acceptance:
+
+* No cross-tenant reads/updates, even by ID guessing.
+
+---
+
+## Phase C — Audit completeness (cover the “missing” events)
+
+### C1) Add edit-diff audit logging
+
+For every UPDATE route (documents + master data):
+
+* Capture old row snapshot
+* Capture new snapshot
+* Store `diff_json` (only changed fields)
+* Store: `actor_id`, `ip`, `user_agent`, `request_id`
+
+✅ Acceptance:
+
+* Any edit shows who changed what, when, and from→to.
+
+### C2) Audit RBAC changes + workflow config changes
+
+Log events for:
+
+* role create/update/delete
+* role_permissions changes
+* user_roles changes
+* user_access_scope changes
+* workflowDefinitions changes (very important)
+
+✅ Acceptance:
+
+* You can answer: “who gave this permission?” and “who changed approval rules?”
+
+---
+
+## Phase D — Approval queue pagination + server-side filtering
+
+### D1) Implement server-side pagination
+
+Queue endpoint should accept:
+
+* `page`, `pageSize`
+* `docType`, `status`, `amountMin/Max`, `dateFrom/To`, `branch/warehouse`
+* `search` (doc no/vendor/customer)
+
+Return:
+
+* `items[]`
+* `totalCount`
+* `page`, `pageSize`
+
+✅ Acceptance:
+
+* Works fast with 10k docs.
+* No “load all then filter in UI”.
+
+### D2) Add proper indexes
+
+At minimum indexes on:
+
+* `(tenant_id, workflowStatus)`
+* `(tenant_id, doc_type, workflowStatus)`
+* `(tenant_id, created_at)`
+* `(tenant_id, amount)` where applicable
+
+✅ Acceptance:
+
+* Filters don’t cause full table scans.
+
+---
+
+## Phase E — Break-glass override UI banner (small but valuable)
+
+### E1) Define a single “override events” feed
+
+From audit/workflow history, show on document view:
+
+* last force unlock event
+* last override/cancel event
+* actor + role + timestamp + reason
+
+### E2) UI placement
+
+* Always visible near top of document detail page when present
+* Include “view full timeline” link
+
+✅ Acceptance:
+
+* Auditors can see override actions instantly.
+
+---
+
+# Recommended execution order (do in this order)
+
+1. **A1 Transaction + row lock**
+2. **A2 Idempotency (request_id + unique index)**
+3. **D1 Pagination + filters + indexes**
+4. **C1/C2 Audit diffs + RBAC/workflow config auditing**
+5. **B1 Tenant isolation tests**
+6. **E1/E2 Break-glass banner**
+
+---
+
+## Replit Prompt (copy-paste)
+
+Use this to make Replit implement the gap-closure safely:
+
+> We need to harden workflow approvals before publishing. Implement the following:
+>
+> 1. Make workflow actions atomic: wrap performAction in a DB transaction; lock the target document row using SELECT ... FOR UPDATE; re-check workflowStatus + approvalProgress inside the transaction; write history + status updates in the same transaction.
+> 2. Add idempotency: include requestId UUID in workflow action requests; store it in workflow history; add a unique constraint to prevent duplicate history for same requestId; ensure double-click doesn’t create duplicate rows (retry should return clean success or “already processed”).
+> 3. Add server-side pagination + filtering to approval queue endpoint (page/pageSize + filters). Add DB indexes needed.
+> 4. Add audit logging for edits-with-diff (documents + RBAC + workflowDefinitions/config changes). Store diff_json, actor, ip, userAgent, requestId.
+> 5. Add tenant isolation tests (cross-tenant read/update must fail).
+> 6. Add Break-glass override banner UI component: show force-unlock/override events (who/when/reason) on document detail pages.
+>    Output a checklist of changes, migration SQL, and example API payloads for actions + queue.
+
+---
+
+## One decision you should make now (I’ll pick a default if you don’t)
+
+For idempotency, use **requestId** from the client.
+Default: generate `requestId` in frontend per button click and include it in the API call. This is the cleanest.
+
+If you run the prompt and paste back:
+
+* the migration summary, and
+* one example queue response,
+  I’ll sanity-check the shapes and point out any remaining “gotchas” before you publish.

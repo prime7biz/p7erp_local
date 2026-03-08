@@ -1,0 +1,118 @@
+It seems you're still grappling with the "Warning: A component is changing an uncontrolled input to be controlled" error. This is a persistent but solvable issue in React forms. The root cause remains the same: an <input> element is initially rendered with its value prop being undefined, and then at some point later, that value prop receives a defined value (like a string, number, etc.).
+
+Let's look at your stack trace again and pinpoint where to focus in your code:
+
+The error culminates in your custom input component at input.tsx:6:6.
+This input is used within your FormField structure (form.tsx:35:6, form.tsx:78:6, form.tsx:109:9).
+The FormField is being controlled by a Controller from React Hook Form.
+This setup is part of your QuotationForm component, with a relevant part being around quotation-form.tsx:178:21.
+The Most Likely Culprit: Initial undefined Values for Form Fields
+
+When using React Hook Form's Controller, the value for the input is derived from the form's state. If a field in your form's state is undefined when the Controller first renders, and then later gets a defined value (e.g., when data loads or state changes), you'll see this warning.
+
+Here’s a more targeted checklist for your QuotationForm (quotation-form.tsx):
+
+Examine useForm and defaultValues:
+
+Locate where you initialize React Hook Form using useForm() in quotation-form.tsx.
+Pay very close attention to the defaultValues object you pass to useForm.
+Crucial: Every single field name that corresponds to a Controller in your form must have a defined initial value in defaultValues. It cannot be undefined.
+<!-- end list -->
+
+TypeScript
+
+// Inside quotation-form.tsx
+import { useForm, FormProvider, Controller } from 'react-hook-form';
+// ... other imports
+// Assume your form has fields like: 'quotationSubject', 'clientName', 'totalAmount'
+
+const MyQuotationForm = ({ initialData }) => {
+  const methods = useForm({
+    defaultValues: {
+      // BAD: If initialData is undefined or initialData.subject is undefined,
+      // quotationSubject will be undefined.
+      // quotationSubject: initialData?.subject,
+      // clientName: initialData?.client,
+      // totalAmount: initialData?.amount,
+
+      // GOOD: Ensure every field has a defined default.
+      quotationSubject: initialData?.subject || '', // Use empty string for text
+      clientName: initialData?.client || '',
+      totalAmount: initialData?.amount || 0,      // Use 0 for numbers
+      isActive: initialData?.isActive || false,  // Use false for booleans
+      // ... any other fields used in your form
+    }
+  });
+
+  // ... rest of your form
+};
+Handling Asynchronously Loaded Data (for editing forms):
+
+If initialData (or whatever you use to populate an existing quotation for editing) is fetched asynchronously:
+Option 1 (Recommended): Initialize with defined defaultValues (as shown above, e.g., all empty strings or zeros). Then, once your data is fetched, use the reset() method from useForm to update the form values.
+TypeScript
+
+useEffect(() => {
+  if (fetchedData) {
+    methods.reset({
+      quotationSubject: fetchedData.subject || '',
+      clientName: fetchedData.client || '',
+      totalAmount: fetchedData.amount || 0,
+      isActive: fetchedData.isActive || false,
+      // ...etc.
+    });
+  }
+}, [fetchedData, methods]);
+Option 2: Conditionally render your form or the FormProvider only after the initialData has loaded and you've ensured all its relevant properties are defined (not undefined).
+Trace the value prop:
+
+In quotation-form.tsx (around line 178 or where the problematic FormField is):
+TypeScript
+
+<FormField
+  control={methods.control}
+  name="yourProblematicFieldName" // <--- Check this field's default value
+  render={({ field, fieldState }) => {
+    // Log the value here before it goes into your custom Input
+    console.log('Field value for "yourProblematicFieldName":', field.value);
+    console.log('Is value undefined?:', typeof field.value === 'undefined');
+    return (
+      <FormItem>
+        <FormLabel>Label</FormLabel>
+        <FormControl>
+          {/* Your custom Input component _c from input.tsx */}
+          <Input {...field} />
+        </FormControl>
+        <FormMessage />
+      </FormItem>
+    );
+  }}
+/>
+If field.value logs as undefined on the initial render, that's the direct cause. You need to go back to step 1 and fix its corresponding entry in defaultValues.
+Check your custom Input component (input.tsx:6:6):
+
+Make sure your custom Input component (_c) correctly passes the value prop it receives to the actual HTML <input> element.
+It should look something like this:
+TypeScript
+
+// input.tsx
+import React from 'react';
+
+const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  ({ type, ...props }, ref) => {
+    // props.value here should never be undefined if the above steps are correct
+    // console.log('Value received by custom Input:', props.value);
+    return (
+      <input
+        type={type}
+        ref={ref}
+        {...props} // This spreads value, onChange, onBlur, etc.
+      />
+    );
+  }
+);
+Input.displayName = "Input";
+export { Input }; // Assuming _c is an alias or this is your Input
+To reiterate, the most common fix is to ensure your useForm defaultValues object initializes every form field to a non-undefined value (e.g., '', 0, false, or null if explicitly handled).
+
+If you've thoroughly checked these and are still stuck, consider sharing the snippet of your quotation-form.tsx that includes the useForm hook and the FormField that you suspect is causing the issue.

@@ -1,0 +1,106 @@
+Nice — that checklist reads like a clean, production-grade implementation. ✅
+To make sure nothing subtle is missed, here’s a tight go-live verification + hardening checklist you can run through (no code changes required unless something fails).
+
+1) Smoke tests (must pass)
+
+Tenant signup creates:
+
+companyCode generated
+
+tenant status = PENDING
+
+Tenant Owner created with role = TENANT_OWNER
+
+Login:
+
+PENDING tenant → blocked with correct message
+
+APPROVED tenant → can login
+
+REJECTED / SUSPENDED tenant → blocked with correct message
+
+Approval flow:
+
+Approve → tenant becomes APPROVED, audit log written, approval email sent
+
+Reject → tenant becomes REJECTED, reason saved, audit log written, rejection email sent
+
+Suspend → tenant becomes SUSPENDED, audit log written
+
+2) Email flows (Resend)
+
+Registration confirmation email arrives + links are correct (APP_BASE_URL)
+
+Verify email:
+
+token works once
+
+token expires after 24h
+
+resend verification works + rate limit behaves
+
+Forgot/reset password:
+
+endpoint returns generic success (no enumeration)
+
+reset token expires after 1h
+
+token works once
+
+From address is verified in Resend and not triggering spam (SPF/DKIM domain checks)
+
+3) Tenant isolation & auth hardening
+
+Confirm every tenant-scoped API route derives tenantId from JWT and never from request body/query.
+
+Confirm the “debug bypass” is truly removed in all environments (search repo for bypass flags).
+
+Confirm middleware blocks unapproved tenants everywhere (not just login).
+
+4) Admin panel safety
+
+Only platform admin can hit /api/admin/*
+
+Approve/reject/suspend actions require CSRF-safe behavior (if cookies are used)
+
+Audit logs include:
+
+admin id
+
+tenant id
+
+action + reason (when applicable)
+
+timestamp
+
+5) UI/UX quick checks
+
+Login remembers companyCode (localStorage) correctly
+
+Favorites persist and don’t break when modules list changes
+
+Sidebar accordion state behaves well on mobile
+
+Dashboard loads without layout shift / broken cards
+
+6) Production readiness items (recommended)
+
+Set rate limits for:
+
+signup
+
+resend verification
+
+forgot password
+
+login attempts
+
+Ensure env vars are set:
+
+RESEND_API_KEY
+
+EMAIL_FROM
+
+APP_BASE_URL
+
+Add a simple health check route if not present (/api/health).

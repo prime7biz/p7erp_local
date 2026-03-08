@@ -1,0 +1,935 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Loader2, Plus, Search, Edit, Trash2, Check, X, User, MoreHorizontal, Eye, AlertCircle, LineChart, Lightbulb } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { cn } from "@/lib/utils";
+
+// Customer type definition
+interface Customer {
+  id: number;
+  customerId: string;
+  customerName: string;
+  country: string;
+  hasAgent: boolean;
+  contactPerson: string;
+  email: string;
+  phone: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  agent?: {
+    id: number;
+    agentName: string;
+    agentEmail: string;
+    agentPhone: string;
+  }
+}
+
+// Country list for dropdown
+const countries = [
+  "Bangladesh", "India", "China", "Pakistan", "Vietnam", 
+  "Indonesia", "Thailand", "Malaysia", "Japan", "South Korea",
+  "United States", "United Kingdom", "Germany", "France", "Italy",
+  "Spain", "Australia", "Canada", "Brazil", "Mexico"
+].sort();
+
+const CustomerForm = ({ 
+  customer,
+  onSubmit,
+  onCancel,
+  isSubmitting
+}: { 
+  customer?: Customer;
+  onSubmit: (data: any) => void;
+  onCancel: () => void;
+  isSubmitting: boolean;
+}) => {
+  // Customer form validation schema
+  const formSchema = z.object({
+    customerName: z.string().min(2, "Name must be at least 2 characters"),
+    country: z.string().min(1, "Country is required"),
+    hasAgent: z.boolean().default(false),
+    contactPerson: z.string().min(2, "Contact person is required"),
+    email: z.string().email("Invalid email address"),
+    phone: z.string().min(5, "Phone number is required"),
+    agent: z.object({
+      agentName: z.string().optional(),
+      agentEmail: z.string().email("Invalid email address").optional(),
+      agentPhone: z.string().optional()
+    }).optional()
+  });
+
+  // Initialize form with default values
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: customer ? {
+      customerName: customer.customerName,
+      country: customer.country,
+      hasAgent: customer.hasAgent,
+      contactPerson: customer.contactPerson,
+      email: customer.email,
+      phone: customer.phone,
+      agent: customer.agent ? {
+        agentName: customer.agent.agentName,
+        agentEmail: customer.agent.agentEmail,
+        agentPhone: customer.agent.agentPhone
+      } : undefined
+    } : {
+      customerName: "",
+      country: "",
+      hasAgent: false,
+      contactPerson: "",
+      email: "",
+      phone: "",
+      agent: undefined
+    }
+  });
+
+  // Watch hasAgent field to conditionally show agent fields
+  const hasAgent = form.watch("hasAgent");
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="customerName"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Customer Name *</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter customer name" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="country"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Country *</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a country" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {countries.map((country) => (
+                    <SelectItem key={country} value={country}>{country}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="contactPerson"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Contact Person *</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter contact person name" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email Address *</FormLabel>
+                <FormControl>
+                  <Input placeholder="Enter email address" type="email" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Phone Number *</FormLabel>
+                <FormControl>
+                  <Input placeholder="Enter phone number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <FormField
+          control={form.control}
+          name="hasAgent"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Agent</FormLabel>
+                <FormDescription>
+                  Does this customer have an agent?
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        {hasAgent && (
+          <div className="border rounded-lg p-4 space-y-4">
+            <h3 className="font-medium">Agent Details</h3>
+
+            <FormField
+              control={form.control}
+              name="agent.agentName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Agent Name *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter agent name" {...field} value={field.value || ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="agent.agentEmail"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Agent Email *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter agent email" type="email" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="agent.agentPhone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Agent Phone *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter agent phone" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" type="button" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {customer ? 'Update Customer' : 'Create Customer'}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Form>
+  );
+};
+
+// Define AI Insight interface
+interface AIInsight {
+  id: string;
+  title: string;
+  description: string;
+  type: 'info' | 'warning' | 'success';
+  confidence: number;
+  recommendations: string[];
+}
+
+export default function CustomersPage() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isAIInsightDialogOpen, setIsAIInsightDialogOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerInsights, setCustomerInsights] = useState<AIInsight[] | null>(null);
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
+  const [showAIInsights, setShowAIInsights] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  // Fetch customers
+  const { data: customersData = [], isLoading } = useQuery<Customer[]>({
+    queryKey: ['/api/customers'],
+    retry: false,
+  });
+  
+  // Ensure we have a properly typed array of customers
+  const customers = Array.isArray(customersData) ? customersData : [];
+
+  // Create customer mutation
+  const createCustomerMutation = useMutation({
+    mutationFn: (newCustomer: any) => 
+      apiRequest("/api/customers", "POST", newCustomer),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      setIsCreateDialogOpen(false);
+      toast({
+        title: "Customer created",
+        description: "The customer has been created successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create customer",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Update customer mutation
+  const updateCustomerMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number, data: any }) => 
+      apiRequest(`/api/customers/${id}`, "PUT", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      setIsEditDialogOpen(false);
+      setSelectedCustomer(null);
+      toast({
+        title: "Customer updated",
+        description: "The customer has been updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update customer",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Toggle customer status mutation
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: number, isActive: boolean }) => 
+      apiRequest(`/api/customers/${id}/status`, "PATCH", { isActive }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      toast({
+        title: "Status updated",
+        description: "The customer status has been updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update customer status",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Delete customer mutation
+  const deleteCustomerMutation = useMutation({
+    mutationFn: (id: number) => 
+      apiRequest(`/api/customers/${id}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      setIsDeleteDialogOpen(false);
+      setSelectedCustomer(null);
+      toast({
+        title: "Customer deleted",
+        description: "The customer has been deleted successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete customer",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Handle create customer
+  const handleCreateCustomer = (data: any) => {
+    createCustomerMutation.mutate(data);
+  };
+
+  // Handle edit customer
+  const handleEditCustomer = (data: any) => {
+    if (selectedCustomer) {
+      updateCustomerMutation.mutate({ id: selectedCustomer.id, data });
+    }
+  };
+
+  // Handle toggle customer status
+  const handleToggleStatus = (customer: Customer) => {
+    toggleStatusMutation.mutate({ id: customer.id, isActive: !customer.isActive });
+  };
+
+  // Handle delete customer
+  const handleDeleteCustomer = () => {
+    if (selectedCustomer) {
+      deleteCustomerMutation.mutate(selectedCustomer.id);
+    }
+  };
+  
+  // Open AI insight dialog and generate insights
+  const openAIInsightDialog = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setIsLoadingInsights(true);
+    setIsAIInsightDialogOpen(true);
+    
+    // Generate AI insights for the customer 
+    // This would typically call an API endpoint, but for demonstration purposes we'll generate them client-side
+    setTimeout(() => {
+      const generatedInsights: AIInsight[] = [
+        {
+          id: '1',
+          title: 'Potential Business Growth',
+          description: `Based on ${customer.customerName}'s order patterns, there's an opportunity to increase business by 15-20% with targeted engagement.`,
+          type: 'success',
+          confidence: 0.85,
+          recommendations: [
+            'Schedule quarterly business review meetings',
+            'Present new product lines that align with their current purchases',
+            'Offer volume-based discounts for increased orders'
+          ]
+        },
+        {
+          id: '2',
+          title: 'Communication Patterns',
+          description: `Analysis shows ${customer.customerName} responds best to email communications with detailed information rather than quick phone calls.`,
+          type: 'info',
+          confidence: 0.78,
+          recommendations: [
+            'Send monthly email newsletters with product updates',
+            'Follow up important calls with detailed email summaries',
+            'Schedule video conferences for complex discussions'
+          ]
+        }
+      ];
+      
+      // If customer is from Bangladesh or India, add regional insights
+      if (customer.country === 'Bangladesh' || customer.country === 'India') {
+        generatedInsights.push({
+          id: '3',
+          title: 'Regional Market Trends',
+          description: `Garment industry in ${customer.country} is showing increased demand for sustainable fabrics and ethical production practices.`,
+          type: 'info',
+          confidence: 0.92,
+          recommendations: [
+            'Highlight your sustainable production capabilities',
+            'Provide documentation on ethical manufacturing practices',
+            'Consider obtaining regional certifications'
+          ]
+        });
+      }
+      
+      // If customer is inactive, add reactivation insight
+      if (!customer.isActive) {
+        generatedInsights.push({
+          id: '4',
+          title: 'Reactivation Opportunity',
+          description: `${customer.customerName} has been inactive for over 3 months. Historical data suggests a 65% chance of reactivation with proper engagement.`,
+          type: 'warning',
+          confidence: 0.72,
+          recommendations: [
+            'Reach out with a personalized reactivation offer',
+            'Address any previously reported issues',
+            'Schedule a meeting to discuss new business opportunities'
+          ]
+        });
+      }
+      
+      setCustomerInsights(generatedInsights);
+      setIsLoadingInsights(false);
+    }, 1500); // Simulate API call delay
+  };
+
+  // Filter customers based on search term and active status
+  const filteredCustomers = customers.filter((customer: Customer) => {
+    const matchesSearch = searchTerm === "" || 
+      customer.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.customerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.country.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = showInactive ? true : customer.isActive;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  return (
+    <div className="container py-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold tracking-tight">Customers</h1>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Create New Customer
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Create New Customer</DialogTitle>
+              <DialogDescription>
+                Add a new customer to your system. Customer ID will be automatically generated.
+              </DialogDescription>
+            </DialogHeader>
+            <CustomerForm 
+              onSubmit={handleCreateCustomer} 
+              onCancel={() => setIsCreateDialogOpen(false)}
+              isSubmitting={createCustomerMutation.isPending}
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Customer Management</CardTitle>
+          <CardDescription>
+            View, search, and manage all your customers in one place.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between mb-4">
+            <div className="relative w-[300px]">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search customers..."
+                className="pl-8"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="show-inactive" 
+                checked={showInactive}
+                onCheckedChange={() => setShowInactive(!showInactive)}
+              />
+              <label
+                htmlFor="show-inactive"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Show inactive customers
+              </label>
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="flex justify-center items-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              {filteredCustomers.length === 0 ? (
+                <div className="text-center py-12 border rounded-md">
+                  <User className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <h3 className="mt-4 text-lg font-medium">No customers found</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {searchTerm ? "Try a different search term" : "Create your first customer to get started"}
+                  </p>
+                </div>
+              ) : (
+                <div className="border rounded-md overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Customer ID</TableHead>
+                        <TableHead>Customer Name</TableHead>
+                        <TableHead>Country</TableHead>
+                        <TableHead>Agent</TableHead>
+                        <TableHead>Contact Person</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredCustomers.map((customer: Customer) => (
+                        <TableRow key={customer.id} className={cn(
+                          !customer.isActive && "opacity-60 bg-muted/50"
+                        )}>
+                          <TableCell className="font-medium">{customer.customerId}</TableCell>
+                          <TableCell>{customer.customerName}</TableCell>
+                          <TableCell>{customer.country}</TableCell>
+                          <TableCell>
+                            {customer.hasAgent ? (
+                              <Badge variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
+                                Yes
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-gray-50 text-gray-700 hover:bg-gray-50">
+                                No
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>{customer.contactPerson}</TableCell>
+                          <TableCell>{customer.email}</TableCell>
+                          <TableCell>{customer.phone}</TableCell>
+                          <TableCell>
+                            {customer.isActive ? (
+                              <Badge className="bg-green-50 text-green-700 hover:bg-green-50">
+                                Active
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-red-50 text-red-700 hover:bg-red-50">
+                                Inactive
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="ml-auto flex h-8 w-8 p-0">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                  <span className="sr-only">Open menu</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-[160px]">
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedCustomer(customer);
+                                    setIsViewDialogOpen(true);
+                                  }}
+                                >
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedCustomer(customer);
+                                    setIsEditDialogOpen(true);
+                                  }}
+                                >
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleToggleStatus(customer)}
+                                >
+                                  {customer.isActive ? (
+                                    <>
+                                      <X className="mr-2 h-4 w-4 text-red-500" />
+                                      Deactivate
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Check className="mr-2 h-4 w-4 text-green-500" />
+                                      Activate
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => openAIInsightDialog(customer)}
+                                >
+                                  <Lightbulb className="mr-2 h-4 w-4 text-amber-500" />
+                                  AI Insights
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-red-600"
+                                  onClick={() => {
+                                    setSelectedCustomer(customer);
+                                    setIsDeleteDialogOpen(true);
+                                  }}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Edit Customer Dialog */}
+      {selectedCustomer && (
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Edit Customer</DialogTitle>
+              <DialogDescription>
+                Update customer information for {selectedCustomer.customerName}
+              </DialogDescription>
+            </DialogHeader>
+            <CustomerForm 
+              customer={selectedCustomer}
+              onSubmit={handleEditCustomer} 
+              onCancel={() => {
+                setIsEditDialogOpen(false);
+                setSelectedCustomer(null);
+              }}
+              isSubmitting={updateCustomerMutation.isPending}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* View Customer Details Dialog */}
+      {selectedCustomer && (
+        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Customer Details</DialogTitle>
+              <DialogDescription>
+                Detailed information for {selectedCustomer.customerName}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-4 py-4">
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium text-muted-foreground">Customer ID</h4>
+                <p className="text-sm">{selectedCustomer.customerId}</p>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium text-muted-foreground">Customer Name</h4>
+                <p className="text-sm font-medium">{selectedCustomer.customerName}</p>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium text-muted-foreground">Country</h4>
+                <p className="text-sm">{selectedCustomer.country}</p>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium text-muted-foreground">Status</h4>
+                <div>
+                  {selectedCustomer.isActive ? (
+                    <Badge className="bg-green-50 text-green-700 hover:bg-green-50">Active</Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-red-50 text-red-700 hover:bg-red-50">Inactive</Badge>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium text-muted-foreground">Contact Person</h4>
+                <p className="text-sm">{selectedCustomer.contactPerson}</p>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium text-muted-foreground">Email</h4>
+                <p className="text-sm">{selectedCustomer.email}</p>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium text-muted-foreground">Phone</h4>
+                <p className="text-sm">{selectedCustomer.phone}</p>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium text-muted-foreground">Has Agent</h4>
+                <p className="text-sm">{selectedCustomer.hasAgent ? 'Yes' : 'No'}</p>
+              </div>
+              
+              {selectedCustomer.hasAgent && selectedCustomer.agent && (
+                <>
+                  <div className="col-span-2 pt-2">
+                    <h3 className="text-sm font-semibold">Agent Information</h3>
+                    <div className="h-px bg-border my-2"></div>
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium text-muted-foreground">Agent Name</h4>
+                    <p className="text-sm">{selectedCustomer.agent.agentName}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium text-muted-foreground">Agent Email</h4>
+                    <p className="text-sm">{selectedCustomer.agent.agentEmail}</p>
+                  </div>
+                  <div className="space-y-1 col-span-2">
+                    <h4 className="text-sm font-medium text-muted-foreground">Agent Phone</h4>
+                    <p className="text-sm">{selectedCustomer.agent.agentPhone}</p>
+                  </div>
+                </>
+              )}
+              
+              <div className="col-span-2 pt-2">
+                <h3 className="text-sm font-semibold">Additional Information</h3>
+                <div className="h-px bg-border my-2"></div>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium text-muted-foreground">Created</h4>
+                <p className="text-sm">{new Date(selectedCustomer.createdAt).toLocaleDateString()}</p>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium text-muted-foreground">Last Updated</h4>
+                <p className="text-sm">{new Date(selectedCustomer.updatedAt).toLocaleDateString()}</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {/* AI Insights Dialog */}
+      {selectedCustomer && (
+        <Dialog open={isAIInsightDialogOpen} onOpenChange={setIsAIInsightDialogOpen}>
+          <DialogContent className="sm:max-w-[700px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <Lightbulb className="h-5 w-5 mr-2 text-amber-500" />
+                AI Insights for {selectedCustomer.customerName}
+              </DialogTitle>
+              <DialogDescription>
+                Intelligent business analysis and recommendations
+              </DialogDescription>
+            </DialogHeader>
+            
+            {isLoadingInsights ? (
+              <div className="py-12 flex flex-col items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-amber-500 mb-4" />
+                <p className="text-sm text-muted-foreground">Generating insights...</p>
+              </div>
+            ) : customerInsights && customerInsights.length > 0 ? (
+              <div className="space-y-4 py-4 max-h-[500px] overflow-y-auto pr-2">
+                {customerInsights.map((insight) => (
+                  <Card key={insight.id} className={cn(
+                    "border",
+                    insight.type === 'success' && "border-green-200 bg-green-50",
+                    insight.type === 'warning' && "border-amber-200 bg-amber-50",
+                    insight.type === 'info' && "border-blue-200 bg-blue-50"
+                  )}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className={cn(
+                        "text-lg flex items-center",
+                        insight.type === 'success' && "text-green-800",
+                        insight.type === 'warning' && "text-amber-800",
+                        insight.type === 'info' && "text-blue-800"
+                      )}>
+                        {insight.type === 'success' && <Check className="h-5 w-5 mr-2 text-green-600" />}
+                        {insight.type === 'warning' && <AlertCircle className="h-5 w-5 mr-2 text-amber-600" />}
+                        {insight.type === 'info' && <Lightbulb className="h-5 w-5 mr-2 text-blue-600" />}
+                        {insight.title}
+                      </CardTitle>
+                      <div className={cn(
+                        "text-xs font-medium rounded-full px-2 py-0.5 inline-block mt-1",
+                        insight.confidence > 0.8 ? "bg-green-100 text-green-800" : 
+                        insight.confidence > 0.6 ? "bg-amber-100 text-amber-800" : 
+                        "bg-blue-100 text-blue-800"
+                      )}>
+                        {Math.round(insight.confidence * 100)}% confidence
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className={cn(
+                        "text-sm mb-4",
+                        insight.type === 'success' && "text-green-700",
+                        insight.type === 'warning' && "text-amber-700",
+                        insight.type === 'info' && "text-blue-700"
+                      )}>
+                        {insight.description}
+                      </p>
+                      
+                      <h4 className="text-sm font-semibold mb-2">Recommendations:</h4>
+                      <ul className="space-y-1 text-sm list-disc pl-5">
+                        {insight.recommendations.map((rec, idx) => (
+                          <li key={idx}>{rec}</li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="py-8 text-center">
+                <p className="text-muted-foreground">No insights available for this customer.</p>
+              </div>
+            )}
+            
+            <DialogFooter>
+              <Button onClick={() => setIsAIInsightDialogOpen(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {/* Delete Customer Dialog */}
+      {selectedCustomer && (
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete customer <span className="font-medium">{selectedCustomer.customerName}</span>? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsDeleteDialogOpen(false);
+                  setSelectedCustomer(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={handleDeleteCustomer}
+                disabled={deleteCustomerMutation.isPending}
+              >
+                {deleteCustomerMutation.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}

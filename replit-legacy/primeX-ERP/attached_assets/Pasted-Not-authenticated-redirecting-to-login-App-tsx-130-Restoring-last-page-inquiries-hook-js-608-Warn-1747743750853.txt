@@ -1,0 +1,156 @@
+Not authenticated, redirecting to login
+App.tsx:130 Restoring last page: /inquiries
+hook.js:608 Warning: A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components Error Component Stack
+    at input (<anonymous>)
+    at _c (/src/components/ui/input.tsx:20:11)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=64c4692e:79:13
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=64c4692e:56:13
+    at /src/components/ui/form.tsx:130:9
+    at div (<anonymous>)
+    at /src/components/ui/form.tsx:72:6
+    at Controller (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4BFJKWC4.js?v=64c4692e:298:35)
+    at FormField (/src/components/ui/form.tsx:33:6)
+    at div (<anonymous>)
+    at form (<anonymous>)
+    at FormProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4BFJKWC4.js?v=64c4692e:102:11)
+    at InquiryForm (/src/components/forms/InquiryForm.tsx?t=1747743201154:91:39)
+    at div (<anonymous>)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-G76BAGTM.js?v=64c4692e:61:7
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=64c4692e:79:13
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=64c4692e:56:13
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TG4P3ERB.js?v=64c4692e:34:5
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RCOBUTQ5.js?v=64c4692e:237:13
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RCOBUTQ5.js?v=64c4692e:160:58
+    at Presence (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-E4UC4BFD.js?v=64c4692e:24:11)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RCOBUTQ5.js?v=64c4692e:151:64
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=64c4692e:79:13
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2K77HOHX.js?v=64c4692e:56:13
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-G76BAGTM.js?v=64c4692e:260:22
+    at Presence (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-E4UC4BFD.js?v=64c4692e:24:11)
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at DialogPortal (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RCOBUTQ5.js?v=64c4692e:113:11)
+    at _c3 (/src/components/ui/dialog.tsx:52:12)
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at Dialog (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RCOBUTQ5.js?v=64c4692e:54:5)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at DashboardContainer (/src/components/layout/dashboard-container.tsx:19:3)
+    at InquiriesPage (/src/pages/inquiries-new.tsx?t=1747743201154:94:23)
+    at component (<anonymous>)
+    at Route (/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:323:16)
+    at Switch (/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:379:17)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AppRoutes (App.tsx:101:42)
+    at GamificationProvider (/src/context/gamification-context.tsx:25:40)
+    at OnboardingProvider (/src/context/onboarding-context.tsx:20:38)
+    at AuthProvider (/src/context/auth-context.tsx:24:32)
+    at App (<anonymous>)
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at TooltipProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=64c4692e:65:5)
+    at V (/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:44:25)
+    at J (/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:42:18)
+    at QueryClientProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=64c4692e:2805:3)
+overrideMethod @ hook.js:608Understand this error
+ Making POST request to /api/inquiries
+ Making GET request to /api/inquiries/5/insights
+hook.js:608 Warning: `value` prop on `input` should not be null. Consider using an empty string to clear the component or `undefined` for uncontrolled components. Error Component Stack
+    at input (<anonymous>)
+    at _c (/src/components/ui/input.tsx:20:11)
+    at Controller (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4BFJKWC4.js?v=64c4692e:298:35)
+    at FormField (/src/components/ui/form.tsx:33:6)
+    at td (<anonymous>)
+    at _c13 (/src/components/ui/table.tsx:152:13)
+    at tr (<anonymous>)
+    at _c9 (/src/components/ui/table.tsx:102:12)
+    at tbody (<anonymous>)
+    at _c5 (/src/components/ui/table.tsx:55:12)
+    at table (<anonymous>)
+    at div (<anonymous>)
+    at _c (/src/components/ui/table.tsx:20:11)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (/src/components/ui/card.tsx:114:12)
+    at div (<anonymous>)
+    at _c (/src/components/ui/card.tsx:20:11)
+    at div (<anonymous>)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Presence (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-E4UC4BFD.js?v=64c4692e:24:11)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=64c4692e:176:13
+    at _c5 (/src/components/ui/tabs.tsx:72:12)
+    at div (<anonymous>)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=64c4692e:54:7
+    at form (<anonymous>)
+    at FormProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4BFJKWC4.js?v=64c4692e:102:11)
+    at div (<anonymous>)
+    at QuotationForm (/src/pages/quotations/quotation-form.tsx:149:21)
+    at Route (/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:323:16)
+    at Switch (/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:379:17)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AppRoutes (App.tsx:101:42)
+    at GamificationProvider (/src/context/gamification-context.tsx:25:40)
+    at OnboardingProvider (/src/context/onboarding-context.tsx:20:38)
+    at AuthProvider (/src/context/auth-context.tsx:24:32)
+    at App (<anonymous>)
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at TooltipProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=64c4692e:65:5)
+    at V (/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:44:25)
+    at J (/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:42:18)
+    at QueryClientProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=64c4692e:2805:3)
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 Warning: A component is changing a controlled input to be uncontrolled. This is likely caused by the value changing from a defined to undefined, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components Error Component Stack
+    at input (<anonymous>)
+    at _c (/src/components/ui/input.tsx:20:11)
+    at Controller (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4BFJKWC4.js?v=64c4692e:298:35)
+    at FormField (/src/components/ui/form.tsx:33:6)
+    at td (<anonymous>)
+    at _c13 (/src/components/ui/table.tsx:152:13)
+    at tr (<anonymous>)
+    at _c9 (/src/components/ui/table.tsx:102:12)
+    at tbody (<anonymous>)
+    at _c5 (/src/components/ui/table.tsx:55:12)
+    at table (<anonymous>)
+    at div (<anonymous>)
+    at _c (/src/components/ui/table.tsx:20:11)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (/src/components/ui/card.tsx:114:12)
+    at div (<anonymous>)
+    at _c (/src/components/ui/card.tsx:20:11)
+    at div (<anonymous>)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Presence (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-E4UC4BFD.js?v=64c4692e:24:11)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=64c4692e:176:13
+    at _c5 (/src/components/ui/tabs.tsx:72:12)
+    at div (<anonymous>)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AXMZZQ2X.js?v=64c4692e:42:13
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at /@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=64c4692e:54:7
+    at form (<anonymous>)
+    at FormProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4BFJKWC4.js?v=64c4692e:102:11)
+    at div (<anonymous>)
+    at QuotationForm (/src/pages/quotations/quotation-form.tsx:149:21)
+    at Route (/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:323:16)
+    at Switch (/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:379:17)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AppRoutes (App.tsx:101:42)
+    at GamificationProvider (/src/context/gamification-context.tsx:25:40)
+    at OnboardingProvider (/src/context/onboarding-context.tsx:20:38)
+    at AuthProvider (/src/context/auth-context.tsx:24:32)
+    at App (<anonymous>)
+    at Provider (/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at TooltipProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=64c4692e:65:5)
+    at V (/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:44:25)
+    at J (/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:42:18)
+    at QueryClientProvider (/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=64c4692e:2805:3)

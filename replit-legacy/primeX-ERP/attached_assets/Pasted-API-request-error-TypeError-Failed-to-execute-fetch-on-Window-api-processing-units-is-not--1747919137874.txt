@@ -1,0 +1,434 @@
+API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/processing-units' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at queryFn (transactions.tsx?t=1747919054744:229:30)
+    at Object.fetchFn [as fn] (@tanstack_react-query.js?v=64c4692e:840:14)
+    at run (@tanstack_react-query.js?v=64c4692e:494:49)
+    at Object.start (@tanstack_react-query.js?v=64c4692e:536:9)
+    at _a4.fetch (@tanstack_react-query.js?v=64c4692e:926:41)
+    at _a9.executeFetch_fn (@tanstack_react-query.js?v=64c4692e:2211:51)
+    at _a9.onSubscribe (@tanstack_react-query.js?v=64c4692e:1898:74)
+    at _a9.subscribe (@tanstack_react-query.js?v=64c4692e:24:10)
+    at @tanstack_react-query.js?v=64c4692e:3022:60
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56
+await in apiRequest
+queryFn @ transactions.tsx?t=1747919054744:229
+fetchFn @ @tanstack_react-query.js?v=64c4692e:840
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+fetch @ @tanstack_react-query.js?v=64c4692e:926
+executeFetch_fn @ @tanstack_react-query.js?v=64c4692e:2211
+onSubscribe @ @tanstack_react-query.js?v=64c4692e:1898
+subscribe @ @tanstack_react-query.js?v=64c4692e:24
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=64c4692e:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=64c4692e:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=64c4692e:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=64c4692e:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=64c4692e:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=64c4692e:19416
+commitRoot @ chunk-RPCDYKBN.js?v=64c4692e:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=64c4692e:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=64c4692e:9119
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19506
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:19328
+workLoop @ chunk-RPCDYKBN.js?v=64c4692e:197
+flushWork @ chunk-RPCDYKBN.js?v=64c4692e:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=64c4692e:384Understand this error
+queryClient.ts:56 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/subcontractors' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at queryFn (transactions.tsx?t=1747919054744:236:30)
+    at Object.fetchFn [as fn] (@tanstack_react-query.js?v=64c4692e:840:14)
+    at run (@tanstack_react-query.js?v=64c4692e:494:49)
+    at Object.start (@tanstack_react-query.js?v=64c4692e:536:9)
+    at _a4.fetch (@tanstack_react-query.js?v=64c4692e:926:41)
+    at _a9.executeFetch_fn (@tanstack_react-query.js?v=64c4692e:2211:51)
+    at _a9.onSubscribe (@tanstack_react-query.js?v=64c4692e:1898:74)
+    at _a9.subscribe (@tanstack_react-query.js?v=64c4692e:24:10)
+    at @tanstack_react-query.js?v=64c4692e:3022:60
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56
+await in apiRequest
+queryFn @ transactions.tsx?t=1747919054744:236
+fetchFn @ @tanstack_react-query.js?v=64c4692e:840
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+fetch @ @tanstack_react-query.js?v=64c4692e:926
+executeFetch_fn @ @tanstack_react-query.js?v=64c4692e:2211
+onSubscribe @ @tanstack_react-query.js?v=64c4692e:1898
+subscribe @ @tanstack_react-query.js?v=64c4692e:24
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=64c4692e:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=64c4692e:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=64c4692e:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=64c4692e:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=64c4692e:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=64c4692e:19416
+commitRoot @ chunk-RPCDYKBN.js?v=64c4692e:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=64c4692e:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=64c4692e:9119
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19506
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:19328
+workLoop @ chunk-RPCDYKBN.js?v=64c4692e:197
+flushWork @ chunk-RPCDYKBN.js?v=64c4692e:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=64c4692e:384Understand this error
+queryClient.ts:56 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/item-units' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at queryFn (transactions.tsx?t=1747919054744:243:30)
+    at Object.fetchFn [as fn] (@tanstack_react-query.js?v=64c4692e:840:14)
+    at run (@tanstack_react-query.js?v=64c4692e:494:49)
+    at Object.start (@tanstack_react-query.js?v=64c4692e:536:9)
+    at _a4.fetch (@tanstack_react-query.js?v=64c4692e:926:41)
+    at _a9.executeFetch_fn (@tanstack_react-query.js?v=64c4692e:2211:51)
+    at _a9.onSubscribe (@tanstack_react-query.js?v=64c4692e:1898:74)
+    at _a9.subscribe (@tanstack_react-query.js?v=64c4692e:24:10)
+    at @tanstack_react-query.js?v=64c4692e:3022:60
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56
+await in apiRequest
+queryFn @ transactions.tsx?t=1747919054744:243
+fetchFn @ @tanstack_react-query.js?v=64c4692e:840
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+fetch @ @tanstack_react-query.js?v=64c4692e:926
+executeFetch_fn @ @tanstack_react-query.js?v=64c4692e:2211
+onSubscribe @ @tanstack_react-query.js?v=64c4692e:1898
+subscribe @ @tanstack_react-query.js?v=64c4692e:24
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=64c4692e:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=64c4692e:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=64c4692e:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=64c4692e:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=64c4692e:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=64c4692e:19416
+commitRoot @ chunk-RPCDYKBN.js?v=64c4692e:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=64c4692e:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=64c4692e:9119
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19506
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:19328
+workLoop @ chunk-RPCDYKBN.js?v=64c4692e:197
+flushWork @ chunk-RPCDYKBN.js?v=64c4692e:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=64c4692e:384Understand this error
+queryClient.ts:56 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/inventory-movements' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at queryFn (transactions.tsx?t=1747919054744:250:30)
+    at Object.fetchFn [as fn] (@tanstack_react-query.js?v=64c4692e:840:14)
+    at run (@tanstack_react-query.js?v=64c4692e:494:49)
+    at Object.start (@tanstack_react-query.js?v=64c4692e:536:9)
+    at _a4.fetch (@tanstack_react-query.js?v=64c4692e:926:41)
+    at _a9.executeFetch_fn (@tanstack_react-query.js?v=64c4692e:2211:51)
+    at _a9.onSubscribe (@tanstack_react-query.js?v=64c4692e:1898:74)
+    at _a9.subscribe (@tanstack_react-query.js?v=64c4692e:24:10)
+    at @tanstack_react-query.js?v=64c4692e:3022:60
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56
+await in apiRequest
+queryFn @ transactions.tsx?t=1747919054744:250
+fetchFn @ @tanstack_react-query.js?v=64c4692e:840
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+fetch @ @tanstack_react-query.js?v=64c4692e:926
+executeFetch_fn @ @tanstack_react-query.js?v=64c4692e:2211
+onSubscribe @ @tanstack_react-query.js?v=64c4692e:1898
+subscribe @ @tanstack_react-query.js?v=64c4692e:24
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=64c4692e:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=64c4692e:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=64c4692e:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=64c4692e:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=64c4692e:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=64c4692e:19416
+commitRoot @ chunk-RPCDYKBN.js?v=64c4692e:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=64c4692e:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=64c4692e:9119
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19506
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:19328
+workLoop @ chunk-RPCDYKBN.js?v=64c4692e:197
+flushWork @ chunk-RPCDYKBN.js?v=64c4692e:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=64c4692e:384Understand this error
+queryClient.ts:56 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/public/ai-recommendations' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at queryFn (transactions.tsx?t=1747919054744:257:30)
+    at Object.fetchFn [as fn] (@tanstack_react-query.js?v=64c4692e:840:14)
+    at run (@tanstack_react-query.js?v=64c4692e:494:49)
+    at Object.start (@tanstack_react-query.js?v=64c4692e:536:9)
+    at _a4.fetch (@tanstack_react-query.js?v=64c4692e:926:41)
+    at _a9.executeFetch_fn (@tanstack_react-query.js?v=64c4692e:2211:51)
+    at _a9.onSubscribe (@tanstack_react-query.js?v=64c4692e:1898:74)
+    at _a9.subscribe (@tanstack_react-query.js?v=64c4692e:24:10)
+    at @tanstack_react-query.js?v=64c4692e:3022:60
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56
+await in apiRequest
+queryFn @ transactions.tsx?t=1747919054744:257
+fetchFn @ @tanstack_react-query.js?v=64c4692e:840
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+fetch @ @tanstack_react-query.js?v=64c4692e:926
+executeFetch_fn @ @tanstack_react-query.js?v=64c4692e:2211
+onSubscribe @ @tanstack_react-query.js?v=64c4692e:1898
+subscribe @ @tanstack_react-query.js?v=64c4692e:24
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=64c4692e:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=64c4692e:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=64c4692e:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=64c4692e:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=64c4692e:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=64c4692e:19416
+commitRoot @ chunk-RPCDYKBN.js?v=64c4692e:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=64c4692e:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=64c4692e:9119
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19506
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:19328
+workLoop @ chunk-RPCDYKBN.js?v=64c4692e:197
+flushWork @ chunk-RPCDYKBN.js?v=64c4692e:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=64c4692e:384Understand this error
+queryClient.ts:15 Making GET request to /api/vendors
+queryClient.ts:15 Making /api/processing-units request to GET
+queryClient.ts:15 Making /api/subcontractors request to GET
+queryClient.ts:15 Making /api/item-units request to GET
+queryClient.ts:15 Making /api/inventory-movements request to GET
+queryClient.ts:15 Making /api/public/ai-recommendations request to GET
+queryClient.ts:56 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/processing-units' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at queryFn (transactions.tsx?t=1747919054744:229:30)
+    at Object.fetchFn [as fn] (@tanstack_react-query.js?v=64c4692e:840:14)
+    at run (@tanstack_react-query.js?v=64c4692e:494:49)
+    at Object.start (@tanstack_react-query.js?v=64c4692e:536:9)
+    at _a4.fetch (@tanstack_react-query.js?v=64c4692e:926:41)
+    at _a9.executeFetch_fn (@tanstack_react-query.js?v=64c4692e:2211:51)
+    at _a9.onSubscribe (@tanstack_react-query.js?v=64c4692e:1898:74)
+    at _a9.subscribe (@tanstack_react-query.js?v=64c4692e:24:10)
+    at @tanstack_react-query.js?v=64c4692e:3022:60
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56
+await in apiRequest
+queryFn @ transactions.tsx?t=1747919054744:229
+fetchFn @ @tanstack_react-query.js?v=64c4692e:840
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+fetch @ @tanstack_react-query.js?v=64c4692e:926
+executeFetch_fn @ @tanstack_react-query.js?v=64c4692e:2211
+onSubscribe @ @tanstack_react-query.js?v=64c4692e:1898
+subscribe @ @tanstack_react-query.js?v=64c4692e:24
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=64c4692e:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=64c4692e:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=64c4692e:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=64c4692e:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=64c4692e:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=64c4692e:19416
+commitRoot @ chunk-RPCDYKBN.js?v=64c4692e:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=64c4692e:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=64c4692e:9119
+flushSync @ chunk-RPCDYKBN.js?v=64c4692e:18959
+scheduleRefresh @ chunk-RPCDYKBN.js?v=64c4692e:20004
+p.scheduleRefresh @ renderer.js:963
+(anonymous) @ @react-refresh:267
+performReactRefresh @ @react-refresh:256
+(anonymous) @ @react-refresh:677
+setTimeout
+(anonymous) @ @react-refresh:666
+validateRefreshBoundaryAndEnqueueUpdate @ @react-refresh:728
+(anonymous) @ transactions.tsx?t=1747919054744:3330
+(anonymous) @ client:34
+(anonymous) @ client:218
+(anonymous) @ client:193
+queueUpdate @ client:193
+await in queueUpdate
+(anonymous) @ client:642
+handleMessage @ client:640
+(anonymous) @ client:550Understand this error
+queryClient.ts:56 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/subcontractors' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at queryFn (transactions.tsx?t=1747919054744:236:30)
+    at Object.fetchFn [as fn] (@tanstack_react-query.js?v=64c4692e:840:14)
+    at run (@tanstack_react-query.js?v=64c4692e:494:49)
+    at Object.start (@tanstack_react-query.js?v=64c4692e:536:9)
+    at _a4.fetch (@tanstack_react-query.js?v=64c4692e:926:41)
+    at _a9.executeFetch_fn (@tanstack_react-query.js?v=64c4692e:2211:51)
+    at _a9.onSubscribe (@tanstack_react-query.js?v=64c4692e:1898:74)
+    at _a9.subscribe (@tanstack_react-query.js?v=64c4692e:24:10)
+    at @tanstack_react-query.js?v=64c4692e:3022:60
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56
+await in apiRequest
+queryFn @ transactions.tsx?t=1747919054744:236
+fetchFn @ @tanstack_react-query.js?v=64c4692e:840
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+fetch @ @tanstack_react-query.js?v=64c4692e:926
+executeFetch_fn @ @tanstack_react-query.js?v=64c4692e:2211
+onSubscribe @ @tanstack_react-query.js?v=64c4692e:1898
+subscribe @ @tanstack_react-query.js?v=64c4692e:24
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=64c4692e:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=64c4692e:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=64c4692e:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=64c4692e:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=64c4692e:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=64c4692e:19416
+commitRoot @ chunk-RPCDYKBN.js?v=64c4692e:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=64c4692e:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=64c4692e:9119
+flushSync @ chunk-RPCDYKBN.js?v=64c4692e:18959
+scheduleRefresh @ chunk-RPCDYKBN.js?v=64c4692e:20004
+p.scheduleRefresh @ renderer.js:963
+(anonymous) @ @react-refresh:267
+performReactRefresh @ @react-refresh:256
+(anonymous) @ @react-refresh:677
+setTimeout
+(anonymous) @ @react-refresh:666
+validateRefreshBoundaryAndEnqueueUpdate @ @react-refresh:728
+(anonymous) @ transactions.tsx?t=1747919054744:3330
+(anonymous) @ client:34
+(anonymous) @ client:218
+(anonymous) @ client:193
+queueUpdate @ client:193
+await in queueUpdate
+(anonymous) @ client:642
+handleMessage @ client:640
+(anonymous) @ client:550Understand this error
+queryClient.ts:56 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/item-units' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at queryFn (transactions.tsx?t=1747919054744:243:30)
+    at Object.fetchFn [as fn] (@tanstack_react-query.js?v=64c4692e:840:14)
+    at run (@tanstack_react-query.js?v=64c4692e:494:49)
+    at Object.start (@tanstack_react-query.js?v=64c4692e:536:9)
+    at _a4.fetch (@tanstack_react-query.js?v=64c4692e:926:41)
+    at _a9.executeFetch_fn (@tanstack_react-query.js?v=64c4692e:2211:51)
+    at _a9.onSubscribe (@tanstack_react-query.js?v=64c4692e:1898:74)
+    at _a9.subscribe (@tanstack_react-query.js?v=64c4692e:24:10)
+    at @tanstack_react-query.js?v=64c4692e:3022:60
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56
+await in apiRequest
+queryFn @ transactions.tsx?t=1747919054744:243
+fetchFn @ @tanstack_react-query.js?v=64c4692e:840
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+fetch @ @tanstack_react-query.js?v=64c4692e:926
+executeFetch_fn @ @tanstack_react-query.js?v=64c4692e:2211
+onSubscribe @ @tanstack_react-query.js?v=64c4692e:1898
+subscribe @ @tanstack_react-query.js?v=64c4692e:24
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=64c4692e:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=64c4692e:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=64c4692e:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=64c4692e:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=64c4692e:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=64c4692e:19416
+commitRoot @ chunk-RPCDYKBN.js?v=64c4692e:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=64c4692e:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=64c4692e:9119
+flushSync @ chunk-RPCDYKBN.js?v=64c4692e:18959
+scheduleRefresh @ chunk-RPCDYKBN.js?v=64c4692e:20004
+p.scheduleRefresh @ renderer.js:963
+(anonymous) @ @react-refresh:267
+performReactRefresh @ @react-refresh:256
+(anonymous) @ @react-refresh:677
+setTimeout
+(anonymous) @ @react-refresh:666
+validateRefreshBoundaryAndEnqueueUpdate @ @react-refresh:728
+(anonymous) @ transactions.tsx?t=1747919054744:3330
+(anonymous) @ client:34
+(anonymous) @ client:218
+(anonymous) @ client:193
+queueUpdate @ client:193
+await in queueUpdate
+(anonymous) @ client:642
+handleMessage @ client:640
+(anonymous) @ client:550Understand this error
+queryClient.ts:56 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/inventory-movements' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at queryFn (transactions.tsx?t=1747919054744:250:30)
+    at Object.fetchFn [as fn] (@tanstack_react-query.js?v=64c4692e:840:14)
+    at run (@tanstack_react-query.js?v=64c4692e:494:49)
+    at Object.start (@tanstack_react-query.js?v=64c4692e:536:9)
+    at _a4.fetch (@tanstack_react-query.js?v=64c4692e:926:41)
+    at _a9.executeFetch_fn (@tanstack_react-query.js?v=64c4692e:2211:51)
+    at _a9.onSubscribe (@tanstack_react-query.js?v=64c4692e:1898:74)
+    at _a9.subscribe (@tanstack_react-query.js?v=64c4692e:24:10)
+    at @tanstack_react-query.js?v=64c4692e:3022:60
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56
+await in apiRequest
+queryFn @ transactions.tsx?t=1747919054744:250
+fetchFn @ @tanstack_react-query.js?v=64c4692e:840
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+fetch @ @tanstack_react-query.js?v=64c4692e:926
+executeFetch_fn @ @tanstack_react-query.js?v=64c4692e:2211
+onSubscribe @ @tanstack_react-query.js?v=64c4692e:1898
+subscribe @ @tanstack_react-query.js?v=64c4692e:24
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=64c4692e:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=64c4692e:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=64c4692e:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=64c4692e:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=64c4692e:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=64c4692e:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=64c4692e:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=64c4692e:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=64c4692e:19416
+commitRoot @ chunk-RPCDYKBN.js?v=64c4692e:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=64c4692e:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=64c4692e:9119
+flushSync @ chunk-RPCDYKBN.js?v=64c4692e:18959
+scheduleRefresh @ chunk-RPCDYKBN.js?v=64c4692e:20004
+p.scheduleRefresh @ renderer.js:963
+(anonymous) @ @react-refresh:267
+performReactRefresh @ @react-refresh:256
+(anonymous) @ @react-refresh:677
+setTimeout
+(anonymous) @ @react-refresh:666
+validateRefreshBoundaryAndEnqueueUpdate @ @react-refresh:728
+(anonymous) @ transactions.tsx?t=1747919054744:3330
+(anonymous) @ client:34
+(anonymous) @ client:218
+(anonymous) @ client:193
+queueUpdate @ client:193
+await in queueUpdate
+(anonymous) @ client:642
+handleMessage @ client:640
+(anonymous) @ client:550Understand this error
+queryClient.ts:56 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/public/ai-recommendations' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at queryFn (transactions.tsx?t=1747919054744:257:30)
+    at Object.fetchFn [as fn] (@tanstack_react-query.js?v=64c4692e:840:14)
+    at run (@tanstack_react-query.js?v=64c4692e:494:49)
+    at Object.start (@tanstack_react-query.js?v=64c4692e:536:9)
+    at _a4.fetch (@tanstack_react-query.js?v=64c4692e:926:41)
+    at _a9.executeFetch_fn (@tanstack_react-query.js?v=64c4692e:2211:51)
+    at _a9.onSubscribe (@tanstack_react-query.js?v=64c4692e:1898:74)
+    at _a9.subscribe (@tanstack_react-query.js?v=64c4692e:24:10)
+    at @tanstack_react-query.js?v=64c4692e:3022:60

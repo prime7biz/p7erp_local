@@ -1,0 +1,80 @@
+You are working inside my multi-tenant ERP (PostgreSQL schema-based tenants). 
+I need a “hard reset + import” of Chart of Accounts for ONE tenant using an Excel file.
+
+GOAL:
+- For a given tenant (schema), delete ALL existing Account Groups + Ledgers (COA) for that tenant (except system defaults if required).
+- Recreate the nested Groups/Subgroups/Ledgers from the Excel file.
+- Opening Balance of each new ledger = Closing Balance from the Excel (cutover date 15-Feb-2026).
+- Validate: sum(ledger balances) matches group totals from Excel, and overall Dr total == Cr total (else fail with a report; do NOT silently fix).
+
+INPUT FILE:
+- Excel path: /mnt/data/COA_Suggested_with_Opening_Balances.xlsx
+- Sheet1: COA_Openings columns = TopGroup, SubGroup, Ledger, Opening_Dr, Opening_Cr
+- Sheet2: Group_Summary columns = TopGroup, SubGroup, Opening_Dr, Opening_Cr
+
+REQUIREMENTS:
+1) Create a Django management command:
+   - Name: reset_tenant_coa_from_excel
+   - Usage:
+     python manage.py reset_tenant_coa_from_excel --tenant=<tenant_schema_or_tenant_id> --file="/mnt/data/COA_Suggested_with_Opening_Balances.xlsx" --cutover="2026-02-15" --dry-run
+     python manage.py reset_tenant_coa_from_excel --tenant=... --file=... --cutover=... --commit
+2) Must run inside a DB transaction. If any error, rollback.
+3) Before deleting, create a full backup JSON snapshot (groups + ledgers + opening balances + ids) saved to:
+   backend/backups/coa/<tenant>/<timestamp>_coa_backup.json
+4) Deletion rules:
+   - Delete tenant’s COA groups and ledgers only (respect tenant isolation).
+   - If there are foreign keys (vouchers/transactions), then block deletion and show a clear error. 
+     (This command is intended for first-time setup OR fresh tenant only.)
+5) Recreate:
+   - Create Groups in hierarchy: TopGroup -> SubGroup.
+   - Mark SubGroup that ends with “(Control)” as is_posting_allowed = false.
+   - Create Ledgers under the correct SubGroup.
+   - Store opening balances in ledger fields (opening_dr/opening_cr) OR create a single “Opening Balance” journal voucher dated cutover date (choose whichever matches our system best), but ensure reporting works.
+6) Name normalization (auto-corrections):
+   - Implement normalize_name() and apply corrections mapping:
+     Accu-Amortization Soft Ware -> Accumulated Amortization – Software
+     Accu. Dep-Building -> Accumulated Depreciation – Building
+     Accu. Dep- Computer -> Accumulated Depreciation – Computer & IT
+     Accu Dep-Container -> Accumulated Depreciation – Container
+     Accu. Dep-Crockeries & Cutlery -> Accumulated Depreciation – Crockeries & Cutlery
+     Accu. Dep- Electric Equipment -> Accumulated Depreciation – Electrical Equipment
+     Accu. Dep-Furniture & Fixture -> Accumulated Depreciation – Furniture & Fixture
+     Accu Dep-Gas Boiler -> Accumulated Depreciation – Gas Boiler
+     Accu. Dep- Generator -> Accumulated Depreciation – Generator
+     Accu. Dep-Office Equipment -> Accumulated Depreciation – Office Equipment
+     Accu.Dep-PA & PABX System -> Accumulated Depreciation – PA/PABX System
+     Accu. Dep-Plant & Machinery -> Accumulated Depreciation – Plant & Machinery
+     Accu. Dep-Vehicle -> Accumulated Depreciation – Vehicle
+     Accu.Dep-Wear House & Racking System -> Accumulated Depreciation – Warehouse & Racking
+     Accumulated Depreciation & Amortization -> Accumulated Depreciation & Amortization (Control)
+     Revenue From Others -> Other Operating Income
+     Others (Op. Exp.) -> Other Operating Expenses
+     Others (Ad. & Sel.) -> Selling & Distribution – Others
+     Miscellaneous Expenses - Factory -> Factory Misc. Expenses
+     Miscellaneous Expenses - Head Office -> Head Office Misc. Expenses
+     Accrued Director Remuneration -> Director Remuneration Payable
+     Director Remuneration -> Director Remuneration Expense
+   - Also trim extra spaces, normalize hyphens, and keep original name in a “legacy_name” field if available (or store in a notes column).
+7) Validations:
+   - Compute totals: total_opening_dr and total_opening_cr from COA_Openings.
+   - Must match (difference <= 0.01). If not, raise error and show diff.
+   - For each (TopGroup, SubGroup) compute ledger sum and compare with Group_Summary (difference <= 0.01). If mismatch, raise error and print the mismatch list.
+8) Output:
+   - On dry-run: print a summary of how many groups/ledgers will be deleted/created + totals + any name corrections preview.
+   - On commit: print created IDs counts and totals and where backup saved.
+9) Add an admin-only API endpoint (optional but preferred):
+   POST /api/admin/tenants/<tenant_id>/coa/reset-from-excel
+   Body: { file_path, cutover, dry_run }
+   This endpoint calls the same service layer as the management command.
+10) Keep code clean:
+   - Put import logic in a service: accounting/services/coa_importer.py
+   - Management command just calls the service.
+   - Add unit tests for: normalization, totals validation, group-sum validation.
+
+Deliverables:
+- New management command
+- Service layer
+- Tests
+- Minimal documentation in backend/docs/coa_import.md describing how to run it
+
+Proceed to implement now.

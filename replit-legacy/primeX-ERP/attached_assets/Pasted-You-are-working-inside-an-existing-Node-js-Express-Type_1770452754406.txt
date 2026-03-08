@@ -1,0 +1,135 @@
+You are working inside an existing Node.js + Express + TypeScript monorepo (React+Vite client, Express server) that uses PostgreSQL (Neon) and Drizzle. We want to move heavy tasks (PDF generation + later AI jobs) to an asynchronous queue WITHOUT adding Redis/S3. Everything must stay inside this Replit instance.
+
+GOAL
+Implement a Postgres-backed job queue using pg-boss, add a reports worker that generates PDFs asynchronously, save generated PDFs to a local ./generated directory, and serve those files via an API endpoint. Update TECHNICAL_README.md accordingly.
+
+HARD RULES
+- Do not introduce Redis, BullMQ, S3, external queues, or external storage.
+- Use existing DATABASE_URL Postgres connection.
+- Keep all changes within this repository.
+- Preserve existing auth and tenant middleware; enforce tenant isolation when checking job status and serving files.
+- Ensure TypeScript builds successfully.
+
+TASKS (execute in order)
+
+1) Install dependency
+- Add dependency: pg-boss
+- Run: npm install pg-boss
+- Verify package-lock.json updated.
+
+2) Create job system directory structure
+Create these files:
+- server/jobs/boss.ts
+- server/jobs/reports.worker.ts
+- server/jobs/index.ts
+
+Implement as follows:
+
+server/jobs/boss.ts
+- Create a singleton pg-boss instance.
+- Read DATABASE_URL from env.
+- Export: getBoss(): Promise<PgBoss>
+- On first call, create boss = new PgBoss({ connectionString: DATABASE_URL })
+- await boss.start()
+
+server/jobs/reports.worker.ts
+- Ensure a root folder ./generated exists (mkdir recursive)
+- Implement registerReportsWorker(boss)
+- boss.work("reports", { teamConcurrency: 2, teamSize: 2 }, handler)
+- Handler receives job.data describing the report request; it generates the PDF and writes it to ./generated/<filename>
+- Return { filename } from the worker so the API can expose a download URL.
+
+IMPORTANT: Integrate with the existing PDF generation logic already in the codebase.
+- Find where PDFs are currently generated synchronously (likely inside server/api/reportRoutes.ts or similar).
+- Extract the PDF generation function so it can be called both in worker and (if needed) elsewhere.
+- The worker must call that extracted function to produce a Buffer (or stream -> Buffer).
+- Write that Buffer to disk.
+
+server/jobs/index.ts
+- Export startJobs(): Promise<void>
+- Calls getBoss(), creates queue name "reports" (safe if exists), registers worker
+
+3) Start job system in server startup
+In server/index.ts:
+- Import startJobs from server/jobs
+- Call await startJobs() after routes are registered but BEFORE server starts listening.
+- Ensure the server still starts correctly in dev and prod.
+
+4) Refactor report PDF endpoint to enqueue job
+Find the existing endpoint that generates PDFs immediately.
+Change it to:
+- Validate request as before (tenant/user permission checks unchanged)
+- Create a unique filename (ex: report-<timestamp>-<random>.pdf)
+- Enqueue a job to queue "reports" with data:
+  { tenantId, userId, reportType, params, outputFile }
+- Respond with 202 Accepted and body:
+  { jobId, statusUrl: `/api/reports/jobs/${jobId}` }
+
+5) Add job status endpoint (tenant-safe)
+Add an endpoint:
+GET /api/reports/jobs/:jobId
+- Looks up job in pg-boss (boss.getJobById)
+- If not found -> 404
+- Enforce tenant ownership:
+   - job data must include tenantId; compare to current tenantId from middleware
+   - If mismatch -> 404 (do not leak job existence)
+- Return JSON:
+  {
+    id,
+    state,        // created|active|completed|failed
+    progress,
+    startedOn,
+    completedOn,
+    failedReason (if failed),
+    filename (if completed),
+    downloadUrl (if completed)
+  }
+- Note: completed job output should include { filename } from the worker.
+
+6) Local file serving endpoint (secure)
+Add endpoint:
+GET /api/files/:filename
+- Serve files only from ./generated
+- Prevent path traversal: reject if filename contains ".." or "/" or "\".
+- Optionally enforce auth; MUST enforce tenant ownership by checking filename ownership:
+   - Create a DB table OR a simple mapping table to store generated files metadata:
+     reports_files: id, tenantId, userId, filename, createdAt, jobId, reportType
+   - When job enqueued: insert a row with tenantId/userId/filename/jobId/reportType
+   - When serving: lookup filename in reports_files; ensure tenantId matches current tenant.
+- If not found or mismatch -> 404.
+- If ok: res.sendFile(filePath) with Content-Type application/pdf.
+
+7) Minimal DB change (Drizzle)
+- Add Drizzle schema + migration/push for reports_files table.
+- Use drizzle-kit push workflow already in project (npm run db:push).
+Table fields (minimum):
+  id (uuid or serial), tenantId (text/uuid matching existing), userId (text/uuid), jobId (text), filename (text unique per tenant), reportType (text), createdAt (timestamp default now).
+- Add indexes: (tenantId, filename), (tenantId, jobId)
+
+8) Add cleanup task (simple)
+- Add a scheduled cleanup function executed at startup (setInterval daily) that deletes generated files older than e.g. 7 days AND removes their DB rows.
+- Ensure it is safe and logs what it deletes.
+- Keep it lightweight (no external cron).
+
+9) Update TECHNICAL_README.md (required)
+Update these sections:
+- Architecture: show Job Queue is now PostgreSQL-backed using pg-boss; explain async flow: API -> pg-boss queue -> worker -> generated/ -> file endpoint
+- Technology Stack: add pg-boss in Backend section
+- Key Features: add “Asynchronous Reporting (Postgres-backed job queue)” and “Local Generated File Storage”
+
+10) Final checks
+- Ensure TypeScript compiles: npm run check
+- Ensure dev starts: npm run dev
+- Ensure build succeeds: npm run build
+- Verify routes:
+  - POST report generate returns 202 + jobId
+  - GET /api/reports/jobs/:jobId shows status
+  - After completion, downloadUrl works and is tenant-safe
+
+DELIVERABLES
+- All code changes applied
+- New jobs folder created
+- Report generation refactored to async jobs
+- Local generated storage with secure serving route
+- Drizzle schema/table for report file mapping
+- Documentation updated

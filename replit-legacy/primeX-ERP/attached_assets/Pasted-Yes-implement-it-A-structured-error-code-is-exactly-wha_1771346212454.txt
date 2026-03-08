@@ -1,0 +1,70 @@
+Yes — implement it. A structured error code is exactly what you want for UX + audits, and it’s a small, safe change.
+
+Also: don’t worry about “planning mode”; we don’t need live mutation proof right now. Just ship the structured response and we’ll validate with real calls afterward.
+
+## What to implement (minimal + clean)
+
+### 1) Add a typed error for workflow/business-rule blocks
+
+Create a standard “workflow/business error” shape you can reuse later (period lock, SoD conflict, stale status, missing permission, etc.):
+
+* `success: false`
+* `code: string` (e.g., `PERIOD_CLOSED`)
+* `message: string`
+* optional `details: { ... }`
+
+### 2) Period lock returns `PERIOD_CLOSED` with details
+
+When period lock blocks posting:
+
+```json
+{
+  "success": false,
+  "code": "PERIOD_CLOSED",
+  "message": "Cannot post voucher: posting date 2025-01-15 falls within closed accounting period \"January 2025\" (2025-01-01 to 2025-01-31).",
+  "details": {
+    "periodId": 5,
+    "periodName": "January 2025",
+    "periodStart": "2025-01-01",
+    "periodEnd": "2025-01-31",
+    "postingDate": "2025-01-15",
+    "docType": "voucher",
+    "docId": 42,
+    "action": "post"
+  }
+}
+```
+
+### 3) Keep HTTP status consistent
+
+You can keep `200` with `success:false` **if that’s your current convention** (to avoid breaking clients).
+If you ever change later, `409 Conflict` is a good fit — but don’t do that right now unless you’re ready to update frontend globally.
+
+### 4) Add override-specific UX hook (optional but easy)
+
+If the user *has* override permission but didn’t send a reason, return:
+
+* `code: "OVERRIDE_REASON_REQUIRED"`
+
+That lets the UI show a modal for the reason.
+
+### 5) Add tests (fast)
+
+* posting blocked returns `code=PERIOD_CLOSED` + details
+* override without reason returns `OVERRIDE_REASON_REQUIRED`
+* override with reason succeeds and audit log records reason
+
+---
+
+## Replit prompt (copy-paste)
+
+> Update workflow action error handling to support structured business errors without breaking existing clients.
+>
+> * Introduce a standard error response format: success:false, code, message, details(optional).
+> * Update accounting period lock block to return code=PERIOD_CLOSED and include periodId, periodName, periodStart, periodEnd, postingDate in details.
+> * If override permission exists but overrideReason is missing, return code=OVERRIDE_REASON_REQUIRED.
+> * Keep HTTP status code behavior consistent with current system (do not introduce breaking changes).
+> * Add/Update e2e tests verifying these codes and detail fields.
+> * Update frontend voucher posting UI to show a dedicated “Period Closed” message using the code and open an override reason modal when authorized.
+
+Once done, paste one sample response JSON from your endpoint (blocked + override missing reason), and I’ll confirm the shape is perfect for the UI.

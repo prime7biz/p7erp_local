@@ -1,0 +1,114 @@
+Good — Replit’s analysis is **directionally correct**. But it’s still missing the *ERP-grade* specifics (posting rules, idempotency, sync rules, and the “stock ledger” foundation). Here’s what you should reply back to Replit so it implements it the right way, not “half-working”.
+
+Copy-paste this as your next Replit instruction:
+
+---
+
+### ✅ Replit Reply / Implementation Instruction (Copy-Paste)
+
+Implement this in **Phase-1 (Gate Pass ↔ Challan automation)** with correct ERP behavior:
+
+#### 1) Gate Pass Create: add “Create Challan?” option
+
+* On **GP_OUT create UI + API**, add boolean: `autoCreateChallan`
+* If `autoCreateChallan=true`, system must:
+
+  * create a **Delivery Challan (DC) in DRAFT**
+  * copy: party, warehouse, vehicle/driver, remarks, reference no
+  * copy: line items (itemId, qty, uom, batch/lot if applicable, rate optional)
+  * set link both ways:
+
+    * `gate_pass.linkedDocType='DELIVERY_CHALLAN'`
+    * `gate_pass.linkedDocId=dc.id`
+    * `delivery_challan.sourceDocType='GATE_PASS'`
+    * `delivery_challan.sourceDocId=gate_pass.id`
+
+#### 2) Challan Create: add “Create Gate Pass?” option
+
+* On **DC create UI + API**, add boolean: `autoCreateGatePass`
+* If `autoCreateGatePass=true`, system creates **GP_OUT in DRAFT** and links back.
+
+#### 3) Prevent duplicates (Idempotency)
+
+* Add a unique constraint (tenant-safe) so the same source doc can’t create multiple linked docs:
+
+  * DC unique: `(tenant_id, sourceDocType, sourceDocId)`
+  * GatePass unique: `(tenant_id, linkedDocType, linkedDocId)` (optional)
+* If request repeats, return the existing linked doc (no duplicates).
+
+#### 4) Sync behavior (DRAFT only)
+
+* If DC was auto-created from Gate Pass:
+
+  * keep DC lines synced while DC is DRAFT **unless** user manually edits DC lines
+  * once DC lines edited, set `dc.isManuallyModified=true`
+  * provide a button/action: **“Re-sync from Gate Pass”** (DRAFT only)
+
+#### 5) Stock posting rule (CRITICAL)
+
+* Gate Pass is a security document → **must NOT change stock**
+* Delivery Challan is the outward delivery document → **POSTING DC must create stock ledger OUT entries**
+* Add server-side guard so GP posting never writes stock entries.
+
+#### 6) Statuses & workflow
+
+* Allow both documents to move: `DRAFT → APPROVED → POSTED`
+* But **only POSTED DC** affects inventory.
+
+---
+
+### ✅ Phase-2 (Inventory foundation) — must be done right after Phase-1
+
+Replit’s inventory gaps list is correct. Implement these in order:
+
+1. **Stock Ledger table** (single source of truth)
+
+* `stock_ledger(id, tenant_id, date, doc_type, doc_id, warehouse_id, item_id, qty_in, qty_out, rate, value, created_by)`
+* Every posted GRN/DC/Transfer/Adjustment writes rows here.
+
+2. **Current Stock view**
+
+* For each item+warehouse: `SUM(qty_in - qty_out)` from ledger
+
+3. **Item movement history**
+
+* API: `/inventory/items/:id/ledger` with filters (date, warehouse, doc_type)
+
+4. **Stock adjustments + stock transfer (Tally stock journal idea)**
+
+* Adjustment doc for damage/loss/physical count correction
+* Transfer doc for warehouse-to-warehouse movement
+
+5. **Valuation**
+
+* Start with **Weighted Average** first (simpler), then FIFO later.
+
+6. **Reorder point / minimum stock alerts**
+
+* store per item per warehouse: min qty, reorder qty
+* alert when available drops below min.
+
+---
+
+### Deliverable expectation
+
+For Phase-1, provide:
+
+* DB migration PR
+* API changes with tests
+* UI changes with linked doc card
+* 3 sample flows in Postman:
+
+  1. GP_OUT → auto DC
+  2. DC → auto GP_OUT
+  3. re-submit same requestId → no duplicate
+
+---
+
+## Why this reply matters
+
+Because without **(a)** stock ledger + “DC posts stock only”, and **(b)** idempotency + draft sync rules, you’ll get duplicate challans, mismatched quantities, and double stock posting later.
+
+If you paste the above, Replit will build it properly.
+
+If you want, share Replit’s next response + any file paths it mentions, and I’ll tighten the prompts into **single-step Cursor/Replit prompts** (one prompt per change) exactly in your preferred workflow.

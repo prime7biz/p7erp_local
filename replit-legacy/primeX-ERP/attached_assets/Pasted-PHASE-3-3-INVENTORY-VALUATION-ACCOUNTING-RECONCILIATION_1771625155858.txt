@@ -1,0 +1,98 @@
+PHASE 3.3 — INVENTORY VALUATION ↔ ACCOUNTING RECONCILIATION
+(Stock Ledger, GRN/Issue, COGS, and Traceability to Vouchers)
+
+Goal:
+Make inventory and accounting consistent and auditable:
+- Every stock move affecting value is traceable to an accounting voucher
+- Stock valuation report matches accounting inventory ledger balance
+- COGS is derived consistently from issues/consumption + valuation method
+- Provide reconciliation endpoints that prove correctness
+
+Part A — Discover current inventory valuation model (NO changes yet)
+1) Locate tables/services for:
+   - items/materials
+   - warehouses
+   - stock ledger / inventory_moves
+   - stock balance table (if exists)
+   - valuation method (FIFO/Weighted Avg/Standard) if exists
+2) Locate integrations:
+   - purchase receipt (GRN) -> stock in
+   - issue/consumption -> stock out
+   - production transformation (yarn->greige->finish) if already started
+   - any linkage to accounting vouchers
+3) Output file paths + snippets, and identify the current valuation approach (even if implicit).
+
+Part B — Define valuation rules (single source of truth)
+Create server/inventory/valuation/rules.ts:
+1) Choose one valuation method for now (recommended: Weighted Average or FIFO).
+2) Stock In establishes unit cost:
+   - from purchase price + landed cost (if tracked)
+3) Stock Out consumes cost based on valuation method.
+4) Inventory value (closing) = sum(remaining qty * unit cost layers) OR avg cost * qty.
+5) COGS for period = sum(cost of all stock outs for sales/consumption within range).
+6) Tenant scope mandatory.
+
+Part C — Enforce accounting linkage for valuation-impacting moves
+1) For every valuation-impacting inventory move, ensure fields:
+   - accountingVoucherId (nullable until posted)
+   - postingStatus: PENDING_POSTING | POSTED
+   - sourceDocType/sourceDocId (GRN, SO, Production, Transfer, Adjustment)
+2) Rule:
+   - closing a period or running reconciliation must fail if any PENDING_POSTING moves exist.
+
+Part D — Implement Reconciliation APIs
+1) GET /api/reports/inventory/valuation?asOf=YYYY-MM-DD
+Return totals + per-item summary:
+{
+  asOfDate,
+  totalValue,
+  items:[{ itemId, sku, name, qtyOnHand, avgCostOrLayerCost, value }]
+}
+
+2) GET /api/reports/reconciliation/inventory-vs-ledger?asOf=YYYY-MM-DD
+Return:
+{
+  asOfDate,
+  inventoryValuationTotal,
+  accountingInventoryLedgerBalance,
+  difference,
+  pendingPostingCount,
+  topDifferences:[...]
+}
+
+Accounting inventory ledger balance should come from:
+- a configured “Inventory Asset” ledger group/ledger OR mapping table.
+If mapping not present yet, add a minimal config: inventoryAssetLedgerId per tenant.
+
+Part E — Traceability endpoint (auditor view)
+1) GET /api/inventory/moves/:moveId/trace
+Return:
+{
+  moveId,
+  source:{ type, id, refNo },
+  valuation:{ qty, unitCost, totalCost, method },
+  voucher:{ voucherId, voucherNo, status } | null,
+  createdBy, createdAt
+}
+
+Part F — Performance + Data Integrity
+1) Ensure indexes:
+   - (tenantId, itemId, warehouseId, date)
+   - (tenantId, postingStatus)
+2) Ensure inventory move rows are immutable once POSTED (corrections via reversal adjustment moves).
+3) Add validation to prevent negative stock unless override approval exists (reuse workflow override permission).
+
+Part G — Verification
+Create a minimal seed/test script:
+1) GRN: buy 100 units @ 10
+2) Issue/consume 40 units
+3) Verify:
+   - valuation asOf shows 60 units value correct
+   - COGS equals 40 * cost method
+   - reconciliation diff = 0 when voucher posted
+   - if voucher missing, pendingPostingCount > 0 and reconciliation warns
+
+Output:
+- files changed list
+- sample JSON from all endpoints
+- proof numbers from the seed script

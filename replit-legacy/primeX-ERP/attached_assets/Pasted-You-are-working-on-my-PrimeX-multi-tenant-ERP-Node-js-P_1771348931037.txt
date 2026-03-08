@@ -1,0 +1,267 @@
+You are working on my PrimeX multi-tenant ERP (Node.js + PostgreSQL). Implement a clean tenant onboarding + login system with STRICT tenant data isolation and a platform Super Admin approval workflow. Also improve the Dashboard UI/theme as per the design guidelines below.
+
+========================================================
+PART-1: MULTI-TENANT AUTH + APPROVAL + STRICT ISOLATION
+========================================================
+
+GOALS (Must):
+1) Tenant Registration creates a “Pending Tenant” request (NOT active immediately).
+2) System generates a Company Code automatically from company name + random digits; user MUST NOT edit it.
+3) Platform Super Admin approves/rejects tenants from a backend admin portal.
+4) Only APPROVED tenants can log in and access the ERP.
+5) Strict tenant data isolation: no tenant can ever read/write another tenant’s data.
+
+TECH DECISIONS (Follow strictly):
+- Use PostgreSQL schema-per-tenant isolation.
+- Keep a PUBLIC schema (or “public”) for shared/platform tables (tenants, users, platform_admins, subscriptions, audit logs).
+- Each tenant gets its own schema: tenant_<tenantIdOrCompanyCode>.
+- All tenant business tables (orders, inventory, accounting, etc.) live inside that tenant schema.
+- Application must set `search_path` per request based on authenticated tenant schema, and must never accept tenant_id or schema from client payload.
+
+STACK:
+- Node.js backend (Express recommended; if project already uses Fastify/Nest, adapt but keep same logic).
+- Use `pg` (node-postgres) for DB access OR existing ORM if present.
+  - If ORM cannot safely support schema-per-tenant with per-request search_path, use `pg` for tenant-scoped queries.
+- JWT auth for tenant users and platform admins.
+- bcrypt for password hashing.
+- Use httpOnly cookies for refresh tokens if already implemented; otherwise simple JWT access token is ok for now.
+
+DATA MODEL (PUBLIC schema):
+Create these tables (or migrate existing to match):
+
+A) tenants
+- id (uuid preferred)
+- company_name (text)
+- company_code (text UNIQUE, generated, IMMUTABLE)
+- status (enum: PENDING, APPROVED, REJECTED, SUSPENDED)
+- tenant_schema (text UNIQUE)
+- created_at, updated_at
+- approved_at, approved_by (nullable)
+- rejected_reason (nullable)
+
+B) users
+- id
+- tenant_id (FK tenants.id)
+- username (text)
+- email (text nullable for normal users, REQUIRED for tenant SUPER_ADMIN)
+- email_verified (bool default false) [at least for SUPER_ADMIN]
+- password_hash
+- role (enum: SUPER_ADMIN, ADMIN, MANAGER, OFFICER, DATA_ENTRY)
+- is_active (bool default true)
+- created_at
+Constraints:
+- UNIQUE(tenant_id, username)
+- UNIQUE(tenant_id, email) WHERE email IS NOT NULL (or enforce in app)
+
+C) platform_admins
+- id
+- email UNIQUE
+- password_hash
+- role (SUPER_ADMIN only for now)
+- is_active
+- created_at
+
+D) audit_logs (public)
+- id
+- actor_type (PLATFORM_ADMIN / TENANT_USER / SYSTEM)
+- actor_id
+- action
+- entity_type
+- entity_id
+- metadata JSONB
+- created_at
+
+TENANT SCHEMA TABLES (Seed for isolation test):
+Create minimal tables inside tenant schema to prove isolation:
+- settings (id, key, value, created_at)
+- sample_table (id, note, created_at)
+Later ERP modules will add more tables; for now ensure migrations can run per schema.
+
+WORKFLOW:
+
+1) Tenant Signup (Public)
+Route: POST /api/public/tenant-signup
+Input: company_name, super_admin_name, super_admin_email, password, plan(optional)
+Behavior:
+- Generate company_code automatically:
+  - Take first 3-5 letters from company_name (A-Z only, remove spaces/special chars), uppercase
+  - Append 3-4 random digits
+  - If collision, retry up to 10 times
+- Do NOT allow editing company_code in UI.
+- Create tenant row with status=PENDING.
+- tenant_schema should be: "tenant_" + tenant.id (best) OR sanitized "tenant_" + company_code.
+- Create the tenant super admin user in public.users with role=SUPER_ADMIN and tenant_id set.
+- Set email_verified=false initially; add email verification flow (below).
+- IMPORTANT: DO NOT create tenant schema yet (only on approval).
+- Return: {message, company_code, tenant_status:"PENDING"} (no tenant login token yet)
+
+2) Email verification for tenant SUPER_ADMIN
+Routes:
+- POST /api/public/send-verification (email)
+- GET  /api/public/verify-email?token=...
+Behavior:
+- Send verification link to super_admin_email using a signed token.
+- Mark users.email_verified=true after successful verification.
+- Tenant can still remain PENDING; approval is separate.
+
+3) Platform Admin Login + Admin Portal (Protected)
+- Seed one platform super admin from env vars:
+  PLATFORM_ADMIN_EMAIL, PLATFORM_ADMIN_PASSWORD
+Routes:
+- POST /api/platform/auth/login  (returns platform admin JWT)
+- GET  /api/platform/tenants?status=PENDING
+- POST /api/platform/tenants/:id/approve
+- POST /api/platform/tenants/:id/reject  (body: reason)
+- Optional: GET /api/platform/tenants/:id (details)
+
+Approval behavior:
+- Update tenants.status=APPROVED, approved_at, approved_by.
+- Create tenant schema in Postgres: CREATE SCHEMA <tenant_schema>.
+- Run tenant schema migrations/DDL for seed tables in that schema.
+- Insert default settings rows in tenant.settings.
+- Write audit_log entry.
+
+Reject behavior:
+- Update tenants.status=REJECTED, rejected_reason.
+- Write audit_log entry.
+- Do NOT create schema.
+
+4) Tenant User Login
+Route: POST /api/auth/login
+Input: company_code, username, password
+Behavior:
+- Find tenant by company_code
+- If tenant.status != APPROVED => deny with clear message ("Company is pending approval" / "Rejected" / "Suspended")
+- Find user by tenant_id + username
+- Verify password
+- Issue JWT containing tenant_id, tenant_schema, user_id, role
+- Return token + basic user profile
+
+5) Password reset (at least for SUPER_ADMIN via email)
+Routes:
+- POST /api/public/forgot-password (email)
+- POST /api/public/reset-password (token, new_password)
+Behavior:
+- Send reset token to email
+- Reset password_hash on success
+
+STRICT TENANT ISOLATION (Mandatory middleware + DB handling):
+- For any tenant-protected route:
+  - Verify JWT.
+  - Derive tenant_schema ONLY from JWT (never from request body/query).
+  - Use a per-request DB session:
+    - Acquire client from pool
+    - BEGIN
+    - SET LOCAL search_path TO <tenant_schema>, public;
+    - Execute all queries with this same client
+    - COMMIT/ROLLBACK
+    - Release client
+- Ensure NO query can access another tenant schema.
+- Block any direct schema usage coming from user inputs.
+- Never accept tenant_id from client. Always use tenant_id from JWT.
+
+DEMO TENANT ROUTES (to test isolation):
+- POST /api/app/notes {note} -> insert into tenant.sample_table
+- GET  /api/app/notes -> select from tenant.sample_table
+Test: two tenants must see different notes.
+
+FRONTEND changes required for auth:
+- Tenant Signup page:
+  - Remove any manual company code input.
+  - After submit, show generated Company Code in success state (read-only display).
+  - Show: “Your company is pending approval by PrimeX Admin.”
+- Login page:
+  - Fields must be Company Code, Username, Password.
+  - Remember last used company code locally.
+  - If tenant not approved, show correct status message.
+- Add a small “Forgot password” link (email-based).
+
+DELIVERABLES:
+- DB migrations/SQL scripts under /backend/db or similar.
+- Routes + middleware as above.
+- README section “Tenant Approval & Isolation” explaining:
+  - schema-per-tenant approach
+  - how search_path is set
+  - how to seed platform admin
+  - how to test with two tenants
+
+QUALITY CHECKS (Must pass):
+- Login with PENDING tenant => denied
+- After approval, tenant can login
+- Two approved tenants:
+  - Creating notes in tenant A must not appear in tenant B
+- No endpoint accepts tenant_id or schema from client
+- All tenant routes use middleware that sets search_path from JWT
+
+
+========================================================
+PART-2: DASHBOARD + UI + THEME IMPROVEMENTS
+========================================================
+
+Apply the following UI improvements without breaking current styling or structure. Keep it clean, modern, and “premium ERP”. The brand accent is ORANGE but should be used as accent only.
+
+A) Reduce the big orange bar height
+- The plan/status strip is visually heavy.
+- Keep plan info, but reduce height and use a calmer style:
+  - slimmer bar
+  - softer background tint
+  - keep orange only as accent (small left stripe or icon)
+
+B) Use one consistent “card language”
+- Standardize all cards:
+  - neutral card background
+  - small LEFT accent color strip (thin)
+  - consistent border radius, padding, shadow
+- Reserve strong colors only for alerts/errors (not for every card border).
+- Make sure spacing is consistent across dashboard cards and module cards.
+
+C) Dashboard information architecture: “Overview → Exceptions → Actions”
+Re-structure dashboard sections:
+Top (Overview KPIs):
+- Today’s Production
+- Shipments Due
+- Pending Approvals
+- Cash Position
+Middle (Exceptions):
+- Late Orders
+- Low Stock
+- QA Fails
+- Overdue Invoices
+Bottom (Actions + Activity):
+- Quick Actions (New Order, Add Customer, Inventory, Reports)
+- Recent Activity feed (latest orders, approvals, payments)
+
+D) Color/theme suggestion (calm + professional + not boring)
+Implement a calm palette:
+- Background: warm off-white / light sand (already close)
+- Primary text: near-black
+- Accent: orange (buttons, highlights only)
+- Secondary accent: teal/indigo for “info/links”
+- Alerts:
+  - Success = green
+  - Warning = amber
+  - Danger = red
+Keep saturation low so it feels mentally soothing and professional.
+
+E) Sidebar improvement
+- Keep module grouping (already present)
+- Add collapse/expand for groups (accordion behavior)
+- Add “Favorites” pinned section at top:
+  - allow pin/unpin modules (store in local storage or user prefs table)
+- Keep global search (already present) and ensure it’s always accessible.
+
+DELIVERABLES for UI:
+- Update frontend components/styles accordingly.
+- Ensure responsive behavior remains strong (mobile/tablet/desktop).
+- No regressions: existing navigation must still work.
+
+========================================================
+IMPLEMENTATION INSTRUCTIONS
+========================================================
+- Respect existing folder structure (backend/ frontend/).
+- Do not break current UI.
+- Write clean, production-style code with basic validation and error handling.
+- Add minimal seed/demo data only where necessary.
+- Add a short test plan in README to verify tenant isolation + approval + UI changes.
+
+Now implement everything end-to-end in my Replit project.

@@ -1,0 +1,105 @@
+Failed to load resource: the server responded with a status of 401 (Unauthorized)Understand this error
+queryClient.ts:73 401 Unauthorized response for /api/auth/me
+hook.js:608 Query error: Error: Authentication required
+    at queryClient.ts:78:17
+overrideMethod @ hook.js:608Understand this error
+api/auth/me:1 
+            
+            
+           Failed to load resource: the server responded with a status of 401 (Unauthorized)Understand this error
+queryClient.ts:73 401 Unauthorized response for /api/auth/me
+hook.js:608 Query error: Error: Authentication required
+    at queryClient.ts:78:17
+overrideMethod @ hook.js:608
+await in overrideMethod
+fetchFn @ @tanstack_react-query.js?v=ea9cb606:840
+run @ @tanstack_react-query.js?v=ea9cb606:494
+(anonymous) @ @tanstack_react-query.js?v=ea9cb606:519Understand this error
+login.tsx:36 Attempting login with: admin
+queryClient.ts:15 Making POST request to /api/auth/login
+api/auth/login:1 
+            
+            
+           Failed to load resource: the server responded with a status of 400 (Bad Request)Understand this error
+auth-context.tsx:55 API error (400): Invalid credentials
+overrideMethod @ hook.js:608
+await in overrideMethod
+mutationFn @ auth-context.tsx:55
+fn @ @tanstack_react-query.js?v=ea9cb606:1189
+run @ @tanstack_react-query.js?v=ea9cb606:494
+start @ @tanstack_react-query.js?v=ea9cb606:536
+execute @ @tanstack_react-query.js?v=ea9cb606:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=ea9cb606:2630
+login @ auth-context.tsx:128
+onSubmit @ login.tsx:37
+(anonymous) @ chunk-4BFJKWC4.js?v=ea9cb606:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=ea9cb606:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=ea9cb606:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=ea9cb606:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=ea9cb606:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=ea9cb606:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=ea9cb606:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=ea9cb606:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=ea9cb606:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=ea9cb606:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=ea9cb606:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=ea9cb606:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=ea9cb606:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=ea9cb606:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=ea9cb606:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=ea9cb606:5449Understand this error
+auth-context.tsx:55 API request error: Error: Invalid credentials
+    at apiRequest (queryClient.ts:51:13)
+    at async Object.mutationFn (auth-context.tsx:55:19)
+overrideMethod @ hook.js:608
+await in overrideMethod
+mutationFn @ auth-context.tsx:55
+fn @ @tanstack_react-query.js?v=ea9cb606:1189
+run @ @tanstack_react-query.js?v=ea9cb606:494
+start @ @tanstack_react-query.js?v=ea9cb606:536
+execute @ @tanstack_react-query.js?v=ea9cb606:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=ea9cb606:2630
+login @ auth-context.tsx:128
+onSubmit @ login.tsx:37
+(anonymous) @ chunk-4BFJKWC4.js?v=ea9cb606:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=ea9cb606:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=ea9cb606:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=ea9cb606:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=ea9cb606:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=ea9cb606:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=ea9cb606:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=ea9cb606:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=ea9cb606:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=ea9cb606:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=ea9cb606:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=ea9cb606:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=ea9cb606:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=ea9cb606:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=ea9cb606:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=ea9cb606:5449Understand this error
+hook.js:608 Login error: Error: Invalid credentials
+    at apiRequest (queryClient.ts:51:13)
+    at async Object.mutationFn (auth-context.tsx:55:19)
+overrideMethod @ hook.js:608
+await in overrideMethod
+(anonymous) @ chunk-4BFJKWC4.js?v=ea9cb606:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=ea9cb606:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=ea9cb606:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=ea9cb606:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=ea9cb606:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=ea9cb606:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=ea9cb606:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=ea9cb606:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=ea9cb606:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=ea9cb606:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=ea9cb606:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=ea9cb606:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=ea9cb606:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=ea9cb606:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=ea9cb606:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=ea9cb606:5449Understand this error

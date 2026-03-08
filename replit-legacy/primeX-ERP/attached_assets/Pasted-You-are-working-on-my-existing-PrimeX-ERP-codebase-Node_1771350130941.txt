@@ -1,0 +1,234 @@
+You are working on my existing PrimeX ERP codebase (Node.js + PostgreSQL + Drizzle ORM). This system already uses ROW-LEVEL multi-tenant isolation via `tenant_id` across tables, and it already has a PLATFORM ADMIN system:
+
+- Existing: `admin_users` table (platform admin auth)
+- Existing: admin routes under `/api/admin/*` (uses admin_token cookie)
+- Existing: admin dashboard pages under `/admin/*` with tenant management & audit logs
+- Existing: tenant registration endpoint `/api/auth/register`
+- Existing: JWT auth includes tenant_id in token
+- Existing: RBAC system with roles table
+
+DO NOT rebuild these. Implement changes additively and reuse existing patterns.
+
+========================================================
+0) TERMINOLOGY (STRICT)
+========================================================
+- PLATFORM SUPER ADMIN = platform-level admin user (already represented by admin_users + /api/admin/*). Can manage all tenants and see all tenant data from admin backend.
+- TENANT OWNER = the first tenant-level admin user created during tenant registration for that tenant workspace. Tenant Owner is NOT a platform admin.
+
+Never use “super admin” for tenant users. Use “Tenant Owner”.
+
+========================================================
+1) DATABASE CHANGES (TENANTS TABLE ONLY, ADDITIVE)
+========================================================
+Update the existing tenants table (or equivalent “companies/organizations” table that represents a tenant) with additive migrations via Drizzle.
+
+Add columns (exact names preferred; if tenant table uses different naming, map but keep semantics):
+- companyCode (string/varchar), UNIQUE, NOT NULL
+- status (string/varchar), NOT NULL, default = 'PENDING'
+  Allowed: PENDING | APPROVED | REJECTED | SUSPENDED
+- approvedAt (timestamp, nullable)
+- approvedBy (admin_user_id or admin_users.id reference, nullable)
+- rejectedReason (text, nullable)
+
+Also ensure:
+- Unique index on companyCode
+- Add any missing createdAt/updatedAt if your codebase uses them consistently (only if already a convention)
+
+IMPORTANT:
+- companyCode is IMMUTABLE after creation (enforce in service layer; do not allow update endpoint to modify it).
+
+========================================================
+2) COMPANY CODE GENERATION (SYSTEM GENERATED, NO EDITING)
+========================================================
+Implement a company code generator used during registration:
+- Input: company/tenant name
+- Process:
+  - take only letters A-Z from company name (remove spaces/special chars)
+  - uppercase
+  - take first 3–5 letters (minimum 3)
+  - append 3–4 random digits
+- Ensure uniqueness:
+  - check DB for collision, retry up to 10 times
+- The registrant cannot edit companyCode in UI or API.
+
+Example:
+"Amity Design Ltd" => "AMITY4821" (format can vary but same logic)
+
+========================================================
+3) REGISTRATION FLOW UPDATE (/api/auth/register)
+========================================================
+Modify the existing tenant registration flow:
+Currently it likely creates an active tenant immediately.
+Change behavior to:
+
+On successful tenant registration:
+1) Create tenant with:
+   - companyCode = generated code
+   - status = PENDING
+2) Create the first tenant user (Tenant Owner) as you already do:
+   - Keep your existing tenant user table and RBAC roles system
+   - Assign role as the highest tenant-level role (Tenant Owner). If roles table already has “owner/admin”, map accordingly.
+3) Do NOT allow tenant login until approved.
+4) Response payload should include:
+   - companyCode (so frontend can show it)
+   - status = PENDING
+   - user-facing message: “Registration submitted. Your company is pending approval.”
+
+Frontend registration page changes:
+- Remove any company code input field (if present).
+- After submit success:
+  - Show generated companyCode prominently (read-only)
+  - Show PENDING approval message and next steps:
+    “Please wait for approval by PrimeX Platform Admin. You will be able to log in after approval.”
+
+========================================================
+4) PLATFORM ADMIN APPROVAL (REUSE EXISTING /api/admin/*)
+========================================================
+DO NOT create a new admin system. Use existing admin_users auth and /api/admin routes.
+
+Add endpoints under existing admin routes (follow existing patterns + cookie auth):
+- GET  /api/admin/tenants?status=PENDING
+- POST /api/admin/tenants/:tenantId/approve
+- POST /api/admin/tenants/:tenantId/reject   body: { reason }
+- OPTIONAL: POST /api/admin/tenants/:tenantId/suspend body: { reason }
+
+Approve behavior:
+- status = APPROVED
+- approvedAt = now
+- approvedBy = current admin_user id
+- rejectedReason = null
+- Add to audit logs using your existing audit log mechanism (do not invent a new one)
+
+Reject behavior:
+- status = REJECTED
+- rejectedReason = provided reason
+- approvedAt/approvedBy = null
+- Add audit log entry
+
+Suspend behavior (optional but recommended):
+- status = SUSPENDED
+- Add audit log
+
+Update the admin dashboard UI (/admin/*) tenant management screen:
+- Add status badge column
+- Add filters for status
+- Add action buttons for approve/reject/suspend
+- Show companyCode in list and in tenant details
+
+========================================================
+5) LOGIN FLOW UPDATE (/api/auth/login)
+========================================================
+Update login to require:
+- companyCode + username + password
+
+Behavior:
+1) Find tenant by companyCode
+2) If not found: return “Invalid credentials” (generic)
+3) If tenant.status != APPROVED:
+   - PENDING => “Company pending approval”
+   - REJECTED => “Company rejected”
+   - SUSPENDED => “Company suspended”
+   Return 403 with structured reason code
+4) Then authenticate user under that tenant (existing logic):
+   - find user by tenantId + username
+   - verify password
+   - issue JWT (existing) including tenant_id
+5) Ensure JWT tenant_id is always the DB tenant id, never from client
+
+Frontend login page update:
+- Add Company Code field above username
+- Remember last used companyCode in localStorage
+- If backend returns PENDING/REJECTED/SUSPENDED, show friendly message
+
+========================================================
+6) TENANT ISOLATION MIDDLEWARE (TIGHTEN, DON’T REWRITE)
+========================================================
+Row-level isolation already exists. Tighten guardrails:
+
+- Ensure all tenant-scoped routes derive tenantId ONLY from JWT.
+- Never accept tenantId from request payload for authorization.
+- Add a shared helper used by repositories/services to enforce tenant filter:
+  - Example: `withTenant(tenantId)` that injects tenantId condition for Drizzle queries.
+
+If possible, add a DEV-ONLY assertion:
+- If a query targets a tenant table without tenantId filter, throw error in development.
+- Keep production stable (no throwing due to false positives).
+
+DO NOT add demo routes; the app already proves isolation.
+
+========================================================
+7) EMAIL VERIFICATION & PASSWORD RESET (SKIP FOR NOW / STUB ONLY)
+========================================================
+We do NOT have an email provider configured.
+- Do NOT block flows on email verification.
+- If necessary, create stub endpoints that return “Not configured” in a clean way.
+- Mention in README that email can be added later (SendGrid/SES).
+
+========================================================
+8) DASHBOARD + UI REFINEMENTS (FRONTEND)
+========================================================
+Apply UI improvements to existing dashboard and layout without breaking navigation.
+
+A) Reduce big orange bar height
+- Make the plan/status strip slimmer and calmer
+- Orange should be accent-only (small stripe/icon), not a large filled block
+
+B) Consistent “card language”
+- Neutral card background
+- Thin LEFT accent strip
+- Consistent radius/padding/shadow
+- Strong colors only for alerts/errors
+
+C) Dashboard structure: Overview → Exceptions → Actions
+Top Overview KPIs:
+- Today’s Production
+- Shipments Due
+- Pending Approvals
+- Cash Position
+Middle Exceptions:
+- Late Orders
+- Low Stock
+- QA Fails
+- Overdue Invoices
+Bottom:
+- Quick Actions
+- Recent Activity feed
+
+D) Calm palette
+- Background: warm off-white / light sand
+- Text: near-black
+- Accent orange: buttons/highlights only
+- Secondary accent: teal/indigo for info/links
+- Alerts: success green, warning amber, danger red (low saturation)
+
+E) Sidebar improvements
+- Collapsible groups (accordion)
+- Favorites pinned at top (pin/unpin modules)
+- Store favorites in localStorage first (simplest), optionally add user prefs later
+- Keep global search accessible
+
+========================================================
+9) DELIVERABLES
+========================================================
+Backend:
+- Drizzle migration for tenant columns + unique index
+- Registration updated to generate companyCode + PENDING
+- Admin approve/reject/suspend endpoints under /api/admin/*
+- Login updated to require companyCode and block unapproved tenants
+- Tightened tenant isolation guardrails (JWT-derived tenantId only)
+- Audit log writes for approve/reject (reuse existing)
+
+Frontend:
+- Registration: show generated companyCode + pending message
+- Login: companyCode field + localStorage memory + status messages
+- Admin UI: tenant status & actions
+- Dashboard layout + theme refinements
+- Sidebar collapsible groups + favorites
+
+README:
+- Explain platform vs tenant terminology
+- Tenant lifecycle (PENDING → APPROVED → SUSPENDED/REJECTED)
+- How to approve tenants from /admin
+- Notes about email not configured (stubs only)
+
+Now implement all changes end-to-end in this Replit project. Reuse existing routes, auth patterns, Drizzle models, and admin dashboard components. Do not introduce schema-per-tenant or rebuild existing systems.

@@ -1,0 +1,208 @@
+You’re pointing at the **3 hardest “ERP-grade” problems** in garments inventory:
+
+1. **Consumption must never fail** (order finalization locks a BOM/consumption plan; changes require top approval)
+2. **Every stock movement must affect valuation and accounting** (inventory ↔ GL, and CRM/party linkage)
+3. **Raw → Raw conversion** (yarn→greige, greige→finished) including subcontract processing
+
+Your Replit agent’s summary is good, and you already have strong foundations (BOM, variants, stock ledger, weighted avg, adjustments). Now you need the **control layer + manufacturing conversion layer + accounting integration layer**.
+
+Here’s the proper design to give Replit (garments-first).
+
+---
+
+## 1) “Consumption cannot fail” — how to enforce it
+
+### A. Freeze a Consumption Snapshot at Sales Order Finalization
+
+When you “finalize” a Sales Order (or confirm buyer order), the system must:
+
+* Create an **Order BOM Snapshot** (immutable baseline)
+* Create **Material Reservations** for all required items (committed stock)
+* Create an **Approval-controlled Change Request** mechanism
+
+**Tables you need (or equivalent):**
+
+* `order_bom_snapshot(order_id, snapshot_version, item_id, qty_per, wastage_pct, total_required_qty, uom, created_at, locked=true)`
+* `material_reservation(order_id, warehouse_id, item_id, reserved_qty, issued_qty, remaining_qty, status)`
+* `consumption_change_request(order_id, requested_by, reason, delta_lines[], status=PENDING/APPROVED/REJECTED, approved_by, approved_at)`
+
+### B. Block procurement “extra buying” unless approved
+
+This is exactly your requirement: “we should not buy more materials of that”.
+
+Implement procurement guardrails:
+
+* For each order, compute:
+
+  * **Required** (from snapshot)
+  * **Reserved + On-hand** (available for that order)
+  * **Already PO’d for that order**
+* If any new PO line would exceed **(required + approved variance)** → system blocks and forces **Top Management Approval**.
+
+**Rule:**
+
+* Default variance allowance = 0 (or tiny % you set)
+* Any overage must go through `consumption_change_request` and top approval.
+
+### C. Make “Issue to Production” impossible to exceed snapshot without approval
+
+When issuing materials (fabric, trims) to cutting/sewing:
+
+* System checks `remaining_qty` in reservation
+* If issue qty > remaining → block and require approved CR
+
+This ensures consumption never “fails” later, because the *plan* is locked and shortages are visible early (at finalization).
+
+---
+
+## 2) Valuation + Accounts + CRM must be connected
+
+### A. Inventory posts to GL from the Stock Ledger
+
+You already have **stock ledger with weighted average** — good. Now connect it to accounting:
+
+When a document is **POSTED**, you:
+
+1. Write stock ledger rows
+2. Write GL voucher rows (accounting entries)
+
+**Minimum GL mapping (per item category or stock group):**
+
+* Inventory Asset (RM / WIP / FG)
+* COGS / Consumption (or WIP consumption)
+* GRNI / Payables clearing (for GRN)
+* Subcontract WIP / Processing charges (optional)
+* Stock Adjustment gain/loss account
+
+**Examples:**
+
+* **GRN posted**
+  Dr Inventory (RM)
+  Cr GRNI / Goods Received Not Invoiced (or AP if invoice same time)
+
+* **Issue to Production posted (RM → WIP)**
+  Dr WIP Inventory
+  Cr RM Inventory
+  (value uses weighted avg)
+
+* **Delivery Challan / Shipment posted (FG out)**
+  Dr COGS
+  Cr Finished Goods Inventory
+  (invoice will hit AR + Sales separately)
+
+### B. CRM/Customer linkage
+
+You’ve already found Party↔Customer inconsistency. For valuation/accounting integrity:
+
+* **Every sales/purchase/manufacturing doc must reference Party**, not “CRM customer” directly.
+* CRM customer is profile; Party is accounting master.
+
+So: Sales Order → Party → AR ledger, credit limits, terms, etc.
+
+---
+
+## 3) Raw → Raw conversion (yarn → greige → finished) including subcontract
+
+This needs a real **Manufacturing / Process Order** system (even if lightweight).
+
+### A. Define “Process Routes” (multi-stage BOM)
+
+Garments textiles are multi-stage:
+
+* **Process 1: Knitting**
+  Input: Yarn
+  Output: Greige fabric
+  Loss: knitting waste, roll rejection
+
+* **Process 2: Dyeing/Finishing**
+  Input: Greige
+  Output: Finished fabric
+  Loss: process loss, shade rejection
+
+This is not the same as finished-goods BOM; it’s **material transformation BOM**.
+
+**Core docs:**
+
+* `process_order` (type: KNITTING / DYEING / FINISHING, in-house or subcontract, linked to buyer order)
+* `process_issue` (issue input material out of store)
+* `process_receipt` (receive output material into store)
+
+### B. Posting model (valuation-safe)
+
+* **Issue Yarn to knitting** (in-house or subcontract):
+
+  * RM Yarn OUT
+  * WIP-Process IN (Knitting WIP)
+* **Receive Greige**:
+
+  * Greige RM IN
+  * Knitting WIP OUT
+  * Loss goes to “Process Loss” account (if any)
+
+Same again for dyeing:
+
+* Greige OUT → Dyeing WIP IN
+* Finished IN → Dyeing WIP OUT
+
+### C. Subcontract handling (very important)
+
+For subcontract knitting/dyeing:
+
+* Issue materials to vendor (challan/issue doc)
+* Track vendor WIP quantity/value
+* Receive output with:
+
+  * conversion ratio
+  * process loss
+  * vendor bill (processing charges) posted to accounts
+
+This gives you:
+
+* order-wise costing
+* vendor-wise WIP
+* loss analytics
+
+---
+
+## 4) What to tell Replit: implement in the right order
+
+### Phase 4 (your “most important” phase): Order Consumption Control
+
+1. Sales Order Finalize → create **Order BOM Snapshot**
+2. Create **Reservations** (committed stock per item+warehouse)
+3. Block over-issue + block over-procurement without CR approval
+4. Add **Top Management Approval workflow** for consumption changes
+5. Reports:
+
+   * Order-wise required vs reserved vs issued vs remaining
+   * Order variance audit log
+
+### Phase 5: Textile Conversion (Raw→Raw) + Subcontract
+
+1. Process Order (Knitting/Dyeing) + Issue/Receipt
+2. Ledger + Valuation posting across RM/WIP/RM
+3. Subcontract vendor WIP + processing charge accounting
+4. Process loss tracking + yield reporting
+
+### Phase 6: Tight Accounting Integration
+
+1. Auto GL voucher generation from all POSTED inventory docs
+2. Stock valuation reports reconcile with GL inventory balances
+
+---
+
+## Quick check on Replit’s “inventory items need stock tracking columns”
+
+Tell them **not to store stock as editable columns**.
+Keep computed stock views from ledger (you can cache summaries, but ledger remains source of truth).
+
+---
+
+If you paste your Replit agent’s “proposed implementation plan” (the part it was about to write), I’ll rewrite it into a **strict, execution-ready spec** with:
+
+* exact tables/fields
+* exact posting entries (inventory + GL)
+* exact approval workflow states
+* edge cases (partial receipts, partial issues, returns, wastage, rework, cancellations)
+
+So your team can implement without rework.

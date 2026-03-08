@@ -1,0 +1,133 @@
+PHASE 7.4 — TIME & ACTION (TNA) + CRITICAL PATH + ALERTS
+(Templates, task dependencies, delay tracking, owner accountability, dashboards)
+
+Goal:
+Implement a real garments TNA system:
+- Buyer/style/order-specific TNA templates
+- Auto-generated tasks per order (and per sample if linked)
+- Dependencies + critical path
+- Live status updates, delays, alerts
+- Dashboard: upcoming deadlines, overdue, risk score
+
+Part A — Discovery (no breaking changes)
+1) Find existing TNA/time-action modules, if any.
+2) Identify how orders/styles/samples are represented and linkable.
+3) Output file paths + what exists vs missing.
+
+Part B — Data model (minimum viable)
+Create/extend:
+
+1) tna_templates
+- id, tenantId
+- name (e.g. "Buyer A - Knit Tee")
+- appliesTo: ENQUIRY|SAMPLE|ORDER
+- productType (optional)
+- active boolean
+- createdBy, createdAt
+
+2) tna_template_tasks
+- id, tenantId, templateId
+- name (e.g. "Labdip Approval")
+- department: MERCH|SAMPLE|KNIT|DYE|CUT|SEW|FINISH|QA|COMMERCIAL|LOGISTICS
+- defaultOffsetDays (relative to exFactoryDate or shipDate)
+- durationDays (optional)
+- dependencyTaskIds (array) or separate table for dependencies
+- isCritical boolean (optional)
+- defaultOwnerRole (e.g. MANAGER/OFFICER)
+
+3) tna_plans
+- id, tenantId
+- planNo (unique)
+- relatedType: ORDER|SAMPLE
+- relatedId
+- templateId
+- anchorDateType: EX_FACTORY|SHIP|DELIVERY|SAMPLE_SEND
+- anchorDate
+- status: ACTIVE|COMPLETED|CANCELLED
+- createdBy, createdAt
+
+4) tna_tasks
+- id, tenantId, planId
+- name, department
+- plannedStart, plannedEnd
+- actualStart, actualEnd
+- status: NOT_STARTED|IN_PROGRESS|DONE|BLOCKED|DELAYED|CANCELLED
+- assignedToUserId (optional), assignedRole (optional)
+- dependency links: either (taskId, dependsOnTaskId) table or JSON
+- remarks
+- lastUpdatedBy, updatedAt
+
+5) tna_task_updates (audit trail)
+- id, tenantId, taskId
+- fromStatus, toStatus
+- comment
+- updatedBy, createdAt
+
+Part C — Plan generation logic
+1) Generate TNA plan from template when:
+- sales order is CONFIRMED (or a defined status)
+- sample request is APPROVED (optional)
+2) Calculate planned dates using anchorDate and offsets.
+3) Apply dependencies: a task cannot start before dependencies are DONE.
+4) Identify critical path:
+- compute longest dependency chain (simple DAG critical path)
+- mark tasks on critical path as critical=true
+
+Part D — Alerts + risk scoring
+1) Create alert rules:
+- task due in next N days
+- overdue tasks
+- blocked tasks > X days
+- critical task delayed
+2) Create a simple risk score for each plan:
+- % overdue tasks
+- number of critical tasks delayed
+- proximity to anchor date
+Return risk category: LOW|MEDIUM|HIGH
+
+Part E — APIs (minimum)
+Templates:
+- POST /api/tna/templates
+- POST /api/tna/templates/:id/tasks
+- GET  /api/tna/templates
+Plans:
+- POST /api/tna/plans (generate from template)
+- GET  /api/tna/plans?relatedType=&relatedId=
+Tasks:
+- PATCH /api/tna/tasks/:id (status update + dates + owner)
+- POST  /api/tna/tasks/:id/comment (adds update log)
+Dashboards:
+- GET /api/tna/dashboard/summary (counts + risk)
+- GET /api/tna/dashboard/upcoming?days=7
+- GET /api/tna/dashboard/overdue
+
+Part F — Frontend minimum screens
+1) TNA Template builder:
+- create template + add tasks + set offsets + dependencies (simple UI)
+2) TNA Plan view:
+- timeline list + filters by department/status
+- highlight critical tasks
+- show risk badge + upcoming/overdue counts
+3) Task update modal:
+- set status, dates, comment, assign user
+
+Part G — Permissions + audit
+1) Permissions:
+- view TNA: merch/read or operations/read (define appropriate permission)
+- edit tasks: assigned user or MANAGER+ roles
+- template edit: ADMIN/TENANT_OWNER
+2) Every status change creates tna_task_updates row and audit log entry.
+
+Part H — Verification (proof required)
+Seed/test:
+1) Create template with 8 tasks with dependencies (e.g. Labdip -> Bulk fabric -> Cutting -> Sewing -> Finishing -> Shipment docs)
+2) Create an order with anchorDate (exFactory)
+3) Generate plan; confirm planned dates computed
+4) Mark an early dependency delayed; confirm downstream tasks blocked and risk increases
+5) Verify overdue endpoints show correct items
+
+Output:
+- files changed list
+- example plan JSON with tasks + dependencies + critical flags
+- sample dashboard JSON (summary + overdue)
+- one risk score example calculation

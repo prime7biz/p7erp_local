@@ -1,0 +1,122 @@
+PHASE 7.3 — SAMPLE PROGRAM (Proto/Fit/PP/Sealing) + APPROVALS + BOM + TNA LINK
+(Sample workflow, sample BOM/consumption, sample material issuance, comments, revisions)
+
+Goal:
+Implement the complete sample development workflow used in garments:
+- Sample request types (proto, fit, size set, PP, sealing, photo sample, shipment sample)
+- Sample timeline + responsible person + buyer feedback loop
+- Sample BOM/consumption (can reuse style BOM with overrides)
+- Sample material requisition/issue from stock (inventory moves)
+- Approvals and revision history (audit trail)
+
+Part A — Discover existing sampling/TNA entities (NO breaking changes)
+1) Search for existing modules/tables/routes:
+   - sample, proto, pp, sealing, fit, tech pack, comments
+   - tna/time-and-action
+   - styles/BOM/orders already implemented in Phase 7.2
+2) Output file paths + what exists vs missing.
+
+Part B — Data Model (minimum viable)
+Create/extend:
+
+1) sample_requests
+- id, tenantId
+- sampleNo (unique per tenant)
+- buyerId, styleId, enquiryId(optional), salesOrderId(optional)
+- sampleType: PROTO|FIT|SIZE_SET|PP|SEALING|PHOTO|SHIPMENT
+- qty, requiredDate
+- status: DRAFT|SUBMITTED|APPROVED|IN_PROGRESS|SENT_TO_BUYER|REVISION_REQUIRED|APPROVED_BY_BUYER|REJECTED|CLOSED
+- assignedToUserId, createdBy, approvedBy, timestamps
+- notes
+
+2) sample_versions
+- id, tenantId, sampleRequestId
+- versionNo
+- status: WORKING|SENT|FEEDBACK_RECEIVED|ACCEPTED|REJECTED
+- buyerComments, internalComments
+- attachments (array metadata) or reference table
+- createdAt
+
+3) sample_bom_snapshots
+- id, tenantId, sampleRequestId, sampleVersionId
+- sourceStyleBomId, sourceVersionNo
+- snapshot JSON (resolved lines with overrides)
+- lockedAt, lockedBy
+
+4) sample_material_requests (requisition)
+- id, tenantId, sampleRequestId
+- status: DRAFT|APPROVED|ISSUED|CANCELLED
+- requestId (idempotency)
+- approvedBy + reason (optional)
+
+5) sample_material_request_lines
+- id, tenantId, sampleMaterialRequestId
+- itemId, qty, uom
+- warehouseId
+
+6) sample_activity_log
+- id, tenantId, sampleRequestId
+- action, fromStatus, toStatus
+- performedBy, metadata JSON, createdAt
+
+Part C — Workflow rules + approvals
+1) Sample Request:
+- submit → approve → in-progress → sent → feedback → revision/approved → close
+2) Any change in qty/type/requiredDate after approval requires override:
+- workflow:override + overrideReason + audit log
+3) Sample BOM snapshot:
+- On approve, lock snapshot from style BOM (or manual sample BOM)
+- Revisions create new sample version + new snapshot
+
+Part D — Inventory integration (sample material issue)
+1) Sample material issue must be transactional + idempotent:
+- Create inventory OUT moves from warehouse to “Sample Consumption” location
+- sourceDocType="SAMPLE"
+- sourceDocId=sampleRequestId
+2) If insufficient stock:
+- return APPROVAL_REQUIRED or STOCK_INSUFFICIENT with missing items list
+- no partial rows created
+3) Optional: allow substitution only with override reason and audit.
+
+Part E — TNA integration hooks
+1) Add minimal “Sample Milestones” to TNA:
+- Create a tna_tasks template for sample types (lab dip, trims approval, sample sewing, send date, feedback due)
+2) Link sample request to TNA tasks so delays show in dashboards later.
+
+Part F — APIs (minimum)
+- POST /api/samples/requests (create draft)
+- POST /api/samples/requests/:id/submit
+- POST /api/samples/requests/:id/approve
+- POST /api/samples/requests/:id/start
+- POST /api/samples/requests/:id/send (creates sample_version SENT)
+- POST /api/samples/requests/:id/feedback (creates version + status change)
+- POST /api/samples/requests/:id/close
+BOM snapshot:
+- POST /api/samples/requests/:id/lock-bom (create sample_bom_snapshot)
+Material issue:
+- POST /api/samples/requests/:id/material-request (create requisition)
+- POST /api/samples/material-requests/:id/approve
+- POST /api/samples/material-requests/:id/issue (inventory moves, requestId idempotent)
+Trace:
+- GET /api/samples/requests/:id/trace (versions, BOM snapshot, material issues, inventory moves, audit log)
+
+Part G — Frontend minimum screens
+- Sample request list + filters (type/status/buyer/style)
+- Sample request detail: timeline, versions, comments, attachments
+- Material requisition + issue screen (with stock view)
+- “Lock BOM from Style” action button
+
+Part H — Verification (proof required)
+Seed/test:
+1) Create style + BOM (from Phase 7.2)
+2) Create sample request PROTO, submit, approve
+3) Lock BOM snapshot for sample
+4) Create material requisition and issue from stock with requestId; verify idempotent
+5) Send to buyer → feedback revision → create new version; ensure history preserved
+6) Confirm insufficient stock blocks issue with no partial rows
+
+Output:
+- files changed list
+- sample JSON from trace endpoint
+- one inventory move trace linked to sample issue
+- one audit log entry for override

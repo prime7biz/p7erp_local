@@ -1,0 +1,207 @@
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+
+  .print-layout, .print-layout * {
+    -webkit-print-color-adjust: economy !important;
+    print-color-adjust: economy !important;
+    background: #fff !important;
+    background-color: #fff !important;
+  }
+
+  .print-layout {
+    width: 210mm;
+    font-size: 12pt;
+    font-family: "Times New Roman", Times, Georgia, serif;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body {
+    counter-reset: page;
+  }
+
+  .no-print,
+  nav,
+  aside,
+  header:not(.print-header),
+  footer:not(.print-footer),
+  button:not(.print-keep),
+  .sidebar,
+  .topnav,
+  .toast,
+  .toaster,
+  [role="navigation"],
+  [role="complementary"],
+  .fixed,
+  .sticky {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .page-break-before {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  .page-break-after {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .card,
+  [class*="shadow"],
+  [class*="rounded"] {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse;
+  }
+
+  table th,
+  table td {
+    border: 1px solid #333 !important;
+    padding: 4pt 6pt;
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  table th {
+    font-weight: bold;
+    background: #fff !important;
+  }
+
+  tr, td, th {
+    page-break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  img {
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+    color: #000 !important;
+  }
+
+  p, blockquote, ul, ol {
+    orphans: 3;
+    widows: 3;
+  }
+
+  a {
+    color: #000 !important;
+    text-decoration: none !important;
+  }
+
+  *::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  * {
+    scrollbar-width: none !important;
+    overflow: visible !important;
+  }
+
+  .print-header {
+    display: block;
+    text-align: center;
+    margin-bottom: 10pt;
+    padding-bottom: 8pt;
+    border-bottom: 2px solid #000;
+  }
+
+  .print-header h1 {
+    font-size: 18pt;
+    font-weight: bold;
+    margin: 0 0 4pt 0;
+  }
+
+  .print-header p {
+    font-size: 10pt;
+    margin: 2pt 0;
+    color: #333 !important;
+  }
+
+  .print-footer {
+    display: block;
+    text-align: center;
+    margin-top: 10pt;
+    padding-top: 8pt;
+    border-top: 1px solid #999;
+    font-size: 9pt;
+    color: #666 !important;
+  }
+
+  .print-signatures {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 60pt;
+    padding-top: 0;
+    page-break-inside: avoid;
+  }
+
+  .print-signature-block {
+    text-align: center;
+    min-width: 120pt;
+  }
+
+  .print-signature-line {
+    border-top: 1px solid #000;
+    margin-top: 40pt;
+    padding-top: 4pt;
+    font-size: 10pt;
+  }
+
+  .print-signature-name {
+    font-size: 9pt;
+    color: #555 !important;
+    margin-top: 2pt;
+  }
+
+  @page {
+    @bottom-center {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 8pt;
+      color: #999;
+    }
+  }
+
+  .print-title {
+    text-align: center;
+    font-size: 16pt;
+    font-weight: bold;
+    margin: 8pt 0 4pt 0;
+    color: #000 !important;
+  }
+
+  .print-subtitle {
+    text-align: center;
+    font-size: 11pt;
+    color: #444 !important;
+    margin: 2pt 0 8pt 0;
+  }
+}

@@ -1,0 +1,84 @@
+Great — that’s exactly the set of deliverables we needed before publishing. Based on what you pasted, the only thing left is a **quick “publish gate” verification** with concrete evidence so you don’t ship a hidden bug.
+
+Here’s what I want you to grab (copy/paste from console logs or API responses). No need for code.
+
+---
+
+## 1) Show me the *actual* idempotency behavior (A2 proof)
+
+Paste one real response for a double-click scenario:
+
+### a) First approve request (with requestId)
+
+* endpoint + payload (mask tokens)
+* response JSON
+
+### b) Same request repeated (same requestId)
+
+* response JSON
+
+✅ I want to see it returns something like:
+
+* “already processed” OR same success response
+* and that `workflow_history` count stays unchanged
+
+---
+
+## 2) Show one actions endpoint response (critical)
+
+Paste **one** `/documents/:type/:id/actions` response for a doc that is:
+
+* in `SUBMITTED` (or CHECKED)
+* needs multi-approval (requiredCount > 1 if possible)
+
+✅ I’m checking these fields exist and are consistent:
+
+* `allowedActions[]`
+* `whyInQueue`
+* `approvalProgress` (requiredCount, currentCount, remaining)
+* `sodInfo` (mode + reason if blocked)
+* `requiredPermissionKeys` (optional but helpful)
+
+---
+
+## 3) Approval queue pagination response shape (D1 proof)
+
+Paste one `GET /approval-queue?...` response that includes:
+
+* `items` length (pageSize)
+* `totalCount`
+* `page`, `pageSize`
+* filters applied (docType/status/search)
+
+✅ I’m verifying you’re not doing “fetch all then slice”.
+
+---
+
+## 4) The new DB constraints/indexes list (one-liner proof)
+
+Paste the migration summary for:
+
+* the **unique constraint** used for idempotency (table + columns)
+* 2–3 most important indexes (tenant_id + workflowStatus, tenant_id + doc_type + workflowStatus)
+
+---
+
+## 5) Voucher posting rule (final publish safety)
+
+Answer this in one line (based on your system now):
+
+* When voucher is **POSTED**, does it immediately create ledger entries and lock the voucher?
+* Do you block posting into a **closed accounting period**?
+
+Even “not implemented yet” is fine — I just need to know.
+
+---
+
+# If all the above look good → publish recommendation
+
+Once you paste those, I’ll tell you:
+
+* ✅ “Publish now” or ⚠️ “Fix this 1 thing first”
+* plus the exact next phase roadmap (History viewer + Workflow config UI polishing + extending to Sales Order / GIN etc.)
+
+Go ahead and paste #1–#4 outputs + #5 answer.

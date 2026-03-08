@@ -1,0 +1,136 @@
+You are the lead architect for a multi-tenant ERP built in Node.js.
+I need you to design and plan a robust User Management + Access Control + Multi-Level Approval Workflow system across the entire ERP.
+
+Context / Problem
+
+We need strict controls so that:
+
+One user creates an entry (Maker)
+
+Another checks it (Checker)
+
+Another recommends it (Recommender)
+
+Another approves it (Approver)
+
+This must apply to these document types/modules:
+
+Quotation
+
+Sales Order
+
+Purchase Order
+
+Goods In (GRN)
+
+Goods Out (GIN)
+
+Accounting Voucher (Journal/Payment/Receipt/Contra etc.)
+
+We also need restrictions for:
+
+Edit
+
+Amend (versioning after approval)
+
+Delete
+
+Cancel
+
+Send Back / Reject
+
+Posting to stock/ledger
+
+This is a multi-tenant SaaS ERP, so all logic must be tenant-scoped.
+
+Your Task (No code yet)
+
+Propose the best architecture to implement:
+
+Role Based Access Control (RBAC)
+
+Workflow/state machine approvals per document
+
+Segregation of Duties (SoD): same user cannot do multiple control steps (maker ≠ checker ≠ approver)
+
+Amount-based approval matrix (e.g., PO approvals depend on amount range)
+
+Row-level access scope (branch/warehouse/department/cost center/project optional)
+
+Define a standard workflow that can be reused for all documents, with statuses like:
+
+DRAFT → SUBMITTED → CHECKED → RECOMMENDED → APPROVED → POSTED/CLOSED
+
+plus SEND_BACK, REJECT, CANCEL, AMENDMENT flows
+
+Recommend the database tables/entities required (PostgreSQL assumed), including:
+
+Users, Roles, Permissions
+
+RolePermissions, UserRoles
+
+Workflow configuration per doc_type
+
+Workflow history / audit trail
+
+Approval matrix rules
+
+Amendment/version control structure
+
+Document locking fields
+
+Define permission keys naming convention (example):
+
+sales:quotation:create, purchase:po:approve, accounts:voucher:post
+
+and workflow actions permissions like: approve, recommend, check, send_back, cancel
+
+Rules section (must be explicit):
+
+What is editable/deletable in DRAFT only
+
+What happens after SUBMITTED
+
+What happens after APPROVED/POSTED (only amendment/reversal allowed)
+
+Who can cancel and when
+
+How amendment versions are created and tracked
+
+How audit logs are stored and queried
+
+Output a detailed implementation plan (phase-by-phase) that includes:
+
+Phase 1: RBAC foundation
+
+Phase 2: Workflow engine core
+
+Phase 3: Apply to each document type
+
+Phase 4: Amendment + cancellation + reversal rules
+
+Phase 5: UI/UX integration checkpoints (just describe, no code)
+
+Phase 6: Testing plan (unit/integration + security tests)
+
+Output Format Required
+
+Give your answer in this exact structure:
+
+A) Architecture Overview (RBAC + Workflow + SoD + Audit)
+B) Standard Workflow (Statuses + Actions)
+C) Data Model (Tables + key columns + relations)
+D) Permission Matrix (sample keys + mapping)
+E) Business Rules (edit/delete/amend/cancel/posting)
+F) Implementation Plan (phases + deliverables)
+G) Risks & Edge Cases (real ERP issues)
+
+Important:
+
+Do NOT write code now.
+
+Be very practical and ERP-realistic.
+
+Keep everything tenant-aware.
+
+Make sure it can scale and be configurable per tenant.

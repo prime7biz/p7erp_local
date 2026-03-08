@@ -1,0 +1,148 @@
+You are a senior full-stack engineer working inside this ERP codebase (multi-tenant SaaS). Build a dedicated “Admin Backend Portal” (Super Admin console) that is completely separated from tenant users, and can manage tenants, subscriptions, billing, verification, backup/restore, and support tickets.
+
+GOALS (must-have)
+1) Super Admin Authentication & Security
+- Create a separate admin auth system:
+  - Admin users are NOT tenants
+  - Dedicated route namespace: /admin/*
+  - Dedicated roles: SUPER_ADMIN, SUPPORT_ADMIN, BILLING_ADMIN, READONLY_AUDITOR
+- Enforce strict RBAC guards on every admin API endpoint and admin UI route
+- Add audit logging for all admin actions (who/when/what changes)
+
+2) Tenant Approval & Verification
+- Add onboarding pipeline for tenants with statuses:
+  - PENDING -> VERIFIED -> ACTIVE -> SUSPENDED -> CLOSED
+- Tenant can be approved by:
+  a) Manual approval (admin clicks Approve)
+  b) Auto verification via payment confirmation (if payment exists & confirmed)
+- Add admin UI to view tenant KYC/profile and payment verification evidence
+- Add “notes” & “internal comments” per tenant (admin-only)
+
+3) Subscription + Billing Control (Admin can override)
+- Admin can:
+  - Change subscription plan
+  - Set/override allowed user count limit
+  - Modify billing amount (override)
+  - Set billing cycle (monthly/quarterly/yearly/custom days)
+  - Extend trial / set grace period / pause subscription
+  - Mark invoices paid/unpaid
+  - Lock/Unlock tenant access based on subscription status
+- Create data models for: Plan, Subscription, Invoice, Payment, PlanOverride
+- Ensure tenant app enforces limits:
+  - User creation limited by allowed_user_count (including overrides)
+  - If subscription is overdue/suspended: block login except tenant owner + show “billing required” screen
+
+4) Tenant & User Management (Admin Portal)
+- Admin can:
+  - Create a tenant from backend
+  - Create tenant owner user + initial password reset flow
+  - Reset tenant user password / force password reset
+  - Disable user, change role (within tenant scope)
+  - Impersonate tenant (Support mode) with strict logging + time-limited tokens
+- Support mode must be clearly labeled in UI and logged to audit table
+
+5) Backup & Restore (Tenant scoped)
+- Provide tenant-scoped backup & restore features:
+  - Backup: export tenant data + settings in a consistent way
+  - Restore: restore into the same tenant (or to a new tenant in “staging” mode)
+- Approach:
+  - If you are using PostgreSQL schemas per tenant:
+    - Backup should dump tenant schema + shared tenant settings for that tenant
+    - Restore should recreate schema objects safely and replay data
+  - If using tenant_id row isolation:
+    - Backup should export all rows filtered by tenant_id + settings
+    - Restore should validate integrity and insert in transaction
+- Admin UI must show:
+  - Backup history (time, created by, size, status)
+  - Restore runs (time, source backup, status, errors)
+- Add safety:
+  - Require confirmation phrase “RESTORE TENANT DATA”
+  - Perform preflight checks (version compatibility, table counts, checksum)
+  - Store backups in server storage path + metadata in DB
+  - Add “download backup” endpoint restricted to SUPER_ADMIN only
+
+6) Ticketing System Connected to Main App Dashboard
+- Add a support ticket system that is visible in:
+  a) Tenant dashboard (tenant creates ticket, views their tickets)
+  b) Admin portal (admin sees all tickets, can respond, assign, change status)
+- Ticket model:
+  - ticket_id, tenant_id, created_by_user_id
+  - category, priority, status (OPEN, IN_PROGRESS, WAITING_TENANT, RESOLVED, CLOSED)
+  - assigned_admin_id
+  - messages thread (tenant + admin messages)
+  - attachments metadata (optional)
+- Add notifications:
+  - Tenant sees notification badge in main dashboard when admin replies
+  - Admin sees queue + SLA filters (optional)
+- Ensure tenant can only view their own tickets
+- Admin can view all tickets and filter by tenant, status, priority, assigned
+
+NON-FUNCTIONAL REQUIREMENTS
+- Must be multi-tenant safe: no data leakage across tenants
+- All admin changes must be audited
+- Use transactions for billing changes and restore operations
+- Add DB indexes for tenant_id and status fields
+- Add seed data for default plans
+- Provide API + UI with proper error handling
+- Use clean architecture: services, repositories (or equivalent), and clear separation:
+  - admin module
+  - billing module
+  - tenants module
+  - support/tickets module
+  - audit module
+- Add basic automated tests (at least API tests for critical admin endpoints)
+
+DELIVERABLES
+A) Backend:
+- New admin routes: /api/admin/*
+- Controllers/services for:
+  - tenant approval
+  - subscription/billing overrides
+  - tenant backup/restore
+  - admin impersonation
+  - ticketing admin APIs
+  - audit log APIs
+- Database migrations/models:
+  - AdminUser, AdminRole
+  - Tenant (extend with verification + status + notes)
+  - Plan, Subscription, Invoice, Payment, PlanOverride
+  - BackupJob, RestoreJob, BackupArtifact
+  - SupportTicket, SupportMessage, TicketAttachment
+  - AuditLog
+
+B) Frontend:
+- New Admin Portal UI:
+  - Login page
+  - Tenants list + tenant detail + approve/suspend
+  - Subscription & billing management screen
+  - Tenant users screen + create/reset/disable
+  - Backup & restore screen + history
+  - Tickets inbox + ticket detail thread + reply/assign
+  - Audit log viewer
+- Tenant main dashboard:
+  - “Support” menu in sidebar
+  - Create ticket + tickets list + ticket thread + notifications badge
+
+IMPLEMENTATION NOTES (do not skip)
+- If project uses Django/DRF:
+  - Create admin app (e.g., apps/admin_portal, apps/billing_admin, apps/support)
+  - Use DRF permissions for RBAC
+  - Implement schema/tenant isolation carefully (middleware)
+- If project uses Node/Express:
+  - Create admin router with RBAC middleware
+- If frontend is Next.js/React:
+  - Create /admin route group with its own layout and auth guard
+  - Use a separate admin session/token storage
+- Add “Impersonation token”:
+  - Admin requests impersonation -> API returns time-limited token scoped to tenant + “support_mode=true”
+  - Every request with support_mode token logs admin_id + tenant_id + action
+
+OUTPUT FORMAT (very important)
+1) First, show the file/folder structure you will create/update.
+2) Then implement backend: migrations/models + routes + services.
+3) Then implement frontend: pages/components + navigation.
+4) Then add seed script for plans and initial super admin.
+5) Then add tests.
+6) Provide “How to run” steps and admin credentials creation steps.
+
+Start now. Do not ask me questions. Make reasonable assumptions and proceed.

@@ -1,0 +1,55 @@
+Not authenticated, redirecting to login
+App.tsx:135 Restoring last page: /
+hook.js:608 Query error: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+overrideMethod @ hook.js:608Understand this error
+queryClient.ts:15 Making PATCH request to /api/tasks/2/complete
+queryClient.ts:15 Making PATCH request to /api/tasks/1/complete
+4hook.js:608 Query error: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+overrideMethod @ hook.js:608Understand this error
+queryClient.ts:15 Making GET request to /api/item-subcategories
+2items.tsx:605 Uncaught TypeError: subcategories?.find is not a function
+    at items.tsx:605:45
+    at Array.map (<anonymous>)
+    at ItemsPage (items.tsx:597:26)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=64c4692e:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=64c4692e:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=64c4692e:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=64c4692e:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=64c4692e:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=64c4692e:3733:39)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=64c4692e:19765:15)Understand this error
+hook.js:608 The above error occurred in the <ItemsPage> component:
+
+    at ItemsPage (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/inventory/items.tsx:115:23)
+    at div
+    at div
+    at Route (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:323:16)
+    at Switch (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=64c4692e:379:17)
+    at div
+    at div
+    at div
+    at AppRoutes (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?v=1zE412JMq06lGkMfO8C5:96:42)
+    at GamificationProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/context/gamification-context.tsx:25:40)
+    at OnboardingProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/context/onboarding-context.tsx:20:38)
+    at AuthProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/context/auth-context.tsx:24:32)
+    at App
+    at Provider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=64c4692e:38:15)
+    at TooltipProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=64c4692e:65:5)
+    at V (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:44:25)
+    at J (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=64c4692e:42:18)
+    at QueryClientProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=64c4692e:2805:3)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+overrideMethod @ hook.js:608Understand this error
+chunk-RPCDYKBN.js?v=64c4692e:9129 Uncaught TypeError: subcategories?.find is not a function
+    at items.tsx:605:45
+    at Array.map (<anonymous>)
+    at ItemsPage (items.tsx:597:26)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=64c4692e:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=64c4692e:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=64c4692e:15924:22)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=64c4692e:19753:22)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=64c4692e:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=64c4692e:19137:13)
+    at renderRootSync (chunk-RPCDYKBN.js?v=64c4692e:19116:15)

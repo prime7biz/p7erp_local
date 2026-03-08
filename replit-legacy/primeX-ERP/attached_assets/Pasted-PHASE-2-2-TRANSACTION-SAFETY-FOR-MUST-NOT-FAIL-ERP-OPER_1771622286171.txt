@@ -1,0 +1,75 @@
+PHASE 2.2 — TRANSACTION SAFETY FOR “MUST-NOT-FAIL” ERP OPERATIONS
+(Inventory Consumption + Stock Valuation + Posting Idempotency)
+
+Goal:
+Ensure these operations never partially succeed:
+- consumption of BOM/materials during order finalization
+- stock valuation impact
+- accounting posting linked to stock moves
+And prevent duplicate posting/consumption on retries.
+
+Part A — Discover current workflow points (NO changes yet)
+1) Locate where “finalize order”, “consume materials”, “issue stock”, “post voucher”, “stock valuation” are implemented.
+2) Output file paths + key handler/service functions.
+3) Identify current DB tables used for:
+   - stock ledger / inventory moves
+   - order items / BOM
+   - consumption records
+   - vouchers / journal entries
+   - approvals/workflow history
+
+Part B — Define invariants (must always be true)
+Implement these rules (document them in code comments + constants):
+1) Consumption is atomic: either ALL required items consumed or NONE consumed.
+2) Stock cannot go negative unless explicit override approval exists.
+3) Every stock move that affects valuation must generate a linked accounting entry (voucher) or be in a “PENDING_POSTING” state that blocks closing.
+4) Posting is idempotent: same requestId cannot post twice.
+5) If an operation fails, the system leaves no partial rows.
+
+Part C — Implement DB transaction boundaries
+1) Wrap the entire “finalize order → consume” flow in ONE DB transaction.
+2) Lock rows to avoid race conditions:
+   - lock stock rows / item+warehouse balances (SELECT … FOR UPDATE pattern if supported)
+3) Within the transaction:
+   - verify required quantities
+   - create consumption records
+   - create stock ledger/inventory move rows
+   - update balances
+   - create or queue accounting voucher linked to stock moves
+4) Commit only if all steps succeed.
+
+Part D — Add idempotency
+1) Add/requestId support:
+   - For finalize/post endpoints accept requestId (UUID)
+   - Store processed requestIds in a table (idempotency_keys) with:
+     tenantId, requestId(unique), endpoint, status, responseHash, createdAt
+2) If the same requestId repeats, return the previous success result without reprocessing.
+
+Part E — Override approval gate (top management)
+1) If consumption requires extra materials or would go negative:
+   - block operation with a structured error:
+     code: "APPROVAL_REQUIRED"
+     include: missingItems[], requiredDelta[], suggestedAction
+2) Add an override pathway:
+   - requires role/permission workflow:override OR TENANT_OWNER
+   - must include overrideReason
+   - logs audit event + workflow history
+
+Part F — Verification (must provide proof)
+1) Add 3 automated “script tests” (can be node scripts) OR minimal tests:
+   - Concurrent finalize of same order does not double-consume
+   - Retry finalize with same requestId does not duplicate rows
+   - Insufficient stock triggers APPROVAL_REQUIRED and no partial rows are created
+2) Show DB row counts before/after to prove atomicity.
+
+Output:
+- files changed
+- transaction code snippet
+- idempotency table + usage snippet
+- sample error JSON for APPROVAL_REQUIRED
+- audit log entry example
+
+Constraints:
+- Do NOT redesign UI in this phase.
+- Do NOT silently allow negative stock.
+- Prefer minimal schema additions: idempotency_keys, approval/override log if needed.

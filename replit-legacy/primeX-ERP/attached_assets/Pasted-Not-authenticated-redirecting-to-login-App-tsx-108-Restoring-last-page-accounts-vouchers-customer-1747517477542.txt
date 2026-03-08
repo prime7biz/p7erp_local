@@ -1,0 +1,70 @@
+Not authenticated, redirecting to login
+App.tsx:108 Restoring last page: /accounts/vouchers
+customers-new.tsx:416 Submitting customer data: Object
+queryClient.ts:15 Making POST request to /api/customers Object
+api/customers:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): {"message":"Failed to create customer"}
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 Query error: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+overrideMethod @ hook.js:608Understand this error
+queryClient.ts:15 Making GET request to /api/item-subcategories undefined
+18inventory/transactions:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was receivedUnderstand this error
+api/accounting/fiscal-years/current:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 Query error: Error: 500: {"message":"Failed to fetch current fiscal year"}
+    at throwIfResNotOk (queryClient.ts:6:11)
+    at async queryClient.ts:54:7
+overrideMethod @ hook.js:608Understand this error
+api/accounting/account-types:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+api/accounting/chart-of-accounts:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 Query error: Error: 500: {"message":"Failed to fetch account types"}
+    at throwIfResNotOk (queryClient.ts:6:11)
+    at async queryClient.ts:54:7
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 Query error: Error: 500: {"message":"Failed to fetch chart of accounts"}
+    at throwIfResNotOk (queryClient.ts:6:11)
+    at async queryClient.ts:54:7
+overrideMethod @ hook.js:608Understand this error
+api/accounting/chart-of-accounts:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 Query error: Error: 500: {"message":"Failed to fetch chart of accounts"}
+    at throwIfResNotOk (queryClient.ts:6:11)
+    at async queryClient.ts:54:7
+overrideMethod @ hook.js:608Understand this error
+api/accounting/fiscal-years:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+api/accounting/fiscal-years/current:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 Query error: Error: 500: {"message":"Failed to fetch fiscal years"}
+    at throwIfResNotOk (queryClient.ts:6:11)
+    at async queryClient.ts:54:7
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 Query error: Error: 500: {"message":"Failed to fetch current fiscal year"}
+    at throwIfResNotOk (queryClient.ts:6:11)
+    at async queryClient.ts:54:7
+overrideMethod @ hook.js:608Understand this error
+customers-new.tsx:416 Submitting customer data: Object
+queryClient.ts:15 Making POST request to /api/customers Object
+api/customers:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): {"message":"Failed to create customer"}
+overrideMethod @ hook.js:608Understand this error

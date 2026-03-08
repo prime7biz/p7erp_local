@@ -1,0 +1,52 @@
+queryClient.ts:68 Making authenticated request to: /api/auth/me
+queryClient.ts:76 Response status: 200 for /api/auth/me
+queryClient.ts:68 Making authenticated request to: /api/settings/users
+queryClient.ts:68 Making authenticated request to: /api/settings/roles
+queryClient.ts:68 Making authenticated request to: /api/settings/departments
+queryClient.ts:76 Response status: 200 for /api/settings/users
+queryClient.ts:76 Response status: 200 for /api/settings/roles
+queryClient.ts:76 Response status: 200 for /api/settings/departments
+settings:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+settings:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+settings:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+settings:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+queryClient.ts:68 Making authenticated request to: /api/currency/exchange-rates
+queryClient.ts:68 Making authenticated request to: /api/settings/tenant-settings
+queryClient.ts:76 Response status: 200 for /api/currency/exchange-rates
+queryClient.ts:76 Response status: 200 for /api/settings/tenant-settings
+ Making /api/settings/tenant-settings request to PUT
+installHook.js:1 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/settings/tenant-settings' is not a valid HTTP method.
+    at apiRequest (src/lib/queryClient.ts:11:23)
+    at Object.mutationFn (tenant-settings.tsx:115:7)
+    at Object.fn (@tanstack_react-query.js:1189:29)
+    at run (@tanstack_react-query.js:494:49)
+    at Object.start (@tanstack_react-query.js:536:9)
+    at _a6.execute (@tanstack_react-query.js:1225:56)
+overrideMethod @ installHook.js:1
+ Making /api/settings/tenant-settings request to PUT
+installHook.js:1 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/settings/tenant-settings' is not a valid HTTP method.
+    at apiRequest (src/lib/queryClient.ts:11:23)
+    at Object.mutationFn (tenant-settings.tsx:115:7)
+    at Object.fn (@tanstack_react-query.js:1189:29)
+    at run (@tanstack_react-query.js:494:49)
+    at Object.start (@tanstack_react-query.js:536:9)
+    at _a6.execute (@tanstack_react-query.js:1225:56)
+overrideMethod @ installHook.js:1
+ Making /api/settings/tenant-settings request to PUT
+installHook.js:1 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/settings/tenant-settings' is not a valid HTTP method.
+    at apiRequest (src/lib/queryClient.ts:11:23)
+    at Object.mutationFn (tenant-settings.tsx:115:7)
+    at Object.fn (@tanstack_react-query.js:1189:29)
+    at run (@tanstack_react-query.js:494:49)
+    at Object.start (@tanstack_react-query.js:536:9)
+    at _a6.execute (@tanstack_react-query.js:1225:56)
+overrideMethod @ installHook.js:1
+ Making /api/settings/tenant-settings request to PUT
+installHook.js:1 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/settings/tenant-settings' is not a valid HTTP method.
+    at apiRequest (src/lib/queryClient.ts:11:23)
+    at Object.mutationFn (tenant-settings.tsx:115:7)
+    at Object.fn (@tanstack_react-query.js:1189:29)
+    at run (@tanstack_react-query.js:494:49)
+    at Object.start (@tanstack_react-query.js:536:9)
+    at _a6.execute (@tanstack_react-query.js:1225:56)
+overrideMethod @ installHook.js:1

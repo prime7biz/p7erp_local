@@ -1,0 +1,99 @@
+ [Theme] Prime7 Orange + Snow White Sidebar ✅
+ Making authenticated request to: /api/auth/me
+ Response status: 200 for /api/auth/me
+ Making authenticated request to: /api/merch/critical-alerts
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications
+ Response status: 200 for /api/workflow-tasks/my-tasks
+ Response status: 200 for /api/workflow-tasks/notifications/unread-count
+ Response status: 200 for /api/merch/critical-alerts
+ Making authenticated request to: /api/quotations
+ Making authenticated request to: /api/customers
+ Making authenticated request to: /api/inquiries
+ Making authenticated request to: /api/item-categories
+ Making authenticated request to: /api/items
+ Making authenticated request to: /api/item-units
+ Response status: 200 for /api/items
+ Response status: 200 for /api/item-categories
+ Response status: 200 for /api/quotations
+ Response status: 200 for /api/customers
+ Response status: 200 for /api/inquiries
+ Response status: 200 for /api/item-units
+ Making authenticated request to: /api/workflow-tasks/notifications
+ Making authenticated request to: /api/workflow-tasks/my-tasks
+ Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+ Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/merch/critical-alerts
+queryClient.ts:82 Response status: 200 for /api/merch/critical-alerts
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+installHook.js:1 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. Error Component Stack
+    at DescriptionWarning (chunk-AFNTTUGK.js?v=f6ab941d:333:29)
+    at chunk-AFNTTUGK.js?v=f6ab941d:237:13
+    at chunk-AFNTTUGK.js?v=f6ab941d:160:58
+    at Presence (chunk-LUE5KDWX.js?v=f6ab941d:24:11)
+    at chunk-AFNTTUGK.js?v=f6ab941d:151:64
+    at chunk-2K77HOHX.js?v=f6ab941d:79:13
+    at chunk-2K77HOHX.js?v=f6ab941d:56:13
+    at chunk-AXMZZQ2X.js?v=f6ab941d:42:13
+    at chunk-AFLIZ4FI.js?v=f6ab941d:260:22
+    at Presence (chunk-LUE5KDWX.js?v=f6ab941d:24:11)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at DialogPortal (chunk-AFNTTUGK.js?v=f6ab941d:113:11)
+    at _c3 (dialog.tsx:35:6)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at Dialog (chunk-AFNTTUGK.js?v=f6ab941d:54:5)
+    at div (<anonymous>)
+    at QuotationForm (quotation-form.tsx:127:21)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:15 Making POST request to /api/items
+/api/items:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+installHook.js:1 API error (400): Validation error: Required at "itemCode"; Required at "tenantId"
+overrideMethod @ installHook.js:1
+installHook.js:1 API request error: Error: Validation error: Required at "itemCode"; Required at "tenantId"
+    at apiRequest (queryClient.ts:57:13)
+    at async handleCreateItem (quotation-form.tsx:612:19)
+overrideMethod @ installHook.js:1

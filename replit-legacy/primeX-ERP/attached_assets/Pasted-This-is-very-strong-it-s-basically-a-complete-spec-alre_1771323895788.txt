@@ -1,0 +1,182 @@
+This is very strong — it’s basically a complete spec already. Before you hand it back to Replit for implementation, I’d tighten a few things that will save you from painful edge-cases later (especially for vouchers + stock + approvals).
+
+Here are the critical fixes / upgrades (no code, just spec corrections).
+
+1) Add user_roles (you already noted it — make it mandatory)
+
+Do not keep roleId on users.
+Make user_roles(user_id, role_id, tenant_id) the only source of truth.
+
+Also add:
+
+is_primary (optional) → for default UI behavior
+
+effective_from, effective_to (optional but great for audit)
+
+✅ Reason: ERPs always need multi-role users.
+
+2) Fix permissions table scope (don’t make it tenant-scoped)
+
+You wrote permissions … tenant_id. That can become messy because permission keys are universal.
+
+Recommended:
+
+permissions = global catalog (no tenant_id)
+
+tenant customization is done via:
+
+role_permissions(tenant_id, role_id, permission_id)
+
+✅ Reason: avoids duplicates per tenant and simplifies seeding.
+
+3) Replace document_statuses per-tenant with a global status catalog
+
+Statuses like DRAFT/SUBMITTED/APPROVED shouldn’t vary per tenant (the workflow transitions can vary).
+
+Recommended:
+
+document_statuses = global codes
+
+workflow_configurations = tenant-specific transitions that choose which statuses are used
+
+✅ Reason: consistent reporting + easier upgrades.
+
+4) SENT_BACK should not be a status (make it an action)
+
+Right now you have a SENT_BACK status. In real workflow engines, “send back” is an action that moves the document to a previous status (usually DRAFT).
+
+Recommended:
+
+Remove SENT_BACK as a status
+
+Use action: send_back with to_status = DRAFT (or configurable target)
+
+✅ Reason: simplifies queues and prevents weird states like “SENT_BACK but editable_fields say X”.
+
+5) Add “workflow instance” snapshot so config changes don’t break in-flight docs
+
+You already identified this risk — solve it at design time.
+
+Add:
+
+workflow_instances(id, tenant_id, doc_type, doc_id, workflow_version, started_at)
+
+workflow_definitions(tenant_id, doc_type, version, definition_json, is_active)
+
+When a doc is created, it binds to a workflow version. If tenant edits workflow later, new docs use new version, old docs continue safely.
+
+✅ Reason: prevents “workflow updated, old docs become unapprovable”.
+
+6) Approval matrix should support “multiple approvers” and “OR vs AND”
+
+Right now: required_role_id suggests one role.
+
+Better:
+
+approval_matrix_rules
+
+rule_type: ROLE / USER / GROUP
+
+condition: amount range + optional scope
+
+approval_mode: ANY_ONE (OR) or ALL_REQUIRED (AND)
+
+required_count (e.g., 2 approvals needed)
+
+✅ Reason: for payments/vouchers you may require two approvals at high values.
+
+7) Maker/Checker/Approver conflicts: define SoD at the “actor set” level
+
+Instead of listing conflicting actions in JSON, define who has acted so far and apply rules like:
+
+Maker cannot be Checker/Approver
+
+Checker cannot be Approver
+
+Same user cannot perform two control steps on same doc
+
+To support this cleanly, ensure history stores:
+
+actor_role_id (or derived at time of action)
+
+control_step (maker/check/recommend/approve/post)
+
+✅ Reason: keeps SoD deterministic and auditable.
+
+8) Accounting specifics: add “period lock” + “posting date policy”
+
+You mentioned backdating risk — make it a formal rule.
+
+Add configuration:
+
+accounting_periods(tenant_id, period_start, period_end, is_closed)
+
+Rule: POST action checks posting date is inside an open period
+
+Optionally restrict backdating beyond X days
+
+✅ Reason: huge real-world audit requirement.
+
+9) Inventory specifics: partial posting must be explicitly modeled
+
+For GRN/GIN:
+
+posting may be partial (some lines received/shipped)
+
+document can remain “PARTIALLY_POSTED” until complete
+
+Add global status:
+
+PARTIALLY_POSTED
+
+Or keep status APPROVED and track posting progress — but that gets messy.
+
+✅ Reason: partial receipts/deliveries are normal.
+
+10) Document locks: good — but add “lock_owner_session” + “force unlock”
+
+You have expiry; add:
+
+lock_token (per editing session)
+
+force_unlock permission (admin only) with mandatory reason
+
+✅ Reason: stops “I can’t edit, locked forever” situations.
+
+11) Allowed actions endpoint: define caching rule
+
+Your /documents/:type/:id/actions is perfect. Add:
+
+response includes reasons (why blocked)
+
+include required_role/level for next step (helps UX)
+
+cache short (e.g., 10–30s) per user
+
+✅ Reason: makes UI predictable and fast.
+
+The “final” updated task list (what I’d send to Replit)
+
+If you want a clean “do this next” list, here it is:
+
+RBAC schema: users, roles, user_roles, permissions (global), role_permissions
+
+Scope schema: user_access_scope + optional role_scopes
+
+Workflow definitions: global statuses + tenant workflow_definitions (versioned) + workflow_instances
+
+Universal workflow engine: transitions + SoD + approval matrix + scope enforcement
+
+History/audit: workflow_history + audit_logs (diff tracking)
+
+Document upgrades: add status_code, versioning, parent_id, workflow_instance_id, lock support
+
+Action APIs + allowed-actions endpoint
+
+Unified approval queue + notifications
+
+Amendments + cancellations + voucher reversals + period lock rules
+
+Document locking + force unlock workflow
+
+End-to-end testing (RBAC, SoD, amount routing, tenant isolation, period lock, partial posting)

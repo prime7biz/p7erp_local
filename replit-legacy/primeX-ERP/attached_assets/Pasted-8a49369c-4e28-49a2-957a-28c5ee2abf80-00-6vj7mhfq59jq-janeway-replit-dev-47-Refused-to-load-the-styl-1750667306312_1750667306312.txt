@@ -1,0 +1,58 @@
+8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/:47 Refused to load the stylesheet 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto+Mono&display=swap' because it violates the following Content Security Policy directive: "style-src 'self' 'unsafe-inline'". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback.
+
+8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/:48 Refused to load the stylesheet 'https://fonts.googleapis.com/icon?family=Material+Icons' because it violates the following Content Security Policy directive: "style-src 'self' 'unsafe-inline'". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback.
+
+8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/:1 Refused to load the script 'https://replit.com/public/js/replit-dev-banner.js' because it violates the following Content Security Policy directive: "script-src 'self' 'unsafe-inline' 'unsafe-eval'". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback.
+
+queryClient.ts:68 
+            
+            
+           GET https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/api/auth/me 401 (Unauthorized)
+(anonymous) @ queryClient.ts:68
+fetchFn @ @tanstack_react-query.js?v=84579f2c:840
+run @ @tanstack_react-query.js?v=84579f2c:494
+start @ @tanstack_react-query.js?v=84579f2c:536
+fetch @ @tanstack_react-query.js?v=84579f2c:926
+executeFetch_fn @ @tanstack_react-query.js?v=84579f2c:2211
+onSubscribe @ @tanstack_react-query.js?v=84579f2c:1898
+subscribe @ @tanstack_react-query.js?v=84579f2c:24
+(anonymous) @ @tanstack_react-query.js?v=84579f2c:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=84579f2c:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=84579f2c:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=84579f2c:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=84579f2c:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=84579f2c:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=84579f2c:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=84579f2c:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=84579f2c:19447
+(anonymous) @ chunk-RPCDYKBN.js?v=84579f2c:19328
+workLoop @ chunk-RPCDYKBN.js?v=84579f2c:197
+flushWork @ chunk-RPCDYKBN.js?v=84579f2c:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=84579f2c:384
+queryClient.ts:73 401 Unauthorized response for /api/auth/me
+queryClient.ts:85 Query error: Error: Authentication required
+    at queryClient.ts:78:17
+overrideMethod @ hook.js:608
+(anonymous) @ queryClient.ts:85
+await in (anonymous)
+fetchFn @ @tanstack_react-query.js?v=84579f2c:840
+run @ @tanstack_react-query.js?v=84579f2c:494
+start @ @tanstack_react-query.js?v=84579f2c:536
+fetch @ @tanstack_react-query.js?v=84579f2c:926
+executeFetch_fn @ @tanstack_react-query.js?v=84579f2c:2211
+onSubscribe @ @tanstack_react-query.js?v=84579f2c:1898
+subscribe @ @tanstack_react-query.js?v=84579f2c:24
+(anonymous) @ @tanstack_react-query.js?v=84579f2c:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=84579f2c:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=84579f2c:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=84579f2c:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=84579f2c:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=84579f2c:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=84579f2c:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=84579f2c:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=84579f2c:19447
+(anonymous) @ chunk-RPCDYKBN.js?v=84579f2c:19328
+workLoop @ chunk-RPCDYKBN.js?v=84579f2c:197
+flushWork @ chunk-RPCDYKBN.js?v=84579f2c:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=84579f2c:384
+queryClient.ts:15 Making POST request to /api/auth/demo-login

@@ -1,0 +1,167 @@
+accounts/vouchers/new:1 Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015' violates the following Content Security Policy directive: "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://replit.com". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.
+ Making authenticated request to: /api/auth/me
+ Response status: 200 for /api/auth/me
+ Making authenticated request to: /api/accounting/vouchers/types
+ Making authenticated request to: /api/accounting/vouchers/statuses
+ Making authenticated request to: /api/accounting/chart-of-accounts
+ Making authenticated request to: /api/accounting/account-groups
+ Making authenticated request to: /api/accounting/fiscal-years
+ Making authenticated request to: /api/accounting/fiscal-years/current
+ Response status: 200 for /api/accounting/chart-of-accounts
+ Response status: 200 for /api/accounting/fiscal-years
+ Response status: 200 for /api/accounting/fiscal-years/current
+ Making authenticated request to: /api/accounting/fiscal-years/1/periods
+ Response status: 200 for /api/accounting/account-groups
+ Response status: 200 for /api/accounting/vouchers/statuses
+ Response status: 200 for /api/accounting/vouchers/types
+api/accounting/fiscal-years/1/periods:1  Failed to load resource: the server responded with a status of 500 ()
+ Response status: 500 for /api/accounting/fiscal-years/1/periods
+ Query error: 
+(anonymous) @ index-DNAexffy.js:424
+ Making POST request to /api/accounting/vouchers
+ Making authenticated request to: /api/settings/tenant-settings
+ Making authenticated request to: /api/accounting/vouchers/dashboard
+ Making authenticated request to: /api/accounting/vouchers
+ Response status: 200 for /api/settings/tenant-settings
+ Response status: 200 for /api/accounting/vouchers/dashboard
+ Response status: 200 for /api/accounting/vouchers
+ Making POST request to /api/accounting/vouchers/21/change-status
+ Making authenticated request to: /api/accounting/vouchers/types
+ Making authenticated request to: /api/accounting/vouchers
+ Making authenticated request to: /api/accounting/vouchers/dashboard
+ Response status: 200 for /api/accounting/vouchers/types
+ Response status: 200 for /api/accounting/vouchers
+ Response status: 200 for /api/accounting/vouchers/dashboard
+ Making authenticated request to: /api/accounting/vouchers/21
+ Making authenticated request to: /api/accounting/vouchers/21/available-actions
+ Response status: 200 for /api/accounting/vouchers/21/available-actions
+ Response status: 200 for /api/accounting/vouchers/21
+ Making authenticated request to: /api/accounting/vouchers/statuses
+ Making authenticated request to: /api/accounting/fiscal-years/1/periods
+api/accounting/fiscal-years/1/periods:1  Failed to load resource: the server responded with a status of 500 ()
+ Response status: 500 for /api/accounting/fiscal-years/1/periods
+ Query error: 
+(anonymous) @ index-DNAexffy.js:424
+ Response status: 200 for /api/accounting/vouchers/statuses
+ Making POST request to /api/accounting/chart-of-accounts
+ Making authenticated request to: /api/accounting/chart-of-accounts
+ Response status: 200 for /api/accounting/chart-of-accounts
+ Making POST request to /api/accounting/vouchers
+ Making authenticated request to: /api/accounting/vouchers
+ Response status: 200 for /api/accounting/vouchers
+ Making POST request to /api/accounting/vouchers/22/change-status
+ Making authenticated request to: /api/accounting/vouchers/types
+ Making authenticated request to: /api/accounting/vouchers
+ Making authenticated request to: /api/accounting/vouchers/dashboard
+ Response status: 200 for /api/accounting/vouchers
+ Response status: 200 for /api/accounting/vouchers/dashboard
+ Response status: 200 for /api/accounting/vouchers/types
+ Making authenticated request to: /api/accounting/vouchers/22
+ Making authenticated request to: /api/accounting/vouchers/22/available-actions
+ Response status: 200 for /api/accounting/vouchers/22/available-actions
+ Response status: 200 for /api/accounting/vouchers/22
+ Making POST request to /api/accounting/vouchers/22/change-status
+ Making authenticated request to: /api/accounting/vouchers/22
+ Making authenticated request to: /api/accounting/vouchers/22/available-actions
+ Response status: 200 for /api/accounting/vouchers/22/available-actions
+ Response status: 200 for /api/accounting/vouchers/22
+ Making POST request to /api/accounting/vouchers/22/change-status
+ Making authenticated request to: /api/accounting/vouchers/22
+ Making authenticated request to: /api/accounting/vouchers/22/available-actions
+ Response status: 200 for /api/accounting/vouchers/22/available-actions
+ Response status: 200 for /api/accounting/vouchers/22
+ Making POST request to /api/accounting/vouchers/22/change-status
+ Making authenticated request to: /api/accounting/vouchers/22
+ Making authenticated request to: /api/accounting/vouchers/22/available-actions
+ Response status: 200 for /api/accounting/vouchers/22/available-actions
+ Response status: 200 for /api/accounting/vouchers/22
+ Making POST request to /api/accounting/vouchers/22/change-status
+ Making authenticated request to: /api/accounting/vouchers/22
+ Making authenticated request to: /api/accounting/vouchers/22/available-actions
+ Response status: 200 for /api/accounting/vouchers/22/available-actions
+ Response status: 200 for /api/accounting/vouchers/22
+ Making authenticated request to: /api/accounting/vouchers
+ Response status: 200 for /api/accounting/vouchers
+ Making authenticated request to: /api/accounting/vouchers/21
+ Making authenticated request to: /api/accounting/vouchers/21/available-actions
+ Response status: 200 for /api/accounting/vouchers/21/available-actions
+ Response status: 200 for /api/accounting/vouchers/21
+ Making POST request to /api/accounting/vouchers/21/change-status
+ Making authenticated request to: /api/accounting/vouchers/21
+ Making authenticated request to: /api/accounting/vouchers/21/available-actions
+ Making POST request to /api/accounting/vouchers/21/change-status
+ Response status: 200 for /api/accounting/vouchers/21/available-actions
+ Response status: 200 for /api/accounting/vouchers/21
+api/accounting/vouchers/21/change-status:1  Failed to load resource: the server responded with a status of 500 ()
+ API error (500): Invalid status transition
+hn @ index-DNAexffy.js:424
+index-DNAexffy.js:424 API request error: Error: Invalid status transition
+    at hn (index-DNAexffy.js:424:100430)
+    at async Object.mutationFn (voucher-view-CLlWQNcF.js:6:3127)
+hn @ index-DNAexffy.js:424
+index-DNAexffy.js:424 Making POST request to /api/accounting/vouchers/21/change-status
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/vouchers/21
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/vouchers/21/available-actions
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/vouchers/21/available-actions
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/vouchers/21
+index-DNAexffy.js:424 Making POST request to /api/accounting/vouchers/21/change-status
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/vouchers/21
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/vouchers/21/available-actions
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/vouchers/21/available-actions
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/vouchers/21
+index-DNAexffy.js:424 Making POST request to /api/accounting/vouchers/21/change-status
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/vouchers/21
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/vouchers/21/available-actions
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/vouchers/21/available-actions
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/vouchers/21
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/vouchers
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/vouchers
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/vouchers?statusId=3
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/vouchers?statusId=3
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/vouchers?statusId=10
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/vouchers?statusId=10
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/vouchers?statusId=5
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/vouchers?statusId=5
+index-DNAexffy.js:424 Making authenticated request to: /api/settings/tenant-settings
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/reports/trial-balance?asOfDate=2026-02-15
+index-DNAexffy.js:424 Response status: 200 for /api/settings/tenant-settings
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/reports/trial-balance?asOfDate=2026-02-15
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/chart-of-accounts
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/chart-of-accounts
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/reports/profit-and-loss?startDate=2026-01-31&endDate=2026-02-27
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/reports/profit-and-loss?startDate=2026-01-31&endDate=2026-02-27
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/reports/balance-sheet?asOfDate=2026-02-15
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/reports/balance-sheet?asOfDate=2026-02-15
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/cash-and-bank-accounts
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/cash-and-bank-accounts
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/vouchers/approval-queue
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/vouchers/approval-queue
+index-DNAexffy.js:424 Making authenticated request to: /api/currencies
+index-DNAexffy.js:424 Response status: 200 for /api/currencies
+index-DNAexffy.js:424 Making authenticated request to: /api/currencies
+index-DNAexffy.js:424 Making authenticated request to: /api/currencies
+index-DNAexffy.js:424 Response status: 200 for /api/currencies
+index-DNAexffy.js:424 Response status: 200 for /api/currencies
+index-DNAexffy.js:424 Making authenticated request to: /api/grn
+index-DNAexffy.js:424 Making authenticated request to: /api/vendors
+index-DNAexffy.js:424 Response status: 200 for /api/vendors
+index-DNAexffy.js:424 Response status: 200 for /api/grn
+index-DNAexffy.js:424 Making authenticated request to: /api/purchase-orders
+index-DNAexffy.js:424 Making authenticated request to: /api/warehouses
+index-DNAexffy.js:424 Making authenticated request to: /api/items
+index-DNAexffy.js:424 Making authenticated request to: /api/grn/next-number
+index-DNAexffy.js:424 Response status: 200 for /api/warehouses
+index-DNAexffy.js:424 Response status: 200 for /api/items
+index-DNAexffy.js:424 Response status: 200 for /api/purchase-orders
+index-DNAexffy.js:424 Response status: 200 for /api/grn/next-number
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/account-groups/hierarchy
+index-DNAexffy.js:424 Making authenticated request to: /api/accounting/account-groups
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/account-groups/hierarchy
+index-DNAexffy.js:424 Response status: 200 for /api/accounting/account-groups
+index-DNAexffy.js:424 Making DELETE request to /api/accounting/chart-of-accounts/16
+api/accounting/chart-of-accounts/16:1  Failed to load resource: the server responded with a status of 500 ()
+index-DNAexffy.js:424 API error (500): Failed to delete account
+hn @ index-DNAexffy.js:424
+index-DNAexffy.js:424 API request error: Error: Failed to delete account
+    at hn (index-DNAexffy.js:424:100430)
+hn @ index-DNAexffy.js:424

@@ -1,0 +1,107 @@
+You are working inside my PrimeX ERP (multi-tenant) full codebase.
+
+GOAL: Apply a full “Security + Multi-tenant Guardrails + Performance Indexing + Repo Hygiene” upgrade in ONE pass, without breaking existing flows.
+
+NON-NEGOTIABLES
+- Do NOT remove existing features or pages.
+- Do NOT change API contract shapes unless you also update the frontend callers.
+- Keep tenant isolation strict: every tenant-scoped query must require tenantId.
+- Keep admin flows working (platform super admin vs tenant users).
+- Add tests or lightweight checks where possible.
+
+PHASE A — REPO HYGIENE & SECRETS
+1) Search the repo for any cookie dump / session dump files and delete them:
+   - cookies*.txt, *cookies*.txt, auth_test*.txt, final_test*.txt, fresh_*cookies*.txt, *_test_cookies*.txt
+   - Remove them from the repo and ensure they do not get re-added.
+
+2) Update .gitignore (append rules, do not overwrite):
+   - cookies*.txt
+   - *cookies*.txt
+   - *_cookies*.txt
+   - auth_test*.txt
+   - final_test*.txt
+   - fresh_*.txt
+   - *.log
+   - uploads/
+   - tmp/
+   - .DS_Store
+
+3) Fix .env formatting safely:
+   - Ensure every KEY=VALUE is on its own line.
+   - Specifically fix any “NODE_ENV=productionJWT_SECRET=...” style concatenation by inserting a newline.
+   - Do NOT hardcode secrets into source code.
+   - If you find Django variables in .env but this is a Node backend, move them into a separate sample file (e.g., .env.notes) and keep runtime env clean.
+
+4) Add .env.example if missing:
+   - Include placeholders for required vars: NODE_ENV, JWT_SECRET, COOKIE_DOMAIN (if used), CORS_ORIGINS, DATABASE_URL, etc.
+   - Do not include real secrets.
+
+PHASE B — HTTP SECURITY HARDENING (BACKEND)
+5) Add and configure:
+   - helmet (baseline secure headers)
+   - cors (strict allowlist)
+   - rate limiting on auth endpoints (login/register/forgot/reset/verify)
+   - request size limit for JSON (reasonable default like 1mb unless already set)
+   - trust proxy = 1 if running behind a proxy (Replit/VPS), but only if appropriate
+
+6) CORS:
+   - Add env var CORS_ORIGINS as a comma-separated list.
+   - Only allow those origins.
+   - Allow credentials if cookies are used.
+   - Ensure preflight works.
+
+PHASE C — COOKIE CONFIG UNIFICATION
+7) Create a single shared helper (e.g., server/utils/cookies.ts or similar):
+   - getAuthCookieOptions({ isProd }): returns { httpOnly, secure, sameSite, path, domain?, maxAge }
+   - Rules:
+     - If sameSite = "none", secure MUST be true.
+     - In production: secure true, sameSite "none" (if cross-site) OR "lax" (if same-site); pick what matches current deployment, but keep consistent everywhere.
+     - httpOnly must remain true for auth cookies.
+   - Replace every place where cookies are set/cleared to use this helper.
+   - Ensure logout clears cookies using the same options (domain/path/sameSite/secure must match).
+
+PHASE D — MULTI-TENANT GUARDRAILS (CRITICAL)
+8) Add a “tenant-required” guard that prevents accidental cross-tenant access:
+   - Implement middleware: requireTenantContext
+   - It must verify tenantId is present and validated (from auth context / token / subdomain / company code mapping—whatever this codebase uses).
+   - For tenant-scoped routes, the middleware must run before handlers.
+   - For platform admin routes, do NOT require tenantId unless the route explicitly operates on a tenant.
+
+9) Add a DB query guard pattern:
+   - Introduce a small helper wrapper for tenant-scoped queries:
+     - Example: tenantWhere(tenantId, extraConditions) so tenantId is always injected.
+   - Refactor the most important modules first:
+     - inventory, items/stock, accounting/vouchers, orders/merchandising (whatever exists now)
+   - If any query currently lacks tenantId filtering, fix it.
+
+10) Add safety checks for destructive actions:
+   - Prevent deleting master data (ledger, group, item, warehouse, etc.) if referenced by any posted transaction.
+   - Implement “soft delete” where appropriate:
+     - Add isActive/isDeleted fields if needed
+     - Update UI lists to hide inactive by default
+   - Return user-friendly error messages.
+
+PHASE E — DATABASE PERFORMANCE (INDEXING)
+11) Identify high-traffic tenant-scoped tables and ensure tenant indexes exist:
+   - For each tenant-scoped table, ensure an index on tenantId.
+   - Add commonly-used composite indexes:
+     - (tenantId, createdAt) where list views sort by date
+     - (tenantId, status) where filtering exists
+   - Use the project’s migration system (Drizzle/Prisma/Knex/etc.). Do not change schema ad-hoc.
+
+PHASE F — QUICK VERIFICATION
+12) Add a minimal verification checklist and run it:
+   - Backend boots without errors
+   - Login works (tenant user)
+   - Tenant approval flow still works (platform admin)
+   - Logout clears cookies properly
+   - A tenant user cannot query another tenant’s records (add 1 simple automated test OR a dev-only endpoint test)
+   - No CORS errors on frontend
+
+DELIVERABLES
+- Commit-style summary in the final output:
+  - Files changed
+  - What was added (helmet/cors/rate limit/cookie helper/tenant middleware/index migrations)
+  - What was deleted (cookie dump files)
+  - Any env vars added
+- Do NOT leave the project in a partially broken state. If something is risky, implement the safe version and document follow-ups.

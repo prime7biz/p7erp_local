@@ -1,0 +1,158 @@
+PHASE 8.4 — FINISHING + PACKING + CARTONIZATION + SHIPMENT PACKLIST LINK
+(Finishing output, ironing, poly, pack, carton, scan, packing list, shipment readiness)
+
+Goal:
+Run finishing + packing operations like a real garments factory:
+- Bundle/lot moves from SEWING → FINISHING → PACKING
+- Finishing hourly entry (good/rework/reject)
+- Packing by size/color ratio, poly/label checks
+- Cartonization (carton no, CBM, gross/net weight)
+- Packing list generation linked to Shipment (Phase 4.2)
+- Traceability from bundle → carton → packing list → shipment → invoice
+
+Part A — Discovery (no breaking changes)
+1) Find existing modules for:
+   - finishing, packing, shipments, commercial documents
+   - bundles/WIP from 8.1–8.3
+2) Output file paths + what exists vs missing.
+
+Part B — Data Model (minimum viable)
+Create/extend:
+
+1) finishing_batches
+- id, tenantId
+- productionPlanId, salesOrderId, styleId
+- batchNo (unique per tenant/day)
+- status: DRAFT|IN_PROGRESS|COMPLETED|CLOSED
+- createdBy, timestamps
+
+2) finishing_entries (hourly/shift-wise)
+- id, tenantId
+- finishingBatchId
+- entryDate, hourSlot, shiftId
+- goodQty, reworkQty, rejectQty
+- remarks, enteredBy, createdAt
+Rules: no backdate edit without override + audit
+
+3) packing_batches
+- id, tenantId
+- productionPlanId, salesOrderId, styleId
+- batchNo (unique)
+- status: DRAFT|IN_PROGRESS|COMPLETED|CLOSED
+
+4) pack_units (optional but helpful)
+Represents “packed pieces” aggregated by size/color:
+- id, tenantId
+- packingBatchId
+- size, color
+- qtyPacked
+- qtyRework
+- qtyRejected
+
+5) cartons
+- id, tenantId
+- packingBatchId
+- cartonNo (unique per tenant)
+- grossWeight, netWeight, cbm
+- status: OPEN|SEALED|SHIPPED|CANCELLED
+- sealedBy, sealedAt
+
+6) carton_lines
+- id, tenantId
+- cartonId
+- size, color
+- qty
+
+7) packing_lists
+- id, tenantId
+- shipmentId (from Phase 4.2)
+- packingListNo (unique)
+- salesOrderId
+- totalCartons, totalQty
+- status: DRAFT|APPROVED|ISSUED|CANCELLED
+- issuedAt, issuedBy
+- attachments/meta
+
+8) packing_list_cartons
+- id, tenantId
+- packingListId
+- cartonId
+
+Part C — Workflow + WIP stage movement
+1) Finishing receives from sewing output:
+- bundle stage FINISHED -> enters finishing batch (or aggregated)
+2) Finishing completion updates WIP:
+- FINISHING done -> PACKING available
+3) Packing converts WIP to “Packed”:
+- update bundle/carton associations
+4) Carton sealing is immutable without override.
+5) Packing list issuance locks carton contents.
+
+Part D — Quality checkpoints (lightweight)
+Add simple checks (expand more in Phase 9):
+- required fields: size/color/qty must match order ratio tolerance
+- reject/rework reasons optional table:
+  packing_defects (code, name)
+- ability to mark cartons for re-open with override + reason
+
+Part E — APIs (minimum)
+Finishing:
+- POST /api/finishing/batches
+- POST /api/finishing/batches/:id/start
+- POST /api/finishing/batches/:id/hourly (adds finishing_entries)
+- POST /api/finishing/batches/:id/complete
+Packing:
+- POST /api/packing/batches
+- POST /api/packing/batches/:id/start
+- POST /api/packing/batches/:id/pack (updates pack_units)
+Cartons:
+- POST /api/packing/cartons (create OPEN carton)
+- POST /api/packing/cartons/:id/add-lines
+- POST /api/packing/cartons/:id/seal (immutable, override required to reopen)
+Packing List:
+- POST /api/packing/packing-lists (draft for a shipment)
+- POST /api/packing/packing-lists/:id/add-cartons
+- POST /api/packing/packing-lists/:id/approve
+- POST /api/packing/packing-lists/:id/issue (locks)
+Trace:
+- GET /api/packing/cartons/:id/trace (carton -> lines -> packing list -> shipment)
+- GET /api/packing/packing-lists/:id/trace
+
+Part F — Dashboards
+- GET /api/finishing/dashboard/summary?date=
+- GET /api/packing/dashboard/summary?date=
+Return:
+- planned vs finished vs packed vs shipped
+- WIP by stage (SEW_FINISHED, FINISHING, PACKING, CARTONIZED)
+- alerts: cartons open too long, packing list pending
+
+Part G — Frontend minimum screens
+1) Finishing batch screen (hourly entry grid)
+2) Packing batch screen (size/color packing entry)
+3) Carton screen:
+- create carton, add lines, seal
+- show CBM/weights
+4) Packing list screen:
+- select shipment, attach cartons, approve, issue
+5) Trace views:
+- carton trace + packing list trace
+
+Part H — Permissions + audit
+- Seal carton: OFFICER+; reopen requires workflow:override + reason
+- Issue packing list: MANAGER/ADMIN
+- Any backdate edits require override + audit log
+
+Part I — Verification (proof required)
+Seed/test:
+1) Create packing batch linked to production plan and shipment
+2) Pack 500 pcs across sizes/colors
+3) Create 5 cartons, add lines, seal
+4) Create packing list for shipment, attach cartons, issue
+5) Trace carton -> packing list -> shipment
+6) Attempt reopen sealed carton without override -> 403
+7) Override reopen with reason -> allowed + audit logged
+
+Output:
+- files changed list
+- sample JSON for carton trace + packing list issue
+- one audit log entry for override reopen

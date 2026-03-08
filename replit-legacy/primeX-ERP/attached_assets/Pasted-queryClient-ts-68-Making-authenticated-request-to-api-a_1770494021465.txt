@@ -1,0 +1,100 @@
+queryClient.ts:68 Making authenticated request to: /api/auth/me
+queryClient.ts:76 Response status: 200 for /api/auth/me
+queryClient.ts:68 Making authenticated request to: /api/settings/users
+queryClient.ts:68 Making authenticated request to: /api/settings/roles
+queryClient.ts:68 Making authenticated request to: /api/settings/departments
+queryClient.ts:76 Response status: 200 for /api/settings/users
+queryClient.ts:76 Response status: 200 for /api/settings/roles
+queryClient.ts:76 Response status: 200 for /api/settings/departments
+queryClient.ts:68 Making authenticated request to: /api/settings/tenant-settings
+queryClient.ts:76 Response status: 200 for /api/settings/tenant-settings
+queryClient.ts:15 Making PUT request to /api/settings/tenant-settings
+queryClient.ts:18  PUT https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/api/settings/tenant-settings 403 (Forbidden)
+apiRequest @ queryClient.ts:18
+mutationFn @ tenant-settings.tsx:115
+fn @ @tanstack_react-query.js?v=8646db12:1189
+run @ @tanstack_react-query.js?v=8646db12:494
+start @ @tanstack_react-query.js?v=8646db12:536
+execute @ @tanstack_react-query.js?v=8646db12:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=8646db12:2630
+(anonymous) @ @tanstack_react-query.js?v=8646db12:3295
+onSubmit @ tenant-settings.tsx:133
+(anonymous) @ chunk-4BFJKWC4.js?v=8646db12:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=8646db12:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=8646db12:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=8646db12:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=8646db12:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=8646db12:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=8646db12:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=8646db12:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=8646db12:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=8646db12:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=8646db12:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=8646db12:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=8646db12:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=8646db12:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=8646db12:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=8646db12:5449
+installHook.js:1 API error (403): Forbidden
+overrideMethod @ installHook.js:1
+apiRequest @ queryClient.ts:44
+await in apiRequest
+mutationFn @ tenant-settings.tsx:115
+fn @ @tanstack_react-query.js?v=8646db12:1189
+run @ @tanstack_react-query.js?v=8646db12:494
+start @ @tanstack_react-query.js?v=8646db12:536
+execute @ @tanstack_react-query.js?v=8646db12:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=8646db12:2630
+(anonymous) @ @tanstack_react-query.js?v=8646db12:3295
+onSubmit @ tenant-settings.tsx:133
+(anonymous) @ chunk-4BFJKWC4.js?v=8646db12:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=8646db12:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=8646db12:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=8646db12:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=8646db12:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=8646db12:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=8646db12:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=8646db12:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=8646db12:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=8646db12:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=8646db12:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=8646db12:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=8646db12:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=8646db12:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=8646db12:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=8646db12:5449
+installHook.js:1 API request error: Error: Forbidden
+    at apiRequest (queryClient.ts:51:13)
+overrideMethod @ installHook.js:1
+apiRequest @ queryClient.ts:56
+await in apiRequest
+mutationFn @ tenant-settings.tsx:115
+fn @ @tanstack_react-query.js?v=8646db12:1189
+run @ @tanstack_react-query.js?v=8646db12:494
+start @ @tanstack_react-query.js?v=8646db12:536
+execute @ @tanstack_react-query.js?v=8646db12:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=8646db12:2630
+(anonymous) @ @tanstack_react-query.js?v=8646db12:3295
+onSubmit @ tenant-settings.tsx:133
+(anonymous) @ chunk-4BFJKWC4.js?v=8646db12:1465
+await in (anonymous)
+callCallback2 @ chunk-RPCDYKBN.js?v=8646db12:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=8646db12:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=8646db12:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=8646db12:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=8646db12:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=8646db12:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=8646db12:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=8646db12:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=8646db12:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=8646db12:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=8646db12:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=8646db12:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=8646db12:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=8646db12:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=8646db12:5449

@@ -1,0 +1,1311 @@
+Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 0)
+    at async generateStandardMilestones (index.tsx:358:7)
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 Error generating milestones: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 0)
+    at async generateStandardMilestones (index.tsx:358:7)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 1)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 2)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 5)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 3)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 4)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 7)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 8)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 6)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 9)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 11)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 10)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 12)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 14)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 15)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 16)
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 13)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 17)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 18)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 22)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 21)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 20)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 19)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 0)
+    at async generateStandardMilestones (index.tsx:358:7)
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 Error generating milestones: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 0)
+    at async generateStandardMilestones (index.tsx:358:7)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 1)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 5)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 4)
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 2)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 3)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 6)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 7)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 8)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 9)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 10)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 11)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 13)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 14)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 12)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 15)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 16)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 17)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 18)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 19)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 21)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 20)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 22)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 0)
+    at async generateStandardMilestones (index.tsx:358:7)
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 Error generating milestones: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 0)
+    at async generateStandardMilestones (index.tsx:358:7)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+hook.js:608 API error (500): Error creating milestone
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 1)
+overrideMethod @ hook.js:608Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 3)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 2)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 4)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 5)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 7)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 6)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 8)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 9)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 11)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 13)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 10)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 14)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 15)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 12)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 16)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 17)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 18)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 19)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 22)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 21)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 20)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 1)
+    at async generateStandardMilestones (index.tsx:358:7)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+index.tsx:371 Error generating milestones: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 1)
+    at async generateStandardMilestones (index.tsx:358:7)
+overrideMethod @ hook.js:608
+generateStandardMilestones @ index.tsx:371Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 0)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 2)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 4)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 5)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 6)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 7)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 8)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 3)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 10)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 9)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 11)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 13)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 14)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 12)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 17)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 16)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 18)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 15)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 19)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 20)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 22)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 21)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 0)
+    at async generateStandardMilestones (index.tsx:358:7)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+index.tsx:371 Error generating milestones: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 0)
+    at async generateStandardMilestones (index.tsx:358:7)
+overrideMethod @ hook.js:608
+generateStandardMilestones @ index.tsx:371Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 2)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 1)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 3)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 4)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 5)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 7)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 6)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 8)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 10)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 11)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 12)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 9)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 13)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 14)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 16)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 15)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 19)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 18)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 17)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 21)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 20)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56Understand this error
+time-action-milestones:1 
+            
+            
+           Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+queryClient.ts:44 API error (500): Error creating milestone
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44Understand this error
+queryClient.ts:56 API request error: Error: Error creating milestone
+    at apiRequest (queryClient.ts:51:13)
+    at async Promise.all (index 22)

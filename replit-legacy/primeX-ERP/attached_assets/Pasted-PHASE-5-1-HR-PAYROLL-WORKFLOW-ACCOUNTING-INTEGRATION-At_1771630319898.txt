@@ -1,0 +1,130 @@
+PHASE 5.1 — HR + PAYROLL WORKFLOW + ACCOUNTING INTEGRATION
+(Attendance → Payroll Run → Payslips → Salary Accrual → Salary Payment → Advances/Deductions)
+
+Goal:
+Make HR/Payroll fully functional and tightly connected to accounting + approvals + audit trails.
+
+Part A — Discover what already exists (NO breaking changes)
+1) Locate existing tables/endpoints for:
+   - employees, departments, designations
+   - attendance/leave (if any)
+   - payroll runs / payslips
+   - advances/loans/deductions
+   - accounting voucher posting endpoints + period lock rules
+2) Output file paths + brief schema summary so we don’t duplicate anything.
+
+Part B — Define minimum ERP payroll data model (extend if already exists)
+Ensure these entities exist (create only if missing, otherwise extend safely):
+
+1) employees
+- id, tenantId
+- empCode (unique per tenant), name, phone/email
+- departmentId, designationId
+- joinDate, status ACTIVE|INACTIVE
+- paymentMethod BANK|CASH|MFS
+- bankAccountNo/bankName (optional)
+
+2) salary_structures
+- id, tenantId, employeeId
+- basic, houseRent, medical, conveyance, otherAllowances
+- gross (computed)
+- deductions config (tax/PF/other)
+- effectiveFrom, effectiveTo
+
+3) payroll_runs
+- id, tenantId
+- month (YYYY-MM), startDate, endDate
+- status DRAFT|APPROVED|POSTED|PAID|CLOSED
+- totals: totalGross, totalDeductions, totalNet
+- createdBy/approvedBy/postedBy + timestamps
+
+4) payslips
+- id, tenantId, payrollRunId, employeeId
+- gross, deductionsTotal, netPay
+- breakdown JSON (earnings + deductions)
+- status GENERATED|APPROVED|POSTED|PAID
+
+5) employee_advances (recommended)
+- id, tenantId, employeeId
+- advanceDate, amount
+- monthlyDeductionAmount
+- outstandingAmount
+- status ACTIVE|CLOSED
+- voucherId link (if accounted)
+
+Part C — Workflow rules (Tally-like immutability)
+1) Payroll lifecycle:
+- DRAFT: editable, can generate/regenerate payslips
+- APPROVED: locks inputs (no edits unless override)
+- POSTED: creates salary accrual voucher (immutable; reversal required to change)
+- PAID: creates payment voucher + marks payslips paid
+2) Override:
+- requires workflow:override permission + overrideReason
+- write audit_log + workflow_history entry
+
+Part D — Accounting integration (must be correct)
+Add/confirm tenant ledger mappings:
+- salaryExpenseLedgerId
+- salaryPayableLedgerId
+- bankLedgerId / cashLedgerId
+Optional:
+- taxPayableLedgerId, pfPayableLedgerId
+- advanceReceivableLedgerId
+
+Posting rules:
+1) On Payroll POST (Accrual):
+- Debit: Salary Expense (total)
+- Credit: Salary Payable (net)
+- Credit: Tax/PF payable (if deducted)
+
+2) On Payroll PAY:
+- Debit: Salary Payable
+- Credit: Bank/Cash
+
+3) Advances:
+- When advance given:
+  Debit: Employee Advance Receivable
+  Credit: Bank/Cash
+- When recovered in payroll:
+  Credit: Employee Advance Receivable (reduce outstanding)
+  and reduce employee net pay accordingly
+
+All POST/PAY endpoints must be:
+- transactional
+- idempotent (requestId)
+- period-lock aware (Phase 2.3 rules)
+
+Part E — APIs (minimum required)
+HR:
+- POST /api/hr/employees
+- GET  /api/hr/employees?status=
+Payroll:
+- POST /api/payroll/runs (create draft)
+- POST /api/payroll/runs/:id/generate (create payslips)
+- POST /api/payroll/runs/:id/approve
+- POST /api/payroll/runs/:id/post (creates accrual voucher)
+- POST /api/payroll/runs/:id/pay  (creates payment voucher)
+Advances:
+- POST /api/hr/advances
+- POST /api/hr/advances/:id/close
+Trace:
+- GET  /api/payroll/runs/:id/trace (payslips + vouchers + audit)
+
+Part F — Verification (proof required)
+Add a small seed/test script:
+1) create 3 employees + salary structures
+2) create payroll run for a month
+3) generate → approve → post (accrual voucher created)
+4) pay (payment voucher created)
+5) create an advance for 1 employee and recover via payroll
+Verify:
+- totals match (gross/deductions/net)
+- vouchers balance (debit == credit)
+- posted immutability enforced (edit fails; reversal required)
+- tenant isolation enforced
+
+Output:
+- list of files changed
+- sample JSON responses for run lifecycle
+- example voucher lines for accrual + payment
+- proof of idempotency using same requestId twice

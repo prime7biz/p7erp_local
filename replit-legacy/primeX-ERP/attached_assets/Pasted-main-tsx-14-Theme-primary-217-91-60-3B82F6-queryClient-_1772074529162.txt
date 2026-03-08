@@ -1,0 +1,40 @@
+main.tsx:14 [Theme] --primary = "217 91% 60%" (#3B82F6) ✅
+queryClient.ts:74 Making authenticated request to: /api/auth/me
+queryClient.ts:82 Response status: 200 for /api/auth/me
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/types
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/statuses
+queryClient.ts:74 Making authenticated request to: /api/accounting/chart-of-accounts
+queryClient.ts:74 Making authenticated request to: /api/accounting/account-groups
+queryClient.ts:74 Making authenticated request to: /api/accounting/fiscal-years
+queryClient.ts:74 Making authenticated request to: /api/accounting/fiscal-years/current
+queryClient.ts:74 Making authenticated request to: /api/currencies
+queryClient.ts:82 Response status: 200 for /api/accounting/fiscal-years
+queryClient.ts:82 Response status: 200 for /api/accounting/fiscal-years/current
+queryClient.ts:74 Making authenticated request to: /api/accounting/fiscal-years/1/periods
+queryClient.ts:82 Response status: 200 for /api/accounting/account-groups
+queryClient.ts:82 Response status: 200 for /api/accounting/chart-of-accounts
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers/types
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers/statuses
+queryClient.ts:82 Response status: 200 for /api/currencies
+queryClient.ts:82 Response status: 200 for /api/accounting/fiscal-years/1/periods
+queryClient.ts:15 Making POST request to /api/accounting/vouchers
+queryClient.ts:74 Making authenticated request to: /api/settings/tenant-settings
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/dashboard
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers
+/api/settings/tenant-settings:1  Failed to load resource: the server responded with a status of 403 (Forbidden)
+queryClient.ts:82 Response status: 403 for /api/settings/tenant-settings
+installHook.js:1 Query error: Error: 403: {"message":"Insufficient permissions"}
+    at throwIfResNotOk (queryClient.ts:6:11)
+    at async queryClient.ts:94:7
+overrideMethod @ installHook.js:1
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers/dashboard
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/91
+queryClient.ts:74 Making authenticated request to: /api/accounting/vouchers/91/available-actions
+queryClient.ts:82 Response status: 200 for /api/accounting/vouchers/91/available-actions
+/api/accounting/vouchers/91:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+queryClient.ts:82 Response status: 500 for /api/accounting/vouchers/91
+installHook.js:1 Query error: Error: 500: {"message":"Cannot convert undefined or null to object"}
+    at throwIfResNotOk (queryClient.ts:6:11)
+    at async queryClient.ts:94:7
+overrideMethod @ installHook.js:1

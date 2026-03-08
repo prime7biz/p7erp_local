@@ -1,0 +1,3471 @@
+export const tenants = pgTable("tenants", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  domain: text("domain").notNull().unique(),
+  logo: text("logo"),
+  isActive: boolean("is_active").default(true).notNull(),
+  companyCode: varchar("company_code", { length: 20 }).unique(),
+  status: varchar("status", { length: 20 }).default("APPROVED").notNull(),
+  approvedAt: timestamp("approved_at"),
+  approvedBy: integer("approved_by"),
+  rejectedReason: text("rejected_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  displayName: text("display_name").notNull(),
+  description: text("description"),
+  maxUsers: integer("max_users").notNull(),
+  pricePerUserPerMonth: integer("price_per_user_per_month").notNull().default(0),
+  monthlyPrice: integer("monthly_price").notNull().default(0),
+  dailyEntryLimit: integer("daily_entry_limit"),
+  trialDays: integer("trial_days").default(0),
+  features: text("features").array().notNull().default([]),
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const dailyEntryCounts = pgTable("daily_entry_counts", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  entryDate: date("entry_date").notNull(),
+  entryCount: integer("entry_count").notNull().default(0),
+}, (table) => ({
+  uniqueTenantDate: unique().on(table.tenantId, table.entryDate),
+}));
+
+// Subscriptions table - for managing tenant subscriptions
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  plan: text("plan").notNull(), // Use text plan name instead of planId reference
+  status: text("status").notNull(), // active, trial, expired, cancelled, suspended
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  plan: text("plan").notNull(), // Use text plan name instead of planId reference
+  status: text("status").notNull(), // active, trial, expired, cancelled, suspended
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const roles = pgTable("roles", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  displayName: text("display_name").notNull(),
+  description: text("description"),
+  level: integer("level").notNull(), // 1=Owner, 2=Director, 3=General Manager, etc.
+  permissions: jsonb("permissions").notNull().default('{}'),
+  tenantId: integer("tenant_id").references(() => tenants.id),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  email: text("email").notNull(),
+  password: text("password").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  roleId: integer("role_id").notNull().references(() => roles.id),
+  departmentId: integer("department_id").references(() => departments.id),
+  employeeId: text("employee_id"),
+  phone: text("phone"),
+  address: text("address"),
+  joiningDate: date("joining_date"),
+  isActive: boolean("is_active").default(true).notNull(),
+  isSuperUser: boolean("is_super_user").default(false).notNull(),
+  lastLogin: timestamp("last_login"),
+  profileImage: text("profile_image"),
+  emailVerified: boolean("email_verified").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const departments = pgTable("departments", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: text("name").notNull(),
+  code: varchar("code", { length: 255 }).notNull(),
+  description: text("description"),
+  headUserId: integer("head_user_id").references(() => users.id),
+  parentDepartmentId: integer("parent_department_id").references(() => departments.id),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const designations = pgTable("designations", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name").notNull(),
+  level: integer("level").default(1),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const employees = pgTable("employees", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  employeeId: varchar("employee_id").notNull(),
+  firstName: varchar("first_name").notNull(),
+  lastName: varchar("last_name").notNull(),
+  gender: varchar("gender"),
+  dateOfBirth: date("date_of_birth"),
+  email: varchar("email"),
+  phone: varchar("phone"),
+  address: text("address"),
+  department: varchar("department"),
+  designation: varchar("designation"),
+  joinDate: date("join_date").notNull(),
+  employmentType: varchar("employment_type").default("Full-time"),
+  education: text("education"),
+  experience: text("experience"),
+  skills: text("skills"),
+  salary: numeric("salary"),
+  bankAccount: varchar("bank_account"),
+  isActive: boolean("is_active").default(true),
+  profileImage: varchar("profile_image"),
+  emergencyContactName: varchar("emergency_contact_name"),
+  emergencyContactPhone: varchar("emergency_contact_phone"),
+  nationalId: varchar("national_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  departmentId: integer("department_id").references(() => departments.id),
+  designationId: integer("designation_id").references(() => designations.id),
+});
+---END---
+export const tenantSettings = pgTable("tenant_settings", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  // Company Information
+  companyName: text("company_name"),
+  companyAddress: text("company_address"),
+  companyPhone: text("company_phone"),
+  companyEmail: text("company_email"),
+  companyWebsite: text("company_website"),
+  companyLogo: text("company_logo"),
+  taxNumber: text("tax_number"),
+  registrationNumber: text("registration_number"),
+  
+  // Financial Settings
+  baseCurrency: text("base_currency").default("BDT").notNull(), // Primary currency
+  localCurrency: text("local_currency").default("BDT").notNull(), // Local accounting currency
+  displayCurrency: text("display_currency").default("BDT").notNull(), // Default display currency
+  fiscalYearStart: text("fiscal_year_start").default("April").notNull(),
+  fiscalYearEnd: text("fiscal_year_end").default("March").notNull(),
+  timeZone: text("time_zone").default("UTC").notNull(),
+  dateFormat: text("date_format").default("DD/MM/YYYY").notNull(),
+  
+  // HR Settings
+  workingDaysPerWeek: integer("working_days_per_week").default(5).notNull(),
+  workingHoursPerDay: real("working_hours_per_day").default(8).notNull(),
+  weekStartDay: text("week_start_day").default("Monday").notNull(),
+  probationPeriodDays: integer("probation_period_days").default(90).notNull(),
+  
+  // Accounting Settings
+  accountingMethod: text("accounting_method").default("accrual").notNull(), // accrual, cash
+  inventoryMethod: text("inventory_method").default("FIFO").notNull(), // FIFO, LIFO, Average
+  deprecationMethod: text("deprecation_method").default("straight_line").notNull(),
+  
+  // System Settings
+  multiCurrencyEnabled: boolean("multi_currency_enabled").default(false).notNull(),
+  autoBackupEnabled: boolean("auto_backup_enabled").default(true).notNull(),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
+  passwordPolicy: jsonb("password_policy").default('{"minLength": 8, "requireUppercase": true, "requireNumbers": true, "requireSpecialChars": true}').notNull(),
+  
+  // Notification Settings
+  emailNotifications: boolean("email_notifications").default(true).notNull(),
+  smsNotifications: boolean("sms_notifications").default(false).notNull(),
+  systemNotifications: boolean("system_notifications").default(true).notNull(),
+  
+  // Production Settings
+  defaultLeadTime: integer("default_lead_time").default(30).notNull(),
+  qualityControlEnabled: boolean("quality_control_enabled").default(true).notNull(),
+  autoOrderGeneration: boolean("auto_order_generation").default(false).notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  tenantUnique: unique().on(table.tenantId),
+}));
+
+// Currency Exchange Rates table
+export const currencyExchangeRates = pgTable("currency_exchange_rates", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  fromCurrency: text("from_currency").notNull(),
+  toCurrency: text("to_currency").notNull(),
+  exchangeRate: decimal("exchange_rate", { precision: 12, scale: 6 }).notNull(),
+  effectiveDate: date("effective_date").defaultNow().notNull(),
+  source: text("source").default("manual").notNull(), // manual, api, bank
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  currencyPairUnique: unique().on(table.tenantId, table.fromCurrency, table.toCurrency, table.effectiveDate),
+}));
+
+// User Permissions table - Granular permissions for users
+export const userPermissions = pgTable("user_permissions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  module: text("module").notNull(), // e.g., 'orders', 'customers', 'inventory'
+  action: text("action").notNull(), // e.g., 'create', 'read', 'update', 'delete'
+  granted: boolean("granted").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userModuleActionUnique: unique().on(table.userId, table.module, table.action),
+}));
+
+// Calendar Events table - for AI-enhanced calendar system
+export const calendarEvents = pgTable("calendar_events", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  startDateTime: timestamp("start_date_time").notNull(),
+  endDateTime: timestamp("end_date_time").notNull(),
+  allDay: boolean("all_day").default(false).notNull(),
+  location: text("location"),
+  virtualMeetingUrl: text("virtual_meeting_url"),
+  category: text("category").notNull(), // meeting, production, delivery, quality, etc.
+  color: text("color").default("#3B82F6"), // Color for UI display
+  priority: text("priority").default("medium").notNull(), // high, medium, low
+  status: text("status").default("scheduled").notNull(), // scheduled, in-progress, completed, cancelled
+  isRecurring: boolean("is_recurring").default(false).notNull(),
+  recurrencePattern: jsonb("recurrence_pattern"), // JSON with recurrence details
+  creatorId: integer("creator_id").notNull().references(() => users.id),
+  attendees: jsonb("attendees").notNull(), // Array of user objects with user ID and response status
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  relatedEntityType: text("related_entity_type"), // order, production, inventory, etc.
+  relatedEntityId: integer("related_entity_id"), // ID of the related entity
+  reminderMinutes: integer("reminder_minutes"), // Minutes before event to send reminder
+  attachments: jsonb("attachments"), // JSON array of attachment objects with URLs
+  notes: text("notes"), // Meeting notes or follow-up items
+  aiSuggestions: jsonb("ai_suggestions"), // AI-generated insights or recommendations
+  aiSummary: text("ai_summary"), // AI-generated summary of the event
+  isSuggested: boolean("is_suggested").default(false), // Indicates if this was AI-suggested
+  suggestedReason: text("suggested_reason"), // Why AI suggested this event
+  conflicts: jsonb("conflicts"), // Potential calendar conflicts detected
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const currencyExchangeRates = pgTable("currency_exchange_rates", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  fromCurrency: text("from_currency").notNull(),
+  toCurrency: text("to_currency").notNull(),
+  exchangeRate: decimal("exchange_rate", { precision: 12, scale: 6 }).notNull(),
+  effectiveDate: date("effective_date").defaultNow().notNull(),
+  source: text("source").default("manual").notNull(), // manual, api, bank
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  currencyPairUnique: unique().on(table.tenantId, table.fromCurrency, table.toCurrency, table.effectiveDate),
+}));
+
+// User Permissions table - Granular permissions for users
+export const userPermissions = pgTable("user_permissions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  module: text("module").notNull(), // e.g., 'orders', 'customers', 'inventory'
+  action: text("action").notNull(), // e.g., 'create', 'read', 'update', 'delete'
+  granted: boolean("granted").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userModuleActionUnique: unique().on(table.userId, table.module, table.action),
+}));
+
+// Calendar Events table - for AI-enhanced calendar system
+export const calendarEvents = pgTable("calendar_events", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  startDateTime: timestamp("start_date_time").notNull(),
+  endDateTime: timestamp("end_date_time").notNull(),
+  allDay: boolean("all_day").default(false).notNull(),
+  location: text("location"),
+  virtualMeetingUrl: text("virtual_meeting_url"),
+  category: text("category").notNull(), // meeting, production, delivery, quality, etc.
+  color: text("color").default("#3B82F6"), // Color for UI display
+  priority: text("priority").default("medium").notNull(), // high, medium, low
+  status: text("status").default("scheduled").notNull(), // scheduled, in-progress, completed, cancelled
+  isRecurring: boolean("is_recurring").default(false).notNull(),
+  recurrencePattern: jsonb("recurrence_pattern"), // JSON with recurrence details
+  creatorId: integer("creator_id").notNull().references(() => users.id),
+  attendees: jsonb("attendees").notNull(), // Array of user objects with user ID and response status
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  relatedEntityType: text("related_entity_type"), // order, production, inventory, etc.
+  relatedEntityId: integer("related_entity_id"), // ID of the related entity
+  reminderMinutes: integer("reminder_minutes"), // Minutes before event to send reminder
+  attachments: jsonb("attachments"), // JSON array of attachment objects with URLs
+  notes: text("notes"), // Meeting notes or follow-up items
+  aiSuggestions: jsonb("ai_suggestions"), // AI-generated insights or recommendations
+  aiSummary: text("ai_summary"), // AI-generated summary of the event
+  isSuggested: boolean("is_suggested").default(false), // Indicates if this was AI-suggested
+  suggestedReason: text("suggested_reason"), // Why AI suggested this event
+  conflicts: jsonb("conflicts"), // Potential calendar conflicts detected
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const userPermissions = pgTable("user_permissions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  module: text("module").notNull(), // e.g., 'orders', 'customers', 'inventory'
+  action: text("action").notNull(), // e.g., 'create', 'read', 'update', 'delete'
+  granted: boolean("granted").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userModuleActionUnique: unique().on(table.userId, table.module, table.action),
+}));
+
+// Calendar Events table - for AI-enhanced calendar system
+export const calendarEvents = pgTable("calendar_events", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  startDateTime: timestamp("start_date_time").notNull(),
+  endDateTime: timestamp("end_date_time").notNull(),
+  allDay: boolean("all_day").default(false).notNull(),
+  location: text("location"),
+  virtualMeetingUrl: text("virtual_meeting_url"),
+  category: text("category").notNull(), // meeting, production, delivery, quality, etc.
+  color: text("color").default("#3B82F6"), // Color for UI display
+  priority: text("priority").default("medium").notNull(), // high, medium, low
+  status: text("status").default("scheduled").notNull(), // scheduled, in-progress, completed, cancelled
+  isRecurring: boolean("is_recurring").default(false).notNull(),
+  recurrencePattern: jsonb("recurrence_pattern"), // JSON with recurrence details
+  creatorId: integer("creator_id").notNull().references(() => users.id),
+  attendees: jsonb("attendees").notNull(), // Array of user objects with user ID and response status
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  relatedEntityType: text("related_entity_type"), // order, production, inventory, etc.
+  relatedEntityId: integer("related_entity_id"), // ID of the related entity
+  reminderMinutes: integer("reminder_minutes"), // Minutes before event to send reminder
+  attachments: jsonb("attachments"), // JSON array of attachment objects with URLs
+  notes: text("notes"), // Meeting notes or follow-up items
+  aiSuggestions: jsonb("ai_suggestions"), // AI-generated insights or recommendations
+  aiSummary: text("ai_summary"), // AI-generated summary of the event
+  isSuggested: boolean("is_suggested").default(false), // Indicates if this was AI-suggested
+  suggestedReason: text("suggested_reason"), // Why AI suggested this event
+  conflicts: jsonb("conflicts"), // Potential calendar conflicts detected
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const calendarEvents = pgTable("calendar_events", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  startDateTime: timestamp("start_date_time").notNull(),
+  endDateTime: timestamp("end_date_time").notNull(),
+  allDay: boolean("all_day").default(false).notNull(),
+  location: text("location"),
+  virtualMeetingUrl: text("virtual_meeting_url"),
+  category: text("category").notNull(), // meeting, production, delivery, quality, etc.
+  color: text("color").default("#3B82F6"), // Color for UI display
+  priority: text("priority").default("medium").notNull(), // high, medium, low
+  status: text("status").default("scheduled").notNull(), // scheduled, in-progress, completed, cancelled
+  isRecurring: boolean("is_recurring").default(false).notNull(),
+  recurrencePattern: jsonb("recurrence_pattern"), // JSON with recurrence details
+  creatorId: integer("creator_id").notNull().references(() => users.id),
+  attendees: jsonb("attendees").notNull(), // Array of user objects with user ID and response status
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  relatedEntityType: text("related_entity_type"), // order, production, inventory, etc.
+  relatedEntityId: integer("related_entity_id"), // ID of the related entity
+  reminderMinutes: integer("reminder_minutes"), // Minutes before event to send reminder
+  attachments: jsonb("attachments"), // JSON array of attachment objects with URLs
+  notes: text("notes"), // Meeting notes or follow-up items
+  aiSuggestions: jsonb("ai_suggestions"), // AI-generated insights or recommendations
+  aiSummary: text("ai_summary"), // AI-generated summary of the event
+  isSuggested: boolean("is_suggested").default(false), // Indicates if this was AI-suggested
+  suggestedReason: text("suggested_reason"), // Why AI suggested this event
+  conflicts: jsonb("conflicts"), // Potential calendar conflicts detected
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const calendarSettings = pgTable("calendar_settings", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id).unique(),
+  workingHoursStart: time("working_hours_start").default("09:00:00"),
+  workingHoursEnd: time("working_hours_end").default("17:00:00"),
+  workingDays: jsonb("working_days").default(["1", "2", "3", "4", "5"]), // 0=Sunday, 1=Monday, etc.
+  defaultView: text("default_view").default("week"), // day, week, month, schedule
+  defaultReminder: integer("default_reminder").default(15), // minutes
+  showWeekends: boolean("show_weekends").default(false),
+  timeZone: text("time_zone").default("UTC"),
+  categoryColors: jsonb("category_colors"), // JSON mapping category to color
+  notificationPreferences: jsonb("notification_preferences"), // JSON with notification settings
+  calendarIntegrations: jsonb("calendar_integrations"), // External calendar integrations
+  aiAssistEnabled: boolean("ai_assist_enabled").default(true), // Enable AI calendar assistant
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const customers = pgTable("customers", {
+  id: serial("id").primaryKey(),
+  customerId: varchar("customer_id").notNull().unique(), // Auto-generated unique ID (e.g., CUST-001)
+  customerName: varchar("customer_name").notNull(),
+  address: text("address"), // New field for customer address
+  website: varchar("website"), // New field for customer website
+  country: varchar("country").notNull(),
+  hasAgent: boolean("has_agent").default(false).notNull(),
+  contactPerson: varchar("contact_person").notNull(),
+  email: varchar("email").notNull(),
+  phone: varchar("phone").notNull(),
+  // Garment industry specific fields
+  industrySegment: varchar("industry_segment"), // Type of industry segment
+  paymentTerms: varchar("payment_terms"), // Payment terms like Net 30, Net 60, etc
+  leadTime: integer("lead_time"), // Average lead time in days
+  complianceLevel: varchar("compliance_level"), // Level of compliance with standards
+  sustainabilityRating: numeric("sustainability_rating", { precision: 3, scale: 1 }), // 0-5 rating scale
+  isActive: boolean("is_active").default(true).notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const customerAgents = pgTable("customer_agents", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull().references(() => customers.id, {
+    onDelete: "cascade",
+  }),
+  agentName: varchar("agent_name").notNull(),
+  agentEmail: varchar("agent_email").notNull(),
+  agentPhone: varchar("agent_phone").notNull(),
+  agentAddress: text("agent_address"), // New field for agent address
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const tasks = pgTable("tasks", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  dueDate: date("due_date"),
+  dueTime: time("due_time"),
+  priority: text("priority").notNull().default("medium"), // urgent, important, medium, standard
+  status: text("status").notNull().default("pending"), // pending, in_progress, completed, canceled
+  completed: boolean("completed").notNull().default(false),
+  completedAt: timestamp("completed_at"),
+  assignedTo: integer("assigned_to").references(() => users.id),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  relatedEntityType: text("related_entity_type"), // customer, order, etc.
+  relatedEntityId: integer("related_entity_id"),
+  tags: text("tags").array(),
+  reminderAt: timestamp("reminder_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const taskComments = pgTable("task_comments", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id").notNull().references(() => tasks.id, {
+    onDelete: "cascade",
+  }),
+  userId: integer("user_id").notNull().references(() => users.id),
+  comment: text("comment").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const taskAIInsights = pgTable("task_ai_insights", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id").notNull().references(() => tasks.id, {
+    onDelete: "cascade",
+  }),
+  insightType: text("insight_type").notNull(), // productivity, health, priority, deadline
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  recommendations: text("recommendations").array(),
+  confidence: numeric("confidence", { precision: 3, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const inquiries = pgTable("inquiries", {
+  id: serial("id").primaryKey(),
+  inquiryId: varchar("inquiry_id").notNull(),
+  customerId: integer("customer_id").references(() => customers.id).notNull(),
+  styleName: varchar("style_name").notNull(),
+  inquiryType: varchar("inquiry_type").notNull(), // Sample Development, Salesman Sample, Quotation, Repeat Order
+  department: varchar("department").notNull(), // Infant, Kids, Boys, Girls, Men's, Ladies
+  projectedQuantity: integer("projected_quantity").notNull(),
+  projectedDeliveryDate: date("projected_delivery_date").notNull(), // Changed to date type to match form
+  targetPrice: numeric("target_price").notNull(),
+  
+  // Additional fields from the inquiry form
+  seasonYear: varchar("season_year"), // Season and year for the product
+  brand: varchar("brand"), // Brand name for production
+  materialComposition: varchar("material_composition"), // Material composition (e.g., 95% Cotton, 5% Elastane)
+  sizeRange: varchar("size_range"), // Size range (e.g., S-XXL, 28-36)
+  colorOptions: text("color_options").array(), // Array of color options
+  countryOfOrigin: varchar("country_of_origin"), // Manufacturing country
+  incoterms: varchar("incoterms"), // International Commercial Terms for shipping
+  specialRequirements: text("special_requirements"), // Special requirements or certifications
+  contactPersonRef: varchar("contact_person_ref"), // Contact person reference
+  
+  technicalFiles: text("technical_files").array(), // Store file paths as array
+  status: varchar("status").default("new").notNull(), // new, in_progress, quotation_sent, converted_to_order, closed
+  tenantId: integer("tenant_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const vendors = pgTable("vendors", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  vendorCode: varchar("vendor_code").notNull(),
+  vendorName: varchar("vendor_name").notNull(),
+  vendorType: varchar("vendor_type"),
+  contactPerson: varchar("contact_person"),
+  email: varchar("email"),
+  phone: varchar("phone"),
+  address: text("address"),
+  city: varchar("city"),
+  country: varchar("country"),
+  bankName: varchar("bank_name"),
+  bankAccount: varchar("bank_account"),
+  bankSwift: varchar("bank_swift"),
+  paymentTerms: varchar("payment_terms"),
+  creditLimit: numeric("credit_limit"),
+  taxId: varchar("tax_id"),
+  isActive: boolean("is_active").default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+---END---
+export const warehouses = pgTable("warehouses", {
+  id: serial("id").primaryKey(),
+  warehouseId: varchar("warehouse_id").notNull().unique(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name").notNull(),
+  type: varchar("type").notNull().default("company"), // company, vendor, third_party
+  location: varchar("location").notNull(),
+  address: varchar("address"),
+  contactPerson: varchar("contact_person"),
+  contactPhone: varchar("contact_phone"),
+  contactEmail: varchar("contact_email"),
+  totalCapacity: numeric("total_capacity"), // Total storage capacity in square feet or meters
+  usedCapacity: numeric("used_capacity"), // Used storage space
+  capacityUnit: varchar("capacity_unit").default("sqft"), // sqft, sqm, etc.
+  isTemperatureControlled: boolean("is_temperature_controlled").default(false),
+  temperatureRange: varchar("temperature_range"), // e.g., "18-22°C"
+  isHumidityControlled: boolean("is_humidity_controlled").default(false),
+  humidityRange: varchar("humidity_range"), // e.g., "40-60%"
+  vendorId: integer("vendor_id").references(() => vendors.id), // Only for vendor/third-party warehouses
+  hasAlarmSystem: boolean("has_alarm_system").default(false),
+  hasSprinklerSystem: boolean("has_sprinkler_system").default(false),
+  hasSecurityPersonnel: boolean("has_security_personnel").default(false),
+  hasCCTV: boolean("has_cctv").default(false),
+  isActive: boolean("is_active").default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const inventoryMovements = pgTable("inventory_movements", {
+  id: serial("id").primaryKey(),
+  movementId: varchar("movement_id").notNull().unique(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  warehouseId: integer("warehouse_id").notNull().references(() => warehouses.id),
+  type: varchar("type").notNull(), // receive, issue, transfer, processing_send, processing_receive, subcontract_send, subcontract_receive, return, adjustment, manufacturing
+  sourceType: varchar("source_type"), // purchase_order, manufacturing_order, sales_order, etc.
+  sourceId: integer("source_id"), // ID of the source document
+  description: text("description"),
+  movementDate: timestamp("movement_date").defaultNow().notNull(),
+  processedBy: integer("processed_by").references(() => users.id),
+  status: varchar("status").default("draft").notNull(), // draft, approved, processed, cancelled
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  notes: text("notes"),
+  additionalData: jsonb("additional_data"), // Store items, target warehouse, processing unit, etc.
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const stockGroups = pgTable("stock_groups", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 50 }),
+  parentId: integer("parent_id"),
+  level: integer("level").default(0).notNull(),
+  path: text("path"),
+  nature: varchar("nature", { length: 30 }).notNull().default("raw_material"),
+  inventoryAccountId: integer("inventory_account_id").references(() => chartOfAccounts.id),
+  cogsAccountId: integer("cogs_account_id").references(() => chartOfAccounts.id),
+  wipAccountId: integer("wip_account_id").references(() => chartOfAccounts.id),
+  adjustmentAccountId: integer("adjustment_account_id").references(() => chartOfAccounts.id),
+  grniAccountId: integer("grni_account_id").references(() => chartOfAccounts.id),
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const itemCategories = pgTable("item_categories", {
+  id: serial("id").primaryKey(),
+  categoryId: varchar("category_id").notNull().unique(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name").notNull(),
+  description: varchar("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const itemSubcategories = pgTable("item_subcategories", {
+  id: serial("id").primaryKey(),
+  subcategoryId: varchar("subcategory_id").notNull().unique(),
+  categoryId: integer("category_id").notNull().references(() => itemCategories.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name").notNull(),
+  description: varchar("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const itemUnits = pgTable("item_units", {
+  id: serial("id").primaryKey(),
+  unitCode: varchar("unit_code", { length: 10 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  type: varchar("type", { length: 50 }).notNull(), // length, weight, volume, quantity, etc.
+  baseUnit: boolean("base_unit").default(false).notNull(), // Is this a base unit or derived unit
+  conversionFactor: numeric("conversion_factor").default("1"), // For conversion between related units
+  baseUnitId: integer("base_unit_id").references(() => itemUnits.id), // Reference to base unit if this is a derived unit
+  isCompound: boolean("is_compound").default(false).notNull(),
+  compoundOfId: integer("compound_of_id"),
+  compoundQty: numeric("compound_qty"),
+  isActive: boolean("is_active").default(true).notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const items = pgTable("items", {
+  id: serial("id").primaryKey(),
+  itemCode: varchar("item_code", { length: 20 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  categoryId: integer("category_id").notNull().references(() => itemCategories.id),
+  subcategoryId: integer("subcategory_id").references(() => itemSubcategories.id),
+  stockGroupId: integer("stock_group_id").references(() => stockGroups.id),
+  unitId: integer("unit_id").notNull().references(() => itemUnits.id),
+  purchaseUnitId: integer("purchase_unit_id").references(() => itemUnits.id),
+  sku: varchar("sku", { length: 50 }).unique(),
+  barcode: varchar("barcode", { length: 50 }).unique(),
+  hasVariants: boolean("has_variants").default(false).notNull(),
+  type: varchar("type", { length: 50 }).notNull().default("standard"), // standard, fabric, accessory, finishing
+  minStockLevel: numeric("min_stock_level").default("0"),
+  maxStockLevel: numeric("max_stock_level"),
+  reorderPoint: numeric("reorder_point").default("0"),
+  leadTimeInDays: integer("lead_time_in_days"),
+  isActive: boolean("is_active").default(true).notNull(),
+  isStockable: boolean("is_stockable").default(true).notNull(),
+  isServiceItem: boolean("is_service_item").default(false).notNull(),
+  isBillOfMaterial: boolean("is_bill_of_material").default(false).notNull(),
+  costMethod: varchar("cost_method", { length: 20 }).default("average"), // fifo, lifo, average, specific
+  defaultCost: numeric("default_cost").default("0"),
+  defaultPrice: numeric("default_price").default("0"),
+  images: text("images").array(), // Array of image URLs
+  tags: text("tags").array(),
+  attributes: jsonb("attributes"), // JSON for flexible custom attributes
+  meta: jsonb("meta"), // Additional meta information
+  vendorIds: integer("vendor_ids").array(), // Array of vendor IDs
+  garmentTypes: text("garment_types").array(), // Types of garments this item can be used for
+  seasons: text("seasons").array(), // Applicable seasons (Summer, Winter, Spring, etc.)
+  materialContent: jsonb("material_content"), // Specific for fabrics (cotton 80%, polyester 20%)
+  weight: numeric("weight"), // Weight per unit
+  weightUnit: varchar("weight_unit", { length: 10 }), // kg, g, lb, etc.
+  color: varchar("color", { length: 50 }),
+  size: varchar("size", { length: 50 }),
+  dimensions: jsonb("dimensions"), // For physical measurement specifications
+  salesTaxable: boolean("sales_taxable").default(true),
+  purchaseTaxable: boolean("purchase_taxable").default(true),
+  taxRate: numeric("tax_rate").default("0"),
+  hsCode: varchar("hs_code", { length: 20 }), // Harmonized System code for international trade
+  countryOfOrigin: varchar("country_of_origin", { length: 50 }),
+  discontinued: boolean("discontinued").default(false),
+  discontinuedDate: timestamp("discontinued_date"),
+  replacementItemId: integer("replacement_item_id").references(() => items.id),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const itemVariants = pgTable("item_variants", {
+  id: serial("id").primaryKey(),
+  parentItemId: integer("parent_item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  variantCode: varchar("variant_code", { length: 30 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  sku: varchar("sku", { length: 50 }).unique(),
+  barcode: varchar("barcode", { length: 50 }).unique(),
+  attributes: jsonb("attributes").notNull(), // JSON containing variant attributes (color, size, etc.)
+  images: text("images").array(), // Array of image URLs specific to this variant
+  defaultCost: numeric("default_cost").default("0"),
+  defaultPrice: numeric("default_price").default("0"),
+  isActive: boolean("is_active").default(true).notNull(),
+  weight: numeric("weight"), // Weight per unit
+  dimensions: jsonb("dimensions"), // For physical measurement specifications
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const billOfMaterials = pgTable("bill_of_materials", {
+  id: serial("id").primaryKey(),
+  itemId: integer("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+  version: varchar("version", { length: 20 }).notNull(), // Version number/code for this BOM
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true).notNull(),
+  isDefault: boolean("is_default").default(false), // Is this the default BOM for the item
+  effectiveDate: date("effective_date"), // When this BOM becomes effective
+  expiryDate: date("expiry_date"), // When this BOM expires
+  notes: text("notes"),
+  totalCost: numeric("total_cost").default("0"), // Calculated total cost
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const bomComponents = pgTable("bom_components", {
+  id: serial("id").primaryKey(),
+  bomId: integer("bom_id").notNull().references(() => billOfMaterials.id, { onDelete: "cascade" }),
+  componentItemId: integer("component_item_id").notNull().references(() => items.id),
+  variantId: integer("variant_id").references(() => itemVariants.id), // For specific variants
+  quantity: numeric("quantity").notNull().default("1"),
+  unitId: integer("unit_id").notNull().references(() => itemUnits.id),
+  wastagePercentage: numeric("wastage_percentage").default("0"), // Expected wastage
+  costPerUnit: numeric("cost_per_unit").default("0"),
+  position: varchar("position", { length: 50 }), // Where in the garment is this used (e.g., "collar", "cuff")
+  notes: text("notes"),
+  isOptional: boolean("is_optional").default(false),
+  isAlternative: boolean("is_alternative").default(false),
+  alternativeFor: integer("alternative_for").references(() => bomComponents.id), // Which component this is an alternative for
+  sortOrder: integer("sort_order").default(0), // For ordering components in the BOM
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const itemStock = pgTable("item_stock", {
+  id: serial("id").primaryKey(),
+  itemId: integer("item_id").notNull().references(() => items.id),
+  variantId: integer("variant_id").references(() => itemVariants.id),
+  warehouseId: integer("warehouse_id").notNull().references(() => warehouses.id),
+  locationCode: varchar("location_code", { length: 50 }), // Specific location within warehouse
+  quantity: numeric("quantity").notNull().default("0"),
+  reservedQuantity: numeric("reserved_quantity").default("0"), // Reserved for orders but not picked
+  availableQuantity: numeric("available_quantity").default("0"), // Calculated: quantity - reservedQuantity
+  unitCost: numeric("unit_cost").default("0"), // Current average cost per unit
+  lastCountDate: timestamp("last_count_date"), // Date of last physical inventory count
+  expiryDate: date("expiry_date"), // For items with expiration
+  lotNumber: varchar("lot_number", { length: 50 }), // Batch/lot tracking
+  serialNumbers: text("serial_numbers").array(), // For serial-tracked items
+  minimumStockLevel: numeric("minimum_stock_level").default("0"), // Override item default for this warehouse
+  maximumStockLevel: numeric("maximum_stock_level"), // Override item default for this warehouse
+  reorderPoint: numeric("reorder_point").default("0"), // Override item default for this warehouse
+  reorderQuantity: numeric("reorder_quantity").default("0"), // Suggested reorder quantity
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    // Create a unique constraint to ensure one row per item/variant/warehouse combination
+    itemWarehouseUnique: unique().on(
+      table.itemId, 
+      table.variantId, 
+      table.warehouseId, 
+      table.locationCode
+    )
+  };
+});
+---END---
+export const priceLists = pgTable("price_lists", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  currency: varchar("currency", { length: 3 }).notNull().default("BDT"),
+  isActive: boolean("is_active").default(true).notNull(),
+  isDefault: boolean("is_default").default(false),
+  effectiveDate: date("effective_date").notNull(),
+  expiryDate: date("expiry_date"),
+  customerGroupId: integer("customer_group_id"), // For customer-specific pricing
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const priceListItems = pgTable("price_list_items", {
+  id: serial("id").primaryKey(),
+  priceListId: integer("price_list_id").notNull().references(() => priceLists.id, { onDelete: "cascade" }),
+  itemId: integer("item_id").notNull().references(() => items.id),
+  variantId: integer("variant_id").references(() => itemVariants.id),
+  price: numeric("price").notNull(),
+  minQuantity: numeric("min_quantity").default("1"), // Minimum quantity for this price
+  maxQuantity: numeric("max_quantity"), // Maximum quantity for this price
+  specialPrice: numeric("special_price"), // Optional special/promotional price
+  specialFrom: date("special_from"), // When special price starts
+  specialTo: date("special_to"), // When special price ends
+  discountPercentage: numeric("discount_percentage"), // As an alternative to direct price setting
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    // Create a unique constraint to ensure one row per price list/item/variant combination
+    priceListItemUnique: unique().on(
+      table.priceListId, 
+      table.itemId, 
+      table.variantId, 
+      table.minQuantity
+    )
+  };
+});
+---END---
+export const currencies = pgTable("currencies", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 3 }).notNull(),
+  name: varchar("name", { length: 50 }).notNull(),
+  symbol: varchar("symbol", { length: 5 }).notNull(),
+  decimalPlaces: integer("decimal_places").default(2).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("currencies_code_tenant_idx").on(table.code, table.tenantId),
+]);
+
+// Exchange rates (relative to base currency)
+export const exchangeRates = pgTable("exchange_rates", {
+  id: serial("id").primaryKey(),
+  currencyId: integer("currency_id").notNull().references(() => currencies.id, {
+    onDelete: "cascade",
+  }),
+  rate: decimal("rate", { precision: 10, scale: 6 }).notNull(), // Exchange rate relative to base currency
+  validFrom: timestamp("valid_from").notNull(), // When this rate begins to be valid
+  validTo: timestamp("valid_to"), // When this rate expires (null = indefinite)
+  source: varchar("source", { length: 50 }), // Source of exchange rate (e.g., "manual", "api", "openai")
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const exchangeRates = pgTable("exchange_rates", {
+  id: serial("id").primaryKey(),
+  currencyId: integer("currency_id").notNull().references(() => currencies.id, {
+    onDelete: "cascade",
+  }),
+  rate: decimal("rate", { precision: 10, scale: 6 }).notNull(), // Exchange rate relative to base currency
+  validFrom: timestamp("valid_from").notNull(), // When this rate begins to be valid
+  validTo: timestamp("valid_to"), // When this rate expires (null = indefinite)
+  source: varchar("source", { length: 50 }), // Source of exchange rate (e.g., "manual", "api", "openai")
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const currencyInsights = pgTable("currency_insights", {
+  id: serial("id").primaryKey(),
+  currencyId: integer("currency_id").notNull().references(() => currencies.id, {
+    onDelete: "cascade",
+  }),
+  insightType: varchar("insight_type", { length: 50 }).notNull(), // "trend", "forecast", "risk" etc.
+  title: varchar("title", { length: 200 }).notNull(), // Short title of the insight
+  content: text("content").notNull(), // Detailed insight content
+  confidence: decimal("confidence", { precision: 3, scale: 2 }), // AI confidence level (0-1)
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const quotations = pgTable("quotations", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  quotationId: varchar("quotation_id", { length: 20 }).notNull().unique(),
+  inquiryId: integer("inquiry_id").references(() => inquiries.id),
+  customerId: integer("customer_id").notNull(),
+  styleName: varchar("style_name", { length: 255 }).notNull(),
+  department: varchar("department", { length: 100 }).notNull(),
+  projectedQuantity: integer("projected_quantity").notNull(),
+  projectedDeliveryDate: date("projected_delivery_date"),
+  targetPrice: varchar("target_price", { length: 50 }),
+  // @deprecated Use workflowStatus instead. Will be removed after migration.
+  status: varchar("status", { length: 50 }).default("draft"),
+  workflowStatus: varchar("workflow_status", { length: 30 }).default("DRAFT"),
+  workflowInstanceId: integer("workflow_instance_id").references(() => workflowInstances.id),
+  materialCost: numeric("material_cost").default("0"),
+  manufacturingCost: numeric("manufacturing_cost").default("0"),
+  otherCost: numeric("other_cost").default("0"),
+  totalCost: numeric("total_cost").default("0"),
+  costPerPiece: numeric("cost_per_piece").default("0"),
+  profitPercentage: numeric("profit_percentage").default("0"),
+  quotedPrice: numeric("quoted_price").default("0"),
+  quotationDate: date("quotation_date").defaultNow(),
+  validUntil: date("valid_until"),
+  notes: text("notes"),
+  createdBy: integer("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const quotationMaterials = pgTable("quotation_materials", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  quotationId: integer("quotation_id").notNull().references(() => quotations.id, { onDelete: "cascade" }),
+  serialNo: integer("serial_no").notNull(),
+  categoryId: integer("category_id").references(() => itemCategories.id),
+  itemId: integer("item_id").references(() => items.id),
+  consumptionPerDozen: numeric("consumption_per_dozen").notNull(),
+  unitPrice: numeric("unit_price").notNull(),
+  amountPerDozen: numeric("amount_per_dozen").notNull(),
+  totalAmount: numeric("total_amount").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const quotationManufacturing = pgTable("quotation_manufacturing", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  quotationId: integer("quotation_id").notNull().references(() => quotations.id, { onDelete: "cascade" }),
+  serialNo: integer("serial_no").notNull(),
+  stylePart: varchar("style_part", { length: 50 }).notNull(),
+  machinesRequired: integer("machines_required").notNull(),
+  productionPerHour: numeric("production_per_hour").notNull(),
+  productionPerDay: numeric("production_per_day").notNull(),
+  costPerMachine: numeric("cost_per_machine").notNull(),
+  totalLineCost: numeric("total_line_cost").notNull(),
+  costPerDozen: numeric("cost_per_dozen").notNull(),
+  cmPerPiece: numeric("cm_per_piece").notNull(),
+  totalOrderCost: numeric("total_order_cost").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const quotationOtherCosts = pgTable("quotation_other_costs", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  quotationId: integer("quotation_id").notNull().references(() => quotations.id, { onDelete: "cascade" }),
+  serialNo: integer("serial_no").notNull(),
+  costHead: varchar("cost_head", { length: 100 }).notNull(),
+  percentage: numeric("percentage").notNull(),
+  totalAmount: numeric("total_amount").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const quotationCostSummary = pgTable("quotation_cost_summary", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  quotationId: integer("quotation_id").notNull().references(() => quotations.id, { onDelete: "cascade" }),
+  categoryName: varchar("category_name", { length: 100 }).notNull(),
+  totalCost: numeric("total_cost").notNull(),
+  percentageOfTotal: numeric("percentage_of_total").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
+  orderId: varchar("order_id", { length: 20 }).notNull().unique(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  quotationId: integer("quotation_id").references(() => quotations.id),
+  customerId: integer("customer_id").notNull().references(() => customers.id),
+  styleName: varchar("style_name", { length: 255 }).notNull(),
+  department: varchar("department", { length: 100 }).notNull(),
+  totalQuantity: integer("total_quantity").notNull(),
+  deliveryDate: date("delivery_date").notNull(),
+  deliveryMode: varchar("delivery_mode", { length: 50 }).notNull(), // Air, Sea, etc.
+  deliveryPort: varchar("delivery_port", { length: 100 }),
+  paymentTerms: varchar("payment_terms", { length: 100 }),
+  orderStatus: varchar("order_status", { length: 50 }).default("new").notNull(), // new, in_progress, ready_for_production, in_production, completed, shipped, delivered, canceled
+  priceConfirmed: numeric("price_confirmed").notNull(),
+  currency: varchar("currency", { length: 10 }).default("BDT"),
+  notes: text("notes"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const orderColorSizeBreakdown = pgTable("order_color_size_breakdown", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  color: varchar("color", { length: 50 }).notNull(),
+  size: varchar("size", { length: 20 }).notNull(),
+  quantity: integer("quantity").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const orderMaterials = pgTable("order_materials", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  materialType: varchar("material_type", { length: 100 }).notNull(), // Fabric, Label, Hangtag, etc.
+  itemId: integer("item_id").references(() => items.id),
+  variantId: integer("variant_id").references(() => itemVariants.id),
+  quantityNeeded: numeric("quantity_needed").notNull(),
+  unitId: integer("unit_id").references(() => itemUnits.id),
+  unitPrice: numeric("unit_price").notNull(),
+  totalCost: numeric("total_cost").notNull(),
+  bookingStatus: varchar("booking_status", { length: 50 }).default("pending").notNull(), // pending, booked, received
+  expectedDeliveryDate: date("expected_delivery_date"),
+  actualDeliveryDate: date("actual_delivery_date"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const orderSamples = pgTable("order_samples", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  sampleType: varchar("sample_type", { length: 50 }).notNull(), // Photo Sample, Fit Sample, PP Sample, Shipping Sample
+  required: boolean("required").default(true),
+  status: varchar("status", { length: 50 }).default("pending").notNull(), // pending, in_process, submitted_for_approval, approved, rejected
+  submittedDate: date("submitted_date"),
+  approvalDate: date("approval_date"),
+  rejectionDate: date("rejection_date"),
+  rejectionReason: text("rejection_reason"),
+  comments: text("comments"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const orderTrims = pgTable("order_trims", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  trimType: varchar("trim_type", { length: 50 }).notNull(), // Label, Hangtag, Sticker, etc.
+  description: text("description"),
+  imageUrl: text("image_url"),
+  status: varchar("status", { length: 50 }).default("pending").notNull(), // pending, submitted_for_approval, approved, rejected
+  submittedDate: date("submitted_date"),
+  approvalDate: date("approval_date"),
+  rejectionDate: date("rejection_date"),
+  rejectionReason: text("rejection_reason"),
+  comments: text("comments"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const timeActionPlans = pgTable("time_action_plans", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(), // Delivery date
+  totalDays: integer("total_days").notNull(), // Calculated lead time
+  status: varchar("status", { length: 50 }).default("active").notNull(), // active, completed, canceled
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const timeActionMilestones = pgTable("time_action_milestones", {
+  id: serial("id").primaryKey(),
+  planId: integer("plan_id").notNull().references(() => timeActionPlans.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  milestoneName: varchar("milestone_name", { length: 100 }).notNull(),
+  description: text("description"),
+  plannedStartDate: date("planned_start_date").notNull(),
+  plannedEndDate: date("planned_end_date").notNull(),
+  actualStartDate: date("actual_start_date"),
+  actualEndDate: date("actual_end_date"),
+  status: varchar("status", { length: 50 }).default("pending").notNull(), // pending, in_progress, completed, delayed, at_risk
+  responsiblePerson: varchar("responsible_person", { length: 100 }),
+  department: varchar("department", { length: 100 }),
+  comments: text("comments"),
+  dependencies: text("dependencies").array(),
+  priority: varchar("priority", { length: 20 }).default("medium"), // high, medium, low
+  isCritical: boolean("is_critical").default(false),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const customerInteractions = pgTable("customer_interactions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  customerId: integer("customer_id").notNull().references(() => customers.id),
+  interactionType: varchar("interaction_type", { length: 50 }).notNull(), // email, call, meeting, site_visit, etc.
+  subject: varchar("subject", { length: 255 }).notNull(),
+  description: text("description"),
+  interactionDate: timestamp("interaction_date").notNull(),
+  nextFollowUpDate: timestamp("next_follow_up_date"),
+  status: varchar("status", { length: 50 }).default("open").notNull(), // open, in_progress, closed
+  assignedTo: integer("assigned_to").references(() => users.id),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const buyerPortalUsers = pgTable("buyer_portal_users", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  customerId: integer("customer_id").notNull().references(() => customers.id),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  firstName: varchar("first_name", { length: 100 }).notNull(),
+  lastName: varchar("last_name", { length: 100 }).notNull(),
+  password: varchar("password", { length: 255 }).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  lastLogin: timestamp("last_login"),
+  resetToken: varchar("reset_token", { length: 255 }),
+  resetTokenExpiry: timestamp("reset_token_expiry"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const sampleDevelopments = pgTable("sample_developments", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  customerId: integer("customer_id").notNull().references(() => customers.id),
+  inquiryId: integer("inquiry_id").references(() => inquiries.id),
+  sampleId: varchar("sample_id", { length: 20 }).notNull().unique(),
+  styleName: varchar("style_name", { length: 255 }).notNull(),
+  department: varchar("department", { length: 100 }).notNull(),
+  sampleType: varchar("sample_type", { length: 50 }).notNull(), // Development Sample, Sales Sample, Pre-Production, etc.
+  description: text("description"),
+  quantity: integer("quantity").notNull().default(1),
+  requestedDate: date("requested_date").notNull(),
+  targetCompletionDate: date("target_completion_date").notNull(),
+  actualCompletionDate: date("actual_completion_date"),
+  status: varchar("status", { length: 50 }).default("new").notNull(), // new, in_process, completed, sent_to_customer, approved, rejected
+  rejectionReason: text("rejection_reason"),
+  comments: text("comments"),
+  technicalDetails: jsonb("technical_details"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const sampleMaterials = pgTable("sample_materials", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  sampleId: integer("sample_id").notNull().references(() => sampleDevelopments.id, { onDelete: "cascade" }),
+  materialType: varchar("material_type", { length: 100 }).notNull(), // Fabric, Label, Hangtag, etc.
+  itemId: integer("item_id").references(() => items.id),
+  quantity: numeric("quantity").notNull(),
+  unitId: integer("unit_id").references(() => itemUnits.id),
+  status: varchar("status", { length: 50 }).default("pending").notNull(), // pending, received, used
+  comments: text("comments"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  notificationType: varchar("notification_type", { length: 50 }).notNull(), // inquiry, quotation, order, sample, general
+  title: varchar("title", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  relatedEntityType: varchar("related_entity_type", { length: 50 }), // order, quotation, inquiry, sample
+  relatedEntityId: integer("related_entity_id"),
+  userId: integer("user_id"), // Internal user ID (if applicable)
+  portalUserId: integer("portal_user_id"), // Buyer portal user ID (if applicable)
+  isRead: boolean("is_read").default(false),
+  isSent: boolean("is_sent").default(false),
+  sentAt: timestamp("sent_at"),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const crmActivities = pgTable("crm_activities", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  customerId: integer("customer_id").notNull().references(() => customers.id),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  activityType: varchar("activity_type", { length: 50 }).notNull(), // call, email, meeting, note, portal_activity
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  activityDate: timestamp("activity_date").notNull(),
+  relatedEntityType: varchar("related_entity_type", { length: 50 }), // inquiry, quotation, order, sample, trim
+  relatedEntityId: integer("related_entity_id"),
+  followUpRequired: boolean("follow_up_required").default(false),
+  followUpDate: timestamp("follow_up_date"),
+  isCompleted: boolean("is_completed").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const sampleApprovals = pgTable("sample_approvals", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  sampleId: integer("sample_id").notNull().references(() => sampleDevelopments.id, { onDelete: "cascade" }),
+  approvalType: varchar("approval_type", { length: 50 }).notNull(), // photo, fit, pp, shipping
+  status: varchar("status", { length: 50 }).default("pending").notNull(), // pending, approved, rejected, revised
+  comments: text("comments"),
+  attachments: text("attachments").array(),
+  approvedBy: integer("approved_by").references(() => buyerPortalUsers.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const trimApprovals = pgTable("trim_approvals", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  trimType: varchar("trim_type", { length: 50 }).notNull(), // label, hangtag, packaging, sticker
+  description: text("description"),
+  attachments: text("attachments").array(),
+  status: varchar("status", { length: 50 }).default("pending").notNull(), // pending, approved, rejected, revised
+  comments: text("comments"),
+  approvedBy: integer("approved_by").references(() => buyerPortalUsers.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const portalActivityLogs = pgTable("portal_activity_logs", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  portalUserId: integer("portal_user_id").notNull().references(() => buyerPortalUsers.id),
+  activityType: varchar("activity_type", { length: 50 }).notNull(), // login, view, approval, rejection, comment
+  activityDetail: text("activity_detail").notNull(),
+  relatedEntityType: varchar("related_entity_type", { length: 50 }),
+  relatedEntityId: integer("related_entity_id"),
+  ipAddress: varchar("ip_address", { length: 50 }),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const customerInsights = pgTable("customer_insights", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  customerId: integer("customer_id").notNull().references(() => customers.id),
+  insightType: varchar("insight_type", { length: 50 }).notNull(), // order_pattern, communication, feedback, risk, opportunity
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  insightData: jsonb("insight_data"), // Structured data for charts and visualization
+  score: integer("score"), // Numerical score/rating if applicable
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const communicationTemplates = pgTable("communication_templates", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  type: varchar("type", { length: 50 }).notNull(), // email, sms, portal_notification
+  subject: varchar("subject", { length: 255 }),
+  content: text("content").notNull(),
+  variables: jsonb("variables"), // Available template variables
+  isActive: boolean("is_active").default(true),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const accountTypes = pgTable("account_types", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  code: varchar("code", { length: 20 }).notNull(),
+  category: varchar("category", { length: 50 }).notNull(), // Asset, Liability, Equity, Income, Expense
+  description: text("description"),
+  normalBalance: varchar("normal_balance", { length: 10 }).notNull(), // debit or credit
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    tenantCodeUnq: unique().on(table.tenantId, table.code),
+  };
+});
+---END---
+export const accountGroups = pgTable("account_groups", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  code: varchar("code", { length: 30 }).notNull(),
+  parentGroupId: integer("parent_group_id"),
+  nature: varchar("nature", { length: 20 }).notNull(),
+  affectsGrossProfit: boolean("affects_gross_profit").default(false).notNull(),
+  isDefault: boolean("is_default").default(false).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    tenantCodeUnq: unique().on(table.tenantId, table.code),
+  };
+});
+---END---
+export const chartOfAccounts = pgTable("chart_of_accounts", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  accountTypeId: integer("account_type_id").notNull().references(() => accountTypes.id),
+  groupId: integer("group_id").notNull().references(() => accountGroups.id),
+  parentAccountId: integer("parent_account_id").references(() => chartOfAccounts.id),
+  accountNumber: varchar("account_number", { length: 30 }).notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true).notNull(),
+  path: varchar("path", { length: 255 }).notNull(),
+  level: integer("level").notNull().default(1),
+  allowJournalEntries: boolean("allow_journal_entries").default(true).notNull(),
+  isCashAccount: boolean("is_cash_account").default(false).notNull(),
+  isBankAccount: boolean("is_bank_account").default(false).notNull(),
+  normalBalance: varchar("normal_balance", { length: 10 }).default("debit"),
+  bankAccountDetails: jsonb("bank_account_details"),
+  balance: numeric("balance", { precision: 15, scale: 2 }).default("0").notNull(),
+  openingBalance: numeric("opening_balance", { precision: 15, scale: 2 }).default("0"),
+  isMaterialSupplier: boolean("is_material_supplier").default(false).notNull(),
+  supplierContactPerson: varchar("supplier_contact_person", { length: 100 }),
+  supplierPhone: varchar("supplier_phone", { length: 30 }),
+  supplierEmail: varchar("supplier_email", { length: 100 }),
+  supplierAddress: text("supplier_address"),
+  supplierCity: varchar("supplier_city", { length: 50 }),
+  supplierCountry: varchar("supplier_country", { length: 50 }),
+  supplierTaxId: varchar("supplier_tax_id", { length: 50 }),
+  supplierPaymentTerms: varchar("supplier_payment_terms", { length: 50 }),
+  supplierCreditLimit: numeric("supplier_credit_limit", { precision: 15, scale: 2 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    tenantAccountNumberUnq: unique().on(table.tenantId, table.accountNumber),
+  };
+});
+---END---
+export const fiscalYears = pgTable("fiscal_years", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("open"), // open, closed
+  isCurrent: boolean("is_current").default(false),
+  notes: text("notes"),
+  isClosed: boolean("is_closed").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    tenantNameUnq: unique().on(table.tenantId, table.name),
+  };
+});
+---END---
+export const accountingPeriods = pgTable("accounting_periods", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  fiscalYearId: integer("fiscal_year_id").references(() => fiscalYears.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  isClosed: boolean("is_closed").default(false).notNull(),
+  closedBy: integer("closed_by").references(() => users.id),
+  closedAt: timestamp("closed_at"),
+  closedReason: text("closed_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    fiscalYearPeriodUnq: unique().on(table.fiscalYearId, table.name),
+    tenantDateUnique: unique().on(table.tenantId, table.startDate, table.endDate),
+  };
+});
+---END---
+export const journalTypes = pgTable("journal_types", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  code: varchar("code", { length: 20 }).notNull(),
+  description: text("description"),
+  prefix: varchar("prefix", { length: 10 }),
+  nextNumber: integer("next_number").default(1).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    tenantCodeUnq: unique().on(table.tenantId, table.code),
+  };
+});
+---END---
+export const journals = pgTable("journals", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  journalTypeId: integer("journal_type_id").notNull().references(() => journalTypes.id),
+  fiscalYearId: integer("fiscal_year_id").references(() => fiscalYears.id),
+  periodId: integer("period_id").references(() => accountingPeriods.id),
+  reversalOfJournalId: integer("reversal_of_journal_id").references(() => journals.id),
+  journalNumber: varchar("journal_number", { length: 50 }).notNull(),
+  journalDate: date("journal_date").notNull(),
+  postDate: date("post_date"),
+  reference: varchar("reference", { length: 100 }),
+  description: text("description").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("draft"), // draft, posted, reversed
+  amount: numeric("amount", { precision: 15, scale: 2 }).default("0").notNull(),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  postedBy: integer("posted_by").references(() => users.id),
+  postedAt: timestamp("posted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    tenantJournalNumberUnq: unique().on(table.tenantId, table.journalNumber),
+  };
+});
+---END---
+export const journalLines = pgTable("journal_lines", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  journalId: integer("journal_id").notNull().references(() => journals.id),
+  accountId: integer("account_id").notNull().references(() => chartOfAccounts.id),
+  description: text("description"),
+  debitAmount: numeric("debit_amount", { precision: 15, scale: 2 }).default("0").notNull(),
+  creditAmount: numeric("credit_amount", { precision: 15, scale: 2 }).default("0").notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const voucherTypes = pgTable("voucher_types", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 10 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  journalTypeId: integer("journal_type_id").references(() => journalTypes.id),
+  prefix: varchar("prefix", { length: 10 }).notNull(),
+  nextNumber: integer("next_number").notNull().default(1),
+  isPurchase: boolean("is_purchase").default(false),
+  isSales: boolean("is_sales").default(false),
+  isPayment: boolean("is_payment").default(false),
+  isReceipt: boolean("is_receipt").default(false),
+  isJournal: boolean("is_journal").default(false),
+  isContra: boolean("is_contra").default(false),
+  isAsset: boolean("is_asset").default(false),
+  isLiability: boolean("is_liability").default(false),
+  requiresApproval: boolean("requires_approval").default(true),
+  requiresAttachment: boolean("requires_attachment").default(false),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const voucherStatus = pgTable("voucher_status", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 50 }).notNull(),
+  code: varchar("code", { length: 20 }).notNull(),
+  description: text("description"),
+  color: varchar("color", { length: 20 }).default("#808080"),
+  isBlocking: boolean("is_blocking").default(false),
+  isDefault: boolean("is_default").default(false),
+  sequence: integer("sequence").default(0),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const voucherWorkflow = pgTable("voucher_workflow", {
+  id: serial("id").primaryKey(),
+  voucherTypeId: integer("voucher_type_id").notNull().references(() => voucherTypes.id),
+  fromStatusId: integer("from_status_id").references(() => voucherStatus.id),
+  toStatusId: integer("to_status_id").notNull().references(() => voucherStatus.id),
+  actionName: varchar("action_name", { length: 50 }).notNull(),
+  requiredRole: varchar("required_role", { length: 50 }),
+  description: text("description"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const approvalRules = pgTable("approval_rules", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  voucherTypeId: integer("voucher_type_id").references(() => voucherTypes.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  minAmount: numeric("min_amount", { precision: 15, scale: 2 }).default("0"),
+  maxAmount: numeric("max_amount", { precision: 15, scale: 2 }),
+  requiredRole: varchar("required_role", { length: 50 }).notNull(),
+  approvalLevel: integer("approval_level").notNull().default(1),
+  makerCheckerEnabled: boolean("maker_checker_enabled").default(true).notNull(),
+  originModule: varchar("origin_module", { length: 50 }),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const vouchers = pgTable("vouchers", {
+  id: serial("id").primaryKey(),
+  voucherNumber: varchar("voucher_number", { length: 50 }).notNull().unique(),
+  voucherTypeId: integer("voucher_type_id").notNull().references(() => voucherTypes.id),
+  voucherDate: date("voucher_date").notNull(),
+  postingDate: date("posting_date"),
+  fiscalYearId: integer("fiscal_year_id").notNull().references(() => fiscalYears.id),
+  accountingPeriodId: integer("accounting_period_id").references(() => accountingPeriods.id),
+  // @deprecated Use workflowStatus instead. Will be removed after migration.
+  statusId: integer("status_id").notNull().references(() => voucherStatus.id),
+  reference: varchar("reference", { length: 100 }),
+  referenceDate: date("reference_date"),
+  description: text("description"),
+  preparedById: integer("prepared_by_id").notNull().references(() => users.id),
+  approvedById: integer("approved_by_id").references(() => users.id),
+  approvedDate: timestamp("approved_date"),
+  submittedById: integer("submitted_by_id").references(() => users.id),
+  submittedDate: timestamp("submitted_date"),
+  checkedById: integer("checked_by_id").references(() => users.id),
+  checkedDate: timestamp("checked_date"),
+  postedById: integer("posted_by_id").references(() => users.id),
+  postedDate: timestamp("posted_date"),
+  rejectedById: integer("rejected_by_id").references(() => users.id),
+  rejectionReason: text("rejection_reason"),
+  rejectedDate: timestamp("rejected_date"),
+  entityType: varchar("entity_type", { length: 50 }), // vendor, customer, employee
+  entityId: integer("entity_id"), // ID of the related entity
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull().default("0"),
+  currencyCode: varchar("currency_code", { length: 10 }).default("BDT"),
+  exchangeRate: numeric("exchange_rate", { precision: 10, scale: 6 }).default("1"),
+  baseCurrencyAmount: numeric("base_currency_amount", { precision: 15, scale: 2 }),
+  journalId: integer("journal_id").references(() => journals.id), // Link to journal if posted
+  isPosted: boolean("is_posted").default(false),
+  postingReference: varchar("posting_reference", { length: 100 }),
+  workflowStatus: varchar("workflow_status", { length: 30 }).default("DRAFT"),
+  workflowInstanceId: integer("workflow_instance_id").references(() => workflowInstances.id),
+  isCancelled: boolean("is_cancelled").default(false),
+  cancellationReason: text("cancellation_reason"),
+  cancelledById: integer("cancelled_by_id").references(() => users.id),
+  cancellationDate: timestamp("cancellation_date"),
+  attachments: jsonb("attachments"), // JSON array of attachment objects with URLs
+  notes: text("notes"),
+  tags: text("tags").array(),
+  customFields: jsonb("custom_fields"), // For extensibility
+  aiSummary: text("ai_summary"), // AI-generated insights
+  originModule: varchar("origin_module", { length: 50 }),
+  originType: varchar("origin_type", { length: 50 }),
+  originId: integer("origin_id"),
+  originRef: varchar("origin_ref", { length: 100 }),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    originUnq: unique().on(table.tenantId, table.originModule, table.originType, table.originId),
+  };
+});
+---END---
+export const voucherItems = pgTable("voucher_items", {
+  id: serial("id").primaryKey(),
+  voucherId: integer("voucher_id").notNull().references(() => vouchers.id, {
+    onDelete: "cascade",
+  }),
+  lineNumber: integer("line_number").notNull(),
+  accountId: integer("account_id").notNull().references(() => chartOfAccounts.id),
+  description: text("description"),
+  debitAmount: numeric("debit_amount", { precision: 15, scale: 2 }).default("0"),
+  creditAmount: numeric("credit_amount", { precision: 15, scale: 2 }).default("0"),
+  baseCurrencyDebit: numeric("base_currency_debit", { precision: 15, scale: 2 }).default("0"),
+  baseCurrencyCreditAmount: numeric("base_currency_credit", { precision: 15, scale: 2 }).default("0"),
+  taxAmount: numeric("tax_amount", { precision: 15, scale: 2 }).default("0"),
+  taxPercentage: numeric("tax_percentage", { precision: 5, scale: 2 }).default("0"),
+  costCenterId: integer("cost_center_id"),
+  costCategoryId: integer("cost_category_id"),
+  projectId: integer("project_id"),
+  entityType: varchar("entity_type", { length: 50 }), // vendor, customer, employee, item, asset
+  entityId: integer("entity_id"), // ID of the related entity
+  reference: varchar("reference", { length: 100 }),
+  attachments: jsonb("attachments"), // JSON array of attachment objects with URLs
+  notes: text("notes"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const voucherApprovalHistory = pgTable("voucher_approval_history", {
+  id: serial("id").primaryKey(),
+  voucherId: integer("voucher_id").notNull().references(() => vouchers.id, {
+    onDelete: "cascade",
+  }),
+  fromStatusId: integer("from_status_id").references(() => voucherStatus.id),
+  toStatusId: integer("to_status_id").notNull().references(() => voucherStatus.id),
+  actionName: varchar("action_name", { length: 50 }).notNull(),
+  actionById: integer("action_by_id").notNull().references(() => users.id),
+  comments: text("comments"),
+  actionDate: timestamp("action_date").defaultNow().notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const voucherEditHistory = pgTable("voucher_edit_history", {
+  id: serial("id").primaryKey(),
+  voucherId: integer("voucher_id").notNull().references(() => vouchers.id, { onDelete: "cascade" }),
+  editedById: integer("edited_by_id").notNull().references(() => users.id),
+  fieldName: varchar("field_name", { length: 100 }).notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  editDate: timestamp("edit_date").defaultNow().notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+});
+---END---
+export const ledgerPostings = pgTable("ledger_postings", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  voucherId: integer("voucher_id").notNull().references(() => vouchers.id),
+  voucherItemId: integer("voucher_item_id").notNull().references(() => voucherItems.id),
+  accountId: integer("account_id").notNull().references(() => chartOfAccounts.id),
+  postingDate: date("posting_date").notNull(),
+  debitAmount: numeric("debit_amount", { precision: 15, scale: 2 }).default("0").notNull(),
+  creditAmount: numeric("credit_amount", { precision: 15, scale: 2 }).default("0").notNull(),
+  narration: text("narration"),
+  postedById: integer("posted_by_id").references(() => users.id),
+  fiscalYearId: integer("fiscal_year_id").references(() => fiscalYears.id),
+  accountingPeriodId: integer("accounting_period_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const ledgerOpeningBalances = pgTable("ledger_opening_balances", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  accountId: integer("account_id").notNull().references(() => chartOfAccounts.id),
+  fiscalYearId: integer("fiscal_year_id").notNull().references(() => fiscalYears.id),
+  openingDebit: numeric("opening_debit", { precision: 15, scale: 2 }).default("0").notNull(),
+  openingCredit: numeric("opening_credit", { precision: 15, scale: 2 }).default("0").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    uniqueBalance: unique().on(table.tenantId, table.accountId, table.fiscalYearId),
+  };
+});
+---END---
+export const postingProfiles = pgTable("posting_profiles", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  originModule: varchar("origin_module", { length: 50 }).notNull(),
+  originType: varchar("origin_type", { length: 50 }).notNull(),
+  voucherTypeId: integer("voucher_type_id").notNull().references(() => voucherTypes.id),
+  version: integer("version").notNull().default(1),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const postingProfileLines = pgTable("posting_profile_lines", {
+  id: serial("id").primaryKey(),
+  profileId: integer("profile_id").notNull().references(() => postingProfiles.id, { onDelete: "cascade" }),
+  lineNumber: integer("line_number").notNull(),
+  accountCode: varchar("account_code", { length: 20 }).notNull(),
+  accountId: integer("account_id").references(() => chartOfAccounts.id),
+  debitFormula: varchar("debit_formula", { length: 200 }),
+  creditFormula: varchar("credit_formula", { length: 200 }),
+  description: text("description"),
+  costCenterField: varchar("cost_center_field", { length: 100 }),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+});
+---END---
+export const financialStatementTemplates = pgTable("financial_statement_templates", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  type: varchar("type", { length: 50 }).notNull(), // balance_sheet, income_statement, cash_flow
+  description: text("description"),
+  isDefault: boolean("is_default").default(false),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    tenantNameTypeUnq: unique().on(table.tenantId, table.name, table.type),
+  };
+});
+---END---
+export const financialStatementSections = pgTable("financial_statement_sections", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  templateId: integer("template_id").notNull().references(() => financialStatementTemplates.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  type: varchar("type", { length: 50 }).notNull(), // header, calculation, accounts
+  formula: text("formula"), // Used for calculation sections
+  parentSectionId: integer("parent_section_id").references(() => financialStatementSections.id),
+  displayOrder: integer("display_order").default(0).notNull(),
+  indentLevel: integer("indent_level").default(0).notNull(),
+  showTotal: boolean("show_total").default(true),
+  isNegative: boolean("is_negative").default(false), // Indicates if the section should display as negative
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const financialStatementSectionAccounts = pgTable("financial_statement_section_accounts", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  sectionId: integer("section_id").notNull().references(() => financialStatementSections.id),
+  accountId: integer("account_id").notNull().references(() => chartOfAccounts.id),
+  includeSubAccounts: boolean("include_sub_accounts").default(true),
+  isNegative: boolean("is_negative").default(false), // Flip sign of account amount
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    sectionAccountUnq: unique().on(table.sectionId, table.accountId),
+  };
+});
+---END---
+export const financialInsights = pgTable("financial_insights", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  insightType: varchar("insight_type", { length: 50 }).notNull(), // profitability, liquidity, growth, etc.
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  recommendations: text("recommendations").array(),
+  metrics: jsonb("metrics"), // Relevant financial metrics
+  severity: varchar("severity", { length: 20 }), // info, warning, critical
+  confidence: numeric("confidence", { precision: 5, scale: 2 }),
+  periodStart: date("period_start"),
+  periodEnd: date("period_end"),
+  comparisonPeriodStart: date("comparison_period_start"),
+  comparisonPeriodEnd: date("comparison_period_end"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const achievementBadges = pgTable("achievement_badges", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description").notNull(),
+  icon: varchar("icon", { length: 50 }).notNull(),
+  category: varchar("category", { length: 50 }).notNull(), // productivity, quality, efficiency, collaboration
+  maxLevel: integer("max_level").default(1).notNull(),
+  thresholds: jsonb("thresholds").notNull(), // Array of point thresholds for each level
+  colorClass: varchar("color_class", { length: 50 }).notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const userAchievements = pgTable("user_achievements", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  badgeId: integer("badge_id").notNull().references(() => achievementBadges.id),
+  currentLevel: integer("current_level").default(0).notNull(),
+  progress: integer("progress").default(0).notNull(), // Percentage progress to next level
+  pointsEarned: integer("points_earned").default(0).notNull(),
+  unlocked: boolean("unlocked").default(false).notNull(),
+  dateUnlocked: timestamp("date_unlocked"),
+  dateLevelUp: timestamp("date_level_up"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    userBadgeUnique: unique().on(table.userId, table.badgeId, table.tenantId),
+  }
+});
+---END---
+export const userPerformanceMetrics = pgTable("user_performance_metrics", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  metricType: varchar("metric_type", { length: 50 }).notNull(), // tasks_completed, quality_score, efficiency_rate, etc.
+  value: integer("value").notNull(),
+  date: timestamp("date").defaultNow().notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const achievementActivityLogs = pgTable("achievement_activity_logs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  badgeId: integer("badge_id").notNull().references(() => achievementBadges.id),
+  activityType: varchar("activity_type", { length: 50 }).notNull(), // unlock, level_up, progress
+  oldLevel: integer("old_level"),
+  newLevel: integer("new_level"),
+  oldProgress: integer("old_progress"),
+  newProgress: integer("new_progress"),
+  pointsAwarded: integer("points_awarded"),
+  message: text("message"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const reportFiles = pgTable("report_files", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  reportId: integer("report_id"),
+  jobId: varchar("job_id", { length: 255 }).notNull(),
+  fileName: varchar("file_name", { length: 500 }).notNull(),
+  filePath: varchar("file_path", { length: 1000 }).notNull(),
+  fileSize: integer("file_size"),
+  mimeType: varchar("mime_type", { length: 100 }).default("application/pdf").notNull(),
+  status: varchar("status", { length: 50 }).default("pending").notNull(),
+  errorMessage: text("error_message"),
+  generatedBy: integer("generated_by").notNull().references(() => users.id),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const processingUnits = pgTable("processing_units", {
+  id: serial("id").primaryKey(),
+  unitCode: varchar("unit_code", { length: 20 }).notNull().unique(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
+  address: text("address"),
+  contactPerson: varchar("contact_person", { length: 100 }),
+  contactPhone: varchar("contact_phone", { length: 50 }),
+  contactEmail: varchar("contact_email", { length: 100 }),
+  country: varchar("country", { length: 50 }),
+  capabilities: text("capabilities").array(),
+  certifications: text("certifications").array(),
+  averageLeadTime: integer("average_lead_time"),
+  qualityRating: numeric("quality_rating"),
+  processLossRate: numeric("process_loss_rate").default("0"),
+  costPerUnit: numeric("cost_per_unit").default("0"),
+  costCurrency: varchar("cost_currency", { length: 3 }).default("BDT"),
+  capacity: numeric("capacity"),
+  capacityUnit: varchar("capacity_unit", { length: 20 }),
+  vendorId: integer("vendor_id").references(() => vendors.id),
+  isInternal: boolean("is_internal").default(false),
+  isActive: boolean("is_active").default(true).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const purchaseOrders = pgTable("purchase_orders", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  poNumber: varchar("po_number", { length: 30 }).notNull().unique(),
+  supplierId: integer("supplier_id").notNull().references(() => vendors.id),
+  requisitionId: integer("requisition_id"),
+  orderDate: date("order_date"),
+  expectedDeliveryDate: date("expected_delivery_date"),
+  currency: varchar("currency", { length: 3 }),
+  exchangeRate: numeric("exchange_rate"),
+  subtotal: numeric("subtotal"),
+  taxAmount: numeric("tax_amount"),
+  shippingCharges: numeric("shipping_charges"),
+  totalAmount: numeric("total_amount"),
+  // @deprecated Use workflowStatus instead. Will be removed after migration.
+  status: varchar("status", { length: 30 }).default("draft"),
+  workflowStatus: varchar("workflow_status", { length: 30 }).default("DRAFT"),
+  workflowInstanceId: integer("workflow_instance_id").references(() => workflowInstances.id),
+  paymentTerms: varchar("payment_terms", { length: 100 }),
+  deliveryAddress: text("delivery_address"),
+  notes: text("notes"),
+  createdBy: integer("created_by").references(() => users.id),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  btbLcId: integer("btb_lc_id"),
+  exportOrderId: integer("export_order_id"),
+});
+---END---
+export const purchaseOrderItems = pgTable("purchase_order_items", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  poId: integer("po_id").notNull().references(() => purchaseOrders.id, { onDelete: "cascade" }),
+  itemId: integer("item_id").notNull().references(() => items.id),
+  quantity: numeric("quantity").notNull(),
+  unitPrice: numeric("unit_price").notNull(),
+  discountPercent: numeric("discount_percent"),
+  taxPercent: numeric("tax_percent"),
+  lineTotal: numeric("line_total").notNull(),
+  receivedQuantity: numeric("received_quantity"),
+  unitId: integer("unit_id"),
+  remarks: text("remarks"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const goodsReceivingNotes = pgTable("goods_receiving_notes", {
+  id: serial("id").primaryKey(),
+  grnNumber: varchar("grn_number", { length: 30 }).notNull().unique(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  purchaseOrderId: integer("purchase_order_id").references(() => purchaseOrders.id),
+  vendorId: integer("vendor_id").notNull().references(() => vendors.id),
+  warehouseId: integer("warehouse_id").notNull().references(() => warehouses.id),
+  receivingDate: date("receiving_date").notNull(),
+  status: varchar("status", { length: 30 }).notNull().default("draft"),
+  invoiceNumber: varchar("invoice_number", { length: 50 }),
+  invoiceDate: date("invoice_date"),
+  invoiceAmount: numeric("invoice_amount"),
+  challanNumber: varchar("challan_number", { length: 50 }),
+  vehicleNumber: varchar("vehicle_number", { length: 30 }),
+  transporterName: varchar("transporter_name", { length: 100 }),
+  receivedBy: integer("received_by").notNull().references(() => users.id),
+  inspectedBy: integer("inspected_by").references(() => users.id),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  notes: text("notes"),
+  qualityNotes: text("quality_notes"),
+  workflowStatus: varchar("workflow_status", { length: 30 }).default("DRAFT"),
+  workflowInstanceId: integer("workflow_instance_id").references(() => workflowInstances.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const grnItems = pgTable("grn_items", {
+  id: serial("id").primaryKey(),
+  grnId: integer("grn_id").notNull().references(() => goodsReceivingNotes.id, { onDelete: "cascade" }),
+  purchaseOrderItemId: integer("purchase_order_item_id").references(() => purchaseOrderItems.id),
+  itemId: integer("item_id").notNull().references(() => items.id),
+  variantId: integer("variant_id").references(() => itemVariants.id),
+  orderedQuantity: numeric("ordered_quantity"),
+  receivedQuantity: numeric("received_quantity").notNull(),
+  acceptedQuantity: numeric("accepted_quantity"),
+  rejectedQuantity: numeric("rejected_quantity").default("0"),
+  unitId: integer("unit_id").notNull().references(() => itemUnits.id),
+  unitCost: numeric("unit_cost").notNull(),
+  totalCost: numeric("total_cost").notNull(),
+  batchNumber: varchar("batch_number", { length: 50 }),
+  expiryDate: date("expiry_date"),
+  qualityStatus: varchar("quality_status", { length: 30 }).default("pending"),
+  qualityNotes: text("quality_notes"),
+  locationCode: varchar("location_code", { length: 50 }),
+  postedQuantity: numeric("posted_quantity").default("0"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const manufacturingOrders = pgTable("manufacturing_orders", {
+  id: serial("id").primaryKey(),
+  moNumber: varchar("mo_number", { length: 30 }).notNull().unique(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  finishedItemId: integer("finished_item_id").notNull().references(() => items.id),
+  finishedVariantId: integer("finished_variant_id").references(() => itemVariants.id),
+  bomId: integer("bom_id").references(() => billOfMaterials.id),
+  orderId: integer("order_id").references(() => orders.id),
+  plannedQuantity: numeric("planned_quantity").notNull(),
+  completedQuantity: numeric("completed_quantity").default("0"),
+  rejectedQuantity: numeric("rejected_quantity").default("0"),
+  unitId: integer("unit_id").notNull().references(() => itemUnits.id),
+  status: varchar("status", { length: 30 }).notNull().default("draft"),
+  priority: varchar("priority", { length: 20 }).default("normal"),
+  plannedStartDate: date("planned_start_date"),
+  plannedEndDate: date("planned_end_date"),
+  actualStartDate: date("actual_start_date"),
+  actualEndDate: date("actual_end_date"),
+  currentStage: varchar("current_stage", { length: 50 }),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  totalMaterialCost: numeric("total_material_cost").default("0"),
+  totalProcessingCost: numeric("total_processing_cost").default("0"),
+  totalOverheadCost: numeric("total_overhead_cost").default("0"),
+  totalCost: numeric("total_cost").default("0"),
+  costPerUnit: numeric("cost_per_unit").default("0"),
+  totalProcessLoss: numeric("total_process_loss").default("0"),
+  processLossPercentage: numeric("process_loss_percentage").default("0"),
+  notes: text("notes"),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const manufacturingStages = pgTable("manufacturing_stages", {
+  id: serial("id").primaryKey(),
+  manufacturingOrderId: integer("manufacturing_order_id").notNull().references(() => manufacturingOrders.id, { onDelete: "cascade" }),
+  stageNumber: integer("stage_number").notNull(),
+  stageName: varchar("stage_name", { length: 50 }).notNull(),
+  stageType: varchar("stage_type", { length: 30 }).notNull(),
+  processingUnitId: integer("processing_unit_id").references(() => processingUnits.id),
+  status: varchar("status", { length: 30 }).notNull().default("pending"),
+  inputQuantity: numeric("input_quantity"),
+  outputQuantity: numeric("output_quantity"),
+  processLoss: numeric("process_loss").default("0"),
+  processLossPercentage: numeric("process_loss_percentage").default("0"),
+  expectedLossPercentage: numeric("expected_loss_percentage").default("0"),
+  inputItemId: integer("input_item_id").references(() => items.id),
+  outputItemId: integer("output_item_id").references(() => items.id),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  processingCost: numeric("processing_cost").default("0"),
+  materialCost: numeric("material_cost").default("0"),
+  overheadCost: numeric("overhead_cost").default("0"),
+  totalStageCost: numeric("total_stage_cost").default("0"),
+  plannedStartDate: date("planned_start_date"),
+  plannedEndDate: date("planned_end_date"),
+  actualStartDate: date("actual_start_date"),
+  actualEndDate: date("actual_end_date"),
+  gatePassOut: varchar("gate_pass_out", { length: 30 }),
+  gatePassIn: varchar("gate_pass_in", { length: 30 }),
+  challanNumber: varchar("challan_number", { length: 50 }),
+  qualityCheckPassed: boolean("quality_check_passed"),
+  qualityNotes: text("quality_notes"),
+  notes: text("notes"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const stageMaterials = pgTable("stage_materials", {
+  id: serial("id").primaryKey(),
+  stageId: integer("stage_id").notNull().references(() => manufacturingStages.id, { onDelete: "cascade" }),
+  itemId: integer("item_id").notNull().references(() => items.id),
+  variantId: integer("variant_id").references(() => itemVariants.id),
+  type: varchar("type", { length: 20 }).notNull(),
+  quantity: numeric("quantity").notNull(),
+  unitId: integer("unit_id").notNull().references(() => itemUnits.id),
+  unitCost: numeric("unit_cost").default("0"),
+  totalCost: numeric("total_cost").default("0"),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  batchNumber: varchar("batch_number", { length: 50 }),
+  notes: text("notes"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const qualityInspections = pgTable("quality_inspections", {
+  id: serial("id").primaryKey(),
+  inspectionNumber: varchar("inspection_number", { length: 30 }).notNull().unique(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  sourceType: varchar("source_type", { length: 30 }).notNull(),
+  sourceId: integer("source_id").notNull(),
+  itemId: integer("item_id").notNull().references(() => items.id),
+  variantId: integer("variant_id").references(() => itemVariants.id),
+  inspectionDate: date("inspection_date").notNull(),
+  inspectedBy: integer("inspected_by").notNull().references(() => users.id),
+  sampleSize: numeric("sample_size"),
+  totalQuantity: numeric("total_quantity").notNull(),
+  passedQuantity: numeric("passed_quantity").default("0"),
+  failedQuantity: numeric("failed_quantity").default("0"),
+  result: varchar("result", { length: 20 }).notNull().default("pending"),
+  defectTypes: text("defect_types").array(),
+  defectDetails: jsonb("defect_details"),
+  aqlLevel: varchar("aql_level", { length: 10 }),
+  notes: text("notes"),
+  images: text("images").array(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const inventoryInsights = pgTable("inventory_insights", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  insightType: varchar("insight_type", { length: 50 }).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  recommendations: text("recommendations").array(),
+  metrics: jsonb("metrics"),
+  severity: varchar("severity", { length: 20 }).default("info"),
+  confidence: numeric("confidence"),
+  relatedItemId: integer("related_item_id").references(() => items.id),
+  relatedOrderId: integer("related_order_id").references(() => manufacturingOrders.id),
+  isRead: boolean("is_read").default(false),
+  isDismissed: boolean("is_dismissed").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const emailVerificationTokens = pgTable("email_verification_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const adminUsers = pgTable("admin_users", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  role: text("role").notNull().default("support"), // super_admin, support, billing
+  isActive: boolean("is_active").default(true).notNull(),
+  lastLogin: timestamp("last_login"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const supportTickets = pgTable("support_tickets", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  userId: integer("user_id").references(() => users.id),
+  assignedAdminId: integer("assigned_admin_id").references(() => adminUsers.id),
+  subject: text("subject").notNull(),
+  description: text("description").notNull(),
+  status: text("status").notNull().default("open"), // open, in_progress, resolved, closed
+  priority: text("priority").notNull().default("medium"), // low, medium, high, critical
+  category: text("category").default("general"), // general, billing, technical, feature_request
+  closedAt: timestamp("closed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const ticketComments = pgTable("ticket_comments", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").notNull().references(() => supportTickets.id),
+  authorType: text("author_type").notNull(), // admin, user
+  authorId: integer("author_id").notNull(),
+  content: text("content").notNull(),
+  isInternal: boolean("is_internal").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const billingRecords = pgTable("billing_records", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  planName: text("plan_name").notNull(),
+  amount: integer("amount").notNull(), // in BDT paisa
+  currency: text("currency").notNull().default("BDT"),
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  status: text("status").notNull().default("pending"), // pending, paid, overdue, cancelled
+  paymentMethod: text("payment_method"),
+  paymentReference: text("payment_reference"),
+  invoiceNumber: text("invoice_number"),
+  notes: text("notes"),
+  paidAt: timestamp("paid_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const adminAuditLogs = pgTable("admin_audit_logs", {
+  id: serial("id").primaryKey(),
+  adminId: integer("admin_id").references(() => adminUsers.id),
+  action: text("action").notNull(),
+  entityType: text("entity_type"), // tenant, subscription, user, ticket, billing
+  entityId: integer("entity_id"),
+  tenantId: integer("tenant_id").references(() => tenants.id),
+  details: jsonb("details"),
+  ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const conversations = pgTable("conversations", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+---END---
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+---END---
+export const budgets = pgTable("budgets", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  fiscalYearId: integer("fiscal_year_id").notNull(),
+  name: text("budget_name").notNull(),
+  description: text("description"),
+  budgetType: text("budget_type").notNull().default("annual"),
+  status: text("status").notNull().default("draft"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+---END---
+export const budgetItems = pgTable("budget_items", {
+  id: serial("id").primaryKey(),
+  budgetId: integer("budget_id").notNull().references(() => budgets.id, { onDelete: "cascade" }),
+  accountId: integer("account_id").notNull(),
+  groupId: integer("group_id"),
+  month1: numeric("month1", { precision: 15, scale: 2 }).default("0"),
+  month2: numeric("month2", { precision: 15, scale: 2 }).default("0"),
+  month3: numeric("month3", { precision: 15, scale: 2 }).default("0"),
+  month4: numeric("month4", { precision: 15, scale: 2 }).default("0"),
+  month5: numeric("month5", { precision: 15, scale: 2 }).default("0"),
+  month6: numeric("month6", { precision: 15, scale: 2 }).default("0"),
+  month7: numeric("month7", { precision: 15, scale: 2 }).default("0"),
+  month8: numeric("month8", { precision: 15, scale: 2 }).default("0"),
+  month9: numeric("month9", { precision: 15, scale: 2 }).default("0"),
+  month10: numeric("month10", { precision: 15, scale: 2 }).default("0"),
+  month11: numeric("month11", { precision: 15, scale: 2 }).default("0"),
+  month12: numeric("month12", { precision: 15, scale: 2 }).default("0"),
+  annualTotal: numeric("annual_total", { precision: 15, scale: 2 }).default("0"),
+  tenantId: integer("tenant_id").notNull(),
+});
+---END---
+export const erpPermissions = pgTable("erp_permissions", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  module: varchar("module", { length: 50 }).notNull(),
+  docType: varchar("doc_type", { length: 50 }).notNull(),
+  action: varchar("action", { length: 50 }).notNull(),
+  displayName: varchar("display_name", { length: 200 }).notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 50 }).default("document"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const rolePermissions = pgTable("role_permissions", {
+  id: serial("id").primaryKey(),
+  roleId: integer("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+  permissionId: integer("permission_id").notNull().references(() => erpPermissions.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  grantedAt: timestamp("granted_at").defaultNow().notNull(),
+  grantedBy: integer("granted_by").references(() => users.id),
+}, (table) => ({
+  rolePermUnique: unique().on(table.roleId, table.permissionId),
+}));
+
+export const userRoles = pgTable("user_roles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  roleId: integer("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  isPrimary: boolean("is_primary").default(false).notNull(),
+  effectiveFrom: timestamp("effective_from").defaultNow().notNull(),
+  effectiveTo: timestamp("effective_to"),
+  assignedAt: timestamp("assigned_at").defaultNow().notNull(),
+  assignedBy: integer("assigned_by").references(() => users.id),
+}, (table) => ({
+  userRoleUnique: unique().on(table.userId, table.roleId),
+}));
+
+export const userAccessScopes = pgTable("user_access_scopes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  scopeType: varchar("scope_type", { length: 50 }).notNull(),
+  scopeValueId: integer("scope_value_id").notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userScopeUnique: unique().on(table.userId, table.scopeType, table.scopeValueId),
+}));
+
+export const roleAccessScopes = pgTable("role_access_scopes", {
+  id: serial("id").primaryKey(),
+  roleId: integer("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+  scopeType: varchar("scope_type", { length: 50 }).notNull(),
+  scopeValueId: integer("scope_value_id").notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  roleScopeUnique: unique().on(table.roleId, table.scopeType, table.scopeValueId),
+}));
+
+export const documentStatuses = pgTable("document_statuses", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 30 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  color: varchar("color", { length: 20 }).default("#808080"),
+  sequence: integer("sequence").default(0).notNull(),
+  isTerminal: boolean("is_terminal").default(false).notNull(),
+  isEditable: boolean("is_editable").default(false).notNull(),
+  isDeletable: boolean("is_deletable").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const userRoles = pgTable("user_roles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  roleId: integer("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  isPrimary: boolean("is_primary").default(false).notNull(),
+  effectiveFrom: timestamp("effective_from").defaultNow().notNull(),
+  effectiveTo: timestamp("effective_to"),
+  assignedAt: timestamp("assigned_at").defaultNow().notNull(),
+  assignedBy: integer("assigned_by").references(() => users.id),
+}, (table) => ({
+  userRoleUnique: unique().on(table.userId, table.roleId),
+}));
+
+export const userAccessScopes = pgTable("user_access_scopes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  scopeType: varchar("scope_type", { length: 50 }).notNull(),
+  scopeValueId: integer("scope_value_id").notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userScopeUnique: unique().on(table.userId, table.scopeType, table.scopeValueId),
+}));
+
+export const roleAccessScopes = pgTable("role_access_scopes", {
+  id: serial("id").primaryKey(),
+  roleId: integer("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+  scopeType: varchar("scope_type", { length: 50 }).notNull(),
+  scopeValueId: integer("scope_value_id").notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  roleScopeUnique: unique().on(table.roleId, table.scopeType, table.scopeValueId),
+}));
+
+export const documentStatuses = pgTable("document_statuses", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 30 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  color: varchar("color", { length: 20 }).default("#808080"),
+  sequence: integer("sequence").default(0).notNull(),
+  isTerminal: boolean("is_terminal").default(false).notNull(),
+  isEditable: boolean("is_editable").default(false).notNull(),
+  isDeletable: boolean("is_deletable").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const userAccessScopes = pgTable("user_access_scopes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  scopeType: varchar("scope_type", { length: 50 }).notNull(),
+  scopeValueId: integer("scope_value_id").notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userScopeUnique: unique().on(table.userId, table.scopeType, table.scopeValueId),
+}));
+
+export const roleAccessScopes = pgTable("role_access_scopes", {
+  id: serial("id").primaryKey(),
+  roleId: integer("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+  scopeType: varchar("scope_type", { length: 50 }).notNull(),
+  scopeValueId: integer("scope_value_id").notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  roleScopeUnique: unique().on(table.roleId, table.scopeType, table.scopeValueId),
+}));
+
+export const documentStatuses = pgTable("document_statuses", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 30 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  color: varchar("color", { length: 20 }).default("#808080"),
+  sequence: integer("sequence").default(0).notNull(),
+  isTerminal: boolean("is_terminal").default(false).notNull(),
+  isEditable: boolean("is_editable").default(false).notNull(),
+  isDeletable: boolean("is_deletable").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const roleAccessScopes = pgTable("role_access_scopes", {
+  id: serial("id").primaryKey(),
+  roleId: integer("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+  scopeType: varchar("scope_type", { length: 50 }).notNull(),
+  scopeValueId: integer("scope_value_id").notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  roleScopeUnique: unique().on(table.roleId, table.scopeType, table.scopeValueId),
+}));
+
+export const documentStatuses = pgTable("document_statuses", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 30 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  color: varchar("color", { length: 20 }).default("#808080"),
+  sequence: integer("sequence").default(0).notNull(),
+  isTerminal: boolean("is_terminal").default(false).notNull(),
+  isEditable: boolean("is_editable").default(false).notNull(),
+  isDeletable: boolean("is_deletable").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const documentStatuses = pgTable("document_statuses", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 30 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  color: varchar("color", { length: 20 }).default("#808080"),
+  sequence: integer("sequence").default(0).notNull(),
+  isTerminal: boolean("is_terminal").default(false).notNull(),
+  isEditable: boolean("is_editable").default(false).notNull(),
+  isDeletable: boolean("is_deletable").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const workflowTransitions = pgTable("workflow_transitions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  docType: varchar("doc_type", { length: 50 }).notNull(),
+  fromStatusCode: varchar("from_status_code", { length: 30 }),
+  toStatusCode: varchar("to_status_code", { length: 30 }).notNull(),
+  actionName: varchar("action_name", { length: 50 }).notNull(),
+  requiredPermissionKey: varchar("required_permission_key", { length: 100 }),
+  sodGroup: varchar("sod_group", { length: 50 }),
+  isOptional: boolean("is_optional").default(false).notNull(),
+  sequence: integer("sequence").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const approvalMatrix = pgTable("approval_matrix", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  docType: varchar("doc_type", { length: 50 }).notNull(),
+  minAmount: numeric("min_amount", { precision: 15, scale: 2 }).default("0").notNull(),
+  maxAmount: numeric("max_amount", { precision: 15, scale: 2 }),
+  currency: varchar("currency", { length: 10 }).default("BDT"),
+  approvalLevel: integer("approval_level").notNull().default(1),
+  ruleType: varchar("rule_type", { length: 20 }).default("ROLE").notNull(),
+  requiredRoleId: integer("required_role_id").references(() => roles.id),
+  requiredUserId: integer("required_user_id").references(() => users.id),
+  requiredPermissionKey: varchar("required_permission_key", { length: 100 }),
+  approvalMode: varchar("approval_mode", { length: 20 }).default("ANY_ONE").notNull(),
+  requiredCount: integer("required_count").default(1).notNull(),
+  scopeType: varchar("scope_type", { length: 50 }),
+  scopeValueId: integer("scope_value_id"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const sodRules = pgTable("sod_rules", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  docType: varchar("doc_type", { length: 50 }).notNull(),
+  ruleName: varchar("rule_name", { length: 100 }).notNull(),
+  conflictingActions: jsonb("conflicting_actions").notNull(),
+  sodMode: varchar("sod_mode", { length: 20 }).default("STANDARD").notNull(),
+  isStrict: boolean("is_strict").default(true).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const documentLocks = pgTable("document_locks", {
+  id: serial("id").primaryKey(),
+  docType: varchar("doc_type", { length: 50 }).notNull(),
+  docId: integer("doc_id").notNull(),
+  lockedBy: integer("locked_by").notNull().references(() => users.id),
+  lockToken: varchar("lock_token", { length: 100 }).notNull(),
+  lockedAt: timestamp("locked_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  lockReason: varchar("lock_reason", { length: 255 }),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+}, (table) => ({
+  docLockUnique: unique().on(table.docType, table.docId),
+}));
+
+export const documentWorkflowHistory = pgTable("document_workflow_history", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  docType: varchar("doc_type", { length: 50 }).notNull(),
+  docId: integer("doc_id").notNull(),
+  action: varchar("action", { length: 50 }).notNull(),
+  controlStep: varchar("control_step", { length: 30 }),
+  fromStatus: varchar("from_status", { length: 30 }),
+  toStatus: varchar("to_status", { length: 30 }).notNull(),
+  performedBy: integer("performed_by").notNull().references(() => users.id),
+  actorRoleId: integer("actor_role_id").references(() => roles.id),
+  performedAt: timestamp("performed_at").defaultNow().notNull(),
+  comments: text("comments"),
+  reason: text("reason"),
+  isOverride: boolean("is_override").default(false).notNull(),
+  overrideReason: text("override_reason"),
+  ipAddress: varchar("ip_address", { length: 50 }),
+  amountAtAction: numeric("amount_at_action", { precision: 15, scale: 2 }),
+  metadata: jsonb("metadata"),
+  requestId: varchar("request_id", { length: 100 }),
+});
+---END---
+export const documentWorkflowHistory = pgTable("document_workflow_history", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  docType: varchar("doc_type", { length: 50 }).notNull(),
+  docId: integer("doc_id").notNull(),
+  action: varchar("action", { length: 50 }).notNull(),
+  controlStep: varchar("control_step", { length: 30 }),
+  fromStatus: varchar("from_status", { length: 30 }),
+  toStatus: varchar("to_status", { length: 30 }).notNull(),
+  performedBy: integer("performed_by").notNull().references(() => users.id),
+  actorRoleId: integer("actor_role_id").references(() => roles.id),
+  performedAt: timestamp("performed_at").defaultNow().notNull(),
+  comments: text("comments"),
+  reason: text("reason"),
+  isOverride: boolean("is_override").default(false).notNull(),
+  overrideReason: text("override_reason"),
+  ipAddress: varchar("ip_address", { length: 50 }),
+  amountAtAction: numeric("amount_at_action", { precision: 15, scale: 2 }),
+  metadata: jsonb("metadata"),
+  requestId: varchar("request_id", { length: 100 }),
+});
+---END---
+export const documentVersions = pgTable("document_versions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  docType: varchar("doc_type", { length: 50 }).notNull(),
+  docId: integer("doc_id").notNull(),
+  versionNumber: integer("version_number").notNull().default(1),
+  parentVersionId: integer("parent_version_id").references(() => documentVersions.id),
+  amendmentReason: text("amendment_reason"),
+  snapshotData: jsonb("snapshot_data").notNull(),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const workflowDefinitions = pgTable("workflow_definitions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  docType: varchar("doc_type", { length: 50 }).notNull(),
+  version: integer("version").notNull().default(1),
+  definitionJson: jsonb("definition_json").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  tenantDocVersionUnique: unique().on(table.tenantId, table.docType, table.version),
+}));
+
+export const workflowInstances = pgTable("workflow_instances", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  docType: varchar("doc_type", { length: 50 }).notNull(),
+  docId: integer("doc_id").notNull(),
+  workflowDefinitionId: integer("workflow_definition_id").notNull().references(() => workflowDefinitions.id),
+  currentStatus: varchar("current_status", { length: 30 }).notNull().default("DRAFT"),
+  currentOwnerRoleId: integer("current_owner_role_id").references(() => roles.id),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+---END---
+export const workflowInstances = pgTable("workflow_instances", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  docType: varchar("doc_type", { length: 50 }).notNull(),
+  docId: integer("doc_id").notNull(),
+  workflowDefinitionId: integer("workflow_definition_id").notNull().references(() => workflowDefinitions.id),
+  currentStatus: varchar("current_status", { length: 30 }).notNull().default("DRAFT"),
+  currentOwnerRoleId: integer("current_owner_role_id").references(() => roles.id),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+---END---
+export const auditLogs = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  entityType: varchar("entity_type", { length: 50 }).notNull(),
+  entityId: integer("entity_id").notNull(),
+  action: varchar("action", { length: 30 }).notNull(),
+  performedBy: integer("performed_by").notNull().references(() => users.id),
+  performedAt: timestamp("performed_at").defaultNow().notNull(),
+  oldValues: jsonb("old_values"),
+  newValues: jsonb("new_values"),
+  diffJson: jsonb("diff_json"),
+  ipAddress: varchar("ip_address", { length: 50 }),
+  userAgent: text("user_agent"),
+  requestId: varchar("request_id", { length: 100 }),
+  metadata: jsonb("metadata"),
+});
+---END---
+export const parties = pgTable("parties", {
+  id: serial("id").primaryKey(),
+  partyCode: varchar("party_code", { length: 20 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  partyType: varchar("party_type", { length: 20 }).notNull(),
+  ledgerAccountId: integer("ledger_account_id").references(() => chartOfAccounts.id),
+  customerId: integer("customer_id").references(() => customers.id),
+  contactPerson: varchar("contact_person", { length: 255 }),
+  email: varchar("email", { length: 255 }),
+  phone: varchar("phone", { length: 50 }),
+  address: text("address"),
+  city: varchar("city", { length: 100 }),
+  country: varchar("country", { length: 100 }),
+  creditPeriodDays: integer("credit_period_days").default(0),
+  creditLimit: numeric("credit_limit", { precision: 15, scale: 2 }).default("0"),
+  defaultPaymentTerms: varchar("default_payment_terms", { length: 100 }),
+  groupLabel: varchar("group_label", { length: 100 }),
+  taxId: varchar("tax_id", { length: 50 }),
+  bankName: varchar("bank_name", { length: 255 }),
+  bankAccountNumber: varchar("bank_account_number", { length: 50 }),
+  bankBranch: varchar("bank_branch", { length: 255 }),
+  bankRoutingNumber: varchar("bank_routing_number", { length: 20 }),
+  isActive: boolean("is_active").default(true).notNull(),
+  notes: text("notes"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const billReferences = pgTable("bill_references", {
+  id: serial("id").primaryKey(),
+  billNumber: varchar("bill_number", { length: 50 }).notNull(),
+  billDate: date("bill_date").notNull(),
+  dueDate: date("due_date"),
+  billType: varchar("bill_type", { length: 20 }).notNull(),
+  partyId: integer("party_id").notNull().references(() => parties.id),
+  accountId: integer("account_id").notNull().references(() => chartOfAccounts.id),
+  originalAmount: numeric("original_amount", { precision: 15, scale: 2 }).notNull(),
+  pendingAmount: numeric("pending_amount", { precision: 15, scale: 2 }).notNull(),
+  sourceVoucherId: integer("source_voucher_id").references(() => vouchers.id),
+  sourceDocType: varchar("source_doc_type", { length: 50 }),
+  sourceDocNumber: varchar("source_doc_number", { length: 50 }),
+  status: varchar("status", { length: 20 }).default("OPEN").notNull(),
+  creditPeriodDays: integer("credit_period_days"),
+  isOverdue: boolean("is_overdue").default(false),
+  notes: text("notes"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const billAllocations = pgTable("bill_allocations", {
+  id: serial("id").primaryKey(),
+  billReferenceId: integer("bill_reference_id").references(() => billReferences.id),
+  voucherId: integer("voucher_id").notNull().references(() => vouchers.id),
+  voucherItemId: integer("voucher_item_id").references(() => voucherItems.id),
+  allocationType: varchar("allocation_type", { length: 20 }).notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  partyId: integer("party_id").notNull().references(() => parties.id),
+  accountId: integer("account_id").notNull().references(() => chartOfAccounts.id),
+  allocationDate: date("allocation_date").notNull(),
+  notes: text("notes"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const costCenterCategories = pgTable("cost_center_categories", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  code: varchar("code", { length: 20 }).notNull(),
+  description: text("description"),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true).notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const costCenterBudgets = pgTable("cost_center_budgets", {
+  id: serial("id").primaryKey(),
+  costCenterId: integer("cost_center_id").notNull(),
+  categoryId: integer("category_id").notNull().references(() => costCenterCategories.id),
+  description: varchar("description", { length: 255 }),
+  plannedQuantity: numeric("planned_quantity", { precision: 15, scale: 4 }),
+  plannedRate: numeric("planned_rate", { precision: 15, scale: 4 }),
+  plannedAmount: numeric("planned_amount", { precision: 15, scale: 2 }).notNull(),
+  unit: varchar("unit", { length: 50 }),
+  notes: text("notes"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const deliveryChallans = pgTable("delivery_challans", {
+  id: serial("id").primaryKey(),
+  challanNumber: varchar("challan_number", { length: 50 }).notNull(),
+  challanDate: date("challan_date").notNull(),
+  partyId: integer("party_id").references(() => parties.id),
+  customerId: integer("customer_id").references(() => customers.id),
+  orderId: integer("order_id").references(() => orders.id),
+  warehouseId: integer("warehouse_id"),
+  vehicleNumber: varchar("vehicle_number", { length: 50 }),
+  driverName: varchar("driver_name", { length: 255 }),
+  driverContact: varchar("driver_contact", { length: 50 }),
+  transporterName: varchar("transporter_name", { length: 255 }),
+  deliveryAddress: text("delivery_address"),
+  receiverName: varchar("receiver_name", { length: 255 }),
+  receiverContact: varchar("receiver_contact", { length: 50 }),
+  totalQuantity: numeric("total_quantity", { precision: 15, scale: 4 }),
+  totalAmount: numeric("total_amount", { precision: 15, scale: 2 }).default("0"),
+  currency: varchar("currency", { length: 10 }).default("BDT"),
+  workflowStatus: varchar("workflow_status", { length: 30 }).default("DRAFT"),
+  workflowInstanceId: integer("workflow_instance_id"),
+  isPosted: boolean("is_posted").default(false),
+  postedById: integer("posted_by_id").references(() => users.id),
+  postedAt: timestamp("posted_at"),
+  invoiceVoucherId: integer("invoice_voucher_id").references(() => vouchers.id),
+  invoiceCreated: boolean("invoice_created").default(false),
+  notes: text("notes"),
+  specialInstructions: text("special_instructions"),
+  sourceDocType: varchar("source_doc_type", { length: 30 }),
+  sourceDocId: integer("source_doc_id"),
+  isManuallyModified: boolean("is_manually_modified").default(false),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const deliveryChallanItems = pgTable("delivery_challan_items", {
+  id: serial("id").primaryKey(),
+  challanId: integer("challan_id").notNull().references(() => deliveryChallans.id, { onDelete: "cascade" }),
+  itemId: integer("item_id"),
+  itemName: varchar("item_name", { length: 255 }).notNull(),
+  itemCode: varchar("item_code", { length: 50 }),
+  description: text("description"),
+  quantity: numeric("quantity", { precision: 15, scale: 4 }).notNull(),
+  unit: varchar("unit", { length: 50 }),
+  rate: numeric("rate", { precision: 15, scale: 4 }),
+  amount: numeric("amount", { precision: 15, scale: 2 }),
+  batchNumber: varchar("batch_number", { length: 50 }),
+  color: varchar("color", { length: 50 }),
+  size: varchar("size", { length: 50 }),
+  remarks: text("remarks"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const enhancedGatePasses = pgTable("enhanced_gate_passes", {
+  id: serial("id").primaryKey(),
+  gatePassNumber: varchar("gate_pass_number", { length: 50 }).notNull(),
+  gatePassDate: date("gate_pass_date").notNull(),
+  gatePassType: varchar("gate_pass_type", { length: 10 }).notNull(),
+  partyId: integer("party_id").references(() => parties.id),
+  partyName: varchar("party_name", { length: 255 }),
+  deliveryChallanId: integer("delivery_challan_id").references(() => deliveryChallans.id),
+  grnId: integer("grn_id"),
+  purchaseOrderId: integer("purchase_order_id"),
+  orderId: integer("order_id").references(() => orders.id),
+  warehouseId: integer("warehouse_id"),
+  vehicleNumber: varchar("vehicle_number", { length: 50 }),
+  vehicleType: varchar("vehicle_type", { length: 50 }),
+  driverName: varchar("driver_name", { length: 255 }),
+  driverContact: varchar("driver_contact", { length: 50 }),
+  driverLicense: varchar("driver_license", { length: 50 }),
+  transporterName: varchar("transporter_name", { length: 255 }),
+  securityGuardName: varchar("security_guard_name", { length: 255 }),
+  securityCheckpoint: varchar("security_checkpoint", { length: 100 }),
+  guardAcknowledged: boolean("guard_acknowledged").default(false),
+  guardAcknowledgedAt: timestamp("guard_acknowledged_at"),
+  entryTime: timestamp("entry_time"),
+  exitTime: timestamp("exit_time"),
+  workflowStatus: varchar("workflow_status", { length: 30 }).default("DRAFT"),
+  workflowInstanceId: integer("workflow_instance_id"),
+  totalItems: integer("total_items").default(0),
+  totalQuantity: numeric("total_quantity", { precision: 15, scale: 4 }),
+  purpose: text("purpose"),
+  notes: text("notes"),
+  remarks: text("remarks"),
+  linkedDocType: varchar("linked_doc_type", { length: 30 }),
+  linkedDocId: integer("linked_doc_id"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdBy: integer("created_by").references(() => users.id),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const enhancedGatePassItems = pgTable("enhanced_gate_pass_items", {
+  id: serial("id").primaryKey(),
+  gatePassId: integer("gate_pass_id").notNull().references(() => enhancedGatePasses.id, { onDelete: "cascade" }),
+  itemId: integer("item_id"),
+  itemName: varchar("item_name", { length: 255 }).notNull(),
+  itemCode: varchar("item_code", { length: 50 }),
+  description: text("description"),
+  quantity: numeric("quantity", { precision: 15, scale: 4 }).notNull(),
+  unit: varchar("unit", { length: 50 }),
+  weight: numeric("weight", { precision: 15, scale: 4 }),
+  batchNumber: varchar("batch_number", { length: 50 }),
+  condition: varchar("condition", { length: 50 }).default("good"),
+  remarks: text("remarks"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const stockLedger = pgTable("stock_ledger", {
+  id: serial("id").primaryKey(),
+  docType: varchar("doc_type", { length: 30 }).notNull(),
+  docId: integer("doc_id").notNull(),
+  docNumber: varchar("doc_number", { length: 50 }),
+  postingDate: date("posting_date").notNull(),
+  itemId: integer("item_id").notNull().references(() => items.id),
+  itemCode: varchar("item_code", { length: 50 }),
+  itemName: varchar("item_name", { length: 255 }),
+  warehouseId: integer("warehouse_id"),
+  warehouseName: varchar("warehouse_name", { length: 255 }),
+  qtyIn: numeric("qty_in", { precision: 15, scale: 4 }).default("0").notNull(),
+  qtyOut: numeric("qty_out", { precision: 15, scale: 4 }).default("0").notNull(),
+  balanceQty: numeric("balance_qty", { precision: 15, scale: 4 }).default("0").notNull(),
+  rate: numeric("rate", { precision: 15, scale: 4 }).default("0"),
+  valuationRate: numeric("valuation_rate", { precision: 15, scale: 4 }).default("0"),
+  valueIn: numeric("value_in", { precision: 15, scale: 2 }).default("0"),
+  valueOut: numeric("value_out", { precision: 15, scale: 2 }).default("0"),
+  balanceValue: numeric("balance_value", { precision: 15, scale: 2 }).default("0"),
+  unit: varchar("unit", { length: 50 }),
+  batchNumber: varchar("batch_number", { length: 50 }),
+  partyId: integer("party_id").references(() => parties.id),
+  partyName: varchar("party_name", { length: 255 }),
+  remarks: text("remarks"),
+  isReversed: boolean("is_reversed").default(false),
+  reversedById: integer("reversed_by_id"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const stockAdjustments = pgTable("stock_adjustments", {
+  id: serial("id").primaryKey(),
+  adjustmentNumber: varchar("adjustment_number", { length: 50 }).notNull(),
+  adjustmentDate: date("adjustment_date").notNull(),
+  adjustmentType: varchar("adjustment_type", { length: 30 }).notNull(),
+  warehouseId: integer("warehouse_id"),
+  reason: text("reason"),
+  workflowStatus: varchar("workflow_status", { length: 30 }).default("DRAFT"),
+  notes: text("notes"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdBy: integer("created_by").references(() => users.id),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const stockAdjustmentItems = pgTable("stock_adjustment_items", {
+  id: serial("id").primaryKey(),
+  adjustmentId: integer("adjustment_id").notNull().references(() => stockAdjustments.id, { onDelete: "cascade" }),
+  itemId: integer("item_id").notNull().references(() => items.id),
+  itemCode: varchar("item_code", { length: 50 }),
+  itemName: varchar("item_name", { length: 255 }).notNull(),
+  currentQty: numeric("current_qty", { precision: 15, scale: 4 }).default("0"),
+  adjustedQty: numeric("adjusted_qty", { precision: 15, scale: 4 }).notNull(),
+  differenceQty: numeric("difference_qty", { precision: 15, scale: 4 }).notNull(),
+  rate: numeric("rate", { precision: 15, scale: 4 }).default("0"),
+  value: numeric("value", { precision: 15, scale: 2 }).default("0"),
+  unit: varchar("unit", { length: 50 }),
+  reason: text("reason"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const orderBomSnapshots = pgTable("order_bom_snapshots", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  snapshotVersion: integer("snapshot_version").notNull().default(1),
+  isLocked: boolean("is_locked").default(true).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: integer("locked_by").references(() => users.id),
+  totalEstimatedCost: numeric("total_estimated_cost", { precision: 15, scale: 2 }).default("0"),
+  notes: text("notes"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const orderBomSnapshotItems = pgTable("order_bom_snapshot_items", {
+  id: serial("id").primaryKey(),
+  snapshotId: integer("snapshot_id").notNull().references(() => orderBomSnapshots.id, { onDelete: "cascade" }),
+  itemId: integer("item_id").notNull().references(() => items.id),
+  itemCode: varchar("item_code", { length: 50 }),
+  itemName: varchar("item_name", { length: 255 }).notNull(),
+  materialType: varchar("material_type", { length: 50 }).notNull(),
+  requiredQty: numeric("required_qty", { precision: 15, scale: 4 }).notNull(),
+  wastagePercent: numeric("wastage_percent", { precision: 5, scale: 2 }).default("0"),
+  totalRequiredQty: numeric("total_required_qty", { precision: 15, scale: 4 }).notNull(),
+  unitId: integer("unit_id").references(() => itemUnits.id),
+  unitName: varchar("unit_name", { length: 50 }),
+  estimatedRate: numeric("estimated_rate", { precision: 15, scale: 4 }).default("0"),
+  estimatedCost: numeric("estimated_cost", { precision: 15, scale: 2 }).default("0"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const materialReservations = pgTable("material_reservations", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  snapshotId: integer("snapshot_id").references(() => orderBomSnapshots.id),
+  itemId: integer("item_id").notNull().references(() => items.id),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  reservedQty: numeric("reserved_qty", { precision: 15, scale: 4 }).notNull().default("0"),
+  issuedQty: numeric("issued_qty", { precision: 15, scale: 4 }).notNull().default("0"),
+  remainingQty: numeric("remaining_qty", { precision: 15, scale: 4 }).notNull().default("0"),
+  unitId: integer("unit_id").references(() => itemUnits.id),
+  status: varchar("status", { length: 20 }).notNull().default("ACTIVE"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const consumptionChangeRequests = pgTable("consumption_change_requests", {
+  id: serial("id").primaryKey(),
+  crNumber: varchar("cr_number", { length: 50 }).notNull(),
+  orderId: integer("order_id").notNull().references(() => orders.id),
+  snapshotId: integer("snapshot_id").references(() => orderBomSnapshots.id),
+  reason: text("reason").notNull(),
+  changeType: varchar("change_type", { length: 30 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("PENDING"),
+  requestedBy: integer("requested_by").notNull().references(() => users.id),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectedBy: integer("rejected_by").references(() => users.id),
+  rejectedAt: timestamp("rejected_at"),
+  rejectionReason: text("rejection_reason"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const consumptionChangeItems = pgTable("consumption_change_items", {
+  id: serial("id").primaryKey(),
+  changeRequestId: integer("change_request_id").notNull().references(() => consumptionChangeRequests.id, { onDelete: "cascade" }),
+  itemId: integer("item_id").notNull().references(() => items.id),
+  itemName: varchar("item_name", { length: 255 }).notNull(),
+  previousQty: numeric("previous_qty", { precision: 15, scale: 4 }).notNull(),
+  newQty: numeric("new_qty", { precision: 15, scale: 4 }).notNull(),
+  deltaQty: numeric("delta_qty", { precision: 15, scale: 4 }).notNull(),
+  unitName: varchar("unit_name", { length: 50 }),
+  reason: text("reason"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+export const processOrders = pgTable("process_orders", {
+  id: serial("id").primaryKey(),
+  processNumber: varchar("process_number", { length: 50 }).notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  processType: varchar("process_type", { length: 30 }).notNull(),
+  processMethod: varchar("process_method", { length: 20 }).notNull().default("in_house"),
+  orderId: integer("order_id").references(() => orders.id),
+  vendorId: integer("vendor_id").references(() => vendors.id),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  inputItemId: integer("input_item_id").notNull().references(() => items.id),
+  inputItemName: varchar("input_item_name", { length: 255 }).notNull(),
+  inputQty: numeric("input_qty", { precision: 15, scale: 4 }).notNull(),
+  inputUnitId: integer("input_unit_id").references(() => itemUnits.id),
+  inputRate: numeric("input_rate", { precision: 15, scale: 4 }).default("0"),
+  outputItemId: integer("output_item_id").notNull().references(() => items.id),
+  outputItemName: varchar("output_item_name", { length: 255 }).notNull(),
+  expectedOutputQty: numeric("expected_output_qty", { precision: 15, scale: 4 }).notNull(),
+  actualOutputQty: numeric("actual_output_qty", { precision: 15, scale: 4 }).default("0"),
+  outputUnitId: integer("output_unit_id").references(() => itemUnits.id),
+  expectedWastagePercent: numeric("expected_wastage_percent", { precision: 5, scale: 2 }).default("0"),
+  actualWastagePercent: numeric("actual_wastage_percent", { precision: 5, scale: 2 }).default("0"),
+  processLossQty: numeric("process_loss_qty", { precision: 15, scale: 4 }).default("0"),
+  processingCharges: numeric("processing_charges", { precision: 15, scale: 2 }).default("0"),
+  outputRate: numeric("output_rate", { precision: 15, scale: 4 }).default("0"),
+  totalInputValue: numeric("total_input_value", { precision: 15, scale: 2 }).default("0"),
+  totalOutputValue: numeric("total_output_value", { precision: 15, scale: 2 }).default("0"),
+  processLossValue: numeric("process_loss_value", { precision: 15, scale: 2 }).default("0"),
+  status: varchar("status", { length: 20 }).notNull().default("DRAFT"),
+  issuedAt: timestamp("issued_at"),
+  issuedBy: integer("issued_by").references(() => users.id),
+  receivedAt: timestamp("received_at"),
+  receivedBy: integer("received_by").references(() => users.id),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  remarks: text("remarks"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const warehouseTransfers = pgTable("warehouse_transfers", {
+  id: serial("id").primaryKey(),
+  transferNumber: varchar("transfer_number", { length: 50 }).notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  sourceWarehouseId: integer("source_warehouse_id").notNull().references(() => warehouses.id),
+  destinationWarehouseId: integer("destination_warehouse_id").notNull().references(() => warehouses.id),
+  transferDate: date("transfer_date").notNull(),
+  reason: text("reason"),
+  status: varchar("status", { length: 20 }).notNull().default("DRAFT"),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  shippedAt: timestamp("shipped_at"),
+  receivedAt: timestamp("received_at"),
+  receivedBy: integer("received_by").references(() => users.id),
+  notes: text("notes"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+---END---
+export const warehouseTransferItems = pgTable("warehouse_transfer_items", {
+  id: serial("id").primaryKey(),
+  transferId: integer("transfer_id").notNull().references(() => warehouseTransfers.id, { onDelete: "cascade" }),
+  itemId: integer("item_id").notNull().references(() => items.id),
+  itemCode: varchar("item_code", { length: 50 }),
+  itemName: varchar("item_name", { length: 255 }).notNull(),
+  transferQty: numeric("transfer_qty", { precision: 15, scale: 4 }).notNull(),
+  receivedQty: numeric("received_qty", { precision: 15, scale: 4 }).default("0"),
+  unitId: integer("unit_id").references(() => itemUnits.id),
+  unitName: varchar("unit_name", { length: 50 }),
+  rate: numeric("rate", { precision: 15, scale: 4 }).default("0"),
+  value: numeric("value", { precision: 15, scale: 2 }).default("0"),
+  remarks: text("remarks"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+---END---
+import { pgTable, text, serial, integer, boolean, timestamp, varchar, date, jsonb, decimal, unique } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+import { relations } from "drizzle-orm";
+import { tenants, users } from "../schema";
+
+// Commercial Inquiry Table (for initial customer inquiries)
+export const commercialInquiries = pgTable("commercial_inquiries", {
+  id: serial("id").primaryKey(),
+  inquiryNumber: varchar("inquiry_number", { length: 50 }).notNull().unique(),
+  customerId: integer("customer_id").notNull(),
+  inquiryDate: timestamp("inquiry_date").defaultNow().notNull(),
+  season: varchar("season", { length: 50 }),
+  deliveryDeadline: date("delivery_deadline"),
+  fabricRequirements: text("fabric_requirements"),
+  samplingRequirements: text("sampling_requirements"),
+  productionCapacity: integer("production_capacity"),
+  targetPrice: decimal("target_price", { precision: 10, scale: 2 }),
+  targetMarkets: varchar("target_markets", { length: 255 }),
+  complianceRequirements: text("compliance_requirements"),
+  inquiryStatus: varchar("inquiry_status", { length: 50 }).default("New").notNull(),
+  assignedTo: integer("assigned_to").references(() => users.id),
+  sustainabilityRequirements: text("sustainability_requirements"),
+  preferredColors: text("preferred_colors"),
+  specialFinishes: text("special_finishes"),
+  attachments: jsonb("attachments").$type<string[]>().default([]),
+  comments: text("comments"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+});
+
+// Commercial Quotations
+export const commercialQuotations = pgTable("commercial_quotations", {
+  id: serial("id").primaryKey(),
+  quotationNumber: varchar("quotation_number", { length: 50 }).notNull().unique(),
+  inquiryId: integer("inquiry_id").references(() => commercialInquiries.id),
+  customerId: integer("customer_id").notNull(),
+  quotationDate: timestamp("quotation_date").defaultNow().notNull(),
+  validUntil: date("valid_until").notNull(),
+  fabricDetails: text("fabric_details"),
+  productionLeadTime: integer("production_lead_time"),
+  samplingCost: decimal("sampling_cost", { precision: 10, scale: 2 }),
+  quotationStatus: varchar("quotation_status", { length: 50 }).default("Draft").notNull(),
+  paymentTerms: varchar("payment_terms", { length: 255 }),
+  shippingTerms: varchar("shipping_terms", { length: 255 }),
+  totalQuantity: integer("total_quantity"),
+  totalAmount: decimal("total_amount", { precision: 12, scale: 2 }),
+  profitMargin: decimal("profit_margin", { precision: 5, scale: 2 }),
+  currencyCode: varchar("currency_code", { length: 3 }).default("USD"),
+  exchangeRate: decimal("exchange_rate", { precision: 10, scale: 4 }),
+  isApproved: boolean("is_approved").default(false),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvalDate: timestamp("approval_date"),
+  comments: text("comments"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+});
+
+// Commercial Orders (confirmed orders from customers)
+export const commercialOrders = pgTable("commercial_orders", {
+  id: serial("id").primaryKey(),
+  orderNumber: varchar("order_number", { length: 50 }).notNull().unique(),
+  quotationId: integer("quotation_id").references(() => commercialQuotations.id),
+  customerId: integer("customer_id").notNull(),
+  poNumber: varchar("po_number", { length: 100 }),
+  orderDate: timestamp("order_date").defaultNow().notNull(),
+  deliveryDate: date("delivery_date"),
+  orderStatus: varchar("order_status", { length: 50 }).default("New").notNull(),
+  totalQuantity: integer("total_quantity"),
+  totalAmount: decimal("total_amount", { precision: 12, scale: 2 }),
+  currencyCode: varchar("currency_code", { length: 3 }).default("USD"),
+  exchangeRate: decimal("exchange_rate", { precision: 10, scale: 4 }),
+  paymentTerms: varchar("payment_terms", { length: 255 }),
+  shippingTerms: varchar("shipping_terms", { length: 255 }),
+  isConfirmed: boolean("is_confirmed").default(false),
+  confirmedBy: integer("confirmed_by").references(() => users.id),
+  confirmationDate: timestamp("confirmation_date"),
+  buyerRemarks: text("buyer_remarks"),
+  internalNotes: text("internal_notes"),
+  attachments: jsonb("attachments").$type<string[]>().default([]),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+});
+
+// LC (Letter of Credit) Management
+export const letterOfCredits = pgTable("letter_of_credits", {
+  id: serial("id").primaryKey(),
+  lcNumber: varchar("lc_number", { length: 100 }).notNull(),
+  orderId: integer("order_id").references(() => commercialOrders.id),
+  customerId: integer("customer_id").notNull(),
+  bankName: varchar("bank_name", { length: 255 }),
+  issuingBank: varchar("issuing_bank", { length: 255 }),
+  advisingBank: varchar("advising_bank", { length: 255 }),
+  issuanceDate: date("issuance_date"),
+  expiryDate: date("expiry_date"),
+  lastShipmentDate: date("last_shipment_date"),
+  amount: decimal("amount", { precision: 12, scale: 2 }),
+  currencyCode: varchar("currency_code", { length: 3 }).default("USD"),
+  status: varchar("status", { length: 50 }).default("Draft"),
+  documents: jsonb("documents").$type<string[]>().default([]),
+  amendmentDetails: text("amendment_details"),
+  amendmentDate: date("amendment_date"),
+  lcTerms: text("lc_terms"),
+  paymentTerms: varchar("payment_terms", { length: 255 }),
+  bankCharges: decimal("bank_charges", { precision: 10, scale: 2 }),
+  discrepancies: text("discrepancies"),
+  reminderDate: date("reminder_date"),
+  comments: text("comments"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+});
+
+// Shipment Details
+export const shipments = pgTable("shipments", {
+  id: serial("id").primaryKey(),
+  shipmentNumber: varchar("shipment_number", { length: 50 }).notNull().unique(),
+  orderId: integer("order_id").references(() => commercialOrders.id),
+  shipmentDate: date("shipment_date"),
+  etd: date("etd"), // Estimated Time of Departure
+  eta: date("eta"), // Estimated Time of Arrival
+  shipmentMode: varchar("shipment_mode", { length: 50 }), // Air, Sea, Land
+  carrier: varchar("carrier", { length: 255 }),
+  trackingNumber: varchar("tracking_number", { length: 100 }),
+  containerDetails: jsonb("container_details"),
+  goodsDescription: text("goods_description"),
+  packageCount: integer("package_count"),
+  grossWeight: decimal("gross_weight", { precision: 10, scale: 2 }),
+  netWeight: decimal("net_weight", { precision: 10, scale: 2 }),
+  volume: decimal("volume", { precision: 10, scale: 2 }),
+  unitOfMeasure: varchar("unit_of_measure", { length: 20 }),
+  forwarder: varchar("forwarder", { length: 255 }),
+  shippingDocuments: jsonb("shipping_documents"),
+  customsClearanceStatus: varchar("customs_clearance_status", { length: 50 }),
+  inspectionDetails: text("inspection_details"),
+  status: varchar("status", { length: 50 }).default("Planned"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+});
+
+// Buyer's Feedback (post-delivery feedback)
+export const buyerFeedback = pgTable("buyer_feedback", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").references(() => commercialOrders.id),
+  customerId: integer("customer_id").notNull(),
+  feedbackDate: date("feedback_date").defaultNow(),
+  qualityRating: integer("quality_rating"), // 1-5 scale
+  deliveryRating: integer("delivery_rating"), // 1-5 scale
+  communicationRating: integer("communication_rating"), // 1-5 scale
+  priceRating: integer("price_rating"), // 1-5 scale
+  overallRating: integer("overall_rating"), // 1-5 scale
+  comments: text("comments"),
+  strengthsHighlighted: text("strengths_highlighted"),
+  improvementAreas: text("improvement_areas"),
+  actionTaken: text("action_taken"),
+  respondedBy: integer("responded_by").references(() => users.id),
+  responseDate: date("response_date"),
+  responseComments: text("response_comments"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+});
+
+// Define relations
+export const commercialInquiriesRelations = relations(commercialInquiries, ({ many }) => ({
+  quotations: many(commercialQuotations),
+}));
+
+export const commercialQuotationsRelations = relations(commercialQuotations, ({ one, many }) => ({
+  inquiry: one(commercialInquiries, {
+    fields: [commercialQuotations.inquiryId],
+    references: [commercialInquiries.id],
+  }),
+  orders: many(commercialOrders),
+}));
+
+export const commercialOrdersRelations = relations(commercialOrders, ({ one, many }) => ({
+  quotation: one(commercialQuotations, {
+    fields: [commercialOrders.quotationId],
+    references: [commercialQuotations.id],
+  }),
+  letterOfCredits: many(letterOfCredits),
+  shipments: many(shipments),
+  feedback: many(buyerFeedback),
+}));
+
+export const letterOfCreditsRelations = relations(letterOfCredits, ({ one }) => ({
+  order: one(commercialOrders, {
+    fields: [letterOfCredits.orderId],
+    references: [commercialOrders.id],
+  }),
+}));
+
+export const shipmentsRelations = relations(shipments, ({ one }) => ({
+  order: one(commercialOrders, {
+    fields: [shipments.orderId],
+    references: [commercialOrders.id],
+  }),
+}));
+
+export const buyerFeedbackRelations = relations(buyerFeedback, ({ one }) => ({
+  order: one(commercialOrders, {
+    fields: [buyerFeedback.orderId],
+    references: [commercialOrders.id],
+  }),
+}));
+
+// Costing Templates for Product Costing
+export const costingTemplates = pgTable("costing_templates", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  templateName: varchar("template_name", { length: 100 }).notNull(),
+  productCategory: varchar("product_category", { length: 100 }).notNull(),
+  description: text("description"),
+  defaultWastage: decimal("default_wastage", { precision: 5, scale: 2 }),
+  defaultProfit: decimal("default_profit", { precision: 5, scale: 2 }),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    tenantTemplateNameUnq: unique().on(table.tenantId, table.templateName),
+  };
+});
+
+// Quotation Styles - for storing style details in quotations
+export const quotationStyles = pgTable("quotation_styles", {
+  id: serial("id").primaryKey(),
+  quotationId: integer("quotation_id").notNull().references(() => commercialQuotations.id),
+  styleName: varchar("style_name", { length: 100 }).notNull(),
+  styleCode: varchar("style_code", { length: 50 }),
+  productCategory: varchar("product_category", { length: 100 }),
+  description: text("description"),
+  technicalDetails: text("technical_details"),
+  sizeRange: varchar("size_range", { length: 255 }),
+  colors: varchar("colors", { length: 255 }),
+  fabricComposition: varchar("fabric_composition", { length: 255 }),
+  fabricWeight: varchar("fabric_weight", { length: 50 }),
+  artwork: jsonb("artwork").$type<string[]>().default([]),
+  quantityPerSize: jsonb("quantity_per_size"),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }),
+  totalQuantity: integer("total_quantity"),
+  totalAmount: decimal("total_amount", { precision: 12, scale: 2 }),
+  comments: text("comments"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Style Cost Breakdowns - for material costs in quotations
+export const styleCostBreakdowns = pgTable("style_cost_breakdowns", {
+  id: serial("id").primaryKey(),
+  styleId: integer("style_id").notNull().references(() => quotationStyles.id),
+  materialCategory: varchar("material_category", { length: 100 }).notNull(),
+  materialName: varchar("material_name", { length: 100 }).notNull(),
+  materialDescription: text("material_description"),
+  supplier: varchar("supplier", { length: 100 }),
+  unit: varchar("unit", { length: 20 }).notNull(),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  wastage: decimal("wastage", { precision: 5, scale: 2 }),
+  totalCost: decimal("total_cost", { precision: 10, scale: 2 }).notNull(),
+  remarks: text("remarks"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// CM (Cost of Manufacturing) Breakdowns
+export const cmCostBreakdowns = pgTable("cm_cost_breakdowns", {
+  id: serial("id").primaryKey(),
+  styleId: integer("style_id").notNull().references(() => quotationStyles.id),
+  operationName: varchar("operation_name", { length: 100 }).notNull(),
+  department: varchar("department", { length: 100 }),
+  machineType: varchar("machine_type", { length: 100 }),
+  timeRequired: decimal("time_required", { precision: 8, scale: 2 }), // in minutes
+  costPerMinute: decimal("cost_per_minute", { precision: 8, scale: 4 }),
+  totalCost: decimal("total_cost", { precision: 10, scale: 2 }).notNull(),
+  remarks: text("remarks"),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Order Styles - similar to quotation styles but for confirmed orders
+export const orderStyles = pgTable("order_styles", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => commercialOrders.id),
+  quotationStyleId: integer("quotation_style_id").references(() => quotationStyles.id),
+  styleName: varchar("style_name", { length: 100 }).notNull(),
+  styleCode: varchar("style_code", { length: 50 }),
+  productCategory: varchar("product_category", { length: 100 }),
+  description: text("description"),
+  technicalDetails: text("technical_details"),
+  sizeRange: varchar("size_range", { length: 255 }),
+  colors: varchar("colors", { length: 255 }),
+  fabricComposition: varchar("fabric_composition", { length: 255 }),
+  fabricWeight: varchar("fabric_weight", { length: 50 }),
+  artwork: jsonb("artwork").$type<string[]>().default([]),
+  quantityPerSize: jsonb("quantity_per_size"),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }),
+  totalQuantity: integer("total_quantity"),
+  totalAmount: decimal("total_amount", { precision: 12, scale: 2 }),
+  deliveryDate: date("delivery_date"),
+  packingInstructions: text("packing_instructions"),
+  specialRequirements: text("special_requirements"),
+  qualityStandards: text("quality_standards"),
+  approvedSample: boolean("approved_sample").default(false),
+  isActive: boolean("is_active").default(true),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Export Documents for LC, Shipment, etc.
+export const exportDocuments = pgTable("export_documents", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  orderId: integer("order_id").references(() => commercialOrders.id),
+  documentType: varchar("document_type", { length: 50 }).notNull(), // commercial_invoice, packing_list, bill_of_lading, etc.
+  documentNumber: varchar("document_number", { length: 100 }),
+  documentDate: date("document_date"),
+  issuedBy: varchar("issued_by", { length: 100 }),
+  issuedTo: varchar("issued_to", { length: 100 }),
+  description: text("description"),
+  amount: decimal("amount", { precision: 12, scale: 2 }),
+  currencyCode: varchar("currency_code", { length: 3 }).default("USD"),
+  status: varchar("status", { length: 50 }).default("Draft"),
+  documentFiles: jsonb("document_files").$type<string[]>().default([]),
+  remarks: text("remarks"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Create insert schemas for each table
+export const insertCommercialInquirySchema = createInsertSchema(commercialInquiries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCommercialQuotationSchema = createInsertSchema(commercialQuotations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCommercialOrderSchema = createInsertSchema(commercialOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertLetterOfCreditSchema = createInsertSchema(letterOfCredits).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertShipmentSchema = createInsertSchema(shipments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertBuyerFeedbackSchema = createInsertSchema(buyerFeedback).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCostingTemplateSchema = createInsertSchema(costingTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertQuotationStyleSchema = createInsertSchema(quotationStyles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStyleCostBreakdownSchema = createInsertSchema(styleCostBreakdowns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCmCostBreakdownSchema = createInsertSchema(cmCostBreakdowns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertOrderStyleSchema = createInsertSchema(orderStyles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertExportDocumentSchema = createInsertSchema(exportDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types 
+export type CommercialInquiry = typeof commercialInquiries.$inferSelect;
+export type InsertCommercialInquiry = z.infer<typeof insertCommercialInquirySchema>;
+
+export type CommercialQuotation = typeof commercialQuotations.$inferSelect;
+export type InsertCommercialQuotation = z.infer<typeof insertCommercialQuotationSchema>;
+
+export type CommercialOrder = typeof commercialOrders.$inferSelect;
+export type InsertCommercialOrder = z.infer<typeof insertCommercialOrderSchema>;
+
+export type LetterOfCredit = typeof letterOfCredits.$inferSelect;
+export type InsertLetterOfCredit = z.infer<typeof insertLetterOfCreditSchema>;
+
+export type Shipment = typeof shipments.$inferSelect;
+export type InsertShipment = z.infer<typeof insertShipmentSchema>;
+
+export type BuyerFeedback = typeof buyerFeedback.$inferSelect;
+export type InsertBuyerFeedback = z.infer<typeof insertBuyerFeedbackSchema>;
+
+export type CostingTemplate = typeof costingTemplates.$inferSelect;
+export type InsertCostingTemplate = z.infer<typeof insertCostingTemplateSchema>;
+
+export type QuotationStyle = typeof quotationStyles.$inferSelect;
+export type InsertQuotationStyle = z.infer<typeof insertQuotationStyleSchema>;
+
+export type StyleCostBreakdown = typeof styleCostBreakdowns.$inferSelect;
+export type InsertStyleCostBreakdown = z.infer<typeof insertStyleCostBreakdownSchema>;
+
+export type CmCostBreakdown = typeof cmCostBreakdowns.$inferSelect;
+export type InsertCmCostBreakdown = z.infer<typeof insertCmCostBreakdownSchema>;
+
+export type OrderStyle = typeof orderStyles.$inferSelect;
+export type InsertOrderStyle = z.infer<typeof insertOrderStyleSchema>;
+
+export type ExportDocument = typeof exportDocuments.$inferSelect;
+export type InsertExportDocument = z.infer<typeof insertExportDocumentSchema>;

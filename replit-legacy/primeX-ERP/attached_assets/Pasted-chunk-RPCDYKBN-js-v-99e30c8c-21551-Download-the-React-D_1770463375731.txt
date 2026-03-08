@@ -1,0 +1,81 @@
+chunk-RPCDYKBN.js?v=99e30c8c:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+queryClient.ts:68 Making authenticated request to: /api/auth/me
+queryClient.ts:76 Response status: 200 for /api/auth/me
+queryClient.ts:68 Making authenticated request to: /api/accounting/vouchers/types
+queryClient.ts:68 Making authenticated request to: /api/accounting/vouchers/statuses
+queryClient.ts:68 Making authenticated request to: /api/accounting/chart-of-accounts
+queryClient.ts:68 Making authenticated request to: /api/accounting/fiscal-years
+queryClient.ts:68 Making authenticated request to: /api/accounting/fiscal-years/current
+queryClient.ts:76 Response status: 200 for /api/accounting/chart-of-accounts
+queryClient.ts:76 Response status: 200 for /api/accounting/fiscal-years
+queryClient.ts:76 Response status: 200 for /api/accounting/vouchers/types
+/api/accounting/fiscal-years/current:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+queryClient.ts:76 Response status: 500 for /api/accounting/fiscal-years/current
+queryClient.ts:91 Query error: Error: 500: {"message":"Failed to fetch current fiscal year"}
+    at throwIfResNotOk (queryClient.ts:6:11)
+    at async queryClient.ts:88:7
+(anonymous) @ queryClient.ts:91
+queryClient.ts:76 Response status: 200 for /api/accounting/vouchers/statuses
+queryClient.ts:68 Making authenticated request to: /api/accounting/vouchers/dashboard
+queryClient.ts:68 Making authenticated request to: /api/accounting/vouchers
+queryClient.ts:76 Response status: 200 for /api/accounting/vouchers
+queryClient.ts:76 Response status: 200 for /api/accounting/vouchers/dashboard
+queryClient.ts:68 Making authenticated request to: /api/accounting/vouchers
+queryClient.ts:76 Response status: 200 for /api/accounting/vouchers
+queryClient.ts:68 Making authenticated request to: /api/accounting/vouchers
+queryClient.ts:76 Response status: 200 for /api/accounting/vouchers
+queryClient.ts:68 Making authenticated request to: /api/accounting/vouchers
+queryClient.ts:76 Response status: 200 for /api/accounting/vouchers
+voucher-view.tsx:201 Uncaught TypeError: Cannot read properties of undefined (reading 'isPosted')
+    at VoucherView (voucher-view.tsx:201:28)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=99e30c8c:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=99e30c8c:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=99e30c8c:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=99e30c8c:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=99e30c8c:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=99e30c8c:3733:39)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=99e30c8c:19765:15)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=99e30c8c:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=99e30c8c:19137:13)
+voucher-view.tsx:201 Uncaught TypeError: Cannot read properties of undefined (reading 'isPosted')
+    at VoucherView (voucher-view.tsx:201:28)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=99e30c8c:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=99e30c8c:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=99e30c8c:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=99e30c8c:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=99e30c8c:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=99e30c8c:3733:39)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=99e30c8c:19765:15)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=99e30c8c:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=99e30c8c:19137:13)
+chunk-RPCDYKBN.js?v=99e30c8c:14032 The above error occurred in the <VoucherView> component:
+
+    at VoucherView (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/accounts/vouchers/voucher-view.tsx:72:18)
+    at Route (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=99e30c8c:323:16)
+    at Switch (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=99e30c8c:379:17)
+    at Suspense
+    at div
+    at div
+    at div
+    at AuthenticatedApp
+    at Provider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=99e30c8c:38:15)
+    at TooltipProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=99e30c8c:63:5)
+    at App (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?v=TAJMyyPp02ra2SDhKVMur:569:42)
+    at V (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=99e30c8c:44:25)
+    at J (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=99e30c8c:42:18)
+    at QueryClientProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=99e30c8c:2805:3)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+logCapturedError @ chunk-RPCDYKBN.js?v=99e30c8c:14032
+chunk-RPCDYKBN.js?v=99e30c8c:9129 Uncaught TypeError: Cannot read properties of undefined (reading 'isPosted')
+    at VoucherView (voucher-view.tsx:201:28)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=99e30c8c:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=99e30c8c:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=99e30c8c:15924:22)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=99e30c8c:19753:22)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=99e30c8c:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=99e30c8c:19137:13)
+    at renderRootSync (chunk-RPCDYKBN.js?v=99e30c8c:19116:15)
+    at recoverFromConcurrentError (chunk-RPCDYKBN.js?v=99e30c8c:18736:28)
+    at performSyncWorkOnRoot (chunk-RPCDYKBN.js?v=99e30c8c:18879:28)

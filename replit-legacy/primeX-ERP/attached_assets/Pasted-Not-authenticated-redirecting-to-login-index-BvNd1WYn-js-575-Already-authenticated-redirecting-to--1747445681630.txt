@@ -1,0 +1,94 @@
+Not authenticated, redirecting to login
+index-BvNd1WYn.js:575 Already authenticated, redirecting to dashboard
+api/public/ai-recommendations:1 
+            
+            
+            Failed to load resource: the server responded with a status of 500 ()
+hook.js:608  Query error: Error: 500: {"message":"Failed to generate recommendations","error":"401 Incorrect API key provided: sk-proj-********************************************************************************************************************************************************zGMA. You can find your API key at https://platform.openai.com/account/api-keys."}
+    at _Ee (index-BvNd1WYn.js:501:41336)
+    at async index-BvNd1WYn.js:501:41950
+overrideMethod @ hook.js:608
+index-BvNd1WYn.js:501 Making POST request to /api/auth/logout Object
+index-BvNd1WYn.js:575 Already authenticated, redirecting to dashboard
+index-BvNd1WYn.js:575 Not authenticated, redirecting to login
+api/auth/me:1 
+            
+            
+            Failed to load resource: the server responded with a status of 401 ()
+index-BvNd1WYn.js:501 401 Unauthorized response for /api/auth/me
+hook.js:608  Query error: Error: Authentication required
+    at index-BvNd1WYn.js:501:41906
+overrideMethod @ hook.js:608
+api/dashboard/kpi:1 
+            
+            
+            Failed to load resource: the server responded with a status of 401 ()
+index-BvNd1WYn.js:501 401 Unauthorized response for /api/dashboard/kpi
+hook.js:608  Query error: Error: Authentication required
+    at index-BvNd1WYn.js:501:41906
+overrideMethod @ hook.js:608
+api/dashboard/tasks:1 
+            
+            
+            Failed to load resource: the server responded with a status of 401 ()
+index-BvNd1WYn.js:501 401 Unauthorized response for /api/dashboard/tasks
+hook.js:608  Query error: Error: Authentication required
+    at index-BvNd1WYn.js:501:41906
+overrideMethod @ hook.js:608
+api/dashboard/calendar-events:1 
+            
+            
+            Failed to load resource: the server responded with a status of 401 ()
+index-BvNd1WYn.js:501 401 Unauthorized response for /api/dashboard/calendar-events
+hook.js:608  Query error: Error: Authentication required
+    at index-BvNd1WYn.js:501:41906
+overrideMethod @ hook.js:608
+api/insights:1 
+            
+            
+            Failed to load resource: the server responded with a status of 401 ()
+index-BvNd1WYn.js:501 401 Unauthorized response for /api/insights
+hook.js:608  Query error: Error: Authentication required
+    at index-BvNd1WYn.js:501:41906
+overrideMethod @ hook.js:608
+api/dashboard/production-trends:1 
+            
+            
+            Failed to load resource: the server responded with a status of 401 ()
+index-BvNd1WYn.js:501 401 Unauthorized response for /api/dashboard/production-trends
+hook.js:608  Query error: Error: Authentication required
+    at index-BvNd1WYn.js:501:41906
+overrideMethod @ hook.js:608
+api/dashboard/supply-chain-status:1 
+            
+            
+            Failed to load resource: the server responded with a status of 401 ()
+index-BvNd1WYn.js:501 401 Unauthorized response for /api/dashboard/supply-chain-status
+hook.js:608  Query error: Error: Authentication required
+    at index-BvNd1WYn.js:501:41906
+overrideMethod @ hook.js:608
+api/dashboard/recent-orders:1 
+            
+            
+            Failed to load resource: the server responded with a status of 401 ()
+index-BvNd1WYn.js:501 401 Unauthorized response for /api/dashboard/recent-orders
+hook.js:608  Query error: Error: Authentication required
+    at index-BvNd1WYn.js:501:41906
+overrideMethod @ hook.js:608
+api/public/ai-recommendations:1 
+            
+            
+            Failed to load resource: the server responded with a status of 500 ()
+hook.js:608  Query error: Error: 500: {"message":"Failed to generate recommendations","error":"401 Incorrect API key provided: sk-proj-********************************************************************************************************************************************************zGMA. You can find your API key at https://platform.openai.com/account/api-keys."}
+    at _Ee (index-BvNd1WYn.js:501:41336)
+    at async index-BvNd1WYn.js:501:41950
+overrideMethod @ hook.js:608
+index-BvNd1WYn.js:501 Making POST request to /api/auth/register Object
+api/auth/register:1 
+            
+            
+            Failed to load resource: net::ERR_TOO_MANY_REDIRECTS
+[NEW] Explain Console errors by using Copilot in Edge: click
+         
+         to explain an error. 
+        Learn more

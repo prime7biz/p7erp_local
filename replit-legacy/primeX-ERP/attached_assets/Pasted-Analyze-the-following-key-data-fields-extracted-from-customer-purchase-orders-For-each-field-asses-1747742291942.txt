@@ -1,0 +1,121 @@
+Analyze the following key data fields extracted from customer purchase orders. For each field, assess if my current ERP system's 'New Inquiry,' 'New Quotation,' and 'New Order' forms can capture this information.
+
+If a field exists, confirm its mapping.
+If a field is missing, suggest adding it to the relevant form(s) (Inquiry, Quotation, Order).
+If a field's properties (e.g., data type, options) need modification, suggest changes.
+Identify any fields that should be auto-populated or linked based on the workflow (e.g., Inquiry Ref. in Quotation, Quotation Ref. in Order).
+Flag any fields that might require special handling, validation rules, or new tables in the database.
+Customer Information:
+
+Buyer/Purchaser Name: (e.g., SCANWEAR APPAREL, Lidl & Kaufland Asia Pte. Limited, Primark Limited )
+
+
+
+Buyer/Purchaser Address: (e.g., Solbakken 5, 6500 Vojens, 30 Pasir Panjang Road Mapletree Business City, #12-31/32, Singapore 117440, Arthur Ryan House, 22-24 Parnell Street, Dublin 1, Ireland )
+
+
+Contact Person (Your Ref.): (e.g., Safina Rahman )
+
+Issuing Person (Our Ref.): (e.g., Belinda Smallpeice Beck, Lene Ziegler Hansen )
+
+Buyer VAT/Tax ID: (e.g., DK27510353 )
+Order General Information:
+
+PO Number/Order No.: (e.g., 24076, 24077, 1179053 )
+
+
+Lidl IAN/Selection: (e.g., 481259 / 2410 )
+Order Date: (e.g., 02-05-25, 03-07-2024 )
+
+
+Season/Year: (e.g., SS2025 )
+Currency: (e.g., USD )
+
+
+
+Product/Item Details:
+
+Article No./Item Code/Style ORIN/Kimball: (e.g., BULK 922345, 922345, Style 481259_A/B, 991091688 / 00941 )
+
+
+
+Product Description: (e.g., Organic Cotton VRS Mens Tights 5 pack BLACK, Men Sleeveless Shirt 5 pcs pack, BU 5PK WHITE VEST ) 
+
+
+Sub-details: Color (e.g., BLACK ), Sizes (e.g., M-5XL, 4/S, 5/M etc. ), Material Composition (e.g., 95% cotton, 5% elastane, 100% Cotton ), Fabric Weight (g/m 
+2
+ ), Knit/Weave Structure, No. of pieces per pack (e.g., 5 pack )
+
+
+
+
+GTIN Code(s): (e.g., Per assortment, Pack GTIN, EAN-13 )
+
+
+Country of Origin: (e.g., Bangladesh )
+HS Code/Customs Tariff No.: (e.g., 61071200 )
+Brand: (e.g., Esmara, Townland )
+Quantity & Pricing:
+
+Order Quantity (Total Units): (e.g., 8000, 2000, 174,306, 376,560 )
+
+
+
+Number of Boxes/Cartons: (e.g., 10.000, 15,718 total )
+
+Unit Price (FOB/Item Price): (e.g., $5,13, 5.200 USD, $2.50 )
+
+
+Total Amount/Total Net Value: (e.g., 10.260,00 USD, 906,391.20 USD, $941,400.00 )
+
+
+Assortment/Packing Method/Pack Details: (e.g., Details of items per size per pack ) 
+
+
+
+
+Carton Measurement 
+Gross Weight per Carton 
+Units per Carton/Pack 
+Delivery & Shipment:
+
+Handover Date/ETD (Estimated Time of Departure): (e.g., 31-12-26, 29-07-25, 23-11-2024 )
+
+
+Delivery Week: (e.g., 16/25 )
+Delivery Terms (Incoterms): (e.g., FOB Chittagong, FOB Port: Chattogram (ICC-Incoterms 2020), Free Carrier )
+
+
+
+Loading Port/Exit Port: (e.g., Chittagong )
+
+
+Destination Port(s)/Country Distribution: (e.g., Antwerp, Rotterdam, Barcelona, Koper, ROO, UK, US1-PA etc. )
+
+
+Shipment Method: (e.g., Seafreight )
+Shipping Agent: (e.g., Scan Global Logistics )
+Factory Address/ID for Pickup (if different from Supplier): (e.g., LAKHSMA INNERWEAR LTD PJT, Factory ID: 000200009586 )
+
+Loading Method (FCL/LCL): 
+Payment Terms:
+
+Payment Terms: (e.g., 30 Days after B/L date, TT 60 days against full set of original documents, 30 DAYS )
+
+
+
+Payment Method: (e.g., Open Account )
+Special Instructions/Remarks:
+
+Yarn/Material Specifications & Certifications: (e.g., Organic Cotton Yarn, TC for yarn, supplier certificate )
+
+PVC Free Plastic: 
+
+Required Documents: (e.g., Invoice, PL & BL for final product )
+
+Packaging Remarks/Instructions: (e.g., Folding box with tactile window, Care Instructions )
+
+Compliance Requirements: (e.g., ORDER MUST BE IN COMPLIANCE WITH SCAN WEAR'S SUPPLIER MANUAL, Adherence to Primark Standard Terms and Conditions, Packing Conditions, etc. )
+
+Consolidation Warehouse/Inspection Center details: 
+Based on your analysis, provide recommendations for structuring the Inquiry, Quotation, and Order forms, paying attention to data flow and potential for automation (e.g., auto-filling customer details once selected, calculating total amounts)."

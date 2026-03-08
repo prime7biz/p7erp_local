@@ -1,0 +1,242 @@
+```text id="u2p1w7"
+You are the Replit Agent working on prime7erp.com (single domain, NO subdomain). 
+We must implement the earlier SEO fixes PLUS Gemini’s suggestions. Do NOT break the existing ERP app under /app/*.
+
+========================================================
+0) CORE GOAL
+========================================================
+- Root domain (prime7erp.com) becomes a high-quality SEO marketing site for garments manufacturers + buying houses in Bangladesh and also globally.
+- The ERP client area remains under /app/* and must be NOINDEX.
+- Add dedicated pages for each module to rank for long-tail keywords.
+- Add Local SEO legitimacy signals (real NAP + LocalBusiness schema).
+- Add technical SEO outputs (robots, sitemap, schema, metadata, internal linking).
+- Add currency auto-detection by IP + manual override (no subdomain, no duplicate URLs per currency).
+
+========================================================
+1) ROUTES / PAGES TO CREATE OR IMPROVE
+========================================================
+A) Core public pages (INDEXABLE):
+- /                        (Landing)
+- /about                   (What we are)
+- /features                (What we offer summary)
+- /garments-erp            (Manufacturing focus)
+- /buying-house-erp        (Buying house focus)
+- /erp-software-bangladesh (Bangladesh ERP intent, but positioned global-ready)
+- /pricing                 (Packages with IP-based currency)
+- /how-it-works
+- /resources               (Blog index)
+- /contact                 (Real contact, demo booking CTA)
+- /security
+- /privacy
+- /terms
+
+B) NEW: dedicated module pages (Gemini suggestion)
+Create a folder /modules and generate detailed landing pages for each module:
+- /modules/merchandising
+- /modules/inventory
+- /modules/accounting
+- /modules/production
+- /modules/lc-processing
+- /modules/quality-management
+- /modules/hr-payroll
+- /modules/reports-analytics
+- /modules/crm-support   (or support/ticketing if applicable)
+Each module page must have:
+- SEO title & meta description with long-tail keyword
+- H1 + sections: problems solved, key features, workflow, integrations, FAQs
+- CTA: Book a Demo (/contact) + Start Trial (/app/register) + Login (/app/login)
+- Internal links to /pricing, /garments-erp, /buying-house-erp, /resources
+
+C) Resources/blog posts (content marketing)
+Create at least 6 SEO blog posts:
+1) /resources/avoid-lc-deadline-misses
+2) /resources/excel-vs-erp-rmg-production-planning
+3) /resources/accurate-garment-costing-bangladesh
+4) /resources/tna-calendar-guide-for-merchandisers
+5) /resources/stock-valuation-accounting-integration
+6) /resources/consumption-control-approvals-in-garments
+Each post needs SEO metadata + internal links + a CTA banner.
+
+========================================================
+2) ON-PAGE SEO (Gemini + Previous Plan)
+========================================================
+A) Title Tag Improvement (Gemini)
+Update homepage title to include “RMG” and “Apparel” naturally.
+Suggested:
+- Title: "Prime7 ERP | AI-Powered Garment, RMG & Apparel ERP Software"
+- Description: mention manufacturers + buying houses, cloud ERP, multi-tenant, Tally-style accounting, WIP, inventory, T&A, LC, reports.
+
+B) Keyword mapping system
+Create: /seo/keywords.ts
+- Map each page route to:
+  - primary keyword
+  - secondary keywords[]
+  - related FAQs[]
+  - internal link targets[]
+Include Bangladesh + global keywords:
+Bangladesh core:
+- erp software bangladesh
+- best erp software in bangladesh
+- cloud erp bangladesh
+- erp solution bangladesh
+- erp software price in bangladesh
+Garments/RMG:
+- garments erp software bangladesh
+- rmg erp software bangladesh
+- apparel erp software
+- garment factory management software
+Buying house:
+- buying house erp software bangladesh
+- merchandising software garments
+- tna software garments
+- po tracking software garments
+Global:
+- cloud ERP for apparel
+- ERP for garment factories
+- ERP for buying houses
+- multi-currency ERP
+- multi-tenant ERP
+
+Use this map to generate:
+- titles, meta descriptions, H1 text
+- FAQs (6–10 per key page) without keyword stuffing
+
+========================================================
+3) LOCAL SEO FOR BANGLADESH (Gemini)
+========================================================
+A) Real NAP (Name/Address/Phone)
+- Replace placeholder phone number and address with REAL values.
+- Create a config file /seo/company.ts with:
+  - legalName
+  - address (Dhaka)
+  - phone
+  - email
+  - opening hours (optional)
+  - social links (optional)
+Use it on:
+- /contact page
+- footer
+- schema markup
+
+B) LocalBusiness schema
+Add JSON-LD schema on:
+- / (homepage) and /contact
+Include LocalBusiness fields: name, address, telephone, email, url, areaServed.
+Also keep Organization schema sitewide.
+
+Add a NOTE in README:
+- "Create and optimize Google Business Profile (GBP) for Dhaka" (instruction only; we can’t create it from code).
+
+========================================================
+4) TECHNICAL SEO (Robots, Sitemap, Noindex /app)
+========================================================
+A) robots.txt (200 OK)
+- Allow /
+- Disallow /app/
+- Include Sitemap: https://prime7erp.com/sitemap.xml (use NEXT_PUBLIC_SITE_URL)
+
+B) sitemap.xml (200 OK)
+- Include ONLY public routes + module pages + resources posts
+- Exclude /app/*
+- Add <lastmod>
+
+C) /app NOINDEX hardening
+- Add /app layout with: <meta name="robots" content="noindex, nofollow" />
+- Add X-Robots-Tag header for /app/* using middleware or headers config if possible.
+
+D) Canonicals + OG
+Every public page must have:
+- canonical URL
+- OpenGraph title/description/image (create a default OG image if possible)
+- twitter card tags
+
+E) Schema
+- Organization schema sitewide
+- SoftwareApplication schema on homepage (include categories like “BusinessApplication”, “ERP”, “Apparel Management Software”)
+- FAQPage schema on pages that have FAQ blocks
+- LocalBusiness schema on homepage + contact
+
+========================================================
+5) MULTI-CURRENCY BY IP + MANUAL OVERRIDE (User Request)
+========================================================
+A) Detect country from headers (no external paid service):
+- Prefer CF-IPCountry (Cloudflare)
+- Prefer x-vercel-ip-country (if on Vercel)
+- Fallback to "US"
+
+B) Currency selection:
+- Map country->currency & locale:
+  BD->BDT bn-BD
+  US->USD en-US
+  GB->GBP en-GB
+  EU->EUR en-IE
+  AE->AED ar-AE/en-AE
+  SA->SAR ar-SA/en-SA
+  IN->INR en-IN
+  Default->USD en-US
+
+C) Manual override UI:
+- Add currency selector in Navbar and Pricing page
+- Store override in cookie: p7_currency_override
+- Always use override if present; otherwise use geo.
+
+D) SEO safety:
+- Do NOT create separate URLs for different currency
+- Do NOT add currency query params to canonical
+
+========================================================
+6) CRO IMPROVEMENTS (Gemini)
+========================================================
+A) “Book a Demo” emphasis
+- Add a persistent CTA button in navbar: “Book a Demo” -> /contact
+- Add CTA sections on every landing/module/blog page.
+
+B) Add demo video block (optional but implement structure)
+- Add a “1-minute demo” section on homepage:
+  - If no video file exists, embed a placeholder container with a note and accept a URL from env (NEXT_PUBLIC_DEMO_VIDEO_URL) to enable later.
+
+C) Client logos block (optional structure)
+- Add a “Trusted by” section that supports logos:
+  - If no logos available, keep layout but show “Add logos here” placeholder.
+  - Keep it visually clean.
+
+========================================================
+7) OFF-PAGE SEO INSTRUCTIONS (Gemini) - DOCUMENT ONLY
+========================================================
+We can’t do these in code, but add a “Marketing SEO Checklist” in README:
+- Create Google Business Profile (Dhaka)
+- Submit to BASIS / BGMEA relevant directories (where allowed)
+- Create profiles on G2, Capterra, SoftwareAdvice (categories: ERP, Apparel Management)
+- Outreach to Textile Today Bangladesh / Apparel Resources for guest articles
+- Encourage client reviews
+
+========================================================
+8) AUTOMATED SEO AUDIT SCRIPT (MUST)
+========================================================
+Create scripts/seo-audit.ts that:
+- Fetches all public URLs + robots + sitemap + one /app URL
+- Reports PASS/FAIL for:
+  - Title exists (20–70 chars)
+  - meta description exists (70–160)
+  - canonical exists
+  - 1 H1 exists
+  - public pages are NOT noindex
+  - /app pages ARE noindex
+  - robots disallows /app
+  - sitemap excludes /app
+- Print a final report.
+
+========================================================
+9) FINAL OUTPUTS
+========================================================
+After implementing:
+1) Run seo-audit script and show its output in logs.
+2) Update README with:
+   - SEO Status Report
+   - URLs: /robots.txt, /sitemap.xml
+   - Google Search Console steps
+   - Local SEO steps (GBP, NAP)
+3) Confirm nothing in /app broke.
+
+Now implement all of the above in the repo with clean code and consistent styling.
+```

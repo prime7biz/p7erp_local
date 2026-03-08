@@ -1,0 +1,263 @@
+PHASE 9.2 + 9.3 + 9.4 — IE/SMV + EFFICIENCY ENGINE + SKILL MATRIX + LINE BALANCING + ADVANCED PLANNING + AI ASSISTS
+(Builds on 8.1–8.4 production execution + 9.1 QC)
+
+========================
+PHASE 9.2 — IE/SMV FOUNDATION (Operation Bulletin + SMV + Targets)
+========================
+
+Goal:
+Industrial Engineering foundation to calculate capacity, targets, and efficiency:
+- SMV database per style/operation (Operation Bulletin)
+- Standard minute calculations
+- Target/minute/hour/day
+- Efficiency computation (real, not proxy)
+- Operator allocation model
+
+A) Data Model
+1) ie_operations_library
+- id, tenantId
+- opCode (unique per tenant), opName
+- defaultSmv
+- machineType (SNLS/OL/FLATLOCK etc)
+- category (sewing/finishing/packing)
+- active boolean
+
+2) ie_style_operation_bulletins (reuse/extend from 8.3 OB)
+Ensure:
+- obId, styleId, version, totalSmv
+- status DRAFT|APPROVED|LOCKED
+- lock when style linked to confirmed orders
+
+3) ie_style_operations (reuse/extend OB ops)
+Ensure:
+- obId, opCode/opName, smv, sequence
+- machineType
+- qcPoint flag
+
+4) ie_line_configs
+- id, tenantId
+- lineId
+- defaultShiftMinutes (net minutes after breaks)
+- defaultEfficiencyPct (baseline)
+- standardManpower
+- active
+
+B) Core Calculations (single source of truth)
+Implement functions (server/ie/calc.ts):
+1) netMinutesPerShift = (shiftDurationMinutes - breakMinutes)
+2) availableMinutes = netMinutesPerShift * operatorsPresent
+3) targetPcs = (availableMinutes * efficiencyPct/100) / totalSmv
+4) actualEfficiencyPct = (actualOutputQty * totalSmv) / (operatorsPresent * netMinutesPerShift) * 100
+5) Allow line-specific SMV overrides if OB differs.
+
+C) APIs (IE)
+- POST /api/ie/operations (library)
+- GET  /api/ie/operations
+- POST /api/ie/ob (create/approve/revise) (or reuse existing)
+- GET  /api/ie/ob/style/:styleId
+- POST /api/ie/line-configs
+- GET  /api/ie/line-configs
+
+D) Integrate with Phase 8 hourly production
+Enhance hourly_production_entries:
+- store operatorsPresent, shiftId, minutesWorked(optional)
+- compute efficiency using OB totalSmv via active line_load
+Add endpoint:
+- GET /api/ie/lines/efficiency?date=YYYY-MM-DD
+Returns real efficiency per line per hour and cumulative.
+
+E) Verification (9.2)
+Seed/test:
+- style OB totalSmv=10
+- line operators=30, netMinutes=480, efficiency=50%
+- expected target = (480*30*0.5)/10 = 720 pcs/day
+- enter actual output and verify efficiency formula matches
+
+
+========================
+PHASE 9.3 — SKILL MATRIX + OPERATOR ALLOCATION + LINE BALANCING
+========================
+
+Goal:
+Real line planning: assign operators to operations based on skills and balance bottlenecks.
+- Operator master + skill levels per operation/machine type
+- Recommended operator allocation per line load
+- Bottleneck detection from operation capacities
+- Line balancing suggestions (manual + AI assist later)
+
+A) Data Model
+1) operators
+- id, tenantId
+- empId (link employee if HR exists)
+- name, grade, status ACTIVE|INACTIVE
+- defaultLineId(optional)
+
+2) operator_skills
+- id, tenantId
+- operatorId
+- opCode or machineType
+- skillLevel 1-5
+- speedFactor (optional, e.g. 0.8–1.2)
+- lastAssessedAt
+
+3) line_operator_assignments
+- id, tenantId
+- lineLoadId
+- operatorId
+- assignedOpCode(optional)
+- assignedAt, removedAt
+
+4) line_balance_runs
+- id, tenantId
+- lineLoadId
+- runDate
+- totalSmv
+- operatorsCount
+- predictedTargetPerHour
+- bottleneckOps JSON
+- recommendation JSON
+- createdBy
+
+B) Line balancing logic (deterministic v1)
+Implement algorithm:
+1) For each operation:
+   opCapacityPerHour = (60 / opSmv) * operatorSpeedFactor
+2) Sum capacities by assigned operators per operation
+3) Bottleneck = min(opCapacityPerHour across ops sequence)
+4) Recommend moving operators from non-bottleneck ops to bottleneck ops
+5) If no assignments exist, propose a default allocation:
+   proportional to opSmv share of totalSmv.
+
+C) APIs
+- POST /api/ie/operators
+- POST /api/ie/operators/:id/skills
+- POST /api/ie/line-loads/:id/assign-operators
+- POST /api/ie/line-loads/:id/balance (creates line_balance_run)
+- GET  /api/ie/line-loads/:id/balance/latest
+
+D) Frontend
+- Skill matrix screen (operator vs opCode)
+- Line load operator assignment UI
+- Balance report view (bottlenecks + suggestions)
+
+E) Verification (9.3)
+Seed/test:
+- OB with 8 ops, assign 20 operators randomly
+- run balance -> bottleneck identified and recommendations produced
+- change assignment -> bottleneck improves in recalculation
+
+
+========================
+PHASE 9.4 — ADVANCED PLANNING + AI ASSIST (Sewing/Knitting/Dyeing Capacity Wise)
+========================
+
+Goal:
+Introduce planning intelligence across departments:
+- Sewing line-wise plan optimization
+- Knitting machine-wise plan (gauge/capacity)
+- Dyeing batch/machine plan (shade/capacity)
+- AI-assisted suggestions for:
+  - BOM/consumption anomalies
+  - line allocation & target planning
+  - knitting machine schedule
+  - dyeing batch grouping
+This phase is about the planning engine + APIs; UI can be minimal.
+
+A) Data model (lightweight planners)
+1) capacity_resources
+- id, tenantId
+- type: SEWING_LINE|KNITTING_MACHINE|DYEING_MACHINE|PRINT_MACHINE|WASH_MACHINE
+- resourceCode (unique)
+- attributes JSON (gauge, dia, kgCapacity, lotSize, speed, etc)
+- active boolean
+
+2) capacity_calendars
+- id, tenantId
+- resourceId
+- date
+- availableMinutes OR availableQty (kg/day, pcs/day)
+- downtimeMinutes(optional)
+- notes
+
+3) planning_jobs
+- id, tenantId
+- jobType: SEWING|KNITTING|DYEING|PRINT|WASH
+- sourceType: ORDER|PRODUCTION_ORDER
+- sourceId
+- requiredQty
+- dueDate
+- constraints JSON (color/shade, gauge, gsm, width, priority)
+- status: OPEN|PLANNED|IN_PROGRESS|DONE
+
+4) planning_allocations
+- id, tenantId
+- planningJobId
+- resourceId
+- date
+- allocatedQty or allocatedMinutes
+- status: PLANNED|CONFIRMED|DONE
+
+B) Planning algorithms (deterministic v1)
+1) Sewing:
+- Allocate orders to lines based on:
+  - earliest due date first (EDD)
+  - line capacity from net minutes & efficiency
+  - OB totalSmv
+2) Knitting:
+- Allocate yarn→fabric jobs to machines matching gauge/dia
+- Respect kg/day capacity and downtime
+3) Dyeing:
+- Group jobs by color/shade/fabric type into batches
+- Allocate batches to machines by lot size/capacity
+
+C) AI Assist v1 (safe)
+Add endpoints that provide suggestions, never auto-apply:
+1) POST /api/ai/planning/sewing-line-suggest
+Input: { orders[], lines[], obSmv, efficiencies, dueDates }
+Output: suggested line allocations + confidence + explanation
+
+2) POST /api/ai/planning/knitting-schedule-suggest
+Input: { jobs[], machines[], capacities }
+Output: suggested machine plan + warnings
+
+3) POST /api/ai/planning/dyeing-batch-suggest
+Input: { jobs[], machines[], capacities, shadeGroupingRules }
+Output: suggested batches + allocations
+
+4) POST /api/ai/anomaly/consumption-check
+Input: { orderId, bomSnapshot, historicalStats }
+Output: flags: over/under consumption risk, suggested adjustments
+
+Implementation:
+- deterministic heuristic first
+- if OpenAI available, enrich with narrative + alternative options
+- always fallback when AI unavailable
+
+D) APIs (Planning)
+- POST /api/planning/resources (capacity resources)
+- POST /api/planning/calendars (availability)
+- POST /api/planning/jobs (create)
+- POST /api/planning/run?jobType=SEWING|KNITTING|DYEING (generates allocations)
+- GET  /api/planning/allocations?dateFrom=&dateTo=&resourceType=
+- GET  /api/planning/dashboard/summary?date=
+
+E) Verification (9.4)
+Seed/test:
+1) create 3 sewing lines with capacities
+2) create 5 orders with due dates and OB SMV
+3) run sewing planning -> allocations match constraints and do not exceed capacity
+4) create 2 knitting machines + 4 jobs -> schedule feasible
+5) create dyeing machines + jobs -> grouped batches generated
+6) AI endpoints return suggestions even in fallback mode
+
+========================
+OUTPUT REQUIRED
+========================
+After implementation output:
+1) Files changed list
+2) Example JSON:
+- real efficiency calculation response
+- line balance run output (bottleneck + recommendation)
+- planning allocations result for sewing/knitting/dyeing
+3) One AI suggestion response in fallback mode (no OpenAI)
+4) Proof that allocations never exceed capacity constraints

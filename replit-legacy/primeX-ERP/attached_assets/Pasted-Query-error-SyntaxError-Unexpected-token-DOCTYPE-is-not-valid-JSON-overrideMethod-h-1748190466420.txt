@@ -1,0 +1,69 @@
+Query error: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+overrideMethod @ hook.js:608Understand this error
+23queryClient.ts:15 Making /api/time-action-milestones request to POST
+23hook.js:608 API request error: TypeError: Failed to execute 'fetch' on 'Window': '/api/time-action-milestones' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at index.tsx?t=1748190249135:310:16
+    at Array.map (<anonymous>)
+    at generateStandardMilestones (index.tsx?t=1748190249135:305:50)
+    at onClick (index.tsx?t=1748190249135:1344:25)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=5a0b8b17:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=5a0b8b17:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=5a0b8b17:3733:39)
+    at invokeGuardedCallbackAndCatchFirstError (chunk-RPCDYKBN.js?v=5a0b8b17:3736:33)
+    at executeDispatch (chunk-RPCDYKBN.js?v=5a0b8b17:7014:11)
+overrideMethod @ hook.js:608Understand this error
+hook.js:608 Error generating milestones: TypeError: Failed to execute 'fetch' on 'Window': '/api/time-action-milestones' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:18:23)
+    at index.tsx?t=1748190249135:310:16
+    at Array.map (<anonymous>)
+    at generateStandardMilestones (index.tsx?t=1748190249135:305:50)
+    at onClick (index.tsx?t=1748190249135:1344:25)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=5a0b8b17:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=5a0b8b17:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=5a0b8b17:3733:39)
+    at invokeGuardedCallbackAndCatchFirstError (chunk-RPCDYKBN.js?v=5a0b8b17:3736:33)
+    at executeDispatch (chunk-RPCDYKBN.js?v=5a0b8b17:7014:11)
+overrideMethod @ hook.js:608Understand this error
+queryClient.ts:85 Query error: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+overrideMethod @ hook.js:608
+(anonymous) @ queryClient.ts:85
+await in (anonymous)
+fetchFn @ @tanstack_react-query.js?v=d958aeb3:840
+run @ @tanstack_react-query.js?v=d958aeb3:494
+start @ @tanstack_react-query.js?v=d958aeb3:536
+fetch @ @tanstack_react-query.js?v=d958aeb3:926
+executeFetch_fn @ @tanstack_react-query.js?v=d958aeb3:2211
+onSubscribe @ @tanstack_react-query.js?v=d958aeb3:1898
+subscribe @ @tanstack_react-query.js?v=d958aeb3:24
+(anonymous) @ @tanstack_react-query.js?v=d958aeb3:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=5a0b8b17:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=5a0b8b17:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=5a0b8b17:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=5a0b8b17:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=5a0b8b17:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=5a0b8b17:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=5a0b8b17:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=5a0b8b17:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=5a0b8b17:19416
+commitRoot @ chunk-RPCDYKBN.js?v=5a0b8b17:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=5a0b8b17:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=5a0b8b17:9119
+flushSync @ chunk-RPCDYKBN.js?v=5a0b8b17:18959
+scheduleRefresh @ chunk-RPCDYKBN.js?v=5a0b8b17:20004
+p.scheduleRefresh @ renderer.js:963
+(anonymous) @ @react-refresh:267
+performReactRefresh @ @react-refresh:256
+(anonymous) @ @react-refresh:677
+setTimeout
+(anonymous) @ @react-refresh:666
+validateRefreshBoundaryAndEnqueueUpdate @ @react-refresh:728
+(anonymous) @ index.tsx?t=1748190249135:2900
+(anonymous) @ client:34
+(anonymous) @ client:218
+(anonymous) @ client:193
+queueUpdate @ client:193
+await in queueUpdate
+(anonymous) @ client:642
+handleMessage @ client:640
+(anonymous) @ client:550Understand this error

@@ -1,0 +1,86 @@
+index-C28n_wL0.js:79 Making authenticated request to: /api/auth/me
+index-C28n_wL0.js:79 Response status: 200 for /api/auth/me
+index-C28n_wL0.js:79 Making authenticated request to: /api/merch/critical-alerts
+index-C28n_wL0.js:79 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+index-C28n_wL0.js:79 Making authenticated request to: /api/workflow-tasks/notifications
+index-C28n_wL0.js:79 Making authenticated request to: /api/workflow-tasks/my-tasks
+index-C28n_wL0.js:79 Response status: 200 for /api/workflow-tasks/my-tasks
+index-C28n_wL0.js:79 Making authenticated request to: /api/delivery-challans
+index-C28n_wL0.js:79 Response status: 200 for /api/workflow-tasks/notifications
+index-C28n_wL0.js:79 Response status: 200 for /api/merch/critical-alerts
+index-C28n_wL0.js:79 Response status: 200 for /api/delivery-challans
+index-C28n_wL0.js:79 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+index-C28n_wL0.js:79 Making authenticated request to: /api/purchase-orders
+index-C28n_wL0.js:79 Response status: 200 for /api/purchase-orders
+index-C28n_wL0.js:79 Making authenticated request to: /api/commercial/orders
+index-C28n_wL0.js:79 Response status: 200 for /api/commercial/orders
+index-C28n_wL0.js:79 Making authenticated request to: /api/commercial/lcs
+index-C28n_wL0.js:79 Response status: 200 for /api/commercial/lcs
+index-C28n_wL0.js:79 Making authenticated request to: /api/btb-lcs
+index-C28n_wL0.js:79 Response status: 200 for /api/btb-lcs
+index-C28n_wL0.js:79 Making authenticated request to: /api/quality/inspections
+index-C28n_wL0.js:79 Response status: 200 for /api/quality/inspections
+index-C28n_wL0.js:79 Making authenticated request to: /api/hr/employees
+index-C28n_wL0.js:79 Response status: 200 for /api/hr/employees
+index-C28n_wL0.js:79 Making authenticated request to: /api/workflow-tasks/my-tasks
+index-C28n_wL0.js:79 Making authenticated request to: /api/workflow-tasks/notifications
+index-C28n_wL0.js:79 Response status: 200 for /api/workflow-tasks/my-tasks
+index-C28n_wL0.js:79 Response status: 200 for /api/workflow-tasks/notifications
+index-C28n_wL0.js:79 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+index-C28n_wL0.js:79 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+index-C28n_wL0.js:79 Making authenticated request to: /api/payroll/runs
+index-C28n_wL0.js:79 Response status: 200 for /api/payroll/runs
+index-C28n_wL0.js:79 Making authenticated request to: /api/commercial/shipments
+index-C28n_wL0.js:79 Response status: 200 for /api/commercial/shipments
+index-C28n_wL0.js:79 Making authenticated request to: /api/gate-passes
+index-C28n_wL0.js:79 Response status: 200 for /api/gate-passes
+index-C28n_wL0.js:79 Making authenticated request to: /api/reports/reconciliation/stock-vs-gl
+index-C28n_wL0.js:79 Response status: 200 for /api/reports/reconciliation/stock-vs-gl
+index-C28n_wL0.js:79 Making authenticated request to: /api/exceptions/scan
+index-C28n_wL0.js:79 Making authenticated request to: /api/exceptions/summary
+index-C28n_wL0.js:79 Response status: 200 for /api/exceptions/scan
+installHook.js:1 TypeError: (v || []).filter is not a function
+    at mt (exceptions-page-DfLGCIIl.js:1:4079)
+    at Xa (index-C28n_wL0.js:39:16981)
+    at Wl (index-C28n_wL0.js:41:3135)
+    at Qp (index-C28n_wL0.js:41:44654)
+    at Bp (index-C28n_wL0.js:41:39661)
+    at eg (index-C28n_wL0.js:41:39589)
+    at Hi (index-C28n_wL0.js:41:39443)
+    at na (index-C28n_wL0.js:41:35825)
+    at Wc (index-C28n_wL0.js:41:36627)
+    at gn (index-C28n_wL0.js:39:3265)
+overrideMethod @ installHook.js:1
+installHook.js:1 [ErrorBoundary] Uncaught error: TypeError: (v || []).filter is not a function
+    at mt (exceptions-page-DfLGCIIl.js:1:4079)
+    at Xa (index-C28n_wL0.js:39:16981)
+    at Wl (index-C28n_wL0.js:41:3135)
+    at Qp (index-C28n_wL0.js:41:44654)
+    at Bp (index-C28n_wL0.js:41:39661)
+    at eg (index-C28n_wL0.js:41:39589)
+    at Hi (index-C28n_wL0.js:41:39443)
+    at na (index-C28n_wL0.js:41:35825)
+    at Wc (index-C28n_wL0.js:41:36627)
+    at gn (index-C28n_wL0.js:39:3265)
+overrideMethod @ installHook.js:1
+installHook.js:1 [ErrorBoundary] Component stack: 
+    at mt (https://prime7erp.com/assets/exceptions-page-DfLGCIIl.js:1:3124)
+    at G (https://prime7erp.com/assets/index-C28n_wL0.js:49:3327)
+    at Gg (https://prime7erp.com/assets/index-C28n_wL0.js:49:4140)
+    at Suspense
+    at div
+    at div
+    at div
+    at npe (https://prime7erp.com/assets/AppArea-CeTdSAj4.js:317:68352)
+    at Qg (https://prime7erp.com/assets/index-C28n_wL0.js:49:2689)
+    at u (https://prime7erp.com/assets/index-C28n_wL0.js:49:6458)
+    at xm (https://prime7erp.com/assets/index-C28n_wL0.js:79:50811)
+    at ipe (https://prime7erp.com/assets/AppArea-CeTdSAj4.js:317:80487)
+    at Suspense
+    at ii (https://prime7erp.com/assets/index-C28n_wL0.js:79:62015)
+    at Ux (https://prime7erp.com/assets/index-C28n_wL0.js:79:68843)
+    at Qx (https://prime7erp.com/assets/index-C28n_wL0.js:79:70578)
+    at Hx (https://prime7erp.com/assets/index-C28n_wL0.js:79:70455)
+    at gE (https://prime7erp.com/assets/index-C28n_wL0.js:79:98854)
+overrideMethod @ installHook.js:1
+index-C28n_wL0.js:79 Response status: 200 for /api/exceptions/summary

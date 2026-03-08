@@ -1,0 +1,103 @@
+```text id="h7k3p2"
+You are Replit Agent working inside my PrimeX ERP repo.
+
+OBJECTIVE
+Finalize the sidebar navigation (this is the FINAL structure) to match actual garment manufacturing departments, reduce confusion, and eliminate duplicate/ambiguous labels. This is a UI/navigation re-org only — DO NOT change any route paths or backend logic.
+
+TARGET CHANGES (do all)
+A) Core department re-org
+1) Merge “Sales & CRM” + “Merchandising” into ONE section named “Merchandising” (use Shirt icon already in repo).
+   - Include all existing items from both sections (do not invent new pages). Keep hrefs/icons unchanged.
+2) Move Gate Pass and Delivery Challan out of “Delivery & Logistics” into “Inventory” (append at end of Inventory list).
+   - Remove the entire “Delivery & Logistics” section.
+3) Move Banking items (Bank Accounts, Reconciliation, Payment Runs) out of “Banking” into “Finance” (append at end of Finance list).
+   - Remove the entire “Banking” section.
+4) Rename “Export & LC” to “Export & Import”.
+   - Move Logistics (/logistics with Truck icon) OUT of Manufacturing into “Export & Import”.
+   - Export & Import should contain the existing export-related items (Export Cases, Proforma Invoices, BTB LCs) plus Logistics.
+5) Move Quality (Legacy) (/quality/qc, CheckSquare icon) OUT of Manufacturing into the “Quality” section.
+
+B) Final polish to avoid confusing duplicates (LABEL-ONLY fixes; routes unchanged)
+6) Resolve “Reconciliation” label clash:
+   - Finance-side reconciliation (the one moved from Banking) label must be: “Bank Reconciliation”.
+   - Reports → /reports/reconciliation label must be renamed to: “Operational Reconciliation” (or “Data Reconciliation” if that reads better with existing docs).
+7) Resolve “Approval” label ambiguity:
+   - Finance → /accounts/vouchers/approval-queue label must be: “Voucher Approvals”.
+   - Workflow → /approvals label must be: “All Approvals” (or “Workflow Approvals” if repo already uses that wording elsewhere).
+
+C) Optional-but-recommended polish (DO THESE ONLY IF the routes already exist today)
+8) Move “Cashflow Calendar” (/cashflow/calendar) from Reports into Finance (label unchanged unless repo currently uses something else).
+9) Rename Inventory → /inventory/consumption-control label to “Consumption Control” (only label change).
+
+RESULT REQUIREMENT
+- Sidebar ends up with 12 sections (down from 15 previously).
+- No duplicate menu items.
+- No TypeScript/build errors.
+- All links still work (hrefs unchanged).
+- Only grouping/labels change; no route path edits.
+
+========================================
+STEP 0 — INSPECT (must do first)
+========================================
+1) Open: client/src/components/layout/sidebar.tsx
+   - Identify menuModules structure, section titles, icons, items (label + href + icon).
+2) Confirm current hrefs for all items mentioned (Gate Pass, Delivery Challan, Banking items, Logistics, Quality Legacy, Reconciliation pages, Approvals pages, Cashflow Calendar, Consumption Control).
+3) Open: client/src/data/tutorials.ts and replit.md to locate sidebar/org references that must be updated after the sidebar change.
+
+Proceed automatically to implementation after inspection.
+
+========================================
+T001 — Implement sidebar re-org + label fixes
+========================================
+Modify menuModules in client/src/components/layout/sidebar.tsx:
+- Merge Sales & CRM + Merchandising → “Merchandising”
+- Remove “Delivery & Logistics”; move its Gate Pass + Delivery Challan into Inventory (append at end)
+- Remove “Banking”; move Bank Accounts + Reconciliation + Payment Runs into Finance (append at end)
+- Rename “Export & LC” → “Export & Import”; move Logistics (/logistics) from Manufacturing into it
+- Move Quality (Legacy) (/quality/qc) from Manufacturing into Quality section
+- Apply label-only fixes:
+  - Finance reconciliation label: “Bank Reconciliation”
+  - Reports /reports/reconciliation label: “Operational Reconciliation” (or “Data Reconciliation”)
+  - Finance /accounts/vouchers/approval-queue label: “Voucher Approvals”
+  - Workflow /approvals label: “All Approvals” (or “Workflow Approvals”)
+- Optional polish (only if routes exist already):
+  - Move /cashflow/calendar to Finance
+  - Rename /inventory/consumption-control label to “Consumption Control”
+- Ensure final sections count is 12 and ordering remains sensible (keep existing ordering style; do not reorder unrelated sections unless necessary).
+
+Acceptance:
+- Sidebar renders with 12 sections; moved items appear once; labels updated; no TS errors.
+
+========================================
+T002 — Update docs to match final sidebar
+========================================
+Update client/src/data/tutorials.ts:
+- Replace “Sales & CRM” references → “Merchandising”
+- Replace “Delivery & Logistics” references → “Inventory”
+- Replace “Banking” references → “Finance”
+- Replace “Export & LC” references → “Export & Import”
+- If tutorials mention “Reconciliation” or “Approval Queue”, align text with new labels:
+  - “Bank Reconciliation”, “Operational/Data Reconciliation”
+  - “Voucher Approvals”, “All/Workflow Approvals”
+
+Update replit.md:
+- Document the final sidebar organization and the rationale:
+  - Merchandising merged
+  - Export & Import includes Logistics
+  - Inventory includes Gate Pass + Delivery Challan
+  - Finance includes banking items
+  - Quality includes Quality (Legacy)
+  - Note the label clarifications for reconciliation/approvals
+
+Acceptance:
+- Docs reflect the final structure and labels.
+
+========================================
+FINAL OUTPUT REQUIRED
+========================================
+After completion, print:
+1) Final sidebar sections (titles in order) and item counts per section
+2) A move map: each moved item → old section → new section (with href)
+3) Confirm that build/typecheck passed, or list remaining errors with fixes
+Proceed now.
+```

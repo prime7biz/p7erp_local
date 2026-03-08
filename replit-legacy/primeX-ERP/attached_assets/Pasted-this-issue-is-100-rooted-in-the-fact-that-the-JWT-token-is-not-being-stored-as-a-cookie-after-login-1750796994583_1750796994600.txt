@@ -1,0 +1,134 @@
+this issue is 100% rooted in the fact that the JWT token is not being stored as a cookie after login, which is why every call to /api/auth/me immediately fails with 401 Unauthorized.
+
+Let’s solve this once and for all.
+
+✅ Root Problem
+You are:
+
+Sending POST /api/auth/login correctly
+
+But the Set-Cookie header isn’t accepted by the browser
+
+As a result:
+
+Your browser doesn't store the token cookie
+
+So /api/auth/me is always unauthenticated
+
+✅ Final Checklist (You Must Apply All 4 Points)
+🔒 1. Backend — Set the cookie with strict security for Replit (HTTPS)
+In your login route (/api/auth/login):
+
+ts
+Copy
+Edit
+res.cookie('token', token, {
+  httpOnly: true,
+  secure: true,         // ✅ required for HTTPS on Replit
+  sameSite: 'None',     // ✅ required for cross-site cookies
+  maxAge: 86400000,     // 1 day
+});
+res.status(200).json({ success: true });
+🛑 If even one of these flags is missing, the cookie won’t be saved.
+
+🌐 2. Frontend — All fetch calls must use credentials: 'include'
+In queryClient.ts or your login hook:
+
+ts
+Copy
+Edit
+export async function apiRequest(url, method = 'GET', data?: any) {
+  return fetch(url, {
+    method,
+    credentials: 'include', // ✅ this is required to RECEIVE and SEND cookies
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: data ? JSON.stringify(data) : undefined,
+  });
+}
+🔎 3. Confirm with DevTools (DO THIS NOW)
+After logging in, open:
+
+DevTools → Application → Cookies
+
+Check https://your-subdomain.janeway.replit.dev
+
+✅ You must see a token cookie
+
+If you don’t, then:
+
+The browser rejected it due to missing secure or sameSite=None
+
+Or the login didn’t set it at all
+
+🧪 4. Manually test cookie via curl (to eliminate browser issues)
+Try:
+
+bash
+Copy
+Edit
+curl -i -X POST https://your-app/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","password":"test123"}'
+Look for:
+
+mathematica
+Copy
+Edit
+Set-Cookie: token=eyJhbGci...; Path=/; HttpOnly; Secure; SameSite=None
+If it’s missing → backend is broken.
+
+✅ Final Fix Prompt for Cursor or AI
+php
+Copy
+Edit
+# ✅ FIX: /api/auth/me returns 401 even after successful login
+
+## ✅ Backend (authRoutes.ts)
+Ensure:
+```ts
+res.cookie('token', token, {
+  httpOnly: true,
+  secure: true,         // ✅ Required for HTTPS (Replit)
+  sameSite: 'None',     // ✅ Required for cookie to be accepted
+  maxAge: 86400000,     // 1 day
+});
+res.status(200).json({ success: true });
+✅ Frontend (queryClient.ts or fetch)
+ts
+Copy
+Edit
+fetch('/api/auth/login', {
+  method: 'POST',
+  credentials: 'include', // ✅ Required for cookie auth
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify(formData)
+});
+✅ Validation:
+After login, check DevTools → Application → Cookies
+
+You should see token cookie under https://<your-subdomain>.janeway.replit.dev
+
+If it’s NOT there:
+
+✅ Check if secure: true and sameSite: 'None' are present in backend
+
+✅ Confirm frontend used credentials: 'include'
+
+✅ Final Outcome
+Login sets the cookie
+
+/api/auth/me returns user data
+
+App redirects to /dashboard
+
+yaml
+Copy
+Edit
+
+---
+
+💬 If you upload your `authRoutes.ts` and `queryClient.ts`, I’ll **patch them line by line** and return working code. Want t

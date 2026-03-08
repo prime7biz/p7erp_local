@@ -1,0 +1,78 @@
+PHASE 7.1 — MERCHANDISING + CRM + ORDER NEGOTIATION FOUNDATION
+(Enquiry → Quotation → Costing → Order Confirmation)
+
+Goal:
+Implement core merchandising workflow with versioning + approvals + audit trails.
+
+Part A — Discovery (no breaking changes)
+1) Identify existing modules/tables/routes for:
+   - customers/buyers, contacts, CRM
+   - products/styles
+   - sales orders (if any) and how they relate to garments orders
+   - inventory items (fabric/trims/packing)
+2) Output file paths and what exists vs missing.
+
+Part B — Data model (minimum viable)
+Create/extend:
+
+1) buyers (or reuse customers with type=BUYER)
+- id, tenantId, name, country, paymentTerms, leadTimeDefaults
+
+2) styles
+- id, tenantId, buyerId
+- styleNo, season, productType (tee/boxer/etc)
+- status: DRAFT|ACTIVE|ARCHIVED
+- techPackMeta JSON (optional)
+
+3) enquiries
+- id, tenantId, buyerId, styleId(optional)
+- enquiryNo, date, qty, targetPrice, deliveryDate, notes
+- status: DRAFT|SUBMITTED|NEGOTIATING|WON|LOST
+- history/audit
+
+4) quotations (versioned)
+- id, tenantId, enquiryId, versionNo
+- currency, validityDate
+- pricePerPc, totalValue
+- status: DRAFT|APPROVED|SENT|REVISED|ACCEPTED|REJECTED
+- approvedBy, approvedAt
+- revisionOfQuotationId(optional)
+
+5) costings (linked to quotation)
+- id, tenantId, quotationId
+- smv, efficiency, cm, overhead, marginPct
+- fabricCost, trimsCost, packingCost, washing/printing cost, testing cost
+- commercialCost, financeCost
+- totalCostPerPc, targetPrice, proposedPrice
+- breakdown JSON for details
+
+Part C — Workflow + permissions
+- Only MANAGER/ADMIN/TENANT_OWNER can approve quotation/costing
+- Edits after approval require workflow:override + reason + audit log
+- Immutability rules similar to vouchers: accepted quotations cannot be edited; revision creates a new version.
+
+Part D — APIs
+- POST /api/merch/enquiries
+- POST /api/merch/enquiries/:id/submit
+- POST /api/merch/quotations (creates v1)
+- POST /api/merch/quotations/:id/approve
+- POST /api/merch/quotations/:id/revise (creates v2 linked to v1)
+- GET  /api/merch/enquiries/:id/trace (shows quotations + costing versions)
+- GET  /api/merch/quotations/:id (with costing)
+
+Part E — Frontend minimum screens
+- Buyer list + buyer detail
+- Enquiry create + list
+- Quotation builder (with costing panel) + version timeline
+
+Part F — Verification
+Seed/test:
+- create buyer + style + enquiry
+- create quotation v1 + costing
+- approve + revise to v2
+- ensure v1 is immutable and trace shows history
+
+Output:
+- files changed list
+- sample API JSON for trace
+- proof of approvals + override audit entries

@@ -1,0 +1,217 @@
+You are working inside my existing PrimeX ERP codebase (the zip I uploaded). Do NOT create a new project. Modify the existing backend + frontend.
+
+GOAL
+Implement employee-based user creation + workflow roles + module access + report confidentiality + tasks/notifications integrated with the existing workflow engine and RBAC.
+
+IMPORTANT EXISTING CONTEXT (use it)
+- Roles + permissions are seeded in server/services/rbacSeeder.ts.
+- Workflow engine exists in server/services/workflowEngine.ts and already enforces:
+  - status transitions (DRAFT → SUBMITTED → CHECKED → RECOMMENDED → APPROVED → POSTED)
+  - requiredPermissionKey per action
+  - SoD conflicts (maker/checker separation)
+- Permission checks read roles via user_roles (permissionService.ts uses userRoles).
+- The user creation route currently writes only users (server/api/settingsRoutes.ts POST /users) and DOES NOT insert into user_roles. Fix this.
+- There is users.isSuperUser which must bypass RBAC.
+
+DELIVERABLES
+A) Fix role assignment bug: ensure every user has roles in user_roles and permission checks work.
+B) User creation must be from Employees list only (select an employee, not free text).
+C) While creating user:
+   1) Select ONE workflow role (Creator, Checker, Recommender, Approver, Poster, Auditor).
+   2) Select allowed modules via checkboxes.
+   3) Save => assign the workflow role + module roles in user_roles.
+D) Confidential reports:
+   - Workflow roles Creator + Checker cannot see “wholesome” reports (Trial Balance, P&L, Balance Sheet, Stock Valuation, Party Ledger, Payroll reports etc.)
+   - Other roles can see reports ONLY for modules they are allowed.
+E) Add task queue + notifications:
+   - Every workflow action creates a task for the next step and sends notifications to the next responsible users.
+   - Task list page + bell icon with unread count + toast popup when user is online.
+F) Must be tenant-safe: all queries scoped by tenantId.
+
+--------------------------------------------------------------------------------
+STEP 1 — DATABASE / SCHEMA CHANGES
+1) Employee-based user link
+- Add users.employeeRefId (int) FK → employees.id (or the equivalent employees PK in shared/schema.ts).
+- Keep existing users.employeeId text for now if used elsewhere, but ensure employeeRefId is the true link going forward.
+- Add unique constraint: (tenantId, employeeRefId) so one employee cannot have multiple users in the same tenant.
+- Add migration.
+
+2) Tasks + Notifications tables
+Create new tables in shared/schema.ts + migration:
+- tasks:
+  id, tenantId, docType (text), docId (int), assignedRoleId (int, nullable), assignedUserId (int, nullable),
+  status (OPEN|DONE), title (text), meta (json), createdAt, updatedAt
+- notifications:
+  id, tenantId, userId, type (WORKFLOW|SYSTEM), title, body, meta (json),
+  readAt (timestamp nullable), createdAt
+
+Indexes:
+- tasks tenantId + status
+- tasks assignedUserId + status
+- tasks assignedRoleId + status
+- notifications tenantId + userId + readAt
+
+--------------------------------------------------------------------------------
+STEP 2 — RBAC MODEL (ROLES + MODULE ACCESS)
+You must NOT create “custom permission arrays per user”. Use roles.
+
+2.1 Workflow roles (already exist)
+Ensure these exist (use existing seed names if present):
+- data_entry (Creator)
+- officer (Checker)
+- recommender
+- approver
+- accounts_poster (Poster)
+- auditor
+
+2.2 Module roles (NEW)
+Create module roles in rbacSeeder.ts. Each module role grants module-specific permissions:
+- module_accounts
+- module_inventory
+- module_purchase
+- module_sales
+- module_commercial_lc
+- module_hr_payroll
+(Add more if existing modules exist; keep minimal for now.)
+
+2.3 Report permissions (NEW, explicit)
+Add explicit read permissions for reports in rbacSeeder.ts:
+Accounts:
+- accounts:trial_balance:read
+- accounts:pl:read
+- accounts:balance_sheet:read
+- accounts:party_ledger:read
+- accounts:voucher_register:read
+Inventory:
+- inventory:stock_valuation:read
+- inventory:stock_summary:read
+Purchase/Sales:
+- purchase:register:read
+- sales:register:read
+HR:
+- hr:payroll_report:read
+
+Grant strategy:
+- data_entry + officer: DO NOT grant any of the above “wholesome report” permissions.
+  (They may keep permission to view/print their own vouchers if needed.)
+- recommender + approver + accounts_poster + auditor: grant report permissions only if user also has the relevant module role.
+(If easier: grant report perms to module roles, and do not assign module roles to creator/checker unless you want them to do module entry; if they must do entry, keep module role but still block report perms via a separate “report role”. Prefer this clean rule:
+  - Module roles give entry/action permissions
+  - Report permissions are separate and granted only to higher roles
+)
+
+Implement whichever is simplest but must satisfy:
+- Creator/Checker can do entry/check actions
+- They cannot open Trial Balance / P&L / Balance Sheet / Stock Valuation / Party ledger / Payroll reports
+
+--------------------------------------------------------------------------------
+STEP 3 — FIX USER CREATION BUG (user_roles sync)
+In server/api/settingsRoutes.ts:
+- POST /users: after inserting into users, also insert rows into user_roles:
+  - primary workflow role (selected by admin)
+  - selected module roles
+- PUT /users/:id: update roles by:
+  - delete existing user_roles for that user+tenant
+  - insert new selected roles (workflow + modules)
+Do not rely on users.roleId alone; keep it for backward compatibility but permission system must work even if users.roleId is wrong.
+
+Also ensure isSuperUser bypass remains.
+
+--------------------------------------------------------------------------------
+STEP 4 — EMPLOYEE-BASED USER CREATION UI
+In client/src/pages/settings/user-management.tsx (or equivalent):
+- Replace free employee fields with a dropdown “Select Employee”:
+  - query employees list API
+  - show (employeeId, full name, department)
+  - on selection auto-fill name/email/phone (read-only or editable as per current pattern)
+- Add “Workflow Role” dropdown (Creator/Checker/Recommender/Approver/Poster/Auditor)
+- Add “Modules Allowed” checkbox list (Accounts, Inventory, Purchase, Sales, Commercial/LC, HR/Payroll)
+- On submit, send payload:
+  { employeeRefId, workflowRoleKey, moduleRoleKeys[], username, email, phone, isActive, isSuperUser? }
+- Add validation:
+  - must select employee
+  - must choose workflow role
+  - at least 1 module selected (unless superuser)
+
+Backend:
+- Add GET /employees picklist endpoint if not existing (tenant scoped).
+- Ensure the response contains: employees.id, employeeId, name, department
+
+--------------------------------------------------------------------------------
+STEP 5 — REPORT CONFIDENTIALITY ENFORCEMENT
+Backend:
+- Any report API route must use requirePermission().
+- Add/ensure middleware “requirePermission(permissionKey)” exists and is used.
+- For pages without backend routes yet, still guard the frontend route and API.
+
+Frontend:
+- Hide report navigation items if user lacks the report permission.
+- For Creator/Checker, do not render “Reports” sections.
+
+Edge:
+- Never rely only on frontend hiding. Backend must enforce.
+
+--------------------------------------------------------------------------------
+STEP 6 — TASK QUEUE + NOTIFICATIONS IN WORKFLOW ENGINE
+Add a service server/services/taskService.ts and notificationService.ts.
+
+On every workflow transition (in workflowEngine.ts):
+- Determine next assignee:
+  SUBMIT -> Checker role queue
+  CHECK -> Recommender role queue
+  RECOMMEND -> Approver role queue
+  APPROVE -> Poster role queue (or back to the original creator user if that is the intended posting person)
+  POST -> no next task; mark previous task DONE
+  REJECT/RETURN -> assign back to creator (document.createdBy)
+Implementation requirements:
+- Create a task row on transition with title like: “Voucher #123 needs CHECK”
+- Send notifications to:
+  - if assignedUserId exists => notify that user
+  - else assignedRoleId => notify all active users in that role for that tenant
+- Add APIs:
+  - GET /api/tasks?status=OPEN (my queue: tasks assigned to my user or to my roles)
+  - POST /api/tasks/:id/done (mark done)
+  - GET /api/notifications (list recent)
+  - POST /api/notifications/:id/read
+  - POST /api/notifications/read-all
+
+Frontend:
+- Add bell icon to top bar with unread count.
+- Create a “My Tasks” page listing OPEN tasks with filters (docType, status).
+- When notification arrives while user is online, show toast popup.
+(Use polling every 20–30s for MVP. If you already have websockets, use them; otherwise polling is fine.)
+
+--------------------------------------------------------------------------------
+STEP 7 — TESTING / VERIFICATION (must do)
+Add a short manual test checklist in the PR description and run through:
+1) Create an employee.
+2) Create user from employee as Creator + Accounts module.
+   - Ensure user_roles inserted.
+   - Ensure Creator cannot open Trial Balance API/page (403).
+3) Create Checker user.
+   - Ensure Checker sees submitted vouchers in task list and gets notification.
+4) Submit voucher as Creator:
+   - Task created for Checker.
+5) Checker checks:
+   - Task created for Recommender.
+6) Recommender recommends:
+   - Task created for Approver.
+7) Approver approves:
+   - Task created for Poster or original Creator (posting stage).
+8) Poster posts:
+   - Document status POSTED; task closed; audit log created.
+9) Auditor can view audit trail but cannot change status.
+10) Superuser can do everything.
+
+QUALITY RULES
+- Keep code style consistent with existing repo.
+- Tenant isolation everywhere.
+- No breaking changes to existing auth.
+- Add migrations + update seeders safely.
+- If any existing routes/pages need refactor, do it but keep the app running.
+
+Now implement everything above end-to-end.
+Return:
+- list of files changed
+- explanation of schema changes
+- how to test in UI

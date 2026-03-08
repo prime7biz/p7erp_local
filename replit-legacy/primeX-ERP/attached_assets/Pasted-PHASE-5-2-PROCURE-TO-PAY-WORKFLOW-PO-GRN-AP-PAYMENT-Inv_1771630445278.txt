@@ -1,0 +1,131 @@
+PHASE 5.2 — PROCURE-TO-PAY WORKFLOW (PO → GRN → AP → PAYMENT)
+(Inventory valuation + landed cost + accounting vouchers + approvals)
+
+Goal:
+Make purchasing end-to-end functional and audit-ready:
+- Purchase Requisition (optional) → Purchase Order → GRN/Receive → Supplier Invoice (AP)
+- Payments (bank/cash), partial payments, supplier aging
+- Landed cost allocation (freight, CNF, insurance) into inventory valuation (optional but recommended)
+- Approval workflow + override trail
+- Idempotent posting + period lock compliance
+
+Part A — Discover what exists (NO breaking changes)
+1) Locate existing tables/endpoints for:
+   - suppliers/vendors
+   - purchase orders
+   - GRN/receipts (stock in)
+   - purchase invoices/bills
+   - payments
+   - inventory moves + valuation method
+   - accounting vouchers + period lock + reversal rules
+2) Output file paths + what already exists vs missing.
+
+Part B — Core entities (minimum viable)
+Create/extend (only if missing):
+
+1) purchase_orders
+- id, tenantId, poNo(unique per tenant), supplierId
+- poDate, expectedDate, currency
+- status: DRAFT|APPROVED|SENT|PARTIAL_RECEIVED|RECEIVED|CLOSED|CANCELLED
+- totals + approval fields
+
+2) goods_receipts (GRN)
+- id, tenantId, grnNo(unique), supplierId, purchaseOrderId(optional)
+- warehouseId, receiptDate
+- status: DRAFT|APPROVED|POSTED|CANCELLED
+- inventoryMoveGroupId link
+- postingStatus PENDING_POSTING|POSTED
+- accountingVoucherId link (if you post valuation entries immediately)
+
+3) supplier_invoices (AP bills)
+- id, tenantId, billNo(unique per tenant per supplier), supplierId
+- invoiceDate, dueDate, currency
+- amount, tax, discount
+- status: DRAFT|APPROVED|POSTED|PARTIAL_PAID|PAID|CANCELLED
+- accountingVoucherId link
+- links: purchaseOrderId, grnId(optional)
+
+4) supplier_payments
+- id, tenantId, paymentNo(unique), supplierId
+- paymentDate, amount, method BANK|CASH|MFS
+- status: DRAFT|APPROVED|POSTED|CANCELLED
+- accountingVoucherId link
+- allocation table: payment_allocations(invoiceId, amountApplied)
+
+Part C — Workflow rules (approval + immutability)
+1) PO approval locks items/qty/price unless override (workflow:override + reason).
+2) GRN POST is transactional + idempotent (requestId):
+   - creates inventory moves (stock in)
+   - updates valuation layers/cost
+3) Supplier invoice POST:
+   - cannot be posted in locked period (unless override with audit)
+   - immutable once posted (changes via reversal + new bill)
+4) Payments POST:
+   - generates voucher
+   - supports partial payments + allocations
+   - immutable once posted
+
+Part D — Inventory valuation + landed cost (recommended)
+1) GRN establishes unit cost from PO price (or actual received cost).
+2) Landed cost handling:
+   - allow capturing charges (freight/CNF/insurance) per GRN or per invoice
+   - allocate proportionally by qty/value to received items
+   - update valuation cost layers accordingly
+3) Ensure inventory vs ledger reconciliation remains 0 after posting.
+
+Part E — Accounting integration (Tally-like)
+Add/confirm tenant ledger mappings:
+- inventoryAssetLedgerId (already)
+- accountsPayableLedgerId (supplier control)
+- purchaseExpenseOrCOGSLedgerId (if direct expense purchases)
+- landedCostClearingLedgerId / freightExpenseLedgerId
+- bankLedgerId / cashLedgerId
+- taxInputLedgerId (optional VAT)
+
+Posting rules:
+1) On Supplier Invoice POST (AP):
+- Debit: Inventory Asset (or Purchase Expense) [+ landed costs if capitalized]
+- Debit: Input Tax (optional)
+- Credit: Accounts Payable (Supplier)
+
+2) On Payment POST:
+- Debit: Accounts Payable
+- Credit: Bank/Cash
+
+Part F — APIs (minimum)
+PO:
+- POST /api/purchase/orders
+- POST /api/purchase/orders/:id/approve
+- GET  /api/purchase/orders/:id
+GRN:
+- POST /api/purchase/grn
+- POST /api/purchase/grn/:id/approve
+- POST /api/purchase/grn/:id/post (transaction + requestId)
+Bills:
+- POST /api/purchase/bills
+- POST /api/purchase/bills/:id/post (creates voucher)
+Payments:
+- POST /api/purchase/payments
+- POST /api/purchase/payments/:id/post
+Reports:
+- GET /api/purchase/reports/ap-aging?asOf=YYYY-MM-DD
+- GET /api/purchase/bills/:id/trace (grn + voucher + payments)
+
+Part G — Verification (proof required)
+Seed/test script:
+1) Create PO for 100 units
+2) Post GRN for 100 units
+3) Post Supplier Invoice linked to GRN
+4) Post partial payment then final payment
+Verify:
+- AP balance decreases correctly
+- inventory valuation updated correctly
+- vouchers balanced
+- idempotency: same requestId on GRN post doesn’t duplicate moves
+- posted docs immutable (edit fails; reversal required)
+
+Output:
+- files changed list
+- sample JSON for each lifecycle step
+- example voucher lines for bill + payment
+- AP aging sample output

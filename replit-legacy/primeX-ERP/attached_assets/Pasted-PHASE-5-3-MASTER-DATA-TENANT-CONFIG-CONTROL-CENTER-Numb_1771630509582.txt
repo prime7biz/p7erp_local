@@ -1,0 +1,137 @@
+PHASE 5.3 — MASTER DATA + TENANT CONFIG CONTROL CENTER
+(Number Series, Ledger Mappings, Warehouses, Roles/Policies, System Settings)
+
+Goal:
+Create a robust configuration layer so every module behaves consistently:
+- Central tenant settings (currency, valuation method, fiscal year, time zone)
+- Number series for documents (SO/PO/GRN/Voucher/Shipment/Challan etc.)
+- Ledger mappings (Inventory asset, AR/AP, Revenue, COGS, Salary, Subcontract, Bank, Tax)
+- Default warehouses/locations (RM, WIP, FG, Subcontract Out, Scrap)
+- Approval policy matrix (who can approve/post/override per doc type)
+- Ensure all modules use this config instead of hard-coded IDs.
+
+Part A — Discover what exists (NO breaking changes)
+1) Locate existing tables/endpoints for:
+   - tenant settings/config
+   - number series / document numbering
+   - warehouses/locations
+   - ledger mappings / chart of accounts defaults
+   - approval workflow policies
+2) Output file paths + brief summary.
+
+Part B — Implement Tenant Settings (single source of truth)
+Create/extend a table like tenant_settings:
+- tenantId (PK/FK)
+- baseCurrency (default BDT)
+- timezone (default Asia/Dhaka)
+- fiscalYearStartMonth (e.g. 7 for Jul)
+- inventoryValuationMethod: FIFO|WAVG|STANDARD
+- negativeStockPolicy: BLOCK|ALLOW_WITH_OVERRIDE
+- requireApprovalForConsumptionChange: boolean
+- requireApprovalForBackdatePosting: boolean
+- createdAt, updatedAt
+
+API:
+- GET  /api/settings/tenant
+- PUT  /api/settings/tenant (ADMIN/TENANT_OWNER only)
+
+Part C — Number Series Engine
+Create/extend tables:
+1) number_series
+- id, tenantId
+- docType: SO|PO|GRN|BILL|PAYMENT|VOUCHER|CHALLAN|SHIPMENT|PRODUCTION|PAYROLL...
+- prefix, padding (e.g. 6), nextNumber
+- resetPolicy: NEVER|YEARLY|MONTHLY
+- status ACTIVE|INACTIVE
+2) Implement a safe generator:
+- atomic increment within transaction
+- idempotent support with requestId (if same requestId asks again, return same number)
+
+API:
+- GET  /api/settings/number-series
+- POST /api/settings/number-series
+- POST /api/settings/number-series/:docType/preview
+- POST /api/settings/number-series/:docType/next (protected/internal use)
+
+Then refactor key document creations to use the generator:
+- vouchers, SO, PO, GRN, challan, shipment (minimum)
+
+Part D — Ledger Mapping Config (per tenant)
+Create tenant_ledger_mappings table (or extend existing):
+- tenantId
+- inventoryAssetLedgerId
+- accountsReceivableLedgerId
+- accountsPayableLedgerId
+- salesRevenueLedgerId
+- cogsLedgerId
+- salaryExpenseLedgerId
+- salaryPayableLedgerId
+- subcontractPayableLedgerId
+- bankLedgerId
+- cashLedgerId
+- taxInputLedgerId (optional)
+- taxOutputLedgerId (optional)
+- wipLedgerId (optional)
+Validation:
+- ledger IDs must belong to same tenant
+- required mappings must be present before posting certain docs
+
+API:
+- GET /api/settings/ledger-mappings
+- PUT /api/settings/ledger-mappings
+
+Part E — Warehouse/Location Defaults
+Create/extend tenant_defaults:
+- tenantId
+- defaultWarehouseRmId
+- defaultWarehouseWipId
+- defaultWarehouseFgId
+- defaultWarehouseSubcontractOutId
+- defaultWarehouseScrapId
+Rules:
+- block posting inventory docs if required defaults missing
+
+API:
+- GET /api/settings/warehouses/defaults
+- PUT /api/settings/warehouses/defaults
+
+Part F — Approval Policy Matrix
+Create approval_policies table:
+- tenantId, docType, action (APPROVE|POST|OVERRIDE|CANCEL)
+- minRole OR requiredPermission
+- optional thresholds (amountLimit, qtyLimit)
+- requiresReason boolean
+- active boolean
+
+Middleware helper:
+- requirePolicy(docType, action, context) that checks:
+  role/permission + thresholds + reason presence
+
+Apply to:
+- voucher post / override
+- inventory consume override
+- GRN post
+- invoice post
+- payroll post/pay
+- subcontract challan post/bill post
+
+Part G — Verification
+1) Add a “System Readiness Check” endpoint:
+GET /api/settings/health
+Return:
+- missing ledger mappings
+- missing number series
+- missing warehouse defaults
+- tenant settings summary
+- flags that block posting (true/false)
+
+2) Seed defaults per tenant:
+- create primary number series
+- set default valuation method
+- create default approval policies (sane defaults)
+
+Output:
+- files changed list
+- sample JSON from /api/settings/health showing readiness checks
+- proof that document creation now uses number series generator
+- proof that posting fails with clear error if mappings missing (code: CONFIG_INCOMPLETE)

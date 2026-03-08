@@ -1,0 +1,173 @@
+PHASE 4.2 — SUBCONTRACT + COMMERCIAL (LC/EXPORT/IMPORT) + LOGISTICS WORKFLOW
+(Job Work Bills + Documents + Approvals + Accounting + Inventory Traceability)
+
+Goal:
+Build end-to-end “Commercial + Logistics” layer:
+- Subcontract job work (knitting/dyeing/sewing etc.) with challans, receive, bill
+- LC / PI / UD / EXP / IMP documents tracking
+- Shipment planning, packing list, invoice, BL/AWB, courier, ETA/ETD tracking
+- Every document ties to Sales Order / Purchase Order / Production Order
+- Accounting entries generated correctly (accruals, payables, export proceeds, charges)
+- Approval workflow for sensitive actions (document changes, price, quantities)
+
+Part A — Discover current modules (NO changes yet)
+1) Locate existing modules/endpoints/tables for:
+   - suppliers/subcontractors
+   - purchase orders / sales orders
+   - inventory challan / gatepass / GRN / delivery
+   - accounting vouchers & posting
+   - any LC/commercial module (if exists)
+2) Output file paths + key snippets, and list what already exists vs missing.
+
+Part B — Core Entities (minimum viable ERP)
+Implement/extend tables:
+
+1) subcontract_jobs
+- id, tenantId
+- jobType: KNIT|DYE|PRINT|SEW|PACK
+- partyId (supplier/subcontractor)
+- sourceDocType/sourceDocId (productionOrderId or salesOrderId)
+- status: DRAFT|APPROVED|SENT|PARTIAL_RECEIVED|RECEIVED|BILLED|CLOSED
+- plannedQty, receivedQty, rejectedQty
+- rate, amount, currency
+- dueDate, notes
+- createdBy, approvedBy, timestamps
+
+2) subcontract_challans (material send/receive)
+- id, tenantId, subcontractJobId
+- challanNo (unique per tenant)
+- direction: OUTBOUND|INBOUND
+- date
+- items: store as child rows subcontract_challan_lines
+- warehouseFromId, warehouseToId (e.g. RM store → “Subcontract Out” virtual location)
+- inventoryMoveGroupId (link to inventory moves)
+- status: DRAFT|POSTED|CANCELLED
+
+3) subcontract_bills
+- id, tenantId, subcontractJobId
+- billNo, billDate
+- amount, tax, discount
+- status: DRAFT|APPROVED|POSTED|PAID
+- accountingVoucherId link
+- attachments (optional)
+
+4) commercial_lc (if your business uses LC)
+- id, tenantId
+- lcNo, lcType (Import/Export), bank, issueDate, expiryDate
+- applicant, beneficiary
+- value, currency
+- status: DRAFT|ACTIVE|AMENDED|CLOSED
+- linkedSalesOrderId OR linkedPurchaseOrderId
+- attachments
+
+5) commercial_documents (generic doc tracker)
+- id, tenantId
+- docType: PI|CI|PL|BL|AWB|COO|UD|EXP|IP|BE|ETD|ETA|INSURANCE|CERT
+- docNo, docDate
+- relatedType (SO/PO/Shipment/LC/Subcontract)
+- relatedId
+- status: DRAFT|SUBMITTED|APPROVED|REJECTED|ISSUED
+- metadata JSON (for flexible fields)
+- attachments
+
+6) shipments
+- id, tenantId
+- salesOrderId
+- shipmentNo
+- mode: SEA|AIR|COURIER|TRUCK
+- forwarder, vessel/flight, containerNo
+- etd, eta, portOfLoading, portOfDischarge
+- status: PLANNED|BOOKED|SHIPPED|DELIVERED|CLOSED
+- invoiceId / commercial invoice link
+- packingListId link
+
+Part C — Workflow + approvals (critical)
+1) Any of these require approval:
+- subcontract rate change after approval
+- challan quantity change after approval
+- LC amendment (value/date/party)
+- shipment document edits after “ISSUED”
+2) Implement workflow actions:
+- submit → approve → post
+- override requires workflow:override permission + overrideReason + audit log
+
+Part D — Inventory integration (challans MUST affect stock)
+1) OUTBOUND challan:
+- inventory OUT from warehouseFromId
+- inventory IN to a virtual “Subcontract Out” location OR tracked as “In-Transit”
+2) INBOUND challan:
+- inventory IN to destination warehouse
+- optional rejection/scrap to separate location
+3) All challan posting must be transactional and idempotent (reuse requestId from Phase 2.2)
+4) Stock valuation:
+- outbound moves keep cost layer reference
+- inbound output cost roll-up handled via production transformation logic or subcontract service cost (depending on jobType)
+
+Part E — Accounting integration
+1) Subcontract bill posting creates voucher:
+- Debit: WIP / Production Expense or Inventory (capitalized) based on config
+- Credit: Subcontractor Payable
+2) Logistics charges (freight, CNF, insurance):
+- map to expense ledgers or inventory landed cost pool
+3) Export shipment:
+- Sales invoice → Accounts Receivable / Export proceeds
+- recognize revenue and COGS (if you are doing it now; otherwise mark as later phase)
+4) Add tenant-level mappings:
+- wipLedgerId
+- subcontractExpenseLedgerId
+- subcontractPayableLedgerId
+- freightExpenseLedgerId / landedCostLedgerId
+- exportReceivableLedgerId
+- bankChargesLedgerId
+
+Part F — APIs (minimum)
+Subcontract:
+- POST /api/subcontract/jobs (draft)
+- POST /api/subcontract/jobs/:id/approve
+- POST /api/subcontract/challans (create outbound/inbound)
+- POST /api/subcontract/challans/:id/post (creates inventory moves, transactional)
+- POST /api/subcontract/bills (create)
+- POST /api/subcontract/bills/:id/post (creates voucher)
+- GET  /api/subcontract/jobs/:id (full trace)
+
+Commercial/Logistics:
+- POST /api/commercial/lc
+- POST /api/commercial/lc/:id/amend (requires approval)
+- POST /api/commercial/documents
+- POST /api/commercial/documents/:id/approve
+- POST /api/shipments
+- POST /api/shipments/:id/update-status
+- GET  /api/shipments/:id (documents + timeline)
+
+Part G — Traceability (auditor grade)
+Provide “trace” endpoints:
+1) GET /api/subcontract/jobs/:id/trace
+Return:
+- linked production/sales doc
+- challans OUT/IN with inventory move ids
+- bills with voucher ids
+- pending posting counts
+2) GET /api/shipments/:id/trace
+Return:
+- sales order
+- packing list, invoice, BL/AWB docs
+- accounting vouchers posted
+- status timeline
+
+Part H — Verification (proof)
+Add seed/test scripts:
+1) Create subcontract job, approve
+2) Post outbound challan (stock leaves RM)
+3) Post inbound challan (stock returns as greige/finished)
+4) Create & post subcontract bill (voucher created)
+5) Create LC + documents + shipment, update statuses
+6) Verify:
+- no cross-tenant access
+- inventory vs ledger reconciliation remains 0 after posting
+- override blocked unless permission + reason
+
+Output:
+- files changed list
+- sample JSON for each major endpoint
+- example audit log entries for approvals/overrides
+- reconciliation proof snapshot (totals)

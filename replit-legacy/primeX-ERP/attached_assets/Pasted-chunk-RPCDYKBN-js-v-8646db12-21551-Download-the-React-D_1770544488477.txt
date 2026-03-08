@@ -1,0 +1,35 @@
+chunk-RPCDYKBN.js?v=8646db12:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+queryClient.ts:68 Making authenticated request to: /api/auth/me
+queryClient.ts:76 Response status: 200 for /api/auth/me
+queryClient.ts:68 Making authenticated request to: /api/settings/tenant-settings
+queryClient.ts:68 Making authenticated request to: /api/accounting/vouchers/dashboard
+queryClient.ts:68 Making authenticated request to: /api/accounting/vouchers/types
+queryClient.ts:68 Making authenticated request to: /api/accounting/vouchers
+queryClient.ts:76 Response status: 200 for /api/settings/tenant-settings
+queryClient.ts:76 Response status: 200 for /api/accounting/vouchers/dashboard
+queryClient.ts:76 Response status: 200 for /api/accounting/vouchers/types
+queryClient.ts:76 Response status: 200 for /api/accounting/vouchers
+queryClient.ts:68 Making authenticated request to: /api/accounting/vouchers?statusId=8
+queryClient.ts:76 Response status: 200 for /api/accounting/vouchers?statusId=8
+queryClient.ts:68 Making authenticated request to: /api/accounting/vouchers?statusId=7
+queryClient.ts:76 Response status: 200 for /api/accounting/vouchers?statusId=7
+queryClient.ts:68 Making authenticated request to: /api/accounting/account-groups/hierarchy
+queryClient.ts:68 Making authenticated request to: /api/accounting/account-groups
+queryClient.ts:76 Response status: 200 for /api/accounting/account-groups/hierarchy
+queryClient.ts:76 Response status: 200 for /api/accounting/account-groups
+queryClient.ts:68 Making authenticated request to: /api/currencies
+queryClient.ts:76 Response status: 200 for /api/currencies
+queryClient.ts:15 Making POST request to /api/currencies
+/api/currencies:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+queryClient.ts:44 API error (500): duplicate key value violates unique constraint "currencies_code_key"
+apiRequest @ queryClient.ts:44
+queryClient.ts:56 API request error: Error: duplicate key value violates unique constraint "currencies_code_key"
+    at apiRequest (queryClient.ts:51:13)
+apiRequest @ queryClient.ts:56
+queryClient.ts:15 Making POST request to /api/currencies
+/api/currencies:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+queryClient.ts:44 API error (500): duplicate key value violates unique constraint "currencies_code_key"
+apiRequest @ queryClient.ts:44
+queryClient.ts:56 API request error: Error: duplicate key value violates unique constraint "currencies_code_key"
+    at apiRequest (queryClient.ts:51:13)
+apiRequest @ queryClient.ts:56

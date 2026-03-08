@@ -1,0 +1,211 @@
+You are the Replit Agent working on the Prime7ERP website (single domain, NO subdomain). 
+Goal: Improve SEO for Bangladesh + global buyers by adding SEO landing pages, keyword targeting, and IP-based currency display (with manual override). 
+Do NOT break the existing ERP app under /app/*.
+
+========================
+A) ROUTING (NO SUBDOMAIN)
+========================
+1) Public marketing site routes (INDEXABLE):
+- /
+- /features
+- /garments-erp
+- /buying-house-erp
+- /erp-software-bangladesh
+- /pricing
+- /how-it-works
+- /resources (blog index + posts)
+- /about
+- /contact
+- /security
+- /privacy
+- /terms
+
+2) Client area (NOT INDEXABLE):
+- /app/* (keep existing app)
+- MUST add "noindex,nofollow" for all /app pages
+- robots.txt must Disallow: /app/
+- sitemap.xml must EXCLUDE /app/*
+
+========================
+B) SEO KEYWORD STRATEGY
+========================
+We sell worldwide, but we must also rank strongly in Bangladesh searches.
+Implement a keyword map (as a config file) and use it to generate page copy + metadata (title, description, H1, FAQ).
+
+Create a file:
+- /seo/keywords.ts (or .json) containing these clusters:
+
+1) Bangladesh ERP (core)
+- "erp software bangladesh"
+- "best erp software in bangladesh"
+- "cloud erp bangladesh"
+- "erp solution bangladesh"
+- "erp software price in bangladesh"
+- "inventory management software bangladesh"
+- "accounting software bangladesh"
+- "hr payroll software bangladesh"
+
+2) Garments manufacturing ERP (RMG)
+- "garments erp software bangladesh"
+- "rmg erp software bangladesh"
+- "garment factory management software"
+- "apparel erp software"
+- "garments production management software"
+- "wip costing software garments"
+- "tally style accounting erp"
+
+3) Buying house / merchandising / T&A
+- "buying house erp software bangladesh"
+- "garments buying house software"
+- "merchandising software garments"
+- "tna software garments"
+- "po tracking software garments"
+- "sample management software garments"
+- "shipment management software garments"
+- "commercial lc management software garments"
+
+Add also global-friendly keywords (to blend into worldwide search intent):
+- "cloud ERP for apparel"
+- "apparel manufacturing ERP"
+- "ERP for garment factories"
+- "ERP for buying houses"
+- "multi-currency ERP"
+- "multi-tenant ERP"
+
+For each public page, define:
+- primary_keyword
+- secondary_keywords[]
+- suggested_internal_links[]
+
+Then:
+- Use this mapping to generate strong SEO metadata and on-page headings (H1/H2) + FAQ content.
+- Keep wording global: “Global apparel supply chain” + “works for Bangladesh RMG and worldwide operations”.
+
+========================
+C) PAGES TO BUILD (CONTENT REQUIREMENTS)
+========================
+1) /garments-erp (HIGH PRIORITY)
+- Must explain: consumption control with approval, stock valuation connected to accounting, process conversion (yarn→knit→dye→finish), WIP costing, audit logs, multi-warehouse, batch/lot.
+- Include FAQ section (6–8 Qs) + JSON-LD FAQPage schema.
+
+2) /buying-house-erp (HIGH PRIORITY)
+- Must cover: T&A calendar, PO tracking, sample management, supplier follow-up, shipment milestones, document & compliance, approvals, reporting.
+- Include FAQ + schema.
+
+3) /erp-software-bangladesh (HIGH PRIORITY)
+- Position as global cloud ERP but optimized for Bangladesh businesses (without making it “Bangladesh-only”).
+- Mention VAT-ready capability as “optional / roadmap” if not implemented.
+- Include FAQ + schema.
+
+4) /pricing (HIGH PRIORITY)
+- Show plan cards: Starter (10–30 users), Growth (31–100), Enterprise (101+).
+- Price display MUST auto-select currency by country IP, but allow manual override via currency switcher.
+- If you don’t have real prices, show “Contact us” and still display currency symbol for add-ons or “starting from”.
+
+5) /resources
+- Build blog index + 6 starter posts (short but real, 800–1200 words each is OK):
+  a) Consumption control in garments ERP
+  b) Stock valuation + accounting integration (Tally-style)
+  c) WIP costing and process loss in RMG
+  d) Buying house T&A workflow
+  e) PO, sample, and shipment tracking
+  f) Multi-currency ERP for exporters
+- Add internal links from blogs to /garments-erp, /buying-house-erp, /pricing, /contact.
+
+========================
+D) GEO-IP CURRENCY + MANUAL OVERRIDE
+========================
+Requirement: show currency based on visitor’s country IP, but user can change it.
+Must not create duplicate SEO pages per currency.
+
+Implementation (Next.js App Router preferred):
+1) Detect country:
+- Prefer headers if available:
+  - Cloudflare: "CF-IPCountry"
+  - Vercel: "x-vercel-ip-country"
+- If none, fallback to "US".
+
+2) Currency mapping:
+- BD -> BDT (bn-BD)
+- US -> USD (en-US)
+- GB -> GBP (en-GB)
+- EU countries -> EUR (en-IE or country locale)
+- AE -> AED
+- SA -> SAR
+- CA -> CAD
+- AU -> AUD
+- Default -> USD
+
+3) Persist choice:
+- Set cookies: p7_country, p7_currency
+- Provide a currency dropdown in Navbar and Pricing page
+- If user selects manually, store p7_currency_override cookie and always use it over geo.
+
+4) Formatting:
+- Use Intl.NumberFormat(locale, { style:"currency", currency })
+- Ensure currency and locale work server-side + client-side.
+
+5) SEO safety:
+- Do NOT change canonical URLs by currency
+- Do NOT add ?currency= query to canonical
+- Same URL, different display only.
+
+========================
+E) TECHNICAL SEO OUTPUTS
+========================
+1) robots.txt at /robots.txt
+- Allow: /
+- Disallow: /app/
+- Include sitemap URL (use env NEXT_PUBLIC_SITE_URL)
+
+2) sitemap.xml at /sitemap.xml
+- Include ONLY public routes + blog posts
+- Exclude /app/*
+- Add lastmod
+
+3) Metadata:
+- Every public page must have:
+  - title (keyword-included but natural)
+  - meta description
+  - canonical
+  - OpenGraph tags
+  - Twitter card tags
+
+4) JSON-LD:
+- Organization schema on / and /about
+- SoftwareApplication schema on /
+- FAQPage schema on pages with FAQ
+
+========================
+F) UI / DESIGN
+========================
+- Modern calm cloud-SaaS look (professional, not black/white only)
+- Mobile responsive
+- Reusable components: Navbar, Footer, CTA sections, Feature cards, Pricing cards, FAQ accordion
+- CTA buttons:
+  - Start Free Trial -> /app/register
+  - Login -> /app/login
+  - Request Demo -> /contact
+
+========================
+G) DO NOT BREAK APP
+========================
+- Keep all existing /app routes functional
+- Add a /app layout that injects: <meta name="robots" content="noindex,nofollow" />
+- Optional: also set X-Robots-Tag header for /app/*
+
+========================
+H) DELIVERABLES CHECKLIST
+========================
+After finishing, output:
+1) A final route list
+2) Where to edit keyword config (/seo/keywords.ts)
+3) Confirm robots.txt + sitemap.xml working
+4) Confirm /app is noindex and excluded from sitemap
+5) Basic “SEO Setup Checklist” in README:
+   - Google Search Console verification
+   - Submit sitemap
+   - Check indexing for key pages
+   - Core Web Vitals tips
+
+Now implement everything.

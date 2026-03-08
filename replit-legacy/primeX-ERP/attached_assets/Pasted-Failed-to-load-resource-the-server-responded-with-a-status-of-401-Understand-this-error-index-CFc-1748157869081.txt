@@ -1,0 +1,43 @@
+Failed to load resource: the server responded with a status of 401 ()Understand this error
+index-CFcQrRBm.js:883 401 Unauthorized response for /api/auth/me
+hook.js:608 Query error: Error: Authentication required
+    at index-CFcQrRBm.js:883:45527
+overrideMethod @ hook.js:608Understand this error
+/api/auth/me:1 
+            
+            
+           Failed to load resource: the server responded with a status of 401 ()Understand this error
+index-CFcQrRBm.js:883 401 Unauthorized response for /api/auth/me
+hook.js:608 Query error: Error: Authentication required
+    at index-CFcQrRBm.js:883:45527
+overrideMethod @ hook.js:608Understand this error
+index-CFcQrRBm.js:1183 Not authenticated, redirecting to login
+index-CFcQrRBm.js:953 Attempting login with: admin
+index-CFcQrRBm.js:883 Making POST request to /api/auth/login
+index-CFcQrRBm.js:953 Login successful, redirecting...
+index-CFcQrRBm.js:1183 Not authenticated, redirecting to login
+index-CFcQrRBm.js:1183 Restoring last page: /
+9erp.prime7.biz/:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was receivedUnderstand this error
+hook.js:608 TypeError: Z.slice is not a function
+    at RQe (index-CFcQrRBm.js:953:109443)
+    at BD (index-CFcQrRBm.js:38:17031)
+    at _T (index-CFcQrRBm.js:40:3143)
+    at CW (index-CFcQrRBm.js:40:44880)
+    at NW (index-CFcQrRBm.js:40:39822)
+    at bue (index-CFcQrRBm.js:40:39748)
+    at _N (index-CFcQrRBm.js:40:39598)
+    at zT (index-CFcQrRBm.js:40:35960)
+    at L3 (index-CFcQrRBm.js:40:36765)
+    at _u (index-CFcQrRBm.js:38:3288)
+overrideMethod @ hook.js:608Understand this error
+index-CFcQrRBm.js:38 Uncaught TypeError: Z.slice is not a function
+    at RQe (index-CFcQrRBm.js:953:109443)
+    at BD (index-CFcQrRBm.js:38:17031)
+    at _T (index-CFcQrRBm.js:40:3143)
+    at CW (index-CFcQrRBm.js:40:44880)
+    at NW (index-CFcQrRBm.js:40:39822)
+    at bue (index-CFcQrRBm.js:40:39748)
+    at _N (index-CFcQrRBm.js:40:39598)
+    at zT (index-CFcQrRBm.js:40:35960)
+    at L3 (index-CFcQrRBm.js:40:36765)
+    at _u (index-CFcQrRBm.js:38:3288)

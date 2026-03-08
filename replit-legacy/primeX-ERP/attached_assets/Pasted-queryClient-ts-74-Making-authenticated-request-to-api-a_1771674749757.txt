@@ -1,0 +1,42 @@
+queryClient.ts:74 Making authenticated request to: /api/auth/me
+queryClient.ts:82 Response status: 200 for /api/auth/me
+inventory:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+inventory:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+inventory:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+inventory:1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+client:560 [vite] server connection lost. Polling for restart...
+8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+main.tsx:14 [Theme] --primary = "221 83% 53%" (#2563EB) ✅
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard/pending-quotations
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard/recent-orders
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard/upcoming-shipments
+queryClient.ts:74 Making authenticated request to: /api/commercial/dashboard/expiring-lcs
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard/pending-quotations
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard/recent-orders
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard/upcoming-shipments
+queryClient.ts:82 Response status: 200 for /api/commercial/dashboard/expiring-lcs
+party-dashboard.tsx:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+chunk-QCHXOAYK.js?v=218c997b:903 Uncaught TypeError: Failed to fetch dynamically imported module: https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/parties/party-dashboard.tsx
+chunk-QCHXOAYK.js?v=218c997b:903 Uncaught TypeError: Failed to fetch dynamically imported module: https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/parties/party-dashboard.tsx
+installHook.js:1 The above error occurred in the <Context.Provider> component:
+
+    at Route (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=218c997b:323:16)
+    at Switch (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=218c997b:379:17)
+    at Suspense
+    at div
+    at div
+    at div
+    at AuthenticatedApp (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?v=tWNv7mFMyYuimfKsLOVg5:373:53)
+    at Provider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=218c997b:38:15)
+    at TooltipProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=218c997b:65:5)
+    at App (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?v=tWNv7mFMyYuimfKsLOVg5:1466:42)
+    at V (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=218c997b:44:25)
+    at J (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=218c997b:42:18)
+    at QueryClientProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=218c997b:2805:3)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+overrideMethod @ installHook.js:1
+chunk-RPCDYKBN.js?v=218c997b:19413 Uncaught TypeError: Failed to fetch dynamically imported module: https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/parties/party-dashboard.tsx

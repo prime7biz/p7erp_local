@@ -1,0 +1,55 @@
+Table 1: Material Cost for One Dozen Products
+•	Columns:
+1.	Serial No. (auto-generated sequential number for each row)
+2.	Category Section: Dropdown menu fetching data from the Category Table.
+3.	Items: Dropdown fetching data from the Items Table. If the item is new, an option should be available to add it to the Items Table.
+4.	Consumption per Dozen: User input for the quantity consumed per dozen. This will be linked to the relevant unit for the item.
+5.	Unit Price of the Item: User input for the price of the item per unit.
+6.	Amount Required for a Dozen Product: This should be calculated as Consumption per Dozen × Unit Price.
+7.	Total Amount Required: This should be calculated as (Projected Quantity ÷ 12) × Amount Required for a Dozen Product.
+•	There should be 5 rows for users to select multiple items, with options to Add Row and Delete Row.
+•	The last row should show the total sum of the Total Amount Required column.
+________________________________________
+Table 2: Cost of Manufacturing
+•	Columns:
+1.	Serial No. (auto-generated sequential number for each row)
+2.	Part of the Style: Dropdown menu with options such as Top Part, Bottom Part, Extra 1, Extra 2.
+3.	Number of Machines Required for Production: User input.
+4.	Production Per Hour: User input for production capacity per hour.
+5.	Production Per Day: Automatically calculated as Production Per Hour × 8 hours/day.
+6.	Cost Against Per Machine (in USD): User input for cost per machine.
+7.	Total Line Cost: Automatically calculated as Cost per Machine × Number of Machines.
+8.	Cost of Manufacturing Per Dozen: Automatically calculated as (Total Line Cost ÷ Production Per Day) × 12.
+9.	CM per Pcs: Automatically calculated as Cost of Manufacturing Per Dozen ÷ 12.
+10.	Total Cost for the Order: Automatically calculated as Projected Order Quantity × CM per Pcs.
+•	One row should be provided for user input, with options to Add Row and Delete Row.
+•	The last row should show the total sum of the Total Cost for the Order column.
+________________________________________
+Table 3: Other Costs
+•	Columns:
+1.	Serial No. (auto-generated sequential number for each row)
+2.	Cost Head: Dropdown with options such as Commercial Cost, Insurance, Freight, Banking, Factoring, Testing, Transport.
+3.	Required Amount in %: User input for the percentage value.
+4.	Total Amount: Automatically calculated as Required Amount in % × Total Cost for the Order (from the Costing Table in Table 2).
+•	One row should be provided for user input, with options to Add Row and Delete Row.
+•	The last row should show the summation of the Total Amount column.
+________________________________________
+Cost Summary Calculation (auto-generated)
+•	Actual Cost Required for the Execution of the Order:
+This should be calculated as the sum of the following:
+o	Total Amount Required (from Table 1)
+o	Total Cost for the Order (from Table 2)
+o	Total Amount (from Table 3)
+•	Actual Cost Required per Pc:
+This should be calculated as: Actual Cost Required ÷ 12.
+•	Quoted Price:
+o	Quoted Price is calculated as:
+(Actual Cost Required per Pc + User Input Profit Percentage).
+o	The Quoted Price should be displayed in red color to indicate the final quote.
+________________________________________
+Table 4: Cost Summary
+•	Columns:
+o	Category-wise Total Cost: Auto-generated for each category, showing the total cost required for the projected order quantity.
+o	Percentage of Total Cost: Auto-calculated for each category's total cost as a percentage of the grand total.
+o	Grand Total Amount: The final amount needed to execute the order.
+________________________________________

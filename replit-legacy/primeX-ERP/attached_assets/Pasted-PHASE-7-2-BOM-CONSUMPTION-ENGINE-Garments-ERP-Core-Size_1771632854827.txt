@@ -1,0 +1,157 @@
+PHASE 7.2 — BOM + CONSUMPTION ENGINE (Garments ERP Core)
+(Size/Color BOM, Wastage Rules, Approval Locks, Must-Not-Fail Consumption) + AI Assist v1
+
+Goal:
+Build a robust BOM + consumption engine that can drive purchasing, production, and costing:
+- Style → BOM (fabric, trims, packing) with size/color variants
+- Consumption calculation with wastage/process loss rules
+- Order confirmation freezes BOM/consumption (cannot change without top approval)
+- Finalize order triggers atomic “reservation/consumption plan” that must not fail
+- AI assist suggests BOM/consumption based on historical similar styles
+
+Part A — Discovery (no breaking changes)
+1) Identify existing entities related to:
+   - styles/products, items/materials
+   - sales orders / production orders
+   - inventory moves / consumption logic
+   - approvals/workflow/override
+2) Output what exists vs missing.
+
+Part B — Data Model (minimum viable, extensible)
+Create/extend tables:
+
+1) style_boms
+- id, tenantId, styleId
+- versionNo, status: DRAFT|APPROVED|LOCKED
+- effectiveFrom, notes
+- approvedBy, approvedAt
+- revisionOfBomId(optional)
+
+2) style_bom_lines
+- id, tenantId, styleBomId
+- category: FABRIC|TRIM|PACKING
+- itemId (inventory item)
+- uom (kg/m/pcs)
+- baseConsumption (numeric)  // per piece
+- wastagePct (numeric)
+- processLossPct (numeric)   // optional
+- consumptionFormula JSON (optional: marker efficiency, GSM, width)
+- colorPolicy: SOLID|BY_COLOR
+- sizePolicy: SAME_ALL|BY_SIZE
+- remarks
+
+3) bom_variants (optional but recommended)
+- id, tenantId, styleBomLineId
+- size (S/M/L/XL etc) nullable
+- color (buyer color) nullable
+- consumptionOverride numeric
+- wastageOverridePct numeric
+
+4) order_bom_snapshots (freezes per order)
+- id, tenantId, salesOrderId
+- styleBomId, bomVersionNo
+- snapshot JSON (full resolved lines for traceability)
+- lockedAt, lockedBy
+
+5) consumption_plans (for must-not-fail finalize)
+- id, tenantId, salesOrderId
+- status: PLANNED|APPROVED|EXECUTED|CANCELLED
+- requestId (idempotency)
+- approvedBy, approvedAt
+- overrideReason (if any)
+- createdAt
+
+6) consumption_plan_lines
+- id, tenantId, consumptionPlanId
+- itemId, requiredQty, reservedQty, uom
+- sourceWarehouseId (optional)
+- notes
+
+Part C — Consumption Calculation Rules
+Implement a single engine:
+1) resolvedConsumptionPerPc = baseConsumption * (1 + wastagePct/100) * (1 + processLossPct/100)
+2) orderRequiredQty = resolvedConsumptionPerPc * orderQty
+3) If variants exist, apply variant overrides per size/color ratio.
+4) Always return numeric and store calculation details for audit (store formula inputs in metadata JSON).
+
+Part D — Workflow + Approval Locks
+1) BOM lifecycle:
+- DRAFT: editable
+- APPROVED: editable only via revision (creates new version)
+- LOCKED: cannot change; used when linked to confirmed orders
+2) When Sales Order is CONFIRMED:
+- create order_bom_snapshot
+- lock the linked BOM version for that order
+3) Any change after lock requires:
+- workflow:override permission
+- overrideReason
+- audit_log + workflow_history
+
+Part E — “Must-Not-Fail” consumption planning
+1) Implement POST /api/merch/orders/:id/finalize-consumption (or similar)
+- Transactional
+- Idempotent with requestId
+- Generates consumption_plan + lines
+- Validates stock availability (or reservation rules)
+2) If stock insufficient:
+- return code: APPROVAL_REQUIRED
+- include missing items and qty deltas
+- DO NOT create partial rows
+3) With override approval:
+- allow plan creation even if short, but mark plan as APPROVED_OVERRIDE and require reason
+
+Part F — Procurement integration hooks
+1) Expose API to generate purchase requirements:
+GET /api/material-planning/requirements?from=...&to=...
+Return aggregated requiredQty by item across confirmed orders (using snapshots/plans).
+2) This will feed PO generation in later phase.
+
+Part G — AI Assist v1 (safe + useful, not magical)
+Implement endpoint:
+POST /api/ai/bom-suggest
+Input:
+{ styleId, productType, sizeRange, fabricType, gsm, historicalStyleRefs? }
+Output:
+- suggested bom lines with confidence
+- suggested wastage/process loss ranges
+Implementation:
+- Use internal historical data similarity:
+  - find past styles with same productType + fabric attributes
+  - compute averages
+- If OpenAI available, optionally enrich explanation.
+- Always fall back to deterministic suggestions if AI unavailable.
+- Never auto-apply; user must review before saving.
+
+Frontend:
+- BOM Builder UI: “Suggest BOM” button that drafts lines, user edits, then saves.
+
+Part H — APIs (minimum)
+BOM:
+- POST /api/bom/styles/:styleId (create v1 draft)
+- POST /api/bom/:bomId/approve
+- POST /api/bom/:bomId/revise (create v2)
+- GET  /api/bom/styles/:styleId (list versions)
+- GET  /api/bom/:bomId (details)
+Order Snapshot + Planning:
+- POST /api/orders/:id/lock-bom (creates snapshot)
+- POST /api/orders/:id/finalize-consumption (creates plan)
+- GET  /api/orders/:id/consumption-plan
+Planning:
+- GET /api/material-planning/requirements?from=&to=
+
+Part I — Verification (proof required)
+Seed/test:
+1) Create style + BOM v1 with:
+- fabric consumption 0.25 kg/pc, wastage 3%
+- trims 1 pcs/pc, wastage 1%
+2) Create sales order qty 10,000 with size ratio
+3) Lock BOM snapshot for order
+4) Finalize consumption plan with requestId, ensure idempotent
+5) Confirm insufficient stock returns APPROVAL_REQUIRED with no partial rows
+6) AI suggest returns deterministic lines when AI unavailable
+
+Output:
+- files changed list
+- sample JSON for BOM version list + order snapshot + consumption plan
+- one full consumption calculation example with numbers
+- example APPROVAL_REQUIRED response

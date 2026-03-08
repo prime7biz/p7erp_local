@@ -1,0 +1,525 @@
+main.tsx:16 [Theme] Prime7 Orange + Snow White Sidebar ✅
+queryClient.ts:74 Making authenticated request to: /api/auth/me
+queryClient.ts:82 Response status: 200 for /api/auth/me
+queryClient.ts:74 Making authenticated request to: /api/merch/critical-alerts
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:74 Making authenticated request to: /api/dashboard/kpi
+queryClient.ts:74 Making authenticated request to: /api/dashboard/recent-orders
+queryClient.ts:74 Making authenticated request to: /api/dashboard/ai-insights
+queryClient.ts:74 Making authenticated request to: /api/dashboard/tasks
+queryClient.ts:74 Making authenticated request to: /api/approvals/stats
+queryClient.ts:74 Making authenticated request to: /api/bills/report/overdue
+queryClient.ts:74 Making authenticated request to: /api/items
+queryClient.ts:74 Making authenticated request to: /api/dashboard/customer-map
+queryClient.ts:74 Making authenticated request to: /api/dashboard/order-status-breakdown
+queryClient.ts:74 Making authenticated request to: /api/customers
+queryClient.ts:74 Making authenticated request to: /api/merch/styles
+queryClient.ts:74 Making authenticated request to: /api/dashboard/employee-summary
+queryClient.ts:74 Making authenticated request to: /api/dashboard/payroll-summary
+queryClient.ts:74 Making authenticated request to: /api/dashboard/revenue-trend
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/merch/critical-alerts
+queryClient.ts:82 Response status: 200 for /api/dashboard/kpi
+queryClient.ts:82 Response status: 200 for /api/dashboard/recent-orders
+queryClient.ts:82 Response status: 200 for /api/dashboard/tasks
+queryClient.ts:82 Response status: 200 for /api/bills/report/overdue
+queryClient.ts:82 Response status: 200 for /api/items
+queryClient.ts:82 Response status: 200 for /api/approvals/stats
+queryClient.ts:82 Response status: 200 for /api/dashboard/customer-map
+queryClient.ts:82 Response status: 200 for /api/dashboard/order-status-breakdown
+installHook.js:1 The width(120) and height(120) are both fixed numbers,
+       maybe you don't need to use a ResponsiveContainer. Error Component Stack
+    at chunk-HNQMRQ4Q.js?v=f6ab941d:8484:21
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at section (<anonymous>)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at Dashboard (dashboard.tsx:122:20)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+queryClient.ts:82 Response status: 200 for /api/customers
+installHook.js:1 The width(120) and height(120) are both fixed numbers,
+       maybe you don't need to use a ResponsiveContainer. Error Component Stack
+    at chunk-HNQMRQ4Q.js?v=f6ab941d:8484:21
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at section (<anonymous>)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at Dashboard (dashboard.tsx:122:20)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+queryClient.ts:82 Response status: 200 for /api/dashboard/employee-summary
+installHook.js:1 The width(120) and height(120) are both fixed numbers,
+       maybe you don't need to use a ResponsiveContainer. Error Component Stack
+    at chunk-HNQMRQ4Q.js?v=f6ab941d:8484:21
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at section (<anonymous>)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at Dashboard (dashboard.tsx:122:20)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+installHook.js:1 The width(120) and height(120) are both fixed numbers,
+       maybe you don't need to use a ResponsiveContainer. Error Component Stack
+    at chunk-HNQMRQ4Q.js?v=f6ab941d:8484:21
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at section (<anonymous>)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at Dashboard (dashboard.tsx:122:20)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+queryClient.ts:82 Response status: 200 for /api/dashboard/payroll-summary
+installHook.js:1 The width(120) and height(120) are both fixed numbers,
+       maybe you don't need to use a ResponsiveContainer. Error Component Stack
+    at chunk-HNQMRQ4Q.js?v=f6ab941d:8484:21
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at section (<anonymous>)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at Dashboard (dashboard.tsx:122:20)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+installHook.js:1 The width(120) and height(120) are both fixed numbers,
+       maybe you don't need to use a ResponsiveContainer. Error Component Stack
+    at chunk-HNQMRQ4Q.js?v=f6ab941d:8484:21
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at section (<anonymous>)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at Dashboard (dashboard.tsx:122:20)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+queryClient.ts:82 Response status: 200 for /api/merch/styles
+installHook.js:1 The width(120) and height(120) are both fixed numbers,
+       maybe you don't need to use a ResponsiveContainer. Error Component Stack
+    at chunk-HNQMRQ4Q.js?v=f6ab941d:8484:21
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at section (<anonymous>)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at Dashboard (dashboard.tsx:122:20)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+installHook.js:1 The width(120) and height(120) are both fixed numbers,
+       maybe you don't need to use a ResponsiveContainer. Error Component Stack
+    at chunk-HNQMRQ4Q.js?v=f6ab941d:8484:21
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at section (<anonymous>)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at Dashboard (dashboard.tsx:122:20)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+queryClient.ts:82 Response status: 200 for /api/dashboard/revenue-trend
+installHook.js:1 The width(120) and height(120) are both fixed numbers,
+       maybe you don't need to use a ResponsiveContainer. Error Component Stack
+    at chunk-HNQMRQ4Q.js?v=f6ab941d:8484:21
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at section (<anonymous>)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at Dashboard (dashboard.tsx:122:20)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+installHook.js:1 The width(120) and height(120) are both fixed numbers,
+       maybe you don't need to use a ResponsiveContainer. Error Component Stack
+    at chunk-HNQMRQ4Q.js?v=f6ab941d:8484:21
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at section (<anonymous>)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at Dashboard (dashboard.tsx:122:20)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+queryClient.ts:82 Response status: 200 for /api/dashboard/ai-insights
+installHook.js:1 The width(120) and height(120) are both fixed numbers,
+       maybe you don't need to use a ResponsiveContainer. Error Component Stack
+    at chunk-HNQMRQ4Q.js?v=f6ab941d:8484:21
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at section (<anonymous>)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at Dashboard (dashboard.tsx:122:20)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+installHook.js:1 The width(120) and height(120) are both fixed numbers,
+       maybe you don't need to use a ResponsiveContainer. Error Component Stack
+    at chunk-HNQMRQ4Q.js?v=f6ab941d:8484:21
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at _c9 (card.tsx:62:6)
+    at div (<anonymous>)
+    at _c (card.tsx:8:6)
+    at div (<anonymous>)
+    at section (<anonymous>)
+    at div (<anonymous>)
+    at main (<anonymous>)
+    at div (<anonymous>)
+    at Dashboard (dashboard.tsx:122:20)
+    at Route (wouter.js?v=f6ab941d:323:16)
+    at Switch (wouter.js?v=f6ab941d:379:17)
+    at Suspense (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AuthenticatedApp (AppArea.tsx:273:3)
+    at Router (wouter.js?v=f6ab941d:291:17)
+    at Provider (chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (AppArea.tsx:540:42)
+    at Suspense (<anonymous>)
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+queryClient.ts:74 Making authenticated request to: /api/inquiries
+queryClient.ts:82 Response status: 200 for /api/inquiries
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications/unread-count
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/notifications
+queryClient.ts:74 Making authenticated request to: /api/workflow-tasks/my-tasks
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications/unread-count
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/notifications
+queryClient.ts:82 Response status: 200 for /api/workflow-tasks/my-tasks
+[id].tsx:356 Uncaught TypeError: Cannot read properties of null (reading 'length')
+    at InquiryViewPage ([id].tsx:356:41)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=f6ab941d:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=f6ab941d:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=f6ab941d:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=f6ab941d:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=f6ab941d:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=f6ab941d:3733:39)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=f6ab941d:19765:15)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=f6ab941d:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=f6ab941d:19137:13)
+[id].tsx:356 Uncaught TypeError: Cannot read properties of null (reading 'length')
+    at InquiryViewPage ([id].tsx:356:41)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=f6ab941d:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=f6ab941d:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=f6ab941d:15924:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=f6ab941d:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=f6ab941d:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=f6ab941d:3733:39)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=f6ab941d:19765:15)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=f6ab941d:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=f6ab941d:19137:13)
+installHook.js:1 The above error occurred in the <InquiryViewPage> component:
+
+    at InquiryViewPage (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/inquiries/[id].tsx:33:18)
+    at Route (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6ab941d:323:16)
+    at Switch (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6ab941d:379:17)
+    at Suspense
+    at div
+    at div
+    at div
+    at AuthenticatedApp (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/AppArea.tsx:473:3)
+    at Router (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6ab941d:291:17)
+    at Provider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/AppArea.tsx:1795:42)
+    at Suspense
+    at ErrorBoundary (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/components/error-boundary.tsx:13:5)
+    at App (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?v=cZfRb3572r9TjsrwiGWaf:245:22)
+    at V (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=f6ab941d:44:25)
+    at J (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=f6ab941d:2805:3)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary.
+overrideMethod @ installHook.js:1
+installHook.js:1 [ErrorBoundary] Uncaught error: TypeError: Cannot read properties of null (reading 'length')
+    at InquiryViewPage ([id].tsx:356:41)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=f6ab941d:11548:26)
+    at updateFunctionComponent (chunk-RPCDYKBN.js?v=f6ab941d:14582:28)
+    at beginWork (chunk-RPCDYKBN.js?v=f6ab941d:15924:22)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=f6ab941d:19753:22)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=f6ab941d:19198:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=f6ab941d:19137:13)
+    at renderRootSync (chunk-RPCDYKBN.js?v=f6ab941d:19116:15)
+    at recoverFromConcurrentError (chunk-RPCDYKBN.js?v=f6ab941d:18736:28)
+    at performConcurrentWorkOnRoot (chunk-RPCDYKBN.js?v=f6ab941d:18684:30) Error Component Stack
+    at ErrorBoundary (error-boundary.tsx:27:5)
+    at App (App.tsx:78:22)
+    at V (next-themes.js?v=f6ab941d:44:25)
+    at J (next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1
+installHook.js:1 [ErrorBoundary] Component stack: 
+    at InquiryViewPage (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/pages/inquiries/[id].tsx:33:18)
+    at Route (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6ab941d:323:16)
+    at Switch (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6ab941d:379:17)
+    at Suspense
+    at div
+    at div
+    at div
+    at AuthenticatedApp (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/AppArea.tsx:473:3)
+    at Router (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6ab941d:291:17)
+    at Provider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=f6ab941d:38:15)
+    at TooltipProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=f6ab941d:65:5)
+    at AppArea (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/AppArea.tsx:1795:42)
+    at Suspense
+    at ErrorBoundary (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/components/error-boundary.tsx:13:5)
+    at App (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/src/App.tsx?v=cZfRb3572r9TjsrwiGWaf:245:22)
+    at V (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=f6ab941d:44:25)
+    at J (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/next-themes.js?v=f6ab941d:42:18)
+    at QueryClientProvider (https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=f6ab941d:2805:3)
+overrideMethod @ installHook.js:1

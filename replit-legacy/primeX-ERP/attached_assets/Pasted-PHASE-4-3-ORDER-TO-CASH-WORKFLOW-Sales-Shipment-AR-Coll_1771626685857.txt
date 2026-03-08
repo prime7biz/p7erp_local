@@ -1,0 +1,159 @@
+PHASE 4.3 — ORDER-TO-CASH WORKFLOW (Sales → Shipment → AR → Collection)
+(Commercial docs + Inventory dispatch + Accounting + Incentives)
+
+Goal:
+Make the Sales cycle fully functional and audit-ready:
+- Sales Order → Delivery/Dispatch → Shipment docs → Sales Invoice → Accounts Receivable
+- Collections (bank/cash) and settlement
+- Export proceeds tracking + bank charges
+- Optional: export incentive receivable tracking
+Everything tenant-safe, approval-driven, and linked to inventory valuation + vouchers.
+
+Part A — Discover current sales & dispatch model (NO changes yet)
+1) Locate existing tables/endpoints for:
+   - customers
+   - sales orders
+   - deliveries / challans / gatepass
+   - shipments (from Phase 4.2)
+   - invoices (sales)
+   - payments/collections
+   - accounting voucher posting
+2) Output file paths + key snippets and list what exists vs missing.
+
+Part B — Core entities (minimum viable)
+Implement/extend:
+
+1) sales_orders
+- id, tenantId, orderNo(unique per tenant), customerId
+- orderDate, currency, status: DRAFT|APPROVED|CONFIRMED|IN_PRODUCTION|READY|SHIPPED|CLOSED
+- totals: subtotal, discount, tax, grandTotal
+- approval fields + timestamps
+
+2) delivery_notes (dispatch)
+- id, tenantId, deliveryNo(unique per tenant)
+- salesOrderId, warehouseId
+- status: DRAFT|APPROVED|POSTED|CANCELLED
+- postedAt, postedBy
+- links to inventoryMoveGroupId + accountingVoucherId (if valuation impacts)
+
+3) sales_invoices
+- id, tenantId, invoiceNo(unique per tenant)
+- salesOrderId, customerId, shipmentId(optional)
+- invoiceDate, dueDate
+- amount, currency
+- status: DRAFT|APPROVED|POSTED|PARTIAL_PAID|PAID|CANCELLED
+- accountingVoucherId link
+
+4) collections (receipts)
+- id, tenantId, receiptNo(unique)
+- customerId, invoiceId(optional), bankAccountId(optional)
+- receiptDate, amount, method: BANK|CASH|BKASH|ADJUSTMENT
+- status: DRAFT|APPROVED|POSTED|CANCELLED
+- accountingVoucherId link
+
+5) export_proceeds (optional but recommended)
+- id, tenantId, shipmentId or invoiceId
+- bankRefNo, date, amount, currency, conversionRate, bdtAmount
+- bankCharges, status: RECEIVED|PARTIAL|PENDING
+- voucherId link
+
+6) export_incentives (optional tracking)
+- id, tenantId, periodStart, periodEnd
+- expectedAmount, receivedAmount
+- status: EXPECTED|CLAIMED|RECEIVED
+- voucherId link
+
+Part C — Workflow + approvals
+1) Approval required:
+- sales order approval
+- delivery posting
+- invoice posting
+- receipt posting
+- cancelling posted documents requires reversal workflow (Phase 2.3 rules)
+2) Override:
+- price/qty change after approval requires workflow:override + reason + audit log
+
+Part D — Inventory + valuation integration
+1) Delivery POST creates inventory moves (stock out) from warehouse:
+- sourceDocType="DELIVERY"
+- sourceDocId=deliveryId
+- postingStatus must be POSTED or PENDING_POSTING (but must reconcile)
+2) COGS:
+- either generate COGS voucher at invoice posting time OR mark as later;
+  Prefer: on invoice POST, create COGS voucher lines linked to inventory moves.
+
+Part E — Accounting integration (Tally-like)
+1) On Sales Invoice POST:
+- Debit: Accounts Receivable (Customer)
+- Credit: Sales Revenue (Revenue ledger)
+- (Optional now) COGS:
+  - Debit: COGS Expense
+  - Credit: Inventory Asset (or Finished Goods)
+2) On Collection POST:
+- Debit: Bank/Cash
+- Credit: Accounts Receivable (Customer)
+3) On Export proceeds:
+- handle FX gain/loss if conversion differs (optional config)
+- bank charges:
+  - Debit: Bank Charges Expense
+  - Credit: Bank
+4) Add tenant-level ledger mappings:
+- salesRevenueLedgerId
+- accountsReceivableLedgerId (control)
+- cogsLedgerId
+- inventoryAssetLedgerId (already from Phase 3.3)
+- bankLedgerId / cashLedgerId
+- bankChargesLedgerId
+- fxGainLossLedgerId (optional)
+
+Part F — APIs (minimum)
+Sales:
+- POST /api/sales/orders
+- POST /api/sales/orders/:id/approve
+- GET  /api/sales/orders/:id
+Delivery:
+- POST /api/sales/deliveries
+- POST /api/sales/deliveries/:id/approve
+- POST /api/sales/deliveries/:id/post (transaction + idempotent)
+Invoice:
+- POST /api/sales/invoices
+- POST /api/sales/invoices/:id/post (creates voucher + optional COGS)
+Collections:
+- POST /api/sales/receipts
+- POST /api/sales/receipts/:id/post
+Export:
+- POST /api/export/proceeds (link invoice/shipment)
+- GET  /api/export/reconciliation?start=&end=
+
+Part G — Traceability (auditor grade)
+1) GET /api/sales/orders/:id/trace
+Return:
+- deliveries + inventory move ids
+- shipment docs
+- invoice + voucher id
+- receipts + voucher ids
+- outstanding AR balance
+
+2) GET /api/sales/invoices/:id/trace
+Return:
+- linked delivery moves
+- AR voucher lines
+- COGS voucher lines
+- receipts
+
+Part H — Verification (proof)
+Seed/test script:
+1) Create SO for 100 pcs @ price
+2) Post Delivery (stock decreases, valuation applied)
+3) Post Invoice (AR + Sales; optional COGS)
+4) Post Receipt (Bank/Cash)
+5) Verify:
+- AR balance becomes 0 after receipt
+- inventory vs ledger reconciliation remains 0
+- duplicate posting prevented via requestId
+- posted docs immutable (reversal required)
+
+Output:
+- files changed list
+- sample JSON outputs for each major endpoint
+- proof numbers for AR outstanding and reconciliation totals

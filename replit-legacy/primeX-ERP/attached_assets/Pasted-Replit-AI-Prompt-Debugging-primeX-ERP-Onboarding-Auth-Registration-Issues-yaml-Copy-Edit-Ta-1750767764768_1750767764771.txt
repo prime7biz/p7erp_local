@@ -1,0 +1,133 @@
+Replit AI Prompt: Debugging primeX ERP Onboarding Auth & Registration Issues
+yaml
+Copy
+Edit
+# 🛠️ Task: Fix Authentication and Registration Flow in primeX ERP SaaS App
+
+## 🔍 Problem Summary:
+1. `GET /api/auth/me` returns **401 Unauthorized**
+2. `POST /api/auth/register` returns **400 Bad Request (Validation error)**
+3. Subscription plans are not loading due to auth failure.
+
+---
+
+## ✅ Objectives:
+- Fix cross-origin cookie handling for JWT-based authentication.
+- Ensure `register.tsx` sends a valid registration payload.
+- Validate that TanStack Query includes credentials.
+- Confirm backend schema validation and logs helpful errors.
+
+---
+
+## 📦 Tech Stack Context:
+- Frontend: React 18 + Vite + TanStack Query
+- Backend: Node.js + Express + TypeScript
+- Auth: JWT via `httpOnly` cookies
+- Hosting: Replit (`*.janeway.replit.dev` domain)
+
+---
+
+## 🔐 Step 1: Fix Cookie-based Auth (Cross-Origin)
+
+### In `POST /api/auth/login` route:
+Ensure cookie is set like this:
+```ts
+res.cookie('token', jwtToken, {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'None', // Needed for cross-site requests
+  maxAge: 24 * 60 * 60 * 1000, // 1 day
+});
+🌐 Step 2: Include credentials on frontend fetch
+In TanStack Query or custom fetch (queryClient.ts):
+ts
+Copy
+Edit
+fetch('/api/auth/me', {
+  method: 'GET',
+  credentials: 'include', // 🔥 this is REQUIRED for cookies
+});
+In TanStack config (if you use global setup):
+
+ts
+Copy
+Edit
+queryFn: async ({ queryKey }) => {
+  const res = await fetch(queryKey[0], { credentials: 'include' });
+  if (!res.ok) throw new Error('Authentication required');
+  return res.json();
+}
+🧾 Step 3: Validate POST /api/auth/register Payload
+Example backend payload expectation:
+json
+Copy
+Edit
+{
+  "companyName": "Prime7 ERP",
+  "username": "admin",
+  "email": "admin@example.com",
+  "password": "strongpass",
+  "subscriptionPlanId": 1 // if applicable
+}
+In register.tsx:
+Ensure you send all required fields.
+
+Add debug log:
+
+ts
+Copy
+Edit
+console.log('Submitted registration:', formData);
+Backend enhancement:
+Add logging and proper validation error:
+
+ts
+Copy
+Edit
+if (!email || !password || !companyName) {
+  return res.status(400).json({ message: 'Missing required fields' });
+}
+🧪 Step 4: Test Manually
+Start server:
+
+bash
+Copy
+Edit
+npm run dev
+Register a new user (check request in Network tab).
+
+Validate cookie token is stored in browser (DevTools > Application > Cookies).
+
+Visit /api/auth/me manually and check response.
+
+Retry subscription plan fetch (must work now).
+
+🧹 Step 5: Optional Cleanups
+Make /api/subscription-plans a public route (temporarily) if login isn't ready.
+
+Consider adding demo login /api/auth/demo-login.
+
+🎯 Deliverable:
+A working onboarding flow where:
+
+New company registration works.
+
+Auth cookie is set.
+
+Authenticated user info is fetched.
+
+Subscription plans are shown in the dropdown.
+
+yaml
+Copy
+Edit
+
+---
+
+Let me know if you’d like to export this prompt into `.md` or `.txt` format or want the **entire registration API file and frontend React form** written out for you.
+
+
+
+
+
+

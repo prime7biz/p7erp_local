@@ -1,0 +1,271 @@
+Nice — that’s a solid outline. Now let’s **turn Replit’s list into a complete, ERP-ready blueprint** you can follow (and then you can feed back to Replit as the next prompt).
+
+Below is an upgraded plan with **what each item must include**, the **tables**, the **rules**, and the **acceptance checks** so you don’t build something that later breaks in accounting/inventory.
+
+---
+
+## 1) Create user access tables and database
+
+**Must include (multi-tenant):**
+
+* `users`
+* `roles` (tenant-scoped)
+* `permissions` (global list)
+* `role_permissions`
+* `user_roles`
+
+**Add from day-1 (you’ll regret if you don’t):**
+
+* `user_scopes` (optional but powerful): `branch_id`, `warehouse_id`, `department_id`, `cost_center_id`, `project_id`
+* `role_scopes` (if roles are limited by location/warehouse)
+
+✅ Acceptance:
+
+* Same permission set can be reused across modules
+* Users can have multiple roles
+* Everything filtered by `tenant_id`
+
+---
+
+## 2) Build permission checking and add defaults
+
+Implement a single “gate” everywhere:
+
+* **RBAC check** (permission key)
+* **Scope check** (row-level: branch/warehouse/etc.)
+* **Workflow check** (status-based action allowed)
+
+Default roles to seed per tenant:
+
+* Data Entry
+* Officer (Checker)
+* Manager (Recommender)
+* Approver
+* Accounts Poster
+* Admin
+* Auditor (read-only)
+
+✅ Acceptance:
+
+* Any API route can declare required permission(s)
+* Permission denial returns consistent error + audit log entry
+
+---
+
+## 3) Create user management role editor screen
+
+UI must support:
+
+* Create/edit roles
+* Assign permissions (grouped by module)
+* Assign user ↔ roles
+* Optional: assign scope (branch/warehouse)
+
+✅ Acceptance:
+
+* Admin can configure without DB edits
+* Changes take effect immediately
+
+---
+
+## 4) Create document status and rules tables
+
+Instead of hardcoding workflow in code, make it configurable.
+
+**Tables:**
+
+* `workflow_statuses` (DRAFT, SUBMITTED, CHECKED, RECOMMENDED, APPROVED, POSTED, REJECTED, CANCELLED)
+* `workflow_transitions`
+
+  * `doc_type`, `from_status`, `action`, `to_status`
+  * `required_permission`
+  * `sod_rule` (e.g., maker cannot approve)
+  * `editable_fields_rule` (optional)
+* `workflow_approval_matrix`
+
+  * amount ranges + required role(s)
+
+✅ Acceptance:
+
+* Same engine works for PO and Voucher with different rules
+* Action list changes by status
+
+---
+
+## 5) Build universal workflow service engine
+
+This is the “brain”.
+
+Engine responsibilities:
+
+* Validate transition is allowed
+* Enforce **segregation of duties** (maker ≠ checker ≠ approver)
+* Enforce amount-tier approvals (PO/Voucher)
+* Enforce row-level scope
+* Lock documents on APPROVED/POSTED
+* Create workflow history record
+* Trigger side-effects when POSTED (inventory/ledger)
+
+✅ Acceptance:
+
+* One function like `performAction(docType, docId, action, userId, reason)`
+* No module-specific hacks
+
+---
+
+## 6) Create history table and action APIs
+
+**History table:**
+
+* `workflow_history(id, tenant_id, doc_type, doc_id, action, from_status, to_status, actor_id, reason, meta_json, created_at)`
+
+APIs (common):
+
+* `/documents/:type/:id/actions` (list allowed actions)
+* `/documents/:type/:id/submit`
+* `/check`, `/recommend`, `/approve`, `/send-back`, `/reject`, `/cancel`, `/post`
+
+✅ Acceptance:
+
+* Every action has reason + audit trail
+* You can reconstruct the entire lifecycle later
+
+---
+
+## 7) Add fields and wire routes
+
+Every document table must have standard fields:
+
+* `status`
+* `version`
+* `parent_id` (for amendments)
+* `created_by`
+* `current_owner_role` (optional for queue routing)
+* `locked_at`, `locked_by` (optional)
+* `approved_by`, `approved_at` (optional convenience)
+
+✅ Acceptance:
+
+* Every module uses same fields so dashboard works
+
+---
+
+## 8) Build unified approval queue dashboard
+
+This is crucial for usability.
+
+Queue filters:
+
+* Doc type (PO, Voucher, GRN, etc.)
+* Status awaiting me (e.g., “Submitted for Checking”, “Recommended for Approval”)
+* Branch/warehouse
+* Amount range
+* Date range
+
+What to show:
+
+* Doc no, vendor/customer, amount, created by, current step, aging days
+
+✅ Acceptance:
+
+* Checker sees only “needs checking”
+* Approver sees only “needs approval” (and only for their amount-tier)
+
+---
+
+## 9) Create document versions and amendment flow
+
+Rules:
+
+* If document is **APPROVED/POSTED**, edits are not allowed.
+* User must create **AMENDMENT**:
+
+  * new doc row with `version = old.version + 1`, `parent_id = old.id`
+  * status goes back to DRAFT
+  * full approval cycle repeats
+
+Accounting vouchers special:
+
+* After POSTED: amendment might be blocked; use **Reversal voucher** instead.
+
+✅ Acceptance:
+
+* Amendment keeps original unchanged
+* History shows who changed what & why
+
+---
+
+## 10) Build configuration UI and history viewer
+
+Admin UI:
+
+* Configure workflow transitions per doc_type
+* Configure approval matrix ranges
+* Configure SoD rules (strict mode recommended)
+
+History viewer:
+
+* Timeline view of actions
+* Filter by user, date, document
+* Export for audit
+
+✅ Acceptance:
+
+* Tenant admin can tweak workflow without code deploy
+
+---
+
+## 11) End-to-end testing for workflow rules
+
+Test categories:
+
+* RBAC: user without permission cannot act
+* SoD: maker cannot approve/check their own
+* Status rules: cannot delete after submit
+* Approval matrix: wrong approver blocked
+* Amendment: approved doc cannot be edited, amendment creates new version
+* Accounting: posted voucher cannot be edited, reversal is required
+
+✅ Acceptance:
+
+* Add automated tests + a “test tenant seed scenario”
+
+---
+
+# Missing from Replit’s list (add these 3 or you’ll face trouble)
+
+### A) “Posting” separation
+
+Approving ≠ Posting (important for accounting/inventory)
+
+* Approval: business authorization
+* Posting: commits stock/ledger (often Accounts role)
+
+### B) Emergency override
+
+A controlled override feature:
+
+* `override:cancel:any` with mandatory reason + extra audit log
+* Optional: dual approval for override
+
+### C) Notifications
+
+At least:
+
+* In-app notifications when a document moves to your queue
+
+---
+
+## Next Replit Prompt (to refine the plan into specs)
+
+Copy-paste this into Replit:
+
+**“Now convert this plan into a detailed specification document: include exact table schemas (columns + types), standard status/action list, permission key naming convention, SoD rules, approval matrix logic, and the required APIs + payload shapes. Do not write code yet. Output as a numbered technical spec that a developer can implement.”**
+
+---
+
+If you paste Replit’s *spec output* here, I’ll:
+
+* clean it up,
+* point out missing ERP rules (especially for vouchers + stock),
+* and then give you the **next implementation prompt sequence** (one prompt per phase).

@@ -1,0 +1,252 @@
+You are Replit Agent working inside my PrimeX ERP repo.
+
+OBJECTIVE
+Replace ALL mock/hardcoded data across core ERP pages with REAL live data from existing APIs, and apply critical go-live safety hardening for Inventory, Accounting, and Finance. This is preparing for production rollout with real users.
+
+SCOPE / RULES (non-negotiable)
+- Only surgical fixes. NO rewrites. NO route path changes. NO UI restructuring.
+- Replace mock data → real queries; if backend data doesn’t exist, show a proper empty state (“No data yet”, “Not configured”) instead of fake numbers.
+- Keep existing working real data and endpoints as-is unless they are hardcoded/mocked.
+- All changes must be tenant-safe and permission-safe.
+- Add go-live guards (idempotency, GL validation, immutability, audit trail) where missing.
+
+========================================================
+STEP 0 — INSPECT (must do first)
+========================================================
+1) Locate and list every mock/hardcoded dataset on these pages/files:
+   - client/src/pages/dashboard.tsx
+   - client/src/pages/accounts/dashboard.tsx
+   - client/src/pages/hr/index.tsx
+   - client/src/components/hr/analytics.tsx
+   - client/src/components/hr/payroll.tsx
+   - client/src/pages/reports/reports-static.tsx
+   - client/src/pages/reports/report-detail-static.tsx
+   - client/src/pages/reports/[id].tsx
+   - client/src/pages/inventory/warehouses.tsx
+   - client/src/pages/quotations/quotation-view.tsx
+2) Identify existing backend endpoints relevant to these pages:
+   - dashboard KPIs, recent orders, tasks, production trends
+   - accounting summaries (trial balance/P&L/balance sheet), ledger_postings, vouchers
+   - hr employees/departments, payroll runs
+   - reports templates/generated reports
+   - inventory warehouse stock summary + movements, vendors/parties
+3) After inspection, proceed automatically through Phase A → B → C.
+
+========================================================
+PHASE A — Replace Mock Data with Real Data
+========================================================
+
+T001: Main Dashboard — Replace mock KPIs with real data
+Files:
+- server/routes.ts (dashboard endpoints)
+- client/src/pages/dashboard.tsx
+
+Tasks:
+1) Replace hardcoded /api/dashboard/kpi response:
+   - Use real DB queries:
+     - ordersCount: count(*) from orders (tenant-scoped)
+     - revenue: compute from ledger_postings (income accounts) OR existing P&L aggregation logic if available
+     - production KPIs: use production tables if present; otherwise return 0 + “No data yet”
+   - Keep existing real data already present (approval stats, overdue bills, negative stock, pending GRN) unchanged.
+2) Replace hardcoded /api/dashboard/recent-orders:
+   - Query orders table for latest 5 (tenant-scoped) and return minimal fields needed by UI.
+3) Replace hardcoded /api/dashboard/tasks:
+   - Query real tasks table if it exists; if not, return empty array and UI should show “No tasks”.
+4) Replace hardcoded /api/dashboard/production-trends:
+   - Query production data if available; else return empty dataset and UI shows “No data yet”.
+
+UI:
+- Update dashboard.tsx to consume these endpoints and show graceful empty states where applicable.
+
+Acceptance:
+- No hardcoded numbers remain; KPIs reflect actual DB; recent orders are real.
+
+--------------------------------------------------------
+
+T002: Accounts Dashboard — Replace mock financial charts with real data
+Files:
+- client/src/pages/accounts/dashboard.tsx
+- server/routes/accounting.ts OR create a new accounting dashboard endpoint file if repo pattern uses server/routes/accounting.ts
+
+Backend:
+1) Create endpoint: GET /api/accounting/dashboard/metrics
+   - Returns monthly summaries for last 12 months grouped by month:
+     - incomeTotal, expenseTotal, netProfit
+     - cashIn, cashOut (if you can derive from cash/bank accounts movements; otherwise provide empty and UI handles)
+     - expenseBreakdown by expense group/category if chart exists
+   - Compute using ledger_postings grouped by month, filtered by account type (Income/Expense).
+   - Ensure tenant-scoped.
+2) Replace any mock summary endpoint (e.g. /api/accounting/dashboard/summary) with real aggregation:
+   - Prefer existing P&L + balance sheet logic if already implemented; otherwise compute minimal totals from ledger_postings.
+3) Replace /api/accounting/insights:
+   - Either produce simple data-driven insights (top expense category, highest income month) OR remove the UI section if it only showed fake content.
+
+Frontend:
+- Remove hardcoded arrays: revenueData, profitAndLossData, cashFlowData, expenseBreakdownData, taxData.
+- Fetch from /api/accounting/dashboard/metrics and render charts with real data.
+- Add empty state: “No transactions yet” if ledger_postings is empty.
+
+Acceptance:
+- No hardcoded financial data; charts render real numbers or empty state.
+
+--------------------------------------------------------
+
+T003: HR Dashboard — Replace mock KPIs with real data
+Files:
+- client/src/pages/hr/index.tsx
+- client/src/components/hr/analytics.tsx
+- client/src/components/hr/payroll.tsx
+
+Tasks:
+1) Replace hrKPIs/hrStats with real counts:
+   - employees: use /api/hr/employees (count)
+   - departments: use /api/hr/departments (count)
+2) Recent activities:
+   - Use entity_events if available (filter HR/payroll related), or payroll runs as activities.
+   - If none exist, show “No recent activity”.
+3) analytics.tsx:
+   - Replace hardcoded HR_KPIS totals with derived values from employees (e.g., active employees, new hires if data exists).
+   - For metrics without backend support (attendance rate, turnover, training): show “—” or “Not configured”.
+4) payroll.tsx:
+   - Replace MOCK_PAYROLL_HISTORY and MOCK_PAYROLL_SUMMARY with /api/payroll/runs data.
+   - If no runs exist, show “No payroll runs yet”.
+
+Acceptance:
+- HR dashboard shows only real data; unknown metrics show “—” not fake.
+
+--------------------------------------------------------
+
+T004: Reports Pages — Replace static pages with real report engine
+Files:
+- client/src/pages/reports/reports-static.tsx
+- client/src/pages/reports/report-detail-static.tsx
+
+Tasks:
+1) reports-static.tsx:
+   - Replace hardcoded report cards with data from GET /api/reports/templates
+   - If endpoint doesn’t exist, locate existing report templates store or create minimal endpoint that lists report templates already available in DB/config.
+2) report-detail-static.tsx:
+   - Replace fully static detail page:
+     - Either redirect to /reports/[id] (dynamic viewer) OR fetch real generated report data from /api/reports/generated or existing report endpoint.
+3) Remove fake sales figures, fake product tables, fake AI insights:
+   - Show empty state: “No generated report yet” if no data exists.
+
+Acceptance:
+- Reports list shows real templates; detail shows real generated data or empty state.
+
+--------------------------------------------------------
+
+T005: Remove “Coming Soon” placeholders — implement or proper empty states
+Files:
+- client/src/pages/inventory/warehouses.tsx
+- client/src/pages/quotations/quotation-view.tsx
+- client/src/pages/reports/[id].tsx
+
+Tasks:
+1) inventory/warehouses.tsx:
+   - Replace “coming soon” toasts for Stock Summary and Movement Details:
+     - Use existing stock queries:
+       - Stock summary: itemStock for the warehouse (tenant-scoped)
+       - Movements: stock_ledger entries filtered by warehouse, ordered by date
+   - Replace hardcoded “Sample Vendor 1/2” with real party query (customers/vendors/parties endpoint already in repo).
+2) quotations/quotation-view.tsx:
+   - Replace “will be implemented” toasts:
+     - If PDF/email infrastructure exists, implement basic actions using existing utilities.
+     - If not safe today, replace with a proper dialog: “Feature not available in this release” (no fake promise).
+3) reports/[id].tsx:
+   - Replace “Feature coming soon” with actual report rendering using real generated data if available; otherwise empty state.
+
+Acceptance:
+- No “coming soon” or fake numbers shown to users; real data or proper empty state only.
+
+========================================================
+PHASE B — Go-Live Safety Hardening (Inventory + Accounting + Finance)
+========================================================
+
+T006: Add idempotency guards to PO and GRN creation routes
+Files:
+- server/routes/inventory/purchaseOrderRoutes.ts
+- server/routes/inventory/grnRoutes.ts
+
+Tasks:
+1) Support x-request-id header for POST create routes:
+   - If request-id already processed for tenant + route, return existing created record instead of creating duplicate.
+   - If repo already has an idempotency utility/table, reuse it; otherwise implement a minimal idempotency store (tenantId, requestId, routeKey, entityType, entityId, createdAt).
+2) Add duplicate number checks:
+   - PO number unique within tenant (before insert)
+   - GRN number unique within tenant (before insert)
+3) Verify GRN complete double-post guard exists and works.
+
+Acceptance:
+- Double-click or retry doesn’t create duplicate PO/GRN.
+
+--------------------------------------------------------
+
+T007: Add GL account validation before GRN completion
+Files:
+- server/database/inventory/grnStorage.ts OR server/services/stockLedgerService.ts (where GRN completion posts stock/GL)
+
+Tasks:
+Before completing GRN:
+- For each item line, find its stock group/category and ensure required GL accounts are configured:
+  - inventoryAccountId
+  - cogsAccountId
+- If missing, return a clear error:
+  - “Cannot complete GRN: Stock Group ‘X’ missing Inventory/COGS GL accounts. Configure in Stock Groups.”
+- Do not silently skip GL posting.
+
+Acceptance:
+- Helpful validation error instead of silent partial posting.
+
+--------------------------------------------------------
+
+T008: Strengthen immutability and audit on financial writes
+Files:
+- accounting posting service (accountingEngineService.ts or equivalent)
+- GRN completion storage/service
+- stock adjustment/reconciliation service
+- bankReconciliationService.ts
+- payment run service
+
+Tasks:
+1) Ensure voucher status transitions are audited:
+   - DRAFT → SUBMITTED → APPROVED → POSTED
+2) Ensure PO approval, GRN completion, stock adjustment approval create audit/entity_events records.
+3) Ensure bank reconciliation completion locks reconciled lines and prevents edits.
+4) Add any missing audit log entries for critical state changes (include userId, tenantId, summary).
+
+Acceptance:
+- Every critical financial action produces an audit record; reconciled lines are immutable.
+
+========================================================
+PHASE C — Docs & Tutorials
+========================================================
+
+T009: Update tutorials and replit.md
+Files:
+- client/src/data/tutorials.ts
+- replit.md
+
+Tasks:
+- Update any workflow text impacted by mock removal and new safety hardening.
+- Document:
+  - mock removal completed
+  - go-live hardening added (idempotency + GL validation + immutability + audit)
+  - production readiness status and any remaining limitations.
+
+Acceptance:
+- Docs match current behavior.
+
+========================================================
+FINAL OUTPUT REQUIRED
+========================================================
+After finishing, print:
+1) List of ALL mocks removed (file → what replaced → endpoint/source)
+2) New/updated endpoints (method + path + brief response shape)
+3) Safety hardening summary:
+   - idempotency approach
+   - PO/GRN duplicate checks
+   - GRN GL validation
+   - audit/immutability changes
+4) Manual go-live smoke test steps for staff (15–20 steps)
+Proceed now: Inspect → Phase A (T001–T005) → Phase B (T006–T008) → Phase C (T009) → Summarize.

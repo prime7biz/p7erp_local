@@ -1,0 +1,125 @@
+Not authenticated, redirecting to login
+App.tsx:130 Restoring last page: /inventory/categories
+queryClient.ts:15 Making DELETE request to /api/item-categories/15
+queryClient.ts:18 
+            
+            
+           DELETE https://8a49369c-4e28-49a2-957a-28c5ee2abf80-00-6vj7mhfq59jq.janeway.replit.dev/api/item-categories/15 401 (Unauthorized)
+apiRequest @ queryClient.ts:18
+mutationFn @ categories.tsx:159
+fn @ @tanstack_react-query.js?v=64c4692e:1189
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+execute @ @tanstack_react-query.js?v=64c4692e:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=64c4692e:2630
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3295
+handleDelete @ categories.tsx:239
+onClick @ categories.tsx:337
+handleEvent @ chunk-5Q5YC75F.js?v=64c4692e:4
+callCallback2 @ chunk-RPCDYKBN.js?v=64c4692e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=64c4692e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=64c4692e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=64c4692e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=64c4692e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=64c4692e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=64c4692e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=64c4692e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=64c4692e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=64c4692e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=64c4692e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=64c4692e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=64c4692e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=64c4692e:5449Understand this error
+queryClient.ts:44 API error (401): Tenant ID not found
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:44
+await in apiRequest
+mutationFn @ categories.tsx:159
+fn @ @tanstack_react-query.js?v=64c4692e:1189
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+execute @ @tanstack_react-query.js?v=64c4692e:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=64c4692e:2630
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3295
+handleDelete @ categories.tsx:239
+onClick @ categories.tsx:337
+handleEvent @ chunk-5Q5YC75F.js?v=64c4692e:4
+callCallback2 @ chunk-RPCDYKBN.js?v=64c4692e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=64c4692e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=64c4692e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=64c4692e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=64c4692e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=64c4692e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=64c4692e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=64c4692e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=64c4692e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=64c4692e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=64c4692e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=64c4692e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=64c4692e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=64c4692e:5449Understand this error
+queryClient.ts:48 Authentication required - user not logged in
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:48
+await in apiRequest
+mutationFn @ categories.tsx:159
+fn @ @tanstack_react-query.js?v=64c4692e:1189
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+execute @ @tanstack_react-query.js?v=64c4692e:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=64c4692e:2630
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3295
+handleDelete @ categories.tsx:239
+onClick @ categories.tsx:337
+handleEvent @ chunk-5Q5YC75F.js?v=64c4692e:4
+callCallback2 @ chunk-RPCDYKBN.js?v=64c4692e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=64c4692e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=64c4692e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=64c4692e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=64c4692e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=64c4692e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=64c4692e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=64c4692e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=64c4692e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=64c4692e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=64c4692e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=64c4692e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=64c4692e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=64c4692e:5449Understand this warning
+queryClient.ts:56 API request error: Error: Tenant ID not found
+    at apiRequest (queryClient.ts:51:13)
+overrideMethod @ hook.js:608
+apiRequest @ queryClient.ts:56
+await in apiRequest
+mutationFn @ categories.tsx:159
+fn @ @tanstack_react-query.js?v=64c4692e:1189
+run @ @tanstack_react-query.js?v=64c4692e:494
+start @ @tanstack_react-query.js?v=64c4692e:536
+execute @ @tanstack_react-query.js?v=64c4692e:1225
+await in execute
+mutate @ @tanstack_react-query.js?v=64c4692e:2630
+(anonymous) @ @tanstack_react-query.js?v=64c4692e:3295
+handleDelete @ categories.tsx:239
+onClick @ categories.tsx:337
+handleEvent @ chunk-5Q5YC75F.js?v=64c4692e:4
+callCallback2 @ chunk-RPCDYKBN.js?v=64c4692e:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=64c4692e:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=64c4692e:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=64c4692e:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=64c4692e:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=64c4692e:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=64c4692e:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=64c4692e:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=64c4692e:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=64c4692e:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=64c4692e:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=64c4692e:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=64c4692e:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=64c4692e:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=64c4692e:5449Understand this error

@@ -35,5 +35,5 @@ debug-*.log
 *.db
 *.sqlite3
 
-# Replit / reference (excluded to avoid nested .git; remove this line to include)
-replit-legacy/
+# Replit / reference (included in repo)
+# replit-legacy/

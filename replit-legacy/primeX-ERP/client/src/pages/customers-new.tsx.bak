@@ -1,0 +1,1426 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { DashboardContainer } from "@/components/layout/dashboard-container";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Loader2, Plus, Search, Edit, Trash2, Check, X, User, MoreHorizontal, Eye, AlertCircle, LineChart, Lightbulb } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { cn } from "@/lib/utils";
+
+// Customer type definition
+interface Customer {
+  id: number;
+  customerId: string;
+  customerName: string;
+  country: string;
+  hasAgent: boolean;
+  contactPerson: string;
+  email: string;
+  phone: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  orderCount?: number;
+  inquiryCount?: number;
+  totalSpend?: number;
+  avgOrderValue?: number;
+  lastOrderDate?: string;
+  paymentTerms?: string;
+  leadTime?: number;
+  industrySegment?: string;
+  productPreferences?: string[];
+  sustainabilityRating?: number;
+  complianceLevel?: string;
+  agent?: {
+    id: number;
+    agentName: string;
+    agentEmail: string;
+    agentPhone: string;
+  }
+}
+
+// Define AI Insight interface
+interface AIInsight {
+  id: string;
+  title: string;
+  description: string;
+  type: 'info' | 'warning' | 'success';
+  confidence: number;
+  recommendations: string[];
+  dataPoints?: string[];
+  trend?: 'up' | 'down' | 'stable';
+  impactScore?: number;
+  category?: 'business' | 'compliance' | 'production' | 'relationship' | 'opportunity';
+}
+
+// Define Risk Assessment interface
+interface RiskAssessment {
+  id: string;
+  level: 'low' | 'medium' | 'high';
+  factors: string[];
+  mitigationSteps: string[];
+}
+
+// Define Sustainability Metrics interface
+interface SustainabilityMetrics {
+  rating: number;
+  categories: {
+    name: string;
+    score: number;
+    recommendations: string[];
+  }[];
+}
+
+// Define Order Forecast interface
+interface OrderForecast {
+  period: string;
+  predictedVolume: number;
+  predictedValue: number;
+  confidenceLevel: number;
+  seasonalFactors: string[];
+}
+
+// Define Production Metrics
+interface ProductionMetrics {
+  avgLeadTime: number;
+  onTimeDelivery: number;
+  qualityIndex: number;
+  defectRates: number;
+  returnRate: number;
+}
+
+// Country list for dropdown
+const countries = [
+  "Bangladesh", "India", "China", "Pakistan", "Vietnam", 
+  "Indonesia", "Thailand", "Malaysia", "Japan", "South Korea",
+  "United States", "United Kingdom", "Germany", "France", "Italy",
+  "Spain", "Australia", "Canada", "Brazil", "Mexico"
+].sort();
+
+const CustomerForm = ({ 
+  customer,
+  onSubmit,
+  onCancel,
+  isSubmitting
+}: { 
+  customer?: Customer;
+  onSubmit: (data: any) => void;
+  onCancel: () => void;
+  isSubmitting: boolean;
+}) => {
+  // Customer form validation schema
+  const formSchema = z.object({
+    customerName: z.string().min(2, "Name must be at least 2 characters"),
+    country: z.string().min(1, "Country is required"),
+    hasAgent: z.boolean().default(false),
+    contactPerson: z.string().min(2, "Contact person is required"),
+    email: z.string().email("Invalid email address"),
+    phone: z.string().min(5, "Phone number is required"),
+    industrySegment: z.string().optional(),
+    paymentTerms: z.string().optional(),
+    leadTime: z.number().min(0).optional(),
+    complianceLevel: z.string().optional(),
+    sustainabilityRating: z.number().min(0).max(5).optional(),
+    productPreferences: z.array(z.string()).optional(),
+    agent: z.object({
+      agentName: z.string().optional(),
+      agentEmail: z.string().email("Invalid email address").optional(),
+      agentPhone: z.string().optional()
+    }).optional()
+  });
+
+  // Initialize form with default values
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: customer ? {
+      customerName: customer.customerName,
+      country: customer.country,
+      hasAgent: customer.hasAgent,
+      contactPerson: customer.contactPerson,
+      email: customer.email,
+      phone: customer.phone,
+      industrySegment: customer.industrySegment || "",
+      paymentTerms: customer.paymentTerms || "",
+      leadTime: customer.leadTime || 0,
+      complianceLevel: customer.complianceLevel || "",
+      sustainabilityRating: customer.sustainabilityRating || 0,
+      productPreferences: customer.productPreferences || [],
+      agent: customer.agent ? {
+        agentName: customer.agent.agentName,
+        agentEmail: customer.agent.agentEmail,
+        agentPhone: customer.agent.agentPhone
+      } : undefined
+    } : {
+      customerName: "",
+      country: "",
+      hasAgent: false,
+      contactPerson: "",
+      email: "",
+      phone: "",
+      industrySegment: "",
+      paymentTerms: "",
+      leadTime: 0,
+      complianceLevel: "",
+      sustainabilityRating: 0,
+      productPreferences: [],
+      agent: undefined
+    }
+  });
+
+  // Watch hasAgent field to conditionally show agent fields
+  const hasAgent = form.watch("hasAgent");
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="customerName"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Customer Name *</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter customer name" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="country"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Country *</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a country" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {countries.map((country) => (
+                    <SelectItem key={country} value={country}>{country}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="contactPerson"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Contact Person *</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter contact person name" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email Address *</FormLabel>
+                <FormControl>
+                  <Input placeholder="Enter email address" type="email" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Phone Number *</FormLabel>
+                <FormControl>
+                  <Input placeholder="Enter phone number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <FormField
+          control={form.control}
+          name="hasAgent"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Agent</FormLabel>
+                <FormDescription>
+                  Does this customer have an agent?
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        {/* Industry-specific information section */}
+        <div className="border rounded-lg p-4 space-y-4 mt-4">
+          <h3 className="font-medium">Garment Industry Information</h3>
+          
+          <FormField
+            control={form.control}
+            name="industrySegment"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Industry Segment</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select industry segment" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="luxury">Luxury Apparel</SelectItem>
+                    <SelectItem value="fastFashion">Fast Fashion</SelectItem>
+                    <SelectItem value="sportswear">Sportswear</SelectItem>
+                    <SelectItem value="casual">Casual Wear</SelectItem>
+                    <SelectItem value="formalwear">Formal Wear</SelectItem>
+                    <SelectItem value="workwear">Workwear & Uniforms</SelectItem>
+                    <SelectItem value="childrenswear">Children's Wear</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  Segment that best describes this customer's primary business
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="paymentTerms"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Terms</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select payment terms" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="advance">Advance Payment</SelectItem>
+                      <SelectItem value="net30">Net 30</SelectItem>
+                      <SelectItem value="net60">Net 60</SelectItem>
+                      <SelectItem value="net90">Net 90</SelectItem>
+                      <SelectItem value="lc">Letter of Credit</SelectItem>
+                      <SelectItem value="tt">Telegraphic Transfer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="leadTime"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Avg. Lead Time (Days)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="Enter lead time" 
+                      type="number" 
+                      min="0"
+                      {...field} 
+                      value={field.value || ''} 
+                      onChange={e => field.onChange(e.target.valueAsNumber || 0)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="complianceLevel"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Compliance Level</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select compliance level" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="basic">Basic</SelectItem>
+                      <SelectItem value="standard">Standard</SelectItem>
+                      <SelectItem value="comprehensive">Comprehensive</SelectItem>
+                      <SelectItem value="certified">Certified</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Level of compliance with industry standards
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="sustainabilityRating"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sustainability Rating (0-5)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="Enter rating" 
+                      type="number" 
+                      min="0" 
+                      max="5" 
+                      step="0.5"
+                      {...field} 
+                      value={field.value || ''} 
+                      onChange={e => field.onChange(e.target.valueAsNumber || 0)}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Customer's commitment to sustainable practices
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        {hasAgent && (
+          <div className="border rounded-lg p-4 space-y-4 mt-4">
+            <h3 className="font-medium">Agent Details</h3>
+
+            <FormField
+              control={form.control}
+              name="agent.agentName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Agent Name *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter agent name" {...field} value={field.value || ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="agent.agentEmail"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Agent Email *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter agent email" type="email" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="agent.agentPhone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Agent Phone *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter agent phone" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" type="button" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {customer ? 'Update Customer' : 'Create Customer'}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Form>
+  );
+};
+
+export default function CustomersPage() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isAIInsightDialogOpen, setIsAIInsightDialogOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerInsights, setCustomerInsights] = useState<AIInsight[] | null>(null);
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
+  const [showAIInsights, setShowAIInsights] = useState(false);
+  const [businessIntelligence, setBusinessIntelligence] = useState<AIInsight[]>([]);
+  const [isLoadingBusinessIntelligence, setIsLoadingBusinessIntelligence] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  // Fetch customers
+  const { data: customersData = [], isLoading } = useQuery<Customer[]>({
+    queryKey: ['/api/customers'],
+    retry: false,
+  });
+  
+  // Ensure we have a properly typed array of customers
+  const customers = Array.isArray(customersData) ? customersData : [];
+
+  // Create customer mutation
+  const createCustomerMutation = useMutation({
+    mutationFn: (newCustomer: any) => 
+      apiRequest("/api/customers", "POST", newCustomer),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      setIsCreateDialogOpen(false);
+      toast({
+        title: "Customer created",
+        description: "The customer has been created successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create customer",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Update customer mutation
+  const updateCustomerMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number, data: any }) => 
+      apiRequest(`/api/customers/${id}`, "PUT", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      setIsEditDialogOpen(false);
+      setSelectedCustomer(null);
+      toast({
+        title: "Customer updated",
+        description: "The customer has been updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update customer",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Toggle customer status mutation
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: number, isActive: boolean }) => 
+      apiRequest(`/api/customers/${id}/status`, "PATCH", { isActive }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      toast({
+        title: "Status updated",
+        description: "The customer status has been updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update customer status",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Delete customer mutation
+  const deleteCustomerMutation = useMutation({
+    mutationFn: (id: number) => 
+      apiRequest(`/api/customers/${id}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      setIsDeleteDialogOpen(false);
+      setSelectedCustomer(null);
+      toast({
+        title: "Customer deleted",
+        description: "The customer has been deleted successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete customer",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Handle create customer
+  const handleCreateCustomer = (data: any) => {
+    // Ensure agent data is properly formatted
+    let formattedData = { ...data };
+    
+    // Fix the data structure to match the API requirements
+    if (formattedData.hasAgent && formattedData.agent) {
+      // Keep only the agent fields we actually collect in the form
+      formattedData.agent = {
+        agentName: formattedData.agent.agentName,
+        agentEmail: formattedData.agent.agentEmail,
+        agentPhone: formattedData.agent.agentPhone,
+      };
+    } else {
+      // Remove agent data if hasAgent is false
+      delete formattedData.agent;
+    }
+    
+    console.log("Submitting customer data:", formattedData);
+    createCustomerMutation.mutate(formattedData);
+  };
+
+  // Handle edit customer
+  const handleEditCustomer = (data: any) => {
+    if (selectedCustomer) {
+      updateCustomerMutation.mutate({ id: selectedCustomer.id, data });
+    }
+  };
+
+  // Handle toggle customer status
+  const handleToggleStatus = (customer: Customer) => {
+    toggleStatusMutation.mutate({ id: customer.id, isActive: !customer.isActive });
+  };
+
+  // Handle delete customer
+  const handleDeleteCustomer = () => {
+    if (selectedCustomer) {
+      deleteCustomerMutation.mutate(selectedCustomer.id);
+    }
+  };
+  
+  // Open AI insight dialog and generate insights for a specific customer
+  const openAIInsightDialog = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setIsLoadingInsights(true);
+    setIsAIInsightDialogOpen(true);
+    
+    // Generate AI insights using OpenAI integration through our backend API
+    const fetchInsights = async () => {
+      try {
+        const response = await fetch(`/api/ai-insights/customers/${customer.id}`);
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setCustomerInsights(data);
+      } catch (error) {
+        console.error("Error fetching AI insights:", error);
+        // Fallback insights if the API fails
+        setCustomerInsights([{
+          id: 'error-1',
+          title: 'Connection Issue',
+          description: 'There was a problem generating AI insights. Please try again later.',
+          type: 'warning',
+          confidence: 0.5,
+          recommendations: [
+            'Check your connection and try again',
+            'Ensure the AI service is properly configured',
+            'Contact system administrator if the problem persists'
+          ]
+        }]);
+      } finally {
+        setIsLoadingInsights(false);
+      }
+    };
+    
+    fetchInsights();
+  };
+  
+  // Fetch business intelligence for all customers
+  const fetchBusinessIntelligence = async () => {
+    setIsLoadingBusinessIntelligence(true);
+    try {
+      const response = await fetch('/api/ai-insights/customers/business-intelligence');
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setBusinessIntelligence(data);
+    } catch (error) {
+      console.error("Error fetching business intelligence:", error);
+      // Fallback insights if the API fails
+      setBusinessIntelligence([{
+        id: 'error-1',
+        title: 'Business Intelligence Unavailable',
+        description: 'There was a problem generating business intelligence. Please try again later.',
+        type: 'warning',
+        confidence: 0.5,
+        recommendations: [
+          'Check your connection and try again',
+          'Ensure the AI service is properly configured',
+          'Contact system administrator if the problem persists'
+        ]
+      }]);
+    } finally {
+      setIsLoadingBusinessIntelligence(false);
+    }
+  };
+  
+  // Effect to fetch business intelligence when showAIInsights changes
+  if (showAIInsights && businessIntelligence.length === 0 && !isLoadingBusinessIntelligence) {
+    fetchBusinessIntelligence();
+  }
+  
+  // Filter customers based on search term and status
+  const filteredCustomers = customers.filter(customer => {
+    const matchesSearch = 
+      searchTerm === "" || 
+      customer.customerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.country.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = showInactive ? true : customer.isActive;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  // Create actions component for the dashboard container
+  const pageActions = (
+    <div className="flex space-x-2">
+      <Button 
+        variant="outline" 
+        onClick={() => setShowAIInsights(!showAIInsights)}
+        className={showAIInsights ? "bg-primary/5 text-primary hover:bg-primary/10 border-primary/20" : ""}
+      >
+        <Lightbulb className="mr-2 h-4 w-4" /> 
+        {showAIInsights ? "Hide AI Insights" : "Show AI Insights"}
+      </Button>
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogTrigger asChild>
+          <Button className="bg-primary hover:bg-primary/90">
+            <Plus className="mr-2 h-4 w-4" /> Add Customer
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add New Customer</DialogTitle>
+            <DialogDescription>
+              Add a new customer to the system. Fill in all the required fields.
+            </DialogDescription>
+          </DialogHeader>
+          <CustomerForm 
+            onSubmit={handleCreateCustomer} 
+            onCancel={() => setIsCreateDialogOpen(false)}
+            isSubmitting={createCustomerMutation.isPending}
+          />
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+
+  return (
+    <DashboardContainer
+      title="Customers"
+      subtitle="Manage your customers and their information"
+      actions={pageActions}
+    >
+      {/* AI Insights Section */}
+      {showAIInsights && (
+        <div className="space-y-6">
+          <Card className="bg-primary/5 border-primary/20">
+            <CardHeader>
+              <CardTitle className="flex items-center text-primary">
+                <Lightbulb className="mr-2 h-5 w-5" />
+                Business Intelligence
+              </CardTitle>
+              <CardDescription className="text-primary/80">
+                AI-powered insights about your customer base and opportunities
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingBusinessIntelligence ? (
+                <div className="flex items-center justify-center h-24">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {businessIntelligence.map((insight) => (
+                    <Alert key={insight.id} className={cn(
+                      "border",
+                      insight.type === 'info' && "border-blue-200 bg-blue-50 text-blue-800",
+                      insight.type === 'warning' && "border-primary/30 bg-primary/5 text-primary",
+                      insight.type === 'success' && "border-green-200 bg-green-50 text-green-800"
+                    )}>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle className="font-medium">{insight.title}</AlertTitle>
+                      <AlertDescription className="mt-1">
+                        {insight.description}
+                      </AlertDescription>
+                    </Alert>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Search and Filter Bar */}
+      <div className="flex items-center space-x-2 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Search customers..."
+            className="pl-8"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox 
+            id="showInactive" 
+            checked={showInactive} 
+            onCheckedChange={() => setShowInactive(!showInactive)}
+          />
+          <label htmlFor="showInactive" className="text-sm font-medium">
+            Show inactive customers
+          </label>
+        </div>
+      </div>
+
+      {/* Customer Table */}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Customer ID</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Country</TableHead>
+              <TableHead>Contact Person</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead>Has Agent</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={9} className="h-24 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+                </TableCell>
+              </TableRow>
+            ) : filteredCustomers.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="h-24 text-center">
+                  No customers found. {searchTerm && "Try a different search term."}
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredCustomers.map((customer) => (
+                <TableRow key={customer.id} className={!customer.isActive ? "bg-gray-50 opacity-70" : ""}>
+                  <TableCell className="font-medium">{customer.customerId}</TableCell>
+                  <TableCell>{customer.customerName}</TableCell>
+                  <TableCell>{customer.country}</TableCell>
+                  <TableCell>{customer.contactPerson}</TableCell>
+                  <TableCell>{customer.email}</TableCell>
+                  <TableCell>{customer.phone}</TableCell>
+                  <TableCell>
+                    {customer.hasAgent ? 
+                      <Badge variant="outline" className="bg-blue-50 text-blue-800 hover:bg-blue-50">Yes</Badge> : 
+                      <span className="text-muted-foreground">No</span>}
+                  </TableCell>
+                  <TableCell>
+                    {customer.isActive ? 
+                      <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Active</Badge> : 
+                      <Badge variant="outline" className="bg-gray-100 text-gray-800 hover:bg-gray-100">Inactive</Badge>}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setSelectedCustomer(customer);
+                            setIsViewDialogOpen(true);
+                          }}
+                        >
+                          <Eye className="mr-2 h-4 w-4" />
+                          View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedCustomer(customer);
+                            setIsEditDialogOpen(true);
+                          }}
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleToggleStatus(customer)}
+                        >
+                          {customer.isActive ? 
+                            <><X className="mr-2 h-4 w-4" />Deactivate</> : 
+                            <><Check className="mr-2 h-4 w-4" />Activate</>}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openAIInsightDialog(customer)}>
+                          <Lightbulb className="mr-2 h-4 w-4" />
+                          AI Insights
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedCustomer(customer);
+                            setIsDeleteDialogOpen(true);
+                          }}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* View Customer Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <User className="mr-2 h-5 w-5" />
+              Customer Details
+            </DialogTitle>
+            <DialogDescription>
+              Customer information with garment industry insights
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedCustomer && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold">{selectedCustomer.customerName}</h3>
+                <Badge className={selectedCustomer.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                  {selectedCustomer.isActive ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground">Customer ID</h4>
+                  <p>{selectedCustomer.customerId}</p>
+                </div>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="text-xs font-medium text-muted-foreground">Customer ID</h4>
+                      <p className="font-medium text-sm">{selectedCustomer.customerId}</p>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-xs font-medium text-muted-foreground">Name</h4>
+                      <p className="font-medium text-sm">{selectedCustomer.customerName}</p>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-xs font-medium text-muted-foreground">Country</h4>
+                      <p className="text-sm flex items-center">
+                        <span className={`fi fi-${selectedCustomer.country.toLowerCase() === 'united states' ? 'us' : 
+                          selectedCustomer.country.toLowerCase() === 'united kingdom' ? 'gb' : 
+                          selectedCustomer.country.slice(0, 2).toLowerCase()}`} 
+                        style={{width: '16px', marginRight: '6px'}}></span>
+                        {selectedCustomer.country}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-xs font-medium text-muted-foreground">Contact Person</h4>
+                      <p className="text-sm">{selectedCustomer.contactPerson}</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground">Email</h4>
+                        <p className="text-sm">{selectedCustomer.email}</p>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground">Phone</h4>
+                        <p className="text-sm">{selectedCustomer.phone}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {selectedCustomer.hasAgent && selectedCustomer.agent && (
+                  <div>
+                    <h3 className="font-medium mb-2">Agent Information</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground">Agent Name</h4>
+                        <p className="text-sm">{selectedCustomer.agent.agentName}</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <h4 className="text-xs font-medium text-muted-foreground">Email</h4>
+                          <p className="text-sm">{selectedCustomer.agent.agentEmail}</p>
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-medium text-muted-foreground">Phone</h4>
+                          <p className="text-sm">{selectedCustomer.agent.agentPhone}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Industry-specific information */}
+                <div>
+                  <h3 className="font-medium mb-2">Garment Industry Information</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="text-xs font-medium text-muted-foreground">Industry Segment</h4>
+                      <p className="text-sm">{selectedCustomer.industrySegment || 'Not specified'}</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground">Payment Terms</h4>
+                        <p className="text-sm">{selectedCustomer.paymentTerms || 'Not specified'}</p>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground">Lead Time</h4>
+                        <p className="text-sm">{selectedCustomer.leadTime ? `${selectedCustomer.leadTime} days` : 'Not specified'}</p>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-xs font-medium text-muted-foreground">Compliance Level</h4>
+                      <p className="text-sm">{selectedCustomer.complianceLevel || 'Not specified'}</p>
+                    </div>
+                    
+                    {selectedCustomer.sustainabilityRating !== undefined && (
+                      <div>
+                        <h4 className="text-xs font-medium text-muted-foreground">Sustainability Rating</h4>
+                        <div className="flex items-center mt-1">
+                          {[...Array(5)].map((_, i) => (
+                            <svg 
+                              key={i}
+                              xmlns="http://www.w3.org/2000/svg" 
+                              className={`h-4 w-4 ${i < (selectedCustomer.sustainabilityRating || 0) ? 'text-emerald-500' : 'text-gray-200'}`}
+                              viewBox="0 0 20 20" 
+                              fill="currentColor"
+                            >
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Customer Analytics */}
+              <div className="md:col-span-2 space-y-6">
+                <div>
+                  <h3 className="font-medium mb-4">Customer Analytics</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Order Metrics */}
+                    <div className="border rounded-lg p-3">
+                      <h4 className="text-xs font-medium text-muted-foreground mb-2">Order Summary</h4>
+                      <div className="flex flex-col space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">Total Orders</span>
+                          <span className="font-medium">{selectedCustomer.orderCount || 0}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">Avg Order Value</span>
+                          <span className="font-medium">${selectedCustomer.avgOrderValue?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">Total Spend</span>
+                          <span className="font-medium">${selectedCustomer.totalSpend?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">Last Order</span>
+                          <span className="font-medium">{selectedCustomer.lastOrderDate || 'N/A'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Production Performance */}
+                    <div className="border rounded-lg p-3">
+                      <h4 className="text-xs font-medium text-muted-foreground mb-2">Production Metrics</h4>
+                      <div className="flex flex-col space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">On-Time Delivery</span>
+                          <span className="font-medium text-emerald-600">93%</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">Quality Approval</span>
+                          <span className="font-medium text-amber-600">87%</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">Avg. Defect Rate</span>
+                          <span className="font-medium">2.4%</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">Typical Lead Time</span>
+                          <span className="font-medium">{selectedCustomer.leadTime || 45} days</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Sustainability Impact */}
+                    <div className="border rounded-lg p-3">
+                      <h4 className="text-xs font-medium text-muted-foreground mb-2">Sustainability Impact</h4>
+                      <div className="flex flex-col space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">Overall Rating</span>
+                          <div className="flex">
+                            {[...Array(5)].map((_, i) => (
+                              <svg 
+                                key={i}
+                                xmlns="http://www.w3.org/2000/svg" 
+                                className={`h-3 w-3 ${i < (selectedCustomer.sustainabilityRating || 0) ? 'text-emerald-500' : 'text-gray-200'}`}
+                                viewBox="0 0 20 20" 
+                                fill="currentColor"
+                              >
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                              </svg>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">Eco Materials</span>
+                          <span className="font-medium">68%</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">Carbon Reduction</span>
+                          <span className="font-medium text-emerald-600">42%</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">Water Conservation</span>
+                          <span className="font-medium text-blue-600">55%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* AI Insights Module */}
+                <div>
+                  <h3 className="font-medium mb-2 flex items-center">
+                    <Lightbulb className="h-4 w-4 mr-1 text-amber-500" />
+                    AI-Generated Insights
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    <Alert className="border-l-4 border-amber-500 bg-amber-50">
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0 text-amber-500 mr-2">
+                          <AlertCircle className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <AlertTitle className="mb-1">Seasonal Order Pattern Detected</AlertTitle>
+                          <AlertDescription className="text-xs">
+                            This customer typically increases orders by 35% during Q2 for fall collections. Consider proactive capacity planning.
+                          </AlertDescription>
+                        </div>
+                      </div>
+                    </Alert>
+                    
+                    <Alert className="border-l-4 border-green-500 bg-green-50">
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0 text-green-500 mr-2">
+                          <Check className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <AlertTitle className="mb-1">Sustainability Leader</AlertTitle>
+                          <AlertDescription className="text-xs">
+                            This customer has shown 15% higher interest in sustainable fabrics compared to other customers. Consider showcasing your eco-friendly options.
+                          </AlertDescription>
+                        </div>
+                      </div>
+                    </Alert>
+                    
+                    <Alert className="border-l-4 border-blue-500 bg-blue-50">
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0 text-blue-500 mr-2">
+                          <Lightbulb className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <AlertTitle className="mb-1">Opportunity for Growth</AlertTitle>
+                          <AlertDescription className="text-xs">
+                            Based on recent inquiries and market trends, this customer may be expanding into childrenswear. Consider presenting your capabilities in this segment.
+                          </AlertDescription>
+                        </div>
+                      </div>
+                    </Alert>
+                  </div>
+                </div>
+                
+                {/* Risk Assessment */}
+                <div>
+                  <h3 className="font-medium mb-2 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    Risk Assessment
+                  </h3>
+                  
+                  <div className="border rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm font-medium">Overall Risk Level</span>
+                      <Badge className="bg-green-100 text-green-800">Low</Badge>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center text-xs">
+                        <span className="w-36">Payment Risk</span>
+                        <div className="w-full bg-gray-200 h-1.5 rounded-full">
+                          <div className="bg-green-500 h-1.5 rounded-full" style={{width: '15%'}}></div>
+                        </div>
+                        <span className="ml-2 min-w-[30px] text-right">15%</span>
+                      </div>
+                      
+                      <div className="flex items-center text-xs">
+                        <span className="w-36">Market Volatility</span>
+                        <div className="w-full bg-gray-200 h-1.5 rounded-full">
+                          <div className="bg-amber-500 h-1.5 rounded-full" style={{width: '45%'}}></div>
+                        </div>
+                        <span className="ml-2 min-w-[30px] text-right">45%</span>
+                      </div>
+                      
+                      <div className="flex items-center text-xs">
+                        <span className="w-36">Compliance Risk</span>
+                        <div className="w-full bg-gray-200 h-1.5 rounded-full">
+                          <div className="bg-green-500 h-1.5 rounded-full" style={{width: '22%'}}></div>
+                        </div>
+                        <span className="ml-2 min-w-[30px] text-right">22%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+              <div className="h-px bg-border my-2"></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground">Created</h4>
+                  <p>{new Date(selectedCustomer.createdAt).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground">Last Updated</h4>
+                  <p>{new Date(selectedCustomer.updatedAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Customer Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Customer</DialogTitle>
+            <DialogDescription>
+              Update customer information. Fill in all the required fields.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedCustomer && (
+            <CustomerForm 
+              customer={selectedCustomer}
+              onSubmit={handleEditCustomer} 
+              onCancel={() => setIsEditDialogOpen(false)}
+              isSubmitting={updateCustomerMutation.isPending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Customer Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Delete Customer</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this customer? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedCustomer && (
+            <div className="border rounded-md p-4 mt-4">
+              <p><span className="font-medium">ID:</span> {selectedCustomer.customerId}</p>
+              <p><span className="font-medium">Name:</span> {selectedCustomer.customerName}</p>
+              <p><span className="font-medium">Country:</span> {selectedCustomer.country}</p>
+            </div>
+          )}
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteCustomer}
+              disabled={deleteCustomerMutation.isPending}
+            >
+              {deleteCustomerMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Insights Dialog */}
+      <Dialog open={isAIInsightDialogOpen} onOpenChange={setIsAIInsightDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Lightbulb className="mr-2 h-5 w-5 text-primary" />
+              AI Insights: {selectedCustomer?.customerName}
+            </DialogTitle>
+            <DialogDescription>
+              AI-generated insights and recommendations for this customer
+            </DialogDescription>
+          </DialogHeader>
+          
+          {isLoadingInsights ? (
+            <div className="flex items-center justify-center h-48">
+              <div className="text-center">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+                <p className="text-muted-foreground">Generating AI insights...</p>
+              </div>
+            </div>
+          ) : customerInsights ? (
+            <div className="space-y-6 my-4">
+              {customerInsights.map((insight) => (
+                <Card key={insight.id} className={cn(
+                  insight.type === 'info' && "border-blue-200",
+                  insight.type === 'warning' && "border-primary/30",
+                  insight.type === 'success' && "border-green-200"
+                )}>
+                  <CardHeader>
+                    <CardTitle className={cn(
+                      "text-lg",
+                      insight.type === 'info' && "text-blue-700",
+                      insight.type === 'warning' && "text-primary",
+                      insight.type === 'success' && "text-green-700"
+                    )}>
+                      {insight.title}
+                    </CardTitle>
+                    <CardDescription>{insight.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {insight.recommendations.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-2">Recommendations:</h4>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {insight.recommendations.map((rec, idx) => (
+                            <li key={idx}>{rec}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <div className="mt-4 text-xs text-muted-foreground">
+                      Confidence score: {Math.round(insight.confidence * 100)}%
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="font-medium text-lg mb-2">No insights available</h3>
+              <p className="text-muted-foreground">
+                We couldn't generate any insights for this customer.
+              </p>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAIInsightDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </DashboardContainer>
+  );
+}

@@ -1,0 +1,76 @@
+This is excellent evidence. On the core workflow hardening, you’re publish-ready with one clearly-scoped follow-up: accounting period lock (because it’s a finance/audit control, not a workflow stability issue).
+
+Publish decision
+
+✅ Yes — publish now, with two small notes:
+
+Idempotency behavior is safe (stale-status rejection + row lock).
+
+Add period-lock before real accounting usage (or temporarily restrict voucher posting to a small admin group until it’s done).
+
+What looks solid (based on your evidence)
+A2 Idempotency
+
+First submit succeeds.
+
+Second submit fails safely due to status re-check inside transaction.
+
+Unique index on request_id provides a second line of defense.
+
+Only improvement (optional): return already_processed when request_id matches, instead of stale-status. Not required for safety.
+
+Actions endpoint
+
+Clear isAllowed, reason, requiredPermission, whyInQueue, and sodInfo.
+
+SoD blocking works exactly as expected.
+
+Tiny bug to fix later: your reject action’s whyInQueue text says “can be sent back” — just wording.
+
+Approval queue
+
+Proper pagination shape (items, pagination, summary).
+
+Has server-side page controls and caps.
+
+Indexes
+
+The key (tenant_id, workflow_status) and history/audit indexes are exactly what you want.
+
+Voucher posting
+
+Posting bridge creates ledger entries.
+
+POSTED is non-editable.
+
+Period close blocking not implemented (this is the only real accounting governance gap).
+
+The one “must do” before broad go-live in Accounts
+Add Accounting Period Lock for Voucher Posting
+
+Minimum spec:
+
+Table: accounting_periods (tenant_id, start_date, end_date, is_closed)
+
+On post action for vouchers:
+
+if posting_date ∈ a closed period → block with clear message
+
+optionally allow override permission: accounts:period:override_post with audit reason
+
+Also add:
+
+“Backdate limit” policy (optional): max X days.
+
+Next phase roadmap (recommended)
+Phase 8 — Finance governance + polish (in this order)
+
+Period lock for vouchers (must)
+
+Reversal-only rule for POSTED vouchers (tighten if not already strict)
+
+Idempotency UX polish: if same requestId, return “already processed” + current status
+
+Approval queue scaling: extend pagination to all doc types uniformly; add cursor pagination later if needed
+
+Break-glass banner integration into all key document detail pages (not just component-ready)

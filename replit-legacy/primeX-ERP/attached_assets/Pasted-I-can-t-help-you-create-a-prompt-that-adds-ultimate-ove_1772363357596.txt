@@ -1,0 +1,265 @@
+I can’t help you create a prompt that adds **“ultimate override power with no footprint/ghost mode”** (no audit trail). That would be building a backdoor and removing accountability in a system that handles full company data.
+
+What I *can* give you is a **final combined prompt** that delivers everything else you asked for (security, traceability, tenant isolation, backups/restore, notifications, approval queue) **and** gives the super user **ultimate override** with **automatic background logging** that is **hidden from normal users** (super-user-only visibility). This keeps you safe if anything ever goes wrong.
+
+Here’s the final combined Replit prompt:
+
+```text
+You are Replit Agent working inside my PrimeX ERP repo.
+
+FINAL PRODUCTION ROLLOUT OBJECTIVE (ALL-IN-ONE)
+Deliver production readiness with four tracks:
+
+TRACK 1 — Brand Finalization
+- Apply Prime7 ERP logo across app + marketing site
+- Update theme to brand orange + charcoal (calm readable ERP)
+
+TRACK 2 — Mock Data Removal
+- Replace ALL mock/hardcoded UI data with real live data from existing APIs (or proper empty states)
+
+TRACK 3 — Go-Live Safety Hardening + Cross-Module Integration
+- Fix fragmented master data (vendors/customers/parties sync)
+- Add idempotency + duplicate guards for PO/GRN
+- Add GL account validation for GRN completion
+- Strengthen immutability + audit on critical financial operations
+- Employee advances auto-post to GL
+- Backup monitoring + restoration system
+
+TRACK 4 — Security + Traceability + Notifications + Workflow UX
+- Comprehensive footprint tracking (login/logout, failed logins, CRUD, approvals, exports, report views, printouts)
+- Tenant isolation enforcement + detection
+- Real-time pop-up notifications for approvals (SSE)
+- Role-aware approval queue (show only actions user can do)
+- Super user “Ultimate Override” across all guards, BUT:
+  - audit must still be written automatically in background
+  - override logs are visible ONLY to super user (hidden from staff)
+
+STRICT RULES (non-negotiable)
+- Surgical fixes only. NO rewrites. NO route path changes. NO UI restructuring. NO schema PK changes.
+- Tenant-safe and permission-safe: every query/write must be tenant-scoped and authorized.
+- Replace mocks → real queries; if data doesn’t exist, show “No data yet / Not configured / No transactions yet”.
+- No silent cross-tenant reads. If detected, block response and log CRITICAL security event.
+- Super user can override rules instantly (no extra clicks), but actions must still be traceable via audit logs (super-user-only visibility).
+
+========================================================
+STEP 0 — INSPECT FIRST (must do before changes)
+========================================================
+1) Branding/theme:
+- Find logo references: sidebar header, auth pages, marketing navbar/footer, favicon, OG meta/title
+- Find theme tokens: client/src/index.css, tailwind/shadcn tokens, any dev check enforcing old blue
+
+2) Mock data sources:
+Scan and list mocks/placeholders in:
+- client/src/pages/dashboard.tsx
+- client/src/pages/accounts/dashboard.tsx
+- client/src/pages/hr/index.tsx
+- client/src/components/hr/analytics.tsx
+- client/src/components/hr/payroll.tsx
+- client/src/components/hr/attendance.tsx
+- client/src/components/hr/leave.tsx
+- client/src/components/hr/allowances.tsx
+- client/src/components/hr/documents.tsx
+- client/src/pages/reports/reports-static.tsx
+- client/src/pages/reports/report-detail-static.tsx
+- client/src/pages/reports/[id].tsx
+- client/src/pages/inventory/warehouses.tsx
+- client/src/pages/quotations/quotation-view.tsx
+
+3) Safety + multi-tenant:
+- Inspect audit_logs + auditService.ts
+- Inspect auth-routes.ts + middleware/auth.ts
+- Inspect workflowEngine + approval queue routes/UI
+- Inspect tenant middleware and any complex join queries for missing tenant constraints
+- Inspect backup job (pg-boss) and any existing backup/restore routes
+
+After inspection, print:
+- What exists (keep)
+- What is mocked (replace)
+- What’s missing (empty states / endpoints)
+- High-risk gaps (tenant isolation, duplicate posting, missing audit)
+Then proceed automatically.
+
+========================================================
+PHASE A — BRAND FINALIZATION
+========================================================
+A1) Apply Prime7 ERP logo everywhere (logo image will be provided by me)
+- Replace existing logo references in:
+  - Sidebar header
+  - Login/Register/Forgot pages
+  - Marketing navbar + footer
+- Update favicon (small mark derived from “7” element)
+- Update HTML title + OG metadata to “Prime7 ERP”
+- Ensure responsive behavior on mobile
+Acceptance: logo appears everywhere; no broken images; favicon updated.
+
+A2) Theme update (brand orange + charcoal)
+- Update theme tokens (client/src/index.css + existing theme system):
+  - Primary: brand orange ≈ #F97316 (HSL ~ 24 95% 53%)
+  - Primary foreground: white
+  - Accent: warm orange tint (not green)
+  - Sidebar background: charcoal (NOT pure black) e.g. #111827 / hsl(222 47% 11%)
+  - Sidebar active highlight: subtle orange tint
+  - Focus ring: orange tint
+- Remove/update any dev check enforcing old blue (#3B82F6)
+- Regression: tables/forms/charts/dialogs readable; severity colors unaffected
+Acceptance: calm, professional, readable; orange used for actions/accents.
+
+========================================================
+PHASE B — REMOVE MOCK DATA (REAL DATA OR EMPTY STATES)
+========================================================
+B1) Main Dashboard
+Backend (server/routes.ts):
+- /api/dashboard/kpi: replace hardcoded values with real tenant-scoped queries:
+  - ordersCount from orders
+  - revenue from ledger_postings using Income accounts (or existing reporting logic)
+  - production metrics from production tables OR return 0 + “No data”
+- /api/dashboard/recent-orders: latest 5 real orders
+- /api/dashboard/tasks: real tasks if table exists else []
+- /api/dashboard/production-trends: real trends else empty dataset
+Frontend (dashboard.tsx): remove hardcoded numbers; show empty states.
+Keep existing real queries unchanged.
+Acceptance: no hardcoded values.
+
+B2) Accounts Dashboard
+Backend (server/routes/accounting.ts):
+- GET /api/accounting/dashboard/metrics:
+  - last 12 months income/expense/netProfit from ledger_postings grouped by month
+  - cashIn/cashOut from Cash/Bank accounts if mapping exists else 0 + “Not configured”
+  - expenseBreakdown if possible else []
+- Replace mocked summary endpoint with real P&L + Balance Sheet aggregation using existing reportingRoutes
+- Replace insights with minimal real insights or remove section
+Frontend: remove hardcoded arrays; fetch metrics; show “No transactions yet”.
+Acceptance: real ledger data or empty state.
+
+B3) HR Dashboard + components
+- Replace all mock KPIs/history with real endpoints where they exist:
+  employees count, departments count, payroll runs, salary structures
+- Attendance/leave/allowances/documents: if not implemented, show “Not configured” (no fake).
+Acceptance: HR shows only real data or empty.
+
+B4) Reports
+- reports-static: use /api/reports/templates
+- report-detail-static: redirect to /reports/[id] or fetch /api/reports/generated
+- reports/[id]: render real report or “No generated report yet”
+Remove fake sales/product/AI numbers.
+Acceptance: real templates/data or empty.
+
+B5) Remove “Coming Soon” placeholders
+- warehouses: use /api/stock-ledger/summary and /api/stock-ledger for movements
+- replace sample vendors with real vendors/parties
+- quotation view: email via Resend if existing and safe; otherwise show “Feature not available”; PDF via window.print()
+Acceptance: no “coming soon” toasts.
+
+========================================================
+PHASE C — CROSS-MODULE MASTER DATA + GO-LIVE HARDENING
+========================================================
+C1) Vendors/Customers ↔ Parties sync (shared master)
+Create server/services/partySyncService.ts:
+- upsertPartyFromVendor / upsertPartyFromCustomer
+- upsertVendorFromParty / upsertCustomerFromParty (based on partyType)
+Matching priority (tenant-scoped):
+1) taxId
+2) email (normalized)
+3) phone (normalized)
+4) exact name match (trim/lower)
+5) else create new
+Hook into vendor/customer/party create/update routes.
+Run initial sync for existing vendors/customers into parties.
+Commercial LC text fields stay as-is (no route changes).
+Acceptance: same entity available across modules.
+
+C2) Idempotency + duplicate checks for PO & GRN
+- Support x-request-id header for PO/GRN create:
+  return existing created record if requestId already processed (reuse existing idempotency utility if present)
+- PO number unique per tenant (pre-insert)
+- GRN number unique per tenant (pre-insert)
+- verify GRN completion double-post guard
+Acceptance: double-click/retry safe.
+
+C3) GL account validation before GRN completion
+- Validate each item’s stock group has inventoryAccountId and cogsAccountId configured
+- If missing, return clear error and stop completion
+Acceptance: no silent partial GL posting.
+
+C4) Immutability + audit + employee advances → GL
+- Ensure voucher transitions log audit/entity events
+- Ensure PO approval, GRN completion, stock adjustment approval, reconciliation completion all log audit
+- Bank reconciliation locks reconciled lines
+- Employee advances: auto-generate voucher once:
+  Dr Advance Receivable (from payrollAccountingConfig.advanceReceivableLedgerId)
+  Cr Bank/Cash
+Acceptance: full audit trail, advances appear in GL.
+
+========================================================
+PHASE D — SECURITY + TRACEABILITY + BACKUP/RESTORE + NOTIFICATIONS
+========================================================
+D1) Comprehensive Activity Logs (footprint tracking)
+Backend:
+- Ensure audit_logs captures:
+  login/logout/failed login + IP/user-agent
+  CRUD for key entities
+  workflow approvals/posting + override events
+  report views
+  exports
+  prints
+  backup/restore
+- Add endpoints:
+  GET /api/audit/logs (tenant-scoped; override logs visible only to super user)
+  GET /api/audit/security-stats
+  POST /api/audit/log-action (frontend-triggered: print/export/view)
+Frontend:
+- Add /settings/activity-logs page (superUserOnly) with filters, pagination, export CSV (and log export)
+Acceptance: full footprint traceability.
+
+D2) Tenant isolation enforcement (no bridging)
+- Add/strengthen tenantIsolation middleware:
+  - Validate tenantId on every request
+  - For complex joins, enforce tenant constraints
+  - If any row with mismatched tenantId is detected:
+    block response and log CRITICAL event
+Acceptance: no cross-tenant leakage.
+
+D3) Login/session hardening
+- Log failed logins with IP/user-agent/reason
+- After repeated failed attempts (5 in 15 min per IP), flag in security stats (and optionally slow down responses)
+- Record lastLoginAt/lastLoginIp
+- Detect concurrent logins from different IP and log security event
+Acceptance: robust login footprint.
+
+D4) Backup monitoring + restoration
+- Enhance existing pg-boss backup job to log success/failure + size + time per tenant
+- Add GET /api/backup/health (last backup date/status/size per tenant)
+- Add controlled restore endpoint (superUserOnly) requiring confirmation and audit log
+Acceptance: backups monitored; restore possible and audited.
+
+D5) Real-time pop-up notifications (SSE)
+- Add SSE stream /api/notifications/stream and push on workflow notifications
+- Frontend hook useNotificationStream shows toasts + refreshes unread count
+Acceptance: instant notification on approvals.
+
+D6) Role-aware approval queue
+- Backend returns userAuthority per document
+- UI shows tabs for only the user’s authority level; super user sees all
+Acceptance: correct queue visibility.
+
+D7) Super user ultimate override (automatic) WITH hidden audit
+- Super user bypasses permissions/SoD/matrix/period locks automatically
+- Every override still writes audit log (super-user-only visibility)
+- Never weaken tenant isolation
+Acceptance: ultimate control + traceability preserved (hidden from staff).
+
+========================================================
+PHASE E — DOCS + FINAL OUTPUT
+========================================================
+- Update client/src/data/tutorials.ts and replit.md with:
+  branding changes, mock removal, party sync, hardening features
+- Provide final summary:
+  1) all mocks removed (file → replacement → endpoint)
+  2) logo applied screens/areas + favicon
+  3) theme tokens changed (names + values)
+  4) endpoints added/updated
+  5) safety/security summary (idempotency, GL validation, audit, tenant isolation, backups)
+  6) go-live smoke test steps (15–20)
+
+Proceed now: Inspect → Phase A → Phase B → Phase C → Phase D → Phase E → Summarize.
+```

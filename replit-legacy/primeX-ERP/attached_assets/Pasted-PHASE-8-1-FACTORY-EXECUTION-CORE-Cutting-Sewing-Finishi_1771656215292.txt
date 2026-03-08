@@ -1,0 +1,169 @@
+PHASE 8.1 — FACTORY EXECUTION CORE (Cutting + Sewing + Finishing)
+(Production Plan → Line Assignment → Hourly Production → WIP Tracking → Efficiency KPIs)
+
+Goal:
+Run daily production operations inside ERP:
+- Order-wise production plan
+- Sewing line assignment (line-wise plan)
+- Cutting plan + bundle tracking (minimal)
+- Hourly production entry per line/department
+- WIP movement through stages
+- Efficiency, output, bottleneck dashboards
+- Approvals + audit trails for target changes and adjustments
+
+Part A — Discovery (no breaking changes)
+1) Identify existing tables/routes for:
+   - sales orders / style / BOM / consumption plan
+   - production orders (Phase 4.1)
+   - inventory moves (WIP warehouses)
+   - users/roles/permissions
+2) Identify if any production entry module already exists.
+3) Output file paths + what exists vs missing.
+
+Part B — Master data needed
+Create/extend:
+1) departments
+- id, tenantId, name: CUTTING|SEWING|FINISHING|PACKING etc.
+
+2) sewing_lines
+- id, tenantId, lineCode (unique), floor, capacityOperators, defaultShiftHours
+- status ACTIVE|INACTIVE
+
+3) shifts
+- id, tenantId, name, startTime, endTime, breakMinutes
+
+Part C — Production Planning (order-wise + line-wise)
+1) production_plans
+- id, tenantId
+- planDate
+- relatedType: ORDER
+- relatedId: salesOrderId
+- styleId
+- plannedQty, targetQty
+- status: DRAFT|APPROVED|ACTIVE|CLOSED
+- approvedBy, approvedAt
+- notes
+
+2) line_assignments
+- id, tenantId, productionPlanId
+- lineId, shiftId
+- targetQty
+- smv (optional)
+- plannedEfficiencyPct (optional)
+- plannedManpower (optional)
+- status ACTIVE|STOPPED
+Rule:
+- target changes after APPROVED require workflow:override + reason + audit log
+
+Part D — Cutting (minimal but useful)
+1) cutting_orders
+- id, tenantId, productionPlanId
+- markerRef (optional), layCount (optional)
+- plannedQty, cutQty
+- status: DRAFT|IN_PROGRESS|COMPLETED
+
+2) bundles (minimal bundle tracking)
+- id, tenantId, cuttingOrderId
+- bundleNo (unique per tenant/day)
+- size, color
+- qty
+- status: CUT|ISSUED_TO_SEW|SEWING|FINISHED|PACKED
+Purpose: enable WIP movement and traceability without heavy barcode system yet.
+
+Part E — Hourly Production Entry (the core)
+1) hourly_production_entries
+- id, tenantId
+- entryDate, hourSlot (e.g. 09:00-10:00)
+- department: CUTTING|SEWING|FINISHING
+- lineId (nullable for non-sewing depts)
+- productionPlanId
+- goodQty, rejectQty, reworkQty
+- operatorsPresent (optional)
+- remarks
+- enteredBy, createdAt
+Rules:
+- No negative numbers, validate hourSlot within shift
+- Editing past entries requires permission + audit log
+
+Part F — WIP Tracking (stage movement)
+1) wip_moves
+- id, tenantId
+- bundleId (optional), productionPlanId
+- fromStage, toStage (CUT→SEW→FINISH→PACK)
+- qty
+- moveDateTime
+- createdBy
+Rules:
+- cannot move more than available qty in stage
+- transactional and tenant-safe
+- optional integration: create inventory move between virtual WIP locations later (Phase 8.2+)
+
+Part G — KPIs & Dashboards
+Implement endpoints:
+1) GET /api/production/dashboard/summary?date=YYYY-MM-DD
+Return:
+- plannedQty vs producedQty vs remaining
+- line-wise performance: target vs actual, efficiency proxy
+- top bottlenecks (lines with low output or high reject)
+- WIP counts by stage
+
+2) GET /api/production/lines/performance?date=...
+3) GET /api/production/wip/status?date=...
+
+Compute:
+- hourly run rate
+- cumulative output
+- reject %
+- (optional) efficiency = (output * SMV) / (manpower * minutes) if SMV/manpower provided
+
+Part H — Permissions + audit
+1) Permissions:
+- create plan/assign line: MANAGER+
+- hourly entry: OFFICER/DATA_ENTRY
+- edit approved targets or backdate edits: workflow:override + reason
+2) Audit:
+- log changes to targets, deletions, and overrides.
+
+Part I — APIs (minimum)
+Planning:
+- POST /api/production/plans
+- POST /api/production/plans/:id/approve
+- POST /api/production/plans/:id/assign-line
+- GET  /api/production/plans?date=
+Hourly entry:
+- POST /api/production/hourly
+- PATCH /api/production/hourly/:id (restricted)
+Cutting/bundles:
+- POST /api/production/cutting-orders
+- POST /api/production/bundles (generate bundles)
+WIP:
+- POST /api/production/wip/move
+Dashboards:
+- GET /api/production/dashboard/summary?date=
+
+Part J — Frontend minimum screens
+1) Production Plan screen:
+- select order, set target, approve
+- line assignment UI (line + shift + target)
+2) Hourly Entry screen:
+- choose date, dept, line, hour slot, quantities
+- quick add rows for each hour
+3) Live Dashboard:
+- today’s line performance table
+- WIP stage cards
+- alerts for low output / high reject
+
+Part K — Verification (proof required)
+Seed/test:
+1) Create order + plan target 1000
+2) Assign Line A target 600, Line B target 400
+3) Add hourly entries for 3 hours
+4) Verify dashboard totals match and remaining qty correct
+5) Move bundles CUT→SEW and verify WIP counts update
+6) Attempt to edit approved target without override -> 403
+7) Override with reason -> allowed and logged
+
+Output:
+- files changed list
+- sample JSON for dashboard summary
+- proof of permission checks + one audit log entry

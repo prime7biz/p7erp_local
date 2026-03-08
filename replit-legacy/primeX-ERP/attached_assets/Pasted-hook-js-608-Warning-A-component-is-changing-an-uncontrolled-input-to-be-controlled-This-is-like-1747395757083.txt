@@ -1,0 +1,63 @@
+hook.js:608 
+ Warning: A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components Error Component Stack
+    at input (<anonymous>)
+    at _c (input.tsx:6:6)
+    at slot.tsx:68:13
+    at slot.tsx:15:13
+    at form.tsx:109:9
+    at div (<anonymous>)
+    at form.tsx:78:6
+    at Controller (controller.tsx:53:9)
+    at FormField (form.tsx:35:6)
+    at div (<anonymous>)
+    at form (<anonymous>)
+    at FormProvider (useFormContext.tsx:85:11)
+    at InquiryForm (InquiryForm.tsx:77:39)
+    at div (<anonymous>)
+    at primitive.tsx:39:13
+    at dismissable-layer.tsx:64:7
+    at slot.tsx:68:13
+    at slot.tsx:15:13
+    at primitive.tsx:39:13
+    at focus-scope.tsx:50:5
+    at dialog.tsx:385:13
+    at dialog.tsx:260:58
+    at Presence (presence.tsx:12:11)
+    at dialog.tsx:235:64
+    at slot.tsx:68:13
+    at slot.tsx:15:13
+    at primitive.tsx:39:13
+    at portal.tsx:22:22
+    at Presence (presence.tsx:12:11)
+    at Provider (create-context.tsx:59:15)
+    at DialogPortal (dialog.tsx:145:11)
+    at _c3 (dialog.tsx:35:6)
+    at Provider (create-context.tsx:59:15)
+    at Dialog (dialog.tsx:52:5)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at InquiriesPage (inquiries.tsx:104:23)
+    at component (<anonymous>)
+    at Route (index.js:227:18)
+    at Switch (index.js:314:19)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at div (<anonymous>)
+    at AppRoutes (App.tsx:32:31)
+    at Provider (create-context.tsx:59:15)
+    at TooltipProvider (tooltip.tsx:68:5)
+    at OnboardingProvider (onboarding-context.tsx:12:38)
+    at AuthProvider (auth-context.tsx:25:32)
+    at App (<anonymous>)
+    at V (index.mjs:1:856)
+    at J (index.mjs:1:737)
+    at QueryClientProvider (QueryClientProvider.tsx:30:3)
+queryClient.ts:15 Making [object Object] request to /api/inquiries undefined
+hook.js:608 
+ Create error: TypeError: Failed to execute 'fetch' on 'Window': '[object Object]' is not a valid HTTP method.
+    at apiRequest (queryClient.ts:17:21)
+    at Object.mutationFn (InquiryForm.tsx:171:14)
+    at Object.fn (mutation.ts:170:29)
+    at run (retryer.ts:153:49)
+    at Object.start (retryer.ts:218:9)
+    at _a6.execute (mutation.ts:208:40)

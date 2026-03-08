@@ -1,0 +1,130 @@
+You are working inside my PrimeX ERP full codebase (frontend + backend). I want a BIG UI upgrade pass that makes the app feel like a real ERP (Tally-grade speed + modern UX), WITHOUT breaking existing features.
+
+NON-NEGOTIABLES
+- Do NOT remove any existing modules/pages/routes.
+- Do NOT change API response shapes unless you update all callers.
+- Keep the current theme direction (calm/serene, professional).
+- Every change must be consistent across modules (tables, forms, status, actions).
+- Prefer incremental refactor: create reusable UI components and migrate pages to them.
+
+PHASE 1 — UI FOUNDATION (GLOBAL LAYOUT)
+1) Upgrade the App Shell:
+   - Topbar shows: Tenant (Company Code/Name), Current User, Current Period status (OPEN/CLOSED), and a clear environment badge if not production.
+   - Add a “Quick Actions” button in topbar (Create Voucher, New PO, New Order, New Item, New Party).
+   - Keep the left sidebar, but make it 2-level max (Module → Submodule). Collapse/expand states should persist.
+
+2) Add Command Palette (Ctrl/Cmd + K):
+   - Searchable list of routes + actions:
+     - Navigate to pages (Dashboard, Vouchers, Ledgers, Items, Parties, Orders, Reports, Admin/Tenant Mgmt).
+     - Create actions: “Create Voucher”, “New Item”, “New Party”.
+   - Must work with keyboard only.
+   - Include “Recent” (last 10 routes) and “Pinned” (user can pin 5).
+   - Store recent/pinned in localStorage per tenant+user.
+
+PHASE 2 — ERP-GRADE TABLE SYSTEM (REUSABLE COMPONENT)
+3) Build a reusable <ErpTable/> component used by all list pages:
+   REQUIRED FEATURES:
+   - Sticky header + optional sticky first column
+   - Server-side pagination support (page, limit)
+   - Search box (debounced)
+   - Filter bar (chips) + advanced filters drawer
+   - Column chooser + saved “views” (per user, per tenant) using localStorage (later can be persisted)
+   - Row selection + bulk actions (if page supports it)
+   - Row actions menu (…) with consistent actions order: View, Edit, Duplicate (if exists), Delete/Disable
+   - Bottom totals row for numeric columns (money/qty), optional
+   - Skeleton loading state (no spinners) and proper empty states
+
+4) Migrate these pages first to <ErpTable/>:
+   - Items list
+   - Parties/Customers/Suppliers list (whatever exists)
+   - Vouchers list (or Journals list)
+   - Orders/PO list (whatever exists)
+   Implement progressively but complete these migrations in this prompt.
+
+PHASE 3 — DOCUMENT VIEW UX (STATUS HEADER + ACTION PANEL + AUDIT)
+5) Standardize “Document Pages” (Voucher, PO, SO, GRN, Stock Issue/Receive, etc.):
+   - Add a <DocumentHeader/> component:
+     - Title + Doc No + Date + Status badge (DRAFT/SUBMITTED/APPROVED/POSTED/REJECTED)
+     - Period lock indicator (OPEN/CLOSED) + override chip if override exists
+     - Show key summary amounts (Total, Tax, Net) where relevant
+   - Add a right-side <ActionPanel/>:
+     - Only show valid actions based on status + permissions
+     - Primary action prominent (e.g., Submit / Approve / Post)
+     - “Save Draft” always available
+     - Confirm dialogs for irreversible actions (Post/Reject/Delete)
+   - Add <AuditTimeline/> section:
+     - Shows status transitions + who/when/reason (pull from existing audit log endpoints if present; otherwise implement minimal backend endpoint to list history for that document)
+
+6) Apply Document UX to at least:
+   - Voucher view/create/edit
+   - Purchase Order view/create/edit (or equivalent)
+   - Sales Order view/create/edit (or equivalent)
+   If a module doesn’t exist, skip it but do not break builds.
+
+PHASE 4 — FAST DATA ENTRY (KEYBOARD FIRST)
+7) Upgrade Voucher/Line-Item entry grids:
+   - Enter → next cell, Shift+Enter → previous
+   - Ctrl/Cmd+Enter → Save
+   - Alt+N → add new line
+   - F2 → edit selected row
+   - Autocomplete/typeahead for Party/Ledger/Item/Warehouse
+   - Inline “+ Create new …” inside dropdowns (permission-based)
+   - Error highlighting on invalid cells with inline messages
+   - Add a compact “Impact Preview” panel for vouchers (debits=credits, total, warnings) before posting
+
+PHASE 5 — DASHBOARD REFOCUS (EXCEPTIONS + ACTIONS)
+8) Refactor dashboard to “ERP action dashboard”:
+   - Section 1: Exceptions (cards):
+     - Pending approvals count
+     - Negative stock risk items count
+     - Overdue receivables count
+     - Pending GRN against PO count
+   - Section 2: Actions (buttons) — take user directly to filtered list views
+   - Section 3: Trends (small and minimal): sales trend or cash trend only if data exists; otherwise hide with friendly empty state
+   Use existing APIs; if missing, add minimal backend endpoints to provide counts efficiently.
+
+PHASE 6 — UX POLISH (CONSISTENCY)
+9) Implement consistent UI primitives (or ensure existing ones used consistently):
+   - Toast system: success/error/info with consistent placement
+   - Confirm modal: one reusable component
+   - Empty states: icon + message + CTA
+   - Skeleton loaders for tables + cards
+   - Status badge palette consistent (DRAFT grey, SUBMITTED blue, APPROVED purple, POSTED green, REJECTED red, SUSPENDED orange)
+
+10) Improve mobile responsiveness:
+   - Sidebar collapses to drawer
+   - Tables switch to “stacked rows” mode on small screens or enable horizontal scroll with sticky first column
+   - Ensure action buttons remain reachable (bottom action bar on mobile for document pages)
+
+PHASE 7 — PERMISSION-AWARE UI
+11) Ensure UI hides/disabled actions by RBAC:
+   - If user lacks permission, hide button and also ensure backend already blocks it (UI is not security).
+   - Show tooltip “Insufficient permission” on disabled actions when helpful.
+
+PHASE 8 — QA CHECKLIST (MUST DO)
+12) Run through and ensure:
+   - Build passes
+   - No broken routes
+   - Login → dashboard works
+   - Tenant approval/admin pages still accessible
+   - Lists render with new ErpTable
+   - Voucher create/edit/save/post still works
+   - Keyboard shortcuts don’t conflict with browser defaults
+   - No CORS/cookie regressions introduced
+
+DELIVERABLES
+- Create/modify reusable components:
+  - ErpTable, DocumentHeader, ActionPanel, AuditTimeline, CommandPalette, ConfirmDialog, EmptyState, Skeletons
+- Migrate at least 3–4 major pages to new system (as specified)
+- Provide a final “what changed” summary:
+  - Files added/changed
+  - Pages migrated
+  - Any new endpoints added
+
+IMPLEMENTATION NOTES
+- Keep code style consistent with existing project structure.
+- Prefer small, composable components.
+- Do not add heavy dependencies unless absolutely necessary; if you add one, justify it in summary.
+- If audit timeline API doesn’t exist, add a minimal backend endpoint that returns history for a document type/id from existing audit tables/logs.
+
+Now execute all of the above changes end-to-end.

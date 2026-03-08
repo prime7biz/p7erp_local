@@ -1,0 +1,143 @@
+This is moving in the right direction. From what you pasted, the sequence and the schema refinements look ERP-realistic. Now the big risk is drift: you’ll end up with “two statuses” and “two engines” (old voucher workflow vs new universal workflow) unless you lock down a few rules right now.
+
+Here’s what I’d do next (and what to tell Replit to do), in order.
+
+1) Stop “double status” from becoming permanent tech debt
+
+You said you added workflowStatus alongside existing status/statusId. That’s fine temporarily, but you must define one source of truth:
+
+Rule: Universal workflow engine reads/writes only workflowStatus (and workflow history).
+Legacy status fields become:
+
+either derived (computed on read), or
+
+updated by a small mapper (for backward compatibility) until you delete them.
+
+✅ Action item:
+
+Create a mapping function per doc type: legacyStatus <-> workflowStatus
+
+Add a deprecation note: “remove legacy status usage after Phase X”.
+
+If you don’t do this, your queue/dashboard will show one thing and the doc list will show another.
+
+2) Ensure workflow versioning is actually used (not just tables)
+
+You added workflowDefinitions + workflowInstances — perfect. Now enforce:
+
+On document create: create workflowInstance row and store workflowInstanceId on the doc
+
+Engine loads transitions using (tenant_id, doc_type, workflow_version from instance)
+
+✅ Action item:
+
+Add workflow_instance_id column to every workflow-enabled document table.
+
+For existing documents (already in DB), create a default instance during migration.
+
+3) Approval Matrix: finish the “multi-approval” behavior
+
+You added approvalMode + requiredCount. Great — but you need one more concept:
+
+“Approval progress”
+
+If approvalMode = ALL_REQUIRED or requiredCount > 1, you must track who approved so far and whether the step is complete.
+
+Two common patterns:
+
+Pattern A (simpler): store approvals in workflow_history and compute count from it.
+Pattern B (faster): add document_approvals table:
+
+tenant_id, doc_type, doc_id, approval_level, approved_by, approved_at
+
+✅ Action item:
+
+Decide A or B now (A is fine for MVP; B is better at scale).
+
+4) Locks: make them safe and deterministic
+
+You added lockToken + force unlock. Make sure you enforce this rule:
+
+Only the session holding the correct lockToken can save edits
+
+“Force unlock” requires permission + reason and logs to audit trail
+
+✅ Action item:
+
+Don’t lock on “open view”. Lock only on “enter edit mode”.
+
+Add lock_reason (optional) so users know why it’s locked.
+
+5) Inventory: PARTIALLY_POSTED needs a “remaining qty” truth source
+
+Adding PARTIALLY_POSTED is correct, but you must define what makes it partial.
+
+✅ Action item:
+
+For GRN/GIN lines, ensure there is:
+
+ordered_qty
+
+posted_qty (or received_qty / issued_qty)
+
+Status rules:
+
+if sum(posted_qty) == 0 → not posted
+
+if 0 < sum(posted_qty) < sum(ordered_qty) → PARTIALLY_POSTED
+
+if sum(posted_qty) == sum(ordered_qty) → POSTED/CLOSED
+
+6) SoD enforcement: define the exact rule you will enforce
+
+You added actorRoleId and controlStep in history — good. Now pick the rule set:
+
+Recommended default:
+
+Maker cannot Check/Approve/Post the same document
+
+Checker cannot Approve/Post
+
+Same user cannot do two control steps on same doc (strict mode)
+
+✅ Action item:
+
+Put SoD decision into config: STRICT | STANDARD | OFF (per tenant, per doc_type).
+
+7) UI: approval queue must be “action-oriented”
+
+Your approval queue dashboard should not just list documents — it must show:
+
+why it’s in my queue
+
+what action I can take now
+
+what I’m missing (e.g., needs 2 approvals, has 1)
+
+✅ Action item:
+
+Implement the GET /documents/:type/:id/actions endpoint early and use it everywhere.
+
+The next Replit prompt you should run (no code request from you — but Replit will code)
+
+Copy-paste this to Replit:
+
+Prompt:
+
+We’ve completed schema and started RBAC + workflow engine. Now do a hardening pass to prevent double-status drift and ensure workflow versioning is actually enforced.
+
+Make workflowStatus the only source of truth for workflow engine. Add per-doc mapping from legacy status fields to workflowStatus for backward compatibility (read + optional write sync). Mark legacy fields as deprecated in code.
+
+Add workflow_instance_id to all workflow-enabled documents (quotation, sales_order, purchase_order, grn, gin, voucher). On create, create workflowInstance and store it. For existing rows, write a migration to create default instances.
+
+Implement multi-approval behavior for approvalMatrix (approvalMode ANY_ONE/ALL_REQUIRED + requiredCount). Decide whether to compute from workflow_history or use a document_approvals table—prefer the simplest safe MVP. Ensure the engine prevents moving to APPROVED until requirements met.
+
+Enforce lockToken on edits; only the token holder can save. Add force-unlock endpoint requiring permission + reason and log it.
+
+Implement PARTIALLY_POSTED logic for GRN/GIN based on posted quantities per line.
+
+Implement GET /documents/:type/:id/actions endpoint returning allowed actions + reasons (for UI).
+
+Add integration tests for: SoD, multi-approval count, workflow version binding, lockToken enforcement, partial posting rules.
+
+Output: show me a checklist of changes you made + any migrations required + routes added.

@@ -29,7 +29,7 @@ Thumbs.db
 # Logs / debug
 *.log
 debug-*.log
-.cursor/
+# .cursor/ — uncomment to ignore; we commit .cursor/rules/ for project context
 
 # Database / local data (optional: remove if you want to track SQLite)
 *.db

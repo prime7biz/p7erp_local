@@ -1,0 +1,17 @@
+---
+description: P7 ERP project context and conventions
+globs: 
+alwaysApply: true
+---
+
+# P7 ERP – Project rules
+
+- **User:** Beginner at programming; prefer clear, simple structure and explanations.
+- **Directory structure:** Keep it clear. Main layout:
+  - `backend/` – FastAPI (Python), `app/`, `alembic/`, `scripts/`
+  - `frontend/` – React + Vite (TypeScript), `src/`, `public/`
+  - `docs/` – plans, parity notes, session notes
+  - `replit-legacy/primeX-ERP/` – reference codebase (PrimeX); match structure and behavior where applicable.
+- **Stack:** Python (FastAPI) backend, React (TypeScript) frontend. Multi-tenant; tenant types: manufacturer | buying_house | both.
+- **Reference parity:** See `docs/REFERENCE_PARITY.md` for auth, public routes, app sidebar, backend modules, and phases. Match reference flows when implementing features.
+- **Conventions:** Prefer consistent naming (e.g. tenant_id on tenant-scoped tables), JWT auth, company_code for tenant resolution on login.

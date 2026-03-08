@@ -1,0 +1,252 @@
+import type { LucideIcon } from "lucide-react";
+import {
+  LayoutDashboard,
+  Package,
+  Users,
+  ClipboardList,
+  ShoppingCart,
+  Shirt,
+  Calculator,
+  FileText,
+  Settings,
+  TrendingUp,
+  Calendar,
+  Factory,
+  Shield,
+  Truck,
+  DollarSign,
+  BarChart3,
+  CheckSquare,
+  Clock,
+  Warehouse,
+  CreditCard,
+  Target,
+  FileBarChart,
+  Globe,
+  Banknote,
+  FolderTree,
+  BookOpen,
+  Scissors,
+  ClipboardCheck,
+  Layers,
+  AlertTriangle,
+  ArrowRightLeft,
+  Activity,
+  MessageSquare,
+  Zap,
+  UserCheck,
+  Landmark,
+  PieChart,
+  FileSpreadsheet,
+  Gauge,
+  PackageCheck,
+  Cog,
+  FlaskConical,
+  RotateCcw,
+  ShieldCheck,
+  Wrench,
+  UserCog,
+  HardDrive,
+} from "lucide-react";
+
+export type TenantTypeFilter = "manufacturer" | "buying_house" | "both";
+
+export interface NavItem {
+  icon: LucideIcon;
+  label: string;
+  href: string;
+  exact?: boolean;
+  visibleFor?: TenantTypeFilter[];
+}
+
+export interface MenuSection {
+  section: string;
+  icon: LucideIcon;
+  directLink?: string;
+  items: NavItem[];
+  visibleFor?: TenantTypeFilter[];
+}
+
+const PREFIX = "/app";
+
+export const menuSections: MenuSection[] = [
+  {
+    section: "Dashboard",
+    icon: LayoutDashboard,
+    directLink: `${PREFIX}`,
+    items: [],
+  },
+  {
+    section: "Merchandising",
+    icon: Shirt,
+    items: [
+      { icon: Users, label: "Customers", href: `${PREFIX}/customers` },
+      { icon: ClipboardList, label: "Inquiries", href: `${PREFIX}/inquiries` },
+      { icon: FileText, label: "Quotations", href: `${PREFIX}/quotations` },
+      { icon: ShoppingCart, label: "Orders", href: `${PREFIX}/orders` },
+      { icon: Shirt, label: "Garment Styles", href: `${PREFIX}/merchandising/styles` },
+      { icon: Calculator, label: "BOM Builder", href: `${PREFIX}/bom` },
+      { icon: Target, label: "Consumption Plans", href: `${PREFIX}/bom/orders` },
+      { icon: TrendingUp, label: "Order Pipeline", href: `${PREFIX}/merchandising/pipeline` },
+      { icon: AlertTriangle, label: "Critical Alerts", href: `${PREFIX}/merchandising/alerts` },
+      { icon: ArrowRightLeft, label: "Consumption Recon", href: `${PREFIX}/merchandising/consumption-reconciliation` },
+      { icon: Globe, label: "Commercial", href: `${PREFIX}/commercial` },
+      { icon: Activity, label: "Order Follow-up", href: `${PREFIX}/followup` },
+      { icon: Users, label: "Parties", href: `${PREFIX}/parties` },
+      { icon: TrendingUp, label: "Document Flow", href: `${PREFIX}/flow` },
+    ],
+  },
+  {
+    section: "Export & Import",
+    icon: Globe,
+    items: [
+      { icon: Globe, label: "Export Cases", href: `${PREFIX}/commercial/export-cases` },
+      { icon: FileText, label: "Proforma Invoices", href: `${PREFIX}/commercial/proforma-invoices` },
+      { icon: ArrowRightLeft, label: "BTB LCs", href: `${PREFIX}/commercial/btb-lcs` },
+      { icon: Truck, label: "Logistics", href: `${PREFIX}/logistics` },
+    ],
+  },
+  {
+    section: "Inventory",
+    icon: Package,
+    items: [
+      { icon: Package, label: "Items & Stock", href: `${PREFIX}/inventory` },
+      { icon: FolderTree, label: "Stock Groups", href: `${PREFIX}/inventory/stock-groups` },
+      { icon: Warehouse, label: "Warehouses", href: `${PREFIX}/inventory/warehouses` },
+      { icon: Layers, label: "Units", href: `${PREFIX}/inventory/units` },
+      { icon: ShoppingCart, label: "Purchase Orders", href: `${PREFIX}/inventory/purchase-orders` },
+      { icon: ClipboardCheck, label: "Goods Receiving", href: `${PREFIX}/inventory/goods-receiving` },
+      { icon: Factory, label: "Process Orders", href: `${PREFIX}/inventory/process-orders` },
+      { icon: ArrowRightLeft, label: "Transfers", href: `${PREFIX}/inventory/warehouse-transfers` },
+      { icon: ClipboardList, label: "Adjustments", href: `${PREFIX}/inventory/stock-adjustments/new` },
+      { icon: Shield, label: "Consumption Control", href: `${PREFIX}/inventory/consumption-control` },
+      { icon: BarChart3, label: "Stock Summary", href: `${PREFIX}/inventory/stock-summary` },
+      { icon: Activity, label: "Dashboard", href: `${PREFIX}/inventory/stock-dashboard` },
+      { icon: FileBarChart, label: "Ledger", href: `${PREFIX}/inventory/stock-ledger` },
+      { icon: DollarSign, label: "Valuation", href: `${PREFIX}/inventory/stock-valuation` },
+      { icon: Package, label: "Lot Traceability", href: `${PREFIX}/inventory/lots` },
+      { icon: Truck, label: "Delivery Challans", href: `${PREFIX}/inventory/delivery-challans` },
+      { icon: Shield, label: "Gate Passes", href: `${PREFIX}/inventory/enhanced-gate-passes` },
+    ],
+  },
+  {
+    section: "Manufacturing",
+    icon: Factory,
+    visibleFor: ["manufacturer", "both"],
+    items: [
+      { icon: Shirt, label: "Samples", href: `${PREFIX}/samples/requests` },
+      { icon: Clock, label: "TNA Dashboard", href: `${PREFIX}/tna/dashboard` },
+      { icon: ClipboardList, label: "TNA Templates", href: `${PREFIX}/tna/templates` },
+      { icon: Calendar, label: "TNA Plans", href: `${PREFIX}/tna/plans` },
+      { icon: Factory, label: "Production Overview", href: `${PREFIX}/production` },
+      { icon: ClipboardList, label: "Planning", href: `${PREFIX}/production/planning` },
+      { icon: Scissors, label: "Cutting", href: `${PREFIX}/production/cutting` },
+      { icon: Cog, label: "Sewing", href: `${PREFIX}/production/sewing` },
+      { icon: PackageCheck, label: "Finishing", href: `${PREFIX}/production/finishing-packing` },
+      { icon: Gauge, label: "IE & Efficiency", href: `${PREFIX}/production/ie` },
+      { icon: Target, label: "Advanced Planning", href: `${PREFIX}/production/advanced-planning` },
+    ],
+  },
+  {
+    section: "Quality",
+    icon: ShieldCheck,
+    items: [
+      { icon: BarChart3, label: "QC Dashboard", href: `${PREFIX}/quality/dashboard` },
+      { icon: ClipboardCheck, label: "Inspections", href: `${PREFIX}/quality/inspections` },
+      { icon: FlaskConical, label: "Lab Tests", href: `${PREFIX}/quality/lab-tests` },
+      { icon: AlertTriangle, label: "CAPA", href: `${PREFIX}/quality/capa` },
+      { icon: RotateCcw, label: "Returns", href: `${PREFIX}/quality/returns` },
+      { icon: CheckSquare, label: "Quality (Legacy)", href: `${PREFIX}/quality/qc` },
+    ],
+  },
+  {
+    section: "AI Tools",
+    icon: MessageSquare,
+    items: [
+      { icon: MessageSquare, label: "AI Assistant", href: `${PREFIX}/ai/assistant` },
+      { icon: Zap, label: "AI Automation", href: `${PREFIX}/ai/automation` },
+      { icon: Activity, label: "AI Predictions", href: `${PREFIX}/ai/predictions` },
+    ],
+  },
+  {
+    section: "HR",
+    icon: UserCheck,
+    items: [
+      { icon: UserCheck, label: "Employees", href: `${PREFIX}/hr/employees` },
+      { icon: Banknote, label: "Payroll", href: `${PREFIX}/hr/payroll` },
+      { icon: Target, label: "Performance", href: `${PREFIX}/hr/performance` },
+      { icon: Calendar, label: "Attendance", href: `${PREFIX}/hr/attendance` },
+    ],
+  },
+  {
+    section: "Finance",
+    icon: DollarSign,
+    items: [
+      { icon: FolderTree, label: "Account Groups", href: `${PREFIX}/accounts/groups` },
+      { icon: DollarSign, label: "Chart of Accounts", href: `${PREFIX}/accounts` },
+      { icon: CreditCard, label: "Vouchers", href: `${PREFIX}/accounts/vouchers` },
+      { icon: ClipboardList, label: "Voucher Approvals", href: `${PREFIX}/accounts/vouchers/approval-queue` },
+      { icon: Banknote, label: "Multi-Currency", href: `${PREFIX}/accounts/currency` },
+      { icon: FileText, label: "Bills", href: `${PREFIX}/accounts/outstanding-bills` },
+      { icon: Target, label: "Cost Centers", href: `${PREFIX}/accounts/cost-centers` },
+      { icon: BookOpen, label: "Day Book", href: `${PREFIX}/accounts/reports/day-book` },
+      { icon: FileBarChart, label: "Trial Balance", href: `${PREFIX}/accounts/reports/trial-balance` },
+      { icon: BarChart3, label: "Financial Statements", href: `${PREFIX}/accounts/reports/financial-statements` },
+      { icon: PieChart, label: "Group Summary", href: `${PREFIX}/accounts/reports/group-summary` },
+      { icon: Activity, label: "Ratio Analysis", href: `${PREFIX}/accounts/reports/ratio-analysis` },
+      { icon: TrendingUp, label: "Cash Flow", href: `${PREFIX}/accounts/reports/cash-flow` },
+      { icon: FileSpreadsheet, label: "Budgets", href: `${PREFIX}/accounts/budgets` },
+      { icon: FileText, label: "Purchase & AP", href: `${PREFIX}/accounts/purchase-workflow` },
+      { icon: Banknote, label: "FX Receipts", href: `${PREFIX}/finance/fx-receipts` },
+      { icon: TrendingUp, label: "Cash Forecast", href: `${PREFIX}/finance/cash-forecast` },
+      { icon: Target, label: "Style Profitability", href: `${PREFIX}/finance/style-profitability` },
+      { icon: Globe, label: "LC Profitability", href: `${PREFIX}/finance/lc-profitability` },
+      { icon: BarChart3, label: "Costing Variance", href: `${PREFIX}/finance/costing-variance` },
+      { icon: Landmark, label: "Bank Accounts", href: `${PREFIX}/banking/accounts` },
+      { icon: ArrowRightLeft, label: "Bank Reconciliation", href: `${PREFIX}/banking/reconciliation` },
+      { icon: CreditCard, label: "Payment Runs", href: `${PREFIX}/banking/payment-runs` },
+      { icon: Calendar, label: "Cashflow Calendar", href: `${PREFIX}/cashflow/calendar` },
+    ],
+  },
+  {
+    section: "Workflow",
+    icon: ClipboardCheck,
+    items: [
+      { icon: ClipboardCheck, label: "All Approvals", href: `${PREFIX}/approvals` },
+    ],
+  },
+  {
+    section: "Reports",
+    icon: BarChart3,
+    items: [
+      { icon: BarChart3, label: "Analytics", href: `${PREFIX}/reports` },
+      { icon: ShoppingCart, label: "Purchase Orders", href: `${PREFIX}/reports/purchase-orders` },
+      { icon: PackageCheck, label: "GRN Summary", href: `${PREFIX}/reports/grn` },
+      { icon: FileText, label: "Sales Orders", href: `${PREFIX}/reports/sales-orders` },
+      { icon: Landmark, label: "LC Outstanding", href: `${PREFIX}/reports/lc-outstanding` },
+      { icon: Banknote, label: "BTB LC Maturity", href: `${PREFIX}/reports/btb-maturity` },
+      { icon: Factory, label: "Production Efficiency", href: `${PREFIX}/reports/production-efficiency` },
+      { icon: CheckSquare, label: "QC Summary", href: `${PREFIX}/reports/qc-summary` },
+      { icon: Users, label: "Employee Summary", href: `${PREFIX}/reports/employee` },
+      { icon: DollarSign, label: "Payroll Summary", href: `${PREFIX}/reports/payroll` },
+      { icon: Truck, label: "Shipment Tracking", href: `${PREFIX}/reports/shipments` },
+      { icon: ClipboardList, label: "Gate Pass Register", href: `${PREFIX}/reports/gate-passes` },
+      { icon: FileSpreadsheet, label: "Delivery Challans", href: `${PREFIX}/reports/challans` },
+      { icon: ArrowRightLeft, label: "Data Reconciliation", href: `${PREFIX}/reports/reconciliation` },
+      { icon: AlertTriangle, label: "Exceptions", href: `${PREFIX}/reports/exceptions` },
+    ],
+  },
+  {
+    section: "Settings",
+    icon: Settings,
+    items: [
+      { icon: Wrench, label: "Configuration", href: `${PREFIX}/settings/config` },
+      { icon: Settings, label: "Settings", href: `${PREFIX}/settings` },
+      { icon: UserCog, label: "User Mgmt", href: `${PREFIX}/settings/users` },
+      { icon: Shield, label: "Roles", href: `${PREFIX}/settings/roles` },
+      { icon: Calendar, label: "Accounting Periods", href: `${PREFIX}/settings/accounting-periods` },
+      { icon: Activity, label: "Activity Logs", href: `${PREFIX}/settings/audit` },
+      { icon: HardDrive, label: "Backup & Restore", href: `${PREFIX}/settings/backup` },
+    ],
+  },
+];

@@ -14,6 +14,7 @@ export function QuotationsPage() {
   const [items, setItems] = useState<QuotationResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [inquiries, setInquiries] = useState<InquiryResponse[]>([]);
   const [search, setSearch] = useState("");
@@ -56,6 +57,11 @@ export function QuotationsPage() {
 
   const inquiryCode = (id: number | null) =>
     id == null ? "—" : inquiries.find((i) => i.id === id)?.inquiry_code ?? `#${id}`;
+
+  const formatAmount = (amount: unknown) => {
+    const parsed = Number(amount);
+    return Number.isFinite(parsed) ? parsed.toFixed(2) : "—";
+  };
 
   useEffect(() => {
     load();
@@ -217,7 +223,7 @@ export function QuotationsPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-          <table className="min-w-[1280px] w-full text-sm">
+          <table className="min-w-[1120px] w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
               <tr>
                 <th className="py-2 px-4">Code</th>
@@ -244,6 +250,14 @@ export function QuotationsPage() {
                 const target = inq?.target_price ? Number(inq.target_price) : null;
                 const quoted = q.total_amount ? Number(q.total_amount) : null;
                 let profitPct: string | null = null;
+                const workflowLabel =
+                  q.status === "DRAFT" || q.status === "NEW"
+                    ? "Submit"
+                    : q.status === "SUBMITTED"
+                      ? "Approve"
+                      : q.status === "APPROVED"
+                        ? "Send"
+                        : "Revise";
                 if (
                   qty != null &&
                   target != null &&
@@ -297,7 +311,7 @@ export function QuotationsPage() {
                       {qty != null ? qty.toLocaleString() : "—"}
                     </td>
                     <td className="py-2 px-4 text-right text-gray-700">
-                      {q.total_amount ?? "—"} {q.currency ?? ""}
+                      {formatAmount(q.total_amount)} {q.currency ?? ""}
                     </td>
                     <td className="py-2 px-4 text-right text-gray-700">
                       {profitPct ?? "—"}
@@ -306,95 +320,108 @@ export function QuotationsPage() {
                     <td className="py-2 px-4 text-gray-700">
                       {new Date(q.created_at).toLocaleDateString()}
                     </td>
-                    <td className="py-2 px-4 text-right space-x-1 whitespace-nowrap">
-                      <Link
-                        to={`/app/quotations/${q.id}`}
-                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        View
-                      </Link>
-                      <Link
-                        to={`/app/quotations/${q.id}?print=1`}
-                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        Print
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            setError("");
-                            if (q.status === "DRAFT" || q.status === "NEW") {
-                              await api.submitQuotation(q.id);
-                            } else if (q.status === "SUBMITTED") {
-                              await api.approveQuotation(q.id);
-                            } else if (q.status === "APPROVED") {
-                              await api.sendQuotation(q.id);
-                            } else {
-                              await api.reviseQuotation(q.id);
-                            }
-                            await load();
-                          } catch (e) {
-                            setError(e instanceof Error ? e.message : "Workflow action failed");
-                          }
-                        }}
-                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        {q.status === "DRAFT" || q.status === "NEW"
-                          ? "Submit"
-                          : q.status === "SUBMITTED"
-                            ? "Approve"
-                            : q.status === "APPROVED"
-                              ? "Send"
-                              : "Revise"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            setError("");
-                            const duplicated = await api.reviseQuotation(q.id);
-                            navigate(`/app/quotations/${duplicated.id}`);
-                          } catch (e) {
-                            setError(e instanceof Error ? e.message : "Duplicate version failed");
-                          }
-                        }}
-                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        Duplicate
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!window.confirm("Delete this quotation?")) return;
-                          try {
-                            setError("");
-                            await api.deleteQuotation(q.id);
-                            await load();
-                          } catch (e) {
-                            setError(e instanceof Error ? e.message : "Delete failed");
-                          }
-                        }}
-                        className="rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                      >
-                        Delete
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            setError("");
-                            await api.convertQuotationToOrder(q.id);
-                            alert("Order created from quotation.");
-                            await load();
-                          } catch (e) {
-                            setError(e instanceof Error ? e.message : "Conversion failed");
-                          }
-                        }}
-                        className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        Convert to order
-                      </button>
+                    <td className="py-2 px-4 text-right whitespace-nowrap">
+                      <div className="relative inline-block text-left">
+                        <button
+                          type="button"
+                          onClick={() => setOpenActionsId((prev) => (prev === q.id ? null : q.id))}
+                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          Actions
+                        </button>
+                        {openActionsId === q.id && (
+                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                            <Link
+                              to={`/app/quotations/${q.id}`}
+                              onClick={() => setOpenActionsId(null)}
+                              className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              View
+                            </Link>
+                            <Link
+                              to={`/app/quotations/${q.id}/print`}
+                              onClick={() => setOpenActionsId(null)}
+                              className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Print
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setOpenActionsId(null);
+                                try {
+                                  setError("");
+                                  if (q.status === "DRAFT" || q.status === "NEW") {
+                                    await api.submitQuotation(q.id);
+                                  } else if (q.status === "SUBMITTED") {
+                                    await api.approveQuotation(q.id);
+                                  } else if (q.status === "APPROVED") {
+                                    await api.sendQuotation(q.id);
+                                  } else {
+                                    await api.reviseQuotation(q.id);
+                                  }
+                                  await load();
+                                } catch (e) {
+                                  setError(e instanceof Error ? e.message : "Workflow action failed");
+                                }
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              {workflowLabel}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setOpenActionsId(null);
+                                try {
+                                  setError("");
+                                  const duplicated = await api.reviseQuotation(q.id);
+                                  navigate(`/app/quotations/${duplicated.id}`);
+                                } catch (e) {
+                                  setError(e instanceof Error ? e.message : "Duplicate version failed");
+                                }
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Duplicate
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setOpenActionsId(null);
+                                if (!window.confirm("Delete this quotation?")) return;
+                                try {
+                                  setError("");
+                                  await api.deleteQuotation(q.id);
+                                  await load();
+                                } catch (e) {
+                                  setError(e instanceof Error ? e.message : "Delete failed");
+                                }
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setOpenActionsId(null);
+                                try {
+                                  setError("");
+                                  await api.convertQuotationToOrder(q.id);
+                                  alert("Order created from quotation.");
+                                  await load();
+                                } catch (e) {
+                                  setError(e instanceof Error ? e.message : "Conversion failed");
+                                }
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Convert to order
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

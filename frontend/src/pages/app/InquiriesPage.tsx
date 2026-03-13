@@ -13,6 +13,7 @@ const statusClass = (status: string) => {
 export function InquiriesPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<InquiryResponse[]>([]);
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -176,51 +177,77 @@ export function InquiriesPage() {
                         {inq.status}
                       </span>
                     </td>
-                    <td className="py-2 px-4 text-right space-x-2 whitespace-nowrap">
-                      <Link
-                        to={`/app/inquiries/${inq.id}`}
-                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        View
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/app/inquiries/${inq.id}/edit`)}
-                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            setError("");
-                            await api.convertInquiryToQuotation(inq.id, { profit_percentage: 15 });
-                            alert("Quotation created from inquiry.");
-                          } catch (e) {
-                            setError(e instanceof Error ? e.message : "Convert to quotation failed");
-                          }
-                        }}
-                        className="rounded-lg border border-indigo-200 px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-50"
-                      >
-                        To quotation
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!window.confirm("Delete this inquiry?")) return;
-                          try {
-                            setError("");
-                            await api.deleteInquiry(inq.id);
-                            await load();
-                          } catch (e) {
-                            setError(e instanceof Error ? e.message : "Delete failed");
-                          }
-                        }}
-                        className="rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                      >
-                        Delete
-                      </button>
+                    <td className="py-2 px-4 text-right whitespace-nowrap">
+                      <div className="relative inline-block text-left">
+                        <button
+                          type="button"
+                          onClick={() => setOpenActionsId((prev) => (prev === inq.id ? null : inq.id))}
+                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          Actions
+                        </button>
+                        {openActionsId === inq.id && (
+                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                            <Link
+                              to={`/app/inquiries/${inq.id}`}
+                              onClick={() => setOpenActionsId(null)}
+                              className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              View
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionsId(null);
+                                navigate(`/app/inquiries/${inq.id}/edit`);
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Edit
+                            </button>
+                            <Link
+                              to={`/app/inquiries/${inq.id}/print`}
+                              onClick={() => setOpenActionsId(null)}
+                              className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Print
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setOpenActionsId(null);
+                                try {
+                                  setError("");
+                                  await api.convertInquiryToQuotation(inq.id, { profit_percentage: 15 });
+                                  alert("Quotation created from inquiry.");
+                                } catch (e) {
+                                  setError(e instanceof Error ? e.message : "Convert to quotation failed");
+                                }
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-indigo-700 hover:bg-indigo-50"
+                            >
+                              To quotation
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setOpenActionsId(null);
+                                if (!window.confirm("Delete this inquiry?")) return;
+                                try {
+                                  setError("");
+                                  await api.deleteInquiry(inq.id);
+                                  await load();
+                                } catch (e) {
+                                  setError(e instanceof Error ? e.message : "Delete failed");
+                                }
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

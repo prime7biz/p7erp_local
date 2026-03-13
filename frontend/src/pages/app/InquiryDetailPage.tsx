@@ -60,13 +60,22 @@ export function InquiryDetailPage() {
             {item.status}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate("/app/inquiries")}
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
-        >
-          Back to list
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate("/app/inquiries")}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+          >
+            Back to list
+          </button>
+          <button
+            type="button"
+            onClick={() => window.open(`/app/inquiries/${item.id}/print`, "_blank", "noopener,noreferrer")}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+          >
+            Print / Save PDF
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

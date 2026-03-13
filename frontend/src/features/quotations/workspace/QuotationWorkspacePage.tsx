@@ -5,7 +5,6 @@ import {
   SHIPPING_TERM_OPTIONS,
   withLegacyOption,
 } from "@/lib/commercialTerms";
-import { printCurrentPage } from "@/lib/reportExport";
 import { CollapsibleSection } from "./components/CollapsibleSection";
 import { useQuotationWorkspaceController } from "./useQuotationWorkspaceController";
 import { CostSummaryCard } from "./sidebar/CostSummaryCard";
@@ -133,7 +132,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           {!isNew && (
             <button
               type="button"
-              onClick={() => printCurrentPage()}
+              onClick={() => window.open(`/app/quotations/${quotation.id}/print`, "_blank", "noopener,noreferrer")}
               className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700"
             >
               Print / Save PDF

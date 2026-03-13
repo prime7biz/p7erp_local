@@ -52,6 +52,9 @@ import { VoucherPrintPage } from "@/pages/app/VoucherPrintPage";
 import { AccountingPeriodsPage } from "@/pages/app/AccountingPeriodsPage";
 import { PaymentAdvicePage } from "@/pages/app/PaymentAdvicePage";
 import { AllApprovalsPage } from "@/pages/app/AllApprovalsPage";
+import { QuotationPrintPage } from "@/pages/print/QuotationPrintPage";
+import { CustomerPrintPage } from "@/pages/print/CustomerPrintPage";
+import { InquiryPrintPage } from "@/pages/print/InquiryPrintPage";
 
 const SettingsLayout = lazy(() => import("@/pages/settings/SettingsLayout").then((m) => ({ default: m.SettingsLayout })));
 const UsersPage = lazy(() => import("@/pages/settings/UsersPage").then((m) => ({ default: m.UsersPage })));
@@ -302,6 +305,9 @@ export function AppProtectedRouter() {
 
   return (
     <Routes>
+      <Route path="quotations/:id/print" element={<QuotationPrintPage />} />
+      <Route path="customers/:id/print" element={<CustomerPrintPage />} />
+      <Route path="inquiries/:id/print" element={<InquiryPrintPage />} />
       <Route
         element={
           <Suspense fallback={<div className="min-h-[40vh] flex items-center justify-center text-sm text-slate-500">Loading module...</div>}>

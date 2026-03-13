@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, type CustomerResponse } from "@/api/client";
-import { ArrowUpRight, ExternalLink, Filter, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { ArrowUpRight, ExternalLink, Filter, Plus, Search, Users } from "lucide-react";
 
 const FILTER_ALL = "all";
 
@@ -18,6 +18,7 @@ function formatDate(value: string): string {
 export function CustomersPage() {
   const PAGE_SIZE = 10;
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [total, setTotal] = useState(0);
@@ -358,23 +359,50 @@ export function CustomersPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-600">{formatDate(customer.updated_at)}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            <Link
-                              to={`/app/customers/${customer.id}/edit`}
-                              className="rounded-lg p-1.5 text-slate-400 hover:bg-primary/10 hover:text-primary"
-                              aria-label="Edit"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Link>
+                        <td className="px-4 py-3 text-right">
+                          <div className="relative inline-block text-left">
                             <button
                               type="button"
-                              onClick={() => handleDelete(customer.id)}
-                              className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                              aria-label="Delete"
+                              onClick={() => setOpenActionsId((prev) => (prev === customer.id ? null : customer.id))}
+                              className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              Actions
                             </button>
+                            {openActionsId === customer.id && (
+                              <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                                <Link
+                                  to={`/app/customers/${customer.id}`}
+                                  onClick={() => setOpenActionsId(null)}
+                                  className="block rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+                                >
+                                  View
+                                </Link>
+                                <Link
+                                  to={`/app/customers/${customer.id}/edit`}
+                                  onClick={() => setOpenActionsId(null)}
+                                  className="block rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+                                >
+                                  Edit
+                                </Link>
+                                <Link
+                                  to={`/app/customers/${customer.id}/print`}
+                                  onClick={() => setOpenActionsId(null)}
+                                  className="block rounded-md px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+                                >
+                                  Print
+                                </Link>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionsId(null);
+                                    void handleDelete(customer.id);
+                                  }}
+                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>

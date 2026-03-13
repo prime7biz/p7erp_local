@@ -1,7 +1,6 @@
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { Layout } from "@/components/Layout";
 import { Landing } from "@/pages/Landing";
-import { Dashboard } from "@/pages/Dashboard";
 import { Login } from "@/pages/Login";
 import { SignUp } from "@/pages/SignUp";
 import { PublicLayout } from "@/components/public/PublicLayout";
@@ -13,12 +12,12 @@ import { GarmentsErpPage } from "@/pages/public/GarmentsErpPage";
 import { BuyingHouseErpPage } from "@/pages/public/BuyingHouseErpPage";
 import { PrivacyPage } from "@/pages/public/PrivacyPage";
 import { TermsPage } from "@/pages/public/TermsPage";
-import { SettingsLayout } from "@/pages/settings/SettingsLayout";
-import { UsersPage } from "@/pages/settings/UsersPage";
-import { RolesPage } from "@/pages/settings/RolesPage";
-import { AuditPage } from "@/pages/settings/AuditPage";
-import { PlaceholderPage } from "@/pages/app/PlaceholderPage";
-import { CustomersPage } from "@/pages/app/CustomersPage";
+import { HowItWorksPage } from "@/pages/public/HowItWorksPage";
+import { SecurityPage } from "@/pages/public/SecurityPage";
+
+const AppProtectedRouter = lazy(() =>
+  import("@/app/AppProtectedRouter").then((mod) => ({ default: mod.AppProtectedRouter })),
+);
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem("p7_token");
@@ -39,26 +38,20 @@ export function AppRouter() {
       <Route path="/buying-house-erp" element={<PublicLayout><BuyingHouseErpPage /></PublicLayout>} />
       <Route path="/privacy" element={<PublicLayout><PrivacyPage /></PublicLayout>} />
       <Route path="/terms" element={<PublicLayout><TermsPage /></PublicLayout>} />
+      <Route path="/how-it-works" element={<PublicLayout><HowItWorksPage /></PublicLayout>} />
+      <Route path="/security" element={<PublicLayout><SecurityPage /></PublicLayout>} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<SignUp />} />
       <Route
-        path="/app"
+        path="/app/*"
         element={
           <ProtectedRoute>
-            <Layout />
+            <Suspense fallback={<div className="min-h-[50vh] flex items-center justify-center text-sm text-slate-500">Loading app...</div>}>
+              <AppProtectedRouter />
+            </Suspense>
           </ProtectedRoute>
         }
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="customers" element={<CustomersPage />} />
-        <Route path="settings" element={<SettingsLayout />}>
-          <Route index element={<Navigate to="/app/settings/users" replace />} />
-          <Route path="users" element={<UsersPage />} />
-          <Route path="roles" element={<RolesPage />} />
-          <Route path="audit" element={<AuditPage />} />
-        </Route>
-        <Route path="*" element={<PlaceholderPage />} />
-      </Route>
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

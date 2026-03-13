@@ -16,9 +16,18 @@ Use this file and `.cursor/rules/` when working on this repo (e.g. on another ma
 
 ## Where to look
 
-- **Plans and parity:** `docs/REFERENCE_PARITY.md`, `docs/PROJECT_PLAN.md`, `docs/session_plan_legacy.md`.
+- **Plans and parity:** `docs/REFERENCE_PARITY.md`, `docs/PROJECT_PLAN.md`, `docs/IMPLEMENTATION_ROADMAP.md`, `docs/session_plan_legacy.md`.
+- **Build:** `docs/BUILD_VERIFICATION.md` – B1–B3 checklist (backend deps, env, frontend build).
 - **Cursor rules:** `.cursor/rules/project.mdc` (project context, always apply).
 - **Run / structure:** `README.md`, `.env.example`, `docker-compose.yml`.
+- **Finance UAT and go-live:**
+  - `docs/FINANCE_UAT_CHECKLIST.md` – high-level test checklist
+  - `docs/FINANCE_UAT_TEST_CASES.md` – numbered test cases (FIN-UAT-001+)
+  - `docs/FINANCE_GO_LIVE_CRITERIA.md` – go/no-go gates and sign-off
+  - `docs/FINANCE_CUTOVER_PLAN.md` – cutover runbook and rollback
+  - `docs/FINANCE_OPERATIONS_SOP.md` – daily/weekly/month-end procedures
+  - `docs/FINANCE_UAT_CLOSURE_REPORT.md` – engineering readiness closure
+  - `docs/FINANCE_CHAT_HANDOFF_2026-03-11.md` – new-chat continuation handoff
 
 ## Auth and tenant
 

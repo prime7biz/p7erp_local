@@ -1,9 +1,18 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 
 const links = [
+  { to: "/app/settings", label: "Overview" },
+  { to: "/app/settings/config", label: "Configuration" },
   { to: "/app/settings/users", label: "Users" },
   { to: "/app/settings/roles", label: "Roles" },
-  { to: "/app/settings/audit", label: "Audit log" },
+  { to: "/app/settings/tenant", label: "Tenant" },
+  { to: "/app/settings/currency", label: "Currency" },
+  { to: "/app/accounts/accounting-periods", label: "Accounting periods" },
+  { to: "/app/settings/pricing", label: "Pricing" },
+  { to: "/app/settings/audit", label: "Audit" },
+  { to: "/app/settings/activity-logs", label: "Activity logs" },
+  { to: "/app/settings/backup", label: "Backup & Restore" },
+  { to: "/app/settings/cheque-templates", label: "Cheque templates" },
 ];
 
 export function SettingsLayout() {

@@ -4,9 +4,11 @@ import { Menu, X } from "lucide-react";
 
 const navLinks = [
   { label: "Features", to: "/features" },
+  { label: "How it works", to: "/how-it-works" },
   { label: "Garments ERP", to: "/garments-erp" },
   { label: "Buying House", to: "/buying-house-erp" },
   { label: "Pricing", to: "/pricing" },
+  { label: "Security", to: "/security" },
   { label: "Contact", to: "/contact" },
 ];
 
@@ -19,7 +21,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link to="/" className="flex items-center gap-2">
-              <img src="/images/logo.png" alt="P7 ERP" className="h-10 w-auto" />
+              <img src="/images/logo.svg" alt="Prime7 ERP" className="h-10 w-auto" />
             </Link>
 
             <nav className="hidden lg:flex items-center gap-1">
@@ -114,7 +116,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
             <div className="col-span-2 md:col-span-1">
               <div className="mb-4">
-                <img src="/images/logo-white.png" alt="P7 ERP" className="h-12 w-auto" />
+                <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-12 w-auto" />
               </div>
               <p className="text-sm text-gray-400 mb-6 leading-relaxed">
                 AI-driven cloud ERP built for garment manufacturers and buying houses worldwide.
@@ -162,7 +164,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         <div className="border-t border-orange-500/20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-gray-500">
-              &copy; {new Date().getFullYear()} P7 ERP. All rights reserved.
+              &copy; {new Date().getFullYear()} Prime7 ERP. All rights reserved.
             </p>
             <div className="flex gap-6 text-sm text-gray-500">
               <Link to="/privacy" className="hover:text-orange-400 transition-colors">Privacy</Link>

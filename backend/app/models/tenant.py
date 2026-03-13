@@ -11,6 +11,11 @@ class TenantType(str, enum.Enum):
     both = "both"
 
 
+class CommissionMode(str, enum.Enum):
+    INCLUDE = "INCLUDE"
+    EXCLUDE = "EXCLUDE"
+
+
 class Tenant(Base):
     __tablename__ = "tenants"
 
@@ -26,6 +31,12 @@ class Tenant(Base):
     logo: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     company_code: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True)
+    default_commission_mode: Mapped[CommissionMode | None] = mapped_column(
+        SQLEnum(CommissionMode, name="commissionmode"),
+        nullable=True,
+        default=CommissionMode.EXCLUDE,
+        server_default=text("'EXCLUDE'"),
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

@@ -183,29 +183,33 @@ export function PricingPage() {
             <p className="text-lg text-gray-600">See exactly what&apos;s included in each plan.</p>
           </div>
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="grid grid-cols-4 border-b border-gray-200 bg-gray-50">
-              <div className="p-4 lg:p-6"><span className="text-sm font-medium text-gray-500">Features</span></div>
-              <div className="p-4 lg:p-6 text-center border-l border-gray-200"><span className="text-sm font-bold text-gray-900">Starter</span></div>
-              <div className="p-4 lg:p-6 text-center border-l border-gray-200 bg-primary/5"><span className="text-sm font-bold text-primary">Growth</span></div>
-              <div className="p-4 lg:p-6 text-center border-l border-gray-200"><span className="text-sm font-bold text-gray-900">Enterprise</span></div>
-            </div>
-            {comparisonCategories.map((category) => (
-              <div key={category.name}>
-                <div className="grid grid-cols-4 bg-gray-50/50 border-b border-gray-100">
-                  <div className="col-span-4 p-3 lg:px-6">
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{category.name}</span>
-                  </div>
+            <div className="overflow-x-auto">
+              <div className="min-w-[680px]">
+                <div className="grid grid-cols-4 border-b border-gray-200 bg-gray-50">
+                  <div className="p-4 lg:p-6"><span className="text-sm font-medium text-gray-500">Features</span></div>
+                  <div className="p-4 lg:p-6 text-center border-l border-gray-200"><span className="text-sm font-bold text-gray-900">Starter</span></div>
+                  <div className="p-4 lg:p-6 text-center border-l border-gray-200 bg-primary/5"><span className="text-sm font-bold text-primary">Growth</span></div>
+                  <div className="p-4 lg:p-6 text-center border-l border-gray-200"><span className="text-sm font-bold text-gray-900">Enterprise</span></div>
                 </div>
-                {category.features.map((feature, i) => (
-                  <div key={feature.name} className={`grid grid-cols-4 ${i < category.features.length - 1 ? "border-b border-gray-100" : ""}`}>
-                    <div className="p-3 lg:px-6 lg:py-3.5 flex items-center"><span className="text-sm text-gray-700">{feature.name}</span></div>
-                    <div className="p-3 lg:px-6 lg:py-3.5 flex justify-center border-l border-gray-100"><CellValue value={feature.starter} /></div>
-                    <div className="p-3 lg:px-6 lg:py-3.5 flex justify-center border-l border-gray-100 bg-primary/[0.02]"><CellValue value={feature.growth} /></div>
-                    <div className="p-3 lg:px-6 lg:py-3.5 flex justify-center border-l border-gray-100"><CellValue value={feature.enterprise} /></div>
+                {comparisonCategories.map((category) => (
+                  <div key={category.name}>
+                    <div className="grid grid-cols-4 bg-gray-50/50 border-b border-gray-100">
+                      <div className="col-span-4 p-3 lg:px-6">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{category.name}</span>
+                      </div>
+                    </div>
+                    {category.features.map((feature, i) => (
+                      <div key={feature.name} className={`grid grid-cols-4 ${i < category.features.length - 1 ? "border-b border-gray-100" : ""}`}>
+                        <div className="p-3 lg:px-6 lg:py-3.5 flex items-center"><span className="text-sm text-gray-700">{feature.name}</span></div>
+                        <div className="p-3 lg:px-6 lg:py-3.5 flex justify-center border-l border-gray-100"><CellValue value={feature.starter} /></div>
+                        <div className="p-3 lg:px-6 lg:py-3.5 flex justify-center border-l border-gray-100 bg-primary/[0.02]"><CellValue value={feature.growth} /></div>
+                        <div className="p-3 lg:px-6 lg:py-3.5 flex justify-center border-l border-gray-100"><CellValue value={feature.enterprise} /></div>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
-            ))}
+            </div>
           </div>
         </div>
       </section>

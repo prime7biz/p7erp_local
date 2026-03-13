@@ -11,6 +11,15 @@ class Settings(BaseSettings):
     cors_origins: str = ""
     redis_url: str | None = None
     api_v1_prefix: str = "/api/v1"
+    ai_confirmation_token_pepper: str = "change-me-ai-token-pepper"
+    ai_rate_limit_window_seconds: int = 60
+    ai_rate_limit_chat_per_window: int = 30
+    ai_rate_limit_read_per_window: int = 50
+    ai_rate_limit_heavy_per_window: int = 12
+    ai_timeout_chat_seconds: int = 20
+    ai_timeout_heavy_seconds: int = 35
+    ai_circuit_breaker_failure_threshold: int = 5
+    ai_circuit_breaker_cooldown_seconds: int = 45
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

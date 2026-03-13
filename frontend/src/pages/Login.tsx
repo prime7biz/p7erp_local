@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api, setAuth } from "@/api/client";
+import { useAuth } from "@/context/AuthContext";
 import { User, Lock, AlertCircle, ArrowLeft, Building2, ShoppingBag, Factory, DollarSign, Brain } from "lucide-react";
 
 const features = [
@@ -23,6 +24,7 @@ export function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { refetch } = useAuth();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,6 +44,7 @@ export function Login() {
       localStorage.setItem("lastCompanyCode", code);
       const tid = res.tenant_id ?? (Number.isFinite(Number(code)) ? Number(code) : 0);
       setAuth(res.access_token, tid);
+      await refetch();
       navigate("/app", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid credentials");
@@ -59,7 +62,7 @@ export function Login() {
         <div className="absolute top-[15%] left-[10%] w-64 h-64 bg-orange-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-[20%] right-[15%] w-48 h-48 bg-orange-400/10 rounded-full blur-3xl" />
         <div className="relative z-10 flex flex-col justify-center items-start px-12 xl:px-20 w-full">
-          <img src="/images/logo-white.png" alt="P7 ERP" className="h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" />
+          <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" />
           <h1 className="text-3xl xl:text-4xl font-bold text-white leading-tight mb-3">
             Complete ERP for<br />
             <span className="text-orange-400">Garment Manufacturers</span>
@@ -92,14 +95,15 @@ export function Login() {
       {/* Right panel - form (reference UI) */}
       <div className="flex-1 flex flex-col">
         <div className="lg:hidden bg-gradient-to-r from-orange-600 to-orange-700 px-6 py-5 flex items-center gap-3">
-          <img src="/images/logo-white.png" alt="P7 ERP" className="h-11 w-auto" />
-          <span className="text-white font-semibold text-lg">P7 ERP</span>
+          <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-11 w-auto" />
+          <span className="text-white font-semibold text-lg">Prime7 ERP</span>
         </div>
         <div className="flex-1 flex items-center justify-center bg-[hsl(220,14%,96%)] px-6 py-10">
           <div className="w-full max-w-md space-y-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Welcome Back</h2>
               <p className="text-sm text-gray-500 mt-1">Sign in to your company account</p>
+              <p className="text-xs text-gray-500 mt-1">Fields marked with ** are mandatory.</p>
             </div>
 
             {error && (
@@ -111,7 +115,7 @@ export function Login() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-1.5">
-                <label htmlFor="companyCode" className="text-gray-700 text-sm font-medium">Company Code</label>
+                <label htmlFor="companyCode" className="text-gray-700 text-sm font-medium">Company Code **</label>
                 <div className="relative mt-1">
                   <Building2 className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                   <input
@@ -127,7 +131,7 @@ export function Login() {
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="username" className="text-gray-700 text-sm font-medium">Username</label>
+                <label htmlFor="username" className="text-gray-700 text-sm font-medium">Username **</label>
                 <div className="relative mt-1">
                   <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                   <input
@@ -144,7 +148,7 @@ export function Login() {
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label htmlFor="password" className="text-gray-700 text-sm font-medium">Password</label>
+                  <label htmlFor="password" className="text-gray-700 text-sm font-medium">Password **</label>
                   <Link to="#" className="text-xs text-primary hover:text-primary/80 font-medium">
                     Forgot password?
                   </Link>

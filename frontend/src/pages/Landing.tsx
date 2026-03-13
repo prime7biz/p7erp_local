@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   Palette,
   FileText,
@@ -11,7 +12,6 @@ import {
   Brain,
   Landmark,
   ArrowRight,
-  Play,
   CheckCircle2,
   XCircle,
   Lock,
@@ -21,16 +21,18 @@ import {
   AlertTriangle,
   Lightbulb,
   ChevronDown,
-  Zap,
   BarChart3,
   Clock,
 } from "lucide-react";
-
-// Same 60x60 dot pattern as reference (inline for exact match)
-const heroPatternStyle = {
-  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23fff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-2H24v2h12zm0-4V28H24v2h12zm0-4V24H24v2h12z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-  opacity: 0.3,
-};
+import {
+  BeforeAfterSection,
+  HeroEnhancedSection,
+  InteractiveProcessFlowSection,
+  LandingTrustHighlights,
+  StickyCtaBar,
+  TrustBadgesBar,
+  WhatsAppFloatingButton,
+} from "@/components/public/landing/LandingEnhancements";
 
 const modules = [
   { icon: Palette, title: "Merchandising & Styles", description: "Manage style libraries, tech packs, BOMs, and buyer requirements in a centralized hub.", href: "/features" },
@@ -42,15 +44,6 @@ const modules = [
   { icon: ShieldCheck, title: "Quality Management", description: "Inline, endline, and final inspections with AQL standards, CAPA tracking, and audit reports.", href: "/features" },
   { icon: Brain, title: "AI Analytics", description: "Demand forecasting, anomaly detection, smart recommendations powered by machine learning.", href: "/features" },
   { icon: Landmark, title: "Bank Reconciliation", description: "Automated bank statement matching, reconciliation reports, and cash flow monitoring.", href: "/features" },
-];
-
-const workflowSteps = [
-  { step: 1, title: "Inquiry & Costing" },
-  { step: 2, title: "Sample Development" },
-  { step: 3, title: "Order Confirmation" },
-  { step: 4, title: "Production Planning" },
-  { step: 5, title: "Quality Control" },
-  { step: 6, title: "Shipment & LC" },
 ];
 
 const faqs = [
@@ -68,13 +61,13 @@ function FAQItem({ q, a }: { q: string; a: string }) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-4 text-left hover:bg-gray-50 transition-colors sm:px-6 sm:py-5"
       >
         <span className="font-semibold text-gray-900 pr-4">{q}</span>
         <ChevronDown className={`h-5 w-5 text-gray-400 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="px-6 pb-5 text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
+        <div className="border-t border-gray-100 px-4 pb-4 pt-3 text-gray-600 leading-relaxed sm:px-6 sm:pb-5 sm:pt-4">
           {a}
         </div>
       )}
@@ -92,13 +85,20 @@ const btnOutline =
   "inline-flex items-center justify-center rounded-xl border border-white/30 bg-transparent px-6 py-3 text-base font-semibold text-white hover:bg-white/10 transition-colors";
 
 export function Landing() {
-  const [showBdBanner, setShowBdBanner] = useState(false);
+  const [showBdBanner, setShowBdBanner] = useState(true);
+
   useEffect(() => {
     document.title = "P7 ERP | AI-Powered Garment, RMG & Apparel ERP Software";
+
+    const dismissed = sessionStorage.getItem("bd_banner_dismissed");
+    if (dismissed === "1") setShowBdBanner(false);
   }, []);
 
   return (
     <div className="min-h-screen flex flex-col">
+      <StickyCtaBar />
+      <WhatsAppFloatingButton />
+
       {/* Optional BD banner - same as reference */}
       {showBdBanner && (
         <div className="bg-gradient-to-r from-orange-600 to-orange-800 text-white py-2.5 px-4 text-center text-sm relative">
@@ -113,7 +113,7 @@ export function Landing() {
                 setShowBdBanner(false);
                 sessionStorage.setItem("bd_banner_dismissed", "1");
               }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white"
+              className="text-white/70 hover:text-white sm:absolute sm:right-3 sm:top-1/2 sm:-translate-y-1/2"
               aria-label="Dismiss"
             >
               ✕
@@ -122,72 +122,9 @@ export function Landing() {
         </div>
       )}
 
-      {/* Hero Section - same structure as reference */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-[hsl(24,90%,15%)] via-[hsl(24,85%,25%)] to-[hsl(20,80%,12%)]">
-        <div className="absolute inset-0 pointer-events-none" style={{ ...heroPatternStyle, backgroundSize: "60px 60px" }} />
-        <img src="/images/hero-factory.png" alt="" width={1920} height={1080} className="absolute inset-0 w-full h-full object-cover opacity-[0.18] pointer-events-none mix-blend-luminosity" loading="eager" />
-        <div className="absolute top-20 -left-40 w-80 h-80 bg-orange-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-40 -right-32 w-96 h-96 bg-orange-400/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-10 left-1/3 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-[15%] left-[10%] w-1.5 h-1.5 bg-orange-200/50 rounded-full animate-pulse" />
-          <div className="absolute top-[40%] right-[25%] w-1.5 h-1.5 bg-orange-200/40 rounded-full animate-pulse" style={{ animationDelay: "0.5s" }} />
-          <div className="absolute top-[70%] left-[60%] w-1 h-1 bg-amber-200/50 rounded-full animate-pulse" style={{ animationDelay: "1.5s" }} />
-        </div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 lg:py-28">
-          <div className="text-center max-w-4xl mx-auto">
-            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-1.5 mb-8">
-              <Zap className="h-4 w-4 text-yellow-300" />
-              <span className="text-sm text-white/90 font-medium">AI-Powered Cloud ERP for Garment Industry</span>
-            </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white leading-tight tracking-tight">
-              The Only ERP Built Specifically for{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[hsl(35,100%,80%)] to-[hsl(24,95%,70%)]">
-                Garment Manufacturers
-              </span>
-            </h1>
-            <p className="mt-6 text-lg sm:text-xl text-white/80 max-w-3xl mx-auto leading-relaxed">
-              Manage merchandising, production, inventory, LC processing, and accounting in one unified platform. Purpose-built for garment manufacturers and buying houses.
-            </p>
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link to="/signup" className="inline-flex items-center justify-center rounded-xl bg-primary text-white hover:bg-primary/90 font-semibold px-8 py-6 text-base shadow-xl shadow-black/20">
-                Start Free Trial
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-              <Link to="/contact" className="inline-flex items-center justify-center rounded-xl border border-white/30 text-white hover:bg-white/10 font-semibold px-8 py-6 text-base bg-transparent">
-                <Play className="mr-2 h-5 w-5" />
-                Watch Demo
-              </Link>
-            </div>
-          </div>
-          <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-2xl mx-auto">
-            {[
-              { value: "500+", label: "Styles Managed" },
-              { value: "99.9%", label: "Uptime" },
-              { value: "$50M+", label: "Processed" },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center bg-white/10 backdrop-blur-sm rounded-2xl px-6 py-5 border border-white/10">
-                <div className="text-3xl font-bold text-white">{stat.value}</div>
-                <div className="text-sm text-orange-200 mt-1">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Trusted By */}
-      <section className="py-12 bg-gray-50 border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-sm font-medium text-gray-500 uppercase tracking-widest">
-            Trusted by garment manufacturers across the world
-          </p>
-          <div className="mt-6 flex items-center justify-center">
-            <div className="h-px w-24 bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
-            <div className="mx-4 h-2 w-2 rounded-full bg-primary/30" />
-            <div className="h-px w-24 bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
-          </div>
-        </div>
-      </section>
+      <HeroEnhancedSection />
+      <TrustBadgesBar />
+      <BeforeAfterSection />
 
       {/* Demo Video placeholder */}
       <section className="py-14 sm:py-20 bg-white">
@@ -215,7 +152,7 @@ export function Landing() {
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-10 lg:gap-16">
-            <div>
+            <motion.div initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }}>
               <h3 className="text-xl font-bold text-red-600 mb-6 flex items-center gap-2">
                 <XCircle className="h-6 w-6" />
                 The Challenges RMG Manufacturers Face
@@ -240,8 +177,8 @@ export function Landing() {
                   </div>
                 ))}
               </div>
-            </div>
-            <div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={{ delay: 0.1 }}>
               <h3 className="text-xl font-bold text-orange-600 mb-6 flex items-center gap-2">
                 <CheckCircle2 className="h-6 w-6" />
                 How P7 Solves Them
@@ -272,7 +209,7 @@ export function Landing() {
                   </div>
                 ))}
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -320,43 +257,9 @@ export function Landing() {
 
       <GradientDivider />
 
-      {/* Workflow Steps */}
-      <section className="py-14 sm:py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">From Order to Shipment in 6 Steps</h2>
-            <p className="mt-4 text-lg text-gray-500 max-w-2xl mx-auto">
-              A streamlined workflow that takes you from buyer inquiry to final shipment with full visibility at every stage.
-            </p>
-          </div>
-          <div className="hidden lg:block relative">
-            <div className="absolute top-8 left-[8%] right-[8%] h-0.5 bg-gradient-to-r from-orange-200 via-primary/40 to-amber-200" />
-            <div className="grid grid-cols-6 gap-4">
-              {workflowSteps.map((ws) => (
-                <div key={ws.step} className="relative flex flex-col items-center text-center">
-                  <div className="relative z-10 h-16 w-16 rounded-full bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-primary/25">
-                    {ws.step}
-                  </div>
-                  <h4 className="mt-4 font-semibold text-gray-900 text-sm">{ws.title}</h4>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="lg:hidden space-y-4">
-            {workflowSteps.map((ws, i) => (
-              <div key={ws.step} className="flex items-center gap-4">
-                <div className="relative flex flex-col items-center">
-                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center text-white font-bold shadow-md">
-                    {ws.step}
-                  </div>
-                  {i < workflowSteps.length - 1 && <div className="w-0.5 h-6 bg-primary/20 mt-1" />}
-                </div>
-                <h4 className="font-semibold text-gray-900">{ws.title}</h4>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <InteractiveProcessFlowSection />
+
+      <LandingTrustHighlights />
 
       <GradientDivider />
 
@@ -546,7 +449,7 @@ export function Landing() {
               Talk to Sales
             </Link>
           </div>
-          <div className="mt-10 flex items-center justify-center gap-8 text-sm text-gray-400">
+          <div className="mt-10 flex flex-col items-center justify-center gap-3 text-sm text-gray-400 sm:flex-row sm:gap-8">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-orange-400" />
               <span>No credit card required</span>

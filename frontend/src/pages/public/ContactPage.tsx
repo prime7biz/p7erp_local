@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { MapPin, Mail, Phone, MessageCircle, Clock, Send, Loader2, Building2 } from "lucide-react";
 
 const companySizes = [
@@ -132,6 +131,7 @@ export function ContactPage() {
                   <Building2 className="h-5 w-5 text-primary" />
                   <h2 className="text-2xl font-bold text-gray-900">Send Us a Message</h2>
                 </div>
+                <p className="text-xs text-gray-500 mb-5">Fields marked with ** are mandatory.</p>
 
                 {submitted ? (
                   <div className="text-center py-12">
@@ -154,11 +154,11 @@ export function ContactPage() {
                   <form onSubmit={handleSubmit} className="space-y-5">
                     <div className="grid sm:grid-cols-2 gap-5">
                       <div>
-                        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Full Name <span className="text-red-500">*</span></label>
+                        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Full Name **</label>
                         <input type="text" id="name" name="name" required value={form.name} onChange={handleChange} placeholder="Your full name" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
                       </div>
                       <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email Address <span className="text-red-500">*</span></label>
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email Address **</label>
                         <input type="email" id="email" name="email" required value={form.email} onChange={handleChange} placeholder="john@company.com" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
                       </div>
                     </div>
@@ -182,7 +182,7 @@ export function ContactPage() {
                       </select>
                     </div>
                     <div>
-                      <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">Message <span className="text-red-500">*</span></label>
+                      <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">Message **</label>
                       <textarea id="message" name="message" required rows={5} value={form.message} onChange={handleChange} placeholder="Tell us about your requirements..." className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none" />
                     </div>
                     <button type="submit" disabled={loading} className="w-full py-3 rounded-lg bg-primary text-white font-medium hover:bg-primary/90 disabled:opacity-60 flex items-center justify-center gap-2">

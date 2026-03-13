@@ -8,7 +8,7 @@ from alembic import context
 
 from app.config import get_settings
 from app.database import Base
-from app.models import tenant, user  # noqa: F401 - load models
+import app.models  # noqa: F401 - load all models
 
 config = context.config
 if config.config_file_name is not None:

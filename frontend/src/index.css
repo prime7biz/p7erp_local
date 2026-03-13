@@ -7,5 +7,53 @@
 }
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .print-report {
+    color: #0f172a;
+  }
+
+  .print-card {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  .print-break-before {
+    break-before: page;
+  }
+
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+
+  .print-report table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .print-report th,
+  .print-report td {
+    border: 1px solid #dbe2ea;
+  }
 }

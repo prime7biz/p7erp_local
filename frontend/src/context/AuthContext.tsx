@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { api, clearAuth, MeResponse, setAuth } from "@/api/client";
+import { api, clearAuth, MeResponse } from "@/api/client";
 
 interface AuthState {
   me: MeResponse | null;

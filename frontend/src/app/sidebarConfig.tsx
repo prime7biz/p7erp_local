@@ -47,6 +47,8 @@ import {
   Wrench,
   UserCog,
   HardDrive,
+  Building2,
+  Menu,
 } from "lucide-react";
 
 export type TenantTypeFilter = "manufacturer" | "buying_house" | "both";
@@ -65,6 +67,17 @@ export interface MenuSection {
   directLink?: string;
   items: NavItem[];
   visibleFor?: TenantTypeFilter[];
+}
+
+export interface BottomNavItem {
+  key: string;
+  icon: LucideIcon;
+  label: string;
+  href: string;
+  exact?: boolean;
+  matchPrefixes?: string[];
+  visibleFor?: TenantTypeFilter[];
+  isMore?: boolean;
 }
 
 const PREFIX = "/app";
@@ -117,9 +130,11 @@ export const menuSections: MenuSection[] = [
       { icon: ShoppingCart, label: "Purchase Orders", href: `${PREFIX}/inventory/purchase-orders` },
       { icon: ClipboardCheck, label: "Goods Receiving", href: `${PREFIX}/inventory/goods-receiving` },
       { icon: Factory, label: "Process Orders", href: `${PREFIX}/inventory/process-orders` },
+      { icon: Factory, label: "Manufacturing Orders", href: `${PREFIX}/inventory/manufacturing-orders` },
       { icon: ArrowRightLeft, label: "Transfers", href: `${PREFIX}/inventory/warehouse-transfers` },
       { icon: ClipboardList, label: "Adjustments", href: `${PREFIX}/inventory/stock-adjustments/new` },
       { icon: Shield, label: "Consumption Control", href: `${PREFIX}/inventory/consumption-control` },
+      { icon: FileBarChart, label: "Reconciliation", href: `${PREFIX}/inventory/reconciliation` },
       { icon: BarChart3, label: "Stock Summary", href: `${PREFIX}/inventory/stock-summary` },
       { icon: Activity, label: "Dashboard", href: `${PREFIX}/inventory/stock-dashboard` },
       { icon: FileBarChart, label: "Ledger", href: `${PREFIX}/inventory/stock-ledger` },
@@ -163,6 +178,7 @@ export const menuSections: MenuSection[] = [
     section: "AI Tools",
     icon: MessageSquare,
     items: [
+      { icon: MessageSquare, label: "AI Tool", href: `${PREFIX}/ai/assistant` },
       { icon: MessageSquare, label: "AI Assistant", href: `${PREFIX}/ai/assistant` },
       { icon: Zap, label: "AI Automation", href: `${PREFIX}/ai/automation` },
       { icon: Activity, label: "AI Predictions", href: `${PREFIX}/ai/predictions` },
@@ -172,10 +188,34 @@ export const menuSections: MenuSection[] = [
     section: "HR",
     icon: UserCheck,
     items: [
-      { icon: UserCheck, label: "Employees", href: `${PREFIX}/hr/employees` },
-      { icon: Banknote, label: "Payroll", href: `${PREFIX}/hr/payroll` },
-      { icon: Target, label: "Performance", href: `${PREFIX}/hr/performance` },
-      { icon: Calendar, label: "Attendance", href: `${PREFIX}/hr/attendance` },
+      { icon: FolderTree, label: "Core: Departments", href: `${PREFIX}/hr/departments` },
+      { icon: UserCog, label: "Core: Designations", href: `${PREFIX}/hr/designations` },
+      { icon: UserCheck, label: "Core: Employees", href: `${PREFIX}/hr/employees` },
+      { icon: Clock, label: "Attendance: Shifts", href: `${PREFIX}/hr/attendance/shifts` },
+      { icon: Calendar, label: "Attendance: Roster", href: `${PREFIX}/hr/attendance/roster` },
+      { icon: ClipboardCheck, label: "Attendance: Entry", href: `${PREFIX}/hr/attendance/entries` },
+      { icon: BarChart3, label: "Attendance: Summary", href: `${PREFIX}/hr/attendance/summary` },
+      { icon: FileText, label: "Leave: Types", href: `${PREFIX}/hr/leave/types` },
+      { icon: BookOpen, label: "Leave: Balances", href: `${PREFIX}/hr/leave/balances` },
+      { icon: ClipboardList, label: "Leave: Requests", href: `${PREFIX}/hr/leave/requests` },
+      { icon: CheckSquare, label: "Leave: Approvals", href: `${PREFIX}/hr/leave/approvals` },
+      { icon: Calendar, label: "Payroll: Periods", href: `${PREFIX}/hr/payroll/periods` },
+      { icon: Layers, label: "Payroll: Salary Structures", href: `${PREFIX}/hr/payroll/salary-structures` },
+      { icon: DollarSign, label: "Payroll: Runs", href: `${PREFIX}/hr/payroll/runs` },
+      { icon: ShieldCheck, label: "Payroll: Approvals", href: `${PREFIX}/hr/payroll/approvals` },
+      { icon: FileSpreadsheet, label: "Payroll: Payslips", href: `${PREFIX}/hr/payroll/payslips` },
+      { icon: Target, label: "Performance: Goals", href: `${PREFIX}/hr/performance/goals` },
+      { icon: Activity, label: "Performance: Reviews", href: `${PREFIX}/hr/performance/reviews` },
+      { icon: Gauge, label: "Performance: Dashboard", href: `${PREFIX}/hr/performance/dashboard` },
+      { icon: Users, label: "Recruitment: Requisitions", href: `${PREFIX}/hr/recruitment/requisitions` },
+      { icon: UserCheck, label: "Recruitment: Candidates", href: `${PREFIX}/hr/recruitment/candidates` },
+      { icon: Calendar, label: "Recruitment: Interviews", href: `${PREFIX}/hr/recruitment/interviews` },
+      { icon: FileText, label: "Recruitment: Offers", href: `${PREFIX}/hr/recruitment/offers` },
+      { icon: UserCog, label: "ESS: My Profile", href: `${PREFIX}/hr/ess/profile` },
+      { icon: Clock, label: "ESS: My Attendance", href: `${PREFIX}/hr/ess/attendance` },
+      { icon: FileText, label: "ESS: My Leave", href: `${PREFIX}/hr/ess/leave` },
+      { icon: FileSpreadsheet, label: "ESS: My Payslips", href: `${PREFIX}/hr/ess/payslips` },
+      { icon: BarChart3, label: "Reports: Dashboard", href: `${PREFIX}/hr/reports` },
     ],
   },
   {
@@ -185,6 +225,7 @@ export const menuSections: MenuSection[] = [
       { icon: FolderTree, label: "Account Groups", href: `${PREFIX}/accounts/groups` },
       { icon: DollarSign, label: "Chart of Accounts", href: `${PREFIX}/accounts` },
       { icon: CreditCard, label: "Vouchers", href: `${PREFIX}/accounts/vouchers` },
+      { icon: FileSpreadsheet, label: "Voucher Print", href: `${PREFIX}/accounts/vouchers/print` },
       { icon: ClipboardList, label: "Voucher Approvals", href: `${PREFIX}/accounts/vouchers/approval-queue` },
       { icon: Banknote, label: "Multi-Currency", href: `${PREFIX}/accounts/currency` },
       { icon: FileText, label: "Bills", href: `${PREFIX}/accounts/outstanding-bills` },
@@ -192,6 +233,9 @@ export const menuSections: MenuSection[] = [
       { icon: BookOpen, label: "Day Book", href: `${PREFIX}/accounts/reports/day-book` },
       { icon: FileBarChart, label: "Trial Balance", href: `${PREFIX}/accounts/reports/trial-balance` },
       { icon: BarChart3, label: "Financial Statements", href: `${PREFIX}/accounts/reports/financial-statements` },
+      { icon: FileText, label: "AR/AP Aging", href: `${PREFIX}/accounts/reports/ar-ap-aging` },
+      { icon: BookOpen, label: "Ledger Activity", href: `${PREFIX}/accounts/reports/ledger-activity` },
+      { icon: Activity, label: "Voucher Analytics", href: `${PREFIX}/accounts/reports/voucher-analytics` },
       { icon: PieChart, label: "Group Summary", href: `${PREFIX}/accounts/reports/group-summary` },
       { icon: Activity, label: "Ratio Analysis", href: `${PREFIX}/accounts/reports/ratio-analysis` },
       { icon: TrendingUp, label: "Cash Flow", href: `${PREFIX}/accounts/reports/cash-flow` },
@@ -205,6 +249,7 @@ export const menuSections: MenuSection[] = [
       { icon: Landmark, label: "Bank Accounts", href: `${PREFIX}/banking/accounts` },
       { icon: ArrowRightLeft, label: "Bank Reconciliation", href: `${PREFIX}/banking/reconciliation` },
       { icon: CreditCard, label: "Payment Runs", href: `${PREFIX}/banking/payment-runs` },
+      { icon: FileText, label: "Payment Advice", href: `${PREFIX}/banking/payment-advice` },
       { icon: Calendar, label: "Cashflow Calendar", href: `${PREFIX}/cashflow/calendar` },
     ],
   },
@@ -220,6 +265,7 @@ export const menuSections: MenuSection[] = [
     icon: BarChart3,
     items: [
       { icon: BarChart3, label: "Analytics", href: `${PREFIX}/reports` },
+      { icon: Shirt, label: "Merchandising", href: `${PREFIX}/reports/merchandising` },
       { icon: ShoppingCart, label: "Purchase Orders", href: `${PREFIX}/reports/purchase-orders` },
       { icon: PackageCheck, label: "GRN Summary", href: `${PREFIX}/reports/grn` },
       { icon: FileText, label: "Sales Orders", href: `${PREFIX}/reports/sales-orders` },
@@ -244,9 +290,75 @@ export const menuSections: MenuSection[] = [
       { icon: Settings, label: "Settings", href: `${PREFIX}/settings` },
       { icon: UserCog, label: "User Mgmt", href: `${PREFIX}/settings/users` },
       { icon: Shield, label: "Roles", href: `${PREFIX}/settings/roles` },
-      { icon: Calendar, label: "Accounting Periods", href: `${PREFIX}/settings/accounting-periods` },
-      { icon: Activity, label: "Activity Logs", href: `${PREFIX}/settings/audit` },
+      { icon: Building2, label: "Tenant", href: `${PREFIX}/settings/tenant` },
+      { icon: Calendar, label: "Accounting Periods", href: `${PREFIX}/accounts/accounting-periods` },
+      { icon: DollarSign, label: "Pricing", href: `${PREFIX}/settings/pricing` },
+      { icon: Activity, label: "Activity Logs", href: `${PREFIX}/settings/activity-logs` },
+      { icon: DollarSign, label: "Currency", href: `${PREFIX}/settings/currency` },
       { icon: HardDrive, label: "Backup & Restore", href: `${PREFIX}/settings/backup` },
+      { icon: FileText, label: "Cheque Templates", href: `${PREFIX}/settings/cheque-templates` },
+    ],
+  },
+];
+
+export const bottomNavItems: BottomNavItem[] = [
+  {
+    key: "home",
+    icon: LayoutDashboard,
+    label: "Home",
+    href: `${PREFIX}`,
+    exact: true,
+  },
+  {
+    key: "sales",
+    icon: ShoppingCart,
+    label: "Sales",
+    href: `${PREFIX}/orders`,
+    matchPrefixes: [
+      `${PREFIX}/orders`,
+      `${PREFIX}/inquiries`,
+      `${PREFIX}/quotations`,
+      `${PREFIX}/customers`,
+      `${PREFIX}/merchandising`,
+      `${PREFIX}/bom`,
+      `${PREFIX}/commercial`,
+      `${PREFIX}/logistics`,
+      `${PREFIX}/followup`,
+      `${PREFIX}/parties`,
+      `${PREFIX}/flow`,
+    ],
+  },
+  {
+    key: "inventory",
+    icon: Package,
+    label: "Stock",
+    href: `${PREFIX}/inventory`,
+    matchPrefixes: [`${PREFIX}/inventory`],
+  },
+  {
+    key: "finance",
+    icon: DollarSign,
+    label: "Finance",
+    href: `${PREFIX}/accounts`,
+    matchPrefixes: [`${PREFIX}/accounts`, `${PREFIX}/banking`, `${PREFIX}/finance`, `${PREFIX}/cashflow`],
+  },
+  {
+    key: "more",
+    icon: Menu,
+    label: "More",
+    href: "#",
+    isMore: true,
+    matchPrefixes: [
+      `${PREFIX}/hr`,
+      `${PREFIX}/production`,
+      `${PREFIX}/tna`,
+      `${PREFIX}/quality`,
+      `${PREFIX}/reports`,
+      `${PREFIX}/settings`,
+      `${PREFIX}/approvals`,
+      `${PREFIX}/ai`,
+      `${PREFIX}/tutorials`,
+      `${PREFIX}/samples`,
     ],
   },
 ];

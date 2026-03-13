@@ -89,8 +89,8 @@ export function SignUp() {
           <div className="absolute top-1/4 -left-20 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl" />
           <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-orange-400/10 rounded-full blur-3xl" />
           <div className="relative z-10 text-center max-w-md">
-            <img src="/images/logo-white.png" alt="P7 ERP" className="mx-auto h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" />
-            <h2 className="text-3xl font-bold text-white mb-4">Welcome to P7 ERP</h2>
+            <img src="/images/logo-white.svg" alt="Prime7 ERP" className="mx-auto h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" />
+            <h2 className="text-3xl font-bold text-white mb-4">Welcome to Prime7 ERP</h2>
             <p className="text-white/80 text-lg mb-10">Complete garment manufacturing solution for modern businesses</p>
             <div className="grid grid-cols-2 gap-4 text-left">
               {[
@@ -110,7 +110,7 @@ export function SignUp() {
         <div className="flex-1 flex items-center justify-center bg-[#F8F9FB] p-6">
           <div className="w-full max-w-md space-y-6">
             <div className="lg:hidden text-center mb-6">
-              <img src="/images/logo.png" alt="P7 ERP" className="mx-auto h-16 w-auto mb-2" />
+              <img src="/images/logo.svg" alt="Prime7 ERP" className="mx-auto h-16 w-auto mb-2" />
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
               <div className="text-center mb-6">
@@ -158,7 +158,7 @@ export function SignUp() {
         <div className="absolute top-1/4 -left-20 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-orange-400/10 rounded-full blur-3xl" />
         <div className="relative z-10 text-center max-w-md">
-          <img src="/images/logo-white.png" alt="P7 ERP" className="mx-auto h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" />
+          <img src="/images/logo-white.svg" alt="Prime7 ERP" className="mx-auto h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" />
           <h1 className="text-3xl font-bold text-white mb-4">Start Your Journey</h1>
           <p className="text-white/80 text-lg mb-10">Register your company and unlock the full power of garment manufacturing ERP</p>
           <div className="grid grid-cols-2 gap-4 text-left">
@@ -195,7 +195,7 @@ export function SignUp() {
         <div className="w-full max-w-lg space-y-4 py-6">
           <div className="lg:hidden text-center mb-4">
             <div className="bg-gradient-to-r from-primary/90 to-primary rounded-xl p-4 mb-4">
-              <img src="/images/logo-white.png" alt="P7 ERP" className="mx-auto h-12 w-auto" />
+              <img src="/images/logo-white.svg" alt="Prime7 ERP" className="mx-auto h-12 w-auto" />
               <p className="text-white/80 text-xs mt-1">Garment Manufacturing ERP</p>
             </div>
           </div>
@@ -204,6 +204,7 @@ export function SignUp() {
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900">Register Your Company</h2>
               <p className="text-sm text-gray-500 mt-1">Create an account to get started</p>
+              <p className="text-xs text-gray-500 mt-1">Fields marked with ** are mandatory.</p>
             </div>
 
             {error && (
@@ -218,7 +219,7 @@ export function SignUp() {
                 </h3>
                 <div className="space-y-3">
                   <div>
-                    <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">Company Name</label>
+                    <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">Company Name **</label>
                     <div className="relative mt-1">
                       <Building2 className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <input
@@ -257,7 +258,7 @@ export function SignUp() {
                     </div>
                   </div>
                   <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email **</label>
                     <div className="relative mt-1">
                       <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <input
@@ -273,7 +274,7 @@ export function SignUp() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
+                      <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username **</label>
                       <div className="relative mt-1">
                         <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                         <input
@@ -288,7 +289,7 @@ export function SignUp() {
                       </div>
                     </div>
                     <div>
-                      <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
+                      <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password **</label>
                       <div className="relative mt-1">
                         <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                         <input
@@ -314,9 +315,7 @@ export function SignUp() {
                 </h3>
                 <div className="space-y-3">
                   <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                      Phone <span className="text-red-500">*</span>
-                    </label>
+                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700">Phone **</label>
                     <div className="relative mt-1">
                       <Phone className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <input

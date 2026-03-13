@@ -64,10 +64,8 @@ Implementation order: first **scaffold all routes** with placeholder pages (titl
 
 ## 5. Phases
 
-- **Phase 1 (current):** Auth (company code + username login), public pages (Features, Pricing, Contact, About), full app sidebar with all sections and placeholder routes. Register: ensure tenant has `company_code` (from signup or generated).
-- **Phase 2:** Core merchandising (Customers, Inquiries, Quotations, Orders) – backend + frontend matching reference flows.
-- **Phase 3:** Inventory (items, warehouses, PO, GRN, stock), then Manufacturing (samples, TNA, production), then Quality, then Finance/Accounts.
-- **Phase 4:** Commercial (export cases, PI, BTB LCs), HR, Reports, remaining settings and workflows.
+- **Phase 1–4 (done):** Auth (company code + username login), public pages, full app sidebar and routes, core merchandising, Inventory, Manufacturing, Quality, Finance/Accounts, Commercial (export cases, PI, BTB LCs), HR, Reports, Settings, Workflow. All app routes have dedicated or coming-soon pages. See `docs/IMPLEMENTATION_ROADMAP.md` for current state.
+- **Optional later:** Register approval status (PENDING/APPROVED/REJECTED); `/modules/*` and `/resources` public pages; filling in coming-soon modules (AI, Logistics, etc.) with full backend and UI.
 
 ---
 
@@ -77,3 +75,17 @@ Implementation order: first **scaffold all routes** with placeholder pages (titl
 - **Backend routes:** `replit-legacy/primeX-ERP/server/routes.ts`
 - **Auth:** `server/auth-routes.ts`, `pages/auth/login.tsx`
 - **Public:** `pages/public/landing.tsx`, `components/public/public-layout.tsx`
+
+---
+
+## 7. Finance module – UAT and go-live docs
+
+Finance parity implemented. See:
+
+- `docs/FINANCE_UAT_CHECKLIST.md` – test checklist
+- `docs/FINANCE_UAT_TEST_CASES.md` – numbered test cases
+- `docs/FINANCE_GO_LIVE_CRITERIA.md` – go/no-go criteria
+- `docs/FINANCE_CUTOVER_PLAN.md` – cutover runbook
+- `docs/FINANCE_OPERATIONS_SOP.md` – operations procedures
+- `docs/FINANCE_UAT_CLOSURE_REPORT.md` – engineering readiness closure
+- `docs/FINANCE_CHAT_HANDOFF_2026-03-11.md` – handoff to continue in a new chat

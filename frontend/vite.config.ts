@@ -47,9 +47,17 @@ export default defineConfig({
       usePolling: true,
       interval: 1000,
     },
-    hmr: {
-      clientPort: isProduction ? 443 : 5173,
-    },
+    hmr: isProduction
+      ? {
+          protocol: "wss",
+          port: 443,
+          clientPort: 443,
+        }
+      : {
+          protocol: "ws",
+          port: 5173,
+          clientPort: 5173,
+        },
     proxy: {
       "/api": {
         // Default localhost so dev on host works; in Docker set VITE_DEV_PROXY_TARGET=http://backend:8000 if using proxy

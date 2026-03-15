@@ -3,6 +3,11 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 const isProduction = process.env.NODE_ENV === "production";
+const allowedHosts = (process.env.VITE_ALLOWED_HOSTS ?? "")
+  .split(",")
+  .map((host) => host.trim())
+  .filter(Boolean);
+const defaultAllowedHosts = ["localhost", "127.0.0.1"];
 
 export default defineConfig({
   plugins: [react()],
@@ -36,7 +41,7 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     strictPort: true,
-    allowedHosts: ["prime7erp.com", "www.prime7erp.com"],
+    allowedHosts: allowedHosts.length > 0 ? allowedHosts : defaultAllowedHosts,
     watch: {
       // More reliable file watching with Docker Desktop bind mounts on Windows.
       usePolling: true,

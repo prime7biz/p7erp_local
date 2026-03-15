@@ -2,6 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+const isProduction = process.env.NODE_ENV === "production";
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -34,13 +36,14 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     strictPort: true,
+    allowedHosts: ["prime7erp.com", "www.prime7erp.com"],
     watch: {
       // More reliable file watching with Docker Desktop bind mounts on Windows.
       usePolling: true,
       interval: 1000,
     },
     hmr: {
-      clientPort: 5173,
+      clientPort: isProduction ? 443 : 5173,
     },
     proxy: {
       "/api": {

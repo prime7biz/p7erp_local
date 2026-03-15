@@ -23,6 +23,35 @@ class AccountGroup(Base):
     is_bank_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Advanced / COA redesign fields (docs/ACCOUNT_GROUP_REDESIGN.md)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reporting_code: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    default_normal_balance: Mapped[str] = mapped_column(String(16), nullable=False, default="debit")
+    allow_posting: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_summary_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_reviewed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class CoAConfig(Base):
+    """Tenant-scoped Chart of Accounts code format and limits (one row per tenant)."""
+    __tablename__ = "coa_config"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True, unique=True
+    )
+    account_number_prefix: Mapped[str] = mapped_column(String(16), nullable=False, default="AC-")
+    account_number_width: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
+    group_code_prefix: Mapped[str] = mapped_column(String(16), nullable=False, default="GRP-")
+    group_code_width: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
+    allow_manual_account_number: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    max_group_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_account_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    validate_normal_balance: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -45,6 +74,16 @@ class ChartOfAccount(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_bank_account: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Advanced CoA fields (docs/COA_ADVANCED_DESIGN.md)
+    account_type: Mapped[str] = mapped_column(String(32), nullable=False, default="posting", index=True)
+    reporting_code: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    statistical_unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    statistical_formula: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parent_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    last_reviewed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -312,6 +351,7 @@ class PaymentRun(Base):
         ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="DRAFT", index=True)
+    base_currency: Mapped[str] = mapped_column(String(10), nullable=False, default="BDT")
     total_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -334,8 +374,33 @@ class PaymentRunItem(Base):
     )
     party_name: Mapped[str] = mapped_column(String(255), nullable=False)
     amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    source_currency: Mapped[str] = mapped_column(String(10), nullable=False, default="BDT")
+    fx_rate_to_base: Mapped[str] = mapped_column(String(32), nullable=False, default="1")
+    base_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING", index=True)
     reference: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class SettlementAuditPreset(Base):
+    __tablename__ = "settlement_audit_presets"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    from_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    to_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status_filter: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    source_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    party_query: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class AccountingPeriod(Base):

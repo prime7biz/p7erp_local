@@ -6,6 +6,7 @@ import {
   type OrderAmendmentResponse,
   type CustomerResponse,
   type QuotationResponse,
+  type MaterialRequirementResponse,
 } from "@/api/client";
 
 export function OrderDetailPage() {
@@ -18,6 +19,10 @@ export function OrderDetailPage() {
   const [error, setError] = useState("");
   const [amendments, setAmendments] = useState<OrderAmendmentResponse[]>([]);
   const [newStatus, setNewStatus] = useState("");
+  const [materialReqModalOpen, setMaterialReqModalOpen] = useState(false);
+  const [materialReq, setMaterialReq] = useState<MaterialRequirementResponse | null>(null);
+  const [materialReqLoading, setMaterialReqLoading] = useState(false);
+  const [materialReqError, setMaterialReqError] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -75,13 +80,44 @@ export function OrderDetailPage() {
             {item.status}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate("/app/orders")}
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
-        >
-          Back to list
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setMaterialReqModalOpen(true);
+              setMaterialReq(null);
+              setMaterialReqError("");
+              setMaterialReqLoading(true);
+              api
+                .getOrderMaterialRequirement(item.id)
+                .then((res) => {
+                  setMaterialReq(res);
+                  setMaterialReqError("");
+                })
+                .catch((e) => {
+                  setMaterialReqError(e instanceof Error ? e.message : "Failed to load material requirement");
+                  setMaterialReq(null);
+                })
+                .finally(() => setMaterialReqLoading(false));
+            }}
+            className="rounded-lg border border-primary bg-white px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/5"
+          >
+            Material requirement
+          </button>
+          <Link
+            to={`/app/orders/${item.id}/print`}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Print / Save PDF
+          </Link>
+          <button
+            type="button"
+            onClick={() => navigate("/app/orders")}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+          >
+            Back to list
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -223,6 +259,78 @@ export function OrderDetailPage() {
         Created at {new Date(item.created_at).toLocaleString()} · Updated at{" "}
         {new Date(item.updated_at).toLocaleString()}
       </div>
+
+      {materialReqModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !materialReqLoading && setMaterialReqModalOpen(false)}
+        >
+          <div
+            className="rounded-xl border border-gray-200 bg-white p-5 shadow-lg w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Material requirement · {item.order_code}
+            </h3>
+            {materialReqLoading && (
+              <p className="text-sm text-gray-500 py-4">Loading…</p>
+            )}
+            {materialReqError && (
+              <p className="text-sm text-red-600 py-2">{materialReqError}</p>
+            )}
+            {!materialReqLoading && materialReq && (
+              <>
+                <p className="text-xs text-gray-500 mb-3">
+                  Order qty: {materialReq.quantity_used.toLocaleString()} · BOM #{materialReq.bom_id} · Style #{materialReq.style_id}
+                </p>
+                <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0">
+                  <table className="min-w-[520px] w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="px-3 py-2 text-left">Item</th>
+                        <th className="px-3 py-2 text-left">UOM</th>
+                        <th className="px-3 py-2 text-right">Required</th>
+                        <th className="px-3 py-2 text-right">Available</th>
+                        <th className="px-3 py-2 text-right">Shortage</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {materialReq.lines.map((line) => (
+                        <tr key={line.item_id} className="border-b border-gray-100 last:border-0">
+                          <td className="px-3 py-2 text-gray-800">
+                            {line.item_code} · {line.item_name}
+                          </td>
+                          <td className="px-3 py-2 text-gray-600">{line.uom ?? "—"}</td>
+                          <td className="px-3 py-2 text-right text-gray-700">
+                            {line.required_qty.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-700">
+                            {line.available_qty.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <span className={line.shortage_qty > 0 ? "font-medium text-amber-700" : "text-gray-600"}>
+                              {line.shortage_qty.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setMaterialReqModalOpen(false)}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

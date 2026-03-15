@@ -1025,12 +1025,12 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               </div>
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Agency Commission</div>
-                <div className="text-xl font-bold text-gray-900">{quotation.commission_value ?? "0"}%</div>
+                <div className="text-xl font-bold text-gray-900">{toSafeNumber(quotation.commission_value).toFixed(1)}%</div>
               </div>
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Final Quoted Price</div>
                 <div className="text-xl font-bold text-primary">
-                  {quotation.quoted_price ?? quotation.total_amount ?? "—"} {quotation.currency ?? ""}
+                  {formatMoney(toSafeNumber(quotation.quoted_price ?? quotation.total_amount))} {quotation.currency ?? ""}
                 </div>
               </div>
             </div>
@@ -1051,8 +1051,8 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                 <div><span className="font-semibold">Currency:</span> {quotation.currency ?? "USD"}</div>
               </div>
               <div>
-                <div><span className="font-semibold">FOB Cost:</span> {quotation.total_cost ?? formatMoney(totals.total)}</div>
-                <div><span className="font-semibold">Final Quoted Price:</span> {quotation.quoted_price ?? quotation.total_amount ?? "—"}</div>
+                <div><span className="font-semibold">FOB Cost:</span> {formatMoney(toSafeNumber(quotation.total_cost) || totals.total)}</div>
+                <div><span className="font-semibold">Final Quoted Price:</span> {formatMoney(toSafeNumber(quotation.quoted_price ?? quotation.total_amount))}</div>
                 <div><span className="font-semibold">Profit %:</span> {quotation.profit_percentage ?? "—"}</div>
                 <div><span className="font-semibold">Commission:</span> {quotation.commission_mode ?? "-"} / {quotation.commission_type ?? "-"} / {quotation.commission_value ?? "-"}</div>
               </div>

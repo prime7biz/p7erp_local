@@ -81,6 +81,7 @@ export function RolesPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [form, setForm] = useState({
     name: "",
     display_name: "",
@@ -102,6 +103,12 @@ export function RolesPage() {
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    const close = () => setOpenActionsId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
   }, []);
 
   const resetForm = () => {
@@ -263,22 +270,41 @@ export function RolesPage() {
               <td style={{ padding: 8 }}>{r.display_name}</td>
               <td style={{ padding: 8 }}>{Object.keys(r.permissions || {}).length}</td>
               <td style={{ padding: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => startEdit(r)}
-                  className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(r)}
-                  className="ml-2 rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
-                  disabled={r.name.toLowerCase() === "admin"}
-                  title={r.name.toLowerCase() === "admin" ? "Admin role cannot be deleted" : undefined}
-                >
-                  Delete
-                </button>
+                <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenActionsId(openActionsId === r.id ? null : r.id)}
+                    className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                  >
+                    Actions
+                  </button>
+                  {openActionsId === r.id && (
+                    <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          startEdit(r);
+                          setOpenActionsId(null);
+                        }}
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleDelete(r);
+                          setOpenActionsId(null);
+                        }}
+                        disabled={r.name.toLowerCase() === "admin"}
+                        title={r.name.toLowerCase() === "admin" ? "Admin role cannot be deleted" : undefined}
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:pointer-events-none"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
               </td>
             </tr>
           ))}

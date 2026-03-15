@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   api,
   type OrderResponse,
@@ -15,9 +15,12 @@ import {
 } from "@/lib/commercialTerms";
 
 export function OrdersPage() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [quickFilter, setQuickFilter] = useState<"all" | "linked_quotation" | "draft" | "active">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<OrderResponse | null>(null);
   const [form, setForm] = useState<OrderCreate>({ customer_id: 0 });
@@ -51,8 +54,11 @@ export function OrdersPage() {
   };
 
   const filteredItems = useMemo(() => {
+    if (quickFilter === "linked_quotation") return items.filter((row) => row.quotation_id != null);
+    if (quickFilter === "draft") return items.filter((row) => row.status === "DRAFT");
+    if (quickFilter === "active") return items.filter((row) => ["NEW", "IN_PROGRESS"].includes(row.status));
     return items;
-  }, [items]);
+  }, [items, quickFilter]);
 
   const customerName = (id: number) =>
     customers.find((c) => c.id === id)?.name ?? `#${id}`;
@@ -83,9 +89,15 @@ export function OrdersPage() {
   }, []);
 
   const openCreate = () => {
-    setEditing(null);
-    setForm({ customer_id: 0 });
-    setModalOpen(true);
+    navigate("/app/orders/new");
+  };
+
+  const statusClass = (statusValue: string) => {
+    const value = statusValue.toUpperCase();
+    if (value === "COMPLETED") return "bg-emerald-100 text-emerald-700";
+    if (value === "IN_PROGRESS") return "bg-blue-100 text-blue-700";
+    if (value === "NEW") return "bg-violet-100 text-violet-700";
+    return "bg-gray-100 text-gray-700";
   };
 
   const closeModal = () => {
@@ -102,11 +114,8 @@ export function OrdersPage() {
     }
     setError("");
     try {
-      if (editing) {
-        await api.updateOrder(editing.id, form);
-      } else {
-        await api.createOrder(form);
-      }
+      if (!editing) return;
+      await api.updateOrder(editing.id, form);
       closeModal();
       await load();
     } catch (e) {
@@ -114,26 +123,36 @@ export function OrdersPage() {
     }
   };
 
+  const draftCount = filteredItems.filter((row) => row.status === "DRAFT").length;
+  const activeCount = filteredItems.filter((row) => ["NEW", "IN_PROGRESS"].includes(row.status)).length;
+  const completedCount = filteredItems.filter((row) => row.status === "COMPLETED").length;
+
   return (
     <div className="space-y-6">
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            View and manage confirmed sales orders in the merchandising pipeline.
+            Manage final sales orders with clear workflow, conversion links, and delivery tracking.
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <input
             type="text"
             placeholder="Search by code…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             className="w-full sm:w-48 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
           />
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(1);
+            }}
             className="w-full sm:w-40 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
           >
             <option value="">All statuses</option>
@@ -142,6 +161,25 @@ export function OrdersPage() {
             <option value="IN_PROGRESS">In Progress</option>
             <option value="COMPLETED">Completed</option>
           </select>
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setStatusFilter("");
+              setQuickFilter("all");
+              setPage(1);
+            }}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Clear filters
+          </button>
+          <button
+            type="button"
+            onClick={load}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Refresh
+          </button>
         </div>
         <button
           type="button"
@@ -152,32 +190,72 @@ export function OrdersPage() {
         </button>
       </header>
 
+      <div className="flex flex-wrap gap-2">
+        {[
+          { key: "all", label: "All" },
+          { key: "linked_quotation", label: "Linked quotation" },
+          { key: "draft", label: "Draft only" },
+          { key: "active", label: "Active" },
+        ].map((chip) => (
+          <button
+            key={chip.key}
+            type="button"
+            onClick={() => setQuickFilter(chip.key as typeof quickFilter)}
+            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+              quickFilter === chip.key ? "border-primary bg-primary/10 text-primary" : "border-gray-200 text-gray-600"
+            }`}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-3">
+          <div className="text-xs uppercase tracking-wide text-gray-500">Total on page</div>
+          <div className="text-xl font-bold text-gray-900">{filteredItems.length}</div>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3">
+          <div className="text-xs uppercase tracking-wide text-gray-500">Draft</div>
+          <div className="text-xl font-bold text-slate-700">{draftCount}</div>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3">
+          <div className="text-xs uppercase tracking-wide text-gray-500">Active</div>
+          <div className="text-xl font-bold text-blue-700">{activeCount}</div>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3">
+          <div className="text-xs uppercase tracking-wide text-gray-500">Completed</div>
+          <div className="text-xl font-bold text-emerald-700">{completedCount}</div>
+        </div>
+      </div>
+
       {error && (
         <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
         {loading ? (
           <div className="p-12 text-center text-gray-500">Loading orders…</div>
-        ) : items.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <div className="p-12 text-center text-gray-500">No orders yet.</div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="min-w-[1180px] w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
               <tr>
-                <th className="py-2 px-4">Code</th>
-                <th className="py-2 px-4">Customer</th>
-                <th className="py-2 px-4">Quotation</th>
-                <th className="py-2 px-4">Style</th>
-                <th className="py-2 px-4">Intermediary</th>
-                <th className="py-2 px-4">Shipping</th>
-                <th className="py-2 px-4">Commission</th>
-                <th className="py-2 px-4">Delivery date</th>
-                <th className="py-2 px-4 text-right">Qty</th>
-                <th className="py-2 px-4">Status</th>
-                <th className="py-2 px-4 text-right">Actions</th>
+                <th className="py-2.5 px-4 w-24 whitespace-nowrap">Code</th>
+                <th className="py-2.5 px-4 min-w-[120px]">Customer</th>
+                <th className="py-2.5 px-4 w-24 whitespace-nowrap">Quotation</th>
+                <th className="py-2.5 px-4 min-w-[140px]">Style</th>
+                <th className="py-2.5 px-4 min-w-[100px] whitespace-nowrap">Intermediary</th>
+                <th className="py-2.5 px-4 w-20 whitespace-nowrap">Shipping</th>
+                <th className="py-2.5 px-4 min-w-[120px] whitespace-nowrap">Commission</th>
+                <th className="py-2.5 px-4 w-28 whitespace-nowrap">Delivery date</th>
+                <th className="py-2.5 px-4 text-right w-20 whitespace-nowrap">Qty</th>
+                <th className="py-2.5 px-4 w-24 whitespace-nowrap">Status</th>
+                <th className="py-2.5 px-4 text-right w-24 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -194,8 +272,8 @@ export function OrdersPage() {
                 const commissionValue = o.commission_value ?? linkedQuotation?.commission_value ?? null;
 
                 return (
-                <tr key={o.id} className="border-b border-gray-100 last:border-0 align-top">
-                  <td className="py-2 px-4 font-medium text-gray-900">
+                <tr key={o.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
+                  <td className="py-2.5 px-4 font-medium text-gray-900 whitespace-nowrap">
                     <Link
                       to={`/app/orders/${o.id}`}
                       className="text-indigo-600 hover:underline"
@@ -203,96 +281,136 @@ export function OrdersPage() {
                       {o.order_code}
                     </Link>
                   </td>
-                  <td className="py-2 px-4 text-gray-700">{customerName(o.customer_id)}</td>
-                  <td className="py-2 px-4 text-gray-700">{quotationCode(o.quotation_id)}</td>
-                  <td className="py-2 px-4">
-                    <div className="flex items-center gap-2">
+                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={customerName(o.customer_id)}>
+                    {customerName(o.customer_id)}
+                  </td>
+                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={quotationCode(o.quotation_id)}>
+                    {quotationCode(o.quotation_id)}
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <div className="flex items-center gap-2 min-w-0">
                       {styleImageUrl ? (
                         <img
                           src={styleImageUrl}
                           alt={styleName ?? styleRef ?? "Style"}
-                          className="h-8 w-8 rounded object-cover border border-gray-200"
+                          className="h-8 w-8 shrink-0 rounded object-cover border border-gray-200"
                         />
                       ) : (
-                        <div className="h-8 w-8 rounded bg-gray-100 border border-gray-200" />
+                        <div className="h-8 w-8 shrink-0 rounded bg-gray-100 border border-gray-200" />
                       )}
-                      <div className="text-gray-700">
-                        <div>{styleName ?? styleRef ?? "—"}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-gray-700 truncate" title={styleName ?? styleRef ?? undefined}>
+                          {styleName ?? styleRef ?? "—"}
+                        </div>
                         {styleName && styleRef && styleName !== styleRef && (
-                          <div className="text-xs text-gray-500">{styleRef}</div>
+                          <div className="text-xs text-gray-500 truncate whitespace-nowrap" title={styleRef}>
+                            {styleRef}
+                          </div>
                         )}
                       </div>
                     </div>
                   </td>
-                  <td className="py-2 px-4 text-gray-700">{intermediaryName ?? "—"}</td>
-                  <td className="py-2 px-4 text-gray-700">{shippingTerm ?? "—"}</td>
-                  <td className="py-2 px-4 text-gray-700">
+                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={intermediaryName ?? undefined}>
+                    {intermediaryName ?? "—"}
+                  </td>
+                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={shippingTerm ?? undefined}>
+                    {shippingTerm ?? "—"}
+                  </td>
+                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={commissionMode || commissionType || commissionValue ? `${commissionMode ?? "-"} / ${commissionType ?? "-"} / ${commissionValue ?? "-"}` : undefined}>
                     {commissionMode || commissionType || commissionValue
                       ? `${commissionMode ?? "-"} / ${commissionType ?? "-"} / ${commissionValue ?? "-"}`
                       : "—"}
                   </td>
-                  <td className="py-2 px-4 text-gray-700">
+                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : undefined}>
                     {o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : "—"}
                   </td>
-                  <td className="py-2 px-4 text-right text-gray-700">
+                  <td className="py-2.5 px-4 text-right text-gray-700 whitespace-nowrap">
                     {o.quantity != null ? o.quantity.toLocaleString() : "—"}
                   </td>
-                  <td className="py-2 px-4 text-gray-700">{o.status}</td>
-                  <td className="py-2 px-4 text-right space-x-2">
-                    <Link
-                      to={`/app/orders/${o.id}`}
-                      className="rounded-lg border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                    >
-                      View
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditing(o);
-                        setForm({
-                          customer_id: o.customer_id,
-                          quotation_id: o.quotation_id ?? undefined,
-                          style_id: o.style_id ?? undefined,
-                          style_ref: o.style_ref ?? undefined,
-                          customer_intermediary_id: o.customer_intermediary_id ?? undefined,
-                          shipping_term: o.shipping_term ?? undefined,
-                          commission_mode: o.commission_mode ?? undefined,
-                          commission_type: o.commission_type ?? undefined,
-                          commission_value: o.commission_value ?? undefined,
-                          order_date: o.order_date ?? undefined,
-                          delivery_date: o.delivery_date ?? undefined,
-                          quantity: o.quantity ?? undefined,
-                          status: o.status ?? undefined,
-                          remarks: o.remarks ?? undefined,
-                        });
-                        setModalOpen(true);
-                      }}
-                      className="rounded-lg border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!window.confirm("Delete this order?")) return;
-                        try {
-                          setError("");
-                          await api.deleteOrder(o.id);
-                          await load();
-                        } catch (e) {
-                          setError(e instanceof Error ? e.message : "Delete failed");
-                        }
-                      }}
-                      className="rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                    >
-                      Delete
-                    </button>
+                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap">
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(o.status)}`}>
+                      {o.status}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-4 text-right whitespace-nowrap">
+                    <div className="relative inline-block text-left">
+                      <button
+                        type="button"
+                        onClick={() => setOpenActionsId((prev) => (prev === o.id ? null : o.id))}
+                        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                      >
+                        Actions
+                      </button>
+                      {openActionsId === o.id && (
+                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                          <Link
+                            to={`/app/orders/${o.id}`}
+                            onClick={() => setOpenActionsId(null)}
+                            className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                          >
+                            View
+                          </Link>
+                          <Link
+                            to={`/app/orders/${o.id}/print`}
+                            onClick={() => setOpenActionsId(null)}
+                            className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                          >
+                            Print
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionsId(null);
+                              setEditing(o);
+                              setForm({
+                                customer_id: o.customer_id,
+                                quotation_id: o.quotation_id ?? undefined,
+                                style_id: o.style_id ?? undefined,
+                                style_ref: o.style_ref ?? undefined,
+                                customer_intermediary_id: o.customer_intermediary_id ?? undefined,
+                                shipping_term: o.shipping_term ?? undefined,
+                                commission_mode: o.commission_mode ?? undefined,
+                                commission_type: o.commission_type ?? undefined,
+                                commission_value: o.commission_value ?? undefined,
+                                order_date: o.order_date ?? undefined,
+                                delivery_date: o.delivery_date ?? undefined,
+                                quantity: o.quantity ?? undefined,
+                                status: o.status ?? undefined,
+                                remarks: o.remarks ?? undefined,
+                              });
+                              setModalOpen(true);
+                            }}
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setOpenActionsId(null);
+                              if (!window.confirm("Delete this order?")) return;
+                              try {
+                                setError("");
+                                await api.deleteOrder(o.id);
+                                await load();
+                              } catch (e) {
+                                setError(e instanceof Error ? e.message : "Delete failed");
+                              }
+                            }}
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
                 );
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -316,10 +434,10 @@ export function OrdersPage() {
         </button>
       </div>
 
-      {modalOpen && (
+      {modalOpen && editing && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">New order</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Edit order</h2>
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

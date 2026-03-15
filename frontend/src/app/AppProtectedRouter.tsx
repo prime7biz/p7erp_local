@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Dashboard } from "@/pages/Dashboard";
 import { AppComingSoonPage } from "@/pages/app/AppComingSoonPage";
@@ -7,9 +7,11 @@ import { PlaceholderPage } from "@/pages/app/PlaceholderPage";
 import { AiAssistantPage } from "@/pages/app/ai/AiAssistantPage";
 import { AiAutomationPage } from "@/pages/app/ai/AiAutomationPage";
 import { AiPredictionsPage } from "@/pages/app/ai/AiPredictionsPage";
+import { CommercialPage } from "@/pages/app/commercial/CommercialPage";
 import { ExportCasesPage } from "@/pages/app/commercial/ExportCasesPage";
 import { ProformaInvoicesPage } from "@/pages/app/commercial/ProformaInvoicesPage";
 import { BtbLcsPage } from "@/pages/app/commercial/BtbLcsPage";
+import { MasterContractsPage } from "@/pages/app/commercial/MasterContractsPage";
 import { LogisticsPage } from "@/pages/app/logistics/LogisticsPage";
 import { PartiesPage } from "@/pages/app/parties/PartiesPage";
 import { DocumentFlowPage } from "@/pages/app/flow/DocumentFlowPage";
@@ -21,6 +23,7 @@ import { InquiriesPage } from "@/pages/app/InquiriesPage";
 import { InquiryCreatePage } from "@/pages/app/InquiryCreatePage";
 import { QuotationsPage } from "@/pages/app/QuotationsPage";
 import { OrdersPage } from "@/pages/app/OrdersPage";
+import { OrderCreatePage } from "@/pages/app/OrderCreatePage";
 import { InquiryDetailPage } from "@/pages/app/InquiryDetailPage";
 import { QuotationDetailPage } from "@/pages/app/QuotationDetailPage";
 import { OrderDetailPage } from "@/pages/app/OrderDetailPage";
@@ -30,11 +33,12 @@ import { BomBuilderPage } from "@/pages/app/BomBuilderPage";
 import { ConsumptionPlansPage } from "@/pages/app/ConsumptionPlansPage";
 import { FollowupPage } from "@/pages/app/FollowupPage";
 import { MerchPipelinePage } from "@/pages/app/MerchPipelinePage";
+import { PipelineAnalyticsPage } from "@/pages/app/PipelineAnalyticsPage";
 import { MerchCriticalAlertsPage } from "@/pages/app/MerchCriticalAlertsPage";
 import { ConsumptionReconciliationPage } from "@/pages/app/ConsumptionReconciliationPage";
+import { WastageReportPage } from "@/pages/app/WastageReportPage";
 import { InventoryItemsPage } from "@/pages/app/InventoryItemsPage";
-import { UnitsPage } from "@/pages/app/UnitsPage";
-import { WarehousesPage } from "@/pages/app/WarehousesPage";
+import { VendorsPage } from "@/pages/app/VendorsPage";
 import { StockGroupsPage } from "@/pages/app/StockGroupsPage";
 import { PurchaseOrdersPage } from "@/pages/app/PurchaseOrdersPage";
 import { GoodsReceivingPage } from "@/pages/app/GoodsReceivingPage";
@@ -55,6 +59,10 @@ import { AllApprovalsPage } from "@/pages/app/AllApprovalsPage";
 import { QuotationPrintPage } from "@/pages/print/QuotationPrintPage";
 import { CustomerPrintPage } from "@/pages/print/CustomerPrintPage";
 import { InquiryPrintPage } from "@/pages/print/InquiryPrintPage";
+import { OrderPrintPage } from "@/pages/print/OrderPrintPage";
+import { StylePrintPage } from "@/pages/print/StylePrintPage";
+import { ProformaInvoicePrintPage } from "@/pages/print/ProformaInvoicePrintPage";
+import { ProformaInvoiceFormPage } from "@/pages/app/commercial/ProformaInvoiceFormPage";
 
 const SettingsLayout = lazy(() => import("@/pages/settings/SettingsLayout").then((m) => ({ default: m.SettingsLayout })));
 const UsersPage = lazy(() => import("@/pages/settings/UsersPage").then((m) => ({ default: m.UsersPage })));
@@ -97,6 +105,9 @@ const ManufacturingOrdersPage = lazy(() =>
 const InventoryReconciliationPage = lazy(() =>
   import("@/pages/app/InventoryReconciliationPage").then((m) => ({ default: m.InventoryReconciliationPage })),
 );
+const AdvanceOptionsPage = lazy(() =>
+  import("@/pages/app/AdvanceOptionsPage").then((m) => ({ default: m.AdvanceOptionsPage })),
+);
 const AccountGroupsPage = lazy(() =>
   import("@/pages/app/AccountGroupsPage").then((m) => ({ default: m.AccountGroupsPage })),
 );
@@ -118,6 +129,9 @@ const BankReconciliationPage = lazy(() =>
 );
 const PaymentRunsPage = lazy(() =>
   import("@/pages/app/PaymentRunsPage").then((m) => ({ default: m.PaymentRunsPage })),
+);
+const SettlementAuditPage = lazy(() =>
+  import("@/pages/app/SettlementAuditPage").then((m) => ({ default: m.SettlementAuditPage })),
 );
 const PurchaseWorkflowPage = lazy(() =>
   import("@/pages/app/PurchaseWorkflowPage").then((m) => ({ default: m.PurchaseWorkflowPage })),
@@ -307,7 +321,10 @@ export function AppProtectedRouter() {
     <Routes>
       <Route path="quotations/:id/print" element={<QuotationPrintPage />} />
       <Route path="customers/:id/print" element={<CustomerPrintPage />} />
-      <Route path="inquiries/:id/print" element={<InquiryPrintPage />} />
+        <Route path="inquiries/:id/print" element={<InquiryPrintPage />} />
+        <Route path="orders/:id/print" element={<OrderPrintPage />} />
+        <Route path="merchandising/styles/:id/print" element={<StylePrintPage />} />
+        <Route path="commercial/proforma-invoices/:id/print" element={<ProformaInvoicePrintPage />} />
       <Route
         element={
           <Suspense fallback={<div className="min-h-[40vh] flex items-center justify-center text-sm text-slate-500">Loading module...</div>}>
@@ -328,20 +345,24 @@ export function AppProtectedRouter() {
         <Route path="quotations/new" element={<QuotationDetailPage />} />
         <Route path="quotations/:id" element={<QuotationDetailPage />} />
         <Route path="orders" element={<OrdersPage />} />
+        <Route path="orders/new" element={<OrderCreatePage />} />
         <Route path="orders/:id" element={<OrderDetailPage />} />
         <Route path="merchandising/styles" element={<StylesPage />} />
         <Route path="merchandising/styles/:id" element={<StyleDetailPage />} />
         <Route path="bom" element={<BomBuilderPage />} />
         <Route path="bom/orders" element={<ConsumptionPlansPage />} />
         <Route path="merchandising/pipeline" element={<MerchPipelinePage />} />
+        <Route path="merchandising/pipeline-analytics" element={<PipelineAnalyticsPage />} />
         <Route path="merchandising/alerts" element={<MerchCriticalAlertsPage />} />
+        <Route path="merchandising/wastage-report" element={<WastageReportPage />} />
         <Route path="merchandising/consumption-reconciliation" element={<ConsumptionReconciliationPage />} />
         <Route path="inventory" element={<InventoryItemsPage />} />
         <Route path="inventory/items" element={<InventoryItemsPage />} />
         <Route path="inventory/categories" element={<AppComingSoonPage title="Inventory Categories" description="Manage item categories and hierarchies." />} />
         <Route path="inventory/subcategories" element={<AppComingSoonPage title="Inventory Subcategories" />} />
-        <Route path="inventory/units" element={<UnitsPage />} />
-        <Route path="inventory/warehouses" element={<WarehousesPage />} />
+        <Route path="inventory/units" element={<Navigate to="/app/inventory" replace />} />
+        <Route path="inventory/vendors" element={<VendorsPage />} />
+        <Route path="inventory/warehouses" element={<Navigate to="/app/inventory" replace />} />
         <Route path="inventory/stock-groups" element={<StockGroupsPage />} />
         <Route path="inventory/stock-dashboard" element={<AppComingSoonPage title="Stock Dashboard" description="Overview of stock levels and movements." />} />
         <Route path="inventory/stock-valuation" element={<AppComingSoonPage title="Stock Valuation" />} />
@@ -382,9 +403,12 @@ export function AppProtectedRouter() {
         <Route path="inventory/reconciliation" element={<InventoryReconciliationPage />} />
         <Route path="inventory/stock-summary" element={<StockSummaryPage />} />
         <Route path="inventory/stock-ledger" element={<StockLedgerPage />} />
-        <Route path="commercial" element={<PlaceholderPage title="Commercial" />} />
+        <Route path="commercial" element={<CommercialPage />} />
         <Route path="commercial/export-cases" element={<ExportCasesPage />} />
+        <Route path="commercial/master-contracts" element={<MasterContractsPage />} />
         <Route path="commercial/proforma-invoices" element={<ProformaInvoicesPage />} />
+        <Route path="commercial/proforma-invoices/new" element={<ProformaInvoiceFormPage />} />
+        <Route path="commercial/proforma-invoices/:id/edit" element={<ProformaInvoiceFormPage />} />
         <Route path="commercial/btb-lcs" element={<BtbLcsPage />} />
         <Route path="logistics" element={<LogisticsPage />} />
         <Route path="followup" element={<FollowupPage />} />
@@ -406,6 +430,7 @@ export function AppProtectedRouter() {
         <Route path="reports/challans" element={<ReportComingSoonPage title="Delivery Challans Report" />} />
         <Route path="reports/reconciliation" element={<ReportComingSoonPage title="Data Reconciliation" />} />
         <Route path="reports/exceptions" element={<ReportComingSoonPage title="Exceptions" />} />
+        <Route path="accounts/advance-options" element={<AdvanceOptionsPage />} />
         <Route path="accounts/groups" element={<AccountGroupsPage />} />
         <Route path="accounts" element={<ChartOfAccountsPage />} />
         <Route path="accounts/vouchers" element={<VouchersPage />} />
@@ -419,6 +444,7 @@ export function AppProtectedRouter() {
         <Route path="banking/accounts" element={<BankAccountsPage />} />
         <Route path="banking/reconciliation" element={<BankReconciliationPage />} />
         <Route path="banking/payment-runs" element={<PaymentRunsPage />} />
+        <Route path="banking/settlement-audit" element={<SettlementAuditPage />} />
         <Route path="banking/payment-advice" element={<PaymentAdvicePage />} />
         <Route path="cashflow/calendar" element={<AppComingSoonPage title="Cashflow Calendar" description="Plan and view cash flow by period." />} />
         <Route path="accounts/reports/day-book" element={<DayBookPage />} />

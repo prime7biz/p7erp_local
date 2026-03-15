@@ -60,6 +60,8 @@ class QuotationResponse(BaseModel):
   profit_percentage: str | None = None
   quoted_price: str | None = None
   status: str
+  is_converted_to_order: bool = False
+  converted_order_id: int | None = None
   version_no: int
   valid_until: date | None
   notes: str | None
@@ -163,6 +165,8 @@ class QuotationDetailResponse(BaseModel):
   currency: str | None
   total_amount: str | None
   status: str
+  is_converted_to_order: bool = False
+  converted_order_id: int | None = None
   version_no: int
   valid_until: date | None
   size_ratio_enabled: bool

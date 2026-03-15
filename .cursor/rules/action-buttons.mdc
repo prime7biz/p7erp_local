@@ -1,0 +1,14 @@
+---
+description: Use a single combined Actions dropdown for table row actions (Edit, Delete, View, etc.)
+globs: frontend/src/pages/**/*.tsx
+alwaysApply: true
+---
+
+# Combined action buttons
+
+- **Always use a single combined "Actions" control** for row-level actions in tables (e.g. Edit, Delete, View, Print). Do **not** use separate icon buttons (e.g. Pencil and Trash2 side by side) unless the user explicitly asks for them.
+- **Pattern:** One "Actions" button per row that opens a dropdown menu. Dropdown contains links or buttons for View, Edit, Delete, Print, Duplicate, etc. Use state like `openActionsId` (or `openActionsRowId`) to track which row’s dropdown is open; close on outside click or after an action.
+- **Reference:** Match the pattern used on `QuotationsPage`, `CustomersPage`, and `InquiriesPage`:
+  - Button: `rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50` with label "Actions".
+  - Dropdown: `absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg`; each item `block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50` (use `text-red-600 hover:bg-red-50` for Delete).
+- **New list/detail pages:** When adding tables with row actions, use this combined Actions dropdown from the start.

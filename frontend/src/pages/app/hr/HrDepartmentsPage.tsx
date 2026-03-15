@@ -12,6 +12,7 @@ export function HrDepartmentsPage() {
   const [error, setError] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<HrDepartmentResponse | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [form, setForm] = useState<HrDepartmentCreate>({ code: "", name: "", is_active: true });
 
   const load = async () => {
@@ -29,6 +30,12 @@ export function HrDepartmentsPage() {
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    const close = () => setOpenActionsId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
   }, []);
 
   const openCreate = () => {
@@ -121,21 +128,40 @@ export function HrDepartmentsPage() {
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.code}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{row.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{row.is_active ? "Active" : "Inactive"}</td>
-                    <td className="px-4 py-3 text-right space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(row)}
-                        className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(row)}
-                        className="rounded border border-red-300 px-3 py-1 text-xs text-red-700 hover:bg-red-50"
-                      >
-                        Delete
-                      </button>
+                    <td className="px-4 py-3 text-right">
+                      <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenActionsId(openActionsId === row.id ? null : row.id)}
+                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          Actions
+                        </button>
+                        {openActionsId === row.id && (
+                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                openEdit(row);
+                                setOpenActionsId(null);
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onDelete(row);
+                                setOpenActionsId(null);
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

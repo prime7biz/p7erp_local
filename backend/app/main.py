@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -49,9 +50,39 @@ if not origins:
     ]
 
 
+async def _run_alert_scan_all_tenants() -> None:
+    """Background: run merch alert scan for all tenants every 15 min."""
+    from app.database import AsyncSessionLocal
+    from app.modules.merch.alert_engine import run_scan, get_tenant_ids
+    while True:
+        await asyncio.sleep(60)  # wait 1 min after startup, then first run
+        try:
+            async with AsyncSessionLocal() as db:
+                tenant_ids = await get_tenant_ids(db)
+                for tid in tenant_ids:
+                    try:
+                        await run_scan(db, tid, trigger="scheduled")
+                        await db.commit()
+                    except Exception:
+                        await db.rollback()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            pass
+        await asyncio.sleep(60 * 14)  # 15 min total between runs
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
+    scan_task = asyncio.create_task(_run_alert_scan_all_tenants())
+    try:
+        yield
+    finally:
+        scan_task.cancel()
+        try:
+            await scan_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(

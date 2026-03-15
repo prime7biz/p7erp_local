@@ -39,6 +39,49 @@ export function QuotationPrintPage() {
   const [customer, setCustomer] = useState<CustomerResponse | null>(null);
   const [inquiry, setInquiry] = useState<InquiryResponse | null>(null);
   const [settings, setSettings] = useState<SettingsConfigResponse | null>(null);
+  const [printPrefs, setPrintPrefs] = useState({
+    showLogo: true,
+    showWatermark: true,
+    showStylePreview: true,
+    showRemarks: true,
+    showSignatureBlock: true,
+    showFooter: true,
+  });
+  const [templatePreset, setTemplatePreset] = useState<"standard" | "minimal" | "factory">("standard");
+
+  const applyPreset = (preset: "standard" | "minimal" | "factory") => {
+    setTemplatePreset(preset);
+    if (preset === "standard") {
+      setPrintPrefs({
+        showLogo: true,
+        showWatermark: true,
+        showStylePreview: true,
+        showRemarks: true,
+        showSignatureBlock: true,
+        showFooter: true,
+      });
+      return;
+    }
+    if (preset === "minimal") {
+      setPrintPrefs({
+        showLogo: false,
+        showWatermark: false,
+        showStylePreview: false,
+        showRemarks: true,
+        showSignatureBlock: false,
+        showFooter: true,
+      });
+      return;
+    }
+    setPrintPrefs({
+      showLogo: true,
+      showWatermark: true,
+      showStylePreview: true,
+      showRemarks: false,
+      showSignatureBlock: true,
+      showFooter: true,
+    });
+  };
 
   useEffect(() => {
     const quotationId = Number(id);
@@ -138,18 +181,93 @@ export function QuotationPrintPage() {
           </button>
         </div>
       </div>
+      <div className="no-print mx-auto mb-3 w-full max-w-[210mm] rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs font-semibold text-indigo-900">Print template settings</div>
+          <div className="flex items-center gap-2">
+            <select
+              value={templatePreset}
+              onChange={(e) => applyPreset(e.target.value as "standard" | "minimal" | "factory")}
+              className="rounded-md border border-indigo-300 bg-white px-2 py-1 text-xs text-indigo-900"
+            >
+              <option value="standard">Standard</option>
+              <option value="minimal">Minimal</option>
+              <option value="factory">Factory Copy</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => applyPreset("standard")}
+              className="rounded-md border border-indigo-300 bg-white px-2 py-1 text-xs font-medium text-indigo-900 hover:bg-indigo-100"
+            >
+              Reset default
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-xs text-indigo-900 md:grid-cols-3">
+          <label className="inline-flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={printPrefs.showLogo}
+              onChange={(e) => setPrintPrefs((prev) => ({ ...prev, showLogo: e.target.checked }))}
+            />
+            Show logo
+          </label>
+          <label className="inline-flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={printPrefs.showWatermark}
+              onChange={(e) => setPrintPrefs((prev) => ({ ...prev, showWatermark: e.target.checked }))}
+            />
+            Show watermark
+          </label>
+          <label className="inline-flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={printPrefs.showStylePreview}
+              onChange={(e) => setPrintPrefs((prev) => ({ ...prev, showStylePreview: e.target.checked }))}
+            />
+            Show style preview
+          </label>
+          <label className="inline-flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={printPrefs.showRemarks}
+              onChange={(e) => setPrintPrefs((prev) => ({ ...prev, showRemarks: e.target.checked }))}
+            />
+            Show remarks
+          </label>
+          <label className="inline-flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={printPrefs.showSignatureBlock}
+              onChange={(e) => setPrintPrefs((prev) => ({ ...prev, showSignatureBlock: e.target.checked }))}
+            />
+            Show signatures
+          </label>
+          <label className="inline-flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={printPrefs.showFooter}
+              onChange={(e) => setPrintPrefs((prev) => ({ ...prev, showFooter: e.target.checked }))}
+            />
+            Show footer
+          </label>
+        </div>
+      </div>
 
       <article className="qp-sheet">
-        <div className={`qp-watermark ${watermarkClass}`}>{watermarkText}</div>
+        {printPrefs.showWatermark && <div className={`qp-watermark ${watermarkClass}`}>{watermarkText}</div>}
         <header className="qp-header">
           <div className="qp-header-left">
-            <div className="qp-logo-wrap">
-              {settings?.logo ? (
-                <img src={resolveAssetUrl(settings.logo)} alt={`${tenantName} logo`} className="qp-logo" />
-              ) : (
-                <div className="qp-logo-fallback">{tenantName.slice(0, 1).toUpperCase()}</div>
-              )}
-            </div>
+            {printPrefs.showLogo && (
+              <div className="qp-logo-wrap">
+                {settings?.logo ? (
+                  <img src={resolveAssetUrl(settings.logo)} alt={`${tenantName} logo`} className="qp-logo" />
+                ) : (
+                  <div className="qp-logo-fallback">{tenantName.slice(0, 1).toUpperCase()}</div>
+                )}
+              </div>
+            )}
             <div>
               <h1 className="qp-tenant-name">{tenantName}</h1>
               <p className="qp-tenant-meta">{tenantAddress}</p>
@@ -195,6 +313,36 @@ export function QuotationPrintPage() {
             <strong>{projectedQtyValue.toLocaleString()}</strong>
           </div>
         </section>
+
+        {printPrefs.showStylePreview && (
+          <section className="qp-section">
+            <h2>Style Preview</h2>
+            <table>
+              <tbody>
+                <tr>
+                  <td style={{ width: "110px" }}>
+                    {quotation.style_image_url ? (
+                      <img
+                        src={resolveAssetUrl(quotation.style_image_url)}
+                        alt={quotation.style_name ?? quotation.style_ref ?? "Style"}
+                        style={{ width: "92px", height: "92px", objectFit: "cover", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+                      />
+                    ) : (
+                      <div style={{ width: "92px", height: "92px", borderRadius: "8px", border: "1px solid #cbd5e1", display: "grid", placeItems: "center", color: "#64748b" }}>
+                        No image
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <div><strong>Style:</strong> {quotation.style_name ?? quotation.style_ref ?? "-"}</div>
+                    <div><strong>Reference:</strong> {quotation.style_ref ?? "-"}</div>
+                    <div><strong>Customer:</strong> {customer?.name ?? `#${quotation.customer_id}`}</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        )}
 
         <section className="qp-section">
           <h2>Cost Breakdown</h2>
@@ -308,11 +456,31 @@ export function QuotationPrintPage() {
           </table>
         </section>
 
-        <section className="qp-notes">
-          <h3>Notes / Assumptions</h3>
-          <p>{quotation.notes || "No additional notes."}</p>
-        </section>
+        {printPrefs.showRemarks && (
+          <section className="qp-notes">
+            <h3>Notes / Assumptions</h3>
+            <p>{quotation.notes || "No additional notes."}</p>
+          </section>
+        )}
 
+        {printPrefs.showSignatureBlock && (
+          <section className="qp-section">
+            <h2>Approval Signatures</h2>
+            <div className="grid grid-cols-3 gap-6 px-3 pt-6 pb-2 text-[10px] text-slate-700">
+              <div className="text-center">
+                <div className="border-t border-slate-400 pt-1">Prepared By</div>
+              </div>
+              <div className="text-center">
+                <div className="border-t border-slate-400 pt-1">Checked By</div>
+              </div>
+              <div className="text-center">
+                <div className="border-t border-slate-400 pt-1">Approved By</div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {printPrefs.showFooter && (
         <footer className="qp-footer">
           <div className="qp-footer-left">
             <strong>Confidential:</strong> This quotation and costing breakdown are private and intended only for authorized use.
@@ -324,6 +492,7 @@ export function QuotationPrintPage() {
             <div className="qp-page-number" />
           </div>
         </footer>
+        )}
       </article>
     </div>
   );

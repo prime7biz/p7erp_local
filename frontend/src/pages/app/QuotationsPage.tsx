@@ -48,7 +48,9 @@ export function QuotationsPage() {
   const filteredItems = useMemo(() => {
     if (quickFilter === "has_inquiry") return items.filter((q) => q.inquiry_id != null);
     if (quickFilter === "has_style_image") return items.filter((q) => Boolean(q.style_image_url));
-    if (quickFilter === "ready_to_convert") return items.filter((q) => q.status === "APPROVED");
+    if (quickFilter === "ready_to_convert") {
+      return items.filter((q) => q.status === "APPROVED" && !q.is_converted_to_order);
+    }
     return items;
   }, [items, quickFilter]);
 
@@ -194,7 +196,7 @@ export function QuotationsPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
         {loading ? (
           <QuotationListSkeleton />
         ) : filteredItems.length === 0 ? (
@@ -226,19 +228,19 @@ export function QuotationsPage() {
           <table className="min-w-[1120px] w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
               <tr>
-                <th className="py-2 px-4">Code</th>
-                <th className="py-2 px-4">Customer</th>
-                <th className="py-2 px-4">Inquiry</th>
-                <th className="py-2 px-4">Style</th>
-                <th className="py-2 px-4">Intermediary</th>
-                <th className="py-2 px-4">Shipping</th>
-                <th className="py-2 px-4">Commission</th>
-                <th className="py-2 px-4 text-right">Qty</th>
-                <th className="py-2 px-4 text-right">Amount</th>
-                <th className="py-2 px-4 text-right">Profit %</th>
-                <th className="py-2 px-4">Status</th>
-                <th className="py-2 px-4">Created</th>
-                <th className="py-2 px-4 text-right">Actions</th>
+                <th className="py-2.5 px-4 w-24 whitespace-nowrap">Code</th>
+                <th className="py-2.5 px-4 min-w-[120px]">Customer</th>
+                <th className="py-2.5 px-4 w-24 whitespace-nowrap">Inquiry</th>
+                <th className="py-2.5 px-4 min-w-[140px]">Style</th>
+                <th className="py-2.5 px-4 min-w-[100px] whitespace-nowrap">Intermediary</th>
+                <th className="py-2.5 px-4 w-20 whitespace-nowrap">Shipping</th>
+                <th className="py-2.5 px-4 min-w-[120px] whitespace-nowrap">Commission</th>
+                <th className="py-2.5 px-4 text-right w-20 whitespace-nowrap">Qty</th>
+                <th className="py-2.5 px-4 text-right min-w-[90px] whitespace-nowrap">Amount</th>
+                <th className="py-2.5 px-4 text-right w-20 whitespace-nowrap">Profit %</th>
+                <th className="py-2.5 px-4 min-w-[140px] whitespace-nowrap">Status</th>
+                <th className="py-2.5 px-4 w-24 whitespace-nowrap">Created</th>
+                <th className="py-2.5 px-4 text-right w-24 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -273,8 +275,8 @@ export function QuotationsPage() {
                   }
                 }
                 return (
-                  <tr key={q.id} className="border-b border-gray-100 last:border-0">
-                    <td className="py-2 px-4 font-medium text-gray-900">
+                  <tr key={q.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
+                    <td className="py-2.5 px-4 font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={q.quotation_code}>
                       <Link
                         to={`/app/quotations/${q.id}`}
                         className="text-indigo-600 hover:underline"
@@ -282,45 +284,62 @@ export function QuotationsPage() {
                         {q.quotation_code}
                       </Link>
                     </td>
-                    <td className="py-2 px-4 text-gray-700">{customerName(q.customer_id)}</td>
-                    <td className="py-2 px-4 text-gray-700">{inquiryCode(q.inquiry_id)}</td>
-                    <td className="py-2 px-4">
-                      <div className="flex items-center gap-2">
+                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={customerName(q.customer_id)}>
+                      {customerName(q.customer_id)}
+                    </td>
+                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={inquiryCode(q.inquiry_id)}>
+                      {inquiryCode(q.inquiry_id)}
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <div className="flex items-center gap-2 min-w-0">
                         {q.style_image_url ? (
                           <img
                             src={q.style_image_url}
                             alt={q.style_name ?? q.style_ref ?? "Style"}
-                            className="h-8 w-8 rounded object-cover border border-gray-200"
+                            className="h-8 w-8 shrink-0 rounded object-cover border border-gray-200"
                           />
                         ) : (
-                          <div className="h-8 w-8 rounded bg-gray-100 border border-gray-200" />
+                          <div className="h-8 w-8 shrink-0 rounded bg-gray-100 border border-gray-200" />
                         )}
-                        <span className="text-gray-700">
+                        <span className="text-gray-700 truncate block min-w-0" title={q.style_name ?? q.style_ref ?? undefined}>
                           {q.style_name ?? q.style_ref ?? "—"}
                         </span>
                       </div>
                     </td>
-                    <td className="py-2 px-4 text-gray-700">{q.intermediary_name ?? "—"}</td>
-                    <td className="py-2 px-4 text-gray-700">{q.shipping_term ?? "—"}</td>
-                    <td className="py-2 px-4 text-gray-700">
+                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={q.intermediary_name ?? undefined}>
+                      {q.intermediary_name ?? "—"}
+                    </td>
+                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={q.shipping_term ?? undefined}>
+                      {q.shipping_term ?? "—"}
+                    </td>
+                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={q.commission_mode || q.commission_type || q.commission_value ? `${q.commission_mode ?? "-"} / ${q.commission_type ?? "-"} / ${q.commission_value ?? "-"}` : undefined}>
                       {q.commission_mode || q.commission_type || q.commission_value
                         ? `${q.commission_mode ?? "-"} / ${q.commission_type ?? "-"} / ${q.commission_value ?? "-"}`
                         : "—"}
                     </td>
-                    <td className="py-2 px-4 text-right text-gray-700">
+                    <td className="py-2.5 px-4 text-right text-gray-700 whitespace-nowrap">
                       {qty != null ? qty.toLocaleString() : "—"}
                     </td>
-                    <td className="py-2 px-4 text-right text-gray-700">
+                    <td className="py-2.5 px-4 text-right text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={`${formatAmount(q.total_amount)} ${q.currency ?? ""}`.trim()}>
                       {formatAmount(q.total_amount)} {q.currency ?? ""}
                     </td>
-                    <td className="py-2 px-4 text-right text-gray-700">
+                    <td className="py-2.5 px-4 text-right text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={profitPct ?? undefined}>
                       {profitPct ?? "—"}
                     </td>
-                    <td className="py-2 px-4 text-gray-700"><QuotationStatusBadge status={q.status} /></td>
-                    <td className="py-2 px-4 text-gray-700">
+                    <td className="py-2.5 px-4 text-gray-700 overflow-hidden text-ellipsis" title={[q.status, q.is_converted_to_order ? "Converted to order" : null].filter(Boolean).join(" · ")}>
+                      <div className="flex items-center gap-1.5 flex-wrap whitespace-nowrap min-w-0">
+                        <QuotationStatusBadge status={q.status} />
+                        {q.is_converted_to_order && (
+                          <span className="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                            Converted to order
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={new Date(q.created_at).toLocaleDateString()}>
                       {new Date(q.created_at).toLocaleDateString()}
                     </td>
-                    <td className="py-2 px-4 text-right whitespace-nowrap">
+                    <td className="py-2.5 px-4 text-right whitespace-nowrap">
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
@@ -402,23 +421,29 @@ export function QuotationsPage() {
                             >
                               Delete
                             </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                setOpenActionsId(null);
-                                try {
-                                  setError("");
-                                  await api.convertQuotationToOrder(q.id);
-                                  alert("Order created from quotation.");
-                                  await load();
-                                } catch (e) {
-                                  setError(e instanceof Error ? e.message : "Conversion failed");
-                                }
-                              }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            >
-                              Convert to order
-                            </button>
+                            {q.is_converted_to_order ? (
+                              <div className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-400">
+                                Already converted
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setOpenActionsId(null);
+                                  try {
+                                    setError("");
+                                    const order = await api.convertQuotationToOrder(q.id);
+                                    alert(`Order ${order.order_code} created from quotation.`);
+                                    await load();
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : "Conversion failed");
+                                  }
+                                }}
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                Convert to order
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

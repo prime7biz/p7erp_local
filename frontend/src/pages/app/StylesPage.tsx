@@ -7,6 +7,7 @@ export function StylesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [form, setForm] = useState<StyleCreate>({
     style_code: "",
     name: "",
@@ -108,52 +109,82 @@ export function StylesPage() {
         </form>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
         {loading ? (
           <div className="p-10 text-center text-gray-500">Loading styles…</div>
         ) : items.length === 0 ? (
           <div className="p-10 text-center text-gray-500">No styles yet.</div>
         ) : (
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
-              <tr>
-                <th className="px-4 py-2">Style code</th>
-                <th className="px-4 py-2">Name</th>
-                <th className="px-4 py-2">Image</th>
-                <th className="px-4 py-2">Department</th>
-                <th className="px-4 py-2">Season</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((s) => (
-                <tr key={s.id} className="border-b border-gray-100 last:border-0">
-                  <td className="px-4 py-2 font-medium text-gray-900">{s.style_code}</td>
-                  <td className="px-4 py-2 text-gray-700">{s.name}</td>
-                  <td className="px-4 py-2 text-gray-700">
-                    {s.style_image_url ? (
-                      <img
-                        src={s.style_image_url}
-                        alt={s.name}
-                        className="h-8 w-8 rounded object-cover border border-gray-200"
-                      />
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-gray-700">{s.department ?? "—"}</td>
-                  <td className="px-4 py-2 text-gray-700">{s.season ?? "—"}</td>
-                  <td className="px-4 py-2 text-gray-700">{s.status}</td>
-                  <td className="px-4 py-2 text-right">
-                    <Link to={`/app/merchandising/styles/${s.id}`} className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50">
-                      Open
-                    </Link>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="min-w-[900px] w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+                <tr>
+                  <th className="px-4 py-2 whitespace-nowrap">Style code</th>
+                  <th className="px-4 py-2 min-w-[120px]">Name</th>
+                  <th className="px-4 py-2 w-16">Image</th>
+                  <th className="px-4 py-2 min-w-[100px]">Department</th>
+                  <th className="px-4 py-2 min-w-[80px]">Season</th>
+                  <th className="px-4 py-2 whitespace-nowrap">Status</th>
+                  <th className="px-4 py-2 text-right w-24 whitespace-nowrap">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {items.map((s) => (
+                  <tr key={s.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
+                    <td className="px-4 py-2 font-medium text-gray-900 whitespace-nowrap">
+                      <Link to={`/app/merchandising/styles/${s.id}`} className="text-indigo-600 hover:underline">
+                        {s.style_code}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2 text-gray-700">{s.name}</td>
+                    <td className="px-4 py-2 text-gray-700">
+                      {s.style_image_url ? (
+                        <img
+                          src={s.style_image_url}
+                          alt={s.name}
+                          className="h-8 w-8 rounded object-cover border border-gray-200"
+                        />
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-gray-700">{s.department ?? "—"}</td>
+                    <td className="px-4 py-2 text-gray-700">{s.season ?? "—"}</td>
+                    <td className="px-4 py-2 text-gray-700">{s.status}</td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      <div className="relative inline-block text-left">
+                        <button
+                          type="button"
+                          onClick={() => setOpenActionsId((prev) => (prev === s.id ? null : s.id))}
+                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          Actions
+                        </button>
+                        {openActionsId === s.id && (
+                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                            <Link
+                              to={`/app/merchandising/styles/${s.id}`}
+                              onClick={() => setOpenActionsId(null)}
+                              className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              View
+                            </Link>
+                            <Link
+                              to={`/app/merchandising/styles/${s.id}/print`}
+                              onClick={() => setOpenActionsId(null)}
+                              className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Print
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

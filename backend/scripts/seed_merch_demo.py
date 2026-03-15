@@ -1,9 +1,29 @@
 """
-Seed demo merchandising data (customers, inquiries, quotations, orders, styles, BOM, follow-ups)
-for the Lakhsma tenant. Safe to run multiple times (idempotent by codes).
+Seed demo merchandising data for the Lakhsma tenant (company_code LAKHSMA4821).
+Safe to run multiple times (idempotent: skips or ensures by code/key).
 
-Run from backend dir (inside Docker backend container):
-  python scripts/seed_merch_demo.py
+RUN ORDER (run from backend dir, e.g. inside Docker backend container):
+  1. python scripts/seed_lakhsma.py   # Creates tenant + admin user (required first)
+  2. python scripts/seed_costing_demo.py  # Optional but recommended: items, currencies for quotation costing
+  3. python scripts/seed_merch_demo.py    # This script
+
+TABLES / ENTITIES SEEDED (merchandising and related):
+  - customers (multiple: CUST-001, CUST-002, CUST-003)
+  - inquiries (multiple: INQ-0001, INQ-0002, INQ-0003)
+  - inquiry_items (line items for inquiries)
+  - inquiry_events (status/workflow events for inquiries)
+  - quotations (QT-0001, QT-0002) with costing:
+    - quotation_materials, quotation_manufacturing, quotation_other_costs, quotation_size_ratios
+  - orders (ORD-0001, ORD-0002) linked to quotations
+  - garment_styles (STYLE-TEES-001, STYLE-HOOD-001)
+  - style_components, style_colorways, style_size_scales (per style)
+  - boms + bom_items (per style)
+  - consumption_plans + consumption_plan_items (per order)
+  - order_followups (legacy follow-up tasks)
+  - followup_action_templates (TNA templates)
+  - order_followup_actions (TNA action lines per order)
+  - followup_action_comments, followup_action_rejection_logs (when applicable)
+  - order_amendments
 """
 import asyncio
 import sys
@@ -21,13 +41,19 @@ from app.database import AsyncSessionLocal  # type: ignore  # noqa: E402
 from app.models import (  # type: ignore  # noqa: E402
     Customer,
     Tenant,
+    User,
     Inquiry,
+    InquiryItem,
     Quotation,
     Order,
     GarmentStyle,
     Bom,
     BomItem,
     Followup,
+    FollowupActionTemplate,
+    OrderFollowupAction,
+    FollowupActionComment,
+    FollowupActionRejectionLog,
     StyleComponent,
     StyleColorway,
     StyleSizeScale,
@@ -35,7 +61,7 @@ from app.models import (  # type: ignore  # noqa: E402
     ConsumptionPlanItem,
     OrderAmendment,
     InquiryEvent,
-    # Inventory / costing models
+    # Costing models (for quotation costing lines)
     Item,
     QuotationMaterial,
     QuotationManufacturing,
@@ -148,6 +174,47 @@ async def seed_merch(db) -> None:
 
     inq1 = inquiries[0]
 
+    # Inquiry line items (inquiry_items)
+    existing_inq_items = await db.execute(
+        select(InquiryItem).where(InquiryItem.tenant_id == tenant.id)
+    )
+    if not existing_inq_items.scalars().first():
+        db.add_all(
+            [
+                InquiryItem(
+                    tenant_id=tenant.id,
+                    inquiry_id=inq1.id,
+                    item_name="Crew neck tee – main body",
+                    description="160 GSM cotton jersey",
+                    quantity=inq1.quantity,
+                    sort_order=1,
+                ),
+                InquiryItem(
+                    tenant_id=tenant.id,
+                    inquiry_id=inq1.id,
+                    item_name="Neck rib",
+                    description="1x1 rib trim",
+                    quantity=inq1.quantity,
+                    sort_order=2,
+                ),
+            ]
+        )
+        if len(inquiries) > 1:
+            inq2_ref = inquiries[1]
+            db.add_all(
+                [
+                    InquiryItem(
+                        tenant_id=tenant.id,
+                        inquiry_id=inq2_ref.id,
+                        item_name="Hoodie body",
+                        description="Brushed fleece",
+                        quantity=inq2_ref.quantity,
+                        sort_order=1,
+                    ),
+                ]
+            )
+        await db.flush()
+
     # Quotations
     existing_q = await db.execute(
         select(Quotation).where(Quotation.tenant_id == tenant.id)
@@ -239,8 +306,9 @@ async def seed_merch(db) -> None:
         orders = [o1, o2]
 
     order = orders[0]
+    order2 = orders[1] if len(orders) > 1 else None
 
-    # Styles and BOM
+    # Styles and BOM (two styles: tee and hoodie)
     existing_styles = await db.execute(
         select(GarmentStyle).where(GarmentStyle.tenant_id == tenant.id)
     )
@@ -256,9 +324,38 @@ async def seed_merch(db) -> None:
             status="ACTIVE",
             notes="Reference style for demo data.",
         )
-        db.add(style)
+        style_hood = GarmentStyle(
+            tenant_id=tenant.id,
+            style_code="STYLE-HOOD-001",
+            name="Brushed Fleece Hoodie",
+            buyer_customer_id=cust2.id,
+            season="AW26",
+            department="Fleece",
+            status="ACTIVE",
+            notes="Hoodie style for demo.",
+        )
+        db.add_all([style, style_hood])
         await db.flush()
-        styles = [style]
+        styles = [style, style_hood]
+    else:
+        style_hood = next(
+            (s for s in styles if s.style_code == "STYLE-HOOD-001"),
+            styles[0] if styles else None,
+        )
+        if not any(s.style_code == "STYLE-HOOD-001" for s in styles):
+            style_hood = GarmentStyle(
+                tenant_id=tenant.id,
+                style_code="STYLE-HOOD-001",
+                name="Brushed Fleece Hoodie",
+                buyer_customer_id=cust2.id,
+                season="AW26",
+                department="Fleece",
+                status="ACTIVE",
+                notes="Hoodie style for demo.",
+            )
+            db.add(style_hood)
+            await db.flush()
+            styles = list(styles) + [style_hood]
 
     style = styles[0]
 
@@ -297,10 +394,52 @@ async def seed_merch(db) -> None:
             )
         )
 
+    # Second style (hoodie) components, colorways, size scale
+    if style_hood and style_hood.id != style.id:
+        existing_comp_hood = await db.execute(
+            select(StyleComponent).where(
+                StyleComponent.tenant_id == tenant.id, StyleComponent.style_id == style_hood.id
+            )
+        )
+        if not existing_comp_hood.scalars().first():
+            db.add_all(
+                [
+                    StyleComponent(tenant_id=tenant.id, style_id=style_hood.id, component_name="Body", sequence_no=1),
+                    StyleComponent(tenant_id=tenant.id, style_id=style_hood.id, component_name="Hood", sequence_no=2),
+                ]
+            )
+        existing_cw_hood = await db.execute(
+            select(StyleColorway).where(
+                StyleColorway.tenant_id == tenant.id, StyleColorway.style_id == style_hood.id
+            )
+        )
+        if not existing_cw_hood.scalars().first():
+            db.add_all(
+                [
+                    StyleColorway(tenant_id=tenant.id, style_id=style_hood.id, color_name="Navy", color_code="#000080"),
+                    StyleColorway(tenant_id=tenant.id, style_id=style_hood.id, color_name="Grey", color_code="#808080"),
+                ]
+            )
+        existing_scale_hood = await db.execute(
+            select(StyleSizeScale).where(
+                StyleSizeScale.tenant_id == tenant.id, StyleSizeScale.style_id == style_hood.id
+            )
+        )
+        if not existing_scale_hood.scalars().first():
+            db.add(
+                StyleSizeScale(
+                    tenant_id=tenant.id,
+                    style_id=style_hood.id,
+                    scale_name="Core",
+                    sizes_csv="S,M,L,XL,XXL",
+                    notes="Hoodie size scale",
+                )
+            )
+
     existing_bom = await db.execute(
         select(Bom).where(Bom.tenant_id == tenant.id, Bom.style_id == style.id)
     )
-    bom = existing_bom.scalar_one_or_none()
+    bom = existing_bom.scalars().first()
     if not bom:
         bom = Bom(
             tenant_id=tenant.id,
@@ -333,6 +472,47 @@ async def seed_merch(db) -> None:
             wastage_pct="3",
         )
         db.add_all([fabric, trim])
+
+    # Second BOM (hoodie style) if we have a second style
+    if style_hood and style_hood.id != style.id:
+        existing_bom_hood = await db.execute(
+            select(Bom).where(Bom.tenant_id == tenant.id, Bom.style_id == style_hood.id)
+        )
+        bom_hood = existing_bom_hood.scalars().first()
+        if not bom_hood:
+            bom_hood = Bom(
+                tenant_id=tenant.id,
+                style_id=style_hood.id,
+                version_no=1,
+                status="DRAFT",
+                notes="Demo BOM for hoodie.",
+            )
+            db.add(bom_hood)
+            await db.flush()
+            db.add_all(
+                [
+                    BomItem(
+                        tenant_id=tenant.id,
+                        bom_id=bom_hood.id,
+                        category="FABRIC",
+                        item_code="FAB-FLEECE-280",
+                        description="280 GSM brushed fleece",
+                        uom="KG",
+                        base_consumption="0.45",
+                        wastage_pct="6",
+                    ),
+                    BomItem(
+                        tenant_id=tenant.id,
+                        bom_id=bom_hood.id,
+                        category="TRIM",
+                        item_code="TRIM-DRAWSTRING",
+                        description="Hood drawstring",
+                        uom="M",
+                        base_consumption="0.15",
+                        wastage_pct="5",
+                    ),
+                ]
+            )
 
     # --- Costing details for quotation QT-0001 (basic tee) ---
     # We populate quotation_materials, quotation_manufacturing,
@@ -510,6 +690,165 @@ async def seed_merch(db) -> None:
         )
         db.add(follow)
 
+    # TNA: follow-up action templates (reusable)
+    existing_tpl = await db.execute(
+        select(FollowupActionTemplate).where(FollowupActionTemplate.tenant_id == tenant.id)
+    )
+    templates = existing_tpl.scalars().all()
+    if not templates:
+        tpl_pre = FollowupActionTemplate(
+            tenant_id=tenant.id,
+            code="PRE-LAB-DIP",
+            name="Lab dip submission",
+            phase="Pre-production",
+            action_group="Sample",
+            sequence_no=1,
+            default_days_before_delivery=90,
+            is_mandatory=True,
+            is_active=True,
+        )
+        tpl_cut = FollowupActionTemplate(
+            tenant_id=tenant.id,
+            code="CUT-APPROVAL",
+            name="Cutting approval",
+            phase="Production",
+            action_group="Cutting",
+            sequence_no=2,
+            default_days_before_delivery=45,
+            is_mandatory=True,
+            is_active=True,
+        )
+        tpl_ship = FollowupActionTemplate(
+            tenant_id=tenant.id,
+            code="SHIP-DOCS",
+            name="Shipping documents",
+            phase="Shipment",
+            action_group="Commercial",
+            sequence_no=3,
+            default_days_before_delivery=-7,
+            is_mandatory=False,
+            is_active=True,
+        )
+        db.add_all([tpl_pre, tpl_cut, tpl_ship])
+        await db.flush()
+        templates = [tpl_pre, tpl_cut, tpl_ship]
+
+    # TNA: order follow-up actions (per order)
+    existing_actions_o1 = await db.execute(
+        select(OrderFollowupAction).where(
+            OrderFollowupAction.tenant_id == tenant.id, OrderFollowupAction.order_id == order.id
+        )
+    )
+    actions_o1 = existing_actions_o1.scalars().all()
+    tpl_pre = next((t for t in templates if t.code == "PRE-LAB-DIP"), templates[0] if templates else None)
+    tpl_cut = next((t for t in templates if t.code == "CUT-APPROVAL"), None)
+    if not actions_o1:
+        planned = order.delivery_date or date.today()
+        act1 = OrderFollowupAction(
+            tenant_id=tenant.id,
+            order_id=order.id,
+            template_id=tpl_pre.id if tpl_pre else None,
+            sequence_no=1,
+            phase="Pre-production",
+            action_group="Sample",
+            action_type="lab_dip",
+            title="Lab dip submission – ORD-0001",
+            description="Submit lab dips for body and rib",
+            is_template_generated=bool(tpl_pre),
+            is_mandatory=True,
+            is_active=True,
+            planned_date=planned,
+            status="pending",
+        )
+        act2 = OrderFollowupAction(
+            tenant_id=tenant.id,
+            order_id=order.id,
+            template_id=tpl_cut.id if tpl_cut else None,
+            sequence_no=2,
+            phase="Production",
+            action_group="Cutting",
+            action_type="cutting_approval",
+            title="Cutting approval – ORD-0001",
+            is_template_generated=bool(tpl_cut),
+            is_mandatory=True,
+            is_active=True,
+            planned_date=planned,
+            status="completed",
+            approval_status="approved",
+        )
+        db.add_all([act1, act2])
+        await db.flush()
+        actions_o1 = [act1, act2]
+    first_action = actions_o1[0] if actions_o1 else None
+
+    if order2:
+        existing_actions_o2 = await db.execute(
+            select(OrderFollowupAction).where(
+                OrderFollowupAction.tenant_id == tenant.id, OrderFollowupAction.order_id == order2.id
+            )
+        )
+        if not existing_actions_o2.scalars().first():
+            planned2 = order2.delivery_date or date.today()
+            db.add(
+                OrderFollowupAction(
+                    tenant_id=tenant.id,
+                    order_id=order2.id,
+                    template_id=tpl_pre.id if tpl_pre else None,
+                    sequence_no=1,
+                    phase="Pre-production",
+                    action_group="Sample",
+                    action_type="lab_dip",
+                    title="Lab dip submission – ORD-0002",
+                    is_template_generated=bool(tpl_pre),
+                    is_mandatory=True,
+                    is_active=True,
+                    planned_date=planned2,
+                    status="pending",
+                )
+            )
+            await db.flush()
+
+    # TNA: comments and rejection log (require a tenant user from seed_lakhsma)
+    tenant_user_result = await db.execute(
+        select(User).where(User.tenant_id == tenant.id).limit(1)
+    )
+    tenant_user = tenant_user_result.scalar_one_or_none()
+    if tenant_user and first_action:
+        existing_comment = await db.execute(
+            select(FollowupActionComment).where(
+                FollowupActionComment.tenant_id == tenant.id,
+                FollowupActionComment.action_id == first_action.id,
+            )
+        )
+        if not existing_comment.scalars().first():
+            db.add(
+                FollowupActionComment(
+                    tenant_id=tenant.id,
+                    action_id=first_action.id,
+                    user_id=tenant_user.id,
+                    comment_text="Demo comment: please send lab dips by next week.",
+                )
+            )
+        # Rejection log on second action (if we have one) to show rejection/resubmission history
+        if len(actions_o1) > 1:
+            act2 = actions_o1[1]
+            existing_rej = await db.execute(
+                select(FollowupActionRejectionLog).where(
+                    FollowupActionRejectionLog.tenant_id == tenant.id,
+                    FollowupActionRejectionLog.action_id == act2.id,
+                )
+            )
+            if not existing_rej.scalars().first():
+                db.add(
+                    FollowupActionRejectionLog(
+                        tenant_id=tenant.id,
+                        action_id=act2.id,
+                        rejection_reason="Initial submission had wrong shade; resubmitted.",
+                        resubmission_date=date.today(),
+                        created_by_id=tenant_user.id,
+                    )
+                )
+
     # Consumption plan + items
     existing_plan = await db.execute(
         select(ConsumptionPlan).where(ConsumptionPlan.tenant_id == tenant.id, ConsumptionPlan.order_id == order.id)
@@ -529,6 +868,35 @@ async def seed_merch(db) -> None:
                 ConsumptionPlanItem(tenant_id=tenant.id, plan_id=plan.id, item_code="TRIM-RIB", required_qty="500", uom="Yard"),
             ]
         )
+
+    # Consumption plan for second order (hoodie)
+    if order2:
+        existing_plan2 = await db.execute(
+            select(ConsumptionPlan).where(
+                ConsumptionPlan.tenant_id == tenant.id, ConsumptionPlan.order_id == order2.id
+            )
+        )
+        plan2 = existing_plan2.scalar_one_or_none()
+        if not plan2:
+            plan2 = ConsumptionPlan(tenant_id=tenant.id, order_id=order2.id, status="PLANNED")
+            db.add(plan2)
+            await db.flush()
+        existing_plan2_items = await db.execute(
+            select(ConsumptionPlanItem).where(
+                ConsumptionPlanItem.tenant_id == tenant.id, ConsumptionPlanItem.plan_id == plan2.id
+            )
+        )
+        if not existing_plan2_items.scalars().first():
+            db.add_all(
+                [
+                    ConsumptionPlanItem(
+                        tenant_id=tenant.id, plan_id=plan2.id, item_code="FAB-FLEECE-280", required_qty="2250", uom="KG"
+                    ),
+                    ConsumptionPlanItem(
+                        tenant_id=tenant.id, plan_id=plan2.id, item_code="TRIM-DRAWSTRING", required_qty="750", uom="M"
+                    ),
+                ]
+            )
 
     # Order amendment snapshot
     existing_amendment = await db.execute(

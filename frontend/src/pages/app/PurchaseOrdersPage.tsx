@@ -5,6 +5,7 @@ import {
   type PurchaseOrderCreate,
   type PurchaseOrderItemCreate,
   type PurchaseOrderResponse,
+  type VendorResponse,
   type WarehouseResponse,
 } from "@/api/client";
 
@@ -12,10 +13,16 @@ export function PurchaseOrdersPage() {
   const [orders, setOrders] = useState<PurchaseOrderResponse[]>([]);
   const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
+  const [vendors, setVendors] = useState<VendorResponse[]>([]);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [form, setForm] = useState<PurchaseOrderCreate>({
     supplier_name: "",
+    vendor_id: null,
+    currency: "USD",
+    exchange_rate_to_base: 1,
+    base_total_amount: null,
+    btb_lc_id: null,
     status: "DRAFT",
     items: [],
   });
@@ -25,14 +32,16 @@ export function PurchaseOrdersPage() {
 
   const load = async () => {
     try {
-      const [po, itm, wh] = await Promise.all([
+      const [po, itm, wh, vnd] = await Promise.all([
         api.listPurchaseOrders(),
         api.listInventoryItems(),
         api.listWarehouses(),
+        api.listVendors({ is_active: true }),
       ]);
       setOrders(po);
       setItems(itm);
       setWarehouses(wh);
+      setVendors(vnd);
       const firstItem = itm[0];
       const firstWarehouse = wh[0];
       if (!line.item_id && firstItem) setLine((p) => ({ ...p, item_id: firstItem.id }));
@@ -50,6 +59,14 @@ export function PurchaseOrdersPage() {
   }, []);
 
   const filteredOrders = statusFilter ? orders.filter((o) => (o.status || "").toUpperCase() === statusFilter) : orders;
+  const selectedVendor = useMemo(
+    () => vendors.find((v) => v.id === (form.vendor_id ?? -1)) ?? null,
+    [vendors, form.vendor_id]
+  );
+  const lineTotal = useMemo(
+    () => form.items.reduce((acc, ln) => acc + Number(ln.quantity || 0) * Number(ln.unit_price || 0), 0),
+    [form.items]
+  );
 
   return (
     <div className="space-y-6">
@@ -72,21 +89,97 @@ export function PurchaseOrdersPage() {
       <form
         onSubmit={async (e) => {
           e.preventDefault();
+          setError("");
+          if (!(form.vendor_id || (form.supplier_name || "").trim())) {
+            setError("Select a vendor or enter supplier name");
+            return;
+          }
           if (form.items.length === 0) {
             setError("Add at least one item line");
             return;
           }
-          await api.createPurchaseOrder(form);
-          setForm({ supplier_name: "", status: "DRAFT", items: [] });
+          const fx = Number(form.exchange_rate_to_base ?? 1);
+          const normalizedFx = Number.isFinite(fx) && fx > 0 ? fx : 1;
+          const payload: PurchaseOrderCreate = {
+            ...form,
+            supplier_name: (form.supplier_name || "").trim(),
+            exchange_rate_to_base: normalizedFx,
+            base_total_amount: Number((lineTotal * normalizedFx).toFixed(2)),
+          };
+          await api.createPurchaseOrder(payload);
+          setForm({
+            supplier_name: "",
+            vendor_id: null,
+            currency: "USD",
+            exchange_rate_to_base: 1,
+            base_total_amount: null,
+            btb_lc_id: null,
+            status: "DRAFT",
+            items: [],
+          });
           await load();
         }}
         className="rounded-xl border border-gray-200 bg-white p-4 space-y-3"
       >
         <h2 className="text-sm font-semibold text-gray-900">New Purchase Order</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Supplier name **" value={form.supplier_name} onChange={(e) => setForm((p) => ({ ...p, supplier_name: e.target.value }))} required />
+          <select
+            className="rounded border px-3 py-2 text-sm"
+            value={form.vendor_id ?? ""}
+            onChange={(e) => {
+              const nextId = e.target.value ? Number(e.target.value) : null;
+              const nextVendor = vendors.find((v) => v.id === nextId) ?? null;
+              setForm((p) => ({
+                ...p,
+                vendor_id: nextId,
+                supplier_name: nextVendor?.name || p.supplier_name || "",
+                currency: nextVendor?.default_currency || p.currency || "USD",
+              }));
+            }}
+          >
+            <option value="">Select vendor (optional)</option>
+            {vendors.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.vendor_code} - {v.name}
+              </option>
+            ))}
+          </select>
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="Supplier name **"
+            value={form.supplier_name ?? ""}
+            onChange={(e) => setForm((p) => ({ ...p, supplier_name: e.target.value }))}
+          />
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="Currency (USD/BDT)"
+            value={form.currency ?? ""}
+            onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value.toUpperCase() }))}
+          />
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="FX rate to base"
+            type="number"
+            min="0"
+            step="0.000001"
+            value={form.exchange_rate_to_base ?? 1}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, exchange_rate_to_base: e.target.value ? Number(e.target.value) : 1 }))
+            }
+          />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
           <input className="rounded border px-3 py-2 text-sm" type="date" value={form.order_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, order_date: e.target.value }))} />
           <input className="rounded border px-3 py-2 text-sm" type="date" value={form.expected_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, expected_date: e.target.value }))} />
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            type="number"
+            min="0"
+            step="1"
+            placeholder="BTB LC ID (optional)"
+            value={form.btb_lc_id ?? ""}
+            onChange={(e) => setForm((p) => ({ ...p, btb_lc_id: e.target.value ? Number(e.target.value) : null }))}
+          />
           <input className="rounded border px-3 py-2 text-sm" placeholder="Notes" value={form.notes ?? ""} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
@@ -107,6 +200,14 @@ export function PurchaseOrdersPage() {
             {form.items.map((ln, i) => (
               <div key={`${ln.item_id}-${i}`}>Line {i + 1}: {itemName.get(ln.item_id)} · Qty {ln.quantity}</div>
             ))}
+            <div className="mt-1 font-medium text-gray-800">
+              Est. base total: {(lineTotal * Number(form.exchange_rate_to_base ?? 1)).toFixed(2)}
+            </div>
+          </div>
+        )}
+        {selectedVendor?.default_currency && (
+          <div className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded px-2 py-1">
+            Vendor default currency applied: {selectedVendor.default_currency}
           </div>
         )}
         <button className="rounded bg-primary px-3 py-2 text-sm font-medium text-white">Create Purchase Order</button>
@@ -118,6 +219,8 @@ export function PurchaseOrdersPage() {
             <tr>
               <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">PO Code</th>
               <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Supplier</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Vendor</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Currency</th>
               <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Status</th>
               <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Items</th>
               <th className="px-3 py-2 text-right text-xs font-medium uppercase text-gray-500">Actions</th>
@@ -128,6 +231,8 @@ export function PurchaseOrdersPage() {
               <tr key={row.id}>
                 <td className="px-3 py-2 text-sm font-medium">{row.po_code}</td>
                 <td className="px-3 py-2 text-sm">{row.supplier_name}</td>
+                <td className="px-3 py-2 text-sm">{row.vendor_id ? `#${row.vendor_id}` : "—"}</td>
+                <td className="px-3 py-2 text-sm">{row.currency || "—"}</td>
                 <td className="px-3 py-2 text-sm">{row.status}</td>
                 <td className="px-3 py-2 text-xs text-gray-600">
                   {row.items.map((ln) => `${itemName.get(ln.item_id) || `#${ln.item_id}`} (${ln.quantity})`).join(", ")}

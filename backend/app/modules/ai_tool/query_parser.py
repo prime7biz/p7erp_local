@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from typing import Literal
 
 
-SearchDomain = Literal["orders", "approvals", "inventory", "production", "vendors", "finance", "unknown"]
+SearchDomain = Literal["orders", "approvals", "inventory", "production", "vendors", "finance", "bom", "purchase", "unknown"]
 
 
 @dataclass(slots=True)
@@ -96,6 +96,10 @@ def parse_search_query(prompt: str) -> SearchQuery:
         domain = "vendors"
     if any(x in text for x in {"finance", "cash", "reconciliation"}):
         domain = "finance" if domain == "unknown" else domain
+    if any(x in text for x in {"bom", "bill of material", "similar style", "suggest item", "bom line"}):
+        domain = "bom" if domain == "unknown" else domain
+    if any(x in text for x in {"material requirement", "shortage", "order shortage", "create po from shortage", "suggest vendor", "vendor for item"}):
+        domain = "purchase" if domain == "unknown" else domain
 
     delayed_only = any(x in text for x in {"delayed", "late", "overdue"})
     shortage_only = any(x in text for x in {"shortage", "low stock", "below stock", "stock out"})

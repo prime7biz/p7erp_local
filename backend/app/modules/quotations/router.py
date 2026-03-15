@@ -1,6 +1,6 @@
 from datetime import date, datetime, time
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,8 @@ from app.models import (
     CustomerIntermediary,
     GarmentStyle,
     Inquiry,
+  InquiryEvent,
+  Order,
     Quotation,
     QuotationManufacturing,
     QuotationMaterial,
@@ -51,7 +53,10 @@ async def _next_quotation_code(db: AsyncSession, tenant_id: int) -> str:
   )
 
 
-def _to_quotation_response(quotation: Quotation) -> QuotationResponse:
+def _to_quotation_response(
+  quotation: Quotation,
+  converted_order_id: int | None = None,
+) -> QuotationResponse:
   commission_value = (
     float(quotation.commission_value) if quotation.commission_value is not None else None
   )
@@ -80,12 +85,35 @@ def _to_quotation_response(quotation: Quotation) -> QuotationResponse:
     profit_percentage=quotation.profit_percentage,
     quoted_price=quotation.quoted_price,
     status=quotation.status,
+    is_converted_to_order=converted_order_id is not None,
+    converted_order_id=converted_order_id,
     version_no=quotation.version_no,
     valid_until=quotation.valid_until,
     notes=quotation.notes,
     created_at=quotation.created_at.isoformat(),
     updated_at=quotation.updated_at.isoformat(),
   )
+
+
+async def _get_converted_order_map(
+  db: AsyncSession, *, tenant_id: int, quotation_ids: list[int]
+) -> dict[int, int]:
+  if not quotation_ids:
+    return {}
+  result = await db.execute(
+    select(Order.id, Order.quotation_id)
+    .where(
+      Order.tenant_id == tenant_id,
+      Order.quotation_id.in_(quotation_ids),
+    )
+    .order_by(Order.created_at.desc(), Order.id.desc())
+  )
+  mapping: dict[int, int] = {}
+  for order_id, quotation_id in result.all():
+    if quotation_id is None:
+      continue
+    mapping.setdefault(quotation_id, order_id)
+  return mapping
 
 
 async def _validate_style(db: AsyncSession, *, tenant_id: int, style_id: int) -> None:
@@ -115,7 +143,7 @@ async def list_quotations(
   department: str | None = Query(default=None, description="Reserved for future department filter"),
   created_from: date | None = Query(default=None, description="Created at from (inclusive)"),
   created_to: date | None = Query(default=None, description="Created at to (inclusive)"),
-  limit: int = Query(default=50, ge=1, le=200),
+  limit: int = Query(default=50, ge=1, le=500),
   offset: int = Query(default=0, ge=0),
   tenant: Tenant = Depends(require_tenant),
   user: User = Depends(get_current_user),
@@ -152,7 +180,10 @@ async def list_quotations(
 
   result = await db.execute(stmt)
   rows = result.scalars().all()
-  return [_to_quotation_response(r) for r in rows]
+  converted_map = await _get_converted_order_map(
+    db, tenant_id=tenant.id, quotation_ids=[r.id for r in rows]
+  )
+  return [_to_quotation_response(r, converted_map.get(r.id)) for r in rows]
 
 
 class InquiryToQuotationBody(BaseModel):
@@ -283,6 +314,7 @@ async def revise_quotation(
 )
 async def create_quotation_from_inquiry(
   inquiry_id: int,
+  response: Response,
   body: InquiryToQuotationBody | None = None,
   tenant: Tenant = Depends(require_tenant),
   user: User = Depends(get_current_user),
@@ -296,13 +328,33 @@ async def create_quotation_from_inquiry(
   if not inquiry or inquiry.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
 
+  existing = await db.execute(
+    select(Quotation)
+    .where(
+      Quotation.tenant_id == tenant.id,
+      Quotation.inquiry_id == inquiry.id,
+    )
+    .order_by(Quotation.created_at.desc(), Quotation.id.desc())
+    .limit(1)
+  )
+  existing_quotation = existing.scalar_one_or_none()
+  if existing_quotation is not None:
+    response.status_code = status.HTTP_200_OK
+    converted_map = await _get_converted_order_map(
+      db, tenant_id=tenant.id, quotation_ids=[existing_quotation.id]
+    )
+    return _to_quotation_response(existing_quotation, converted_map.get(existing_quotation.id))
+
   customer = await db.get(Customer, inquiry.customer_id)
   if not customer or customer.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Customer not found")
 
   profit_pct = (body.profit_percentage if body else 15.0) / 100.0
   # We treat target_price as a base and apply a margin to simulate quotation pricing
-  base_price = float(inquiry.target_price or 0) if inquiry.target_price is not None else 0.0
+  try:
+    base_price = float(inquiry.target_price or 0) if inquiry.target_price is not None else 0.0
+  except (TypeError, ValueError):
+    base_price = 0.0
   quoted_amount = base_price * (1.0 + profit_pct) if base_price > 0 else base_price
   tenant_default_mode = (
     tenant.default_commission_mode.value
@@ -332,6 +384,18 @@ async def create_quotation_from_inquiry(
     notes=inquiry.notes,
   )
   db.add(quotation)
+  old_status = inquiry.status
+  inquiry.status = "CONVERTED"
+  db.add(
+    InquiryEvent(
+      tenant_id=tenant.id,
+      inquiry_id=inquiry.id,
+      event_type="converted_to_quotation",
+      from_status=old_status,
+      to_status="CONVERTED",
+      notes=f"Converted to quotation {code}",
+    )
+  )
   await db.flush()
   await db.refresh(quotation)
 
@@ -511,6 +575,10 @@ async def get_quotation(
   manufacturing = [_manufacturing_to_line(r) for r in mfg_result.scalars().all()]
   other_costs = [_other_cost_to_line(r) for r in other_result.scalars().all()]
   size_ratios = [_size_ratio_to_line(r) for r in sr_result.scalars().all()]
+  converted_map = await _get_converted_order_map(
+    db, tenant_id=tenant.id, quotation_ids=[quotation.id]
+  )
+  converted_order_id = converted_map.get(quotation.id)
 
   return QuotationDetailResponse(
     id=quotation.id,
@@ -542,6 +610,8 @@ async def get_quotation(
     currency=quotation.currency,
     total_amount=quotation.total_amount,
     status=quotation.status,
+    is_converted_to_order=converted_order_id is not None,
+    converted_order_id=converted_order_id,
     version_no=quotation.version_no,
     valid_until=quotation.valid_until,
     size_ratio_enabled=quotation.size_ratio_enabled,

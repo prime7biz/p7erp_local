@@ -1,0 +1,195 @@
+"""Merch Critical Alert engine: seed definitions, run rules, upsert instances, scan log."""
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import (
+    AlertDefinition,
+    AlertInstance,
+    AlertRelatedEntity,
+    AlertScanLog,
+    Tenant,
+)
+from app.modules.merch.alert_rules import DEFAULT_DEFINITIONS, RULE_REGISTRY
+
+
+ACTIVE_STATUSES = ("new", "acknowledged", "in_progress", "waiting_on_buyer", "waiting_on_supplier", "snoozed", "escalated")
+
+
+async def ensure_definitions_for_tenant(db: AsyncSession, tenant_id: int) -> None:
+    """Ensure all default alert_definition rows exist for the tenant. Idempotent."""
+    existing = await db.execute(
+        select(AlertDefinition.rule_key).where(AlertDefinition.tenant_id == tenant_id)
+    )
+    have = {r[0] for r in existing.all()}
+    for defn in DEFAULT_DEFINITIONS:
+        if defn["rule_key"] in have:
+            continue
+        row = AlertDefinition(
+            tenant_id=tenant_id,
+            rule_key=defn["rule_key"],
+            name=defn["name"],
+            severity_default=defn["severity_default"],
+            entity_type=defn["entity_type"],
+            is_system=True,
+            is_enabled=True,
+        )
+        db.add(row)
+        have.add(defn["rule_key"])
+    await db.flush()
+
+
+async def run_rule(
+    db: AsyncSession,
+    tenant_id: int,
+    rule_key: str,
+    definition_id: int,
+    config: dict[str, Any] | None,
+) -> tuple[int, int]:
+    """Run one rule, upsert alert_instances. Returns (created_count, updated_count)."""
+    fn = RULE_REGISTRY.get(rule_key)
+    if not fn:
+        return 0, 0
+    raw_list = await fn(db, tenant_id, config)
+    created = updated = 0
+    for payload in raw_list:
+        natural_key = payload["natural_key"]
+        # Find existing open/snoozed instance
+        existing = await db.execute(
+            select(AlertInstance).where(
+                AlertInstance.tenant_id == tenant_id,
+                AlertInstance.natural_key == natural_key,
+                AlertInstance.status.in_(ACTIVE_STATUSES),
+            )
+        )
+        inst = existing.scalar_one_or_none()
+        if inst:
+            inst.title = payload["title"]
+            inst.description = payload.get("description")
+            inst.severity = payload.get("severity", "medium")
+            inst.reason_text = payload.get("reason_text")
+            inst.recommended_action = payload.get("recommended_action")
+            inst.updated_at = datetime.utcnow()
+            await db.flush()
+            updated += 1
+        else:
+            # Check if resolved/closed with same key – reopen
+            closed = await db.execute(
+                select(AlertInstance).where(
+                    AlertInstance.tenant_id == tenant_id,
+                    AlertInstance.natural_key == natural_key,
+                )
+            )
+            closed_inst = closed.scalar_one_or_none()
+            if closed_inst:
+                closed_inst.status = "new"
+                closed_inst.title = payload["title"]
+                closed_inst.description = payload.get("description")
+                closed_inst.severity = payload.get("severity", "medium")
+                closed_inst.reason_text = payload.get("reason_text")
+                closed_inst.recommended_action = payload.get("recommended_action")
+                closed_inst.resolved_at = None
+                closed_inst.resolved_by_id = None
+                closed_inst.updated_at = datetime.utcnow()
+                await db.flush()
+                updated += 1
+            else:
+                inst = AlertInstance(
+                    tenant_id=tenant_id,
+                    definition_id=definition_id,
+                    natural_key=natural_key,
+                    title=payload["title"],
+                    description=payload.get("description"),
+                    severity=payload.get("severity", "medium"),
+                    status="new",
+                    alert_type=rule_key,
+                    source="system",
+                    reason_text=payload.get("reason_text"),
+                    recommended_action=payload.get("recommended_action"),
+                )
+                db.add(inst)
+                await db.flush()
+                # Link primary entity
+                entity_type = payload.get("entity_type", "order")
+                entity_id = payload.get("entity_id")
+                if entity_id is not None:
+                    rel = AlertRelatedEntity(
+                        tenant_id=tenant_id,
+                        alert_id=inst.id,
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        role="primary",
+                    )
+                    db.add(rel)
+                order_id = payload.get("order_id")
+                if order_id is not None and entity_type != "order":
+                    rel_order = AlertRelatedEntity(
+                        tenant_id=tenant_id,
+                        alert_id=inst.id,
+                        entity_type="order",
+                        entity_id=order_id,
+                        role="related",
+                    )
+                    db.add(rel_order)
+                await db.flush()
+                created += 1
+    return created, updated
+
+
+async def run_scan(
+    db: AsyncSession,
+    tenant_id: int,
+    trigger: str = "scheduled",
+) -> dict[str, Any]:
+    """Ensure definitions, run all enabled rules, log scan. Returns summary."""
+    await ensure_definitions_for_tenant(db, tenant_id)
+    defs_result = await db.execute(
+        select(AlertDefinition).where(
+            AlertDefinition.tenant_id == tenant_id,
+            AlertDefinition.is_enabled == True,
+        )
+    )
+    definitions = list(defs_result.scalars().all())
+    total_created = total_updated = 0
+    for defn in definitions:
+        if defn.rule_key not in RULE_REGISTRY:
+            continue
+        log_row = AlertScanLog(
+            tenant_id=tenant_id,
+            rule_key=defn.rule_key,
+            trigger=trigger,
+            status="running",
+        )
+        db.add(log_row)
+        await db.flush()
+        try:
+            config = defn.config_json if isinstance(defn.config_json, dict) else None
+            created, updated = await run_rule(db, tenant_id, defn.rule_key, defn.id, config)
+            total_created += created
+            total_updated += updated
+            log_row.status = "completed"
+            log_row.finished_at = datetime.utcnow()
+            log_row.instances_created = created
+            log_row.instances_updated = updated
+        except Exception as e:
+            log_row.status = "failed"
+            log_row.finished_at = datetime.utcnow()
+            log_row.error_message = str(e)[:2000]
+            await db.flush()
+            raise
+        await db.flush()
+    return {
+        "instances_created": total_created,
+        "instances_updated": total_updated,
+        "rules_run": len(definitions),
+    }
+
+
+async def get_tenant_ids(db: AsyncSession) -> list[int]:
+    """Return all tenant IDs for background scan."""
+    result = await db.execute(select(Tenant.id))
+    return [r[0] for r in result.all()]

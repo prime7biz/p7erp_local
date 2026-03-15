@@ -252,6 +252,9 @@ class BomItem(Base):
     bom_id: Mapped[int] = mapped_column(
         ForeignKey("boms.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("items.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     category: Mapped[str] = mapped_column(String(32), nullable=False)
     item_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -330,6 +333,140 @@ class Followup(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
         nullable=False,
+    )
+
+
+# ---------- TNA / Advanced Order Follow-up: templates and action lines ----------
+
+
+class FollowupActionTemplate(Base):
+    """Reusable TNA action template: phase, action type, default offset from delivery, for generating order follow-up plans."""
+    __tablename__ = "followup_action_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    action_group: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sequence_no: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    default_days_before_delivery: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_mandatory: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    buyer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class OrderFollowupAction(Base):
+    """TNA action line per order: planned/actual submission/approval/rejection/resubmission tracking."""
+    __tablename__ = "order_followup_actions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("followup_action_templates.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    sequence_no: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    action_group: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    action_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_template_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_mandatory: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    assigned_to_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    planned_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    actual_submission_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    approval_received_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    actual_completion_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    resubmission_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending", index=True
+    )
+    approval_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    is_rejected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    delay_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    severity: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    milestone_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    external_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class FollowupActionComment(Base):
+    """Inline comments on a TNA follow-up action."""
+    __tablename__ = "followup_action_comments"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action_id: Mapped[int] = mapped_column(
+        ForeignKey("order_followup_actions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    comment_text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+
+class FollowupActionRejectionLog(Base):
+    """History of rejections/resubmissions per TNA follow-up action (multiple cycles)."""
+    __tablename__ = "followup_action_rejection_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action_id: Mapped[int] = mapped_column(
+        ForeignKey("order_followup_actions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    rejected_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resubmission_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
     )
 
 

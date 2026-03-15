@@ -18,6 +18,10 @@ from app.modules.ai_tool.tools import (
     search_production_issues,
     search_repeated_late_vendors,
     search_sales_orders,
+    suggest_bom_from_similar_style,
+    suggest_items_for_bom_line,
+    suggest_orders_with_shortage,
+    suggest_vendor_for_item,
 )
 
 ToolHandler = Callable[[AsyncSession, int, str], Awaitable[dict]]
@@ -77,6 +81,22 @@ async def _vendors_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dic
 async def _finance_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
     del prompt
     return await get_financial_summary(db, tenant_id=tenant_id)
+
+
+async def _suggest_bom_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
+    return await suggest_bom_from_similar_style(db, tenant_id=tenant_id, prompt=prompt)
+
+
+async def _suggest_items_bom_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
+    return await suggest_items_for_bom_line(db, tenant_id=tenant_id, prompt=prompt)
+
+
+async def _suggest_vendor_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
+    return await suggest_vendor_for_item(db, tenant_id=tenant_id, prompt=prompt)
+
+
+async def _orders_shortage_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
+    return await suggest_orders_with_shortage(db, tenant_id=tenant_id, prompt=prompt)
 
 
 REGISTRY: dict[str, ToolDefinition] = {
@@ -170,6 +190,42 @@ REGISTRY: dict[str, ToolDefinition] = {
         is_read_only=True,
         handler=_finance_handler,
     ),
+    "suggest_bom_from_similar_style": ToolDefinition(
+        name="suggest_bom_from_similar_style",
+        source_area="merch",
+        allowed_intents={"search_query", "summary_request"},
+        permission_key="ai.tools.inventory.read",
+        requires_confirmation=False,
+        is_read_only=True,
+        handler=_suggest_bom_handler,
+    ),
+    "suggest_items_for_bom_line": ToolDefinition(
+        name="suggest_items_for_bom_line",
+        source_area="merch",
+        allowed_intents={"search_query", "summary_request"},
+        permission_key="ai.tools.inventory.read",
+        requires_confirmation=False,
+        is_read_only=True,
+        handler=_suggest_items_bom_handler,
+    ),
+    "suggest_vendor_for_item": ToolDefinition(
+        name="suggest_vendor_for_item",
+        source_area="inventory",
+        allowed_intents={"search_query", "summary_request"},
+        permission_key="ai.tools.inventory.read",
+        requires_confirmation=False,
+        is_read_only=True,
+        handler=_suggest_vendor_handler,
+    ),
+    "suggest_orders_with_shortage": ToolDefinition(
+        name="suggest_orders_with_shortage",
+        source_area="merch",
+        allowed_intents={"search_query", "summary_request"},
+        permission_key="ai.tools.inventory.read",
+        requires_confirmation=False,
+        is_read_only=True,
+        handler=_orders_shortage_handler,
+    ),
 }
 
 
@@ -197,6 +253,16 @@ def select_tools(intent: AiIntent, prompt: str) -> list[ToolDefinition]:
             return [REGISTRY["get_production_summary"]]
         if parsed.domain == "vendors":
             return [REGISTRY["search_repeated_late_vendors"]]
+        if parsed.domain == "bom":
+            if _contains_any(text, {"item", "search item", "suggest item", "bom line"}):
+                return [REGISTRY["suggest_items_for_bom_line"]]
+            return [REGISTRY["suggest_bom_from_similar_style"]]
+        if parsed.domain == "purchase":
+            if _contains_any(text, {"shortage", "order shortage", "orders with shortage", "create po"}):
+                return [REGISTRY["suggest_orders_with_shortage"]]
+            if _contains_any(text, {"vendor", "suggest vendor", "vendor for item"}):
+                return [REGISTRY["suggest_vendor_for_item"]]
+            return [REGISTRY["suggest_orders_with_shortage"]]
         if parsed.domain == "finance":
             return [REGISTRY["get_financial_summary"]]
         if _contains_any(text, {"order", "sales", "delayed"}):
@@ -208,7 +274,15 @@ def select_tools(intent: AiIntent, prompt: str) -> list[ToolDefinition]:
                 return [REGISTRY["search_inventory_shortages"]]
             return [REGISTRY["get_inventory_snapshot"]]
         if _contains_any(text, {"vendor", "supplier", "late vendors"}):
+            if _contains_any(text, {"suggest vendor", "vendor for item", "item"}):
+                return [REGISTRY["suggest_vendor_for_item"]]
             return [REGISTRY["search_repeated_late_vendors"]]
+        if _contains_any(text, {"bom", "similar style", "suggest item", "bom line"}):
+            if _contains_any(text, {"item", "suggest item", "search item"}):
+                return [REGISTRY["suggest_items_for_bom_line"]]
+            return [REGISTRY["suggest_bom_from_similar_style"]]
+        if _contains_any(text, {"material requirement", "shortage", "order shortage", "orders with shortage"}):
+            return [REGISTRY["suggest_orders_with_shortage"]]
         if _contains_any(text, {"production", "downtime", "ncr", "issue"}):
             return [REGISTRY["search_production_issues"]]
         return [REGISTRY["search_sales_orders"]]
@@ -224,7 +298,15 @@ def select_tools(intent: AiIntent, prompt: str) -> list[ToolDefinition]:
                 return [REGISTRY["search_production_issues"]]
             return [REGISTRY["get_production_summary"]]
         if _contains_any(text, {"vendor", "supplier"}):
+            if _contains_any(text, {"suggest vendor", "vendor for item"}):
+                return [REGISTRY["suggest_vendor_for_item"]]
             return [REGISTRY["search_repeated_late_vendors"]]
+        if _contains_any(text, {"bom", "similar style", "suggest item"}):
+            if _contains_any(text, {"item", "suggest item"}):
+                return [REGISTRY["suggest_items_for_bom_line"]]
+            return [REGISTRY["suggest_bom_from_similar_style"]]
+        if _contains_any(text, {"material requirement", "shortage", "order shortage"}):
+            return [REGISTRY["suggest_orders_with_shortage"]]
         if _contains_any(text, {"finance", "voucher", "cash", "reconciliation"}):
             return [REGISTRY["get_financial_summary"]]
         return [REGISTRY["get_dashboard_summary"]]

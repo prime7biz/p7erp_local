@@ -72,6 +72,8 @@ class InquiryResponse(BaseModel):
   commission_type: str | None
   commission_value: float | None
   status: str
+  is_converted_to_quotation: bool = False
+  converted_quotation_id: int | None = None
   notes: str | None
   items: list[InquiryItemResponse] = Field(default_factory=list)
   created_at: str

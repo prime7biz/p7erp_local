@@ -1,34 +1,452 @@
-import { useEffect, useState } from "react";
-import { api } from "@/api/client";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  api,
+  type MerchPipelineFullResponse,
+  type PipelineItemOut,
+  type PipelineStageOut,
+} from "@/api/client";
+import { LayoutGrid, List, RefreshCw, ChevronDown, BarChart3 } from "lucide-react";
+
+type ViewMode = "kanban" | "list";
+
+/** Format amount to 2 decimal places (avoids float noise like 13.799999999999999) */
+function formatAmount(value: string | number | null | undefined): string {
+  if (value == null || value === "") return "—";
+  const n = typeof value === "string" ? parseFloat(value) : value;
+  if (Number.isNaN(n)) return "—";
+  return n.toFixed(2);
+}
+
+const DOCUMENT_TYPE_OPTIONS = [
+  { value: "", label: "All (Inquiries, Quotations, Orders)" },
+  { value: "inquiry", label: "Inquiries only" },
+  { value: "quotation", label: "Quotations only" },
+  { value: "order", label: "Orders only" },
+];
 
 export function MerchPipelinePage() {
-  const [data, setData] = useState<{ inquiries: number; quotations: number; orders: number } | null>(null);
+  const [data, setData] = useState<MerchPipelineFullResponse | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("kanban");
+  const [documentType, setDocumentType] = useState("");
+  const [customerId, setCustomerId] = useState<string>("");
+  const [search, setSearch] = useState("");
+  const [customers, setCustomers] = useState<{ id: number; name: string }[]>([]);
+  const [moveMenuId, setMoveMenuId] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
+
+  const loadPipeline = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await api.getMerchPipelineFull({
+        document_type: documentType || undefined,
+        customer_id: customerId ? Number(customerId) : undefined,
+        search: search || undefined,
+      });
+      setData(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load pipeline");
+    } finally {
+      setLoading(false);
+    }
+  }, [documentType, customerId, search]);
 
   useEffect(() => {
-    api.getMerchPipeline().then(setData).catch((e) => setError(e instanceof Error ? e.message : "Failed to load pipeline"));
+    loadPipeline();
+  }, [loadPipeline]);
+
+  useEffect(() => {
+    api.listCustomers().then((list) => setCustomers(list)).catch(() => {});
   }, []);
+
+  const handleMoveTo = async (item: PipelineItemOut, newStatus: string) => {
+    setMoveMenuId(null);
+    setMoving(true);
+    setError("");
+    try {
+      if (item.document_type === "inquiry") {
+        await api.updateInquiryStatus(item.id, newStatus);
+      } else if (item.document_type === "quotation") {
+        await api.updateQuotation(item.id, { status: newStatus });
+      } else {
+        await api.updateOrder(item.id, { status: newStatus });
+      }
+      await loadPipeline();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update status");
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  const stagesByKey = useMemo(() => {
+    if (!data) return new Map<string, PipelineStageOut>();
+    const m = new Map<string, PipelineStageOut>();
+    data.stages.forEach((s) => m.set(s.stage_key, s));
+    return m;
+  }, [data]);
+
+  const itemsByStage = useMemo(() => {
+    if (!data) return new Map<string, PipelineItemOut[]>();
+    const m = new Map<string, PipelineItemOut[]>();
+    data.stages.forEach((s) => m.set(s.stage_key, []));
+    data.items.forEach((i) => {
+      const list = m.get(i.stage_key) ?? [];
+      list.push(i);
+      m.set(i.stage_key, list);
+    });
+    return m;
+  }, [data]);
+
+  const visibleStages = useMemo(() => {
+    if (!data) return [];
+    if (documentType) {
+      return data.stages.filter((s) => s.document_type === documentType);
+    }
+    return data.stages;
+  }, [data, documentType]);
+
+  const stageColor = (stage: PipelineStageOut) => {
+    if (stage.document_type === "inquiry") return "bg-slate-100 border-slate-300";
+    if (stage.document_type === "quotation") return "bg-amber-50 border-amber-200";
+    return "bg-emerald-50 border-emerald-200";
+  };
+
+  const docTypeBadge = (doc: string) => {
+    const c =
+      doc === "inquiry"
+        ? "bg-slate-200 text-slate-800"
+        : doc === "quotation"
+          ? "bg-amber-200 text-amber-900"
+          : "bg-emerald-200 text-emerald-900";
+    return (
+      <span className={`inline-flex rounded px-1.5 py-0.5 text-xs font-medium ${c}`}>
+        {doc}
+      </span>
+    );
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Order Pipeline</h1>
-        <p className="text-sm text-gray-500 mt-0.5">High-level merchandising flow snapshot.</p>
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Order Pipeline</h1>
+          <p className="mt-0.5 text-sm text-gray-500">
+            Full lifecycle from inquiry → quotation → order. Move deals through stages; win probability per column.
+          </p>
+          <Link
+            to="/app/merchandising/pipeline-analytics"
+            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10"
+          >
+            <BarChart3 className="h-4 w-4" />
+            Month-wise &amp; quarterly report
+          </Link>
+        </div>
+      </header>
+
+      {/* Summary + filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        {data && (
+          <div className="flex flex-wrap gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
+            <span className="text-xs font-semibold uppercase text-gray-500">Summary</span>
+            <span className="rounded bg-slate-100 px-2 py-0.5 text-sm font-medium text-slate-700">
+              Inquiries: {data.summary.inquiries}
+            </span>
+            <span className="rounded bg-amber-100 px-2 py-0.5 text-sm font-medium text-amber-800">
+              Quotations: {data.summary.quotations}
+            </span>
+            <span className="rounded bg-emerald-100 px-2 py-0.5 text-sm font-medium text-emerald-800">
+              Orders: {data.summary.orders}
+            </span>
+          </div>
+        )}
+        <select
+          value={documentType}
+          onChange={(e) => setDocumentType(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+        >
+          {DOCUMENT_TYPE_OPTIONS.map((o) => (
+            <option key={o.value || "all"} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={customerId}
+          onChange={(e) => setCustomerId(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+        >
+          <option value="">All customers</option>
+          {customers.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          placeholder="Search code or style…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-48 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+        />
+        <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
+          <button
+            type="button"
+            onClick={() => setViewMode("kanban")}
+            className={`rounded-md p-1.5 ${viewMode === "kanban" ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"}`}
+            title="Kanban"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className={`rounded-md p-1.5 ${viewMode === "list" ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"}`}
+            title="List"
+          >
+            <List className="h-4 w-4" />
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => loadPipeline()}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </button>
       </div>
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="text-xs text-gray-500">Inquiries</div>
-          <div className="text-2xl font-bold text-gray-900 mt-1">{data?.inquiries ?? "—"}</div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="text-xs text-gray-500">Quotations</div>
-          <div className="text-2xl font-bold text-gray-900 mt-1">{data?.quotations ?? "—"}</div>
+      )}
+
+      {loading && !data ? (
+        <div className="py-12 text-center text-gray-500">Loading pipeline…</div>
+      ) : !data ? null : viewMode === "kanban" ? (
+        <div className="overflow-x-auto pb-4">
+          <div className="flex gap-4 min-w-max">
+            {visibleStages.map((stage) => {
+              const items = itemsByStage.get(stage.stage_key) ?? [];
+              return (
+                <div
+                  key={stage.stage_key}
+                  className={`w-72 shrink-0 rounded-xl border-2 ${stageColor(stage)} p-3`}
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">{stage.label}</h3>
+                    <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-medium text-gray-600">
+                      {stage.win_probability}%
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {items.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-gray-300 py-6 text-center text-xs text-gray-400">
+                        No items
+                      </div>
+                    ) : (
+                      items.map((item) => (
+                        <PipelineCard
+                          key={`${item.document_type}-${item.id}`}
+                          item={item}
+                          stage={stage}
+                          docTypeBadge={docTypeBadge}
+                          moveMenuId={moveMenuId}
+                          setMoveMenuId={setMoveMenuId}
+                          onMoveTo={handleMoveTo}
+                          moving={moving}
+                        />
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="text-xs text-gray-500">Orders</div>
-          <div className="text-2xl font-bold text-gray-900 mt-1">{data?.orders ?? "—"}</div>
+      ) : (
+        <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="border-b border-gray-200 bg-gray-50 text-left text-gray-600">
+              <tr>
+                <th className="px-4 py-2.5 font-medium">Type</th>
+                <th className="px-4 py-2.5 font-medium">Code</th>
+                <th className="px-4 py-2.5 font-medium">Stage</th>
+                <th className="px-4 py-2.5 font-medium">Customer</th>
+                <th className="px-4 py-2.5 font-medium">Style / Ref</th>
+                <th className="px-4 py-2.5 font-medium">Qty</th>
+                <th className="px-4 py-2.5 font-medium">Amount</th>
+                <th className="px-4 py-2.5 font-medium">Created</th>
+                <th className="px-4 py-2.5 text-right font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                    No pipeline items match your filters.
+                  </td>
+                </tr>
+              ) : (
+                data.items.map((item) => {
+                  const stage = stagesByKey.get(item.stage_key);
+                  return (
+                    <tr
+                      key={`${item.document_type}-${item.id}`}
+                      className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50"
+                    >
+                      <td className="px-4 py-2.5">{docTypeBadge(item.document_type)}</td>
+                      <td className="px-4 py-2.5 font-medium">
+                        <Link to={item.detail_path} className="text-primary hover:underline">
+                          {item.code}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5 text-gray-600">{stage?.label ?? item.stage_key}</td>
+                      <td className="px-4 py-2.5 text-gray-700">{item.customer_name}</td>
+                      <td className="px-4 py-2.5 text-gray-700">
+                        {item.style_name || item.style_ref || "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-gray-700">
+                        {item.quantity != null ? item.quantity.toLocaleString() : "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-gray-700">{formatAmount(item.total_amount)}</td>
+                      <td className="px-4 py-2.5 text-gray-500">
+                        {new Date(item.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Link
+                          to={item.detail_path}
+                          className="text-primary hover:underline mr-2"
+                        >
+                          Open
+                        </Link>
+                        {stage && item.next_status_options.length > 0 && (
+                          <div className="relative inline-block">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setMoveMenuId(
+                                  moveMenuId === `${item.document_type}-${item.id}` ? null : `${item.document_type}-${item.id}`
+                                )
+                              }
+                              className="inline-flex items-center gap-0.5 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Move <ChevronDown className="h-3 w-3" />
+                            </button>
+                            {moveMenuId === `${item.document_type}-${item.id}` && (
+                              <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                                {item.next_status_options.map((opt) => (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => handleMoveTo(item, opt)}
+                                    className="block w-full px-3 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                  >
+                                    → {opt.replace(/_/g, " ")}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
+      )}
+
+      {moving && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          Updating status…
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PipelineCard({
+  item,
+  stage: _stage,
+  docTypeBadge,
+  moveMenuId,
+  setMoveMenuId,
+  onMoveTo,
+  moving,
+}: {
+  item: PipelineItemOut;
+  stage: PipelineStageOut;
+  docTypeBadge: (doc: string) => React.ReactNode;
+  moveMenuId: string | null;
+  setMoveMenuId: (id: string | null) => void;
+  onMoveTo: (item: PipelineItemOut, status: string) => void;
+  moving: boolean;
+}) {
+  const menuId = `${item.document_type}-${item.id}`;
+  const isOpen = moveMenuId === menuId;
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm">
+      <div className="flex items-start justify-between gap-1">
+        <div className="min-w-0 flex-1">
+          {docTypeBadge(item.document_type)}
+          <Link
+            to={item.detail_path}
+            className="mt-1 block font-medium text-gray-900 hover:text-primary hover:underline"
+          >
+            {item.code}
+          </Link>
+          <p className="mt-0.5 truncate text-xs text-gray-600" title={item.customer_name}>
+            {item.customer_name}
+          </p>
+          {(item.style_ref || item.style_name) && (
+            <p className="truncate text-xs text-gray-500" title={item.style_ref || item.style_name || ""}>
+              {item.style_name || item.style_ref}
+            </p>
+          )}
+          <div className="mt-1 flex flex-wrap gap-1 text-xs text-gray-500">
+            {item.quantity != null && <span>Qty: {item.quantity.toLocaleString()}</span>}
+            {(item.total_amount != null && item.total_amount !== "") && (
+              <span>· {formatAmount(item.total_amount)}</span>
+            )}
+          </div>
+        </div>
+        {item.next_status_options.length > 0 && (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setMoveMenuId(isOpen ? null : menuId)}
+              disabled={moving}
+              className="rounded border border-gray-300 p-1 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+              title="Move to next stage"
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            {isOpen && (
+              <div className="absolute right-0 top-full z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                {item.next_status_options.map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => onMoveTo(item, opt)}
+                    className="block w-full px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                  >
+                    → {opt.replace(/_/g, " ")}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

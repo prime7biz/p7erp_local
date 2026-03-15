@@ -115,7 +115,7 @@ export function InquiriesPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
         {loading ? (
           <div className="p-12 text-center text-gray-500">Loading inquiries...</div>
         ) : items.length === 0 ? (
@@ -125,41 +125,43 @@ export function InquiriesPage() {
             <table className="min-w-[1100px] w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
                 <tr>
-                  <th className="py-2 px-4">Code</th>
-                  <th className="py-2 px-4">Customer</th>
-                  <th className="py-2 px-4">Style</th>
-                  <th className="py-2 px-4">Intermediary</th>
-                  <th className="py-2 px-4">Shipping</th>
-                  <th className="py-2 px-4 text-right">Qty</th>
-                  <th className="py-2 px-4">Status</th>
-                  <th className="py-2 px-4 text-right">Actions</th>
+                  <th className="py-2.5 px-4 w-24 whitespace-nowrap">Code</th>
+                  <th className="py-2.5 px-4 min-w-[120px]">Customer</th>
+                  <th className="py-2.5 px-4 min-w-[160px]">Style</th>
+                  <th className="py-2.5 px-4 min-w-[100px] whitespace-nowrap">Intermediary</th>
+                  <th className="py-2.5 px-4 w-20 whitespace-nowrap">Shipping</th>
+                  <th className="py-2.5 px-4 text-right w-20 whitespace-nowrap">Qty</th>
+                  <th className="py-2.5 px-4 min-w-[140px] whitespace-nowrap">Status</th>
+                  <th className="py-2.5 px-4 text-right w-24 whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredItems.map((inq) => (
-                  <tr key={inq.id} className="border-b border-gray-100 last:border-0 align-top">
-                    <td className="py-2 px-4 font-medium text-gray-900">
+                  <tr key={inq.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
+                    <td className="py-2.5 px-4 font-medium text-gray-900 whitespace-nowrap">
                       <Link to={`/app/inquiries/${inq.id}`} className="text-indigo-600 hover:underline">
                         {inq.inquiry_code}
                       </Link>
                     </td>
-                    <td className="py-2 px-4 text-gray-700">{customerName(inq.customer_id)}</td>
-                    <td className="py-2 px-4">
-                      <div className="flex items-center gap-2">
+                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={customerName(inq.customer_id)}>
+                      {customerName(inq.customer_id)}
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <div className="flex items-center gap-2 min-w-0">
                         {inq.style_image_url ? (
                           <img
                             src={inq.style_image_url}
                             alt={inq.style_name ?? inq.style_ref ?? "style"}
-                            className="h-9 w-9 rounded object-cover border border-gray-200"
+                            className="h-9 w-9 shrink-0 rounded object-cover border border-gray-200"
                           />
                         ) : (
-                          <div className="h-9 w-9 rounded bg-gray-100 border border-gray-200" />
+                          <div className="h-9 w-9 shrink-0 rounded bg-gray-100 border border-gray-200" />
                         )}
-                        <div className="text-gray-700">
-                          <div className="font-medium text-gray-900">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-gray-900 truncate" title={inq.style_name ?? inq.style_ref ?? undefined}>
                             {inq.style_name ?? inq.style_ref ?? "—"}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-gray-500 whitespace-nowrap truncate" title={inq.style_ref && inq.style_name && inq.style_ref !== inq.style_name ? inq.style_ref : inq.department ?? undefined}>
                             {inq.style_ref && inq.style_name && inq.style_ref !== inq.style_name
                               ? inq.style_ref
                               : inq.department ?? "—"}
@@ -167,17 +169,28 @@ export function InquiriesPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-2 px-4 text-gray-700">{inq.intermediary_name ?? "—"}</td>
-                    <td className="py-2 px-4 text-gray-700">{inq.shipping_term ?? "—"}</td>
-                    <td className="py-2 px-4 text-right text-gray-700">
+                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={inq.intermediary_name ?? undefined}>
+                      {inq.intermediary_name ?? "—"}
+                    </td>
+                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={inq.shipping_term ?? undefined}>
+                      {inq.shipping_term ?? "—"}
+                    </td>
+                    <td className="py-2.5 px-4 text-right text-gray-700 whitespace-nowrap">
                       {inq.quantity != null ? inq.quantity.toLocaleString() : "—"}
                     </td>
-                    <td className="py-2 px-4">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(inq.status)}`}>
-                        {inq.status}
-                      </span>
+                    <td className="py-2.5 px-4 text-gray-700 overflow-hidden text-ellipsis" title={[inq.status, inq.is_converted_to_quotation ? "Converted to quotation" : null].filter(Boolean).join(" · ")}>
+                      <div className="flex items-center gap-1.5 flex-wrap whitespace-nowrap min-w-0">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(inq.status)}`}>
+                          {inq.status}
+                        </span>
+                        {inq.is_converted_to_quotation && (
+                          <span className="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                            Converted to quotation
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className="py-2 px-4 text-right whitespace-nowrap">
+                    <td className="py-2.5 px-4 text-right whitespace-nowrap">
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
@@ -212,22 +225,31 @@ export function InquiriesPage() {
                             >
                               Print
                             </Link>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                setOpenActionsId(null);
-                                try {
-                                  setError("");
-                                  await api.convertInquiryToQuotation(inq.id, { profit_percentage: 15 });
-                                  alert("Quotation created from inquiry.");
-                                } catch (e) {
-                                  setError(e instanceof Error ? e.message : "Convert to quotation failed");
-                                }
-                              }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-indigo-700 hover:bg-indigo-50"
-                            >
-                              To quotation
-                            </button>
+                            {inq.is_converted_to_quotation ? (
+                              <div className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-400">
+                                Already converted
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setOpenActionsId(null);
+                                  try {
+                                    setError("");
+                                    const quotation = await api.convertInquiryToQuotation(inq.id, {
+                                      profit_percentage: 15,
+                                    });
+                                    await load();
+                                    alert(`Quotation ${quotation.quotation_code} created from inquiry.`);
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : "Convert to quotation failed");
+                                  }
+                                }}
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-indigo-700 hover:bg-indigo-50"
+                              >
+                                To quotation
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={async () => {

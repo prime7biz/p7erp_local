@@ -6,7 +6,7 @@ from io import StringIO
 from datetime import date, datetime, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -18,6 +18,7 @@ from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
     AccountGroup,
+    CoAConfig,
     AccountingPeriod,
     BankAccount,
     BankReconciliation,
@@ -37,6 +38,7 @@ from app.models import (
     OutstandingBill,
     PaymentRun,
     PaymentRunItem,
+    SettlementAuditPreset,
     PurchaseOrder,
     PurchaseOrderItem,
     Quotation,
@@ -92,6 +94,48 @@ async def _require_manager_or_admin(db: AsyncSession, user: User) -> None:
         raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
 
 
+async def _account_group_parent_would_cycle(
+    db: AsyncSession, tenant_id: int, group_id: int, new_parent_id: int | None
+) -> bool:
+    """Return True if setting parent_group_id to new_parent_id would create a cycle (new_parent is descendant of group_id)."""
+    if not new_parent_id or new_parent_id == group_id:
+        return True
+    current_id: int | None = new_parent_id
+    seen: set[int] = set()
+    while current_id and current_id not in seen:
+        seen.add(current_id)
+        if current_id == group_id:
+            return True
+        row = await db.get(AccountGroup, current_id)
+        if not row or row.tenant_id != tenant_id:
+            break
+        current_id = row.parent_group_id
+    return False
+
+
+async def _get_coa_config(db: AsyncSession, tenant_id: int) -> dict:
+    """Return CoA config for tenant or defaults. Keys: account_number_prefix, account_number_width, group_code_prefix, group_code_width, allow_manual_account_number, validate_normal_balance."""
+    r = await db.execute(select(CoAConfig).where(CoAConfig.tenant_id == tenant_id))
+    cfg = r.scalars().first()
+    if cfg:
+        return {
+            "account_number_prefix": cfg.account_number_prefix,
+            "account_number_width": cfg.account_number_width,
+            "group_code_prefix": cfg.group_code_prefix,
+            "group_code_width": cfg.group_code_width,
+            "allow_manual_account_number": cfg.allow_manual_account_number,
+            "validate_normal_balance": cfg.validate_normal_balance,
+        }
+    return {
+        "account_number_prefix": "AC-",
+        "account_number_width": 4,
+        "group_code_prefix": "GRP-",
+        "group_code_width": 4,
+        "allow_manual_account_number": False,
+        "validate_normal_balance": True,
+    }
+
+
 def _is_system_voucher_type(code: str) -> bool:
     return code.strip().upper() in {x[0] for x in DEFAULT_VOUCHER_TYPES}
 
@@ -109,12 +153,64 @@ class AccountGroupBody(BaseModel):
     is_bank_group: bool = False
     sort_order: int = 0
     is_active: bool = True
+    # Advanced fields (COA redesign)
+    description: str | None = None
+    reporting_code: str | None = None
+    default_normal_balance: Literal["debit", "credit"] = "debit"
+    allow_posting: bool = True
+    is_summary_group: bool = False
+    last_reviewed_at: date | None = None
 
 
 class AccountGroupOut(AccountGroupBody):
     id: int
     tenant_id: int
     code: str
+
+    class Config:
+        from_attributes = True
+
+
+class AccountGroupHierarchyNode(BaseModel):
+    id: int
+    code: str
+    name: str
+    nature: str
+    parent_group_id: int | None
+    sort_order: int
+    is_active: bool
+    children: list["AccountGroupHierarchyNode"] = []
+    account_count: int = 0
+    # Advanced fields for tree UX and reporting
+    description: str | None = None
+    reporting_code: str | None = None
+    default_normal_balance: str = "debit"
+    allow_posting: bool = True
+    is_summary_group: bool = False
+    last_reviewed_at: date | None = None
+    depth: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+AccountGroupHierarchyNode.model_rebuild()
+
+
+class CoAConfigBody(BaseModel):
+    account_number_prefix: str = "AC-"
+    account_number_width: int = 4
+    group_code_prefix: str = "GRP-"
+    group_code_width: int = 4
+    allow_manual_account_number: bool = False
+    max_group_depth: int | None = None
+    max_account_depth: int | None = None
+    validate_normal_balance: bool = True
+
+
+class CoAConfigOut(CoAConfigBody):
+    id: int
+    tenant_id: int
 
     class Config:
         from_attributes = True
@@ -131,6 +227,14 @@ class ChartAccountBody(BaseModel):
     description: str | None = None
     is_active: bool = True
     is_bank_account: bool = False
+    # Advanced CoA fields
+    account_type: Literal["posting", "statistical", "header"] = "posting"
+    reporting_code: str | None = None
+    display_order: int = 0
+    statistical_unit: str | None = None
+    statistical_formula: str | None = None
+    parent_account_id: int | None = None
+    last_reviewed_at: date | None = None
 
 
 class ChartAccountOut(ChartAccountBody):
@@ -402,6 +506,9 @@ class PaymentRunItemBody(BaseModel):
     bill_id: int | None = None
     party_name: str
     amount: str
+    source_currency: str | None = None
+    fx_rate_to_base: str | None = None
+    base_amount: str | None = None
     reference: str | None = None
 
 
@@ -409,6 +516,7 @@ class PaymentRunBody(BaseModel):
     run_code: str | None = None
     run_date: date
     bank_account_id: int | None = None
+    base_currency: str | None = "BDT"
     remarks: str | None = None
     items: list[PaymentRunItemBody]
 
@@ -429,12 +537,59 @@ class PaymentRunOut(BaseModel):
     run_code: str
     run_date: date
     bank_account_id: int | None
+    base_currency: str
     status: str
     total_amount: str
     executed_voucher_id: int | None
     remarks: str | None
     created_by: int | None
     items: list[PaymentRunItemOut]
+
+
+class SettlementAuditRow(BaseModel):
+    item_id: int
+    run_id: int
+    run_code: str
+    run_date: date
+    run_status: str
+    party_name: str
+    bill_no: str | None
+    source_currency: str
+    source_amount: float
+    fx_rate_to_base: float
+    base_amount: float
+    base_currency: str
+
+
+class SettlementAuditTotals(BaseModel):
+    row_count: int
+    source_total: float
+    base_total: float
+
+
+class SettlementAuditOut(BaseModel):
+    rows: list[SettlementAuditRow]
+    totals: SettlementAuditTotals
+
+
+class SettlementAuditPresetBody(BaseModel):
+    name: str
+    from_date: date | None = None
+    to_date: date | None = None
+    status_filter: str | None = None
+    source_currency: str | None = None
+    party_query: str | None = None
+
+
+class SettlementAuditPresetOut(SettlementAuditPresetBody):
+    id: int
+    tenant_id: int
+    created_by: int | None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class AccountingPeriodBody(BaseModel):
@@ -546,6 +701,7 @@ async def _payment_run_out(db: AsyncSession, run: PaymentRun) -> PaymentRunOut:
         run_code=run.run_code,
         run_date=run.run_date,
         bank_account_id=run.bank_account_id,
+        base_currency=run.base_currency,
         status=run.status,
         total_amount=run.total_amount,
         executed_voucher_id=run.executed_voucher_id,
@@ -710,8 +866,72 @@ async def list_account_groups(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    result = await db.execute(select(AccountGroup).where(AccountGroup.tenant_id == tenant.id).order_by(AccountGroup.sort_order))
+    result = await db.execute(
+        select(AccountGroup)
+        .where(AccountGroup.tenant_id == tenant.id)
+        .order_by(AccountGroup.sort_order, AccountGroup.name)
+    )
     return list(result.scalars().all())
+
+
+@router.get("/account-groups/hierarchy", response_model=list[AccountGroupHierarchyNode])
+async def list_account_groups_hierarchy(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return account groups as a tree (Group → Type → hierarchy) for tree UX and reports."""
+    _ensure_tenant(user, tenant)
+    result = await db.execute(
+        select(AccountGroup)
+        .where(AccountGroup.tenant_id == tenant.id)
+        .order_by(AccountGroup.sort_order, AccountGroup.name)
+    )
+    groups = list(result.scalars().all())
+    # Account count per group_id
+    count_stmt = (
+        select(ChartOfAccount.group_id, func.count(ChartOfAccount.id).label("cnt"))
+        .where(ChartOfAccount.tenant_id == tenant.id)
+        .group_by(ChartOfAccount.group_id)
+    )
+    count_result = await db.execute(count_stmt)
+    count_by_group = {r.group_id: r.cnt for r in count_result.all()}
+    # Build tree with advanced fields
+    by_id = {g.id: AccountGroupHierarchyNode(
+        id=g.id,
+        code=g.code,
+        name=g.name,
+        nature=g.nature,
+        parent_group_id=g.parent_group_id,
+        sort_order=g.sort_order,
+        is_active=g.is_active,
+        children=[],
+        account_count=count_by_group.get(g.id, 0),
+        description=g.description,
+        reporting_code=g.reporting_code,
+        default_normal_balance=g.default_normal_balance or "debit",
+        allow_posting=g.allow_posting,
+        is_summary_group=g.is_summary_group,
+        last_reviewed_at=g.last_reviewed_at,
+        depth=0,
+    ) for g in groups}
+    roots: list[AccountGroupHierarchyNode] = []
+    for g in groups:
+        node = by_id[g.id]
+        if g.parent_group_id and g.parent_group_id in by_id:
+            by_id[g.parent_group_id].children.append(node)
+        else:
+            roots.append(node)
+    # Set depth and sort children
+    def set_depth_and_sort(n: AccountGroupHierarchyNode, d: int) -> None:
+        n.depth = d
+        n.children.sort(key=lambda c: (c.sort_order, c.name))
+        for c in n.children:
+            set_depth_and_sort(c, d + 1)
+    for r in roots:
+        set_depth_and_sort(r, 0)
+    roots.sort(key=lambda r: (r.sort_order, r.name))
+    return roots
 
 
 @router.post("/account-groups", response_model=AccountGroupOut)
@@ -722,17 +942,28 @@ async def create_account_group(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = AccountGroup(
-        tenant_id=tenant.id,
-        code=await next_tenant_code(
+    coa_cfg = await _get_coa_config(db, tenant.id)
+    code = (body.code or "").strip() if body.code else None
+    if code:
+        existing = await db.execute(
+            select(AccountGroup).where(
+                AccountGroup.tenant_id == tenant.id,
+                AccountGroup.code == code,
+            )
+        )
+        if existing.scalars().first():
+            raise HTTPException(status_code=400, detail="An account group with this code already exists")
+    else:
+        code = await next_tenant_code(
             db,
             model=AccountGroup,
             tenant_id=tenant.id,
-            prefix="GRP-",
-            width=4,
-        ),
-        **body.model_dump(exclude={"code"}),
-    )
+            prefix=coa_cfg["group_code_prefix"],
+            width=coa_cfg["group_code_width"],
+        )
+    payload = body.model_dump(exclude={"code"})
+    payload["code"] = code
+    row = AccountGroup(tenant_id=tenant.id, **payload)
     db.add(row)
     await db.commit()
     await db.refresh(row)
@@ -751,6 +982,12 @@ async def update_account_group(
     row = await db.get(AccountGroup, group_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Account group not found")
+    new_parent_id = body.parent_group_id if body.parent_group_id is not None else row.parent_group_id
+    if new_parent_id is not None and await _account_group_parent_would_cycle(db, tenant.id, group_id, new_parent_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot set parent: would create a circular reference in account group hierarchy.",
+        )
     for key, value in body.model_dump().items():
         if key == "code":
             continue
@@ -771,9 +1008,66 @@ async def delete_account_group(
     row = await db.get(AccountGroup, group_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Account group not found")
+    # Prevent delete if used as parent
+    child = await db.execute(
+        select(AccountGroup).where(
+            AccountGroup.tenant_id == tenant.id,
+            AccountGroup.parent_group_id == group_id,
+        ).limit(1)
+    )
+    if child.scalars().first():
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete: group has child groups. Remove or reparent children first.",
+        )
     await db.delete(row)
     await db.commit()
     return {"ok": True}
+
+
+@router.post("/account-groups/seed", response_model=list[AccountGroupOut])
+async def seed_account_groups(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Seed default account groups if none exist. Idempotent."""
+    _ensure_tenant(user, tenant)
+    existing = await db.execute(select(AccountGroup).where(AccountGroup.tenant_id == tenant.id).limit(1))
+    if existing.scalars().first():
+        result = await db.execute(
+            select(AccountGroup).where(AccountGroup.tenant_id == tenant.id).order_by(AccountGroup.sort_order)
+        )
+        return list(result.scalars().all())
+    defaults = [
+        {"name": "Capital Account", "code": "CAPITAL", "nature": "Equity", "sort_order": 1},
+        {"name": "Loans (Liability)", "code": "LOANS_LIABILITY", "nature": "Liability", "sort_order": 3},
+        {"name": "Current Liabilities", "code": "CURRENT_LIABILITIES", "nature": "Liability", "sort_order": 6},
+        {"name": "Current Assets", "code": "CURRENT_ASSETS", "nature": "Asset", "sort_order": 9},
+        {"name": "Fixed Assets", "code": "FIXED_ASSETS", "nature": "Asset", "sort_order": 16},
+        {"name": "Investments", "code": "INVESTMENTS", "nature": "Asset", "sort_order": 17},
+        {"name": "Direct Expenses", "code": "DIRECT_EXPENSES", "nature": "Expense", "sort_order": 18, "affects_gross_profit": True},
+        {"name": "Indirect Expenses", "code": "INDIRECT_EXPENSES", "nature": "Expense", "sort_order": 20},
+        {"name": "Direct Income", "code": "DIRECT_INCOME", "nature": "Income", "sort_order": 21, "affects_gross_profit": True},
+        {"name": "Indirect Income", "code": "INDIRECT_INCOME", "nature": "Income", "sort_order": 23},
+    ]
+    for d in defaults:
+        row = AccountGroup(
+            tenant_id=tenant.id,
+            name=d["name"],
+            code=d["code"],
+            nature=d["nature"],
+            sort_order=d["sort_order"],
+            affects_gross_profit=d.get("affects_gross_profit", False),
+            is_bank_group=False,
+            is_active=True,
+        )
+        db.add(row)
+    await db.commit()
+    result = await db.execute(
+        select(AccountGroup).where(AccountGroup.tenant_id == tenant.id).order_by(AccountGroup.sort_order)
+    )
+    return list(result.scalars().all())
 
 
 @router.get("/chart-of-accounts", response_model=list[ChartAccountOut])
@@ -784,7 +1078,11 @@ async def list_chart_of_accounts(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    stmt = select(ChartOfAccount).where(ChartOfAccount.tenant_id == tenant.id).order_by(ChartOfAccount.account_number)
+    stmt = (
+        select(ChartOfAccount)
+        .where(ChartOfAccount.tenant_id == tenant.id)
+        .order_by(ChartOfAccount.display_order, ChartOfAccount.account_number)
+    )
     if active_only:
         stmt = stmt.where(ChartOfAccount.is_active.is_(True))
     result = await db.execute(stmt)
@@ -799,22 +1097,38 @@ async def create_chart_account(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    coa_cfg = await _get_coa_config(db, tenant.id)
     group = await db.get(AccountGroup, body.group_id)
     if not group or group.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Account group not found")
-    account_number = await next_tenant_code(
-        db,
-        model=ChartOfAccount,
-        tenant_id=tenant.id,
-        prefix="AC-",
-        width=4,
-    )
-    row = ChartOfAccount(
-        tenant_id=tenant.id,
-        account_number=account_number,
-        balance=body.opening_balance,
-        **body.model_dump(exclude={"account_number"}),
-    )
+    if coa_cfg["validate_normal_balance"] and body.normal_balance != group.default_normal_balance:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Normal balance must be '{group.default_normal_balance}' for this account group.",
+        )
+    manual_code = (body.account_number or "").strip() if body.account_number else None
+    if manual_code and coa_cfg["allow_manual_account_number"]:
+        existing = await db.execute(
+            select(ChartOfAccount).where(
+                ChartOfAccount.tenant_id == tenant.id,
+                ChartOfAccount.account_number == manual_code,
+            )
+        )
+        if existing.scalars().first():
+            raise HTTPException(status_code=400, detail="An account with this number already exists")
+        account_number = manual_code
+    else:
+        account_number = await next_tenant_code(
+            db,
+            model=ChartOfAccount,
+            tenant_id=tenant.id,
+            prefix=coa_cfg["account_number_prefix"],
+            width=coa_cfg["account_number_width"],
+        )
+    payload = body.model_dump(exclude={"account_number"})
+    payload["account_number"] = account_number
+    payload["balance"] = body.opening_balance
+    row = ChartOfAccount(tenant_id=tenant.id, **payload)
     db.add(row)
     await db.commit()
     await db.refresh(row)
@@ -833,6 +1147,15 @@ async def update_chart_account(
     row = await db.get(ChartOfAccount, account_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Ledger account not found")
+    group = await db.get(AccountGroup, body.group_id)
+    if not group or group.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Account group not found")
+    coa_cfg = await _get_coa_config(db, tenant.id)
+    if coa_cfg["validate_normal_balance"] and body.normal_balance != group.default_normal_balance:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Normal balance must be '{group.default_normal_balance}' for this account group.",
+        )
     for key, value in body.model_dump(exclude={"account_number"}).items():
         setattr(row, key, value)
     await db.commit()
@@ -864,6 +1187,324 @@ async def delete_chart_account(
     await db.delete(row)
     await db.commit()
     return {"ok": True}
+
+
+# Report identifiers that use account groups (for reporting-impact).
+COA_REPORT_IDS = [
+    {"id": "group_summary", "label": "Group Summary"},
+    {"id": "pl", "label": "Profit & Loss"},
+    {"id": "balance_sheet", "label": "Balance Sheet"},
+    {"id": "trial_balance", "label": "Trial Balance"},
+    {"id": "financial_statements", "label": "Financial Statements"},
+]
+
+
+@router.get("/account-groups/{group_id}/reporting-impact")
+async def get_account_group_reporting_impact(
+    group_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return which reports reference this account group (read-only)."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(AccountGroup, group_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Account group not found")
+    return {"group_id": group_id, "reports": COA_REPORT_IDS}
+
+
+@router.get("/coa-config", response_model=CoAConfigOut)
+async def get_coa_config(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    r = await db.execute(select(CoAConfig).where(CoAConfig.tenant_id == tenant.id))
+    cfg = r.scalars().first()
+    if cfg:
+        return cfg
+    # Return default in-memory (no row yet)
+    return CoAConfigOut(
+        id=0,
+        tenant_id=tenant.id,
+        account_number_prefix="AC-",
+        account_number_width=4,
+        group_code_prefix="GRP-",
+        group_code_width=4,
+        allow_manual_account_number=False,
+        max_group_depth=None,
+        max_account_depth=None,
+        validate_normal_balance=True,
+    )
+
+
+@router.put("/coa-config", response_model=CoAConfigOut)
+async def put_coa_config(
+    body: CoAConfigBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user)
+    r = await db.execute(select(CoAConfig).where(CoAConfig.tenant_id == tenant.id))
+    cfg = r.scalars().first()
+    payload = body.model_dump()
+    if cfg:
+        for k, v in payload.items():
+            setattr(cfg, k, v)
+        await db.commit()
+        await db.refresh(cfg)
+        return cfg
+    row = CoAConfig(tenant_id=tenant.id, **payload)
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+def _coa_export_csv(tenant_id: int, groups: list, accounts: list, group_by_id: dict, account_by_id: dict) -> str:
+    sio = StringIO()
+    w = csv.writer(sio)
+    # Groups section
+    w.writerow([
+        "section", "code", "name", "parent_code", "nature", "sort_order", "is_active",
+        "description", "reporting_code", "default_normal_balance", "allow_posting", "is_summary_group",
+    ])
+    for g in groups:
+        parent_code = ""
+        if g.parent_group_id and g.parent_group_id in group_by_id:
+            parent_code = group_by_id[g.parent_group_id].code
+        w.writerow([
+            "group", g.code, g.name, parent_code, g.nature, g.sort_order, g.is_active,
+            g.description or "", g.reporting_code or "", g.default_normal_balance or "debit",
+            g.allow_posting, g.is_summary_group,
+        ])
+    # Accounts section
+    w.writerow([
+        "section", "account_number", "name", "group_code", "normal_balance", "opening_balance", "balance",
+        "account_currency", "maintain_fc_balance", "description", "is_active", "is_bank_account",
+        "account_type", "reporting_code", "display_order", "statistical_unit", "parent_account_number",
+    ])
+    for a in accounts:
+        group_code = group_by_id.get(a.group_id)
+        group_code = group_code.code if group_code else ""
+        parent_num = ""
+        if getattr(a, "parent_account_id", None) and a.parent_account_id in account_by_id:
+            parent_num = account_by_id[a.parent_account_id].account_number
+        w.writerow([
+            "account", a.account_number, a.name, group_code, a.normal_balance, a.opening_balance, a.balance,
+            a.account_currency or "", a.maintain_fc_balance, a.description or "", a.is_active, a.is_bank_account,
+            getattr(a, "account_type", "posting"), getattr(a, "reporting_code", "") or "",
+            getattr(a, "display_order", 0), getattr(a, "statistical_unit", "") or "", parent_num,
+        ])
+    return sio.getvalue()
+
+
+@router.get("/coa/export")
+async def coa_export(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export Chart of Accounts (groups and accounts) as CSV."""
+    _ensure_tenant(user, tenant)
+    gr = await db.execute(select(AccountGroup).where(AccountGroup.tenant_id == tenant.id).order_by(AccountGroup.sort_order, AccountGroup.name))
+    groups = list(gr.scalars().all())
+    ac = await db.execute(
+        select(ChartOfAccount).where(ChartOfAccount.tenant_id == tenant.id).order_by(ChartOfAccount.display_order, ChartOfAccount.account_number)
+    )
+    accounts = list(ac.scalars().all())
+    group_by_id = {g.id: g for g in groups}
+    account_by_id = {a.id: a for a in accounts}
+    csv_data = _coa_export_csv(tenant.id, groups, accounts, group_by_id, account_by_id)
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="coa_export.csv"'},
+    )
+
+
+@router.post("/coa/import")
+async def coa_import(
+    file: UploadFile = File(...),
+    conflict: str = Query(default="skip", description="skip | update | abort"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Import Chart of Accounts from CSV. conflict: skip existing, update existing, or abort on first conflict."""
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user)
+    if conflict not in ("skip", "update", "abort"):
+        raise HTTPException(status_code=400, detail="conflict must be skip, update, or abort")
+    content = await file.read()
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+    sio = StringIO(text)
+    reader = csv.DictReader(sio)
+    rows = list(reader)
+    if not rows:
+        return {"ok": True, "groups_created": 0, "groups_updated": 0, "accounts_created": 0, "accounts_updated": 0, "errors": []}
+    # Separate group and account rows by section column or by column count
+    group_rows = []
+    account_rows = []
+    for r in rows:
+        sec = (r.get("section") or "").strip().lower()
+        if sec == "group":
+            group_rows.append(r)
+        elif sec == "account":
+            account_rows.append(r)
+    # Resolve group code -> id for parent and for account group_code
+    existing_groups = (await db.execute(select(AccountGroup).where(AccountGroup.tenant_id == tenant.id))).scalars().all()
+    code_to_group = {g.code: g for g in existing_groups}
+    coa_cfg = await _get_coa_config(db, tenant.id)
+    created_g = 0
+    updated_g = 0
+    errors = []
+    for r in group_rows:
+        code = (r.get("code") or "").strip()
+        if not code:
+            continue
+        parent_code = (r.get("parent_code") or "").strip()
+        parent_id = None
+        if parent_code and parent_code in code_to_group:
+            parent_id = code_to_group[parent_code].id
+        name = (r.get("name") or "").strip() or code
+        nature = (r.get("nature") or "Asset").strip()
+        sort_order = int(r.get("sort_order") or 0)
+        is_active = (r.get("is_active") or "true").strip().lower() not in ("false", "0", "no")
+        desc = (r.get("description") or "").strip() or None
+        reporting_code = (r.get("reporting_code") or "").strip() or None
+        default_normal_balance = (r.get("default_normal_balance") or "debit").strip().lower()
+        if default_normal_balance not in ("debit", "credit"):
+            default_normal_balance = "debit"
+        allow_posting = (r.get("allow_posting") or "true").strip().lower() not in ("false", "0", "no")
+        is_summary_group = (r.get("is_summary_group") or "false").strip().lower() in ("true", "1", "yes")
+        if code in code_to_group:
+            if conflict == "abort":
+                errors.append(f"Group code already exists: {code}")
+                return {"ok": False, "groups_created": created_g, "groups_updated": updated_g, "accounts_created": 0, "accounts_updated": 0, "errors": errors}
+            if conflict == "update":
+                g = code_to_group[code]
+                g.name = name
+                g.parent_group_id = parent_id
+                g.nature = nature
+                g.sort_order = sort_order
+                g.is_active = is_active
+                g.description = desc
+                g.reporting_code = reporting_code
+                g.default_normal_balance = default_normal_balance
+                g.allow_posting = allow_posting
+                g.is_summary_group = is_summary_group
+                updated_g += 1
+            # skip: do nothing
+        else:
+            new_group = AccountGroup(
+                tenant_id=tenant.id,
+                code=code,
+                name=name,
+                parent_group_id=parent_id,
+                nature=nature,
+                sort_order=sort_order,
+                is_active=is_active,
+                description=desc,
+                reporting_code=reporting_code,
+                default_normal_balance=default_normal_balance,
+                allow_posting=allow_posting,
+                is_summary_group=is_summary_group,
+            )
+            db.add(new_group)
+            await db.flush()
+            code_to_group[code] = new_group
+            created_g += 1
+    await db.commit()
+    # Refresh to get ids for new groups
+    existing_groups = (await db.execute(select(AccountGroup).where(AccountGroup.tenant_id == tenant.id))).scalars().all()
+    code_to_group = {g.code: g for g in existing_groups}
+    existing_accounts = (await db.execute(select(ChartOfAccount).where(ChartOfAccount.tenant_id == tenant.id))).scalars().all()
+    num_to_account = {a.account_number: a for a in existing_accounts}
+    created_a = 0
+    updated_a = 0
+    for r in account_rows:
+        account_number = (r.get("account_number") or "").strip()
+        if not account_number:
+            continue
+        group_code = (r.get("group_code") or "").strip()
+        if group_code not in code_to_group:
+            errors.append(f"Unknown group_code for account {account_number}: {group_code}")
+            continue
+        group_id = code_to_group[group_code].id
+        name = (r.get("name") or "").strip() or account_number
+        normal_balance = (r.get("normal_balance") or "debit").strip().lower()
+        if normal_balance not in ("debit", "credit"):
+            normal_balance = "debit"
+        opening_balance = (r.get("opening_balance") or "0").strip()
+        account_currency = (r.get("account_currency") or "").strip() or None
+        maintain_fc = (r.get("maintain_fc_balance") or "false").strip().lower() in ("true", "1", "yes")
+        desc = (r.get("description") or "").strip() or None
+        is_active = (r.get("is_active") or "true").strip().lower() not in ("false", "0", "no")
+        is_bank = (r.get("is_bank_account") or "false").strip().lower() in ("true", "1", "yes")
+        account_type = (r.get("account_type") or "posting").strip().lower()
+        if account_type not in ("posting", "statistical", "header"):
+            account_type = "posting"
+        reporting_code = (r.get("reporting_code") or "").strip() or None
+        display_order = int(r.get("display_order") or 0)
+        statistical_unit = (r.get("statistical_unit") or "").strip() or None
+        parent_account_number = (r.get("parent_account_number") or "").strip()
+        parent_account_id = None
+        if parent_account_number and parent_account_number in num_to_account:
+            parent_account_id = num_to_account[parent_account_number].id
+        if account_number in num_to_account:
+            if conflict == "abort":
+                errors.append(f"Account number already exists: {account_number}")
+                return {"ok": False, "groups_created": created_g, "groups_updated": updated_g, "accounts_created": created_a, "accounts_updated": updated_a, "errors": errors}
+            if conflict == "update":
+                acct = num_to_account[account_number]
+                acct.name = name
+                acct.group_id = group_id
+                acct.normal_balance = normal_balance
+                acct.account_currency = account_currency
+                acct.maintain_fc_balance = maintain_fc
+                acct.description = desc
+                acct.is_active = is_active
+                acct.is_bank_account = is_bank
+                acct.account_type = account_type
+                acct.reporting_code = reporting_code
+                acct.display_order = display_order
+                acct.statistical_unit = statistical_unit
+                acct.parent_account_id = parent_account_id
+                updated_a += 1
+        else:
+            new_acct = ChartOfAccount(
+                tenant_id=tenant.id,
+                account_number=account_number,
+                name=name,
+                group_id=group_id,
+                normal_balance=normal_balance,
+                opening_balance=opening_balance,
+                balance=opening_balance,
+                account_currency=account_currency,
+                maintain_fc_balance=maintain_fc,
+                description=desc,
+                is_active=is_active,
+                is_bank_account=is_bank,
+                account_type=account_type,
+                reporting_code=reporting_code,
+                display_order=display_order,
+                statistical_unit=statistical_unit,
+                parent_account_id=parent_account_id,
+            )
+            db.add(new_acct)
+            await db.flush()
+            num_to_account[account_number] = new_acct
+            created_a += 1
+    await db.commit()
+    return {"ok": True, "groups_created": created_g, "groups_updated": updated_g, "accounts_created": created_a, "accounts_updated": updated_a, "errors": errors}
 
 
 @router.get("/vouchers/types", response_model=list[VoucherTypeOut])
@@ -1006,6 +1647,17 @@ async def create_voucher(
         acct = await db.get(ChartOfAccount, line.account_id)
         if not acct or acct.tenant_id != tenant.id:
             raise HTTPException(status_code=404, detail=f"Account not found: {line.account_id}")
+        if getattr(acct, "account_type", "posting") == "header":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Posting not allowed to header account: {acct.account_number}",
+            )
+        grp = await db.get(AccountGroup, acct.group_id)
+        if grp and not getattr(grp, "allow_posting", True):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Posting not allowed to accounts in group '{grp.name}' (summary/post-disabled).",
+            )
         db.add(
             VoucherLine(
                 tenant_id=tenant.id,
@@ -2821,6 +3473,7 @@ async def create_payment_run(
     _ensure_tenant(user, tenant)
     if not body.items:
         raise HTTPException(status_code=400, detail="At least one payment item is required")
+    base_currency = (body.base_currency or "BDT").strip().upper()
     if body.bank_account_id is not None:
         bank = await db.get(BankAccount, body.bank_account_id)
         if not bank or bank.tenant_id != tenant.id:
@@ -2832,14 +3485,15 @@ async def create_payment_run(
         prefix="PR-",
         width=4,
     )
-    total = sum(_to_float(item.amount) for item in body.items)
+    total_base = 0.0
     run = PaymentRun(
         tenant_id=tenant.id,
         run_code=code,
         run_date=body.run_date,
         bank_account_id=body.bank_account_id,
+        base_currency=base_currency,
         status="DRAFT",
-        total_amount=str(round(total, 2)),
+        total_amount="0",
         remarks=body.remarks,
         created_by=user.id,
     )
@@ -2849,6 +3503,7 @@ async def create_payment_run(
         amount_value = round(_to_float(item.amount), 2)
         if amount_value <= 0:
             raise HTTPException(status_code=400, detail="Payment run item amount must be greater than zero")
+        bill = None
         if item.bill_id is not None:
             bill = await db.get(OutstandingBill, item.bill_id)
             if not bill or bill.tenant_id != tenant.id:
@@ -2861,6 +3516,35 @@ async def create_payment_run(
                     status_code=400,
                     detail=f"Payment amount exceeds outstanding balance for bill: {bill.bill_no}",
                 )
+        source_currency = (
+            (item.source_currency or (bill.currency if bill else None) or base_currency).strip().upper()
+        )
+        if bill and bill.currency and source_currency != str(bill.currency).strip().upper():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Source currency mismatch with bill currency for bill: {bill.bill_no}",
+            )
+        fx_rate = round(_to_float(item.fx_rate_to_base), 6)
+        if source_currency == base_currency:
+            fx_rate = 1.0
+        if fx_rate <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"fx_rate_to_base is required and must be > 0 for currency {source_currency}",
+            )
+        calculated_base_amount = round(amount_value * fx_rate, 2)
+        base_amount = round(_to_float(item.base_amount), 2)
+        if base_amount <= 0:
+            base_amount = calculated_base_amount
+        if abs(base_amount - calculated_base_amount) > 0.05:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"base_amount mismatch for {item.party_name}. "
+                    f"Expected {calculated_base_amount} using amount x fx_rate_to_base"
+                ),
+            )
+        total_base += base_amount
         db.add(
             PaymentRunItem(
                 tenant_id=tenant.id,
@@ -2868,10 +3552,14 @@ async def create_payment_run(
                 bill_id=item.bill_id,
                 party_name=item.party_name,
                 amount=str(amount_value),
+                source_currency=source_currency,
+                fx_rate_to_base=str(fx_rate),
+                base_amount=str(base_amount),
                 status="PENDING",
                 reference=item.reference,
             )
         )
+    run.total_amount = str(round(total_base, 2))
     await db.commit()
     await db.refresh(run)
     return await _payment_run_out(db, run)
@@ -2923,7 +3611,7 @@ async def execute_payment_run(
         party_totals: dict[str, float] = defaultdict(float)
         for item in items:
             party = (item.party_name or "").strip() or "Unknown Supplier"
-            party_totals[party] += _to_float(item.amount)
+            party_totals[party] += _to_float(item.base_amount)
 
         voucher = Voucher(
             tenant_id=tenant.id,
@@ -2958,7 +3646,7 @@ async def execute_payment_run(
                     cost_center_id=None,
                     entry_type="DEBIT",
                     amount=str(rounded_amount),
-                    notes=f"Payment run {run.run_code} - {party_name}",
+                    notes=f"Payment run {run.run_code} - {party_name} ({run.base_currency})",
                 )
             )
             _apply_voucher_impact(supplier_ap, "DEBIT", rounded_amount)
@@ -2970,7 +3658,7 @@ async def execute_payment_run(
             cost_center_id=None,
             entry_type="CREDIT",
             amount=str(total_amount),
-            notes=f"Payment run {run.run_code}",
+            notes=f"Payment run {run.run_code} ({run.base_currency})",
         )
         db.add(credit_line)
         _apply_voucher_impact(bank_gl, "CREDIT", total_amount)
@@ -3019,6 +3707,9 @@ async def payment_run_advice(
                 "party_name": item.party_name,
                 "reference": item.reference,
                 "amount": round(_to_float(item.amount), 2),
+                "source_currency": item.source_currency,
+                "fx_rate_to_base": round(_to_float(item.fx_rate_to_base), 6),
+                "base_amount": round(_to_float(item.base_amount), 2),
                 "status": item.status,
             }
         )
@@ -3030,14 +3721,281 @@ async def payment_run_advice(
             "status": run.status,
             "bank_name": bank_name,
             "bank_account_name": account_name,
+            "base_currency": run.base_currency,
             "executed_voucher_id": run.executed_voucher_id,
         },
         "items": output,
         "totals": {
             "item_count": len(output),
             "total_amount": round(_to_float(run.total_amount), 2),
+            "base_currency": run.base_currency,
         },
     }
+
+
+@router.get("/banking/settlement-audit", response_model=SettlementAuditOut)
+async def settlement_audit(
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    status_filter: str | None = Query(default=None),
+    source_currency: str | None = Query(default=None),
+    party_query: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    raw_rows = await _load_settlement_audit_rows(
+        db=db,
+        tenant_id=tenant.id,
+        from_date=from_date,
+        to_date=to_date,
+        status_filter=status_filter,
+        source_currency=source_currency,
+        party_query=party_query,
+    )
+    totals_source = round(sum(_to_float(r[0].amount) for r in raw_rows), 2)
+    totals_base = round(sum(_to_float(r[0].base_amount) for r in raw_rows), 2)
+    paged = raw_rows[offset : offset + limit]
+    rows: list[SettlementAuditRow] = []
+    for item, run, bill_no in paged:
+        rows.append(
+            SettlementAuditRow(
+                item_id=item.id,
+                run_id=run.id,
+                run_code=run.run_code,
+                run_date=run.run_date,
+                run_status=run.status,
+                party_name=item.party_name,
+                bill_no=bill_no,
+                source_currency=item.source_currency,
+                source_amount=round(_to_float(item.amount), 2),
+                fx_rate_to_base=round(_to_float(item.fx_rate_to_base), 6),
+                base_amount=round(_to_float(item.base_amount), 2),
+                base_currency=run.base_currency,
+            )
+        )
+    return SettlementAuditOut(
+        rows=rows,
+        totals=SettlementAuditTotals(
+            row_count=len(raw_rows),
+            source_total=totals_source,
+            base_total=totals_base,
+        ),
+    )
+
+
+async def _load_settlement_audit_rows(
+    db: AsyncSession,
+    tenant_id: int,
+    from_date: date | None = None,
+    to_date: date | None = None,
+    status_filter: str | None = None,
+    source_currency: str | None = None,
+    party_query: str | None = None,
+):
+    stmt = (
+        select(PaymentRunItem, PaymentRun, OutstandingBill.bill_no)
+        .join(PaymentRun, PaymentRun.id == PaymentRunItem.payment_run_id)
+        .outerjoin(
+            OutstandingBill,
+            OutstandingBill.id == PaymentRunItem.bill_id,
+        )
+        .where(PaymentRunItem.tenant_id == tenant_id, PaymentRun.tenant_id == tenant_id)
+    )
+    if from_date is not None:
+        stmt = stmt.where(PaymentRun.run_date >= from_date)
+    if to_date is not None:
+        stmt = stmt.where(PaymentRun.run_date <= to_date)
+    if status_filter:
+        stmt = stmt.where(PaymentRun.status == status_filter.strip().upper())
+    if source_currency:
+        stmt = stmt.where(PaymentRunItem.source_currency == source_currency.strip().upper())
+    if party_query:
+        q = f"%{party_query.strip().lower()}%"
+        stmt = stmt.where(func.lower(PaymentRunItem.party_name).like(q))
+    return list(
+        (
+            await db.execute(
+                stmt.order_by(
+                    PaymentRun.run_date.desc(),
+                    PaymentRun.id.desc(),
+                    PaymentRunItem.id.desc(),
+                )
+            )
+        ).all()
+    )
+
+
+def _settlement_preset_to_out(row: SettlementAuditPreset) -> SettlementAuditPresetOut:
+    return SettlementAuditPresetOut(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        name=row.name,
+        from_date=row.from_date,
+        to_date=row.to_date,
+        status_filter=row.status_filter,
+        source_currency=row.source_currency,
+        party_query=row.party_query,
+        created_by=row.created_by,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+@router.get(
+    "/banking/settlement-audit-presets",
+    response_model=list[SettlementAuditPresetOut],
+)
+async def list_settlement_audit_presets(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    rows = list(
+        (
+            await db.execute(
+                select(SettlementAuditPreset)
+                .where(SettlementAuditPreset.tenant_id == tenant.id)
+                .order_by(SettlementAuditPreset.updated_at.desc(), SettlementAuditPreset.id.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [_settlement_preset_to_out(r) for r in rows]
+
+
+@router.post(
+    "/banking/settlement-audit-presets",
+    response_model=SettlementAuditPresetOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def save_settlement_audit_preset(
+    body: SettlementAuditPresetBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Preset name is required")
+    existing = (
+        await db.execute(
+            select(SettlementAuditPreset).where(
+                SettlementAuditPreset.tenant_id == tenant.id,
+                func.lower(SettlementAuditPreset.name) == name.lower(),
+            )
+        )
+    ).scalars().first()
+    if existing:
+        existing.from_date = body.from_date
+        existing.to_date = body.to_date
+        existing.status_filter = body.status_filter.strip().upper() if body.status_filter else None
+        existing.source_currency = (
+            body.source_currency.strip().upper() if body.source_currency else None
+        )
+        existing.party_query = body.party_query.strip() if body.party_query else None
+        existing.created_by = user.id
+        await db.commit()
+        await db.refresh(existing)
+        return _settlement_preset_to_out(existing)
+    row = SettlementAuditPreset(
+        tenant_id=tenant.id,
+        name=name,
+        from_date=body.from_date,
+        to_date=body.to_date,
+        status_filter=body.status_filter.strip().upper() if body.status_filter else None,
+        source_currency=body.source_currency.strip().upper() if body.source_currency else None,
+        party_query=body.party_query.strip() if body.party_query else None,
+        created_by=user.id,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return _settlement_preset_to_out(row)
+
+
+@router.delete(
+    "/banking/settlement-audit-presets/{preset_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_settlement_audit_preset(
+    preset_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(SettlementAuditPreset, preset_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    await db.delete(row)
+    await db.commit()
+
+
+@router.get("/banking/settlement-audit/export.csv")
+async def settlement_audit_export_csv(
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    status_filter: str | None = Query(default=None),
+    source_currency: str | None = Query(default=None),
+    party_query: str | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    raw_rows = await _load_settlement_audit_rows(
+        db=db,
+        tenant_id=tenant.id,
+        from_date=from_date,
+        to_date=to_date,
+        status_filter=status_filter,
+        source_currency=source_currency,
+        party_query=party_query,
+    )
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "run_code",
+            "run_date",
+            "run_status",
+            "party_name",
+            "bill_no",
+            "source_currency",
+            "source_amount",
+            "fx_rate_to_base",
+            "base_amount",
+            "base_currency",
+        ]
+    )
+    for item, run, bill_no in raw_rows:
+        writer.writerow(
+            [
+                run.run_code,
+                run.run_date.isoformat() if run.run_date else "",
+                run.status,
+                item.party_name,
+                bill_no or "",
+                item.source_currency,
+                round(_to_float(item.amount), 2),
+                round(_to_float(item.fx_rate_to_base), 6),
+                round(_to_float(item.base_amount), 2),
+                run.base_currency,
+            ]
+        )
+    filename = f"settlement_audit_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/purchase-workflow/ap-overview")

@@ -23,13 +23,13 @@ export function MarginPricingCard({
         <div>
           <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Profit Margin (%)</div>
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-semibold text-gray-900">
-            {profitPercentage ?? "0"}%
+            {toSafeNumber(profitPercentage).toFixed(1)}%
           </div>
         </div>
         <div>
           <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Agency Commission (%)</div>
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-semibold text-gray-900">
-            {commissionValue ?? "0"}%
+            {toSafeNumber(commissionValue).toFixed(1)}%
           </div>
         </div>
       </div>

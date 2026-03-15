@@ -17,6 +17,7 @@ from app.models import (
   Inquiry,
   InquiryEvent,
   InquiryItem,
+  Quotation,
   Tenant,
   User,
 )
@@ -116,10 +117,32 @@ async def _get_styles_by_id(
   return {row.id: row for row in result.scalars().all()}
 
 
+async def _get_converted_quotation_map(
+  db: AsyncSession, *, tenant_id: int, inquiry_ids: list[int]
+) -> dict[int, int]:
+  if not inquiry_ids:
+    return {}
+  result = await db.execute(
+    select(Quotation.id, Quotation.inquiry_id)
+    .where(
+      Quotation.tenant_id == tenant_id,
+      Quotation.inquiry_id.in_(inquiry_ids),
+    )
+    .order_by(Quotation.created_at.desc(), Quotation.id.desc())
+  )
+  mapping: dict[int, int] = {}
+  for quotation_id, inquiry_id in result.all():
+    if inquiry_id is None:
+      continue
+    mapping.setdefault(inquiry_id, quotation_id)
+  return mapping
+
+
 def _serialize_inquiry(
   inquiry: Inquiry,
   items: list[InquiryItemResponse] | None = None,
   style: GarmentStyle | None = None,
+  converted_quotation_id: int | None = None,
 ) -> InquiryResponse:
   commission_value = float(inquiry.commission_value) if inquiry.commission_value is not None else None
   return InquiryResponse(
@@ -141,6 +164,8 @@ def _serialize_inquiry(
     commission_type=inquiry.commission_type,
     commission_value=commission_value,
     status=inquiry.status,
+    is_converted_to_quotation=converted_quotation_id is not None,
+    converted_quotation_id=converted_quotation_id,
     notes=inquiry.notes,
     items=items or [],
     created_at=inquiry.created_at.isoformat(),
@@ -188,7 +213,7 @@ async def list_inquiries(
   department: str | None = Query(default=None, description="Filter by department"),
   created_from: date | None = Query(default=None, description="Created at from (inclusive)"),
   created_to: date | None = Query(default=None, description="Created at to (inclusive)"),
-  limit: int = Query(default=50, ge=1, le=200),
+  limit: int = Query(default=50, ge=1, le=500),
   offset: int = Query(default=0, ge=0),
   tenant: Tenant = Depends(require_tenant),
   user: User = Depends(get_current_user),
@@ -235,7 +260,18 @@ async def list_inquiries(
     tenant_id=tenant.id,
     style_ids=[r.style_id for r in rows if r.style_id is not None],
   )
-  return [_serialize_inquiry(r, item_map.get(r.id, []), style_map.get(r.style_id or -1)) for r in rows]
+  converted_map = await _get_converted_quotation_map(
+    db, tenant_id=tenant.id, inquiry_ids=[r.id for r in rows]
+  )
+  return [
+    _serialize_inquiry(
+      r,
+      item_map.get(r.id, []),
+      style_map.get(r.style_id or -1),
+      converted_map.get(r.id),
+    )
+    for r in rows
+  ]
 
 
 @router.post("", response_model=InquiryResponse, status_code=status.HTTP_201_CREATED)
@@ -296,7 +332,15 @@ async def create_inquiry(
   )
   await db.refresh(inquiry)
   item_map = await _get_items_by_inquiry_id(db, tenant_id=tenant.id, inquiry_ids=[inquiry.id])
-  return _serialize_inquiry(inquiry, item_map.get(inquiry.id, []), style)
+  converted_map = await _get_converted_quotation_map(
+    db, tenant_id=tenant.id, inquiry_ids=[inquiry.id]
+  )
+  return _serialize_inquiry(
+    inquiry,
+    item_map.get(inquiry.id, []),
+    style,
+    converted_map.get(inquiry.id),
+  )
 
 
 @router.get("/{inquiry_id}", response_model=InquiryResponse)
@@ -319,7 +363,15 @@ async def get_inquiry(
     style = await db.get(GarmentStyle, inquiry.style_id)
     if style and style.tenant_id != tenant.id:
       style = None
-  return _serialize_inquiry(inquiry, item_map.get(inquiry.id, []), style)
+  converted_map = await _get_converted_quotation_map(
+    db, tenant_id=tenant.id, inquiry_ids=[inquiry.id]
+  )
+  return _serialize_inquiry(
+    inquiry,
+    item_map.get(inquiry.id, []),
+    style,
+    converted_map.get(inquiry.id),
+  )
 
 
 @router.patch("/{inquiry_id}", response_model=InquiryResponse)
@@ -385,7 +437,15 @@ async def update_inquiry(
     style = await db.get(GarmentStyle, inquiry.style_id)
     if style and style.tenant_id != tenant.id:
       style = None
-  return _serialize_inquiry(inquiry, item_map.get(inquiry.id, []), style)
+  converted_map = await _get_converted_quotation_map(
+    db, tenant_id=tenant.id, inquiry_ids=[inquiry.id]
+  )
+  return _serialize_inquiry(
+    inquiry,
+    item_map.get(inquiry.id, []),
+    style,
+    converted_map.get(inquiry.id),
+  )
 
 
 @router.delete("/{inquiry_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -448,7 +508,15 @@ async def update_inquiry_status(
     style = await db.get(GarmentStyle, inquiry.style_id)
     if style and style.tenant_id != tenant.id:
       style = None
-  return _serialize_inquiry(inquiry, item_map.get(inquiry.id, []), style)
+  converted_map = await _get_converted_quotation_map(
+    db, tenant_id=tenant.id, inquiry_ids=[inquiry.id]
+  )
+  return _serialize_inquiry(
+    inquiry,
+    item_map.get(inquiry.id, []),
+    style,
+    converted_map.get(inquiry.id),
+  )
 
 
 @router.get("/{inquiry_id}/trace")

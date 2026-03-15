@@ -13,6 +13,10 @@ from app.models.merch import (
     ConsumptionPlan,
     ConsumptionPlanItem,
     Followup,
+    FollowupActionTemplate,
+    OrderFollowupAction,
+    FollowupActionComment,
+    FollowupActionRejectionLog,
     StyleComponent,
     StyleColorway,
     StyleSizeScale,
@@ -35,6 +39,7 @@ from app.models.costing import (
 from app.models.inventory import (
     Warehouse,
     StockGroup,
+    Vendor,
     PurchaseOrder,
     PurchaseOrderItem,
     GoodsReceiving,
@@ -75,6 +80,7 @@ from app.models.manufacturing import (
 )
 from app.models.finance import (
     AccountGroup,
+    CoAConfig,
     ChartOfAccount,
     VoucherType,
     Voucher,
@@ -92,6 +98,7 @@ from app.models.finance import (
     BankStatementMatchLog,
     PaymentRun,
     PaymentRunItem,
+    SettlementAuditPreset,
     AccountingPeriod,
 )
 from app.models.hr import (
@@ -139,7 +146,13 @@ from app.models.hr_payroll import (
     PayrollPosting,
     PayrollPayslip,
 )
-from app.models.commercial import ExportCase, ProformaInvoice, BtbLc
+from app.models.commercial import (
+    BtbLc,
+    ExportCase,
+    MasterContract,
+    ProformaInvoice,
+    ProformaInvoiceOrder,
+)
 from app.models.parties import Intermediary, CustomerIntermediary
 from app.models.ai_tool import (
     AiSession,
@@ -154,6 +167,23 @@ from app.models.ai_tool import (
     AiAutomationRule,
     AiActionRun,
     AiAnomalyEvent,
+)
+from app.models.alert import (
+    AlertDefinition,
+    AlertInstance,
+    AlertHistory,
+    AlertComment,
+    AlertRelatedEntity,
+    AlertScanLog,
+    AlertEscalationLog,
+    AlertSavedView,
+)
+from app.models.wastage import (
+    WastageReason,
+    WastageTransaction,
+    WastageThresholdRule,
+    WastageOrderSummary,
+    WastageSavedView,
 )
 
 __all__ = [
@@ -174,6 +204,10 @@ __all__ = [
     "ConsumptionPlan",
     "ConsumptionPlanItem",
     "Followup",
+    "FollowupActionTemplate",
+    "OrderFollowupAction",
+    "FollowupActionComment",
+    "FollowupActionRejectionLog",
     "StyleComponent",
     "StyleColorway",
     "StyleSizeScale",
@@ -192,6 +226,7 @@ __all__ = [
     "QuotationCostSummary",
     "Warehouse",
     "StockGroup",
+    "Vendor",
     "PurchaseOrder",
     "PurchaseOrderItem",
     "GoodsReceiving",
@@ -228,6 +263,7 @@ __all__ = [
     "ManufacturingTnaPlan",
     "ManufacturingTnaPlanTask",
     "AccountGroup",
+    "CoAConfig",
     "ChartOfAccount",
     "VoucherType",
     "Voucher",
@@ -245,6 +281,7 @@ __all__ = [
     "BankStatementMatchLog",
     "PaymentRun",
     "PaymentRunItem",
+    "SettlementAuditPreset",
     "AccountingPeriod",
     "Department",
     "Designation",
@@ -278,7 +315,9 @@ __all__ = [
     "PayrollPosting",
     "PayrollPayslip",
     "ExportCase",
+    "MasterContract",
     "ProformaInvoice",
+    "ProformaInvoiceOrder",
     "BtbLc",
     "Intermediary",
     "CustomerIntermediary",
@@ -294,4 +333,17 @@ __all__ = [
     "AiAutomationRule",
     "AiActionRun",
     "AiAnomalyEvent",
+    "AlertDefinition",
+    "AlertInstance",
+    "AlertHistory",
+    "AlertComment",
+    "AlertRelatedEntity",
+    "AlertScanLog",
+    "AlertEscalationLog",
+    "AlertSavedView",
+    "WastageReason",
+    "WastageTransaction",
+    "WastageThresholdRule",
+    "WastageOrderSummary",
+    "WastageSavedView",
 ]

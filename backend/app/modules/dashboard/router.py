@@ -212,21 +212,23 @@ async def production_trends(
 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
+    # Keep this DB-agnostic (SQLite + Postgres) by bucketing in Python.
     result = await db.execute(
-        select(func.date_trunc("month", Order.created_at), func.count())
-        .where(Order.tenant_id == tenant.id)
-        .group_by(func.date_trunc("month", Order.created_at))
-        .order_by(func.date_trunc("month", Order.created_at))
+        select(Order.created_at).where(Order.tenant_id == tenant.id).order_by(Order.created_at.asc())
     )
     rows = result.all()
+    month_counts: dict[str, int] = {}
+    for (created_at,) in rows:
+        month_key = created_at.strftime("%b %Y")
+        month_counts[month_key] = month_counts.get(month_key, 0) + 1
     points = []
-    for month_dt, order_count in rows:
+    for month_key, order_count in month_counts.items():
         output = int(order_count or 0)
         target = max(output + 2, 5)
         efficiency = round((output / target) * 100, 1) if target > 0 else 0
         points.append(
             {
-                "date": month_dt.strftime("%b %Y"),
+                "date": month_key,
                 "output": output,
                 "target": target,
                 "efficiency": efficiency,
@@ -340,13 +342,13 @@ async def revenue_trend(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
     result = await db.execute(
-        select(func.date_trunc("month", Quotation.created_at), Quotation.quoted_price, Quotation.total_amount)
+        select(Quotation.created_at, Quotation.quoted_price, Quotation.total_amount)
         .where(Quotation.tenant_id == tenant.id)
-        .order_by(func.date_trunc("month", Quotation.created_at))
+        .order_by(Quotation.created_at.asc())
     )
     bucket: dict[str, float] = {}
-    for month_dt, quoted_price, total_amount in result.all():
-        key = month_dt.strftime("%b %Y")
+    for created_at, quoted_price, total_amount in result.all():
+        key = created_at.strftime("%b %Y")
         raw = quoted_price or total_amount or "0"
         try:
             value = float(raw)

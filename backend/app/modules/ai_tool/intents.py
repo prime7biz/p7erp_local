@@ -34,6 +34,13 @@ def detect_intent(prompt: str) -> IntentResult:
         "buyer wise",
         "vendor",
         "status",
+        "bom",
+        "material requirement",
+        "wastage",
+        "suggest vendor",
+        "suggest item",
+        "similar style",
+        "orders with shortage",
     }
     summary_keywords = {"summary", "snapshot", "dashboard", "production issues", "inventory", "finance"}
     help_keywords = {

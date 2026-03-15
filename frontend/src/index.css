@@ -56,4 +56,33 @@ body {
   .print-report td {
     border: 1px solid #dbe2ea;
   }
+
+  /* TNA Follow-up: print only timeline or only action list */
+  body.print-timeline * {
+    visibility: hidden;
+  }
+  body.print-timeline #timeline-print-area,
+  body.print-timeline #timeline-print-area * {
+    visibility: visible;
+  }
+  body.print-timeline #timeline-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  body.print-list * {
+    visibility: hidden;
+  }
+  body.print-list #followup-table-print-area,
+  body.print-list #followup-table-print-area * {
+    visibility: visible;
+  }
+  body.print-list #followup-table-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
 }

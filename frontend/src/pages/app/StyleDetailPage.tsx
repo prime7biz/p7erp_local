@@ -84,6 +84,13 @@ export function StyleDetailPage() {
           <p className="text-sm text-gray-500 mt-0.5">{style.status} · {style.department ?? "No department"}</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => window.open(`/app/merchandising/styles/${styleId}/print`, "_blank", "noopener,noreferrer")}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Print / Save PDF
+          </button>
           <label className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
             {uploadingImage ? "Uploading..." : "Upload style image"}
             <input
@@ -116,7 +123,8 @@ export function StyleDetailPage() {
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="overflow-x-auto">
+      <div className="grid gap-4 md:grid-cols-3 min-w-[640px]">
         <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
           <h2 className="text-sm font-semibold text-gray-900">Components</h2>
           <div className="flex gap-2">
@@ -194,6 +202,7 @@ export function StyleDetailPage() {
             ))}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

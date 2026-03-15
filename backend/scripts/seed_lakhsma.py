@@ -4,6 +4,9 @@ Run from backend dir: python scripts/seed_lakhsma.py
 Requires DATABASE_URL or default postgres in .env.
 After running, open /login and sign in with the printed company code, username, and password;
 you will be redirected to /app Dashboard.
+
+Run this first. For full merchandising demo data (customers, inquiries, quotations, orders, styles, BOM, follow-ups),
+run next: seed_costing_demo.py (optional), then seed_merch_demo.py.
 """
 import asyncio
 import sys

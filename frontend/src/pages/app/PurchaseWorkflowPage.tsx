@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -39,9 +39,14 @@ export function PurchaseWorkflowPage() {
     void load();
   }, []);
 
-  async function createPayable(poId: number) {
+  const poById = useMemo(() => new Map(approvedPoRows.map((po) => [po.id, po])), [approvedPoRows]);
+
+  async function createPayable(po: PurchaseOrderResponse) {
     try {
-      await api.createPayableFromPurchaseOrder(poId, { due_in_days: 30, currency: "BDT" });
+      await api.createPayableFromPurchaseOrder(po.id, {
+        due_in_days: 30,
+        currency: po.currency || "BDT",
+      });
       setSuccess("AP bill created from purchase order.");
       setError("");
       await load();
@@ -50,9 +55,10 @@ export function PurchaseWorkflowPage() {
     }
   }
 
-  async function createPayableFromGrn(grnId: number) {
+  async function createPayableFromGrn(grn: GoodsReceivingResponse) {
     try {
-      await api.createPayableFromGoodsReceiving(grnId, { due_in_days: 30, currency: "BDT" });
+      const poCurrency = (grn.purchase_order_id ? poById.get(grn.purchase_order_id)?.currency : undefined) || "BDT";
+      await api.createPayableFromGoodsReceiving(grn.id, { due_in_days: 30, currency: poCurrency });
       setSuccess("AP bill created from received GRN.");
       setError("");
       await load();
@@ -105,6 +111,7 @@ export function PurchaseWorkflowPage() {
               <th className="px-2 py-1">Bill No</th>
               <th className="px-2 py-1">Party</th>
               <th className="px-2 py-1">Due Date</th>
+              <th className="px-2 py-1">Currency</th>
               <th className="px-2 py-1 text-right">Amount</th>
               <th className="px-2 py-1 text-right">Paid</th>
               <th className="px-2 py-1 text-right">Outstanding</th>
@@ -118,6 +125,7 @@ export function PurchaseWorkflowPage() {
                   <td className="px-2 py-1">{b.bill_no}</td>
                   <td className="px-2 py-1">{b.party_name}</td>
                   <td className="px-2 py-1">{b.due_date}</td>
+                  <td className="px-2 py-1">{b.currency}</td>
                   <td className="px-2 py-1 text-right">{Number(b.amount).toLocaleString()}</td>
                   <td className="px-2 py-1 text-right">{Number(b.paid_amount).toLocaleString()}</td>
                   <td className="px-2 py-1 text-right">{outstanding.toLocaleString()}</td>
@@ -138,6 +146,9 @@ export function PurchaseWorkflowPage() {
               <th className="px-2 py-1">PO Code</th>
               <th className="px-2 py-1">Supplier</th>
               <th className="px-2 py-1">Order Date</th>
+              <th className="px-2 py-1">Currency</th>
+              <th className="px-2 py-1 text-right">FX</th>
+              <th className="px-2 py-1 text-right">Base Total</th>
               <th className="px-2 py-1">Status</th>
               <th className="px-2 py-1">Action</th>
             </tr>
@@ -148,9 +159,16 @@ export function PurchaseWorkflowPage() {
                 <td className="px-2 py-1">{po.po_code}</td>
                 <td className="px-2 py-1">{po.supplier_name}</td>
                 <td className="px-2 py-1">{po.order_date ?? "-"}</td>
+                <td className="px-2 py-1">{po.currency ?? "BDT"}</td>
+                <td className="px-2 py-1 text-right">
+                  {po.exchange_rate_to_base != null ? Number(po.exchange_rate_to_base).toFixed(4) : "—"}
+                </td>
+                <td className="px-2 py-1 text-right">
+                  {po.base_total_amount != null ? Number(po.base_total_amount).toLocaleString() : "—"}
+                </td>
                 <td className="px-2 py-1">{po.status}</td>
                 <td className="px-2 py-1">
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => void createPayable(po.id)}>
+                  <button className="rounded border px-2 py-1 text-xs" onClick={() => void createPayable(po)}>
                     Create AP Bill
                   </button>
                 </td>
@@ -170,6 +188,7 @@ export function PurchaseWorkflowPage() {
               <th className="px-2 py-1">GRN Code</th>
               <th className="px-2 py-1">PO ID</th>
               <th className="px-2 py-1">Received Date</th>
+              <th className="px-2 py-1">PO Currency</th>
               <th className="px-2 py-1">Status</th>
               <th className="px-2 py-1">Action</th>
             </tr>
@@ -180,9 +199,10 @@ export function PurchaseWorkflowPage() {
                 <td className="px-2 py-1">{grn.grn_code}</td>
                 <td className="px-2 py-1">{grn.purchase_order_id ?? "-"}</td>
                 <td className="px-2 py-1">{grn.received_date ?? "-"}</td>
+                <td className="px-2 py-1">{grn.purchase_order_id ? poById.get(grn.purchase_order_id)?.currency ?? "BDT" : "BDT"}</td>
                 <td className="px-2 py-1">{grn.status}</td>
                 <td className="px-2 py-1">
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => void createPayableFromGrn(grn.id)}>
+                  <button className="rounded border px-2 py-1 text-xs" onClick={() => void createPayableFromGrn(grn)}>
                     Create AP Bill
                   </button>
                 </td>

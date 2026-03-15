@@ -7,6 +7,9 @@ export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
   },
+  optimizeDeps: {
+    include: ["qrcode.react"],
+  },
   build: {
     rollupOptions: {
       output: {
@@ -41,7 +44,8 @@ export default defineConfig({
     },
     proxy: {
       "/api": {
-        target: process.env.VITE_DEV_PROXY_TARGET ?? "http://backend:8000",
+        // Default localhost so dev on host works; in Docker set VITE_DEV_PROXY_TARGET=http://backend:8000 if using proxy
+        target: process.env.VITE_DEV_PROXY_TARGET ?? "http://localhost:8000",
         changeOrigin: true,
       },
     },

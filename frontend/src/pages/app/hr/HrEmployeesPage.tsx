@@ -19,6 +19,7 @@ export function HrEmployeesPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<HrEmployeeResponse | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [form, setForm] = useState<HrEmployeeCreate>({
     employee_code: "",
     first_name: "",
@@ -55,6 +56,12 @@ export function HrEmployeesPage() {
   useEffect(() => {
     load();
   }, [showInactive, search]);
+
+  useEffect(() => {
+    const close = () => setOpenActionsId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, []);
 
   const openCreate = () => {
     setEditing(null);
@@ -187,20 +194,37 @@ export function HrEmployeesPage() {
                       {row.designation_id ? designationMap.get(row.designation_id) ?? "Unknown" : "Unassigned"}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">{row.is_active ? "Active" : "Inactive"}</td>
-                    <td className="px-4 py-3 text-right space-x-2">
-                      <Link
-                        to={`/app/hr/employees/${row.id}`}
-                        className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        View
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => openEdit(row)}
-                        className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
-                        Edit
-                      </button>
+                    <td className="px-4 py-3 text-right">
+                      <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenActionsId(openActionsId === row.id ? null : row.id)}
+                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          Actions
+                        </button>
+                        {openActionsId === row.id && (
+                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                            <Link
+                              to={`/app/hr/employees/${row.id}`}
+                              className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              onClick={() => setOpenActionsId(null)}
+                            >
+                              View
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                openEdit(row);
+                                setOpenActionsId(null);
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

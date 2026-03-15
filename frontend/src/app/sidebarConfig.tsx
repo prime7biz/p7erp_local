@@ -18,7 +18,6 @@ import {
   BarChart3,
   CheckSquare,
   Clock,
-  Warehouse,
   CreditCard,
   Target,
   FileBarChart,
@@ -49,6 +48,7 @@ import {
   HardDrive,
   Building2,
   Menu,
+  SlidersHorizontal,
 } from "lucide-react";
 
 export type TenantTypeFilter = "manufacturer" | "buying_house" | "both";
@@ -101,9 +101,10 @@ export const menuSections: MenuSection[] = [
       { icon: Calculator, label: "BOM Builder", href: `${PREFIX}/bom` },
       { icon: Target, label: "Consumption Plans", href: `${PREFIX}/bom/orders` },
       { icon: TrendingUp, label: "Order Pipeline", href: `${PREFIX}/merchandising/pipeline` },
+      { icon: BarChart3, label: "Pipeline Analytics", href: `${PREFIX}/merchandising/pipeline-analytics` },
       { icon: AlertTriangle, label: "Critical Alerts", href: `${PREFIX}/merchandising/alerts` },
+      { icon: BarChart3, label: "Wastage Report", href: `${PREFIX}/merchandising/wastage-report` },
       { icon: ArrowRightLeft, label: "Consumption Recon", href: `${PREFIX}/merchandising/consumption-reconciliation` },
-      { icon: Globe, label: "Commercial", href: `${PREFIX}/commercial` },
       { icon: Activity, label: "Order Follow-up", href: `${PREFIX}/followup` },
       { icon: Users, label: "Parties", href: `${PREFIX}/parties` },
       { icon: TrendingUp, label: "Document Flow", href: `${PREFIX}/flow` },
@@ -113,7 +114,9 @@ export const menuSections: MenuSection[] = [
     section: "Export & Import",
     icon: Globe,
     items: [
+      { icon: Globe, label: "Commercial", href: `${PREFIX}/commercial` },
       { icon: Globe, label: "Export Cases", href: `${PREFIX}/commercial/export-cases` },
+      { icon: BookOpen, label: "Master Contracts", href: `${PREFIX}/commercial/master-contracts` },
       { icon: FileText, label: "Proforma Invoices", href: `${PREFIX}/commercial/proforma-invoices` },
       { icon: ArrowRightLeft, label: "BTB LCs", href: `${PREFIX}/commercial/btb-lcs` },
       { icon: Truck, label: "Logistics", href: `${PREFIX}/logistics` },
@@ -123,10 +126,9 @@ export const menuSections: MenuSection[] = [
     section: "Inventory",
     icon: Package,
     items: [
-      { icon: Package, label: "Items & Stock", href: `${PREFIX}/inventory` },
+      { icon: Package, label: "Stock Master", href: `${PREFIX}/inventory` },
       { icon: FolderTree, label: "Stock Groups", href: `${PREFIX}/inventory/stock-groups` },
-      { icon: Warehouse, label: "Warehouses", href: `${PREFIX}/inventory/warehouses` },
-      { icon: Layers, label: "Units", href: `${PREFIX}/inventory/units` },
+      { icon: Building2, label: "Vendors", href: `${PREFIX}/inventory/vendors` },
       { icon: ShoppingCart, label: "Purchase Orders", href: `${PREFIX}/inventory/purchase-orders` },
       { icon: ClipboardCheck, label: "Goods Receiving", href: `${PREFIX}/inventory/goods-receiving` },
       { icon: Factory, label: "Process Orders", href: `${PREFIX}/inventory/process-orders` },
@@ -222,6 +224,7 @@ export const menuSections: MenuSection[] = [
     section: "Finance",
     icon: DollarSign,
     items: [
+      { icon: SlidersHorizontal, label: "Advance Options", href: `${PREFIX}/accounts/advance-options` },
       { icon: FolderTree, label: "Account Groups", href: `${PREFIX}/accounts/groups` },
       { icon: DollarSign, label: "Chart of Accounts", href: `${PREFIX}/accounts` },
       { icon: CreditCard, label: "Vouchers", href: `${PREFIX}/accounts/vouchers` },
@@ -249,6 +252,7 @@ export const menuSections: MenuSection[] = [
       { icon: Landmark, label: "Bank Accounts", href: `${PREFIX}/banking/accounts` },
       { icon: ArrowRightLeft, label: "Bank Reconciliation", href: `${PREFIX}/banking/reconciliation` },
       { icon: CreditCard, label: "Payment Runs", href: `${PREFIX}/banking/payment-runs` },
+      { icon: FileBarChart, label: "Settlement Audit", href: `${PREFIX}/banking/settlement-audit` },
       { icon: FileText, label: "Payment Advice", href: `${PREFIX}/banking/payment-advice` },
       { icon: Calendar, label: "Cashflow Calendar", href: `${PREFIX}/cashflow/calendar` },
     ],

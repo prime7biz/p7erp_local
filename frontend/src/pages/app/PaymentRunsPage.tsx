@@ -31,6 +31,8 @@ export function PaymentRunsPage() {
   const [myRole, setMyRole] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [baseCurrency, setBaseCurrency] = useState("BDT");
+  const [fxRates, setFxRates] = useState<Record<string, number>>({});
   const [form, setForm] = useState<PaymentRunCreate>({
     run_code: "",
     run_date: new Date().toISOString().slice(0, 10),
@@ -83,14 +85,33 @@ export function PaymentRunsPage() {
       .filter((b) => selectedBillIds.includes(b.id))
       .map((b) => {
         const outstanding = Math.max(Number(b.amount) - Number(b.paid_amount), 0);
+        const sourceCurrency = (b.currency || baseCurrency).toUpperCase();
+        const fxRate = sourceCurrency === baseCurrency.toUpperCase() ? 1 : fxRates[sourceCurrency] || 0;
+        const baseAmount = outstanding * fxRate;
         return {
           bill_id: b.id,
           party_name: b.party_name,
           amount: String(outstanding),
+          source_currency: sourceCurrency,
+          fx_rate_to_base: String(fxRate),
+          base_amount: String(baseAmount),
           reference: b.bill_no,
         };
       });
-  }, [payables, selectedBillIds]);
+  }, [payables, selectedBillIds, baseCurrency, fxRates]);
+
+  const selectedSettlementPreview = useMemo(() => {
+    let sourceTotal = 0;
+    let baseTotal = 0;
+    for (const b of payables.filter((bill) => selectedBillIds.includes(bill.id))) {
+      const outstanding = Math.max(Number(b.amount) - Number(b.paid_amount), 0);
+      sourceTotal += outstanding;
+      const srcCurrency = (b.currency || baseCurrency).toUpperCase();
+      const rate = srcCurrency === baseCurrency.toUpperCase() ? 1 : fxRates[srcCurrency] || 0;
+      baseTotal += outstanding * rate;
+    }
+    return { sourceTotal, baseTotal };
+  }, [payables, selectedBillIds, fxRates, baseCurrency]);
 
   const filteredPayables = useMemo(() => {
     const query = billSearch.trim().toLowerCase();
@@ -117,7 +138,13 @@ export function PaymentRunsPage() {
       setSuccess("");
       if (!selectedItems.length) throw new Error("Please select payable bills");
       if (!form.bank_account_id) throw new Error("Bank account is required for payment run workflow");
-      await api.createPaymentRun({ ...form, items: selectedItems });
+      const missingFxItem = selectedItems.find(
+        (item) => item.source_currency !== baseCurrency.toUpperCase() && Number(item.fx_rate_to_base) <= 0,
+      );
+      if (missingFxItem) {
+        throw new Error(`FX rate is required for ${missingFxItem.source_currency} settlements`);
+      }
+      await api.createPaymentRun({ ...form, base_currency: baseCurrency, items: selectedItems });
       setSelectedBillIds([]);
       setForm((p) => ({ ...p, run_code: "", remarks: "", bank_account_id: undefined }));
       setBillSearch("");
@@ -195,6 +222,24 @@ export function PaymentRunsPage() {
           <button className="w-full rounded bg-slate-900 px-3 py-2 text-sm text-white sm:w-auto">Create Run (Draft)</button>
         </div>
 
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3">
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <h3 className="text-xs font-semibold uppercase text-indigo-700">Settlement Preview</h3>
+            <label className="text-xs text-slate-600">
+              Base Currency:
+              <input
+                className="ml-2 w-20 rounded border border-slate-300 px-2 py-1 text-xs"
+                value={baseCurrency}
+                onChange={(e) => setBaseCurrency(e.target.value.toUpperCase())}
+              />
+            </label>
+          </div>
+          <p className="text-xs text-slate-700">
+            Selected Source Total: <b>{selectedSettlementPreview.sourceTotal.toLocaleString()}</b> | Estimated Base Total (
+            {baseCurrency}): <b>{selectedSettlementPreview.baseTotal.toLocaleString()}</b>
+          </p>
+        </div>
+
         <div>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-medium text-slate-700">Open Payable Bills</h2>
@@ -212,12 +257,18 @@ export function PaymentRunsPage() {
                   <th className="px-2 py-1">Pick</th>
                   <th className="px-2 py-1">Bill</th>
                   <th className="px-2 py-1">Party</th>
-                  <th className="px-2 py-1 text-right">Outstanding</th>
+                  <th className="px-2 py-1">Source Cur</th>
+                  <th className="px-2 py-1 text-right">Outstanding (Source)</th>
+                  <th className="px-2 py-1 text-right">FX to {baseCurrency}</th>
+                  <th className="px-2 py-1 text-right">Base Equivalent</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredPayables.map((b) => {
                   const outstanding = Math.max(Number(b.amount) - Number(b.paid_amount), 0);
+                  const sourceCurrency = (b.currency || baseCurrency).toUpperCase();
+                  const fx = sourceCurrency === baseCurrency.toUpperCase() ? 1 : fxRates[sourceCurrency] || 0;
+                  const baseEquivalent = outstanding * fx;
                   return (
                     <tr key={b.id} className="border-t">
                       <td className="px-2 py-1">
@@ -233,13 +284,33 @@ export function PaymentRunsPage() {
                       </td>
                       <td className="px-2 py-1">{b.bill_no}</td>
                       <td className="px-2 py-1">{b.party_name}</td>
+                      <td className="px-2 py-1">{sourceCurrency}</td>
                       <td className="px-2 py-1 text-right">{outstanding.toLocaleString()}</td>
+                      <td className="px-2 py-1 text-right">
+                        {sourceCurrency === baseCurrency.toUpperCase() ? (
+                          "1.0000"
+                        ) : (
+                          <input
+                            type="number"
+                            step="0.0001"
+                            className="w-20 rounded border border-slate-300 px-1.5 py-1 text-right text-xs"
+                            value={fxRates[sourceCurrency] ?? ""}
+                            onChange={(e) =>
+                              setFxRates((prev) => ({
+                                ...prev,
+                                [sourceCurrency]: e.target.value ? Number(e.target.value) : 0,
+                              }))
+                            }
+                          />
+                        )}
+                      </td>
+                      <td className="px-2 py-1 text-right">{baseEquivalent.toLocaleString()}</td>
                     </tr>
                   );
                 })}
                 {filteredPayables.length === 0 ? (
                   <tr className="border-t">
-                    <td className="px-2 py-2 text-slate-500" colSpan={4}>
+                    <td className="px-2 py-2 text-slate-500" colSpan={7}>
                       No open payable bills for the current search.
                     </td>
                   </tr>
@@ -283,7 +354,7 @@ export function PaymentRunsPage() {
             <tr>
               <th className="px-2 py-1">Run Code</th>
               <th className="px-2 py-1">Date</th>
-              <th className="px-2 py-1 text-right">Total</th>
+              <th className="px-2 py-1 text-right">Base Total</th>
               <th className="px-2 py-1">Status</th>
               <th className="px-2 py-1">Voucher</th>
               <th className="px-2 py-1">Items</th>
@@ -295,7 +366,9 @@ export function PaymentRunsPage() {
               <tr key={r.id} className="border-t">
                 <td className="px-2 py-1">{r.run_code}</td>
                 <td className="px-2 py-1">{r.run_date}</td>
-                <td className="px-2 py-1 text-right">{Number(r.total_amount).toLocaleString()}</td>
+                <td className="px-2 py-1 text-right">
+                  {Number(r.total_amount).toLocaleString()} {r.base_currency}
+                </td>
                 <td className="px-2 py-1">
                   <span className={`rounded px-2 py-1 text-xs ${statusBadgeClass(r.status)}`}>{r.status}</span>
                 </td>

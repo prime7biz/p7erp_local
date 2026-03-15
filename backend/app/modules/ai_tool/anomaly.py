@@ -7,7 +7,20 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Followup, ManufacturingDowntimeEvent, ManufacturingNcr, Order, OutstandingBill, Quotation, StockMovement, User
+from app.models import (
+    Bom,
+    BomItem,
+    Followup,
+    GarmentStyle,
+    Item,
+    ManufacturingDowntimeEvent,
+    ManufacturingNcr,
+    Order,
+    OutstandingBill,
+    Quotation,
+    StockMovement,
+    User,
+)
 from app.modules.ai_tool import repository
 from app.modules.ai_tool.authz import has_tool_permission
 
@@ -182,6 +195,98 @@ async def _process_bottleneck_anomaly(db: AsyncSession, tenant_id: int) -> Anoma
     )
 
 
+async def _high_wastage_anomaly(db: AsyncSession, tenant_id: int) -> AnomalyFinding | None:
+    """Phase F: Orders/items where actual consumption vs BOM exceeds threshold (e.g. 15%)."""
+    threshold_pct = 15.0
+    mov_result = await db.execute(
+        select(StockMovement.reference_id).where(
+            StockMovement.tenant_id == tenant_id,
+            StockMovement.reference_type == "CONSUMPTION_ISSUE",
+            StockMovement.reference_id.isnot(None),
+        ).distinct()
+    )
+    order_ids = [r[0] for r in mov_result.scalars().all() if r[0] is not None]
+    if not order_ids:
+        return None
+    orders = list(
+        (await db.execute(select(Order).where(Order.tenant_id == tenant_id, Order.id.in_(order_ids)))).scalars().all()
+    )
+    high_count = 0
+    examples: list[dict] = []
+    for order in orders:
+        if not order.quotation_id:
+            continue
+        quotation = await db.get(Quotation, order.quotation_id)
+        if not quotation or quotation.tenant_id != tenant_id or not quotation.style_id:
+            continue
+        order_qty = _to_float(str(order.quantity)) if order.quantity else 0.0
+        if order_qty <= 0:
+            continue
+        bom = (
+            await db.execute(
+                select(Bom).where(
+                    Bom.tenant_id == tenant_id,
+                    Bom.style_id == quotation.style_id,
+                ).order_by(Bom.version_no.desc()).limit(1)
+            )
+        ).scalar_one_or_none()
+        if not bom:
+            continue
+        lines = list(
+            (
+                await db.execute(
+                    select(BomItem).where(
+                        BomItem.tenant_id == tenant_id,
+                        BomItem.bom_id == bom.id,
+                        BomItem.item_id.isnot(None),
+                    )
+                )
+            ).scalars().all()
+        )
+        for line in lines:
+            base = _to_float(line.base_consumption)
+            wastage = _to_float(line.wastage_pct) / 100.0
+            expected = order_qty * base * (1.0 + wastage)
+            if expected <= 0:
+                continue
+            act_rows = (
+                await db.execute(
+                    select(StockMovement).where(
+                        StockMovement.tenant_id == tenant_id,
+                        StockMovement.reference_type == "CONSUMPTION_ISSUE",
+                        StockMovement.reference_id == order.id,
+                        StockMovement.item_id == line.item_id,
+                    )
+                )
+            ).scalars().all()
+            actual = sum(
+                _to_float(m.quantity) for m in act_rows if (m.movement_type or "").upper() == "OUT"
+            )
+            pct = (actual - expected) / expected * 100.0
+            if pct >= threshold_pct:
+                high_count += 1
+                if len(examples) < 5:
+                    item = await db.get(Item, line.item_id)
+                    style = await db.get(GarmentStyle, quotation.style_id)
+                    examples.append({
+                        "order_code": order.order_code,
+                        "style_code": style.style_code if style else str(quotation.style_id),
+                        "item_code": item.item_code if item else str(line.item_id),
+                        "wastage_pct": round(pct, 1),
+                    })
+    if high_count < 3:
+        return None
+    return AnomalyFinding(
+        source_area="merch",
+        rule_code="HIGH_WASTAGE_VS_BOM",
+        severity="MEDIUM",
+        title="High wastage vs BOM detected",
+        explanation=f"{high_count} order-item(s) have consumption above BOM by more than {threshold_pct}%.",
+        metrics={"high_wastage_count": high_count, "threshold_pct": threshold_pct, "examples": examples},
+        dimensions={"threshold_pct": threshold_pct},
+    )
+
+
 async def _receivable_risk_anomaly(db: AsyncSession, tenant_id: int) -> AnomalyFinding | None:
     today = date.today()
     rows = (
@@ -243,6 +348,7 @@ async def generate_anomaly_insights(
         _margin_issue_anomaly,
         _inventory_bottleneck_anomaly,
         _process_bottleneck_anomaly,
+        _high_wastage_anomaly,
     ]
     if allow_finance:
         detectors.append(_receivable_risk_anomaly)

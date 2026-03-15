@@ -5,6 +5,7 @@ export function HrLeaveApprovalsPage() {
   const [rows, setRows] = useState<HrLeaveRequestResponse[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
 
   const load = async (): Promise<void> => {
     setLoading(true);
@@ -21,6 +22,12 @@ export function HrLeaveApprovalsPage() {
 
   useEffect(() => {
     void load();
+  }, []);
+
+  useEffect(() => {
+    const close = () => setOpenActionsId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
   }, []);
 
   const decide = async (id: number, decision: "approved" | "rejected"): Promise<void> => {
@@ -77,21 +84,40 @@ export function HrLeaveApprovalsPage() {
                     <td className="px-4 py-3 text-sm text-gray-700">{row.from_date}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{row.to_date}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{row.total_days}</td>
-                    <td className="px-4 py-3 text-right space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => void decide(row.id, "approved")}
-                        className="rounded border border-green-300 px-3 py-1 text-xs text-green-700 hover:bg-green-50"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void decide(row.id, "rejected")}
-                        className="rounded border border-red-300 px-3 py-1 text-xs text-red-700 hover:bg-red-50"
-                      >
-                        Reject
-                      </button>
+                    <td className="px-4 py-3 text-right">
+                      <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenActionsId(openActionsId === row.id ? null : row.id)}
+                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          Actions
+                        </button>
+                        {openActionsId === row.id && (
+                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void decide(row.id, "approved");
+                                setOpenActionsId(null);
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void decide(row.id, "rejected");
+                                setOpenActionsId(null);
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

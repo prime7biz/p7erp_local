@@ -12,6 +12,7 @@ from app.common.auth import get_current_user
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
+    ChartOfAccount,
     DeliveryChallan,
     DeliveryChallanItem,
     EnhancedGatePass,
@@ -32,6 +33,7 @@ from app.models import (
     Tenant,
     Role,
     User,
+    Vendor,
     Warehouse,
 )
 
@@ -203,6 +205,76 @@ class StockGroupOut(BaseModel):
         from_attributes = True
 
 
+class VendorCreate(BaseModel):
+    vendor_code: str
+    name: str
+    contact_person: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    is_active: bool = True
+    ledger_id: int | None = None
+    default_currency: str | None = None
+    payment_terms_days: int | None = None
+    vendor_type: str | None = None
+    country: str | None = None
+    city: str | None = None
+    tax_id: str | None = None
+    bank_name: str | None = None
+    bank_account_no: str | None = None
+    swift_code: str | None = None
+    credit_limit: float | None = None
+
+
+class VendorUpdate(BaseModel):
+    vendor_code: str | None = None
+    name: str | None = None
+    contact_person: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    is_active: bool | None = None
+    ledger_id: int | None = None
+    default_currency: str | None = None
+    payment_terms_days: int | None = None
+    vendor_type: str | None = None
+    country: str | None = None
+    city: str | None = None
+    tax_id: str | None = None
+    bank_name: str | None = None
+    bank_account_no: str | None = None
+    swift_code: str | None = None
+    credit_limit: float | None = None
+
+
+class VendorOut(BaseModel):
+    id: int
+    tenant_id: int
+    vendor_code: str
+    name: str
+    contact_person: str | None
+    email: str | None
+    phone: str | None
+    address: str | None
+    is_active: bool
+    ledger_id: int | None
+    default_currency: str | None
+    payment_terms_days: int | None
+    vendor_type: str | None
+    country: str | None
+    city: str | None
+    tax_id: str | None
+    bank_name: str | None
+    bank_account_no: str | None
+    swift_code: str | None
+    credit_limit: float | None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class PurchaseOrderItemBody(BaseModel):
     item_id: int
     warehouse_id: int | None = None
@@ -212,9 +284,14 @@ class PurchaseOrderItemBody(BaseModel):
 
 class PurchaseOrderBody(BaseModel):
     po_code: str | None = None
-    supplier_name: str
+    supplier_name: str | None = None
+    vendor_id: int | None = None
     order_date: date | None = None
     expected_date: date | None = None
+    currency: str | None = None
+    exchange_rate_to_base: float | None = None
+    base_total_amount: float | None = None
+    btb_lc_id: int | None = None
     notes: str | None = None
     status: str = "DRAFT"
     items: list[PurchaseOrderItemBody] = []
@@ -236,9 +313,14 @@ class PurchaseOrderOut(BaseModel):
     id: int
     tenant_id: int
     po_code: str
+    vendor_id: int | None
     supplier_name: str
     order_date: date | None
     expected_date: date | None
+    currency: str | None
+    exchange_rate_to_base: float | None
+    base_total_amount: float | None
+    btb_lc_id: int | None
     status: str
     notes: str | None
     items: list[PurchaseOrderItemOut]
@@ -749,6 +831,132 @@ async def delete_stock_group(
     return {"ok": True}
 
 
+# ---------- Vendors (Phase C) ----------
+
+
+@router.get("/vendors", response_model=list[VendorOut])
+async def list_vendors(
+    search: str | None = Query(default=None),
+    is_active: bool | None = Query(default=None),
+    vendor_type: str | None = Query(default=None),
+    currency: str | None = Query(default=None),
+    ledger_id: int | None = Query(default=None, description="Filter by linked ledger (chart_of_accounts id)"),
+    has_ledger: bool | None = Query(default=None, description="Filter: true=has ledger, false=no ledger"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    stmt = select(Vendor).where(Vendor.tenant_id == tenant.id)
+    if search:
+        pattern = f"%{search.strip().lower()}%"
+        stmt = stmt.where(
+            func.lower(Vendor.vendor_code).like(pattern)
+            | func.lower(Vendor.name).like(pattern)
+        )
+    if is_active is not None:
+        stmt = stmt.where(Vendor.is_active == is_active)
+    if vendor_type:
+        stmt = stmt.where(func.lower(Vendor.vendor_type) == vendor_type.strip().lower())
+    if currency:
+        stmt = stmt.where(func.lower(Vendor.default_currency) == currency.strip().lower())
+    if ledger_id is not None:
+        stmt = stmt.where(Vendor.ledger_id == ledger_id)
+    if has_ledger is True:
+        stmt = stmt.where(Vendor.ledger_id.isnot(None))
+    elif has_ledger is False:
+        stmt = stmt.where(Vendor.ledger_id.is_(None))
+    result = await db.execute(stmt.order_by(Vendor.vendor_code))
+    return list(result.scalars().all())
+
+
+@router.get("/vendors/{vendor_id}", response_model=VendorOut)
+async def get_vendor(
+    vendor_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(Vendor, vendor_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    return row
+
+
+@router.post("/vendors", response_model=VendorOut, status_code=status.HTTP_201_CREATED)
+async def create_vendor(
+    body: VendorCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    existing = await db.execute(
+        select(Vendor).where(
+            Vendor.tenant_id == tenant.id,
+            func.lower(Vendor.vendor_code) == body.vendor_code.strip().lower(),
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Vendor code already exists")
+    if body.ledger_id is not None:
+        ledger = await db.get(ChartOfAccount, body.ledger_id)
+        if not ledger or ledger.tenant_id != tenant.id:
+            raise HTTPException(status_code=400, detail="Ledger not found or tenant mismatch")
+    if body.payment_terms_days is not None and body.payment_terms_days < 0:
+        raise HTTPException(status_code=400, detail="payment_terms_days cannot be negative")
+    row = Vendor(tenant_id=tenant.id, **body.model_dump())
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@router.patch("/vendors/{vendor_id}", response_model=VendorOut)
+async def update_vendor(
+    vendor_id: int,
+    body: VendorUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(Vendor, vendor_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    updates = body.model_dump(exclude_unset=True)
+    if "payment_terms_days" in updates and updates["payment_terms_days"] is not None and updates["payment_terms_days"] < 0:
+        raise HTTPException(status_code=400, detail="payment_terms_days cannot be negative")
+    if "ledger_id" in updates and updates["ledger_id"] is not None:
+        ledger = await db.get(ChartOfAccount, updates["ledger_id"])
+        if not ledger or ledger.tenant_id != tenant.id:
+            raise HTTPException(status_code=400, detail="Ledger not found or tenant mismatch")
+    for k, v in updates.items():
+        setattr(row, k, v)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@router.delete("/vendors/{vendor_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_vendor(
+    vendor_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(Vendor, vendor_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    await db.delete(row)
+    await db.commit()
+
+
+# ---------- Purchase Orders ----------
+
+
 @router.get("/purchase-orders", response_model=list[PurchaseOrderOut])
 async def list_purchase_orders(
     status_filter: str | None = Query(default=None),
@@ -778,9 +986,18 @@ async def list_purchase_orders(
                 id=row.id,
                 tenant_id=row.tenant_id,
                 po_code=row.po_code,
+                vendor_id=getattr(row, "vendor_id", None),
                 supplier_name=row.supplier_name,
                 order_date=row.order_date,
                 expected_date=row.expected_date,
+                currency=row.currency,
+                exchange_rate_to_base=(
+                    float(row.exchange_rate_to_base) if row.exchange_rate_to_base is not None else None
+                ),
+                base_total_amount=(
+                    float(row.base_total_amount) if row.base_total_amount is not None else None
+                ),
+                btb_lc_id=row.btb_lc_id,
                 status=row.status,
                 notes=row.notes,
                 items=list(items_result.scalars().all()),
@@ -797,6 +1014,22 @@ async def create_purchase_order(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    supplier_name = body.supplier_name
+    vendor_id = body.vendor_id
+    if vendor_id is not None:
+        vendor = await db.get(Vendor, vendor_id)
+        if not vendor or vendor.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Vendor not found")
+        supplier_name = supplier_name or vendor.name
+        if not body.currency and vendor.default_currency:
+            body.currency = vendor.default_currency
+    if not supplier_name:
+        raise HTTPException(status_code=400, detail="Either supplier_name or vendor_id (with existing vendor) is required")
+    line_total = 0.0
+    for line in body.items:
+        line_total += _to_float(line.quantity) * _to_float(line.unit_price)
+    fx = body.exchange_rate_to_base if body.exchange_rate_to_base is not None else 1.0
+    base_total = body.base_total_amount if body.base_total_amount is not None else (line_total * fx if line_total else None)
     if body.po_code:
         po_code = body.po_code
     else:
@@ -805,9 +1038,14 @@ async def create_purchase_order(
     row = PurchaseOrder(
         tenant_id=tenant.id,
         po_code=po_code,
-        supplier_name=body.supplier_name,
+        vendor_id=vendor_id,
+        supplier_name=supplier_name,
         order_date=body.order_date,
         expected_date=body.expected_date,
+        currency=body.currency,
+        exchange_rate_to_base=body.exchange_rate_to_base,
+        base_total_amount=base_total,
+        btb_lc_id=body.btb_lc_id,
         status=body.status,
         notes=body.notes,
     )
@@ -822,9 +1060,16 @@ async def create_purchase_order(
         id=row.id,
         tenant_id=row.tenant_id,
         po_code=row.po_code,
+        vendor_id=row.vendor_id,
         supplier_name=row.supplier_name,
         order_date=row.order_date,
         expected_date=row.expected_date,
+        currency=row.currency,
+        exchange_rate_to_base=(
+            float(row.exchange_rate_to_base) if row.exchange_rate_to_base is not None else None
+        ),
+        base_total_amount=float(row.base_total_amount) if row.base_total_amount is not None else None,
+        btb_lc_id=row.btb_lc_id,
         status=row.status,
         notes=row.notes,
         items=list(items_result.scalars().all()),
@@ -854,9 +1099,16 @@ async def update_purchase_order_status(
         id=row.id,
         tenant_id=row.tenant_id,
         po_code=row.po_code,
+        vendor_id=row.vendor_id,
         supplier_name=row.supplier_name,
         order_date=row.order_date,
         expected_date=row.expected_date,
+        currency=row.currency,
+        exchange_rate_to_base=(
+            float(row.exchange_rate_to_base) if row.exchange_rate_to_base is not None else None
+        ),
+        base_total_amount=float(row.base_total_amount) if row.base_total_amount is not None else None,
+        btb_lc_id=row.btb_lc_id,
         status=row.status,
         notes=row.notes,
         items=list(items_result.scalars().all()),

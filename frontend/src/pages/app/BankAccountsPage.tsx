@@ -5,6 +5,7 @@ export function BankAccountsPage() {
   const [rows, setRows] = useState<BankAccountResponse[]>([]);
   const [ledgers, setLedgers] = useState<ChartOfAccountResponse[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [form, setForm] = useState<BankAccountCreate>({
     account_name: "",
@@ -116,7 +117,7 @@ export function BankAccountsPage() {
               <th className="px-2 py-1">Currency</th>
               <th className="px-2 py-1 text-right">Current</th>
               <th className="px-2 py-1">Status</th>
-              <th className="px-2 py-1">Action</th>
+              <th className="px-2 py-1">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -129,9 +130,29 @@ export function BankAccountsPage() {
                 <td className="px-2 py-1 text-right">{Number(r.current_balance).toLocaleString()}</td>
                 <td className="px-2 py-1">{r.is_active ? "ACTIVE" : "INACTIVE"}</td>
                 <td className="px-2 py-1">
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => startEdit(r)}>
-                    Edit
-                  </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setOpenActionsId((prev) => (prev === r.id ? null : r.id))}
+                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                    >
+                      Actions
+                    </button>
+                    {openActionsId === r.id && (
+                      <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenActionsId(null);
+                            startEdit(r);
+                          }}
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

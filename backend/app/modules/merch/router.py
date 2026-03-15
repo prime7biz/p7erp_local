@@ -5,13 +5,17 @@ Merchandising linked module (PrimeX parity slice):
 - consumption plans + plan items
 - order followups and pipeline/alerts aggregates
 """
-from datetime import date
+from collections import defaultdict
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from io import BytesIO
+
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -19,20 +23,44 @@ from app.common.codegen import next_tenant_code
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
+    AlertDefinition,
+    AlertInstance,
+    AlertHistory,
+    AlertComment,
+    AlertRelatedEntity,
+    AlertEscalationLog,
+    AlertSavedView,
     Bom,
     BomItem,
     ConsumptionPlan,
     ConsumptionPlanItem,
+    Customer,
     Followup,
+    FollowupActionTemplate,
+    FollowupActionRejectionLog,
+    OrderFollowupAction,
+    FollowupActionComment,
     GarmentStyle,
     Inquiry,
+    Item,
+    ItemCategory,
+    ItemUnit,
     Order,
+    PurchaseOrder,
+    PurchaseOrderItem,
     Quotation,
+    StockMovement,
     StyleColorway,
     StyleComponent,
     StyleSizeScale,
     Tenant,
     User,
+    Vendor,
+    WastageReason,
+    WastageTransaction,
+    WastageThresholdRule,
+    WastageOrderSummary,
+    WastageSavedView,
 )
 
 router = APIRouter(prefix="/merch", tags=["merch"])
@@ -112,6 +140,7 @@ class BomUpdate(BaseModel):
 
 
 class BomItemBody(BaseModel):
+    item_id: int | None = None
     category: str
     item_code: str | None = None
     description: str | None = None
@@ -611,7 +640,20 @@ async def create_bom_item(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = BomItem(tenant_id=tenant.id, bom_id=bom_id, **body.model_dump())
+    payload = body.model_dump()
+    item_id = payload.get("item_id")
+    if item_id is not None:
+        item = await db.get(Item, item_id)
+        if not item or item.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Item not found or not in tenant")
+        if payload.get("item_code") is None:
+            payload["item_code"] = item.item_code
+        if payload.get("description") is None:
+            payload["description"] = item.name or item.description
+        if payload.get("uom") is None:
+            unit = await db.get(ItemUnit, item.unit_id) if item.unit_id else None
+            payload["uom"] = unit.unit_code if unit else None
+    row = BomItem(tenant_id=tenant.id, bom_id=bom_id, **payload)
     db.add(row)
     await db.flush()
     await db.refresh(row)
@@ -652,6 +694,225 @@ async def delete_bom_item(
         raise HTTPException(status_code=404, detail="BOM item not found")
     await db.delete(row)
     await db.flush()
+
+
+class GeneratePOFromBOMBody(BaseModel):
+    quantity: float
+    supplier_name: str | None = None
+    vendor_id: int | None = None
+
+
+@router.post("/boms/{bom_id}/generate-purchase-order")
+async def generate_purchase_order_from_bom(
+    bom_id: int,
+    body: GeneratePOFromBOMBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a draft purchase order from BOM lines that have item_id set. Qty = quantity × base_consumption × (1 + wastage_pct/100)."""
+    _ensure_tenant(user, tenant)
+    bom = await db.get(Bom, bom_id)
+    if not bom or bom.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="BOM not found")
+    result = await db.execute(
+        select(BomItem)
+        .where(
+            BomItem.tenant_id == tenant.id,
+            BomItem.bom_id == bom_id,
+            BomItem.item_id.isnot(None),
+        )
+        .order_by(BomItem.id)
+    )
+    bom_lines = list(result.scalars().all())
+    if not bom_lines:
+        raise HTTPException(
+            status_code=400,
+            detail="BOM has no lines linked to inventory items. Link BOM lines to items first.",
+        )
+    quantity = body.quantity
+    if quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be positive")
+
+    supplier_name = (body.supplier_name or "").strip() or "From BOM"
+    vendor_id = body.vendor_id
+    if vendor_id is not None:
+        vendor = await db.get(Vendor, vendor_id)
+        if not vendor or vendor.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Vendor not found")
+        supplier_name = vendor.name
+    else:
+        vendor_id = None
+
+    last_id_result = await db.execute(
+        select(func.coalesce(func.max(PurchaseOrder.id), 0)).where(PurchaseOrder.tenant_id == tenant.id)
+    )
+    last_id = last_id_result.scalar() or 0
+    po_code = f"PO-{(last_id + 1):04d}"
+
+    po = PurchaseOrder(
+        tenant_id=tenant.id,
+        po_code=po_code,
+        vendor_id=vendor_id,
+        supplier_name=supplier_name,
+        status="DRAFT",
+        notes=f"Generated from BOM #{bom_id} (Style {bom.style_id}), quantity={quantity}",
+    )
+    db.add(po)
+    await db.flush()
+
+    for line in bom_lines:
+        item = await db.get(Item, line.item_id)
+        if not item or item.tenant_id != tenant.id:
+            continue
+        try:
+            base = float(line.base_consumption or 0)
+        except (TypeError, ValueError):
+            base = 0.0
+        try:
+            wastage = float(line.wastage_pct or 0) / 100.0
+        except (TypeError, ValueError):
+            wastage = 0.0
+        qty = quantity * base * (1.0 + wastage)
+        qty_str = f"{qty:.4g}".strip()
+        if qty_str == "0":
+            qty_str = "0"
+        unit_price = (item.default_cost or "0").strip() or "0"
+        db.add(
+            PurchaseOrderItem(
+                tenant_id=tenant.id,
+                purchase_order_id=po.id,
+                item_id=line.item_id,
+                quantity=qty_str,
+                unit_price=unit_price,
+            )
+        )
+    await db.commit()
+    await db.refresh(po)
+    return {"id": po.id, "po_code": po.po_code}
+
+
+def _to_float_safe(value: str | None) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+class MaterialRequirementLineOut(BaseModel):
+    item_id: int
+    item_code: str
+    item_name: str
+    uom: str | None
+    required_qty: float
+    available_qty: float
+    shortage_qty: float
+
+
+class MaterialRequirementOut(BaseModel):
+    order_id: int
+    order_code: str
+    style_id: int
+    bom_id: int
+    quantity_used: float
+    lines: list[MaterialRequirementLineOut]
+
+
+@router.get("/orders/{order_id}/material-requirement", response_model=MaterialRequirementOut)
+async def get_order_material_requirement(
+    order_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Explode BOM for the order's style by order quantity; return required vs available stock per item (no persistence)."""
+    _ensure_tenant(user, tenant)
+    order = await db.get(Order, order_id)
+    if not order or order.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Order not found")
+    style_id: int | None = None
+    if order.quotation_id:
+        quotation = await db.get(Quotation, order.quotation_id)
+        if quotation and quotation.tenant_id == tenant.id:
+            style_id = quotation.style_id
+    if not style_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Order has no style. Link a quotation with a style to generate material requirement.",
+        )
+    order_qty = _to_float_safe(str(order.quantity)) if order.quantity is not None else 0.0
+    if order_qty <= 0:
+        raise HTTPException(status_code=400, detail="Order quantity must be positive")
+    bom_result = await db.execute(
+        select(Bom)
+        .where(
+            Bom.tenant_id == tenant.id,
+            Bom.style_id == style_id,
+        )
+        .order_by(Bom.version_no.desc())
+        .limit(1)
+    )
+    bom = bom_result.scalar_one_or_none()
+    if not bom:
+        raise HTTPException(status_code=404, detail="No BOM found for this order's style")
+    bom_lines_result = await db.execute(
+        select(BomItem)
+        .where(
+            BomItem.tenant_id == tenant.id,
+            BomItem.bom_id == bom.id,
+            BomItem.item_id.isnot(None),
+        )
+        .order_by(BomItem.id)
+    )
+    bom_lines = list(bom_lines_result.scalars().all())
+    if not bom_lines:
+        raise HTTPException(
+            status_code=400,
+            detail="BOM has no lines linked to inventory items.",
+        )
+    lines_out: list[MaterialRequirementLineOut] = []
+    for line in bom_lines:
+        item = await db.get(Item, line.item_id)
+        if not item or item.tenant_id != tenant.id:
+            continue
+        base = _to_float_safe(line.base_consumption)
+        wastage = _to_float_safe(line.wastage_pct) / 100.0
+        required = order_qty * base * (1.0 + wastage)
+        mov_result = await db.execute(
+            select(StockMovement).where(
+                StockMovement.tenant_id == tenant.id,
+                StockMovement.item_id == line.item_id,
+            )
+        )
+        movements = list(mov_result.scalars().all())
+        in_qty = sum(_to_float_safe(m.quantity) for m in movements if (m.movement_type or "").upper() == "IN")
+        out_qty = sum(_to_float_safe(m.quantity) for m in movements if (m.movement_type or "").upper() == "OUT")
+        available = round(in_qty - out_qty, 4)
+        shortage = round(max(0.0, required - available), 4)
+        unit_name = None
+        if item.unit_id:
+            unit = await db.get(ItemUnit, item.unit_id)
+            if unit:
+                unit_name = unit.unit_code
+        lines_out.append(
+            MaterialRequirementLineOut(
+                item_id=line.item_id,
+                item_code=item.item_code,
+                item_name=item.name,
+                uom=unit_name or line.uom,
+                required_qty=round(required, 4),
+                available_qty=available,
+                shortage_qty=shortage,
+            )
+        )
+    return MaterialRequirementOut(
+        order_id=order.id,
+        order_code=order.order_code,
+        style_id=style_id,
+        bom_id=bom.id,
+        quantity_used=order_qty,
+        lines=lines_out,
+    )
 
 
 @router.get("/consumption-plans")
@@ -859,6 +1120,1074 @@ async def delete_followup(
     await db.flush()
 
 
+# ---------- TNA / Advanced Order Follow-up: templates and action lines ----------
+
+TNA_PHASES = [
+    "pre_order", "sampling", "approval", "sourcing", "fabric", "trims",
+    "production", "inspection", "finishing", "packing", "commercial", "shipment", "payment", "other",
+]
+TNA_ACTION_STATUSES = [
+    "pending", "in_progress", "submitted", "approved", "rejected", "resubmitted", "completed", "cancelled", "on_hold",
+]
+TNA_APPROVAL_STATUSES = ["pending", "approved", "rejected", "not_applicable"]
+TNA_SEVERITIES = ["low", "medium", "high", "critical"]
+
+# Default template seed: code, name, phase, default_days_before_delivery, sequence_no
+TNA_DEFAULT_TEMPLATE_SEED: list[tuple[str, str, str, int | None, int]] = [
+    ("order_confirmed", "Order confirmed", "pre_order", None, 10),
+    ("lc_received", "LC received", "pre_order", None, 20),
+    ("proto_sample_submit", "Proto sample submission", "sampling", 120, 30),
+    ("fit_sample_submit", "Fit sample submission", "sampling", 100, 40),
+    ("fit_sample_approval", "Fit sample approval", "sampling", 95, 45),
+    ("size_set_submit", "Size set sample submission", "sampling", 85, 50),
+    ("pp_sample_submit", "PP sample submission", "sampling", 55, 60),
+    ("pp_approval", "PP approval", "sampling", 50, 65),
+    ("lab_dip_approval", "Lab dip approval", "approval", 75, 70),
+    ("bulk_fabric_approval", "Bulk fabric approval", "approval", 60, 75),
+    ("accessories_approval", "Accessories approval", "approval", 55, 80),
+    ("fabric_in_house", "Fabric in-house", "fabric", 45, 90),
+    ("accessories_in_house", "Accessories in-house", "trims", 40, 95),
+    ("cutting_start", "Cutting start", "production", 35, 100),
+    ("sewing_start", "Sewing start", "production", 28, 110),
+    ("inline_inspection", "Inline inspection", "inspection", 20, 120),
+    ("final_inspection", "Final inspection", "inspection", 10, 130),
+    ("ex_factory", "Ex-factory", "shipment", 5, 140),
+    ("shipment_docs", "Shipping docs / BL", "commercial", 3, 145),
+    ("shipment_confirmation", "Shipment confirmation to buyer", "commercial", 0, 150),
+]
+
+
+class FollowupActionTemplateOut(BaseModel):
+    id: int
+    code: str
+    name: str
+    phase: str
+    action_group: str | None
+    sequence_no: int
+    default_days_before_delivery: int | None
+    is_mandatory: bool
+    is_active: bool
+    buyer_id: int | None
+
+
+class FollowupActionTemplateCreate(BaseModel):
+    code: str
+    name: str
+    phase: str
+    action_group: str | None = None
+    sequence_no: int = 0
+    default_days_before_delivery: int | None = None
+    is_mandatory: bool = False
+    is_active: bool = True
+    buyer_id: int | None = None
+
+
+class OrderFollowupActionOut(BaseModel):
+    id: int
+    order_id: int
+    order_code: str | None
+    delivery_date: date | None
+    style_code: str | None
+    template_id: int | None
+    sequence_no: int
+    phase: str
+    action_group: str | None
+    action_type: str | None
+    title: str
+    description: str | None
+    is_template_generated: bool
+    is_mandatory: bool
+    is_active: bool
+    assigned_to_id: int | None
+    planned_date: date | None
+    actual_submission_date: date | None
+    approval_received_date: date | None
+    actual_completion_date: date | None
+    resubmission_date: date | None
+    status: str
+    approval_status: str | None
+    is_rejected: bool
+    rejection_reason: str | None
+    delay_reason: str | None
+    severity: str | None
+    remarks: str | None
+    completed_at: datetime | None
+    milestone_type: str | None
+    external_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class FollowupActionCommentOut(BaseModel):
+    id: int
+    user_id: int
+    username: str | None
+    comment_text: str
+    created_at: datetime
+
+
+class FollowupActionCommentCreate(BaseModel):
+    comment_text: str
+
+
+class OrderFollowupActionCreate(BaseModel):
+    order_id: int
+    template_id: int | None = None
+    sequence_no: int = 0
+    phase: str
+    action_group: str | None = None
+    action_type: str | None = None
+    title: str
+    description: str | None = None
+    is_mandatory: bool = False
+    planned_date: date | None = None
+    actual_submission_date: date | None = None
+    approval_received_date: date | None = None
+    resubmission_date: date | None = None
+    status: str = "pending"
+    approval_status: str | None = None
+    is_rejected: bool = False
+    rejection_reason: str | None = None
+    delay_reason: str | None = None
+    severity: str | None = None
+    remarks: str | None = None
+    assigned_to_id: int | None = None
+
+
+class OrderFollowupActionUpdate(BaseModel):
+    sequence_no: int | None = None
+    phase: str | None = None
+    action_group: str | None = None
+    action_type: str | None = None
+    title: str | None = None
+    description: str | None = None
+    planned_date: date | None = None
+    actual_submission_date: date | None = None
+    approval_received_date: date | None = None
+    actual_completion_date: date | None = None
+    resubmission_date: date | None = None
+    status: str | None = None
+    approval_status: str | None = None
+    is_rejected: bool | None = None
+    rejection_reason: str | None = None
+    delay_reason: str | None = None
+    severity: str | None = None
+    remarks: str | None = None
+    assigned_to_id: int | None = None
+    milestone_type: str | None = None
+    external_id: int | None = None
+
+
+class FollowupSummaryOut(BaseModel):
+    open_count: int
+    overdue_count: int
+    due_this_week_count: int
+    rejected_count: int
+    completed_count: int
+
+
+class RejectionLogEntryOut(BaseModel):
+    id: int
+    rejected_at: datetime
+    rejection_reason: str | None
+    resubmission_date: date | None
+    created_at: datetime
+
+
+class RejectionLogCreate(BaseModel):
+    rejection_reason: str | None = None
+    resubmission_date: date | None = None
+
+
+class TnaGenerateRequest(BaseModel):
+    order_id: int
+    template_ids: list[int] | None = None  # if None, use all active templates
+
+
+async def _order_context_for_action(
+    db: AsyncSession, tenant_id: int, order_id: int
+) -> tuple[str | None, date | None, str | None]:
+    """Return (order_code, delivery_date, style_code) for an order."""
+    order = await db.get(Order, order_id)
+    if not order or order.tenant_id != tenant_id:
+        return None, None, None
+    order_code = order.order_code
+    delivery_date = order.delivery_date
+    style_code = None
+    if order.quotation_id:
+        q = await db.get(Quotation, order.quotation_id)
+        if q and q.tenant_id == tenant_id and q.style_id:
+            style = await db.get(GarmentStyle, q.style_id)
+            style_code = style.style_code if style else None
+    return order_code, delivery_date, style_code
+
+
+@router.get("/followup-templates", response_model=list[FollowupActionTemplateOut])
+async def list_followup_templates(
+    phase: str | None = Query(default=None),
+    is_active: bool | None = Query(default=None),
+    buyer_id: int | None = Query(default=None, description="Filter: global (buyer_id null) or this buyer"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List TNA action templates for the tenant. Seeds default templates if empty.
+    When buyer_id is set, returns templates where buyer_id is null (global) or buyer_id == buyer_id.
+    """
+    _ensure_tenant(user, tenant)
+    stmt = select(FollowupActionTemplate).where(FollowupActionTemplate.tenant_id == tenant.id)
+    if phase:
+        stmt = stmt.where(FollowupActionTemplate.phase == phase)
+    if is_active is not None:
+        stmt = stmt.where(FollowupActionTemplate.is_active == is_active)
+    if buyer_id is not None:
+        stmt = stmt.where(
+            or_(FollowupActionTemplate.buyer_id.is_(None), FollowupActionTemplate.buyer_id == buyer_id)
+        )
+    result = await db.execute(stmt.order_by(FollowupActionTemplate.sequence_no, FollowupActionTemplate.id))
+    rows = result.scalars().all()
+    if not rows:
+        for code, name, ph, default_days, seq in TNA_DEFAULT_TEMPLATE_SEED:
+            t = FollowupActionTemplate(
+                tenant_id=tenant.id,
+                code=code,
+                name=name,
+                phase=ph,
+                sequence_no=seq,
+                default_days_before_delivery=default_days,
+                is_mandatory=False,
+                is_active=True,
+            )
+            db.add(t)
+        await db.commit()
+        result = await db.execute(
+            select(FollowupActionTemplate).where(FollowupActionTemplate.tenant_id == tenant.id).order_by(
+                FollowupActionTemplate.sequence_no, FollowupActionTemplate.id
+            )
+        )
+        rows = result.scalars().all()
+    return [
+        FollowupActionTemplateOut(
+            id=r.id,
+            code=r.code,
+            name=r.name,
+            phase=r.phase,
+            action_group=r.action_group,
+            sequence_no=r.sequence_no,
+            default_days_before_delivery=r.default_days_before_delivery,
+            is_mandatory=r.is_mandatory,
+            is_active=r.is_active,
+            buyer_id=r.buyer_id,
+        )
+        for r in rows
+    ]
+
+
+@router.get("/followup-templates/{template_id}", response_model=FollowupActionTemplateOut)
+async def get_followup_template(
+    template_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(FollowupActionTemplate, template_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return FollowupActionTemplateOut(
+        id=row.id, code=row.code, name=row.name, phase=row.phase, action_group=row.action_group,
+        sequence_no=row.sequence_no, default_days_before_delivery=row.default_days_before_delivery,
+        is_mandatory=row.is_mandatory, is_active=row.is_active, buyer_id=row.buyer_id,
+    )
+
+
+@router.post("/followup-templates", status_code=201, response_model=FollowupActionTemplateOut)
+async def create_followup_template(
+    body: FollowupActionTemplateCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = FollowupActionTemplate(tenant_id=tenant.id, **body.model_dump())
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return FollowupActionTemplateOut(
+        id=row.id, code=row.code, name=row.name, phase=row.phase, action_group=row.action_group,
+        sequence_no=row.sequence_no, default_days_before_delivery=row.default_days_before_delivery,
+        is_mandatory=row.is_mandatory, is_active=row.is_active, buyer_id=row.buyer_id,
+    )
+
+
+class FollowupActionTemplateUpdate(BaseModel):
+    name: str | None = None
+    phase: str | None = None
+    action_group: str | None = None
+    sequence_no: int | None = None
+    default_days_before_delivery: int | None = None
+    is_mandatory: bool | None = None
+    is_active: bool | None = None
+    buyer_id: int | None = None
+
+
+@router.patch("/followup-templates/{template_id}", response_model=FollowupActionTemplateOut)
+async def update_followup_template(
+    template_id: int,
+    body: FollowupActionTemplateUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(FollowupActionTemplate, template_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Template not found")
+    for f in ("name", "phase", "action_group", "sequence_no", "default_days_before_delivery", "is_mandatory", "is_active", "buyer_id"):
+        v = getattr(body, f)
+        if v is not None:
+            setattr(row, f, v)
+    await db.commit()
+    await db.refresh(row)
+    return FollowupActionTemplateOut(
+        id=row.id, code=row.code, name=row.name, phase=row.phase, action_group=row.action_group,
+        sequence_no=row.sequence_no, default_days_before_delivery=row.default_days_before_delivery,
+        is_mandatory=row.is_mandatory, is_active=row.is_active, buyer_id=row.buyer_id,
+    )
+
+
+@router.delete("/followup-templates/{template_id}", status_code=204)
+async def delete_followup_template(
+    template_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(FollowupActionTemplate, template_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Template not found")
+    await db.delete(row)
+    await db.commit()
+
+
+@router.get("/followup-actions", response_model=list[OrderFollowupActionOut])
+async def list_followup_actions(
+    order_id: int | None = Query(default=None),
+    status: str | None = Query(default=None),
+    phase: str | None = Query(default=None),
+    assigned_to_id: int | None = Query(default=None),
+    due_from: date | None = Query(default=None),
+    due_to: date | None = Query(default=None),
+    overdue_only: bool = Query(default=False),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    today = date.today()
+    stmt = select(OrderFollowupAction).where(OrderFollowupAction.tenant_id == tenant.id)
+    if order_id is not None:
+        stmt = stmt.where(OrderFollowupAction.order_id == order_id)
+    if status:
+        stmt = stmt.where(OrderFollowupAction.status == status)
+    if phase:
+        stmt = stmt.where(OrderFollowupAction.phase == phase)
+    if assigned_to_id is not None:
+        stmt = stmt.where(OrderFollowupAction.assigned_to_id == assigned_to_id)
+    if due_from is not None:
+        stmt = stmt.where(OrderFollowupAction.planned_date >= due_from)
+    if due_to is not None:
+        stmt = stmt.where(OrderFollowupAction.planned_date <= due_to)
+    if overdue_only:
+        stmt = stmt.where(
+            OrderFollowupAction.planned_date.isnot(None),
+            OrderFollowupAction.planned_date < today,
+            OrderFollowupAction.status.notin_(["completed", "approved", "cancelled"]),
+        )
+    result = await db.execute(stmt.order_by(OrderFollowupAction.planned_date.asc().nullslast(), OrderFollowupAction.sequence_no, OrderFollowupAction.id))
+    actions = result.scalars().all()
+    out: list[OrderFollowupActionOut] = []
+    for a in actions:
+        order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, a.order_id)
+        out.append(
+            OrderFollowupActionOut(
+                id=a.id,
+                order_id=a.order_id,
+                order_code=order_code,
+                delivery_date=delivery_date,
+                style_code=style_code,
+                template_id=a.template_id,
+                sequence_no=a.sequence_no,
+                phase=a.phase,
+                action_group=a.action_group,
+                action_type=a.action_type,
+                title=a.title,
+                description=a.description,
+                is_template_generated=a.is_template_generated,
+                is_mandatory=a.is_mandatory,
+                is_active=a.is_active,
+                assigned_to_id=a.assigned_to_id,
+                planned_date=a.planned_date,
+                actual_submission_date=a.actual_submission_date,
+                approval_received_date=a.approval_received_date,
+                actual_completion_date=a.actual_completion_date,
+                resubmission_date=a.resubmission_date,
+                status=a.status,
+                approval_status=a.approval_status,
+                is_rejected=a.is_rejected,
+                rejection_reason=a.rejection_reason,
+                delay_reason=a.delay_reason,
+                severity=a.severity,
+                remarks=a.remarks,
+                completed_at=a.completed_at,
+                milestone_type=a.milestone_type,
+                external_id=a.external_id,
+                created_at=a.created_at,
+                updated_at=a.updated_at,
+            )
+        )
+    return out
+
+
+@router.get("/followup-actions/summary", response_model=FollowupSummaryOut)
+async def get_followup_actions_summary(
+    order_id: int | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    today = date.today()
+    week_end = today + timedelta(days=7)
+    stmt = select(OrderFollowupAction).where(
+        OrderFollowupAction.tenant_id == tenant.id,
+        OrderFollowupAction.is_active == True,
+    )
+    if order_id is not None:
+        stmt = stmt.where(OrderFollowupAction.order_id == order_id)
+    result = await db.execute(stmt)
+    rows = result.scalars().all()
+    open_statuses = {"pending", "in_progress", "submitted", "rejected", "resubmitted", "on_hold"}
+    open_count = sum(1 for r in rows if r.status in open_statuses)
+    overdue_count = sum(
+        1 for r in rows
+        if r.planned_date and r.planned_date < today and r.status in open_statuses
+    )
+    due_this_week_count = sum(
+        1 for r in rows
+        if r.planned_date and r.planned_date <= week_end and r.planned_date >= today and r.status in open_statuses
+    )
+    rejected_count = sum(1 for r in rows if r.is_rejected or r.status == "rejected")
+    completed_count = sum(1 for r in rows if r.status in ("completed", "approved"))
+    return FollowupSummaryOut(
+        open_count=open_count,
+        overdue_count=overdue_count,
+        due_this_week_count=due_this_week_count,
+        rejected_count=rejected_count,
+        completed_count=completed_count,
+    )
+
+
+@router.get("/followup-actions/search", response_model=list[OrderFollowupActionOut])
+async def search_followup_actions(
+    q: str = Query(..., min_length=2),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    # Search in action title, description, and order code
+    order_ids: list[int] = []
+    order_stmt = select(Order.id).where(Order.tenant_id == tenant.id)
+    if q:
+        order_stmt = order_stmt.where(Order.order_code.ilike(f"%{q}%"))
+    ord_result = await db.execute(order_stmt.limit(50))
+    order_ids = [r[0] for r in ord_result.scalars().all()]
+    conds = [
+        OrderFollowupAction.title.ilike(f"%{q}%"),
+    ]
+    if order_ids:
+        conds.append(OrderFollowupAction.order_id.in_(order_ids))
+    # Search in description (nullable)
+    conds.append(and_(OrderFollowupAction.description.isnot(None), OrderFollowupAction.description.ilike(f"%{q}%")))
+    stmt = (
+        select(OrderFollowupAction)
+        .where(OrderFollowupAction.tenant_id == tenant.id)
+        .where(or_(*conds))
+    )
+    result = await db.execute(stmt.order_by(OrderFollowupAction.planned_date.asc().nullslast()).limit(100))
+    actions = result.scalars().all()
+    out: list[OrderFollowupActionOut] = []
+    for a in actions:
+        order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, a.order_id)
+        out.append(
+            OrderFollowupActionOut(
+                id=a.id, order_id=a.order_id, order_code=order_code, delivery_date=delivery_date, style_code=style_code,
+                template_id=a.template_id, sequence_no=a.sequence_no, phase=a.phase, action_group=a.action_group,
+                action_type=a.action_type, title=a.title, description=a.description,
+                is_template_generated=a.is_template_generated, is_mandatory=a.is_mandatory, is_active=a.is_active,
+                assigned_to_id=a.assigned_to_id, planned_date=a.planned_date, actual_submission_date=a.actual_submission_date,
+                approval_received_date=a.approval_received_date, actual_completion_date=a.actual_completion_date,
+                resubmission_date=a.resubmission_date, status=a.status, approval_status=a.approval_status,
+                is_rejected=a.is_rejected, rejection_reason=a.rejection_reason, delay_reason=a.delay_reason,
+                severity=a.severity, remarks=a.remarks, completed_at=a.completed_at, milestone_type=a.milestone_type, external_id=a.external_id, created_at=a.created_at, updated_at=a.updated_at,
+            )
+        )
+    return out
+
+
+@router.get("/followup-actions/order/{order_id}/timeline", response_model=list[OrderFollowupActionOut])
+async def get_followup_actions_timeline(
+    order_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    order = await db.get(Order, order_id)
+    if not order or order.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Order not found")
+    stmt = (
+        select(OrderFollowupAction)
+        .where(OrderFollowupAction.tenant_id == tenant.id, OrderFollowupAction.order_id == order_id)
+        .order_by(OrderFollowupAction.sequence_no, OrderFollowupAction.planned_date.asc().nullslast(), OrderFollowupAction.id)
+    )
+    result = await db.execute(stmt)
+    actions = result.scalars().all()
+    order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, order_id)
+    return [
+        OrderFollowupActionOut(
+            id=a.id, order_id=a.order_id, order_code=order_code, delivery_date=delivery_date, style_code=style_code,
+            template_id=a.template_id, sequence_no=a.sequence_no, phase=a.phase, action_group=a.action_group,
+            action_type=a.action_type, title=a.title, description=a.description,
+            is_template_generated=a.is_template_generated, is_mandatory=a.is_mandatory, is_active=a.is_active,
+            assigned_to_id=a.assigned_to_id, planned_date=a.planned_date, actual_submission_date=a.actual_submission_date,
+            approval_received_date=a.approval_received_date, actual_completion_date=a.actual_completion_date,
+            resubmission_date=a.resubmission_date, status=a.status, approval_status=a.approval_status,
+            is_rejected=a.is_rejected, rejection_reason=a.rejection_reason, delay_reason=a.delay_reason,
+            severity=a.severity, remarks=a.remarks, completed_at=a.completed_at, milestone_type=a.milestone_type, external_id=a.external_id, created_at=a.created_at, updated_at=a.updated_at,
+        )
+        for a in actions
+    ]
+
+
+@router.post("/followup-actions/generate", response_model=list[OrderFollowupActionOut])
+async def generate_followup_actions(
+    body: TnaGenerateRequest,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate TNA action lines for an order from templates. Planned dates = delivery_date - default_days_before_delivery."""
+    _ensure_tenant(user, tenant)
+    order = await db.get(Order, body.order_id)
+    if not order or order.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Order not found")
+    delivery = order.delivery_date
+    if not delivery:
+        raise HTTPException(status_code=400, detail="Order has no delivery date; set delivery date first.")
+    if body.template_ids:
+        tstmt = select(FollowupActionTemplate).where(
+            FollowupActionTemplate.tenant_id == tenant.id,
+            FollowupActionTemplate.id.in_(body.template_ids),
+            FollowupActionTemplate.is_active == True,
+        ).order_by(FollowupActionTemplate.sequence_no)
+    else:
+        tstmt = select(FollowupActionTemplate).where(
+            FollowupActionTemplate.tenant_id == tenant.id,
+            FollowupActionTemplate.is_active == True,
+        ).order_by(FollowupActionTemplate.sequence_no)
+    templates = (await db.execute(tstmt)).scalars().all()
+    created: list[OrderFollowupAction] = []
+    for seq, t in enumerate(templates, start=1):
+        planned = None
+        if t.default_days_before_delivery is not None:
+            planned = delivery - timedelta(days=t.default_days_before_delivery)
+        action = OrderFollowupAction(
+            tenant_id=tenant.id,
+            order_id=body.order_id,
+            template_id=t.id,
+            sequence_no=seq,
+            phase=t.phase,
+            action_group=t.action_group,
+            title=t.name,
+            is_template_generated=True,
+            is_mandatory=t.is_mandatory,
+            is_active=True,
+            planned_date=planned,
+            status="pending",
+        )
+        db.add(action)
+        created.append(action)
+    await db.commit()
+    for a in created:
+        await db.refresh(a)
+    order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, body.order_id)
+    return [
+        OrderFollowupActionOut(
+            id=a.id, order_id=a.order_id, order_code=order_code, delivery_date=delivery_date, style_code=style_code,
+            template_id=a.template_id, sequence_no=a.sequence_no, phase=a.phase, action_group=a.action_group,
+            action_type=a.action_type, title=a.title, description=a.description,
+            is_template_generated=a.is_template_generated, is_mandatory=a.is_mandatory, is_active=a.is_active,
+            assigned_to_id=a.assigned_to_id, planned_date=a.planned_date, actual_submission_date=a.actual_submission_date,
+            approval_received_date=a.approval_received_date, actual_completion_date=a.actual_completion_date,
+            resubmission_date=a.resubmission_date, status=a.status, approval_status=a.approval_status,
+            is_rejected=a.is_rejected, rejection_reason=a.rejection_reason, delay_reason=a.delay_reason,
+            severity=a.severity, remarks=a.remarks, completed_at=a.completed_at, milestone_type=a.milestone_type, external_id=a.external_id, created_at=a.created_at, updated_at=a.updated_at,
+        )
+        for a in created
+    ]
+
+
+@router.get("/followup-actions/overdue", response_model=list[OrderFollowupActionOut])
+async def list_overdue_followup_actions(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    today = date.today()
+    stmt = (
+        select(OrderFollowupAction)
+        .where(
+            OrderFollowupAction.tenant_id == tenant.id,
+            OrderFollowupAction.is_active == True,
+            OrderFollowupAction.planned_date.isnot(None),
+            OrderFollowupAction.planned_date < today,
+            OrderFollowupAction.status.notin_(["completed", "approved", "cancelled"]),
+        )
+        .order_by(OrderFollowupAction.planned_date.asc())
+    )
+    result = await db.execute(stmt)
+    actions = result.scalars().all()
+    out: list[OrderFollowupActionOut] = []
+    for a in actions:
+        order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, a.order_id)
+        out.append(
+            OrderFollowupActionOut(
+                id=a.id, order_id=a.order_id, order_code=order_code, delivery_date=delivery_date, style_code=style_code,
+                template_id=a.template_id, sequence_no=a.sequence_no, phase=a.phase, action_group=a.action_group,
+                action_type=a.action_type, title=a.title, description=a.description,
+                is_template_generated=a.is_template_generated, is_mandatory=a.is_mandatory, is_active=a.is_active,
+                assigned_to_id=a.assigned_to_id, planned_date=a.planned_date, actual_submission_date=a.actual_submission_date,
+                approval_received_date=a.approval_received_date, actual_completion_date=a.actual_completion_date,
+                resubmission_date=a.resubmission_date, status=a.status, approval_status=a.approval_status,
+                is_rejected=a.is_rejected, rejection_reason=a.rejection_reason, delay_reason=a.delay_reason,
+                severity=a.severity, remarks=a.remarks, completed_at=a.completed_at, milestone_type=a.milestone_type, external_id=a.external_id, created_at=a.created_at, updated_at=a.updated_at,
+            )
+        )
+    return out
+
+
+@router.get("/followup-actions/{action_id}/rejection-history", response_model=list[RejectionLogEntryOut])
+async def get_followup_action_rejection_history(
+    action_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(OrderFollowupAction, action_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Follow-up action not found")
+    stmt = (
+        select(FollowupActionRejectionLog)
+        .where(
+            FollowupActionRejectionLog.tenant_id == tenant.id,
+            FollowupActionRejectionLog.action_id == action_id,
+        )
+        .order_by(FollowupActionRejectionLog.rejected_at.desc())
+    )
+    result = await db.execute(stmt)
+    logs = result.scalars().all()
+    return [
+        RejectionLogEntryOut(
+            id=log.id,
+            rejected_at=log.rejected_at,
+            rejection_reason=log.rejection_reason,
+            resubmission_date=log.resubmission_date,
+            created_at=log.created_at,
+        )
+        for log in logs
+    ]
+
+
+@router.post("/followup-actions/{action_id}/rejection-history", status_code=201, response_model=RejectionLogEntryOut)
+async def add_followup_action_rejection_log(
+    action_id: int,
+    body: RejectionLogCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(OrderFollowupAction, action_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Follow-up action not found")
+    log_entry = FollowupActionRejectionLog(
+        tenant_id=tenant.id,
+        action_id=action_id,
+        rejected_at=datetime.utcnow(),
+        rejection_reason=body.rejection_reason,
+        resubmission_date=body.resubmission_date,
+        created_by_id=user.id,
+    )
+    db.add(log_entry)
+    row.status = "rejected"
+    row.is_rejected = True
+    if body.rejection_reason is not None:
+        row.rejection_reason = body.rejection_reason
+    if body.resubmission_date is not None:
+        row.resubmission_date = body.resubmission_date
+    await db.commit()
+    await db.refresh(log_entry)
+    return RejectionLogEntryOut(
+        id=log_entry.id,
+        rejected_at=log_entry.rejected_at,
+        rejection_reason=log_entry.rejection_reason,
+        resubmission_date=log_entry.resubmission_date,
+        created_at=log_entry.created_at,
+    )
+
+
+@router.get("/followup-actions/{action_id}", response_model=OrderFollowupActionOut)
+async def get_followup_action(
+    action_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(OrderFollowupAction, action_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Follow-up action not found")
+    order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, row.order_id)
+    return OrderFollowupActionOut(
+        id=row.id, order_id=row.order_id, order_code=order_code, delivery_date=delivery_date, style_code=style_code,
+        template_id=row.template_id, sequence_no=row.sequence_no, phase=row.phase, action_group=row.action_group,
+        action_type=row.action_type, title=row.title, description=row.description,
+        is_template_generated=row.is_template_generated, is_mandatory=row.is_mandatory, is_active=row.is_active,
+        assigned_to_id=row.assigned_to_id, planned_date=row.planned_date, actual_submission_date=row.actual_submission_date,
+        approval_received_date=row.approval_received_date, actual_completion_date=row.actual_completion_date,
+        resubmission_date=row.resubmission_date, status=row.status, approval_status=row.approval_status,
+        is_rejected=row.is_rejected, rejection_reason=row.rejection_reason, delay_reason=row.delay_reason,
+        severity=row.severity, remarks=row.remarks, completed_at=row.completed_at, milestone_type=row.milestone_type, external_id=row.external_id, created_at=row.created_at, updated_at=row.updated_at,
+    )
+
+
+@router.get("/followup-actions/{action_id}/comments", response_model=list[FollowupActionCommentOut])
+async def get_followup_action_comments(
+    action_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(OrderFollowupAction, action_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Follow-up action not found")
+    stmt = (
+        select(FollowupActionComment, User.username)
+        .join(User, FollowupActionComment.user_id == User.id)
+        .where(
+            FollowupActionComment.tenant_id == tenant.id,
+            FollowupActionComment.action_id == action_id,
+        )
+        .order_by(FollowupActionComment.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+    return [
+        FollowupActionCommentOut(
+            id=c.id,
+            user_id=c.user_id,
+            username=uname,
+            comment_text=c.comment_text,
+            created_at=c.created_at,
+        )
+        for c, uname in rows
+    ]
+
+
+@router.post("/followup-actions/{action_id}/comments", status_code=201, response_model=FollowupActionCommentOut)
+async def create_followup_action_comment(
+    action_id: int,
+    body: FollowupActionCommentCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(OrderFollowupAction, action_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Follow-up action not found")
+    comment = FollowupActionComment(
+        tenant_id=tenant.id,
+        action_id=action_id,
+        user_id=user.id,
+        comment_text=body.comment_text.strip(),
+    )
+    db.add(comment)
+    await db.commit()
+    await db.refresh(comment)
+    return FollowupActionCommentOut(
+        id=comment.id,
+        user_id=comment.user_id,
+        username=user.username,
+        comment_text=comment.comment_text,
+        created_at=comment.created_at,
+    )
+
+
+@router.post("/followup-actions", status_code=201, response_model=OrderFollowupActionOut)
+async def create_followup_action(
+    body: OrderFollowupActionCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    order = await db.get(Order, body.order_id)
+    if not order or order.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Order not found")
+    row = OrderFollowupAction(
+        tenant_id=tenant.id,
+        order_id=body.order_id,
+        template_id=body.template_id,
+        sequence_no=body.sequence_no,
+        phase=body.phase,
+        action_group=body.action_group,
+        action_type=body.action_type,
+        title=body.title,
+        description=body.description,
+        is_mandatory=body.is_mandatory,
+        planned_date=body.planned_date,
+        actual_submission_date=body.actual_submission_date,
+        approval_received_date=body.approval_received_date,
+        resubmission_date=body.resubmission_date,
+        status=body.status,
+        approval_status=body.approval_status,
+        is_rejected=body.is_rejected,
+        rejection_reason=body.rejection_reason,
+        delay_reason=body.delay_reason,
+        severity=body.severity,
+        remarks=body.remarks,
+        assigned_to_id=body.assigned_to_id,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, row.order_id)
+    return OrderFollowupActionOut(
+        id=row.id, order_id=row.order_id, order_code=order_code, delivery_date=delivery_date, style_code=style_code,
+        template_id=row.template_id, sequence_no=row.sequence_no, phase=row.phase, action_group=row.action_group,
+        action_type=row.action_type, title=row.title, description=row.description,
+        is_template_generated=row.is_template_generated, is_mandatory=row.is_mandatory, is_active=row.is_active,
+        assigned_to_id=row.assigned_to_id, planned_date=row.planned_date, actual_submission_date=row.actual_submission_date,
+        approval_received_date=row.approval_received_date, actual_completion_date=row.actual_completion_date,
+        resubmission_date=row.resubmission_date, status=row.status, approval_status=row.approval_status,
+        is_rejected=row.is_rejected, rejection_reason=row.rejection_reason, delay_reason=row.delay_reason,
+        severity=row.severity, remarks=row.remarks, completed_at=row.completed_at, milestone_type=row.milestone_type, external_id=row.external_id, created_at=row.created_at, updated_at=row.updated_at,
+    )
+
+
+@router.patch("/followup-actions/{action_id}", response_model=OrderFollowupActionOut)
+async def update_followup_action(
+    action_id: int,
+    body: OrderFollowupActionUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(OrderFollowupAction, action_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Follow-up action not found")
+    for field in (
+        "sequence_no", "phase", "action_group", "action_type", "title", "description",
+        "planned_date", "actual_submission_date", "approval_received_date", "actual_completion_date", "resubmission_date",
+        "status", "approval_status", "is_rejected", "rejection_reason", "delay_reason", "severity", "remarks", "assigned_to_id",
+        "milestone_type", "external_id",
+    ):
+        val = getattr(body, field)
+        if val is not None:
+            setattr(row, field, val)
+    if row.is_rejected and (body.rejection_reason is not None or row.rejection_reason):
+        log_entry = FollowupActionRejectionLog(
+            tenant_id=tenant.id,
+            action_id=row.id,
+            rejected_at=datetime.utcnow(),
+            rejection_reason=row.rejection_reason,
+            resubmission_date=row.resubmission_date,
+            created_by_id=user.id,
+        )
+        db.add(log_entry)
+    await db.commit()
+    await db.refresh(row)
+    order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, row.order_id)
+    return OrderFollowupActionOut(
+        id=row.id, order_id=row.order_id, order_code=order_code, delivery_date=delivery_date, style_code=style_code,
+        template_id=row.template_id, sequence_no=row.sequence_no, phase=row.phase, action_group=row.action_group,
+        action_type=row.action_type, title=row.title, description=row.description,
+        is_template_generated=row.is_template_generated, is_mandatory=row.is_mandatory, is_active=row.is_active,
+        assigned_to_id=row.assigned_to_id, planned_date=row.planned_date, actual_submission_date=row.actual_submission_date,
+        approval_received_date=row.approval_received_date, actual_completion_date=row.actual_completion_date,
+        resubmission_date=row.resubmission_date, status=row.status, approval_status=row.approval_status,
+        is_rejected=row.is_rejected, rejection_reason=row.rejection_reason, delay_reason=row.delay_reason,
+        severity=row.severity, remarks=row.remarks, completed_at=row.completed_at, milestone_type=row.milestone_type, external_id=row.external_id, created_at=row.created_at, updated_at=row.updated_at,
+    )
+
+
+@router.post("/followup-actions/{action_id}/complete", response_model=OrderFollowupActionOut)
+async def complete_followup_action(
+    action_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(OrderFollowupAction, action_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Follow-up action not found")
+    row.status = "completed"
+    row.approval_status = "approved"
+    row.is_rejected = False
+    row.actual_completion_date = date.today()
+    row.completed_at = datetime.utcnow()
+    row.completed_by_id = user.id
+    await db.commit()
+    await db.refresh(row)
+    order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, row.order_id)
+    return OrderFollowupActionOut(
+        id=row.id, order_id=row.order_id, order_code=order_code, delivery_date=delivery_date, style_code=style_code,
+        template_id=row.template_id, sequence_no=row.sequence_no, phase=row.phase, action_group=row.action_group,
+        action_type=row.action_type, title=row.title, description=row.description,
+        is_template_generated=row.is_template_generated, is_mandatory=row.is_mandatory, is_active=row.is_active,
+        assigned_to_id=row.assigned_to_id, planned_date=row.planned_date, actual_submission_date=row.actual_submission_date,
+        approval_received_date=row.approval_received_date, actual_completion_date=row.actual_completion_date,
+        resubmission_date=row.resubmission_date, status=row.status, approval_status=row.approval_status,
+        is_rejected=row.is_rejected, rejection_reason=row.rejection_reason, delay_reason=row.delay_reason,
+        severity=row.severity, remarks=row.remarks, completed_at=row.completed_at, milestone_type=row.milestone_type, external_id=row.external_id, created_at=row.created_at, updated_at=row.updated_at,
+    )
+
+
+@router.post("/followup-actions/{action_id}/reopen", response_model=OrderFollowupActionOut)
+async def reopen_followup_action(
+    action_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(OrderFollowupAction, action_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Follow-up action not found")
+    row.status = "pending"
+    row.approval_status = "pending"
+    row.actual_completion_date = None
+    row.completed_at = None
+    row.completed_by_id = None
+    await db.commit()
+    await db.refresh(row)
+    order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, row.order_id)
+    return OrderFollowupActionOut(
+        id=row.id, order_id=row.order_id, order_code=order_code, delivery_date=delivery_date, style_code=style_code,
+        template_id=row.template_id, sequence_no=row.sequence_no, phase=row.phase, action_group=row.action_group,
+        action_type=row.action_type, title=row.title, description=row.description,
+        is_template_generated=row.is_template_generated, is_mandatory=row.is_mandatory, is_active=row.is_active,
+        assigned_to_id=row.assigned_to_id, planned_date=row.planned_date, actual_submission_date=row.actual_submission_date,
+        approval_received_date=row.approval_received_date, actual_completion_date=row.actual_completion_date,
+        resubmission_date=row.resubmission_date, status=row.status, approval_status=row.approval_status,
+        is_rejected=row.is_rejected, rejection_reason=row.rejection_reason, delay_reason=row.delay_reason,
+        severity=row.severity, remarks=row.remarks, completed_at=row.completed_at, milestone_type=row.milestone_type, external_id=row.external_id, created_at=row.created_at, updated_at=row.updated_at,
+    )
+
+
+@router.delete("/followup-actions/{action_id}", status_code=204)
+async def delete_followup_action(
+    action_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(OrderFollowupAction, action_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Follow-up action not found")
+    await db.delete(row)
+    await db.commit()
+
+
+# ---------- Pipeline: stages config (research-based order lifecycle + win probability) ----------
+
+PIPELINE_STAGES = [
+    {"stage_key": "inquiry_draft", "label": "Inquiry · Draft", "document_type": "inquiry", "status_value": "DRAFT", "win_probability": 5, "sort_order": 1},
+    {"stage_key": "inquiry_submitted", "label": "Inquiry · Submitted", "document_type": "inquiry", "status_value": "SUBMITTED", "win_probability": 15, "sort_order": 2},
+    {"stage_key": "inquiry_converted", "label": "Inquiry · Converted", "document_type": "inquiry", "status_value": "CONVERTED", "win_probability": 100, "sort_order": 3},
+    {"stage_key": "quotation_draft", "label": "Quotation · Draft", "document_type": "quotation", "status_value": "DRAFT", "win_probability": 20, "sort_order": 4},
+    {"stage_key": "quotation_new", "label": "Quotation · New", "document_type": "quotation", "status_value": "NEW", "win_probability": 25, "sort_order": 5},
+    {"stage_key": "quotation_submitted", "label": "Quotation · Submitted", "document_type": "quotation", "status_value": "SUBMITTED", "win_probability": 35, "sort_order": 6},
+    {"stage_key": "quotation_approved", "label": "Quotation · Approved", "document_type": "quotation", "status_value": "APPROVED", "win_probability": 50, "sort_order": 7},
+    {"stage_key": "quotation_sent", "label": "Quotation · Sent", "document_type": "quotation", "status_value": "SENT", "win_probability": 60, "sort_order": 8},
+    {"stage_key": "quotation_converted", "label": "Quotation · Won", "document_type": "quotation", "status_value": "CONVERTED", "win_probability": 100, "sort_order": 9},
+    {"stage_key": "order_draft", "label": "Order · Draft", "document_type": "order", "status_value": "DRAFT", "win_probability": 70, "sort_order": 10},
+    {"stage_key": "order_new", "label": "Order · New", "document_type": "order", "status_value": "NEW", "win_probability": 80, "sort_order": 11},
+    {"stage_key": "order_in_progress", "label": "Order · In Progress", "document_type": "order", "status_value": "IN_PROGRESS", "win_probability": 90, "sort_order": 12},
+    {"stage_key": "order_completed", "label": "Order · Completed", "document_type": "order", "status_value": "COMPLETED", "win_probability": 100, "sort_order": 13},
+]
+
+
+class PipelineStageOut(BaseModel):
+    stage_key: str
+    label: str
+    document_type: str
+    status_value: str
+    win_probability: int
+    sort_order: int
+
+
+class PipelineItemOut(BaseModel):
+    document_type: str  # inquiry | quotation | order
+    id: int
+    code: str
+    stage_key: str
+    customer_id: int
+    customer_name: str
+    style_ref: str | None
+    style_name: str | None
+    quantity: int | None
+    total_amount: str | None
+    created_at: str
+    detail_path: str
+    next_status_options: list[str]  # allowed next statuses for "Move to" action
+
+
+def _inquiry_stage_key(status: str) -> str:
+    key = (status or "DRAFT").upper()
+    if key == "CONVERTED":
+        return "inquiry_converted"
+    if key == "SUBMITTED":
+        return "inquiry_submitted"
+    return "inquiry_draft"
+
+
+def _quotation_stage_key(status: str) -> str:
+    key = (status or "DRAFT").upper()
+    for s in PIPELINE_STAGES:
+        if s["document_type"] == "quotation" and s["status_value"] == key:
+            return s["stage_key"]
+    return "quotation_draft"
+
+
+def _order_stage_key(status: str) -> str:
+    key = (status or "DRAFT").upper()
+    for s in PIPELINE_STAGES:
+        if s["document_type"] == "order" and s["status_value"] == key:
+            return s["stage_key"]
+    return "order_draft"
+
+
 @router.get("/pipeline")
 async def get_pipeline_summary(
     tenant: Tenant = Depends(require_tenant),
@@ -882,8 +2211,1949 @@ async def get_pipeline_summary(
     }
 
 
+@router.get("/pipeline/full", response_model=dict)
+async def get_pipeline_full(
+    document_type: str | None = Query(default=None, description="Filter: inquiry, quotation, order"),
+    customer_id: int | None = Query(default=None),
+    search: str | None = Query(default=None, description="Search code, style_ref"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Advanced pipeline: stages with win probability + all items grouped by stage for Kanban/list views."""
+    _ensure_tenant(user, tenant)
+    from app.models import Customer
+
+    stages_out = [PipelineStageOut(**s) for s in PIPELINE_STAGES]
+    items_out: list[PipelineItemOut] = []
+
+    # Inquiries with customer name
+    inq_stmt = select(Inquiry, Customer.name).join(
+        Customer, Inquiry.customer_id == Customer.id
+    ).where(Inquiry.tenant_id == tenant.id)
+    if document_type == "order" or document_type == "quotation":
+        inq_stmt = inq_stmt.where(1 == 0)  # exclude
+    if customer_id is not None:
+        inq_stmt = inq_stmt.where(Inquiry.customer_id == customer_id)
+    if search:
+        pat = f"%{search}%"
+        inq_stmt = inq_stmt.where(
+            or_(Inquiry.inquiry_code.ilike(pat), (Inquiry.style_ref or "").ilike(pat))
+        )
+    inq_result = await db.execute(inq_stmt.order_by(Inquiry.created_at.desc()))
+    for inq, cust_name in inq_result.all():
+        stage_key = _inquiry_stage_key(inq.status)
+        next_options = []
+        if inq.status == "DRAFT":
+            next_options = ["SUBMITTED"]
+        elif inq.status == "SUBMITTED":
+            next_options = []  # converted via create quotation
+        items_out.append(
+            PipelineItemOut(
+                document_type="inquiry",
+                id=inq.id,
+                code=inq.inquiry_code,
+                stage_key=stage_key,
+                customer_id=inq.customer_id,
+                customer_name=cust_name or "",
+                style_ref=inq.style_ref,
+                style_name=None,
+                quantity=inq.quantity,
+                total_amount=None,
+                created_at=inq.created_at.isoformat(),
+                detail_path=f"/app/inquiries/{inq.id}",
+                next_status_options=next_options,
+            )
+        )
+
+    # Quotations with customer name
+    qt_stmt = select(Quotation, Customer.name).join(
+        Customer, Quotation.customer_id == Customer.id
+    ).where(Quotation.tenant_id == tenant.id)
+    if document_type == "inquiry" or document_type == "order":
+        qt_stmt = qt_stmt.where(1 == 0)
+    if customer_id is not None:
+        qt_stmt = qt_stmt.where(Quotation.customer_id == customer_id)
+    if search:
+        pat = f"%{search}%"
+        qt_stmt = qt_stmt.where(
+            or_(Quotation.quotation_code.ilike(pat), (Quotation.style_ref or "").ilike(pat))
+        )
+    qt_result = await db.execute(qt_stmt.order_by(Quotation.created_at.desc()))
+    for qt, cust_name in qt_result.all():
+        stage_key = _quotation_stage_key(qt.status)
+        next_options = []
+        if qt.status in ("DRAFT", "NEW"):
+            next_options = ["SUBMITTED"]
+        elif qt.status == "SUBMITTED":
+            next_options = ["APPROVED"]
+        elif qt.status == "APPROVED":
+            next_options = ["SENT"]
+        elif qt.status == "SENT":
+            next_options = []  # convert to order via orders/from-quotation
+        items_out.append(
+            PipelineItemOut(
+                document_type="quotation",
+                id=qt.id,
+                code=qt.quotation_code,
+                stage_key=stage_key,
+                customer_id=qt.customer_id,
+                customer_name=cust_name or "",
+                style_ref=qt.style_ref,
+                style_name=None,
+                quantity=qt.projected_quantity,
+                total_amount=qt.total_amount,
+                created_at=qt.created_at.isoformat(),
+                detail_path=f"/app/quotations/{qt.id}",
+                next_status_options=next_options,
+            )
+        )
+
+    # Orders with customer name
+    ord_stmt = select(Order, Customer.name).join(
+        Customer, Order.customer_id == Customer.id
+    ).where(Order.tenant_id == tenant.id)
+    if document_type == "inquiry" or document_type == "quotation":
+        ord_stmt = ord_stmt.where(1 == 0)
+    if customer_id is not None:
+        ord_stmt = ord_stmt.where(Order.customer_id == customer_id)
+    if search:
+        pat = f"%{search}%"
+        ord_stmt = ord_stmt.where(
+            or_(Order.order_code.ilike(pat), (Order.style_ref or "").ilike(pat))
+        )
+    ord_result = await db.execute(ord_stmt.order_by(Order.created_at.desc()))
+    for ord_row, cust_name in ord_result.all():
+        stage_key = _order_stage_key(ord_row.status)
+        next_options = []
+        if ord_row.status == "DRAFT":
+            next_options = ["NEW"]
+        elif ord_row.status == "NEW":
+            next_options = ["IN_PROGRESS"]
+        elif ord_row.status == "IN_PROGRESS":
+            next_options = ["COMPLETED"]
+        items_out.append(
+            PipelineItemOut(
+                document_type="order",
+                id=ord_row.id,
+                code=ord_row.order_code,
+                stage_key=stage_key,
+                customer_id=ord_row.customer_id,
+                customer_name=cust_name or "",
+                style_ref=ord_row.style_ref,
+                style_name=None,
+                quantity=ord_row.quantity,
+                total_amount=None,
+                created_at=ord_row.created_at.isoformat(),
+                detail_path=f"/app/orders/{ord_row.id}",
+                next_status_options=next_options,
+            )
+        )
+
+    summary = {
+        "inquiries": len([i for i in items_out if i.document_type == "inquiry"]),
+        "quotations": len([i for i in items_out if i.document_type == "quotation"]),
+        "orders": len([i for i in items_out if i.document_type == "order"]),
+    }
+    return {
+        "stages": [s.model_dump() for s in stages_out],
+        "items": [i.model_dump() for i in items_out],
+        "summary": summary,
+    }
+
+
+# ---------- Pipeline analytics: month-wise and quarterly (for marketing) ----------
+
+
+class PipelineAnalyticsBucket(BaseModel):
+    """One period (month or quarter) with key metrics."""
+    period_key: str  # e.g. "2025-01" or "2025-Q1"
+    period_label: str  # e.g. "Jan 2025" or "Q1 2025"
+    year: int
+    month: int | None  # 1-12 for monthly; None for quarter
+    quarter: int | None  # 1-4 for quarterly; None for monthly
+    inquiries_received: int
+    confirmed_orders_count: int
+    confirmed_orders_quantity: int
+    inquiry_under_processing: int
+    potential_orders_count: int
+
+
+class PipelineAnalyticsResponse(BaseModel):
+    by_month: list[PipelineAnalyticsBucket]
+    by_quarter: list[PipelineAnalyticsBucket]
+    summary: dict
+
+
+def _month_key(d: date | datetime) -> tuple[int, int]:
+    if isinstance(d, datetime):
+        return (d.year, d.month)
+    return (d.year, d.month)
+
+
+def _quarter_key(d: date | datetime) -> tuple[int, int]:
+    if isinstance(d, datetime):
+        y, m = d.year, d.month
+    else:
+        y, m = d.year, d.month
+    q = (m - 1) // 3 + 1
+    return (y, q)
+
+
+@router.get("/pipeline/analytics", response_model=PipelineAnalyticsResponse)
+async def get_pipeline_analytics(
+    years_back: int = Query(default=2, ge=0, le=5, description="Years to look back from current"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Month-wise and quarterly pipeline picture for marketing:
+    - Inquiries received (by created month/quarter)
+    - Confirmed orders by expected delivery date (count + quantity)
+    - Inquiry under processing (inquiries not yet led to an order)
+    - Potential orders (quotations SENT/APPROVED not yet converted)
+    """
+    _ensure_tenant(user, tenant)
+
+    today = date.today()
+    # Inquiries: id, created_at
+    inq_result = await db.execute(
+        select(Inquiry.id, Inquiry.created_at).where(Inquiry.tenant_id == tenant.id)
+    )
+    inquiries = [(r[0], r[1]) for r in inq_result.all() if r[1]]
+
+    # Quotations: id, inquiry_id, status, created_at
+    qt_result = await db.execute(
+        select(Quotation.id, Quotation.inquiry_id, Quotation.status, Quotation.created_at).where(
+            Quotation.tenant_id == tenant.id
+        )
+    )
+    quotations = qt_result.all()
+
+    # Orders: id, quotation_id, status, delivery_date, order_date, quantity
+    ord_result = await db.execute(
+        select(Order.id, Order.quotation_id, Order.status, Order.delivery_date, Order.order_date, Order.quantity).where(
+            Order.tenant_id == tenant.id
+        )
+    )
+    orders = list(ord_result.all())
+
+    # Inquiry IDs that have at least one order (via any quotation)
+    quotation_ids_with_order = {o[1] for o in orders if o[1] is not None}
+    inquiry_ids_converted: set[int] = set()
+    for q in quotations:
+        if q[0] in quotation_ids_with_order and q[1] is not None:
+            inquiry_ids_converted.add(q[1])
+
+    # Quotation IDs that are converted (have an order)
+    converted_quotation_ids = {o[1] for o in orders if o[1] is not None}
+
+    # Build month buckets: (year, month) -> counts
+    month_inq = defaultdict(int)
+    month_ord_count = defaultdict(int)
+    month_ord_qty = defaultdict(int)
+    month_inq_under = defaultdict(int)
+    month_potential = defaultdict(int)
+
+    for inq_id, created in inquiries:
+        if not created:
+            continue
+        y, m = created.year, created.month
+        month_inq[(y, m)] += 1
+        if inq_id not in inquiry_ids_converted:
+            month_inq_under[(y, m)] += 1
+
+    for o in orders:
+        status_val = (o[2] or "").upper()
+        if status_val == "DRAFT":
+            continue
+        deliv = o[3] or o[4]
+        if not deliv:
+            continue
+        y, m = _month_key(deliv)
+        month_ord_count[(y, m)] += 1
+        month_ord_qty[(y, m)] += (o[5] or 0)
+
+    for q in quotations:
+        if q[2] in ("SENT", "APPROVED") and q[0] not in converted_quotation_ids:
+            if q[3]:
+                y, m = q[3].year, q[3].month
+                month_potential[(y, m)] += 1
+
+    # Quarter buckets
+    quarter_inq = defaultdict(int)
+    quarter_ord_count = defaultdict(int)
+    quarter_ord_qty = defaultdict(int)
+    quarter_inq_under = defaultdict(int)
+    quarter_potential = defaultdict(int)
+
+    for inq_id, created in inquiries:
+        if not created:
+            continue
+        y, q = _quarter_key(created)
+        quarter_inq[(y, q)] += 1
+        if inq_id not in inquiry_ids_converted:
+            quarter_inq_under[(y, q)] += 1
+
+    for o in orders:
+        status_val = (o[2] or "").upper()
+        if status_val == "DRAFT":
+            continue
+        deliv = o[3] or o[4]
+        if not deliv:
+            continue
+        y, q = _quarter_key(deliv)
+        quarter_ord_count[(y, q)] += 1
+        quarter_ord_qty[(y, q)] += (o[5] or 0)
+
+    for q in quotations:
+        if q[2] in ("SENT", "APPROVED") and q[0] not in converted_quotation_ids:
+            if q[3]:
+                y, qq = _quarter_key(q[3])
+                quarter_potential[(y, qq)] += 1
+
+    month_names = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
+
+    all_month_keys = set(month_inq.keys()) | set(month_ord_count.keys()) | set(month_inq_under.keys()) | set(month_potential.keys())
+    start_year = today.year - years_back
+    # Limit to last N years and up to 6 months ahead for delivery
+    end_month_linear = today.year * 12 + today.month + 6
+    by_month_out: list[PipelineAnalyticsBucket] = []
+    for y in range(start_year, today.year + 2):
+        for m in range(1, 13):
+            if y * 12 + m < (today.year - years_back) * 12 + 1:
+                continue
+            if y * 12 + m > end_month_linear:
+                continue
+            if (y, m) > (today.year, today.month) and (y, m) not in all_month_keys:
+                continue
+            period_key = f"{y}-{m:02d}"
+            period_label = f"{month_names[m - 1]} {y}"
+            by_month_out.append(
+                PipelineAnalyticsBucket(
+                    period_key=period_key,
+                    period_label=period_label,
+                    year=y,
+                    month=m,
+                    quarter=None,
+                    inquiries_received=month_inq.get((y, m), 0),
+                    confirmed_orders_count=month_ord_count.get((y, m), 0),
+                    confirmed_orders_quantity=month_ord_qty.get((y, m), 0),
+                    inquiry_under_processing=month_inq_under.get((y, m), 0),
+                    potential_orders_count=month_potential.get((y, m), 0),
+                )
+            )
+    by_month_out.sort(key=lambda x: (x.year, x.month or 0))
+    # Trim to only include months that have data or are recent (last N years)
+    cutoff = today - timedelta(days=365 * years_back)
+    by_month_out = [b for b in by_month_out if (b.year, b.month or 0) >= (cutoff.year, cutoff.month) or any([
+        month_inq.get((b.year, b.month or 0), 0) > 0,
+        month_ord_count.get((b.year, b.month or 0), 0) > 0,
+        month_inq_under.get((b.year, b.month or 0), 0) > 0,
+        month_potential.get((b.year, b.month or 0), 0) > 0,
+    ])]
+
+    all_quarter_keys = set(quarter_inq.keys()) | set(quarter_ord_count.keys()) | set(quarter_inq_under.keys()) | set(quarter_potential.keys())
+    by_quarter_out: list[PipelineAnalyticsBucket] = []
+    for y in range(start_year, today.year + 2):
+        for q in range(1, 5):
+            if (y, q) not in all_quarter_keys and (y, q) > (today.year, (today.month - 1) // 3 + 1):
+                continue
+            period_key = f"{y}-Q{q}"
+            period_label = f"Q{q} {y}"
+            by_quarter_out.append(
+                PipelineAnalyticsBucket(
+                    period_key=period_key,
+                    period_label=period_label,
+                    year=y,
+                    month=None,
+                    quarter=q,
+                    inquiries_received=quarter_inq.get((y, q), 0),
+                    confirmed_orders_count=quarter_ord_count.get((y, q), 0),
+                    confirmed_orders_quantity=quarter_ord_qty.get((y, q), 0),
+                    inquiry_under_processing=quarter_inq_under.get((y, q), 0),
+                    potential_orders_count=quarter_potential.get((y, q), 0),
+                )
+            )
+    by_quarter_out.sort(key=lambda x: (x.year, x.quarter or 0))
+
+    total_inq = sum(month_inq.values())
+    total_ord_count = sum(month_ord_count.values())
+    total_ord_qty = sum(month_ord_qty.values())
+    total_under = len([i for i in inquiries if i[0] not in inquiry_ids_converted])
+    total_potential = len([q for q in quotations if q[2] in ("SENT", "APPROVED") and q[0] not in converted_quotation_ids])
+
+    return PipelineAnalyticsResponse(
+        by_month=by_month_out,
+        by_quarter=by_quarter_out,
+        summary={
+            "inquiries_received_total": total_inq,
+            "confirmed_orders_total": total_ord_count,
+            "confirmed_orders_quantity_total": total_ord_qty,
+            "inquiry_under_processing_total": total_under,
+            "potential_orders_total": total_potential,
+        },
+    )
+
+
+# ---------- Phase E: Wastage reporting ----------
+
+
+DEFAULT_WASTAGE_THRESHOLD_PCT = 15.0
+
+
+class WastageReportRowOut(BaseModel):
+    order_id: int
+    order_code: str
+    order_date: date | None
+    delivery_date: date | None
+    buyer_id: int
+    buyer_name: str
+    style_id: int
+    style_code: str
+    item_id: int
+    item_code: str
+    item_name: str
+    category: str  # fabric | trim | other
+    expected_qty: float
+    actual_qty: float
+    wastage_pct_vs_bom: float  # (actual - expected) / expected * 100 when expected > 0
+    wastage_value: float  # max(0, actual - expected) * unit_cost
+    allowed_threshold_pct: float
+    threshold_breach: bool
+
+
+def _wastage_category_from_item(item: Item, category: ItemCategory | None) -> str:
+    if not category:
+        return "other"
+    code = (category.category_code or "").upper()
+    if "FABRIC" in code or code.startswith("FAB"):
+        return "fabric"
+    if "TRIM" in code or "PACK" in code or "ACCESSORY" in code:
+        return "trim"
+    return "other"
+
+
+def _resolve_wastage_threshold_pct(
+    rules: list[WastageThresholdRule],
+    customer_id: int | None,
+) -> float:
+    """Resolve allowed_pct from threshold rules: buyer match first, then tenant-wide. Default 15%."""
+    allowed = DEFAULT_WASTAGE_THRESHOLD_PCT
+    for r in rules:
+        if r.scope_type == "tenant" and r.scope_id is None:
+            allowed = float(r.allowed_pct)
+        if r.scope_type == "buyer" and r.scope_id is not None and r.scope_id == customer_id:
+            allowed = float(r.allowed_pct)
+            break
+    return allowed
+
+
+@router.get("/reports/wastage", response_model=list[WastageReportRowOut])
+async def get_wastage_report(
+    order_id: int | None = Query(default=None, description="Filter by order"),
+    style_id: int | None = Query(default=None, description="Filter by style"),
+    buyer_id: int | None = Query(default=None, description="Filter by buyer (customer)"),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    threshold_pct: float | None = Query(default=None, description="Only rows where wastage % above this"),
+    above_threshold_only: bool = Query(default=False, description="Only rows above default 15% threshold"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Report actual issued consumption vs BOM expected by order/item. Actual = CONSUMPTION_ISSUE movements; expected = order qty × BOM base × (1 + wastage%). Returns wastage value and threshold breach for profitability control."""
+    _ensure_tenant(user, tenant)
+    # Load threshold rules for tenant (used to resolve allowed_pct per order)
+    thr_result = await db.execute(
+        select(WastageThresholdRule).where(WastageThresholdRule.tenant_id == tenant.id)
+    )
+    threshold_rules = list(thr_result.scalars().all())
+    mov_result = await db.execute(
+        select(StockMovement.reference_id).where(
+            StockMovement.tenant_id == tenant.id,
+            StockMovement.reference_type == "CONSUMPTION_ISSUE",
+            StockMovement.reference_id.isnot(None),
+        ).distinct()
+    )
+    order_ids_with_issues = [r for r in mov_result.scalars().all() if r[0] is not None]
+    if not order_ids_with_issues:
+        return []
+    oids = [r[0] for r in order_ids_with_issues]
+    stmt = select(Order).where(Order.tenant_id == tenant.id, Order.id.in_(oids))
+    if order_id is not None:
+        stmt = stmt.where(Order.id == order_id)
+    if buyer_id is not None:
+        stmt = stmt.where(Order.customer_id == buyer_id)
+    if date_from is not None:
+        stmt = stmt.where(Order.order_date >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(Order.order_date <= date_to)
+    orders_result = await db.execute(stmt)
+    orders = list(orders_result.scalars().all())
+    out: list[WastageReportRowOut] = []
+    for order in orders:
+        allowed_pct = _resolve_wastage_threshold_pct(threshold_rules, order.customer_id)
+        if not order.quotation_id:
+            continue
+        quotation = await db.get(Quotation, order.quotation_id)
+        if not quotation or quotation.tenant_id != tenant.id or not quotation.style_id:
+            continue
+        sid = quotation.style_id
+        if style_id is not None and sid != style_id:
+            continue
+        style = await db.get(GarmentStyle, sid)
+        style_code = style.style_code if style else str(sid)
+        customer = await db.get(Customer, order.customer_id)
+        buyer_name = customer.name if customer else f"Customer #{order.customer_id}"
+        order_qty = _to_float_safe(str(order.quantity)) if order.quantity is not None else 0.0
+        if order_qty <= 0:
+            continue
+        bom_result = await db.execute(
+            select(Bom).where(Bom.tenant_id == tenant.id, Bom.style_id == sid).order_by(Bom.version_no.desc()).limit(1)
+        )
+        bom = bom_result.scalar_one_or_none()
+        if not bom:
+            continue
+        lines_result = await db.execute(
+            select(BomItem).where(
+                BomItem.tenant_id == tenant.id,
+                BomItem.bom_id == bom.id,
+                BomItem.item_id.isnot(None),
+            )
+        )
+        for line in lines_result.scalars().all():
+            item = await db.get(Item, line.item_id)
+            if not item or item.tenant_id != tenant.id:
+                continue
+            cat = await db.get(ItemCategory, item.category_id) if item.category_id else None
+            category = _wastage_category_from_item(item, cat)
+            base = _to_float_safe(line.base_consumption)
+            wastage = _to_float_safe(line.wastage_pct) / 100.0
+            expected = order_qty * base * (1.0 + wastage)
+            act_result = await db.execute(
+                select(StockMovement).where(
+                    StockMovement.tenant_id == tenant.id,
+                    StockMovement.reference_type == "CONSUMPTION_ISSUE",
+                    StockMovement.reference_id == order.id,
+                    StockMovement.item_id == line.item_id,
+                )
+            )
+            actual = sum(_to_float_safe(m.quantity) for m in act_result.scalars().all() if (m.movement_type or "").upper() == "OUT")
+            if expected <= 0:
+                wastage_pct = 0.0
+            else:
+                wastage_pct = round((actual - expected) / expected * 100.0, 2)
+            use_threshold = threshold_pct if threshold_pct is not None else (allowed_pct if above_threshold_only else None)
+            if use_threshold is not None and wastage_pct < use_threshold:
+                continue
+            unit_cost = _to_float_safe(item.default_cost)
+            variance_qty = max(0.0, actual - expected)
+            wastage_value = round(variance_qty * unit_cost, 2)
+            threshold_breach = wastage_pct > allowed_pct
+            out.append(
+                WastageReportRowOut(
+                    order_id=order.id,
+                    order_code=order.order_code,
+                    order_date=order.order_date,
+                    delivery_date=order.delivery_date,
+                    buyer_id=order.customer_id,
+                    buyer_name=buyer_name,
+                    style_id=sid,
+                    style_code=style_code,
+                    item_id=line.item_id,
+                    item_code=item.item_code,
+                    item_name=item.name or item.description or "",
+                    category=category,
+                    expected_qty=round(expected, 4),
+                    actual_qty=round(actual, 4),
+                    wastage_pct_vs_bom=wastage_pct,
+                    wastage_value=wastage_value,
+                    allowed_threshold_pct=allowed_pct,
+                    threshold_breach=threshold_breach,
+                )
+            )
+    return out
+
+
+@router.get("/reports/wastage/summary")
+async def get_wastage_summary(
+    style_id: int | None = Query(default=None),
+    buyer_id: int | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregate wastage: KPIs (total value, fabric/trim avg %, above-threshold count) and by_style."""
+    _ensure_tenant(user, tenant)
+    rows = await get_wastage_report(
+        order_id=None,
+        style_id=style_id,
+        buyer_id=buyer_id,
+        date_from=date_from,
+        date_to=date_to,
+        threshold_pct=None,
+        above_threshold_only=False,
+        tenant=tenant,
+        user=user,
+        db=db,
+    )
+    total_wastage_value = sum(r.wastage_value for r in rows)
+    fabric_pcts = [r.wastage_pct_vs_bom for r in rows if r.category == "fabric"]
+    trim_pcts = [r.wastage_pct_vs_bom for r in rows if r.category == "trim"]
+    fabric_wastage_pct_avg = round(sum(fabric_pcts) / len(fabric_pcts), 2) if fabric_pcts else 0.0
+    trim_wastage_pct_avg = round(sum(trim_pcts) / len(trim_pcts), 2) if trim_pcts else 0.0
+    above_threshold_orders_count = len({r.order_id for r in rows if r.threshold_breach})
+    by_style: dict[int, list[float]] = {}
+    for r in rows:
+        by_style.setdefault(r.style_id, []).append(r.wastage_pct_vs_bom)
+    by_style_list = [
+        {
+            "style_id": sid,
+            "order_item_count": len(pcts),
+            "avg_wastage_pct": round(sum(pcts) / len(pcts), 2) if pcts else 0,
+            "max_wastage_pct": round(max(pcts), 2) if pcts else 0,
+        }
+        for sid, pcts in by_style.items()
+    ]
+    return {
+        "total_wastage_value": round(total_wastage_value, 2),
+        "fabric_wastage_pct_avg": fabric_wastage_pct_avg,
+        "trim_wastage_pct_avg": trim_wastage_pct_avg,
+        "above_threshold_orders_count": above_threshold_orders_count,
+        "by_style": by_style_list,
+        "total_rows": len(rows),
+    }
+
+
+class WastageReasonOut(BaseModel):
+    id: int
+    code: str
+    name: str
+    category: str
+    recoverable: bool
+
+
+# Default wastage reason taxonomy (seed when tenant has none). Same as migration 059.
+WASTAGE_REASON_SEED: list[tuple[str, str, str, bool]] = [
+    ("marker_cutting", "Marker / cutting wastage", "fabric", False),
+    ("spreading", "Spreading wastage", "fabric", False),
+    ("end_bit_remnant", "End-bit / remnant wastage", "fabric", True),
+    ("thread_overconsumption", "Thread overconsumption", "trim", False),
+    ("rework_loss", "Rework loss", "process", False),
+    ("rejection_loss", "Rejection loss", "process", False),
+    ("excess_issue_vs_standard", "Excess issue vs standard", "store", False),
+]
+
+
+@router.get("/reports/wastage/reasons", response_model=list[WastageReasonOut])
+async def get_wastage_reasons(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List wastage reason codes for the tenant (for filters and reason breakdown). Seeds from default taxonomy if empty."""
+    _ensure_tenant(user, tenant)
+    result = await db.execute(
+        select(WastageReason).where(WastageReason.tenant_id == tenant.id).order_by(WastageReason.category, WastageReason.code)
+    )
+    rows = result.scalars().all()
+    if not rows:
+        for code, name, category, recoverable in WASTAGE_REASON_SEED:
+            r = WastageReason(tenant_id=tenant.id, code=code, name=name, category=category, recoverable=recoverable)
+            db.add(r)
+        await db.commit()
+        result = await db.execute(
+            select(WastageReason).where(WastageReason.tenant_id == tenant.id).order_by(WastageReason.category, WastageReason.code)
+        )
+        rows = result.scalars().all()
+    return [
+        WastageReasonOut(id=r.id, code=r.code, name=r.name, category=r.category, recoverable=r.recoverable)
+        for r in rows
+    ]
+
+
+class WastageTrendSeriesItem(BaseModel):
+    label: str
+    value: float
+
+
+class WastageTrendsOut(BaseModel):
+    series: list[WastageTrendSeriesItem] | None = None
+    by_buyer: list[dict] | None = None  # [{ buyer_id, buyer_name, value }]
+    by_material_group: list[dict] | None = None  # [{ category, value }]
+
+
+@router.get("/reports/wastage/trends", response_model=WastageTrendsOut)
+async def get_wastage_trends(
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    group_by: str = Query(default="month", description="month | buyer | material_group"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trends: wastage value grouped by month, buyer, or material group (category)."""
+    _ensure_tenant(user, tenant)
+    rows = await get_wastage_report(
+        order_id=None,
+        style_id=None,
+        buyer_id=None,
+        date_from=date_from,
+        date_to=date_to,
+        threshold_pct=None,
+        above_threshold_only=False,
+        tenant=tenant,
+        user=user,
+        db=db,
+    )
+    if group_by == "month":
+        by_month: dict[str, float] = defaultdict(float)
+        for r in rows:
+            d = r.order_date
+            key = d.strftime("%Y-%m") if d else "unknown"
+            by_month[key] += r.wastage_value
+        series = [WastageTrendSeriesItem(label=k, value=round(v, 2)) for k, v in sorted(by_month.items())]
+        return WastageTrendsOut(series=series)
+    if group_by == "buyer":
+        by_buyer: dict[int, tuple[str, float]] = {}
+        for r in rows:
+            if r.buyer_id not in by_buyer:
+                by_buyer[r.buyer_id] = (r.buyer_name, 0.0)
+            by_buyer[r.buyer_id] = (r.buyer_name, by_buyer[r.buyer_id][1] + r.wastage_value)
+        by_buyer_list = [
+            {"buyer_id": bid, "buyer_name": name, "value": round(v, 2)}
+            for bid, (name, v) in by_buyer.items()
+        ]
+        return WastageTrendsOut(by_buyer=by_buyer_list)
+    if group_by == "material_group":
+        by_cat: dict[str, float] = defaultdict(float)
+        for r in rows:
+            by_cat[r.category] += r.wastage_value
+        by_material = [{"category": k, "value": round(v, 2)} for k, v in sorted(by_cat.items())]
+        return WastageTrendsOut(by_material_group=by_material)
+    return WastageTrendsOut()
+
+
+class WastageTransactionCreate(BaseModel):
+    order_id: int
+    item_id: int | None = None
+    process_stage: str
+    reason_id: int | None = None
+    quantity: str = "0"
+    unit_cost: str = "0"
+    recoverable_value: str = "0"
+
+
+@router.post("/reports/wastage/transactions")
+async def create_wastage_transaction(
+    body: WastageTransactionCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record a wastage transaction for an order (process stage and optional reason)."""
+    _ensure_tenant(user, tenant)
+    order = await db.get(Order, body.order_id)
+    if not order or order.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Order not found")
+    qty = _to_float_safe(body.quantity)
+    cost = _to_float_safe(body.unit_cost)
+    rec = _to_float_safe(body.recoverable_value)
+    value = max(0.0, qty * cost)
+    tx = WastageTransaction(
+        tenant_id=tenant.id,
+        order_id=body.order_id,
+        item_id=body.item_id,
+        process_stage=body.process_stage,
+        reason_id=body.reason_id,
+        quantity=body.quantity,
+        unit_cost=body.unit_cost,
+        value=str(round(value, 2)),
+        recoverable_value=body.recoverable_value,
+        created_by_id=user.id,
+    )
+    db.add(tx)
+    await db.commit()
+    await db.refresh(tx)
+    return {"id": tx.id, "order_id": tx.order_id, "value": value}
+
+
+@router.get("/reports/wastage/export")
+async def export_wastage_report(
+    order_id: int | None = Query(default=None),
+    style_id: int | None = Query(default=None),
+    buyer_id: int | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    format: str = Query(default="xlsx", description="xlsx"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export wastage report as Excel (same filters as report)."""
+    _ensure_tenant(user, tenant)
+    rows = await get_wastage_report(
+        order_id=order_id,
+        style_id=style_id,
+        buyer_id=buyer_id,
+        date_from=date_from,
+        date_to=date_to,
+        threshold_pct=None,
+        above_threshold_only=False,
+        tenant=tenant,
+        user=user,
+        db=db,
+    )
+    try:
+        from openpyxl import Workbook
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Excel export not available (openpyxl missing)")
+    wb = Workbook()
+    ws = wb.active
+    if ws is None:
+        raise HTTPException(status_code=500, detail="Workbook error")
+    ws.title = "Wastage detail"
+    headers = [
+        "Order ID", "Order Code", "Order Date", "Delivery Date", "Buyer", "Style", "Item Code", "Item Name",
+        "Category", "Expected Qty", "Actual Qty", "Wastage %", "Wastage Value", "Threshold Breach",
+    ]
+    ws.append(headers)
+    for r in rows:
+        ws.append([
+            r.order_id, r.order_code, r.order_date.isoformat() if r.order_date else "", r.delivery_date.isoformat() if r.delivery_date else "",
+            r.buyer_name, r.style_code, r.item_code, r.item_name, r.category,
+            r.expected_qty, r.actual_qty, r.wastage_pct_vs_bom, r.wastage_value, "Yes" if r.threshold_breach else "No",
+        ])
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="wastage_report.xlsx"'},
+    )
+
+
+# ---------- Phase 3: thresholds, saved views, management summary ----------
+
+
+class WastageThresholdRuleOut(BaseModel):
+    id: int
+    scope_type: str
+    scope_id: int | None
+    allowed_pct: float
+    critical_pct: float
+
+
+class WastageThresholdRuleCreate(BaseModel):
+    scope_type: str  # tenant | buyer | order_type | material_type
+    scope_id: int | None = None
+    allowed_pct: float
+    critical_pct: float
+
+
+@router.get("/reports/wastage/thresholds", response_model=list[WastageThresholdRuleOut])
+async def list_wastage_thresholds(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List wastage threshold rules for the tenant (for badge and config)."""
+    _ensure_tenant(user, tenant)
+    result = await db.execute(
+        select(WastageThresholdRule).where(WastageThresholdRule.tenant_id == tenant.id)
+    )
+    rows = result.scalars().all()
+    return [
+        WastageThresholdRuleOut(
+            id=r.id,
+            scope_type=r.scope_type,
+            scope_id=r.scope_id,
+            allowed_pct=float(r.allowed_pct),
+            critical_pct=float(r.critical_pct),
+        )
+        for r in rows
+    ]
+
+
+@router.post("/reports/wastage/thresholds", status_code=201, response_model=WastageThresholdRuleOut)
+async def create_wastage_threshold(
+    body: WastageThresholdRuleCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a wastage threshold rule (tenant, buyer, order_type, or material_type scope)."""
+    _ensure_tenant(user, tenant)
+    row = WastageThresholdRule(
+        tenant_id=tenant.id,
+        scope_type=body.scope_type,
+        scope_id=body.scope_id,
+        allowed_pct=body.allowed_pct,
+        critical_pct=body.critical_pct,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return WastageThresholdRuleOut(
+        id=row.id,
+        scope_type=row.scope_type,
+        scope_id=row.scope_id,
+        allowed_pct=float(row.allowed_pct),
+        critical_pct=float(row.critical_pct),
+    )
+
+
+class WastageSavedViewOut(BaseModel):
+    id: int
+    name: str
+    description: str | None
+    filter_json: dict
+    is_default: bool
+    created_at: datetime | None
+
+
+class WastageSavedViewBody(BaseModel):
+    name: str
+    description: str | None = None
+    filter_json: dict
+    is_default: bool = False
+
+
+@router.get("/reports/wastage/views", response_model=list[WastageSavedViewOut])
+async def list_wastage_views(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List saved filter views for wastage report (current user)."""
+    _ensure_tenant(user, tenant)
+    result = await db.execute(
+        select(WastageSavedView).where(
+            WastageSavedView.tenant_id == tenant.id,
+            WastageSavedView.user_id == user.id,
+        ).order_by(WastageSavedView.name.asc())
+    )
+    rows = result.scalars().all()
+    return [
+        WastageSavedViewOut(
+            id=r.id,
+            name=r.name,
+            description=r.description,
+            filter_json=r.filter_json or {},
+            is_default=r.is_default,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+
+@router.post("/reports/wastage/views", status_code=201, response_model=WastageSavedViewOut)
+async def create_wastage_view(
+    body: WastageSavedViewBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save current filter state as a named wastage report view."""
+    _ensure_tenant(user, tenant)
+    if body.is_default:
+        default_rows = (await db.execute(
+            select(WastageSavedView).where(
+                WastageSavedView.tenant_id == tenant.id,
+                WastageSavedView.user_id == user.id,
+                WastageSavedView.is_default == True,
+            )
+        )).scalars().all()
+        for r in default_rows:
+            r.is_default = False
+    row = WastageSavedView(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        name=body.name,
+        description=body.description,
+        filter_json=body.filter_json,
+        is_default=body.is_default,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return WastageSavedViewOut(
+        id=row.id,
+        name=row.name,
+        description=row.description,
+        filter_json=row.filter_json or {},
+        is_default=row.is_default,
+        created_at=row.created_at,
+    )
+
+
+@router.delete("/reports/wastage/views/{view_id}", status_code=204)
+async def delete_wastage_view(
+    view_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a saved wastage report view."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(WastageSavedView, view_id)
+    if not row or row.tenant_id != tenant.id or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Saved view not found")
+    await db.delete(row)
+    await db.commit()
+
+
+class WastageManagementSummaryOut(BaseModel):
+    top_orders: list[dict]  # [{ order_id, order_code, buyer_name, total_wastage_value }]
+    top_materials: list[dict]  # [{ item_id, item_code, item_name, total_wastage_value }]
+    top_reasons: list[dict]  # [{ reason_code, reason_name, value, count }] from wastage_transaction
+    mom_change: dict  # { current_total, previous_total, current_above_threshold, previous_above_threshold }
+    suggested_actions: list[str]
+
+
+@router.get("/reports/wastage/management-summary", response_model=WastageManagementSummaryOut)
+async def get_wastage_management_summary(
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Management summary: top 10 orders, top 10 materials, top reasons, month-over-month, suggested actions."""
+    _ensure_tenant(user, tenant)
+    rows = await get_wastage_report(
+        order_id=None,
+        style_id=None,
+        buyer_id=None,
+        date_from=date_from,
+        date_to=date_to,
+        threshold_pct=None,
+        above_threshold_only=False,
+        tenant=tenant,
+        user=user,
+        db=db,
+    )
+    # Top 10 orders by total wastage value
+    order_totals: dict[int, tuple[str, str, float]] = {}
+    for r in rows:
+        if r.order_id not in order_totals:
+            order_totals[r.order_id] = (r.order_code, r.buyer_name, 0.0)
+        order_totals[r.order_id] = (r.order_code, r.buyer_name, order_totals[r.order_id][2] + r.wastage_value)
+    top_orders = [
+        {"order_id": oid, "order_code": code, "buyer_name": name, "total_wastage_value": round(v, 2)}
+        for oid, (code, name, v) in sorted(order_totals.items(), key=lambda x: -x[1][2])[:10]
+    ]
+    # Top 10 materials (items) by total wastage value
+    item_totals: dict[int, tuple[str, str, float]] = {}
+    for r in rows:
+        if r.item_id not in item_totals:
+            item_totals[r.item_id] = (r.item_code, r.item_name, 0.0)
+        item_totals[r.item_id] = (r.item_code, r.item_name, item_totals[r.item_id][2] + r.wastage_value)
+    top_materials = [
+        {"item_id": iid, "item_code": code, "item_name": name, "total_wastage_value": round(v, 2)}
+        for iid, (code, name, v) in sorted(item_totals.items(), key=lambda x: -x[1][2])[:10]
+    ]
+    # Top reasons from wastage_transaction (aggregate by reason; left join for null reason_id)
+    reason_result = await db.execute(
+        select(
+            WastageTransaction.reason_id,
+            WastageReason.code,
+            WastageReason.name,
+            WastageTransaction.value,
+        )
+        .select_from(WastageTransaction)
+        .outerjoin(WastageReason, WastageTransaction.reason_id == WastageReason.id)
+        .where(WastageTransaction.tenant_id == tenant.id)
+    )
+    reason_agg: dict[str, tuple[str, float, int]] = {}
+    for r in reason_result.scalars().all():
+        code = (r.code or "") if r.code else ""
+        name = (r.name or "Unknown") if r.name else "Unknown"
+        val = _to_float_safe(r.value)
+        key = code or f"reason_{r.reason_id or 0}"
+        if key not in reason_agg:
+            reason_agg[key] = (name, 0.0, 0)
+        reason_agg[key] = (reason_agg[key][0], reason_agg[key][1] + val, reason_agg[key][2] + 1)
+    top_reasons = [
+        {"reason_code": k, "reason_name": v[0], "value": round(v[1], 2), "count": v[2]}
+        for k, v in sorted(reason_agg.items(), key=lambda x: -x[1][1])[:10]
+    ]
+    # Month-over-month: current period vs previous period (same length)
+    current_total = sum(r.wastage_value for r in rows)
+    current_above = len({r.order_id for r in rows if r.threshold_breach})
+    period_start = date_from
+    period_end = date_to
+    if period_start and period_end:
+        delta = (period_end - period_start).days + 1
+        prev_end = period_start - timedelta(days=1)
+        prev_start = prev_end - timedelta(days=delta - 1)
+        prev_rows = await get_wastage_report(
+            order_id=None, style_id=None, buyer_id=None,
+            date_from=prev_start, date_to=prev_end,
+            threshold_pct=None, above_threshold_only=False,
+            tenant=tenant, user=user, db=db,
+        )
+        previous_total = sum(r.wastage_value for r in prev_rows)
+        previous_above = len({r.order_id for r in prev_rows if r.threshold_breach})
+    else:
+        previous_total = 0.0
+        previous_above = 0
+    mom_change = {
+        "current_total": round(current_total, 2),
+        "previous_total": round(previous_total, 2),
+        "current_above_threshold": current_above,
+        "previous_above_threshold": previous_above,
+    }
+    # Suggested actions
+    suggested_actions: list[str] = []
+    if current_above > 0:
+        suggested_actions.append(f"Review {current_above} order(s) with wastage above threshold.")
+    if top_orders and float(top_orders[0].get("total_wastage_value", 0)) > 0:
+        suggested_actions.append(f"Highest loss order: {top_orders[0].get('order_code', '')} – consider process review.")
+    if top_reasons:
+        suggested_actions.append(f"Top wastage reason: {top_reasons[0].get('reason_name', '')} – target corrective action.")
+    if not suggested_actions:
+        suggested_actions.append("No high-wastage areas identified for the selected period.")
+    return WastageManagementSummaryOut(
+        top_orders=top_orders,
+        top_materials=top_materials,
+        top_reasons=top_reasons,
+        mom_change=mom_change,
+        suggested_actions=suggested_actions,
+    )
+
+
+@router.post("/reports/wastage/refresh-summary")
+async def refresh_wastage_order_summary(
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Recompute and store wastage order summaries for the tenant (optional date range). Used for management view and KPIs."""
+    _ensure_tenant(user, tenant)
+    rows = await get_wastage_report(
+        order_id=None,
+        style_id=None,
+        buyer_id=None,
+        date_from=date_from,
+        date_to=date_to,
+        threshold_pct=None,
+        above_threshold_only=False,
+        tenant=tenant,
+        user=user,
+        db=db,
+    )
+    order_agg: dict[int, tuple[float, float, float, float, float, bool]] = {}
+    for r in rows:
+        if r.order_id not in order_agg:
+            order_agg[r.order_id] = (0.0, 0.0, 0.0, 0.0, False)
+        exp, act, trim_val, total_val, breach = order_agg[r.order_id]
+        exp += r.expected_qty
+        act += r.actual_qty
+        if r.category == "trim":
+            trim_val += r.wastage_value
+        total_val += r.wastage_value
+        breach = breach or r.threshold_breach
+        order_agg[r.order_id] = (exp, act, trim_val, total_val, breach)
+    for oid, (exp, act, trim_val, total_val, breach) in order_agg.items():
+        await db.execute(delete(WastageOrderSummary).where(
+            WastageOrderSummary.tenant_id == tenant.id,
+            WastageOrderSummary.order_id == oid,
+        ))
+        var_pct = (act - exp) / exp * 100.0 if exp > 0 else 0.0
+        summary = WastageOrderSummary(
+            tenant_id=tenant.id,
+            order_id=oid,
+            period_start=date_from,
+            period_end=date_to,
+            planned_fabric_cons=str(round(exp, 4)),
+            actual_fabric_cons=str(round(act, 4)),
+            fabric_variance_pct=str(round(var_pct, 2)),
+            trim_wastage_value=str(round(trim_val, 2)),
+            total_wastage_value=str(round(total_val, 2)),
+            above_threshold=breach,
+        )
+        db.add(summary)
+    await db.commit()
+    return {"updated_orders": len(order_agg)}
+
+
+class WastageOrderDetailBomLine(BaseModel):
+    item_id: int
+    item_code: str
+    item_name: str
+    category: str
+    base_consumption: float
+    wastage_pct: float
+    expected_qty: float
+    actual_qty: float
+    variance_qty: float
+    wastage_pct_vs_bom: float
+    wastage_value: float
+    threshold_breach: bool
+
+
+class WastageReasonBreakdownItem(BaseModel):
+    reason_id: int | None
+    reason_code: str
+    reason_name: str
+    value: float
+    quantity: float
+
+
+class WastageProcessStageBreakdownItem(BaseModel):
+    process_stage: str
+    value: float
+    quantity: float
+
+
+class WastageOrderDetailOut(BaseModel):
+    order_id: int
+    order_code: str
+    order_date: date | None
+    delivery_date: date | None
+    buyer_id: int
+    buyer_name: str
+    style_id: int
+    style_code: str
+    quantity: int | None
+    bom_lines: list[WastageOrderDetailBomLine]
+    total_expected_value: float
+    total_actual_value: float
+    total_wastage_value: float
+    linked_alert_ids: list[int]
+    reason_breakdown: list[WastageReasonBreakdownItem] = []
+    process_stage_breakdown: list[WastageProcessStageBreakdownItem] = []
+
+
+@router.get("/reports/wastage/order/{order_id}", response_model=WastageOrderDetailOut)
+async def get_wastage_order_detail(
+    order_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Detail for one order: BOM lines with planned/actual/variance and linked alert IDs."""
+    _ensure_tenant(user, tenant)
+    order = await db.get(Order, order_id)
+    if not order or order.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Order not found")
+    customer = await db.get(Customer, order.customer_id)
+    buyer_name = customer.name if customer else f"Customer #{order.customer_id}"
+    if not order.quotation_id:
+        raise HTTPException(status_code=404, detail="Order has no quotation")
+    quotation = await db.get(Quotation, order.quotation_id)
+    if not quotation or quotation.tenant_id != tenant.id or not quotation.style_id:
+        raise HTTPException(status_code=404, detail="Quotation or style not found")
+    sid = quotation.style_id
+    style = await db.get(GarmentStyle, sid)
+    style_code = style.style_code if style else str(sid)
+    order_qty = _to_float_safe(str(order.quantity)) if order.quantity is not None else 0.0
+    bom_result = await db.execute(
+        select(Bom).where(Bom.tenant_id == tenant.id, Bom.style_id == sid).order_by(Bom.version_no.desc()).limit(1)
+    )
+    bom = bom_result.scalar_one_or_none()
+    if not bom:
+        raise HTTPException(status_code=404, detail="No BOM for style")
+    lines_result = await db.execute(
+        select(BomItem).where(
+            BomItem.tenant_id == tenant.id,
+            BomItem.bom_id == bom.id,
+            BomItem.item_id.isnot(None),
+        )
+    )
+    total_expected_value = 0.0
+    total_actual_value = 0.0
+    bom_lines: list[WastageOrderDetailBomLine] = []
+    for line in lines_result.scalars().all():
+        item = await db.get(Item, line.item_id)
+        if not item or item.tenant_id != tenant.id:
+            continue
+        cat = await db.get(ItemCategory, item.category_id) if item.category_id else None
+        category = _wastage_category_from_item(item, cat)
+        base = _to_float_safe(line.base_consumption)
+        wastage_pct_val = _to_float_safe(line.wastage_pct)
+        expected = order_qty * base * (1.0 + wastage_pct_val / 100.0)
+        act_result = await db.execute(
+            select(StockMovement).where(
+                StockMovement.tenant_id == tenant.id,
+                StockMovement.reference_type == "CONSUMPTION_ISSUE",
+                StockMovement.reference_id == order.id,
+                StockMovement.item_id == line.item_id,
+            )
+        )
+        actual = sum(
+            _to_float_safe(m.quantity) for m in act_result.scalars().all() if (m.movement_type or "").upper() == "OUT"
+        )
+        variance_qty = actual - expected
+        wastage_pct_vs_bom = round((variance_qty / expected * 100.0), 2) if expected > 0 else 0.0
+        unit_cost = _to_float_safe(item.default_cost)
+        wastage_value = round(max(0.0, variance_qty) * unit_cost, 2)
+        total_expected_value += expected * unit_cost
+        total_actual_value += actual * unit_cost
+        bom_lines.append(
+            WastageOrderDetailBomLine(
+                item_id=line.item_id,
+                item_code=item.item_code,
+                item_name=item.name or item.description or "",
+                category=category,
+                base_consumption=base,
+                wastage_pct=wastage_pct_val,
+                expected_qty=round(expected, 4),
+                actual_qty=round(actual, 4),
+                variance_qty=round(variance_qty, 4),
+                wastage_pct_vs_bom=wastage_pct_vs_bom,
+                wastage_value=wastage_value,
+                threshold_breach=wastage_pct_vs_bom > DEFAULT_WASTAGE_THRESHOLD_PCT,
+            )
+        )
+    total_wastage_value = round(total_actual_value - total_expected_value, 2)
+    if total_wastage_value < 0:
+        total_wastage_value = 0.0
+    alert_ids_result = await db.execute(
+        select(AlertRelatedEntity.alert_id).where(
+            AlertRelatedEntity.tenant_id == tenant.id,
+            AlertRelatedEntity.entity_type == "order",
+            AlertRelatedEntity.entity_id == order_id,
+        )
+    )
+    linked_alert_ids = list({r[0] for r in alert_ids_result.scalars().all()})
+
+    # Reason and process-stage breakdown from wastage_transaction
+    tx_result = await db.execute(
+        select(WastageTransaction, WastageReason).outerjoin(
+            WastageReason, WastageTransaction.reason_id == WastageReason.id
+        ).where(
+            WastageTransaction.tenant_id == tenant.id,
+            WastageTransaction.order_id == order_id,
+        )
+    )
+    tx_rows = tx_result.all()
+    reason_agg: dict[int | None, tuple[str, str, float, float]] = {}
+    stage_agg: dict[str, tuple[float, float]] = {}
+    for tx, reason in tx_rows:
+        val = _to_float_safe(tx.value)
+        qty = _to_float_safe(tx.quantity)
+        code = reason.code if reason else ""
+        name = reason.name if reason else "Unknown"
+        rid = tx.reason_id
+        if rid not in reason_agg:
+            reason_agg[rid] = (code, name, 0.0, 0.0)
+        reason_agg[rid] = (code, name, reason_agg[rid][2] + val, reason_agg[rid][3] + qty)
+        stage = tx.process_stage or "unknown"
+        if stage not in stage_agg:
+            stage_agg[stage] = (0.0, 0.0)
+        stage_agg[stage] = (stage_agg[stage][0] + val, stage_agg[stage][1] + qty)
+    reason_breakdown = [
+        WastageReasonBreakdownItem(reason_id=rid, reason_code=c, reason_name=n, value=round(v, 2), quantity=round(q, 4))
+        for rid, (c, n, v, q) in reason_agg.items()
+    ]
+    process_stage_breakdown = [
+        WastageProcessStageBreakdownItem(process_stage=st, value=round(v, 2), quantity=round(q, 4))
+        for st, (v, q) in stage_agg.items()
+    ]
+
+    return WastageOrderDetailOut(
+        order_id=order.id,
+        order_code=order.order_code,
+        order_date=order.order_date,
+        delivery_date=order.delivery_date,
+        buyer_id=order.customer_id,
+        buyer_name=buyer_name,
+        style_id=sid,
+        style_code=style_code,
+        quantity=order.quantity,
+        bom_lines=bom_lines,
+        total_expected_value=round(total_expected_value, 2),
+        total_actual_value=round(total_actual_value, 2),
+        total_wastage_value=total_wastage_value,
+        linked_alert_ids=linked_alert_ids,
+        reason_breakdown=reason_breakdown,
+        process_stage_breakdown=process_stage_breakdown,
+    )
+
+
+# ---------- Advanced Critical Alerts (Phase 1: persisted alert engine) ----------
+
+class AlertStatusUpdateBody(BaseModel):
+    status: str  # acknowledged | in_progress | waiting_on_buyer | waiting_on_supplier | resolved | closed
+
+
+class AlertSnoozeBody(BaseModel):
+    snoozed_until: datetime
+
+
+class AlertAssignBody(BaseModel):
+    assigned_to_id: int | None
+
+
+@router.get("/alerts")
+async def list_alerts(
+    severity: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    alert_type: str | None = Query(default=None, alias="alert_type"),
+    order_id: int | None = Query(default=None),
+    assigned_to_id: int | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    sort: str = Query(default="-created_at"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List persisted alerts with filters and pagination."""
+    _ensure_tenant(user, tenant)
+    stmt = select(AlertInstance).where(AlertInstance.tenant_id == tenant.id)
+    if severity:
+        stmt = stmt.where(AlertInstance.severity == severity.lower())
+    if status_filter:
+        stmt = stmt.where(AlertInstance.status == status_filter.lower())
+    if alert_type:
+        stmt = stmt.where(AlertInstance.alert_type == alert_type)
+    if assigned_to_id is not None:
+        stmt = stmt.where(AlertInstance.assigned_to_id == assigned_to_id)
+    if order_id is not None:
+        sub = select(AlertRelatedEntity.alert_id).where(
+            AlertRelatedEntity.tenant_id == tenant.id,
+            AlertRelatedEntity.entity_type == "order",
+            AlertRelatedEntity.entity_id == order_id,
+        )
+        stmt = stmt.where(AlertInstance.id.in_(sub))
+    # Exclude snoozed that are still in future
+    from datetime import datetime as dt
+    now = dt.utcnow()
+    stmt = stmt.where(
+        or_(
+            AlertInstance.snoozed_until.is_(None),
+            AlertInstance.snoozed_until <= now,
+        )
+    )
+    total_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
+    total = total_result.scalar() or 0
+    sort_col = AlertInstance.created_at
+    if sort.lstrip("-") == "created_at":
+        sort_col = AlertInstance.created_at
+    elif sort.lstrip("-") == "updated_at":
+        sort_col = AlertInstance.updated_at
+    elif sort.lstrip("-") == "severity":
+        sort_col = AlertInstance.severity
+    if sort.startswith("-"):
+        stmt = stmt.order_by(sort_col.desc())
+    else:
+        stmt = stmt.order_by(sort_col.asc())
+    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(stmt)
+    rows = result.scalars().all()
+    # Enrich with order_id / order_code from related_entity
+    items = []
+    for r in rows:
+        rel_result = await db.execute(
+            select(AlertRelatedEntity).where(
+                AlertRelatedEntity.alert_id == r.id,
+                AlertRelatedEntity.entity_type == "order",
+            ).limit(1)
+        )
+        rel = rel_result.scalar_one_or_none()
+        order_code = None
+        link_order_id = None
+        if rel:
+            link_order_id = rel.entity_id
+            order_row = await db.get(Order, rel.entity_id)
+            if order_row and order_row.tenant_id == tenant.id:
+                order_code = order_row.order_code
+        items.append({
+            "id": r.id,
+            "natural_key": r.natural_key,
+            "title": r.title,
+            "description": r.description,
+            "severity": r.severity,
+            "status": r.status,
+            "alert_type": r.alert_type,
+            "assigned_to_id": r.assigned_to_id,
+            "order_id": link_order_id,
+            "order_code": order_code,
+            "reason_text": r.reason_text,
+            "recommended_action": r.recommended_action,
+            "snoozed_until": r.snoozed_until.isoformat() if r.snoozed_until else None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+        })
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/alerts/summary")
+async def get_alerts_summary(
+    severity: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """KPI counts for alert center (critical, high, medium, low, total)."""
+    _ensure_tenant(user, tenant)
+    from datetime import datetime as dt
+    now = dt.utcnow()
+    stmt = select(AlertInstance.severity, func.count()).where(
+        AlertInstance.tenant_id == tenant.id,
+        or_(
+            AlertInstance.snoozed_until.is_(None),
+            AlertInstance.snoozed_until <= now,
+        ),
+    )
+    if severity:
+        stmt = stmt.where(AlertInstance.severity == severity)
+    if status_filter:
+        stmt = stmt.where(AlertInstance.status == status_filter)
+    stmt = stmt.group_by(AlertInstance.severity)
+    by_sev = await db.execute(stmt)
+    counts = {row[0]: row[1] for row in by_sev.all()}
+    total = sum(counts.values())
+    return {
+        "by_severity": {
+            "critical": counts.get("critical", 0),
+            "high": counts.get("high", 0),
+            "medium": counts.get("medium", 0),
+            "low": counts.get("low", 0),
+            "informational": counts.get("informational", 0),
+        },
+        "total": total,
+    }
+
+
+@router.get("/alerts/{alert_id}")
+async def get_alert_detail(
+    alert_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Single alert for detail drawer."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(AlertInstance, alert_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    rels = await db.execute(
+        select(AlertRelatedEntity).where(
+            AlertRelatedEntity.alert_id == alert_id,
+            AlertRelatedEntity.tenant_id == tenant.id,
+        )
+    )
+    related = rels.scalars().all()
+    order_id = None
+    order_code = None
+    for rel in related:
+        if rel.entity_type == "order":
+            order_id = rel.entity_id
+            o = await db.get(Order, rel.entity_id)
+            if o and o.tenant_id == tenant.id:
+                order_code = o.order_code
+            break
+    return {
+        "id": row.id,
+        "natural_key": row.natural_key,
+        "title": row.title,
+        "description": row.description,
+        "severity": row.severity,
+        "status": row.status,
+        "alert_type": row.alert_type,
+        "assigned_to_id": row.assigned_to_id,
+        "order_id": order_id,
+        "order_code": order_code,
+        "reason_text": row.reason_text,
+        "recommended_action": row.recommended_action,
+        "snoozed_until": row.snoozed_until.isoformat() if row.snoozed_until else None,
+        "escalated_at": row.escalated_at.isoformat() if row.escalated_at else None,
+        "escalation_level": row.escalation_level,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        "resolved_at": row.resolved_at.isoformat() if row.resolved_at else None,
+    }
+
+
+@router.patch("/alerts/{alert_id}/status")
+async def update_alert_status(
+    alert_id: int,
+    body: AlertStatusUpdateBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update alert status (acknowledged, in_progress, resolved, etc.)."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(AlertInstance, alert_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    old_status = row.status
+    row.status = body.status.lower()
+    if body.status.lower() in ("resolved", "closed"):
+        row.resolved_at = datetime.utcnow()
+        row.resolved_by_id = user.id
+    elif body.status.lower() == "acknowledged":
+        row.acknowledged_at = datetime.utcnow()
+        row.acknowledged_by_id = user.id
+    hist = AlertHistory(
+        tenant_id=tenant.id,
+        alert_id=alert_id,
+        user_id=user.id,
+        action="status_change",
+        field_name="status",
+        old_value=old_status,
+        new_value=row.status,
+    )
+    db.add(hist)
+    await db.flush()
+    await db.refresh(row)
+    return row
+
+
+@router.post("/alerts/{alert_id}/snooze")
+async def snooze_alert(
+    alert_id: int,
+    body: AlertSnoozeBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Snooze alert until given datetime."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(AlertInstance, alert_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    row.status = "snoozed"
+    row.snoozed_until = body.snoozed_until
+    hist = AlertHistory(
+        tenant_id=tenant.id,
+        alert_id=alert_id,
+        user_id=user.id,
+        action="snoozed",
+        field_name="snoozed_until",
+        new_value=body.snoozed_until.isoformat() if body.snoozed_until else None,
+    )
+    db.add(hist)
+    await db.flush()
+    await db.refresh(row)
+    return row
+
+
+@router.post("/alerts/{alert_id}/assign")
+async def assign_alert(
+    alert_id: int,
+    body: AlertAssignBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Assign alert to a user."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(AlertInstance, alert_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    old_val = str(row.assigned_to_id) if row.assigned_to_id else None
+    row.assigned_to_id = body.assigned_to_id
+    hist = AlertHistory(
+        tenant_id=tenant.id,
+        alert_id=alert_id,
+        user_id=user.id,
+        action="assigned",
+        field_name="assigned_to_id",
+        old_value=old_val,
+        new_value=str(body.assigned_to_id) if body.assigned_to_id else None,
+    )
+    db.add(hist)
+    await db.flush()
+    await db.refresh(row)
+    return row
+
+
+async def _run_scan_background(tenant_id: int) -> None:
+    """Background task: run alert scan in its own DB session (avoids request timeout)."""
+    from app.database import AsyncSessionLocal
+    from app.modules.merch.alert_engine import run_scan
+    async with AsyncSessionLocal() as db:
+        try:
+            await run_scan(db, tenant_id, trigger="manual")
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
+
+@router.post("/alerts/scan")
+async def run_alerts_scan(
+    background_tasks: BackgroundTasks,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+):
+    """Start alert rule scan for current tenant (runs in background; returns immediately)."""
+    _ensure_tenant(user, tenant)
+    background_tasks.add_task(_run_scan_background, tenant.id)
+    return JSONResponse(
+        status_code=202,
+        content={"status": "accepted", "message": "Scan started in background. List will update shortly."},
+    )
+
+
+class AlertCommentBody(BaseModel):
+    body: str
+    is_internal: bool = False
+
+
+class AlertEscalateBody(BaseModel):
+    to_level: int = 1
+    assigned_to_id: int | None = None
+    reason: str | None = None
+
+
+class AlertSavedViewBody(BaseModel):
+    name: str
+    description: str | None = None
+    filter_json: dict
+    is_default: bool = False
+
+
+@router.get("/alerts/{alert_id}/comments")
+async def list_alert_comments(
+    alert_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List comments for an alert (lazy-loaded in drawer)."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(AlertInstance, alert_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    result = await db.execute(
+        select(AlertComment)
+        .where(AlertComment.alert_id == alert_id, AlertComment.tenant_id == tenant.id)
+        .order_by(AlertComment.created_at.asc())
+    )
+    rows = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "user_id": r.user_id,
+            "body": r.body,
+            "is_internal": r.is_internal,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/alerts/{alert_id}/comments", status_code=201)
+async def add_alert_comment(
+    alert_id: int,
+    body: AlertCommentBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a comment to an alert."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(AlertInstance, alert_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    comment = AlertComment(
+        tenant_id=tenant.id,
+        alert_id=alert_id,
+        user_id=user.id,
+        body=body.body,
+        is_internal=body.is_internal,
+    )
+    db.add(comment)
+    await db.flush()
+    hist = AlertHistory(
+        tenant_id=tenant.id,
+        alert_id=alert_id,
+        user_id=user.id,
+        action="comment",
+        new_value=str(comment.id),
+    )
+    db.add(hist)
+    await db.flush()
+    await db.refresh(comment)
+    return {
+        "id": comment.id,
+        "user_id": comment.user_id,
+        "body": comment.body,
+        "is_internal": comment.is_internal,
+        "created_at": comment.created_at.isoformat() if comment.created_at else None,
+    }
+
+
+@router.get("/alerts/{alert_id}/history")
+async def list_alert_history(
+    alert_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Timeline/history for an alert (lazy-loaded in drawer)."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(AlertInstance, alert_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    result = await db.execute(
+        select(AlertHistory)
+        .where(AlertHistory.alert_id == alert_id, AlertHistory.tenant_id == tenant.id)
+        .order_by(AlertHistory.created_at.desc())
+    )
+    rows = result.scalars().all()
+    return [
+        {
+            "id": h.id,
+            "user_id": h.user_id,
+            "action": h.action,
+            "field_name": h.field_name,
+            "old_value": h.old_value,
+            "new_value": h.new_value,
+            "created_at": h.created_at.isoformat() if h.created_at else None,
+        }
+        for h in rows
+    ]
+
+
+@router.post("/alerts/{alert_id}/escalate")
+async def escalate_alert(
+    alert_id: int,
+    body: AlertEscalateBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Escalate alert to a level and optionally assign."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(AlertInstance, alert_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    from_level = row.escalation_level
+    row.status = "escalated"
+    row.escalated_at = datetime.utcnow()
+    row.escalation_level = body.to_level
+    if body.assigned_to_id is not None:
+        row.assigned_to_id = body.assigned_to_id
+    log = AlertEscalationLog(
+        tenant_id=tenant.id,
+        alert_id=alert_id,
+        from_level=from_level,
+        to_level=body.to_level,
+        assigned_to_id=body.assigned_to_id,
+        reason=body.reason,
+        created_by_id=user.id,
+    )
+    db.add(log)
+    hist = AlertHistory(
+        tenant_id=tenant.id,
+        alert_id=alert_id,
+        user_id=user.id,
+        action="escalated",
+        field_name="escalation_level",
+        old_value=str(from_level) if from_level is not None else None,
+        new_value=str(body.to_level),
+    )
+    db.add(hist)
+    await db.flush()
+    await db.refresh(row)
+    return row
+
+
+@router.get("/alerts/views")
+async def list_alert_views(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List saved filter views for current user."""
+    _ensure_tenant(user, tenant)
+    result = await db.execute(
+        select(AlertSavedView)
+        .where(
+            AlertSavedView.tenant_id == tenant.id,
+            AlertSavedView.user_id == user.id,
+        )
+        .order_by(AlertSavedView.name.asc())
+    )
+    rows = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "description": r.description,
+            "filter_json": r.filter_json,
+            "is_default": r.is_default,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/alerts/views", status_code=201)
+async def create_alert_view(
+    body: AlertSavedViewBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save current filter state as a named view."""
+    _ensure_tenant(user, tenant)
+    if body.is_default:
+        default_rows = (await db.execute(
+            select(AlertSavedView).where(
+                AlertSavedView.tenant_id == tenant.id,
+                AlertSavedView.user_id == user.id,
+                AlertSavedView.is_default == True,
+            )
+        )).scalars().all()
+        for r in default_rows:
+            r.is_default = False
+    row = AlertSavedView(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        name=body.name,
+        description=body.description,
+        filter_json=body.filter_json,
+        is_default=body.is_default,
+    )
+    db.add(row)
+    await db.flush()
+    await db.refresh(row)
+    return {
+        "id": row.id,
+        "name": row.name,
+        "description": row.description,
+        "filter_json": row.filter_json,
+        "is_default": row.is_default,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+@router.delete("/alerts/views/{view_id}", status_code=204)
+async def delete_alert_view(
+    view_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a saved view."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(AlertSavedView, view_id)
+    if not row or row.tenant_id != tenant.id or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Saved view not found")
+    await db.delete(row)
+    await db.flush()
+
+
 @router.get("/critical-alerts")
 async def get_critical_alerts(
+    wastage_threshold_pct: float | None = Query(default=15.0, description="Include wastage alerts above this %"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -900,7 +4170,7 @@ async def get_critical_alerts(
         )
     )
     rows = overdue.scalars().all()
-    alerts = [
+    alerts: list[dict] = [
         {
             "id": f"followup-{r.id}",
             "severity": "critical" if (date.today() - r.due_date).days > 7 else "warning",
@@ -912,6 +4182,28 @@ async def get_critical_alerts(
         for r in rows
         if r.due_date is not None
     ]
+    # Phase E: add wastage alerts (actual vs BOM above threshold)
+    wastage_rows = await get_wastage_report(
+        order_id=None,
+        style_id=None,
+        date_from=None,
+        date_to=None,
+        threshold_pct=wastage_threshold_pct,
+        tenant=tenant,
+        user=user,
+        db=db,
+    )
+    for r in wastage_rows:
+        alerts.append({
+            "id": f"wastage-{r.order_id}-{r.item_id}",
+            "severity": "warning",
+            "category": "High Wastage",
+            "title": f"Order {r.order_code} · {r.item_code}",
+            "description": f"Wastage vs BOM: {r.wastage_pct_vs_bom:+.1f}% (expected {r.expected_qty}, actual {r.actual_qty})",
+            "order_id": r.order_id,
+            "style_id": r.style_id,
+            "item_id": r.item_id,
+        })
     return {
         "summary": {
             "critical": len([a for a in alerts if a["severity"] == "critical"]),
@@ -922,52 +4214,251 @@ async def get_critical_alerts(
     }
 
 
-@router.get("/consumption-reconciliation/{order_id}")
+# ---------- Consumption Reconciliation (BOM-based planned vs StockMovement actuals) ----------
+
+
+class ConsumptionReconOrderOut(BaseModel):
+    id: int
+    order_code: str
+    style_code: str
+    quantity: int | None
+
+
+class ConsumptionReconItemOut(BaseModel):
+    item_id: int
+    item_code: str
+    item_name: str
+    material_type: str
+    uom: str | None
+    planned_qty: float
+    actual_qty: float
+    variance: float
+    variance_pct: float
+
+
+class ConsumptionReconSummaryOut(BaseModel):
+    total_planned: float
+    total_actual: float
+    variance: float
+    overall_variance_pct: float
+    items_exceeding_tolerance: int
+
+
+class ConsumptionReconResponse(BaseModel):
+    order: ConsumptionReconOrderOut
+    items: list[ConsumptionReconItemOut]
+    summary: ConsumptionReconSummaryOut
+
+
+async def _get_consumption_recon_data(
+    order_id: int,
+    tolerance_pct: float,
+    tenant: Tenant,
+    db: AsyncSession,
+) -> ConsumptionReconResponse | None:
+    """Compute BOM-based planned vs StockMovement actuals for one order. Returns None if order not found."""
+    order = await db.get(Order, order_id)
+    if not order or order.tenant_id != tenant.id:
+        return None
+    style_code = str(order_id)
+    order_qty = _to_float_safe(str(order.quantity)) if order.quantity is not None else 0.0
+    if not order.quotation_id or order_qty <= 0:
+        return ConsumptionReconResponse(
+            order=ConsumptionReconOrderOut(
+                id=order.id,
+                order_code=order.order_code or "",
+                style_code=style_code,
+                quantity=order.quantity,
+            ),
+            items=[],
+            summary=ConsumptionReconSummaryOut(
+                total_planned=0.0,
+                total_actual=0.0,
+                variance=0.0,
+                overall_variance_pct=0.0,
+                items_exceeding_tolerance=0,
+            ),
+        )
+    quotation = await db.get(Quotation, order.quotation_id)
+    if not quotation or quotation.tenant_id != tenant.id or not quotation.style_id:
+        return ConsumptionReconResponse(
+            order=ConsumptionReconOrderOut(
+                id=order.id,
+                order_code=order.order_code or "",
+                style_code=style_code,
+                quantity=order.quantity,
+            ),
+            items=[],
+            summary=ConsumptionReconSummaryOut(
+                total_planned=0.0,
+                total_actual=0.0,
+                variance=0.0,
+                overall_variance_pct=0.0,
+                items_exceeding_tolerance=0,
+            ),
+        )
+    sid = quotation.style_id
+    style = await db.get(GarmentStyle, sid)
+    style_code = style.style_code if style else str(sid)
+    bom_result = await db.execute(
+        select(Bom).where(Bom.tenant_id == tenant.id, Bom.style_id == sid).order_by(Bom.version_no.desc()).limit(1)
+    )
+    bom = bom_result.scalar_one_or_none()
+    if not bom:
+        return ConsumptionReconResponse(
+            order=ConsumptionReconOrderOut(
+                id=order.id,
+                order_code=order.order_code or "",
+                style_code=style_code,
+                quantity=order.quantity,
+            ),
+            items=[],
+            summary=ConsumptionReconSummaryOut(
+                total_planned=0.0,
+                total_actual=0.0,
+                variance=0.0,
+                overall_variance_pct=0.0,
+                items_exceeding_tolerance=0,
+            ),
+        )
+    lines_result = await db.execute(
+        select(BomItem).where(
+            BomItem.tenant_id == tenant.id,
+            BomItem.bom_id == bom.id,
+            BomItem.item_id.isnot(None),
+        )
+    )
+    items_out: list[ConsumptionReconItemOut] = []
+    total_planned = 0.0
+    total_actual = 0.0
+    items_exceeding = 0
+    for line in lines_result.scalars().all():
+        item = await db.get(Item, line.item_id)
+        if not item or item.tenant_id != tenant.id:
+            continue
+        cat = await db.get(ItemCategory, item.category_id) if item.category_id else None
+        material_type = _wastage_category_from_item(item, cat)
+        base = _to_float_safe(line.base_consumption)
+        wastage = _to_float_safe(line.wastage_pct) / 100.0
+        planned_qty = order_qty * base * (1.0 + wastage)
+        act_result = await db.execute(
+            select(StockMovement).where(
+                StockMovement.tenant_id == tenant.id,
+                StockMovement.reference_type == "CONSUMPTION_ISSUE",
+                StockMovement.reference_id == order.id,
+                StockMovement.item_id == line.item_id,
+            )
+        )
+        actual_qty = sum(
+            _to_float_safe(m.quantity) for m in act_result.scalars().all()
+            if (m.movement_type or "").upper() == "OUT"
+        )
+        variance = actual_qty - planned_qty
+        variance_pct = (variance / planned_qty * 100.0) if planned_qty > 0 else 0.0
+        if abs(variance_pct) > tolerance_pct:
+            items_exceeding += 1
+        uom = None
+        if item.unit_id:
+            u = await db.get(ItemUnit, item.unit_id)
+            uom = u.code if u else None
+        total_planned += planned_qty
+        total_actual += actual_qty
+        items_out.append(
+            ConsumptionReconItemOut(
+                item_id=line.item_id,
+                item_code=item.item_code or "",
+                item_name=item.name or item.description or "",
+                material_type=material_type,
+                uom=uom,
+                planned_qty=round(planned_qty, 4),
+                actual_qty=round(actual_qty, 4),
+                variance=round(variance, 4),
+                variance_pct=round(variance_pct, 2),
+            )
+        )
+    overall_pct = (total_actual - total_planned) / total_planned * 100.0 if total_planned > 0 else 0.0
+    return ConsumptionReconResponse(
+        order=ConsumptionReconOrderOut(
+            id=order.id,
+            order_code=order.order_code or "",
+            style_code=style_code,
+            quantity=order.quantity,
+        ),
+        items=items_out,
+        summary=ConsumptionReconSummaryOut(
+            total_planned=round(total_planned, 4),
+            total_actual=round(total_actual, 4),
+            variance=round(total_actual - total_planned, 4),
+            overall_variance_pct=round(overall_pct, 2),
+            items_exceeding_tolerance=items_exceeding,
+        ),
+    )
+
+
+@router.get("/consumption-reconciliation/{order_id}", response_model=ConsumptionReconResponse)
 async def get_consumption_reconciliation(
     order_id: int,
+    tolerance_pct: float = Query(default=5.0, description="Tolerance % for exceeding count (e.g. 5)"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """BOM-based planned vs StockMovement actuals for one order. Planned = order_qty × BOM base × (1 + wastage%); actual = CONSUMPTION_ISSUE OUT movements."""
     _ensure_tenant(user, tenant)
-    plans = (
-        await db.execute(
-            select(ConsumptionPlan).where(
-                ConsumptionPlan.tenant_id == tenant.id,
-                ConsumptionPlan.order_id == order_id,
-            )
-        )
-    ).scalars().all()
-    plan_ids = [p.id for p in plans]
-    if not plan_ids:
-        return {"order_id": order_id, "items": [], "summary": {"total_planned": 0, "total_actual": 0, "variance": 0}}
-    items = (
-        await db.execute(
-            select(ConsumptionPlanItem).where(
-                ConsumptionPlanItem.tenant_id == tenant.id,
-                ConsumptionPlanItem.plan_id.in_(plan_ids),
-            )
-        )
-    ).scalars().all()
-    total_planned = sum(float(i.required_qty or "0") for i in items)
-    # Actual usage source is module-dependent in PrimeX; expose placeholder 0 until production consumption joins are added.
-    total_actual = 0.0
-    rows = [
-        {
-            "item_code": i.item_code,
-            "planned_qty": float(i.required_qty or "0"),
-            "actual_qty": 0.0,
-            "variance": -float(i.required_qty or "0"),
-            "uom": i.uom,
-        }
-        for i in items
-    ]
-    return {
-        "order_id": order_id,
-        "items": rows,
-        "summary": {
-            "total_planned": total_planned,
-            "total_actual": total_actual,
-            "variance": total_actual - total_planned,
-        },
-    }
+    data = await _get_consumption_recon_data(order_id, tolerance_pct, tenant, db)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return data
+
+
+@router.get("/consumption-reconciliation/{order_id}/export")
+async def get_consumption_reconciliation_export(
+    order_id: int,
+    format: str = Query(default="xlsx", description="xlsx"),
+    tolerance_pct: float = Query(default=5.0, description="Tolerance % for exceeding count"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export consumption reconciliation for one order as Excel (order info + items + summary)."""
+    _ensure_tenant(user, tenant)
+    data = await _get_consumption_recon_data(order_id, tolerance_pct, tenant, db)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    try:
+        from openpyxl import Workbook
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Excel export not available (openpyxl missing)")
+    wb = Workbook()
+    ws = wb.active
+    if ws is None:
+        raise HTTPException(status_code=500, detail="Workbook error")
+    ws.title = "Reconciliation"
+    ws.append(["Order", data.order.order_code, "Style", data.order.style_code, "Qty", data.order.quantity or ""])
+    ws.append([])
+    ws.append(["Item", "Type", "Unit", "Planned", "Actual", "Variance", "Variance %"])
+    for i in data.items:
+        ws.append([
+            f"{i.item_code} {i.item_name}".strip(),
+            i.material_type,
+            i.uom or "",
+            i.planned_qty,
+            i.actual_qty,
+            i.variance,
+            i.variance_pct,
+        ])
+    ws.append([])
+    ws.append(["Total planned", data.summary.total_planned])
+    ws.append(["Total actual", data.summary.total_actual])
+    ws.append(["Variance", data.summary.variance])
+    ws.append(["Overall variance %", data.summary.overall_variance_pct])
+    ws.append(["Items exceeding tolerance", data.summary.items_exceeding_tolerance])
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    safe_code = "".join(c if c.isalnum() or c in "-_" else "_" for c in data.order.order_code)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="consumption_recon_order_{safe_code}.xlsx"'},
+    )

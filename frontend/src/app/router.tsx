@@ -14,6 +14,7 @@ import { PrivacyPage } from "@/pages/public/PrivacyPage";
 import { TermsPage } from "@/pages/public/TermsPage";
 import { HowItWorksPage } from "@/pages/public/HowItWorksPage";
 import { SecurityPage } from "@/pages/public/SecurityPage";
+import { VerifyProformaPage } from "@/pages/VerifyProformaPage";
 
 const AppProtectedRouter = lazy(() =>
   import("@/app/AppProtectedRouter").then((mod) => ({ default: mod.AppProtectedRouter })),
@@ -42,6 +43,7 @@ export function AppRouter() {
       <Route path="/security" element={<PublicLayout><SecurityPage /></PublicLayout>} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<SignUp />} />
+      <Route path="/verify/proforma" element={<VerifyProformaPage />} />
       <Route
         path="/app/*"
         element={

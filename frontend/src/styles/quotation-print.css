@@ -313,6 +313,44 @@
   content: "Page " counter(page) " / " counter(pages);
 }
 
+/* Proforma: QR code — on screen, top-right corner */
+.qp-sheet-proforma {
+  position: relative;
+}
+
+.qp-qr-wrap {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+
+.qp-qr-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.qp-qr-label {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+
+/* Proforma: QR on print — bottom-right corner */
+.qp-qr-print {
+  display: none;
+}
+
 @media print {
   @page {
     size: A4;
@@ -364,5 +402,28 @@
     bottom: 0;
     background: #ffffff;
     padding: 4px 0;
+  }
+
+  /* Proforma: hide screen-only QR, show print QR bottom-right */
+  .qp-qr-wrap {
+    display: none !important;
+  }
+
+  .qp-qr-print {
+    display: block !important;
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 2;
+  }
+
+  .qp-qr-print .qp-qr-box {
+    padding: 4px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+  }
+
+  .qp-qr-print .qp-qr-label {
+    font-size: 8px;
   }
 }

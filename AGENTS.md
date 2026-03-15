@@ -13,6 +13,7 @@ Use this file and `.cursor/rules/` when working on this repo (e.g. on another ma
 
 - User is a **beginner at programming**; prefer clear directory structure and simple, well-explained code.
 - Keep **directory structure clear**: `backend/`, `frontend/`, `docs/`, `replit-legacy/`.
+- **Table row actions:** Use a single combined "Actions" dropdown per row (see `.cursor/rules/action-buttons.mdc`). Do not use separate Edit/Delete icon buttons.
 
 ## Where to look
 

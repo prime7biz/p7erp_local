@@ -15,6 +15,7 @@ export function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [form, setForm] = useState({
     role_id: 0,
     email: "",
@@ -45,6 +46,12 @@ export function UsersPage() {
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    const close = () => setOpenActionsId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
   }, []);
 
   const resetForm = () => {
@@ -267,37 +274,62 @@ export function UsersPage() {
               <td style={{ padding: 8 }}>{u.role_name}</td>
               <td style={{ padding: 8 }}>{u.is_active ? "Yes" : "No"}</td>
               <td style={{ padding: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => startEdit(u)}
-                  className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                >
-                  Edit
-                </button>
-                {u.is_active ? (
+                <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
-                    onClick={() => handleDeactivate(u)}
-                    className="ml-2 rounded border border-amber-200 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50"
+                    onClick={() => setOpenActionsId(openActionsId === u.id ? null : u.id)}
+                    className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
                   >
-                    Deactivate
+                    Actions
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleActivate(u)}
-                    className="ml-2 rounded border border-emerald-200 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50"
-                  >
-                    Activate
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleDelete(u)}
-                  className="ml-2 rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
-                >
-                  Delete
-                </button>
+                  {openActionsId === u.id && (
+                    <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          startEdit(u);
+                          setOpenActionsId(null);
+                        }}
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                      >
+                        Edit
+                      </button>
+                      {u.is_active ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleDeactivate(u);
+                            setOpenActionsId(null);
+                          }}
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          Deactivate
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleActivate(u);
+                            setOpenActionsId(null);
+                          }}
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          Activate
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleDelete(u);
+                          setOpenActionsId(null);
+                        }}
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
               </td>
             </tr>
           ))}

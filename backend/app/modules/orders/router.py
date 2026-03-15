@@ -63,6 +63,21 @@ async def _validate_customer_intermediary(
     )
 
 
+async def _get_existing_order_for_quotation(
+  db: AsyncSession, *, tenant_id: int, quotation_id: int
+) -> Order | None:
+  result = await db.execute(
+    select(Order)
+    .where(
+      Order.tenant_id == tenant_id,
+      Order.quotation_id == quotation_id,
+    )
+    .order_by(Order.created_at.desc(), Order.id.desc())
+    .limit(1)
+  )
+  return result.scalar_one_or_none()
+
+
 @router.get("", response_model=list[OrderResponse])
 async def list_orders(
   *,
@@ -70,7 +85,7 @@ async def list_orders(
   status_filter: str | None = Query(default=None, alias="status", description="Filter by status"),
   created_from: date | None = Query(default=None, description="Created at from (inclusive)"),
   created_to: date | None = Query(default=None, description="Created at to (inclusive)"),
-  limit: int = Query(default=50, ge=1, le=200),
+  limit: int = Query(default=50, ge=1, le=500),
   offset: int = Query(default=0, ge=0),
   tenant: Tenant = Depends(require_tenant),
   user: User = Depends(get_current_user),
@@ -125,6 +140,14 @@ async def create_order(
     quotation = await db.get(Quotation, body.quotation_id)
     if not quotation or quotation.tenant_id != tenant.id:
       raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quotation not found")
+    existing_order = await _get_existing_order_for_quotation(
+      db, tenant_id=tenant.id, quotation_id=body.quotation_id
+    )
+    if existing_order:
+      raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=f"Quotation already converted to order {existing_order.order_code}",
+      )
   if body.customer_intermediary_id is not None:
     await _validate_customer_intermediary(
       db,
@@ -153,6 +176,8 @@ async def create_order(
     remarks=body.remarks,
   )
   db.add(order)
+  if body.quotation_id is not None:
+    quotation.status = "CONVERTED"
   await db.flush()
   await db.refresh(order)
   return _to_order_response(order)
@@ -255,6 +280,14 @@ async def create_order_from_quotation(
   quotation = await db.get(Quotation, quotation_id)
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+  existing_order = await _get_existing_order_for_quotation(
+    db, tenant_id=tenant.id, quotation_id=quotation_id
+  )
+  if existing_order:
+    raise HTTPException(
+      status_code=status.HTTP_409_CONFLICT,
+      detail=f"Quotation already converted to order {existing_order.order_code}",
+    )
 
   customer = await db.get(Customer, quotation.customer_id)
   if not customer or customer.tenant_id != tenant.id:
@@ -279,6 +312,7 @@ async def create_order_from_quotation(
     remarks=quotation.notes,
   )
   db.add(order)
+  quotation.status = "CONVERTED"
   await db.flush()
   await db.refresh(order)
 

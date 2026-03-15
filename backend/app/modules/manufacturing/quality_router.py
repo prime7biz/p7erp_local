@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -34,6 +34,175 @@ router = APIRouter(prefix="/manufacturing/quality", tags=["manufacturing-quality
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+
+
+# Result values we treat as pass vs failed for dashboard
+_RESULT_PASS = "pass"
+_RESULT_FAILED = ("fail", "reject")
+
+
+@router.get("/dashboard")
+async def get_quality_dashboard(
+    date_from: date | None = Query(default=None, description="Filter by created_at from (YYYY-MM-DD)"),
+    date_to: date | None = Query(default=None, description="Filter by created_at to (YYYY-MM-DD)"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    tid = tenant.id
+
+    # Optional date filter: include full day for date_to
+    check_base = (
+        ManufacturingQualityCheck.tenant_id == tid,
+        func.lower(ManufacturingQualityCheck.result).in_([_RESULT_PASS, *_RESULT_FAILED]),
+    )
+    ncr_base = (ManufacturingNcr.tenant_id == tid,)
+    capa_base = (ManufacturingCapa.tenant_id == tid,)
+
+    if date_from is not None:
+        dt_from = datetime.combine(date_from, datetime.min.time())
+        check_base = (*check_base, ManufacturingQualityCheck.created_at >= dt_from)
+        ncr_base = (*ncr_base, ManufacturingNcr.created_at >= dt_from)
+        capa_base = (*capa_base, ManufacturingCapa.created_at >= dt_from)
+    if date_to is not None:
+        dt_to = datetime.combine(date_to, datetime.max.time())
+        check_base = (*check_base, ManufacturingQualityCheck.created_at <= dt_to)
+        ncr_base = (*ncr_base, ManufacturingNcr.created_at <= dt_to)
+        capa_base = (*capa_base, ManufacturingCapa.created_at <= dt_to)
+
+    # (1) inspections: total, passed, failed, pass_rate
+    stmt_insp = select(
+        func.count(ManufacturingQualityCheck.id).label("total"),
+        func.sum(case((func.lower(ManufacturingQualityCheck.result) == _RESULT_PASS, 1), else_=0)).label("passed"),
+        func.sum(
+            case((func.lower(ManufacturingQualityCheck.result).in_(_RESULT_FAILED), 1), else_=0)
+        ).label("failed"),
+    ).where(*check_base)
+    row_insp = (await db.execute(stmt_insp)).one()
+    total_i = row_insp.total or 0
+    passed_i = row_insp.passed or 0
+    failed_i = row_insp.failed or 0
+    inspections = {
+        "total": total_i,
+        "passed": passed_i,
+        "failed": failed_i,
+        "pass_rate": round(passed_i / total_i, 4) if total_i else 0.0,
+    }
+
+    # (2) by_check_type
+    stmt_ct = (
+        select(
+            ManufacturingQualityCheck.check_type,
+            func.count(ManufacturingQualityCheck.id).label("total"),
+            func.sum(case((func.lower(ManufacturingQualityCheck.result) == _RESULT_PASS, 1), else_=0)).label(
+                "passed"
+            ),
+            func.sum(
+                case((func.lower(ManufacturingQualityCheck.result).in_(_RESULT_FAILED), 1), else_=0)
+            ).label("failed"),
+        )
+        .where(*check_base)
+        .group_by(ManufacturingQualityCheck.check_type)
+    )
+    rows_ct = (await db.execute(stmt_ct)).all()
+    by_check_type = []
+    for r in rows_ct:
+        t, passed, failed = r.total or 0, r.passed or 0, r.failed or 0
+        by_check_type.append(
+            {
+                "check_type": r.check_type,
+                "total": t,
+                "passed": passed,
+                "failed": failed,
+                "pass_rate": round(passed / t, 4) if t else 0.0,
+            }
+        )
+
+    # (3) defect_distribution: defect_code, count; only where defect_code is set; order by count desc
+    stmt_def = (
+        select(ManufacturingQualityCheck.defect_code, func.count(ManufacturingQualityCheck.id).label("count"))
+        .where(
+            ManufacturingQualityCheck.tenant_id == tid,
+            ManufacturingQualityCheck.defect_code.isnot(None),
+            ManufacturingQualityCheck.defect_code != "",
+        )
+        .group_by(ManufacturingQualityCheck.defect_code)
+        .order_by(func.count(ManufacturingQualityCheck.id).desc())
+    )
+    if date_from is not None:
+        stmt_def = stmt_def.where(ManufacturingQualityCheck.created_at >= datetime.combine(date_from, datetime.min.time()))
+    if date_to is not None:
+        stmt_def = stmt_def.where(ManufacturingQualityCheck.created_at <= datetime.combine(date_to, datetime.max.time()))
+    rows_def = (await db.execute(stmt_def)).all()
+    defect_distribution = [{"defect_code": r.defect_code, "count": r.count} for r in rows_def]
+
+    # (4) recent_checks: last 10 with id, work_order_id, check_type, result, defect_code, created_at
+    stmt_recent = (
+        select(ManufacturingQualityCheck)
+        .where(ManufacturingQualityCheck.tenant_id == tid)
+        .order_by(ManufacturingQualityCheck.id.desc())
+        .limit(10)
+    )
+    if date_from is not None:
+        stmt_recent = stmt_recent.where(
+            ManufacturingQualityCheck.created_at >= datetime.combine(date_from, datetime.min.time())
+        )
+    if date_to is not None:
+        stmt_recent = stmt_recent.where(
+            ManufacturingQualityCheck.created_at <= datetime.combine(date_to, datetime.max.time())
+        )
+    recent_rows = (await db.execute(stmt_recent)).scalars().all()
+    recent_checks = [
+        {
+            "id": r.id,
+            "work_order_id": r.work_order_id,
+            "check_type": r.check_type,
+            "result": r.result,
+            "defect_code": r.defect_code,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in recent_rows
+    ]
+
+    # (5) capa: total, open, in_progress, closed
+    stmt_capa_total = select(func.count(ManufacturingCapa.id)).where(*capa_base)
+    capa_total = (await db.execute(stmt_capa_total)).scalar() or 0
+    stmt_capa_open = select(func.count(ManufacturingCapa.id)).where(
+        *capa_base, func.lower(ManufacturingCapa.status) == "open"
+    )
+    capa_open = (await db.execute(stmt_capa_open)).scalar() or 0
+    stmt_capa_ip = select(func.count(ManufacturingCapa.id)).where(
+        *capa_base, func.lower(ManufacturingCapa.status) == "in_progress"
+    )
+    capa_in_progress = (await db.execute(stmt_capa_ip)).scalar() or 0
+    stmt_capa_closed = select(func.count(ManufacturingCapa.id)).where(
+        *capa_base, func.lower(ManufacturingCapa.status).in_(["closed", "completed"])
+    )
+    capa_closed = (await db.execute(stmt_capa_closed)).scalar() or 0
+    capa = {"total": capa_total, "open": capa_open, "in_progress": capa_in_progress, "closed": capa_closed}
+
+    # (6) ncr: total, open, closed
+    stmt_ncr_total = select(func.count(ManufacturingNcr.id)).where(*ncr_base)
+    ncr_total = (await db.execute(stmt_ncr_total)).scalar() or 0
+    stmt_ncr_open = select(func.count(ManufacturingNcr.id)).where(
+        *ncr_base, func.lower(ManufacturingNcr.status) == "open"
+    )
+    ncr_open = (await db.execute(stmt_ncr_open)).scalar() or 0
+    stmt_ncr_closed = select(func.count(ManufacturingNcr.id)).where(
+        *ncr_base, func.lower(ManufacturingNcr.status) == "closed"
+    )
+    ncr_closed = (await db.execute(stmt_ncr_closed)).scalar() or 0
+    ncr = {"total": ncr_total, "open": ncr_open, "closed": ncr_closed}
+
+    return {
+        "inspections": inspections,
+        "by_check_type": by_check_type,
+        "defect_distribution": defect_distribution,
+        "recent_checks": recent_checks,
+        "capa": capa,
+        "ncr": ncr,
+    }
 
 
 def _to_ncr_response(row: ManufacturingNcr) -> NcrResponse:

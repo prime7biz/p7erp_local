@@ -84,12 +84,12 @@ export function SignUp() {
     return (
       <div className="min-h-screen flex">
         <div className="hidden lg:flex lg:w-[55%] relative flex-col items-center justify-center p-12 overflow-hidden">
-          <img src="/images/hero-bg.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-orange-950/50" />
-          <div className="absolute top-1/4 -left-20 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-orange-400/10 rounded-full blur-3xl" />
+          <img src="/images/auth-bg-register.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/80 via-gray-900/60 to-primary/25" />
+          <div className="absolute top-1/4 -left-20 w-64 h-64 bg-primary/20 rounded-full blur-3xl" />
+          <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
           <div className="relative z-10 text-center max-w-md">
-            <img src="/images/logo-white.svg" alt="Prime7 ERP" className="mx-auto h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" />
+            <img src="/images/logo-white.svg" alt="Prime7 ERP" className="mx-auto h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" role="img" />
             <h2 className="text-3xl font-bold text-white mb-4">Welcome to Prime7 ERP</h2>
             <p className="text-white/80 text-lg mb-10">Complete garment manufacturing solution for modern businesses</p>
             <div className="grid grid-cols-2 gap-4 text-left">
@@ -107,12 +107,13 @@ export function SignUp() {
             </div>
           </div>
         </div>
-        <div className="flex-1 flex items-center justify-center bg-[#F8F9FB] p-6">
-          <div className="w-full max-w-md space-y-6">
-            <div className="lg:hidden text-center mb-6">
-              <img src="/images/logo.svg" alt="Prime7 ERP" className="mx-auto h-16 w-auto mb-2" />
+        <div className="flex-1 flex items-center justify-center relative p-6 bg-gradient-to-b from-gray-50 to-white min-h-[60vh]">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_70%_20%,rgba(249,115,22,0.06),transparent)] pointer-events-none" aria-hidden="true" />
+          <div className="w-full max-w-md space-y-6 relative z-10">
+            <div className="text-center mb-6">
+              <img src="/images/logo.png" alt="Prime7 ERP" className="mx-auto h-14 w-auto mb-2" />
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-8">
               <div className="text-center mb-6">
                 <div className="mx-auto w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mb-3">
                   <CheckCircle className="h-6 w-6 text-green-600" />
@@ -153,12 +154,12 @@ export function SignUp() {
   return (
     <div className="min-h-screen flex">
       <div className="hidden lg:flex lg:w-[55%] relative flex-col items-center justify-center p-12 overflow-hidden">
-        <img src="/images/hero-bg.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-orange-950/50" />
-        <div className="absolute top-1/4 -left-20 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-orange-400/10 rounded-full blur-3xl" />
+        <img src="/images/auth-bg-register.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/80 via-gray-900/60 to-primary/25" />
+        <div className="absolute top-1/4 -left-20 w-64 h-64 bg-primary/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
         <div className="relative z-10 text-center max-w-md">
-          <img src="/images/logo-white.svg" alt="Prime7 ERP" className="mx-auto h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" />
+          <img src="/images/logo-white.svg" alt="Prime7 ERP" className="mx-auto h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" role="img" />
           <h1 className="text-3xl font-bold text-white mb-4">Start Your Journey</h1>
           <p className="text-white/80 text-lg mb-10">Register your company and unlock the full power of garment manufacturing ERP</p>
           <div className="grid grid-cols-2 gap-4 text-left">
@@ -191,16 +192,15 @@ export function SignUp() {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center bg-[#F8F9FB] p-4 lg:p-6 overflow-y-auto">
-        <div className="w-full max-w-lg space-y-4 py-6">
-          <div className="lg:hidden text-center mb-4">
-            <div className="bg-gradient-to-r from-primary/90 to-primary rounded-xl p-4 mb-4">
-              <img src="/images/logo-white.svg" alt="Prime7 ERP" className="mx-auto h-12 w-auto" />
-              <p className="text-white/80 text-xs mt-1">Garment Manufacturing ERP</p>
-            </div>
+      <div className="flex-1 flex items-center justify-center relative p-4 lg:p-6 overflow-y-auto bg-gradient-to-b from-gray-50 to-white min-h-[60vh]">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_70%_20%,rgba(249,115,22,0.05),transparent)] pointer-events-none" aria-hidden="true" />
+        <div className="w-full max-w-lg space-y-4 py-6 relative z-10">
+          <div className="text-center mb-4">
+            <img src="/images/logo.png" alt="Prime7 ERP" className="mx-auto h-12 w-auto mb-2" />
+            <p className="text-gray-500 text-xs">Garment Manufacturing ERP</p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 lg:p-8">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 lg:p-8">
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900">Register Your Company</h2>
               <p className="text-sm text-gray-500 mt-1">Create an account to get started</p>

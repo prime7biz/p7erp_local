@@ -25,10 +25,10 @@ import {
   Globe,
   Package,
   PlusCircle,
+  RefreshCw,
   ShoppingCart,
   Sparkles,
   Truck,
-  UserPlus,
   Users,
   Settings,
 } from "lucide-react";
@@ -52,6 +52,21 @@ function toStatusLabel(value: string) {
     .toLowerCase()
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function getTimeBasedGreeting(hour: number): string {
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function minutesAgo(from: Date | null, now: Date): string {
+  if (!from) return "—";
+  const diffMs = now.getTime() - from.getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  if (diffMins < 1) return "just now";
+  if (diffMins === 1) return "1 min ago";
+  return `${diffMins} min ago`;
 }
 
 function SimpleDonut({
@@ -96,6 +111,8 @@ function SimpleDonut({
 export function Dashboard() {
   const { me } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [kpis, setKpis] = useState<DashboardKpi[]>([]);
   const [orderStatus, setOrderStatus] = useState<OrderStatusSummary[]>([]);
   const [insights, setInsights] = useState<DashboardInsight[]>([]);
@@ -111,12 +128,7 @@ export function Dashboard() {
     departments: [],
   });
 
-  useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(new Date()), 60_000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
+  const fetchDashboardData = () => {
     Promise.allSettled([
       api.getDashboardKpis(),
       api.getDashboardOrderStatus(),
@@ -139,12 +151,24 @@ export function Dashboard() {
       if (results[7].status === "fulfilled") setCustomerMap(results[7].value);
       if (results[8].status === "fulfilled") setStylesCount(results[8].value.length);
       if (results[9].status === "fulfilled") setEmployeeSummary(results[9].value);
+      setLoading(false);
+      setLastUpdated(new Date());
     });
+  };
+
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
 
   if (!me) return null;
 
   const firstName = me.first_name || me.username || "User";
+  const greeting = getTimeBasedGreeting(currentTime.getHours());
 
   const kpiById = (id: string) => kpis.find((k) => k.id === id)?.value ?? 0;
   const customerCount = kpiById("total-customers");
@@ -217,7 +241,8 @@ export function Dashboard() {
       iconBg: "bg-purple-100",
       iconColor: "text-purple-600",
       href: "/app/items",
-      format: (v: number) => bdt.format(v),
+      format: (v: number) => (v === 0 ? "—" : bdt.format(v)),
+      comingSoon: true,
     },
   ];
 
@@ -238,25 +263,71 @@ export function Dashboard() {
     { label: "New Quotation", href: "/app/quotations/new", icon: ShoppingCart },
     { label: "Order Follow-ups", href: "/app/merchandising/followups", icon: Truck },
     { label: "Settings", href: "/app/settings/users", icon: Settings },
-    { label: "Users", href: "/app/settings/users", icon: UserPlus },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex flex-col" data-page="dashboard-v2">
+        <main className="bg-white rounded-xl border border-gray-200/80 shadow-sm shadow-gray-300/30">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="space-y-2">
+                <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+                <div className="h-4 w-64 bg-gray-100 rounded animate-pulse" />
+              </div>
+              <div className="h-16 w-40 bg-gray-100 rounded-lg animate-pulse shrink-0" />
+            </div>
+            <section>
+              <div className="h-4 w-24 bg-gray-100 rounded mb-2.5 animate-pulse" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="rounded-xl border border-gray-200/90 bg-white p-5 animate-pulse">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="h-9 w-9 rounded-xl bg-gray-200" />
+                      <div className="h-3 w-8 bg-gray-100 rounded" />
+                    </div>
+                    <div className="h-9 w-20 bg-gray-200 rounded mb-2" />
+                    <div className="h-4 w-24 bg-gray-100 rounded" />
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col" data-page="dashboard-v2">
       <main className="bg-white rounded-xl border border-gray-200/80 shadow-sm shadow-gray-300/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-          {/* Welcome header – same as reference (PrimeX format) */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          {/* Welcome header with prominent tenant block */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold text-gray-900">
-                Welcome back, {firstName}
+                {greeting}, {firstName}
               </h1>
               <p className="text-sm text-gray-600 mt-0.5">{formatDateTime(currentTime)}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Last updated: {minutesAgo(lastUpdated, currentTime)}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoading(true);
+                    fetchDashboardData();
+                  }}
+                  className="ml-2 inline-flex items-center gap-1 text-gray-500 hover:text-orange-600 transition-colors"
+                  title="Refresh dashboard"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Refresh
+                </button>
+              </p>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center rounded-md border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs font-semibold text-gray-700">
-                {me.tenant_name}
-              </span>
+            <div className="w-full sm:w-auto rounded-lg bg-primary/5 border border-primary/10 px-4 py-3 text-center sm:text-right shrink-0">
+              <p className="text-lg font-semibold text-gray-800">{me.tenant_name}</p>
+              <p className="text-sm text-gray-600 mt-0.5">Company code: {me.company_code ?? "—"}</p>
             </div>
           </div>
 
@@ -288,7 +359,12 @@ export function Dashboard() {
                       <p className="text-3xl font-bold text-gray-900">
                         {card.format(card.value)}
                       </p>
-                      <p className="text-xs text-gray-600 mt-1">{card.label}</p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {card.label}
+                        {"comingSoon" in card && card.comingSoon && (
+                          <span className="block text-[10px] text-gray-400 mt-0.5">Coming soon</span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 );
@@ -299,24 +375,39 @@ export function Dashboard() {
           {/* Secondary stats – 4 compact cards with dot */}
           <section>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {secondaryStats.map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-xl border border-gray-200/90 bg-white shadow-sm shadow-gray-300/30 p-4 flex items-center gap-3"
-                >
+              {secondaryStats.map((stat) => {
+                const isCriticalAlerts = stat.label === "Critical Alerts" && (stat.value ?? 0) > 0;
+                return (
                   <div
-                    className={`w-2.5 h-2.5 rounded-full ${stat.dotColor} shrink-0`}
-                  />
-                  <div className="min-w-0">
-                    <p className="text-xl font-bold text-gray-900">
-                      {stat.value !== null && stat.value !== undefined
-                        ? bdt.format(stat.value)
-                        : "—"}
-                    </p>
-                    <p className="text-xs text-gray-600 truncate">{stat.label}</p>
+                    key={stat.label}
+                    className={`rounded-xl border border-gray-200/90 bg-white shadow-sm shadow-gray-300/30 p-4 flex items-center gap-3 ${isCriticalAlerts ? "border-l-4 border-l-red-500 bg-red-50" : ""}`}
+                  >
+                    {isCriticalAlerts ? (
+                      <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+                    ) : (
+                      <div
+                        className={`w-2.5 h-2.5 rounded-full ${stat.dotColor} shrink-0`}
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xl font-bold text-gray-900">
+                        {stat.value !== null && stat.value !== undefined
+                          ? bdt.format(stat.value)
+                          : "—"}
+                      </p>
+                      <p className="text-xs text-gray-600 truncate">{stat.label}</p>
+                      {isCriticalAlerts && (
+                        <Link
+                          to="/app/merchandising/followups"
+                          className="text-[11px] font-semibold text-red-600 hover:text-red-700 hover:underline underline-offset-2 flex items-center gap-0.5 mt-1"
+                        >
+                          View <ArrowRight className="h-3 w-3" />
+                        </Link>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
 
@@ -350,8 +441,14 @@ export function Dashboard() {
                       </div>
                     </div>
                   ) : (
-                    <div className="h-[120px] flex items-center justify-center text-xs text-gray-400">
-                      No orders yet
+                    <div className="h-[120px] flex flex-col items-center justify-center gap-2 text-xs text-gray-400">
+                      <p>No orders yet</p>
+                      <Link
+                        to="/app/orders"
+                        className="text-orange-600 hover:text-orange-700 font-medium hover:underline underline-offset-2"
+                      >
+                        Create first order
+                      </Link>
                     </div>
                   )}
                 </div>
@@ -381,11 +478,15 @@ export function Dashboard() {
                       </div>
                     </div>
                   ) : (
-                    <div className="h-[120px] flex items-center justify-center text-xs text-gray-400">
-                      <div className="text-center">
-                        <Users className="h-10 w-10 mx-auto mb-2 text-gray-300" />
-                        <p>No employee data yet</p>
-                      </div>
+                    <div className="h-[120px] flex flex-col items-center justify-center gap-2 text-xs text-gray-400">
+                      <Users className="h-10 w-10 text-gray-300" />
+                      <p>No employee data yet</p>
+                      <Link
+                        to="/app/settings/users"
+                        className="text-orange-600 hover:text-orange-700 font-medium hover:underline underline-offset-2"
+                      >
+                        Manage users
+                      </Link>
                     </div>
                   )}
                 </div>
@@ -417,11 +518,15 @@ export function Dashboard() {
                       ))}
                     </div>
                   ) : (
-                    <div className="h-[120px] flex items-center justify-center text-xs text-gray-400">
-                      <div className="text-center">
-                        <DollarSign className="h-10 w-10 mx-auto mb-2 text-gray-300" />
-                        <p>No revenue data yet</p>
-                      </div>
+                    <div className="h-[120px] flex flex-col items-center justify-center gap-2 text-xs text-gray-400">
+                      <DollarSign className="h-10 w-10 text-gray-300" />
+                      <p>No revenue data yet</p>
+                      <Link
+                        to="/app/reports/tenant-overview"
+                        className="text-orange-600 hover:text-orange-700 font-medium hover:underline underline-offset-2"
+                      >
+                        View reports
+                      </Link>
                     </div>
                   )}
                 </div>
@@ -558,9 +663,17 @@ export function Dashboard() {
             </h2>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2 rounded-xl border border-gray-200/90 bg-white shadow-sm shadow-gray-300/35 p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Briefcase className="h-4 w-4 text-gray-700" />
-                  <h3 className="text-sm font-semibold text-gray-900">Recent Orders</h3>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-gray-700" />
+                    <h3 className="text-sm font-semibold text-gray-900">Recent Orders</h3>
+                  </div>
+                  <Link
+                    to="/app/orders"
+                    className="text-[11px] font-semibold text-orange-600 hover:text-orange-700 hover:underline underline-offset-2 flex items-center gap-0.5"
+                  >
+                    View all <ArrowRight className="h-3 w-3" />
+                  </Link>
                 </div>
                 {recentOrders.length > 0 ? (
                   <div className="space-y-2">
@@ -587,9 +700,17 @@ export function Dashboard() {
               </div>
 
               <div className="rounded-xl border border-gray-200/90 bg-white shadow-sm shadow-gray-300/35 p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Clock3 className="h-4 w-4 text-amber-600" />
-                  <h3 className="text-sm font-semibold text-gray-900">Follow-up Tasks</h3>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Clock3 className="h-4 w-4 text-amber-600" />
+                    <h3 className="text-sm font-semibold text-gray-900">Follow-up Tasks</h3>
+                  </div>
+                  <Link
+                    to="/app/merchandising/followups"
+                    className="text-[11px] font-semibold text-orange-600 hover:text-orange-700 hover:underline underline-offset-2 flex items-center gap-0.5"
+                  >
+                    View all <ArrowRight className="h-3 w-3" />
+                  </Link>
                 </div>
                 {tasks.length > 0 ? (
                   <div className="space-y-2">

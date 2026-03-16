@@ -100,15 +100,15 @@ const features = [
 ];
 
 const processSteps = [
-  { label: "Buyer PO Received", color: "bg-blue-500" },
-  { label: "Factory Allocation", color: "bg-indigo-500" },
-  { label: "T&A Planning", color: "bg-purple-500" },
-  { label: "Sample Coordination", color: "bg-pink-500" },
-  { label: "Production Follow-up", color: "bg-red-500" },
-  { label: "QC & Inspection", color: "bg-orange-500" },
-  { label: "Shipment Booking", color: "bg-yellow-500" },
-  { label: "LC Documentation", color: "bg-emerald-500" },
-  { label: "Delivery & Closure", color: "bg-teal-500" },
+  { label: "Buyer PO Received", color: "bg-primary" },
+  { label: "Factory Allocation", color: "bg-primary/90" },
+  { label: "T&A Planning", color: "bg-primary/80" },
+  { label: "Sample Coordination", color: "bg-primary/70" },
+  { label: "Production Follow-up", color: "bg-primary/60" },
+  { label: "QC & Inspection", color: "bg-primary/50" },
+  { label: "Shipment Booking", color: "bg-primary/40" },
+  { label: "LC Documentation", color: "bg-primary/30" },
+  { label: "Delivery & Closure", color: "bg-primary/20" },
 ];
 
 const faqs = [
@@ -117,15 +117,15 @@ const faqs = [
     a: "A buying house ERP is specialized software designed for garment buying offices that act as intermediaries between international buyers and local factories. It centralizes T&A tracking, PO management, sample coordination, shipment monitoring, and commercial documentation — replacing scattered Excel files and manual follow-ups with a single integrated platform.",
   },
   {
-    q: "How does P7 handle T&A (Time & Action) calendar management?",
-    a: "P7 provides a visual T&A calendar with customizable milestone templates per buyer and product type. You can set target dates, track actual completion, receive automated alerts for upcoming and overdue tasks, and generate buyer-ready T&A status reports. The system supports bulk updates across multiple POs and automatic critical path calculation.",
+    q: "How does Prime7 ERP handle T&A (Time & Action) calendar management?",
+    a: "Prime7 ERP provides a visual T&A calendar with customizable milestone templates per buyer and product type. You can set target dates, track actual completion, receive automated alerts for upcoming and overdue tasks, and generate buyer-ready T&A status reports. The system supports bulk updates across multiple POs and automatic critical path calculation.",
   },
   {
     q: "Can I track POs across multiple factories and suppliers?",
-    a: "Yes, P7 allows you to manage purchase orders across unlimited factories and suppliers. Each PO tracks order quantity, delivery dates, pricing, and status. You get a consolidated dashboard view showing all active POs by buyer, factory, or delivery date — with color-coded alerts for delayed or at-risk orders.",
+    a: "Yes, Prime7 ERP allows you to manage purchase orders across unlimited factories and suppliers. Each PO tracks order quantity, delivery dates, pricing, and status. You get a consolidated dashboard view showing all active POs by buyer, factory, or delivery date — with color-coded alerts for delayed or at-risk orders.",
   },
   {
-    q: "How does sample management work in P7?",
+    q: "How does sample management work in Prime7 ERP?",
     a: "The sample module tracks the entire sample lifecycle — from proto to fit, PP, size set, pre-production, and TOP samples. Each sample request records the type, submission date, buyer comments, approval status, and courier details. You can monitor approval cycles and identify bottlenecks causing delays in the critical path.",
   },
 ];
@@ -138,9 +138,9 @@ export function BuyingHouseErpPage() {
       {/* Hero */}
       <section className="relative bg-gradient-to-br from-[#1E293B] via-[#1E293B]/95 to-primary/90 py-20 lg:py-28 overflow-hidden">
         <div className="absolute top-10 -left-20 w-80 h-80 bg-primary/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-20 -right-32 w-72 h-72 bg-orange-400/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-20 -right-32 w-72 h-72 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute top-[15%] left-[10%] w-2 h-2 bg-primary/30 rounded-full animate-pulse pointer-events-none" />
-        <div className="absolute top-[60%] right-[25%] w-2 h-2 bg-orange-400/25 rounded-full animate-pulse pointer-events-none" />
+        <div className="absolute top-[60%] right-[25%] w-2 h-2 bg-primary/25 rounded-full animate-pulse pointer-events-none" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="max-w-4xl mx-auto text-center">
             <div className="inline-flex items-center gap-2 bg-white/15 text-white px-4 py-1.5 rounded-full text-sm font-medium mb-6">
@@ -150,17 +150,17 @@ export function BuyingHouseErpPage() {
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
               Streamline Your Buying House with
               <br />
-              <span className="text-orange-400">Purpose-Built ERP Software</span>
+              <span className="text-primary">Purpose-Built ERP Software</span>
             </h1>
             <p className="text-lg md:text-xl text-gray-300 max-w-3xl mx-auto mb-8">
               From PO receipt to shipment delivery — manage T&A calendars, track orders across multiple factories,
               coordinate samples, and handle LC documentation in one integrated platform.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-8 py-3 text-base font-medium text-white hover:bg-primary/90">
+              <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-8 py-3 text-base font-semibold text-white hover:bg-primary/90 transition-colors">
                 Start Free Trial <ArrowRight className="w-4 h-4" />
               </Link>
-              <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white text-white px-8 py-3 text-base font-medium hover:bg-white/10">
+              <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/50 text-white px-8 py-3 text-base font-semibold hover:bg-white/10 transition-colors">
                 Request Demo
               </Link>
             </div>
@@ -171,10 +171,10 @@ export function BuyingHouseErpPage() {
       {/* Global Buying House Operations Image Section */}
       <section className="relative py-16 lg:py-24 bg-gray-900 overflow-hidden">
         <div className="absolute top-10 -right-20 w-72 h-72 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-10 -left-20 w-64 h-64 bg-orange-400/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-10 -left-20 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-white mb-4">
               Global Buying House Operations
             </h2>
             <p className="text-lg text-gray-400 max-w-2xl mx-auto">
@@ -197,7 +197,7 @@ export function BuyingHouseErpPage() {
               <AlertTriangle className="w-4 h-4" />
               Common Buying House Challenges
             </div>
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">
               Challenges Every Buying House Faces
             </h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
@@ -206,7 +206,7 @@ export function BuyingHouseErpPage() {
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {painPoints.map((point) => (
-              <div key={point.title} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
+              <div key={point.title} className="bg-white rounded-xl border border-primary/20 p-6 hover:shadow-lg hover:border-primary/30 transition-all">
                 <div className="inline-flex items-center justify-center w-12 h-12 bg-red-50 text-red-500 rounded-lg mb-4">
                   <point.icon className="w-6 h-6" />
                 </div>
@@ -220,15 +220,15 @@ export function BuyingHouseErpPage() {
 
       {/* Key Features */}
       <section className="relative py-16 lg:py-24 bg-gray-50 overflow-hidden">
-        <div className="absolute top-20 -left-40 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-10 -right-20 w-72 h-72 bg-indigo-400/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-20 -left-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-10 -right-20 w-72 h-72 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-1.5 rounded-full text-sm font-medium mb-4">
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-1.5 rounded-full text-sm font-medium mb-4">
               <CheckCircle2 className="w-4 h-4" />
               Comprehensive Feature Set
             </div>
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">
               Everything Your Buying House Needs
             </h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
@@ -237,7 +237,7 @@ export function BuyingHouseErpPage() {
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((feature) => (
-              <div key={feature.title} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+              <div key={feature.title} className="bg-white rounded-xl p-6 shadow-sm border border-primary/20 hover:shadow-md hover:border-primary/30 transition-all">
                 <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 text-primary rounded-lg mb-4">
                   <feature.icon className="w-6 h-6" />
                 </div>
@@ -253,16 +253,16 @@ export function BuyingHouseErpPage() {
       <section className="relative py-16 lg:py-24 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">
               Buying House Order Lifecycle
             </h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              P7 covers the complete buying house workflow — from receiving buyer POs to final delivery and closure.
+              Prime7 ERP covers the complete buying house workflow — from receiving buyer POs to final delivery and closure.
             </p>
           </div>
           <div className="relative">
             <div className="hidden lg:flex items-center justify-between relative">
-              <div className="absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-primary via-orange-400 to-teal-500 -translate-y-1/2 z-0 rounded-full" />
+              <div className="absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-primary to-primary/30 -translate-y-1/2 z-0 rounded-full" />
               {processSteps.map((step, i) => (
                 <div key={step.label} className="relative z-10 flex flex-col items-center">
                   <div className={`w-12 h-12 rounded-full ${step.color} text-white flex items-center justify-center text-sm font-bold shadow-lg`}>
@@ -293,20 +293,20 @@ export function BuyingHouseErpPage() {
       <section className="py-16 lg:py-24 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">
               Frequently Asked Questions
             </h2>
             <p className="text-lg text-gray-600">
-              Common questions from buying houses considering P7 ERP.
+              Common questions from buying houses considering Prime7 ERP.
             </p>
           </div>
           <div className="space-y-3">
             {faqs.map((faq, i) => (
-              <div key={i} className="border border-gray-200 rounded-xl overflow-hidden">
+              <div key={i} className="border border-primary/20 rounded-xl overflow-hidden hover:border-primary/30 transition-colors">
                 <button
                   type="button"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center justify-between p-5 text-left hover:bg-primary/5 transition-colors"
                 >
                   <span className="font-medium text-gray-900 pr-4">{faq.q}</span>
                   <ChevronDown className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${openFaq === i ? "rotate-180" : ""}`} />
@@ -324,11 +324,11 @@ export function BuyingHouseErpPage() {
 
       {/* CTA */}
       <section className="relative py-16 lg:py-24 bg-gradient-to-br from-gray-900 to-gray-800 overflow-hidden">
-        <img src="/images/tech-pattern.png" alt="" width={1920} height={1080} className="absolute inset-0 w-full h-full object-cover opacity-[0.05] pointer-events-none" loading="lazy" />
+        <img src="/images/tech-pattern.svg" alt="" width={1920} height={1080} className="absolute inset-0 w-full h-full object-cover opacity-[0.05] pointer-events-none" loading="lazy" />
         <div className="absolute top-10 -left-20 w-72 h-72 bg-primary/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-10 -right-20 w-64 h-64 bg-orange-400/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-10 -right-20 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <div className="inline-flex items-center gap-2 bg-primary/20 text-orange-200 px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+          <div className="inline-flex items-center gap-2 bg-white/15 text-white px-4 py-1.5 rounded-full text-sm font-medium mb-6">
             <Zap className="w-4 h-4" />
             Trusted by Leading Buying Houses
           </div>
@@ -339,10 +339,10 @@ export function BuyingHouseErpPage() {
             Join buying houses who manage T&A, POs, samples, and shipments in one platform. Start your free trial today.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-white px-8 py-3 font-medium hover:bg-primary/90">
+            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-white px-8 py-3 font-semibold hover:bg-primary/90 transition-colors">
               Start Free Trial <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white text-white px-8 py-3 font-medium hover:bg-white/10">
+            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/50 text-white px-8 py-3 font-semibold hover:bg-white/10 transition-colors">
               Request Demo
             </Link>
           </div>

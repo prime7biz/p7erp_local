@@ -144,4 +144,5 @@ async def me(
         last_name=user.last_name,
         tenant_name=tenant.name,
         tenant_type=tenant.tenant_type,
+        company_code=tenant.company_code,
     )

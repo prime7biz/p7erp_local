@@ -49,14 +49,19 @@ const steps = [
 export function HowItWorksPage() {
   return (
     <>
-      <section className="relative bg-gradient-to-br from-primary/5 via-blue-50 to-white py-20 lg:py-28 overflow-hidden">
+      <section className="relative bg-gradient-to-br from-primary/5 via-white to-white py-20 lg:py-28 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative">
           <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 leading-tight">
             How It <span className="text-primary">Works</span>
           </h1>
-          <p className="mt-6 text-lg text-gray-600 max-w-2xl mx-auto">
-            Get from sign-up to go-live in three clear steps. P7 ERP is designed for fast setup and ongoing growth.
+          <p className="mt-6 text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
+            Get from sign-up to go-live in three clear steps. Prime7 ERP is designed for fast setup and ongoing growth.
           </p>
+          <div className="mt-8">
+            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-white hover:bg-primary/90 transition-colors">
+              Get Started <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -70,12 +75,12 @@ export function HowItWorksPage() {
                 </div>
                 <div className="flex-1">
                   <span className="text-sm font-medium text-primary">{step.number}</span>
-                  <h2 className="text-2xl font-bold text-gray-900 mt-1">{step.title}</h2>
+                  <h2 className="text-2xl font-semibold text-gray-900 mt-1">{step.title}</h2>
                   <p className="mt-3 text-gray-600">{step.description}</p>
                   <ul className="mt-4 space-y-2">
                     {step.details.map((d, i) => (
                       <li key={i} className="flex items-center gap-2 text-gray-700">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                        <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
                         {d}
                       </li>
                     ))}
@@ -87,12 +92,12 @@ export function HowItWorksPage() {
         </div>
       </section>
 
-      <section className="py-16 bg-gray-50">
+      <section className="py-16 lg:py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-gray-600 mb-6">Ready to get started?</p>
           <Link
             to="/signup"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-white font-medium hover:bg-primary/90"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-white font-semibold hover:bg-primary/90 transition-colors"
           >
             Create your account
             <ArrowRight className="w-4 h-4" />

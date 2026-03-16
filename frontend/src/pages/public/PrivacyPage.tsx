@@ -15,7 +15,7 @@ export function PrivacyPage() {
 
           <div className="prose prose-gray max-w-none space-y-8">
             <p className="text-gray-600 leading-relaxed">
-              At P7 ERP (&quot;P7&quot;, &quot;we&quot;, &quot;our&quot;, or &quot;us&quot;), we are committed to protecting the
+              At Prime7 ERP (&quot;Prime7&quot;, &quot;we&quot;, &quot;our&quot;, or &quot;us&quot;), we are committed to protecting the
               privacy and security of your personal and business information. This Privacy Policy
               explains how we collect, use, disclose, and safeguard your information when you use our
               cloud-based ERP platform and related services.
@@ -130,9 +130,9 @@ export function PrivacyPage() {
                 please contact us:
               </p>
               <div className="mt-4 bg-gray-50 rounded-lg p-6 border border-gray-200">
-                <p className="text-gray-700 font-medium">P7 ERP</p>
+                <p className="text-gray-700 font-medium">Prime7 ERP</p>
                 <p className="text-gray-600">Gulshan-2, Dhaka 1212, Bangladesh</p>
-                <p className="text-gray-600">Email: <a href="mailto:privacy@p7erp.com" className="text-primary hover:underline">privacy@p7erp.com</a></p>
+                <p className="text-gray-600">Email: <a href="mailto:privacy@prime7erp.com" className="text-primary hover:underline">privacy@prime7erp.com</a></p>
                 <p className="text-gray-600">Or via our <Link to="/contact" className="text-primary hover:underline">Contact</Link> page.</p>
               </div>
             </div>

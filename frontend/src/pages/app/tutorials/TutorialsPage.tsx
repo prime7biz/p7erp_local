@@ -4,7 +4,7 @@ export function TutorialsPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Tutorials</h1>
         <p className="text-sm text-slate-500">
-          Guides and how-to articles for P7 ERP.
+          Guides and how-to articles for Prime7 ERP.
         </p>
       </div>
       <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">

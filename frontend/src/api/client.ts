@@ -12,6 +12,7 @@ export interface MeResponse {
   last_name: string | null;
   tenant_name: string;
   tenant_type: TenantType;
+  company_code: string | null;
 }
 
 export interface TokenResponse {

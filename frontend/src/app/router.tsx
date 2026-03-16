@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { Landing } from "@/pages/Landing";
 import { Login } from "@/pages/Login";
 import { SignUp } from "@/pages/SignUp";
@@ -14,6 +14,10 @@ import { PrivacyPage } from "@/pages/public/PrivacyPage";
 import { TermsPage } from "@/pages/public/TermsPage";
 import { HowItWorksPage } from "@/pages/public/HowItWorksPage";
 import { SecurityPage } from "@/pages/public/SecurityPage";
+import { ErpBangladeshPage } from "@/pages/public/ErpBangladeshPage";
+import { ErpComparisonPage } from "@/pages/public/ErpComparisonPage";
+import { ResourcesPage } from "@/pages/public/ResourcesPage";
+import { SupportPage } from "@/pages/public/SupportPage";
 import { VerifyProformaPage } from "@/pages/VerifyProformaPage";
 
 const AppProtectedRouter = lazy(() =>
@@ -25,6 +29,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const tenantId = localStorage.getItem("p7_tenant_id");
   if (!token || !tenantId) return <Navigate to="/login" replace />;
   return <>{children}</>;
+}
+
+function BlogSlugRedirect() {
+  const { slug } = useParams<{ slug: string }>();
+  return <Navigate to={slug ? `/resources/${slug}` : "/resources"} replace />;
 }
 
 export function AppRouter() {
@@ -41,6 +50,13 @@ export function AppRouter() {
       <Route path="/terms" element={<PublicLayout><TermsPage /></PublicLayout>} />
       <Route path="/how-it-works" element={<PublicLayout><HowItWorksPage /></PublicLayout>} />
       <Route path="/security" element={<PublicLayout><SecurityPage /></PublicLayout>} />
+      <Route path="/erp-bangladesh" element={<PublicLayout><ErpBangladeshPage /></PublicLayout>} />
+      <Route path="/erp-comparison" element={<PublicLayout><ErpComparisonPage /></PublicLayout>} />
+      <Route path="/blog" element={<Navigate to="/resources" replace />} />
+      <Route path="/blog/:slug" element={<BlogSlugRedirect />} />
+      <Route path="/resources" element={<PublicLayout><ResourcesPage /></PublicLayout>} />
+      <Route path="/resources/:slug" element={<PublicLayout><ResourcesPage /></PublicLayout>} />
+      <Route path="/support" element={<PublicLayout><SupportPage /></PublicLayout>} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<SignUp />} />
       <Route path="/verify/proforma" element={<VerifyProformaPage />} />

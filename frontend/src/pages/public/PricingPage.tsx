@@ -39,7 +39,7 @@ const comparisonCategories = [
 ];
 
 function CellValue({ value }: { value: boolean }) {
-  return value ? <Check className="w-5 h-5 text-emerald-500 mx-auto" /> : <X className="w-4 h-4 text-gray-300 mx-auto" />;
+  return value ? <Check className="w-5 h-5 text-primary mx-auto" /> : <X className="w-4 h-4 text-gray-300 mx-auto" />;
 }
 
 const faqs = [
@@ -99,7 +99,7 @@ export function PricingPage() {
   return (
     <>
       {/* Hero */}
-      <section className="relative bg-gradient-to-br from-primary/5 via-blue-50 to-white py-20 lg:py-28">
+      <section className="relative bg-gradient-to-br from-primary/5 via-white to-white py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-1.5 rounded-full text-sm font-medium mb-6">
             <Zap className="w-4 h-4" />
@@ -110,11 +110,11 @@ export function PricingPage() {
             <br />
             <span className="text-primary">Pricing</span>
           </h1>
-          <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto mb-6">
+          <p className="text-lg md:text-xl text-gray-600 max-w-3xl mx-auto mb-6 leading-relaxed">
             No hidden fees. Choose the plan that fits your factory and scale as you grow.
           </p>
           <div className="inline-flex items-center gap-2">
-            <Globe className="w-4 h-4 text-gray-400" />
+            <Globe className="w-4 h-4 text-gray-600" />
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
@@ -129,13 +129,14 @@ export function PricingPage() {
       </section>
 
       {/* Pricing Cards */}
-      <section className="py-16 lg:py-24 bg-white -mt-8">
+      <section className="py-16 lg:py-24 bg-white -mt-8" aria-labelledby="pricing-plans-heading">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 id="pricing-plans-heading" className="sr-only">Choose your plan</h2>
           <div className="grid md:grid-cols-3 gap-6 lg:gap-8 max-w-5xl mx-auto">
             {plans.map((plan) => (
               <div
                 key={plan.name}
-                className={`relative rounded-2xl border ${
+                className={`relative rounded-xl border ${
                   plan.popular ? "border-primary shadow-xl shadow-primary/10 scale-[1.02] lg:scale-105" : "border-gray-200 shadow-sm"
                 } bg-white overflow-hidden flex flex-col`}
               >
@@ -146,7 +147,7 @@ export function PricingPage() {
                 )}
                 <div className="p-6 lg:p-8 flex-1 flex flex-col">
                   <h3 className="text-xl font-bold text-gray-900 mb-1">{plan.name}</h3>
-                  <p className="text-sm text-gray-500 mb-6">{plan.description}</p>
+                  <p className="text-sm text-gray-600 mb-6">{plan.description}</p>
                   <div className="mb-6">
                     <span className="text-4xl font-bold text-gray-900">{plan.price}</span>
                     <span className="text-gray-500 text-sm">{plan.period}</span>
@@ -154,14 +155,14 @@ export function PricingPage() {
                   <ul className="space-y-3 mb-8 flex-1">
                     {plan.features.map((f) => (
                       <li key={f} className="flex items-start gap-2.5">
-                        <Check className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                        <Check className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                         <span className="text-sm text-gray-700">{f}</span>
                       </li>
                     ))}
                   </ul>
                   <Link
                     to={plan.href}
-                    className={`block w-full text-center rounded-xl py-3 font-medium ${plan.popular ? "bg-primary text-white hover:bg-primary/90" : "border border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+                    className={`block w-full text-center rounded-lg py-3 font-semibold transition-colors ${plan.popular ? "bg-primary text-white hover:bg-primary/90" : "border border-gray-200 text-gray-700 hover:border-primary hover:text-primary hover:bg-primary/5"}`}
                   >
                     {plan.cta} <ArrowRight className="inline w-4 h-4 ml-1" />
                   </Link>
@@ -169,7 +170,7 @@ export function PricingPage() {
               </div>
             ))}
           </div>
-          <p className="text-center text-sm text-gray-500 mt-8">
+          <p className="text-center text-sm text-gray-600 mt-8">
             All plans include SSL encryption, daily backups, and 99.9% uptime.
           </p>
         </div>
@@ -179,10 +180,10 @@ export function PricingPage() {
       <section className="py-16 lg:py-24 bg-gray-50">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Compare Plans in Detail</h2>
+            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">Compare Plans in Detail</h2>
             <p className="text-lg text-gray-600">See exactly what&apos;s included in each plan.</p>
           </div>
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <div className="min-w-[680px]">
                 <div className="grid grid-cols-4 border-b border-gray-200 bg-gray-50">
@@ -215,11 +216,11 @@ export function PricingPage() {
       </section>
 
       {/* Guarantees */}
-      <section className="py-12 bg-white border-b">
+      <section className="py-16 lg:py-24 bg-white border-b border-primary/20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid sm:grid-cols-3 gap-8">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center flex-shrink-0"><Shield className="w-6 h-6" /></div>
+              <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center flex-shrink-0"><Shield className="w-6 h-6" /></div>
               <div>
                 <h3 className="font-semibold text-gray-900">30-Day Money Back</h3>
                 <p className="text-sm text-gray-500">Full refund, no questions asked</p>
@@ -233,7 +234,7 @@ export function PricingPage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center flex-shrink-0"><HelpCircle className="w-6 h-6" /></div>
+              <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center flex-shrink-0"><HelpCircle className="w-6 h-6" /></div>
               <div>
                 <h3 className="font-semibold text-gray-900">Migration Support</h3>
                 <p className="text-sm text-gray-500">We help move your data from Excel/Tally</p>
@@ -247,16 +248,16 @@ export function PricingPage() {
       <section className="py-16 lg:py-24 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Pricing FAQ</h2>
+            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">Pricing FAQ</h2>
             <p className="text-lg text-gray-600">Common questions about billing and plans.</p>
           </div>
           <div className="space-y-3">
             {faqs.map((faq, i) => (
-              <div key={i} className="border border-gray-200 rounded-xl overflow-hidden">
+              <div key={i} className="border border-primary/20 rounded-xl overflow-hidden hover:border-primary/30 transition-colors">
                 <button
                   type="button"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center justify-between p-5 text-left hover:bg-primary/5 transition-colors"
                 >
                   <span className="font-medium text-gray-900 pr-4">{faq.q}</span>
                   <ChevronDown className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${openFaq === i ? "rotate-180" : ""}`} />
@@ -274,14 +275,14 @@ export function PricingPage() {
       <section className="py-16 lg:py-24 bg-primary">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Start Your Free Trial Today</h2>
-          <p className="text-lg text-blue-100 mb-8 max-w-2xl mx-auto">
+          <p className="text-lg text-white/90 mb-8 max-w-2xl mx-auto leading-relaxed">
             No credit card required. Get full access for 14 days.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-primary px-8 py-3 text-base font-medium hover:bg-gray-50">
+            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white text-primary px-8 py-3 text-base font-semibold hover:bg-gray-50 transition-colors">
               Start Free Trial <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white text-white px-8 py-3 text-base font-medium hover:bg-white/10">
+            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/50 text-white px-8 py-3 text-base font-semibold hover:bg-white/10 transition-colors">
               Contact Sales
             </Link>
           </div>

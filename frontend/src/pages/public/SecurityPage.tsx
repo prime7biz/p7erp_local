@@ -16,7 +16,7 @@ const securityFeatures = [
     title: "Data Encryption",
     description:
       "All data is encrypted at rest using AES-256 and in transit using TLS 1.3. Your financial records, inventory data, and business information are protected with industry-standard encryption.",
-    color: "bg-blue-50 text-blue-600",
+    color: "bg-primary/10 text-primary",
   },
   {
     icon: ShieldCheck,
@@ -51,7 +51,7 @@ const securityFeatures = [
     title: "Compliance",
     description:
       "Built to meet industry security standards and best practices. Regular security audits, vulnerability assessments, and penetration testing ensure ongoing compliance and protection.",
-    color: "bg-cyan-50 text-cyan-600",
+    color: "bg-primary/10 text-primary",
   },
 ];
 
@@ -76,25 +76,30 @@ const privacy = [
 export function SecurityPage() {
   return (
     <>
-      <section className="relative bg-gradient-to-br from-primary/5 via-blue-50 to-white py-20 lg:py-28 overflow-hidden">
+      <section className="relative bg-gradient-to-br from-primary/5 via-white to-white py-20 lg:py-28 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative">
           <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 leading-tight">
             Security & <span className="text-primary">Privacy</span>
           </h1>
-          <p className="mt-6 text-lg text-gray-600 max-w-2xl mx-auto">
+          <p className="mt-6 text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
             Enterprise-grade security and multi-tenant isolation so your data stays protected and compliant.
           </p>
+          <div className="mt-8">
+            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-white hover:bg-primary/90 transition-colors">
+              Start Free Trial <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
         </div>
       </section>
 
       <section className="py-16 lg:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-10 text-center">Security Features</h2>
+          <h2 className="text-3xl sm:text-4xl font-semibold text-gray-900 mb-10 text-center">Security Features</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {securityFeatures.map((f, idx) => (
               <div
                 key={idx}
-                className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
+                className="rounded-xl border border-primary/20 bg-white p-6 shadow-sm hover:shadow-md hover:border-primary/30 transition-all"
               >
                 <div className={`inline-flex rounded-lg p-3 ${f.color}`}>
                   <f.icon className="w-6 h-6" />
@@ -107,26 +112,26 @@ export function SecurityPage() {
         </div>
       </section>
 
-      <section className="py-16 bg-gray-50">
+      <section className="py-16 lg:py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-2 gap-12">
-            <div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Infrastructure</h3>
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="bg-white rounded-xl p-6 lg:p-8 border border-primary/20">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">Infrastructure</h3>
               <ul className="space-y-2">
                 {infrastructure.map((item, i) => (
                   <li key={i} className="flex items-start gap-2 text-gray-700">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                     {item}
                   </li>
                 ))}
               </ul>
             </div>
-            <div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Privacy</h3>
+            <div className="bg-white rounded-xl p-6 lg:p-8 border border-primary/20">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">Privacy</h3>
               <ul className="space-y-2">
                 {privacy.map((item, i) => (
                   <li key={i} className="flex items-start gap-2 text-gray-700">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                     {item}
                   </li>
                 ))}
@@ -136,12 +141,12 @@ export function SecurityPage() {
         </div>
       </section>
 
-      <section className="py-16 bg-white">
+      <section className="py-16 lg:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-gray-600 mb-6">Learn more about how we handle your data.</p>
           <Link
             to="/privacy"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-white font-medium hover:bg-primary/90"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-white font-semibold hover:bg-primary/90 transition-colors"
           >
             Privacy Policy
             <ArrowRight className="w-4 h-4" />

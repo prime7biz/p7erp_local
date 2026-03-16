@@ -10,7 +10,7 @@ export function TutorialArticlePage() {
           {articleId ? `Tutorial: ${articleId}` : "Tutorial"}
         </h1>
         <p className="text-sm text-slate-500">
-          How-to and guide articles for P7 ERP.
+          How-to and guide articles for Prime7 ERP.
         </p>
       </div>
       <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">

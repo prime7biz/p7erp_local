@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "analyze": "vite build --mode analyze"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "latest",
@@ -18,6 +19,7 @@
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-helmet-async": "^2.0.5",
     "react-router-dom": "^7.0.2",
     "tailwind-merge": "latest"
   },
@@ -27,6 +29,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
+    "rollup-plugin-visualizer": "^5.14.0",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.6.2",
     "vite": "^6.0.1"

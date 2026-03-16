@@ -5,7 +5,7 @@ export default {
     extend: {
       colors: {
         primary: {
-          DEFAULT: "hsl(24, 95%, 53%)",
+          DEFAULT: "hsl(24, 100%, 50%)",
           foreground: "#fff",
         },
         orange: {

@@ -180,7 +180,6 @@ export const menuSections: MenuSection[] = [
     section: "AI Tools",
     icon: MessageSquare,
     items: [
-      { icon: MessageSquare, label: "AI Tool", href: `${PREFIX}/ai/assistant` },
       { icon: MessageSquare, label: "AI Assistant", href: `${PREFIX}/ai/assistant` },
       { icon: Zap, label: "AI Automation", href: `${PREFIX}/ai/automation` },
       { icon: Activity, label: "AI Predictions", href: `${PREFIX}/ai/predictions` },

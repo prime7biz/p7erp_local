@@ -15,15 +15,15 @@ export function TermsPage() {
 
           <div className="prose prose-gray max-w-none space-y-8">
             <p className="text-gray-600 leading-relaxed">
-              These Terms of Service (&quot;Terms&quot;) govern your access to and use of the P7 ERP cloud
-              platform and related services (&quot;Service&quot;) provided by P7 ERP (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;). By creating
+              These Terms of Service (&quot;Terms&quot;) govern your access to and use of the Prime7 ERP cloud
+              platform and related services (&quot;Service&quot;) provided by Prime7 ERP (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;). By creating
               an account or using the Service, you agree to be bound by these Terms.
             </p>
 
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-4">1. Acceptance of Terms</h2>
               <p className="text-gray-600 leading-relaxed">
-                By accessing or using P7 ERP, you acknowledge that you have read, understood, and
+                By accessing or using Prime7 ERP, you acknowledge that you have read, understood, and
                 agree to be bound by these Terms. If you are using the Service on behalf of an
                 organization, you represent and warrant that you have the authority to bind that
                 organization to these Terms. If you do not agree with any part of these Terms, you
@@ -34,7 +34,7 @@ export function TermsPage() {
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-4">2. Account Terms</h2>
               <p className="text-gray-600 leading-relaxed mb-3">
-                To use P7 ERP, you must create an account and provide accurate, complete
+                To use Prime7 ERP, you must create an account and provide accurate, complete
                 information. You are responsible for:
               </p>
               <ul className="list-disc pl-6 text-gray-600 space-y-1">
@@ -53,7 +53,7 @@ export function TermsPage() {
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-4">3. Service Description</h2>
               <p className="text-gray-600 leading-relaxed">
-                P7 ERP is a cloud-based enterprise resource planning platform designed for garment
+                Prime7 ERP is a cloud-based enterprise resource planning platform designed for garment
                 manufacturers and buying houses. The Service includes modules for accounting,
                 inventory management, production tracking, merchandising, order management, quality
                 control, and AI-powered analytics. We reserve the right to modify, enhance, or
@@ -81,7 +81,7 @@ export function TermsPage() {
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-4">5. Data Ownership</h2>
               <p className="text-gray-600 leading-relaxed">
-                You retain full ownership of all data you enter into P7 ERP, including but not
+                You retain full ownership of all data you enter into Prime7 ERP, including but not
                 limited to financial records, inventory data, production information, customer details,
                 and business documents. We do not claim any ownership rights over your data. You may
                 export your data at any time in standard formats. Upon termination of your subscription,
@@ -93,7 +93,7 @@ export function TermsPage() {
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-4">6. Intellectual Property</h2>
               <p className="text-gray-600 leading-relaxed">
-                The P7 ERP platform, including its software, design, branding, documentation, and
+                The Prime7 ERP platform, including its software, design, branding, documentation, and
                 all associated intellectual property, is and remains our exclusive property. Your
                 subscription grants you a limited, non-exclusive, non-transferable license to use the
                 Service during the subscription period. You may not reverse engineer, decompile, or
@@ -153,9 +153,9 @@ export function TermsPage() {
 
             <div className="mt-8 bg-gray-50 rounded-lg p-6 border border-gray-200">
               <p className="text-gray-700 font-medium">Questions about these Terms?</p>
-              <p className="text-gray-600 mt-1">Contact us at <a href="mailto:legal@p7erp.com" className="text-primary hover:underline">legal@p7erp.com</a> or via our <Link to="/contact" className="text-primary hover:underline">Contact</Link> page.</p>
+              <p className="text-gray-600 mt-1">Contact us at <a href="mailto:legal@prime7erp.com" className="text-primary hover:underline">legal@prime7erp.com</a> or via our <Link to="/contact" className="text-primary hover:underline">Contact</Link> page.</p>
               <p className="text-gray-600 mt-2">
-                P7 ERP<br />
+                Prime7 ERP<br />
                 Gulshan-2, Dhaka 1212, Bangladesh
               </p>
             </div>

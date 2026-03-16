@@ -26,14 +26,23 @@ async def create_tenant(
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Domain already registered")
 
-    # Auto-generate company_code from company name (slug + uniqueness suffix)
-    slug = re.sub(r"[^a-zA-Z0-9]", "", body.name)[:20].upper() or "T"
-    company_code = slug
-    while True:
-        existing_code = await db.execute(select(Tenant).where(Tenant.company_code == company_code))
-        if existing_code.scalar_one_or_none() is None:
+    # Auto-generate company_code: 4 uppercase letters from company name + 6 digits (10 chars total)
+    letters = re.sub(r"[^A-Za-z]", "", body.name)[:4].upper()
+    if len(letters) < 4:
+        letters = (letters + "XXXX")[:4]
+    company_code = None
+    for _ in range(100):  # avoid infinite loop
+        digits = str(random.randint(100000, 999999))
+        candidate = letters + digits
+        existing = await db.execute(select(Tenant).where(Tenant.company_code == candidate))
+        if existing.scalar_one_or_none() is None:
+            company_code = candidate
             break
-        company_code = f"{slug}{random.randint(100, 9999)}"[:20]
+    if company_code is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not generate unique company code; please try again.",
+        )
 
     tenant = Tenant(
         name=body.name,

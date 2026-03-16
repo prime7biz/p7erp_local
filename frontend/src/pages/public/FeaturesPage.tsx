@@ -78,7 +78,7 @@ const modules = [
   {
     icon: FileText,
     title: "Commercial & LC",
-    color: "bg-cyan-50 text-cyan-600",
+    color: "bg-primary/10 text-primary",
     description: "End-to-end LC management designed for export/import workflows.",
     features: [
       "Master LC management with full document set",
@@ -146,10 +146,10 @@ const moduleImages: Record<number, { src: string; alt: string }> = {
 };
 
 const featureFaqs = [
-  { q: "What modules are included in P7 ERP?", a: "P7 includes Merchandising, Order & Commercial, Inventory, Production & WIP, Financial Accounting, HR & Payroll, Quality Management, and AI Analytics — all integrated in one platform." },
-  { q: "Does P7 ERP include AI features?", a: "Yes. P7 uses AI for demand forecasting, inventory optimization, cost prediction, and smart recommendations across modules." },
-  { q: "Can P7 handle multiple warehouses?", a: "Yes. P7 supports multi-warehouse management with real-time stock tracking, lot traceability, and inter-warehouse transfers." },
-  { q: "Does P7 support approval workflows?", a: "Yes. P7 has configurable multi-level approval workflows for purchase orders, vouchers, production orders, and other documents with amount-based routing and segregation of duties." },
+  { q: "What modules are included in Prime7 ERP?", a: "Prime7 includes Merchandising, Order & Commercial, Inventory, Production & WIP, Financial Accounting, HR & Payroll, Quality Management, and AI Analytics — all integrated in one platform." },
+  { q: "Does Prime7 ERP include AI features?", a: "Yes. Prime7 uses AI for demand forecasting, inventory optimization, cost prediction, and smart recommendations across modules." },
+  { q: "Can Prime7 ERP handle multiple warehouses?", a: "Yes. Prime7 ERP supports multi-warehouse management with real-time stock tracking, lot traceability, and inter-warehouse transfers." },
+  { q: "Does Prime7 ERP support approval workflows?", a: "Yes. Prime7 ERP has configurable multi-level approval workflows for purchase orders, vouchers, production orders, and other documents with amount-based routing and segregation of duties." },
 ];
 
 function ModuleVisual({ mod, index }: { mod: typeof modules[0]; index: number }) {
@@ -163,8 +163,8 @@ function ModuleVisual({ mod, index }: { mod: typeof modules[0]; index: number })
     );
   }
   return (
-    <div className={`relative rounded-2xl p-8 lg:p-12 ${mod.color.split(" ")[0]} border border-gray-100 overflow-hidden`}>
-      <div className="absolute inset-0 border-2 border-transparent bg-gradient-to-br from-blue-200/30 via-transparent to-blue-300/20 rounded-2xl pointer-events-none" />
+    <div className={`relative rounded-xl p-8 lg:p-12 ${mod.color.split(" ")[0]} border border-gray-100 overflow-hidden`}>
+      <div className="absolute inset-0 border-2 border-transparent bg-gradient-to-br from-primary/10 via-transparent to-primary/5 rounded-xl pointer-events-none" />
       <mod.icon className="w-20 h-20 mx-auto mb-6 opacity-20 relative" />
       <div className="grid grid-cols-2 gap-4 relative">
         {mod.features.slice(0, 4).map((feature) => (
@@ -184,10 +184,9 @@ export function FeaturesPage() {
   return (
     <>
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-blue-50 to-white py-20 lg:py-28">
-        <div className="absolute top-10 -right-20 w-72 h-72 bg-blue-400/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-10 -left-16 w-64 h-64 bg-blue-300/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle, rgba(37,99,235,0.06) 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-white to-white py-20 lg:py-28">
+        <div className="absolute top-10 -right-20 w-72 h-72 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-10 -left-16 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-1.5 rounded-full text-sm font-medium mb-6">
             <Layers className="w-4 h-4" />
@@ -198,15 +197,15 @@ export function FeaturesPage() {
             <br />
             <span className="text-primary">Your Garment Business</span>
           </h1>
-          <p className="text-lg md:text-xl text-gray-600 max-w-3xl mx-auto mb-8">
-            From buyer inquiry to LC realization, P7 ERP covers every aspect of garment manufacturing
+          <p className="text-lg md:text-xl text-gray-600 max-w-3xl mx-auto mb-8 leading-relaxed">
+            From buyer inquiry to LC realization, Prime7 ERP covers every aspect of garment manufacturing
             and export operations with deeply integrated modules.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-8 py-3 text-base font-medium text-white hover:bg-primary/90">
+            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-8 py-3 text-base font-semibold text-white hover:bg-primary/90 transition-colors">
               Start Free Trial <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-8 py-3 text-base font-medium text-gray-700 hover:bg-gray-50">
+            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-primary/20 px-8 py-3 text-base font-semibold text-gray-700 hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors">
               Request a Demo
             </Link>
           </div>
@@ -235,7 +234,7 @@ export function FeaturesPage() {
       {modules.map((mod, index) => (
         <div key={mod.title}>
           {index > 0 && (
-            <div className="h-px bg-gradient-to-r from-transparent via-blue-200 to-transparent" />
+            <div className="h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
           )}
           <section
             id={mod.title.toLowerCase().replace(/[^a-z]/g, "-")}
@@ -248,7 +247,7 @@ export function FeaturesPage() {
                     <mod.icon className="w-4 h-4" />
                     Module {index + 1} of 9
                   </div>
-                  <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">{mod.title}</h2>
+                  <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">{mod.title}</h2>
                   <p className="text-lg text-gray-600 mb-8">{mod.description}</p>
                   <ul className="space-y-3">
                     {mod.features.map((feature) => (
@@ -269,29 +268,29 @@ export function FeaturesPage() {
       ))}
 
       {/* Integration Highlights */}
-      <section className="relative overflow-hidden py-16 lg:py-24 bg-gradient-to-br from-primary/5 to-blue-50">
+      <section className="relative overflow-hidden py-16 lg:py-24 bg-gradient-to-br from-primary/5 to-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-1.5 rounded-full text-sm font-medium mb-6">
             <RefreshCw className="w-4 h-4" />
             Unified Platform
           </div>
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Seamlessly Connected</h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-12">
-            Every module in P7 shares a single source of truth. When merchandising creates a BOM,
+          <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">Seamlessly Connected</h2>
+          <p className="text-lg text-gray-600 max-w-3xl mx-auto mb-12 leading-relaxed">
+            Every module in Prime7 ERP shares a single source of truth. When merchandising creates a BOM,
             inventory knows what to order. When production consumes material, accounting records the cost.
           </p>
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:border-primary/20 transition-colors">
               <Globe className="w-10 h-10 text-primary mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Single Source of Truth</h3>
               <p className="text-gray-600 text-sm">One database, one login, one platform.</p>
             </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:border-primary/20 transition-colors">
               <Zap className="w-10 h-10 text-primary mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Automatic Workflows</h3>
               <p className="text-gray-600 text-sm">GRN updates stock and triggers accounting entries.</p>
             </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:border-primary/20 transition-colors">
               <BarChart3 className="w-10 h-10 text-primary mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Cross-Module Analytics</h3>
               <p className="text-gray-600 text-sm">AI insights across production, inventory, and finance.</p>
@@ -304,16 +303,16 @@ export function FeaturesPage() {
       <section className="py-16 lg:py-24 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Frequently Asked Questions</h2>
-            <p className="text-lg text-gray-600">Common questions about P7 ERP features and capabilities.</p>
+            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">Frequently Asked Questions</h2>
+            <p className="text-lg text-gray-600">Common questions about Prime7 ERP features and capabilities.</p>
           </div>
           <div className="space-y-3">
             {featureFaqs.map((faq, i) => (
-              <div key={i} className="border border-gray-200 rounded-xl overflow-hidden">
+              <div key={i} className="border border-primary/20 rounded-xl overflow-hidden hover:border-primary/30 transition-colors">
                 <button
                   type="button"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-primary/5 transition-colors"
                 >
                   <span className="font-semibold text-gray-900 pr-4">{faq.q}</span>
                   <ChevronDown className={`h-5 w-5 text-gray-400 shrink-0 transition-transform duration-200 ${openFaq === i ? "rotate-180" : ""}`} />
@@ -331,14 +330,14 @@ export function FeaturesPage() {
       <section className="relative overflow-hidden py-16 lg:py-24 bg-primary">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">See It in Action</h2>
-          <p className="text-lg text-blue-100 mb-8 max-w-2xl mx-auto">
-            Experience how P7 ERP can transform your garment manufacturing operations.
+          <p className="text-lg text-white/90 mb-8 max-w-2xl mx-auto leading-relaxed">
+            Experience how Prime7 ERP can transform your garment manufacturing operations.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-primary px-8 py-3 text-base font-medium hover:bg-gray-50">
+            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white text-primary px-8 py-3 text-base font-semibold hover:bg-gray-50 transition-colors">
               Start Free Trial <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white text-white px-8 py-3 text-base font-medium hover:bg-white/10">
+            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/50 text-white px-8 py-3 text-base font-semibold hover:bg-white/10 transition-colors">
               Contact Sales
             </Link>
           </div>

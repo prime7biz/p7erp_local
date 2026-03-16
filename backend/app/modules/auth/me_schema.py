@@ -4,7 +4,7 @@ from app.models import TenantType
 
 
 class MeResponse(BaseModel):
-    """Current user + tenant info for UI (tenant name, tenant_type for sidebar)."""
+    """Current user + tenant info for UI (tenant name, tenant_type, company_code for sidebar)."""
     user_id: int
     tenant_id: int
     email: str
@@ -13,3 +13,4 @@ class MeResponse(BaseModel):
     last_name: str | None
     tenant_name: str
     tenant_type: TenantType
+    company_code: str | None = None

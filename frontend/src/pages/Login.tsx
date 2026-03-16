@@ -55,14 +55,14 @@ export function Login() {
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
-      {/* Left panel - same as reference */}
+      {/* Left panel - branded background */}
       <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden">
-        <img src="/images/hero-bg.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-orange-950/50" />
-        <div className="absolute top-[15%] left-[10%] w-64 h-64 bg-orange-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-[20%] right-[15%] w-48 h-48 bg-orange-400/10 rounded-full blur-3xl" />
+        <img src="/images/auth-bg-login.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/85 via-gray-900/70 to-primary/30" />
+        <div className="absolute top-[15%] left-[10%] w-64 h-64 bg-primary/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-[20%] right-[15%] w-48 h-48 bg-primary/10 rounded-full blur-3xl" />
         <div className="relative z-10 flex flex-col justify-center items-start px-12 xl:px-20 w-full">
-          <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" />
+          <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" role="img" />
           <h1 className="text-3xl xl:text-4xl font-bold text-white leading-tight mb-3">
             Complete ERP for<br />
             <span className="text-orange-400">Garment Manufacturers</span>
@@ -92,17 +92,19 @@ export function Login() {
         </div>
       </div>
 
-      {/* Right panel - form (reference UI) */}
+      {/* Right panel - form */}
       <div className="flex-1 flex flex-col">
-        <div className="lg:hidden bg-gradient-to-r from-orange-600 to-orange-700 px-6 py-5 flex items-center gap-3">
-          <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-11 w-auto" />
+        <div className="lg:hidden bg-gradient-to-r from-primary to-primary/90 px-6 py-5 flex items-center justify-center gap-3">
+          <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-10 w-auto" />
           <span className="text-white font-semibold text-lg">Prime7 ERP</span>
         </div>
-        <div className="flex-1 flex items-center justify-center bg-[hsl(220,14%,96%)] px-6 py-10">
-          <div className="w-full max-w-md space-y-6">
-            <div>
+        <div className="flex-1 flex items-center justify-center relative px-6 py-10 bg-gradient-to-b from-gray-50 to-white min-h-[60vh]">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(249,115,22,0.06),transparent)] pointer-events-none" aria-hidden="true" />
+          <div className="w-full max-w-md space-y-6 relative z-10">
+            <div className="text-center lg:text-left">
+              <img src="/images/logo.png" alt="Prime7 ERP" className="h-12 w-auto mx-auto lg:mx-0 mb-4" />
               <h2 className="text-2xl font-bold text-gray-900">Welcome Back</h2>
-              <p className="text-sm text-gray-500 mt-1">Sign in to your company account</p>
+              <p className="text-sm text-gray-600 mt-1">Sign in to your company account</p>
               <p className="text-xs text-gray-500 mt-1">Fields marked with ** are mandatory.</p>
             </div>
 

@@ -13,7 +13,7 @@ export default defineConfig(async ({ mode }) => {
   const analyzePlugins =
     mode === "analyze"
       ? [
-          (await import("rollup-plugin-visualizer")).default({
+          (await import("rollup-plugin-visualizer")).visualizer({
             filename: "dist/stats.html",
             open: false,
             gzipSize: true,

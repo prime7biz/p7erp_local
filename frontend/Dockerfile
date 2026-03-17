@@ -1,3 +1,4 @@
+# Development-only Dockerfile (Vite dev server + HMR).
 FROM node:20-alpine
 
 ARG VITE_API_BASE_URL

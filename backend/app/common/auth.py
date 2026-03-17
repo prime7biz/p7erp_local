@@ -5,6 +5,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +21,12 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return pwd_context.verify(plain, hashed)
+    except (ValueError, TypeError, UnknownHashError):
+        # If stored hash is malformed/legacy, treat as invalid credentials
+        # instead of raising a 500 error from the login endpoint.
+        return False
 
 
 def create_access_token(subject: str | int, expires_delta: timedelta | None = None) -> str:

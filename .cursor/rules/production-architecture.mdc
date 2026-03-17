@@ -1,0 +1,21 @@
+---
+description: Production deployment architecture rules for frontend, ports, env, and websockets
+alwaysApply: true
+---
+
+# P7 ERP Production Architecture Rules
+
+- Frontend production image is Nginx-based (multi-stage build output), not Node.js runtime.
+- Never add `command: npm ...` (or other Node runtime commands) to production frontend services in compose files.
+
+- Host server Nginx owns `80/443` for `prime7erp.com`.
+- Never map Docker containers to host `80` (for example, avoid `80:80`).
+- Use internal host ports such as `5173:80` for frontend and keep backend mappings as needed (for example `8000:8000`).
+
+- Production secrets and origin settings are handled by live server `.env` (excluded from git).
+- Do not warn about missing `JWT_SECRET` / `CORS_ORIGINS` during normal guidance when the user indicates live `.env` is already configured.
+
+- Keep secure WebSocket behavior for live HTTPS:
+  - Host Nginx upgrades websocket traffic to `wss://` over `443`.
+  - Preserve Vite HMR logic that checks HTTPS via `VITE_API_BASE_URL` and uses secure websocket settings accordingly.
+

@@ -1,7 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-import { visualizer } from "rollup-plugin-visualizer";
 
 const isProduction = process.env.NODE_ENV === "production";
 const allowedHosts = (process.env.VITE_ALLOWED_HOSTS ?? "")
@@ -10,19 +9,22 @@ const allowedHosts = (process.env.VITE_ALLOWED_HOSTS ?? "")
   .filter(Boolean);
 const defaultAllowedHosts = ["localhost", "127.0.0.1"];
 
-export default defineConfig(({ mode }) => ({
-  plugins: [
-    react(),
-    ...(mode === "analyze"
+export default defineConfig(async ({ mode }) => {
+  const analyzePlugins =
+    mode === "analyze"
       ? [
-          visualizer({
+          (await import("rollup-plugin-visualizer")).default({
             filename: "dist/stats.html",
             open: false,
             gzipSize: true,
             brotliSize: true,
           }),
         ]
-      : []),
+      : [];
+  return {
+  plugins: [
+    react(),
+    ...analyzePlugins,
   ],
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
@@ -86,4 +88,5 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-}));
+  };
+});

@@ -129,7 +129,9 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
 export function getSeoForPath(pathname: string): SeoMeta {
   const articleMatch = pathname.match(/^\/resources\/([^/]+)$/);
   if (articleMatch) {
-    const article = getArticleBySlug(articleMatch[1]);
+    const articleSlug = articleMatch[1];
+    if (!articleSlug) return DEFAULT_SEO;
+    const article = getArticleBySlug(articleSlug);
     if (article)
       return {
         title: `${article.title} – Prime7 ERP`,

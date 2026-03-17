@@ -67,7 +67,8 @@ export function Seo() {
   const isLanding = pathname === "/";
   const isContact = pathname === "/contact";
   const articleMatch = pathname.match(/^\/resources\/([^/]+)$/);
-  const article = articleMatch ? getArticleBySlug(articleMatch[1]) : null;
+  const articleSlug = articleMatch?.[1];
+  const article = articleSlug ? getArticleBySlug(articleSlug) : null;
   const canonicalUrl = `${SITE_URL}${pathname === "/" ? "" : pathname}`;
   const articleJsonLd =
     article &&

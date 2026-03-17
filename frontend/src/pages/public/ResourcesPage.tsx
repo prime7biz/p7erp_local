@@ -97,7 +97,9 @@ function renderContentLine(line: string, i: number) {
   // Markdown links [text](url) -> render as internal Link or external a
   const linkMatch = trimmed.match(/^\[(.+?)\]\((.+?)\)$/);
   if (linkMatch) {
-    const [, text, url] = linkMatch;
+    const text = linkMatch[1];
+    const url = linkMatch[2];
+    if (!text || !url) return null;
     const isInternal =
       url.startsWith("/") && !url.startsWith("//");
     if (isInternal) {

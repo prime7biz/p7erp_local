@@ -13,6 +13,7 @@ import {
   SHIPPING_TERM_OPTIONS,
   withLegacyOption,
 } from "@/lib/commercialTerms";
+import { getOrderStatusChoices } from "@/features/merch/workflow";
 
 export function OrdersPage() {
   const navigate = useNavigate();
@@ -94,10 +95,10 @@ export function OrdersPage() {
 
   const statusClass = (statusValue: string) => {
     const value = statusValue.toUpperCase();
-    if (value === "COMPLETED") return "bg-emerald-100 text-emerald-700";
-    if (value === "IN_PROGRESS") return "bg-blue-100 text-blue-700";
-    if (value === "NEW") return "bg-violet-100 text-violet-700";
-    return "bg-gray-100 text-gray-700";
+    if (value === "COMPLETED") return "bg-status-success-subtle text-status-success-foreground";
+    if (value === "IN_PROGRESS") return "bg-status-info-subtle text-status-info-foreground";
+    if (value === "NEW") return "bg-brand-primary/10 text-brand-primary";
+    return "bg-status-neutral-subtle text-status-neutral-foreground";
   };
 
   const closeModal = () => {
@@ -131,8 +132,8 @@ export function OrdersPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
-          <p className="text-gray-500 text-sm mt-0.5">
+          <h1 className="text-2xl font-bold text-text-primary">Orders</h1>
+          <p className="text-text-muted text-sm mt-0.5">
             Manage final sales orders with clear workflow, conversion links, and delivery tracking.
           </p>
         </div>
@@ -145,7 +146,7 @@ export function OrdersPage() {
               setSearch(e.target.value);
               setPage(1);
             }}
-            className="w-full sm:w-48 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+            className="w-full sm:w-48 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
           />
           <select
             value={statusFilter}
@@ -153,7 +154,7 @@ export function OrdersPage() {
               setStatusFilter(e.target.value);
               setPage(1);
             }}
-            className="w-full sm:w-40 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+            className="w-full sm:w-40 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
           >
             <option value="">All statuses</option>
             <option value="DRAFT">Draft</option>
@@ -169,14 +170,14 @@ export function OrdersPage() {
               setQuickFilter("all");
               setPage(1);
             }}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
           >
             Clear filters
           </button>
           <button
             type="button"
             onClick={load}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
           >
             Refresh
           </button>
@@ -184,7 +185,7 @@ export function OrdersPage() {
         <button
           type="button"
           onClick={openCreate}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-primary/90"
+          className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
         >
           New order
         </button>
@@ -202,7 +203,7 @@ export function OrdersPage() {
             type="button"
             onClick={() => setQuickFilter(chip.key as typeof quickFilter)}
             className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-              quickFilter === chip.key ? "border-primary bg-primary/10 text-primary" : "border-gray-200 text-gray-600"
+              quickFilter === chip.key ? "border-brand-primary bg-brand-primary/10 text-brand-primary" : "border-border text-text-secondary"
             }`}
           >
             {chip.label}
@@ -211,39 +212,39 @@ export function OrdersPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-3">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Total on page</div>
-          <div className="text-xl font-bold text-gray-900">{filteredItems.length}</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Total on page</div>
+          <div className="text-xl font-bold text-text-primary">{filteredItems.length}</div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-3">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Draft</div>
-          <div className="text-xl font-bold text-slate-700">{draftCount}</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Draft</div>
+          <div className="text-xl font-bold text-status-neutral-foreground">{draftCount}</div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-3">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Active</div>
-          <div className="text-xl font-bold text-blue-700">{activeCount}</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Active</div>
+          <div className="text-xl font-bold text-status-info-foreground">{activeCount}</div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-3">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Completed</div>
-          <div className="text-xl font-bold text-emerald-700">{completedCount}</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Completed</div>
+          <div className="text-xl font-bold text-status-success-foreground">{completedCount}</div>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         {loading ? (
-          <div className="p-12 text-center text-gray-500">Loading orders…</div>
+          <div className="p-12 text-center text-text-muted">Loading orders…</div>
         ) : filteredItems.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">No orders yet.</div>
+          <div className="p-12 text-center text-text-muted">No orders yet.</div>
         ) : (
           <div className="overflow-x-auto">
           <table className="min-w-[1180px] w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+            <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
               <tr>
                 <th className="py-2.5 px-4 w-24 whitespace-nowrap">Code</th>
                 <th className="py-2.5 px-4 min-w-[120px]">Customer</th>
@@ -272,19 +273,19 @@ export function OrdersPage() {
                 const commissionValue = o.commission_value ?? linkedQuotation?.commission_value ?? null;
 
                 return (
-                <tr key={o.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
-                  <td className="py-2.5 px-4 font-medium text-gray-900 whitespace-nowrap">
+                <tr key={o.id} className="border-b border-border-subtle last:border-0 hover:bg-surface-subtle/70">
+                  <td className="py-2.5 px-4 font-medium text-text-primary whitespace-nowrap">
                     <Link
                       to={`/app/orders/${o.id}`}
-                      className="text-indigo-600 hover:underline"
+                      className="text-status-info hover:underline"
                     >
                       {o.order_code}
                     </Link>
                   </td>
-                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={customerName(o.customer_id)}>
+                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={customerName(o.customer_id)}>
                     {customerName(o.customer_id)}
                   </td>
-                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={quotationCode(o.quotation_id)}>
+                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={quotationCode(o.quotation_id)}>
                     {quotationCode(o.quotation_id)}
                   </td>
                   <td className="py-2.5 px-4">
@@ -293,41 +294,41 @@ export function OrdersPage() {
                         <img
                           src={styleImageUrl}
                           alt={styleName ?? styleRef ?? "Style"}
-                          className="h-8 w-8 shrink-0 rounded object-cover border border-gray-200"
+                          className="h-8 w-8 shrink-0 rounded object-cover border border-border"
                         />
                       ) : (
-                        <div className="h-8 w-8 shrink-0 rounded bg-gray-100 border border-gray-200" />
+                        <div className="h-8 w-8 shrink-0 rounded bg-surface-subtle border border-border" />
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="text-gray-700 truncate" title={styleName ?? styleRef ?? undefined}>
+                        <div className="text-text-secondary truncate" title={styleName ?? styleRef ?? undefined}>
                           {styleName ?? styleRef ?? "—"}
                         </div>
                         {styleName && styleRef && styleName !== styleRef && (
-                          <div className="text-xs text-gray-500 truncate whitespace-nowrap" title={styleRef}>
+                          <div className="text-xs text-text-muted truncate whitespace-nowrap" title={styleRef}>
                             {styleRef}
                           </div>
                         )}
                       </div>
                     </div>
                   </td>
-                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={intermediaryName ?? undefined}>
+                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={intermediaryName ?? undefined}>
                     {intermediaryName ?? "—"}
                   </td>
-                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={shippingTerm ?? undefined}>
+                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={shippingTerm ?? undefined}>
                     {shippingTerm ?? "—"}
                   </td>
-                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={commissionMode || commissionType || commissionValue ? `${commissionMode ?? "-"} / ${commissionType ?? "-"} / ${commissionValue ?? "-"}` : undefined}>
+                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={commissionMode || commissionType || commissionValue ? `${commissionMode ?? "-"} / ${commissionType ?? "-"} / ${commissionValue ?? "-"}` : undefined}>
                     {commissionMode || commissionType || commissionValue
                       ? `${commissionMode ?? "-"} / ${commissionType ?? "-"} / ${commissionValue ?? "-"}`
                       : "—"}
                   </td>
-                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : undefined}>
+                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : undefined}>
                     {o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : "—"}
                   </td>
-                  <td className="py-2.5 px-4 text-right text-gray-700 whitespace-nowrap">
+                  <td className="py-2.5 px-4 text-right text-text-secondary whitespace-nowrap">
                     {o.quantity != null ? o.quantity.toLocaleString() : "—"}
                   </td>
-                  <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap">
+                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(o.status)}`}>
                       {o.status}
                     </span>
@@ -337,23 +338,23 @@ export function OrdersPage() {
                       <button
                         type="button"
                         onClick={() => setOpenActionsId((prev) => (prev === o.id ? null : o.id))}
-                        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                        className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                       >
                         Actions
                       </button>
                       {openActionsId === o.id && (
-                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
                           <Link
                             to={`/app/orders/${o.id}`}
                             onClick={() => setOpenActionsId(null)}
-                            className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                           >
                             View
                           </Link>
                           <Link
                             to={`/app/orders/${o.id}/print`}
                             onClick={() => setOpenActionsId(null)}
-                            className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                           >
                             Print
                           </Link>
@@ -380,7 +381,7 @@ export function OrdersPage() {
                               });
                               setModalOpen(true);
                             }}
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                           >
                             Edit
                           </button>
@@ -397,7 +398,7 @@ export function OrdersPage() {
                                 setError(e instanceof Error ? e.message : "Delete failed");
                               }
                             }}
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
                           >
                             Delete
                           </button>
@@ -414,12 +415,12 @@ export function OrdersPage() {
         )}
       </div>
 
-      <div className="flex items-center justify-between text-xs text-gray-500">
+      <div className="flex items-center justify-between text-xs text-text-muted">
         <button
           type="button"
           disabled={page === 1}
           onClick={() => setPage((p) => Math.max(1, p - 1))}
-          className="rounded-lg border border-gray-300 px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-lg border border-border-strong px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Previous
         </button>
@@ -428,7 +429,7 @@ export function OrdersPage() {
           type="button"
           disabled={items.length < pageSize}
           onClick={() => setPage((p) => p + 1)}
-          className="rounded-lg border border-gray-300 px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-lg border border-border-strong px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Next
         </button>
@@ -436,11 +437,11 @@ export function OrdersPage() {
 
       {modalOpen && editing && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Edit order</h2>
+          <div className="w-full max-w-md rounded-xl bg-surface-raised p-6 shadow-lg">
+            <h2 className="text-lg font-semibold text-text-primary mb-4">Edit order</h2>
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-text-secondary mb-1">
                   Customer
                 </label>
                 <select
@@ -448,7 +449,7 @@ export function OrdersPage() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, customer_id: Number(e.target.value) || 0 }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value={0}>Select customer…</option>
                   {customers.map((c) => (
@@ -459,7 +460,7 @@ export function OrdersPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-text-secondary mb-1">
                   Linked quotation (optional)
                 </label>
                 <select
@@ -484,7 +485,7 @@ export function OrdersPage() {
                       };
                     })
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">No linked quotation</option>
                   {quotations.map((q) => (
@@ -495,7 +496,7 @@ export function OrdersPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-text-secondary mb-1">
                   Style ref
                 </label>
                 <input
@@ -504,12 +505,12 @@ export function OrdersPage() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, style_ref: e.target.value || undefined }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
                     Style ID
                   </label>
                   <input
@@ -521,11 +522,11 @@ export function OrdersPage() {
                         style_id: e.target.value ? Number(e.target.value) : undefined,
                       }))
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
                     Shipping term
                   </label>
                   <select
@@ -533,7 +534,7 @@ export function OrdersPage() {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, shipping_term: e.target.value || undefined }))
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                   >
                     <option value="">Select shipping term</option>
                     {withLegacyOption(form.shipping_term, SHIPPING_TERM_OPTIONS).map((term) => (
@@ -548,7 +549,7 @@ export function OrdersPage() {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
                     Commission mode
                   </label>
                   <select
@@ -556,7 +557,7 @@ export function OrdersPage() {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, commission_mode: e.target.value || undefined }))
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                   >
                     <option value="">Select mode</option>
                     {withLegacyOption(form.commission_mode, COMMISSION_MODE_OPTIONS).map((mode) => (
@@ -569,7 +570,7 @@ export function OrdersPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
                     Commission type
                   </label>
                   <select
@@ -577,7 +578,7 @@ export function OrdersPage() {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, commission_type: e.target.value || undefined }))
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                   >
                     <option value="">Select type</option>
                     {withLegacyOption(form.commission_type, COMMISSION_TYPE_OPTIONS).map((type) => (
@@ -590,7 +591,7 @@ export function OrdersPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
                     Commission value
                   </label>
                   <input
@@ -599,12 +600,12 @@ export function OrdersPage() {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, commission_value: e.target.value || undefined }))
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-text-secondary mb-1">
                   Delivery date
                 </label>
                 <input
@@ -613,11 +614,11 @@ export function OrdersPage() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, delivery_date: e.target.value || undefined }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-text-secondary mb-1">
                   Quantity (pcs)
                 </label>
                 <input
@@ -629,11 +630,11 @@ export function OrdersPage() {
                       quantity: e.target.value ? Number(e.target.value) : undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-text-secondary mb-1">
                   Status
                 </label>
                 <select
@@ -641,26 +642,26 @@ export function OrdersPage() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, status: e.target.value || undefined }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
-                  <option value="">Select status…</option>
-                  <option value="DRAFT">Draft</option>
-                  <option value="NEW">New</option>
-                  <option value="IN_PROGRESS">In Progress</option>
-                  <option value="COMPLETED">Completed</option>
+                  {getOrderStatusChoices(editing?.status).map((statusValue) => (
+                    <option key={statusValue} value={statusValue}>
+                      {statusValue}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+                  className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-white"
+                  className="rounded-lg bg-brand-primary px-4 py-1.5 text-sm font-semibold text-brand-primary-foreground"
                 >
                   Save
                 </button>

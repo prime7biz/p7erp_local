@@ -152,45 +152,45 @@ export function MasterContractsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-bold text-gray-900">Master Contracts</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-bold text-text-primary">Master Contracts</h1>
+        <p className="mt-1 text-sm text-text-muted">
           Track customer-side Master Export LC / Sales Contract and monitor how many BTB LCs are opened under each parent.
         </p>
       </header>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
 
       <section className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-2xl font-semibold text-gray-900">{totals.total}</p>
-          <p className="text-xs uppercase tracking-wide text-gray-500">Total Master Contracts</p>
+        <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+          <p className="text-2xl font-semibold text-text-primary">{totals.total}</p>
+          <p className="text-xs uppercase tracking-wide text-text-muted">Total Master Contracts</p>
         </div>
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-sm">
-          <p className="text-2xl font-semibold text-emerald-700">{totals.active}</p>
-          <p className="text-xs uppercase tracking-wide text-gray-500">Active</p>
+        <div className="rounded-xl border border-status-success/30 bg-status-success-subtle/70 p-4 shadow-sm">
+          <p className="text-2xl font-semibold text-status-success-foreground">{totals.active}</p>
+          <p className="text-xs uppercase tracking-wide text-text-muted">Active</p>
         </div>
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-4 shadow-sm">
-          <p className="text-2xl font-semibold text-indigo-700">{totals.amount.toLocaleString()}</p>
-          <p className="text-xs uppercase tracking-wide text-gray-500">Total Value</p>
+        <div className="rounded-xl border border-brand-primary/30 bg-brand-primary/10/70 p-4 shadow-sm">
+          <p className="text-2xl font-semibold text-brand-primary">{totals.amount.toLocaleString()}</p>
+          <p className="text-xs uppercase tracking-wide text-text-muted">Total Value</p>
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-3">
-          <h2 className="text-base font-semibold text-slate-800">Create Master Contract</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
+      <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+        <div className="border-b border-border bg-surface-subtle/70 px-5 py-3">
+          <h2 className="text-base font-semibold text-text-primary">Create Master Contract</h2>
+          <p className="mt-0.5 text-xs text-text-muted">
             One master contract can have multiple BTB LCs under it.
           </p>
         </div>
         <form onSubmit={createContract} className="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Type</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Type</label>
             <select
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.contract_type ?? "EXPORT_LC"}
               onChange={(e) => setForm((prev) => ({ ...prev, contract_type: e.target.value }))}
             >
@@ -202,9 +202,9 @@ export function MasterContractsPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Reference *</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Reference *</label>
             <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.reference ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, reference: e.target.value }))}
               placeholder="e.g. ELC-2026-001"
@@ -212,9 +212,9 @@ export function MasterContractsPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Status</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Status</label>
             <select
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.status ?? "DRAFT"}
               onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
             >
@@ -226,29 +226,29 @@ export function MasterContractsPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Contract Date</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Contract Date</label>
             <input
               type="date"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.contract_date ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, contract_date: e.target.value || undefined }))}
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Expiry Date</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Expiry Date</label>
             <input
               type="date"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.expiry_date ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, expiry_date: e.target.value || undefined }))}
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Amount</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Amount</label>
             <input
               type="number"
               step="0.01"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.amount ?? ""}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, amount: e.target.value ? Number(e.target.value) : undefined }))
@@ -256,27 +256,27 @@ export function MasterContractsPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Currency</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Currency</label>
             <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.currency ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, currency: e.target.value.toUpperCase() }))}
               placeholder="USD"
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Buyer Name</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Buyer Name</label>
             <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.buyer_name ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, buyer_name: e.target.value }))}
               placeholder="Customer / buyer"
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Bank Name</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Bank Name</label>
             <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.bank_name ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, bank_name: e.target.value }))}
               placeholder="Lien bank"
@@ -286,7 +286,7 @@ export function MasterContractsPage() {
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+              className="inline-flex items-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground shadow-sm hover:bg-brand-primary/90 disabled:opacity-50"
             >
               {saving ? "Saving..." : "Create Master Contract"}
             </button>
@@ -294,13 +294,13 @@ export function MasterContractsPage() {
         </form>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-5 py-3">
-          <h2 className="text-base font-semibold text-slate-800">Master Contract Register</h2>
+      <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+        <div className="flex items-center justify-between border-b border-border bg-surface-subtle/70 px-5 py-3">
+          <h2 className="text-base font-semibold text-text-primary">Master Contract Register</h2>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"
           >
             <option value="">All status</option>
             {STATUS_OPTIONS.map((value) => (
@@ -311,13 +311,13 @@ export function MasterContractsPage() {
           </select>
         </div>
         {loading ? (
-          <div className="p-12 text-center text-sm text-slate-500">Loading master contracts...</div>
+          <div className="p-12 text-center text-sm text-text-muted">Loading master contracts...</div>
         ) : items.length === 0 ? (
-          <div className="p-12 text-center text-sm text-slate-500">No master contract found.</div>
+          <div className="p-12 text-center text-sm text-text-muted">No master contract found.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-600">
+              <thead className="bg-surface-subtle text-left text-text-secondary">
                 <tr>
                   <th className="px-4 py-3">Reference</th>
                   <th className="px-4 py-3">Type</th>
@@ -330,18 +330,18 @@ export function MasterContractsPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {items.map((row) => (
-                  <tr key={row.id} className="cursor-pointer hover:bg-slate-50" onClick={() => void openDetail(row)}>
-                    <td className="px-4 py-2.5 font-medium text-slate-900">{row.reference || `#${row.id}`}</td>
-                    <td className="px-4 py-2.5 text-slate-700">{row.contract_type || "—"}</td>
-                    <td className="px-4 py-2.5 text-slate-700">{row.status || "—"}</td>
-                    <td className="px-4 py-2.5 text-slate-700">{row.buyer_name || "—"}</td>
-                    <td className="px-4 py-2.5 text-slate-700">
+                  <tr key={row.id} className="cursor-pointer hover:bg-surface-subtle" onClick={() => void openDetail(row)}>
+                    <td className="px-4 py-2.5 font-medium text-text-primary">{row.reference || `#${row.id}`}</td>
+                    <td className="px-4 py-2.5 text-text-secondary">{row.contract_type || "—"}</td>
+                    <td className="px-4 py-2.5 text-text-secondary">{row.status || "—"}</td>
+                    <td className="px-4 py-2.5 text-text-secondary">{row.buyer_name || "—"}</td>
+                    <td className="px-4 py-2.5 text-text-secondary">
                       {row.contract_date ? new Date(row.contract_date).toLocaleDateString() : "—"}
                     </td>
-                    <td className="px-4 py-2.5 text-right text-slate-700">
+                    <td className="px-4 py-2.5 text-right text-text-secondary">
                       {row.amount != null ? Number(row.amount).toLocaleString() : "—"}
                     </td>
-                    <td className="px-4 py-2.5 text-slate-700">{row.currency || "—"}</td>
+                    <td className="px-4 py-2.5 text-text-secondary">{row.currency || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -353,53 +353,53 @@ export function MasterContractsPage() {
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/30" onClick={() => setDrawerOpen(false)} aria-hidden />
-          <div className="relative flex h-full w-full max-w-2xl flex-col overflow-hidden bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <h2 className="text-lg font-semibold text-slate-900">
+          <div className="relative flex h-full w-full max-w-2xl flex-col overflow-hidden bg-surface-raised shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="text-lg font-semibold text-text-primary">
                 {selectedContract?.reference || "Master Contract Detail"}
               </h2>
               <button
                 type="button"
                 onClick={() => setDrawerOpen(false)}
-                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+                className="rounded-lg p-1.5 text-text-muted hover:bg-surface-subtle"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
               {drawerError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">
                   {drawerError}
                 </div>
               )}
               {drawerLoading ? (
-                <div className="p-6 text-sm text-slate-500">Loading details...</div>
+                <div className="p-6 text-sm text-text-muted">Loading details...</div>
               ) : selectedContract ? (
                 <>
                   {utilization && (
                     <div className={`rounded-lg border p-3 ${
-                      utilization.percent >= 90 ? "border-red-200 bg-red-50" : "border-indigo-200 bg-indigo-50"
+                      utilization.percent >= 90 ? "border-status-danger/20 bg-status-danger-subtle" : "border-brand-primary/30 bg-brand-primary/10"
                     }`}>
                       <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className={utilization.percent >= 90 ? "text-red-700" : "text-indigo-700"}>
+                        <span className={utilization.percent >= 90 ? "text-status-danger-foreground" : "text-brand-primary"}>
                           Utilization
                         </span>
-                        <span className={utilization.percent >= 90 ? "text-red-800" : "text-indigo-800"}>
+                        <span className={utilization.percent >= 90 ? "text-status-danger-foreground" : "text-brand-primary"}>
                           {utilization.percent.toFixed(1)}%
                         </span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-white/70">
+                      <div className="h-2 overflow-hidden rounded-full bg-surface-raised/70">
                         <div
-                          className={`h-full rounded-full ${utilization.percent >= 90 ? "bg-red-600" : "bg-indigo-600"}`}
+                          className={`h-full rounded-full ${utilization.percent >= 90 ? "bg-status-danger" : "bg-brand-primary"}`}
                           style={{ width: `${utilization.percent}%` }}
                         />
                       </div>
-                      <p className="mt-1 text-xs text-slate-700">
+                      <p className="mt-1 text-xs text-text-secondary">
                         Used: {utilization.used.toLocaleString()} | Remaining: {utilization.remaining.toLocaleString()} |
                         Total: {utilization.total.toLocaleString()}
                       </p>
                       {utilization.percent >= 90 && (
-                        <p className="mt-1 text-xs font-medium text-red-700">
+                        <p className="mt-1 text-xs font-medium text-status-danger-foreground">
                           Alert: Master contract is near fully utilized.
                         </p>
                       )}
@@ -408,9 +408,9 @@ export function MasterContractsPage() {
 
                   <form onSubmit={saveUpdate} className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-500">Type</label>
+                      <label className="mb-1 block text-xs font-medium text-text-muted">Type</label>
                       <select
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                         value={updateForm.contract_type ?? "EXPORT_LC"}
                         onChange={(e) => setUpdateForm((p) => ({ ...p, contract_type: e.target.value }))}
                       >
@@ -422,9 +422,9 @@ export function MasterContractsPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-500">Status</label>
+                      <label className="mb-1 block text-xs font-medium text-text-muted">Status</label>
                       <select
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                         value={updateForm.status ?? "DRAFT"}
                         onChange={(e) => setUpdateForm((p) => ({ ...p, status: e.target.value }))}
                       >
@@ -436,19 +436,19 @@ export function MasterContractsPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-500">Reference</label>
+                      <label className="mb-1 block text-xs font-medium text-text-muted">Reference</label>
                       <input
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                         value={updateForm.reference ?? ""}
                         onChange={(e) => setUpdateForm((p) => ({ ...p, reference: e.target.value }))}
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-500">Amount</label>
+                      <label className="mb-1 block text-xs font-medium text-text-muted">Amount</label>
                       <input
                         type="number"
                         step="0.01"
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                         value={updateForm.amount ?? ""}
                         onChange={(e) =>
                           setUpdateForm((p) => ({ ...p, amount: e.target.value ? Number(e.target.value) : undefined }))
@@ -456,9 +456,9 @@ export function MasterContractsPage() {
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-500">Currency</label>
+                      <label className="mb-1 block text-xs font-medium text-text-muted">Currency</label>
                       <input
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                         value={updateForm.currency ?? ""}
                         onChange={(e) =>
                           setUpdateForm((p) => ({ ...p, currency: e.target.value.toUpperCase() }))
@@ -466,9 +466,9 @@ export function MasterContractsPage() {
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-500">Buyer</label>
+                      <label className="mb-1 block text-xs font-medium text-text-muted">Buyer</label>
                       <input
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                         value={updateForm.buyer_name ?? ""}
                         onChange={(e) => setUpdateForm((p) => ({ ...p, buyer_name: e.target.value }))}
                       />
@@ -477,23 +477,23 @@ export function MasterContractsPage() {
                       <button
                         type="submit"
                         disabled={updating}
-                        className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                        className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground hover:bg-brand-primary/90 disabled:opacity-50"
                       >
                         {updating ? "Saving..." : "Save Contract"}
                       </button>
                     </div>
                   </form>
 
-                  <div className="rounded-lg border border-slate-200">
-                    <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                  <div className="rounded-lg border border-border">
+                    <div className="border-b border-border bg-surface-subtle px-3 py-2 text-sm font-medium text-text-secondary">
                       Child BTB LCs ({selectedLcs.length})
                     </div>
                     {selectedLcs.length === 0 ? (
-                      <div className="px-3 py-4 text-sm text-slate-500">No BTB LC linked yet.</div>
+                      <div className="px-3 py-4 text-sm text-text-muted">No BTB LC linked yet.</div>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="min-w-full text-sm">
-                          <thead className="bg-slate-50 text-left text-slate-600">
+                          <thead className="bg-surface-subtle text-left text-text-secondary">
                             <tr>
                               <th className="px-3 py-2">Reference</th>
                               <th className="px-3 py-2">Status</th>
@@ -519,7 +519,7 @@ export function MasterContractsPage() {
                   </div>
                 </>
               ) : (
-                <div className="p-6 text-sm text-slate-500">No contract selected.</div>
+                <div className="p-6 text-sm text-text-muted">No contract selected.</div>
               )}
             </div>
           </div>

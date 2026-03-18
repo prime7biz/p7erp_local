@@ -5,6 +5,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user, hash_password
+from app.common.authz import ensure_user_is_tenant_admin
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import AuditLog, CommissionMode, Role, Tenant, User
@@ -59,8 +60,10 @@ async def _get_tenant_user(db: AsyncSession, tenant_id: int, user_id: int) -> Us
 async def get_settings_config(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     return SettingsConfigResponse(
         tenant_id=tenant.id,
         company_name=tenant.name,
@@ -81,6 +84,7 @@ async def update_settings_config(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
 
     domain = (body.domain or "").strip() or None
     if domain != tenant.domain:
@@ -127,6 +131,7 @@ async def list_settings_roles(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     result = await db.execute(select(Role).where(Role.tenant_id == tenant.id).order_by(Role.display_name.asc()))
     rows = result.scalars().all()
     return [
@@ -149,6 +154,7 @@ async def create_settings_role(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     role_name = body.name.strip().lower()
     existing = await db.execute(
         select(Role).where(func.lower(Role.name) == role_name, Role.tenant_id == tenant.id)
@@ -191,6 +197,7 @@ async def update_settings_role(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     role = await _get_tenant_role(db, tenant.id, role_id)
 
     if body.display_name is not None:
@@ -225,6 +232,7 @@ async def delete_settings_role(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     role = await _get_tenant_role(db, tenant.id, role_id)
     if _is_protected_role(role):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Admin role cannot be deleted")
@@ -258,6 +266,7 @@ async def list_settings_users(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     result = await db.execute(
         select(User, Role)
         .join(Role, User.role_id == Role.id)
@@ -289,6 +298,7 @@ async def create_settings_user(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     role = await _get_tenant_role(db, tenant.id, body.role_id)
 
     email_value = body.email.strip().lower()
@@ -348,6 +358,7 @@ async def update_settings_user(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     target = await _get_tenant_user(db, tenant.id, target_user_id)
 
     if body.role_id is not None:
@@ -392,7 +403,9 @@ async def update_settings_user(
     await db.flush()
     await db.refresh(target)
     role_result = await db.execute(select(Role).where(Role.id == target.role_id))
-    role = role_result.scalar_one()
+    role = role_result.scalar_one_or_none()
+    if role is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User role not found")
     await log_action(
         db,
         tenant_id=tenant.id,
@@ -422,6 +435,7 @@ async def deactivate_settings_user(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     target = await _get_tenant_user(db, tenant.id, target_user_id)
     if target.id == user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot deactivate your own account")
@@ -458,6 +472,7 @@ async def activate_settings_user(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     target = await _get_tenant_user(db, tenant.id, target_user_id)
     target.is_active = True
     await db.flush()
@@ -492,6 +507,7 @@ async def delete_settings_user(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     target = await _get_tenant_user(db, tenant.id, target_user_id)
     if target.id == user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own account")
@@ -523,6 +539,7 @@ async def list_settings_audit_logs(
     created_to: datetime | None = Query(default=None),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
 
     filters = [AuditLog.tenant_id == tenant.id]
     if action:
@@ -576,6 +593,7 @@ async def list_backup_history(
     limit: int = Query(default=20, ge=1, le=100),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     result = await db.execute(
         select(AuditLog)
         .where(AuditLog.tenant_id == tenant.id, AuditLog.resource == "settings.backup")
@@ -603,6 +621,7 @@ async def trigger_backup_restore(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     backup_log = await db.get(AuditLog, backup_log_id)
     if not backup_log or backup_log.tenant_id != tenant.id or backup_log.resource != "settings.backup":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backup snapshot not found")
@@ -699,9 +718,11 @@ async def trigger_backup(
 async def get_settings_pricing(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Stub: return current plan/subscription for the tenant."""
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     return SettingsPricingResponse(
         plan="trial",
         display_name="Trial",
@@ -714,8 +735,10 @@ async def get_settings_pricing(
 async def list_settings_cheque_templates(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Stub: list cheque templates for the tenant (empty until implemented)."""
     _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
     return SettingsChequeTemplatesListResponse(items=[], total=0)
 

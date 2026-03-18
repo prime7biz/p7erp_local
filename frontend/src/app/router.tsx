@@ -64,7 +64,7 @@ export function AppRouter() {
         path="/app/*"
         element={
           <ProtectedRoute>
-            <Suspense fallback={<div className="min-h-[50vh] flex items-center justify-center text-sm text-slate-500">Loading app...</div>}>
+            <Suspense fallback={<div className="min-h-[50vh] flex items-center justify-center text-sm text-text-muted">Loading app...</div>}>
               <AppProtectedRouter />
             </Suspense>
           </ProtectedRoute>

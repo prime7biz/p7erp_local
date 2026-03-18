@@ -8,9 +8,9 @@ export function PlaceholderPage({ title }: { title?: string }) {
   const displayTitle = label.charAt(0).toUpperCase() + label.slice(1);
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-8 text-center">
-      <h2 className="text-xl font-semibold text-gray-900 mb-2">{displayTitle}</h2>
-      <p className="text-gray-500">This module is coming soon. Same structure as the reference; we will implement it in the next phases.</p>
+    <div className="rounded-xl border border-border bg-surface-raised p-8 text-center">
+      <h2 className="text-xl font-semibold text-text-primary mb-2">{displayTitle}</h2>
+      <p className="text-text-muted">This module is coming soon. Same structure as the reference; we will implement it in the next phases.</p>
     </div>
   );
 }

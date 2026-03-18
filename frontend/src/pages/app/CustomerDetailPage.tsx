@@ -42,19 +42,19 @@ export function CustomerDetailPage() {
   }, [id]);
 
   if (loading) {
-    return <div className="p-6 text-slate-500">Loading customer profile...</div>;
+    return <div className="p-6 text-text-muted">Loading customer profile...</div>;
   }
 
   if (error || !customer) {
     return (
       <div className="space-y-3 p-6">
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error || "Customer not found."}
         </div>
         <button
           type="button"
           onClick={() => navigate("/app/customers")}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+          className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
         >
           Back to customers
         </button>
@@ -84,12 +84,12 @@ export function CustomerDetailPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <Link to="/app/customers" className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-primary">
+          <Link to="/app/customers" className="inline-flex items-center gap-1 text-sm font-medium text-text-secondary hover:text-brand-primary">
             <ArrowLeft className="h-4 w-4" />
             Back to customers
           </Link>
-          <h1 className="mt-2 text-3xl font-bold text-slate-900">{customer.name}</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="mt-2 text-3xl font-bold text-text-primary">{customer.name}</h1>
+          <p className="mt-1 text-sm text-text-muted">
             {customer.customer_code} · {customer.customer_type ?? "Unspecified type"}
           </p>
         </div>
@@ -97,13 +97,13 @@ export function CustomerDetailPage() {
           <button
             type="button"
             onClick={() => window.open(`/app/customers/${customer.id}/print`, "_blank", "noopener,noreferrer")}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-1 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
           >
             Print / Save PDF
           </button>
           <Link
             to={`/app/customers/${customer.id}/edit`}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-1 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
           >
             <Pencil className="h-3.5 w-3.5" />
             Edit customer
@@ -111,8 +111,8 @@ export function CustomerDetailPage() {
           <span
             className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${
               (customer.status || "active").toLowerCase() === "active"
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-slate-100 text-slate-600"
+                ? "bg-status-success-subtle text-status-success-foreground"
+                : "bg-surface-subtle text-text-secondary"
             }`}
           >
             {customer.status || "active"}
@@ -121,116 +121,116 @@ export function CustomerDetailPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Legal Entity</div>
-          <div className="mt-1 font-semibold text-slate-900">{orDash(customer.legal_entity_name ?? customer.name)}</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Legal Entity</div>
+          <div className="mt-1 font-semibold text-text-primary">{orDash(customer.legal_entity_name ?? customer.name)}</div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Trade Name</div>
-          <div className="mt-1 font-semibold text-slate-900">{orDash(customer.trade_name)}</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Trade Name</div>
+          <div className="mt-1 font-semibold text-text-primary">{orDash(customer.trade_name)}</div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Tax / VAT</div>
-          <div className="mt-1 font-semibold text-slate-900">{orDash(customer.tax_id_vat_number)}</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Tax / VAT</div>
+          <div className="mt-1 font-semibold text-text-primary">{orDash(customer.tax_id_vat_number)}</div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Website</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Website</div>
           {customer.website ? (
-            <a href={customer.website} target="_blank" rel="noreferrer" className="mt-1 inline-block font-semibold text-primary hover:underline">
+            <a href={customer.website} target="_blank" rel="noreferrer" className="mt-1 inline-block font-semibold text-brand-primary hover:underline">
               Open website
             </a>
           ) : (
-            <div className="mt-1 font-semibold text-slate-900">—</div>
+            <div className="mt-1 font-semibold text-text-primary">—</div>
           )}
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-orange-500">
+        <section className="rounded-xl border border-border bg-surface-raised p-5">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-status-warning">
             <UserRound className="h-4 w-4" />
             Contact & Communication
           </div>
           <dl className="space-y-2 text-sm">
             <div className="flex items-center justify-between gap-3">
-              <dt className="text-slate-500">Primary Contact</dt>
-              <dd className="font-medium text-slate-800">{orDash(customer.primary_contact_name)}</dd>
+              <dt className="text-text-muted">Primary Contact</dt>
+              <dd className="font-medium text-text-primary">{orDash(customer.primary_contact_name)}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <dt className="text-slate-500">Designation</dt>
-              <dd className="font-medium text-slate-800">{orDash(customer.designation)}</dd>
+              <dt className="text-text-muted">Designation</dt>
+              <dd className="font-medium text-text-primary">{orDash(customer.designation)}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <dt className="inline-flex items-center gap-1 text-slate-500">
+              <dt className="inline-flex items-center gap-1 text-text-muted">
                 <Mail className="h-3.5 w-3.5" />
                 Email
               </dt>
-              <dd className="font-medium text-slate-800">{orDash(customer.contact_email ?? customer.email)}</dd>
+              <dd className="font-medium text-text-primary">{orDash(customer.contact_email ?? customer.email)}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <dt className="inline-flex items-center gap-1 text-slate-500">
+              <dt className="inline-flex items-center gap-1 text-text-muted">
                 <Phone className="h-3.5 w-3.5" />
                 Phone
               </dt>
-              <dd className="font-medium text-slate-800">{orDash(customer.contact_phone ?? customer.phone)}</dd>
+              <dd className="font-medium text-text-primary">{orDash(customer.contact_phone ?? customer.phone)}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <dt className="text-slate-500">Newsletter</dt>
-              <dd className="font-medium text-slate-800">{customer.subscribe_newsletter ? "Subscribed" : "Not subscribed"}</dd>
+              <dt className="text-text-muted">Newsletter</dt>
+              <dd className="font-medium text-text-primary">{customer.subscribe_newsletter ? "Subscribed" : "Not subscribed"}</dd>
             </div>
           </dl>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-orange-500">
+        <section className="rounded-xl border border-border bg-surface-raised p-5">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-status-warning">
             <Building2 className="h-4 w-4" />
             Profile Summary
           </div>
           <dl className="space-y-2 text-sm">
             <div className="flex items-center justify-between gap-3">
-              <dt className="text-slate-500">Customer Code</dt>
-              <dd className="font-medium text-slate-800">{customer.customer_code}</dd>
+              <dt className="text-text-muted">Customer Code</dt>
+              <dd className="font-medium text-text-primary">{customer.customer_code}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <dt className="text-slate-500">Customer Type</dt>
-              <dd className="font-medium text-slate-800">{orDash(customer.customer_type)}</dd>
+              <dt className="text-text-muted">Customer Type</dt>
+              <dd className="font-medium text-text-primary">{orDash(customer.customer_type)}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <dt className="text-slate-500">Status</dt>
-              <dd className="font-medium capitalize text-slate-800">{customer.status || "active"}</dd>
+              <dt className="text-text-muted">Status</dt>
+              <dd className="font-medium capitalize text-text-primary">{customer.status || "active"}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <dt className="text-slate-500">Created</dt>
-              <dd className="font-medium text-slate-800">{formatDateTime(customer.created_at)}</dd>
+              <dt className="text-text-muted">Created</dt>
+              <dd className="font-medium text-text-primary">{formatDateTime(customer.created_at)}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <dt className="text-slate-500">Updated</dt>
-              <dd className="font-medium text-slate-800">{formatDateTime(customer.updated_at)}</dd>
+              <dt className="text-text-muted">Updated</dt>
+              <dd className="font-medium text-text-primary">{formatDateTime(customer.updated_at)}</dd>
             </div>
           </dl>
         </section>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-orange-500">
+        <section className="rounded-xl border border-border bg-surface-raised p-5">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-status-warning">
             <MapPin className="h-4 w-4" />
             Billing Address
           </div>
-          <p className="text-sm text-slate-700">{billingAddress || "No billing address provided."}</p>
+          <p className="text-sm text-text-secondary">{billingAddress || "No billing address provided."}</p>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <section className="rounded-xl border border-border bg-surface-raised p-5">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <div className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-orange-500">
+            <div className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-status-warning">
               <MapPin className="h-4 w-4" />
               Shipping Address
             </div>
             {customer.same_as_billing ? (
-              <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-600">Same as billing</span>
+              <span className="rounded-full bg-status-warning-subtle px-2 py-0.5 text-[11px] font-semibold text-status-warning-foreground">Same as billing</span>
             ) : null}
           </div>
-          <p className="text-sm text-slate-700">{shippingAddress || "No shipping address provided."}</p>
+          <p className="text-sm text-text-secondary">{shippingAddress || "No shipping address provided."}</p>
         </section>
       </div>
     </div>

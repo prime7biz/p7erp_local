@@ -3,12 +3,16 @@ import { cn } from "@/lib/utils";
 export function QuotationStatusBadge({ status }: { status: string }) {
   const cls =
     status === "APPROVED"
-      ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+      ? "bg-status-success-subtle text-status-success-foreground border-status-success/25"
+      : status === "CONVERTED"
+        ? "bg-status-success-subtle text-status-success-foreground border-status-success/25"
       : status === "SUBMITTED"
-        ? "bg-blue-100 text-blue-700 border-blue-200"
+        ? "bg-status-info-subtle text-status-info-foreground border-status-info/25"
         : status === "SENT"
-          ? "bg-violet-100 text-violet-700 border-violet-200"
-          : "bg-gray-100 text-gray-700 border-gray-200";
+          ? "bg-brand-primary/10 text-brand-primary border-brand-primary/25"
+          : status === "REJECTED" || status === "CANCELLED"
+            ? "bg-status-danger-subtle text-status-danger-foreground border-status-danger/25"
+          : "bg-status-neutral-subtle text-status-neutral-foreground border-border";
 
   return <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold", cls)}>{status}</span>;
 }

@@ -53,32 +53,32 @@ export function CashForecastPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Cash Forecast</h1>
-        <p className="mt-1 text-sm text-slate-500">Scenario-based inflow/outflow planning copied from legacy finance workflow.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Cash Forecast</h1>
+        <p className="mt-1 text-sm text-text-muted">Scenario-based inflow/outflow planning copied from legacy finance workflow.</p>
       </div>
 
       {summary ? (
         <div className="grid gap-3 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="text-xs text-slate-500">Expected Inflow</div>
-            <div className="text-xl font-semibold text-emerald-600">{summary.expected_inflows.toLocaleString()}</div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3">
+            <div className="text-xs text-text-muted">Expected Inflow</div>
+            <div className="text-xl font-semibold text-status-success">{summary.expected_inflows.toLocaleString()}</div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="text-xs text-slate-500">Expected Outflow</div>
-            <div className="text-xl font-semibold text-rose-600">{summary.expected_outflows.toLocaleString()}</div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3">
+            <div className="text-xs text-text-muted">Expected Outflow</div>
+            <div className="text-xl font-semibold text-status-danger-foreground">{summary.expected_outflows.toLocaleString()}</div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="text-xs text-slate-500">Net Cash</div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3">
+            <div className="text-xs text-text-muted">Net Cash</div>
             <div className="text-xl font-semibold">{summary.net_cash_flow.toLocaleString()}</div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="text-xs text-slate-500">Scenarios</div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3">
+            <div className="text-xs text-text-muted">Scenarios</div>
             <div className="text-xl font-semibold">{summary.scenarios_count}</div>
           </div>
         </div>
       ) : null}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-4">
+      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 md:grid-cols-4">
         <input
           className="rounded border px-3 py-2 text-sm"
           placeholder="Scenario Name"
@@ -99,23 +99,23 @@ export function CashForecastPage() {
           value={form.months ?? 6}
           onChange={(e) => setForm((p) => ({ ...p, months: Number(e.target.value) }))}
         />
-        <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white">Create Scenario</button>
+        <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-text-inverse">Create Scenario</button>
       </form>
 
-      {error ? <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
 
       <div className="space-y-3">
         {loading ? (
-          <div className="rounded border bg-white px-3 py-4 text-sm text-slate-500">Loading scenarios...</div>
+          <div className="rounded border bg-surface-raised px-3 py-4 text-sm text-text-muted">Loading scenarios...</div>
         ) : rows.length === 0 ? (
-          <div className="rounded border bg-white px-3 py-4 text-sm text-slate-500">No scenarios yet.</div>
+          <div className="rounded border bg-surface-raised px-3 py-4 text-sm text-text-muted">No scenarios yet.</div>
         ) : (
           rows.map((r) => (
-            <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4">
+            <div key={r.id} className="rounded-xl border border-border bg-surface-raised p-4">
               <div className="mb-2 flex items-center justify-between">
                 <div>
                   <div className="font-semibold">{r.name}</div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-text-muted">
                     Start {r.start_date} | Months {r.months} | {r.status}
                   </div>
                 </div>
@@ -126,7 +126,7 @@ export function CashForecastPage() {
               {r.lines.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50 text-left">
+                    <thead className="bg-surface-subtle text-left">
                       <tr>
                         <th className="px-2 py-1">Month</th>
                         <th className="px-2 py-1">Inflow</th>

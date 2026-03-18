@@ -71,6 +71,7 @@ def _export_case_to_response(r: ExportCase) -> ExportCaseResponse:
         status=r.status,
         case_date=r.case_date.isoformat() if r.case_date else None,
         amount=float(r.amount) if r.amount is not None else None,
+        trade_case_id=r.trade_case_id,
         created_at=r.created_at.isoformat(),
         updated_at=r.updated_at.isoformat(),
     )
@@ -224,6 +225,7 @@ async def create_export_case(
         status=body.status or "DRAFT",
         case_date=body.case_date,
         amount=body.amount,
+        trade_case_id=body.trade_case_id,
     )
     db.add(row)
     await db.flush()

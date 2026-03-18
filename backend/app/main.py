@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -36,8 +37,12 @@ from app.modules.settings.router import router as settings_router
 from app.modules.commercial.router import router as commercial_router
 from app.modules.parties.router import router as parties_router
 from app.modules.ai_tool.router import router as ai_tool_router
+from app.modules.tna_unified.router import router as tna_unified_router
+from app.modules.trade_case.router import router as trade_case_router
+from app.modules.logistics.router import router as logistics_router
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 if not origins:
@@ -68,7 +73,7 @@ async def _run_alert_scan_all_tenants() -> None:
         except asyncio.CancelledError:
             break
         except Exception:
-            pass
+            logger.exception("Scheduled merch alert scan failed")
         await asyncio.sleep(60 * 14)  # 15 min total between runs
 
 
@@ -132,6 +137,9 @@ app.include_router(settings_router, prefix=settings.api_v1_prefix)
 app.include_router(commercial_router, prefix=settings.api_v1_prefix)
 app.include_router(parties_router, prefix=settings.api_v1_prefix)
 app.include_router(ai_tool_router, prefix=settings.api_v1_prefix)
+app.include_router(tna_unified_router, prefix=settings.api_v1_prefix)
+app.include_router(trade_case_router, prefix=settings.api_v1_prefix)
+app.include_router(logistics_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/health")

@@ -11,9 +11,9 @@ interface Props {
 
 export function AiSessionList({ sessions, activeSessionId, loading, onSelect, onCreate }: Props) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-border bg-surface-raised p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-800">AI Sessions</h2>
+        <h2 className="text-sm font-semibold text-text-primary">AI Sessions</h2>
         <button
           type="button"
           onClick={onCreate}
@@ -23,9 +23,9 @@ export function AiSessionList({ sessions, activeSessionId, loading, onSelect, on
         </button>
       </div>
       {loading ? (
-        <p className="text-sm text-slate-500">Loading sessions...</p>
+        <p className="text-sm text-text-muted">Loading sessions...</p>
       ) : sessions.length === 0 ? (
-        <p className="text-sm text-slate-500">No sessions yet.</p>
+        <p className="text-sm text-text-muted">No sessions yet.</p>
       ) : (
         <div className="space-y-2">
           {sessions.map((session) => {
@@ -36,11 +36,11 @@ export function AiSessionList({ sessions, activeSessionId, loading, onSelect, on
                 type="button"
                 onClick={() => onSelect(session.id)}
                 className={`w-full rounded-lg border px-3 py-2 text-left ${
-                  active ? "border-primary bg-indigo-50" : "border-slate-200 bg-white hover:bg-slate-50"
+                  active ? "border-primary bg-status-info-subtle" : "border-border bg-surface-raised hover:bg-surface-subtle"
                 }`}
               >
-                <div className="truncate text-sm font-medium text-slate-800">{session.title || "Untitled Session"}</div>
-                <div className="mt-1 text-xs text-slate-500">{formatRelative(session.last_message_at || session.created_at)}</div>
+                <div className="truncate text-sm font-medium text-text-primary">{session.title || "Untitled Session"}</div>
+                <div className="mt-1 text-xs text-text-muted">{formatRelative(session.last_message_at || session.created_at)}</div>
               </button>
             );
           })}

@@ -196,20 +196,20 @@ export function PartiesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Parties</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-text-primary">Parties</h1>
+        <p className="text-sm text-text-muted">
           Manage buying houses, agents, and customer intermediary assignments.
         </p>
-        <p className="text-xs text-slate-500 mt-1">Fields marked with ** are mandatory.</p>
+        <p className="text-xs text-text-muted mt-1">Fields marked with ** are mandatory.</p>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-2">
+      <div className="rounded-xl border border-border bg-surface-raised p-2">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <button
             type="button"
             onClick={() => setActiveTab("buying_houses")}
             className={`rounded-lg px-3 py-2 text-sm font-medium ${
-              activeTab === "buying_houses" ? "bg-primary text-white" : "bg-slate-100 text-slate-700"
+              activeTab === "buying_houses" ? "bg-brand-primary text-brand-primary-foreground" : "bg-surface-subtle text-text-secondary"
             }`}
           >
             Buying Houses
@@ -218,7 +218,7 @@ export function PartiesPage() {
             type="button"
             onClick={() => setActiveTab("agents")}
             className={`rounded-lg px-3 py-2 text-sm font-medium ${
-              activeTab === "agents" ? "bg-primary text-white" : "bg-slate-100 text-slate-700"
+              activeTab === "agents" ? "bg-brand-primary text-brand-primary-foreground" : "bg-surface-subtle text-text-secondary"
             }`}
           >
             Agents
@@ -227,7 +227,7 @@ export function PartiesPage() {
             type="button"
             onClick={() => setActiveTab("links")}
             className={`rounded-lg px-3 py-2 text-sm font-medium ${
-              activeTab === "links" ? "bg-primary text-white" : "bg-slate-100 text-slate-700"
+              activeTab === "links" ? "bg-brand-primary text-brand-primary-foreground" : "bg-surface-subtle text-text-secondary"
             }`}
           >
             Customer Links
@@ -236,22 +236,22 @@ export function PartiesPage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500">
+        <div className="rounded-xl border border-border bg-surface-raised p-8 text-center text-text-muted">
           Loading parties...
         </div>
       ) : (
         <>
           {(activeTab === "buying_houses" || activeTab === "agents") && (
             <div className="grid gap-4 lg:grid-cols-3">
-              <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white overflow-hidden">
+              <div className="lg:col-span-2 rounded-xl border border-border bg-surface-raised overflow-hidden">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+                  <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
                     <tr>
                       <th className="px-4 py-2">Code</th>
                       <th className="px-4 py-2">Name</th>
@@ -262,25 +262,25 @@ export function PartiesPage() {
                   </thead>
                   <tbody>
                     {(activeTab === "buying_houses" ? buyingHouses : agents).map((row) => (
-                      <tr key={row.id} className="border-b border-gray-100 last:border-0">
-                        <td className="px-4 py-2 text-gray-700">{row.code}</td>
-                        <td className="px-4 py-2 font-medium text-gray-900">{row.name}</td>
-                        <td className="px-4 py-2 text-gray-700">
+                      <tr key={row.id} className="border-b border-border-subtle last:border-0">
+                        <td className="px-4 py-2 text-text-secondary">{row.code}</td>
+                        <td className="px-4 py-2 font-medium text-text-primary">{row.name}</td>
+                        <td className="px-4 py-2 text-text-secondary">
                           {row.contact_name || row.contact_email || row.contact_phone || "—"}
                         </td>
-                        <td className="px-4 py-2 text-gray-700">{row.is_active ? "ACTIVE" : "INACTIVE"}</td>
+                        <td className="px-4 py-2 text-text-secondary">{row.is_active ? "ACTIVE" : "INACTIVE"}</td>
                         <td className="px-4 py-2 text-right space-x-2">
                           <button
                             type="button"
                             onClick={() => beginEditIntermediary(row)}
-                            className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                            className="rounded border border-border-strong px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                           >
                             Edit
                           </button>
                           <button
                             type="button"
                             onClick={() => removeIntermediary(row.id)}
-                            className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                            className="rounded border border-status-danger/20 px-2 py-1 text-xs text-status-danger hover:bg-status-danger-subtle"
                           >
                             Delete
                           </button>
@@ -291,58 +291,58 @@ export function PartiesPage() {
                 </table>
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-                <h2 className="text-sm font-semibold text-gray-900">
+              <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
+                <h2 className="text-sm font-semibold text-text-primary">
                   {editingIntermediary ? "Edit party" : "New party"}
                 </h2>
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Name **</label>
+                  <label className="block text-xs text-text-secondary mb-1">Name **</label>
                   <input
                     type="text"
                     value={intermediaryForm.name}
                     onChange={(e) =>
                       setIntermediaryForm((prev) => ({ ...prev, name: e.target.value }))
                     }
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Contact person</label>
+                  <label className="block text-xs text-text-secondary mb-1">Contact person</label>
                   <input
                     type="text"
                     value={intermediaryForm.contact_name ?? ""}
                     onChange={(e) =>
                       setIntermediaryForm((prev) => ({ ...prev, contact_name: e.target.value }))
                     }
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">Email</label>
+                    <label className="block text-xs text-text-secondary mb-1">Email</label>
                     <input
                       type="email"
                       value={intermediaryForm.contact_email ?? ""}
                       onChange={(e) =>
                         setIntermediaryForm((prev) => ({ ...prev, contact_email: e.target.value }))
                       }
-                      className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">Phone</label>
+                    <label className="block text-xs text-text-secondary mb-1">Phone</label>
                     <input
                       type="text"
                       value={intermediaryForm.contact_phone ?? ""}
                       onChange={(e) =>
                         setIntermediaryForm((prev) => ({ ...prev, contact_phone: e.target.value }))
                       }
-                      className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Status</label>
+                  <label className="block text-xs text-text-secondary mb-1">Status</label>
                   <select
                     value={intermediaryForm.is_active ? "ACTIVE" : "INACTIVE"}
                     onChange={(e) =>
@@ -351,7 +351,7 @@ export function PartiesPage() {
                         is_active: e.target.value === "ACTIVE",
                       }))
                     }
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                   >
                     <option value="ACTIVE">ACTIVE</option>
                     <option value="INACTIVE">INACTIVE</option>
@@ -361,7 +361,7 @@ export function PartiesPage() {
                   <button
                     type="button"
                     onClick={saveIntermediary}
-                    className="rounded bg-primary px-3 py-2 text-sm font-semibold text-white"
+                    className="rounded bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground"
                   >
                     {editingIntermediary ? "Update" : "Create"}
                   </button>
@@ -370,7 +370,7 @@ export function PartiesPage() {
                     onClick={() =>
                       beginCreateIntermediary(activeTab === "agents" ? "AGENT" : "BUYING_HOUSE")
                     }
-                    className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                    className="rounded border border-border-strong px-3 py-2 text-sm text-text-secondary"
                   >
                     Clear
                   </button>
@@ -381,9 +381,9 @@ export function PartiesPage() {
 
           {activeTab === "links" && (
             <div className="grid gap-4 lg:grid-cols-3">
-              <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white overflow-hidden">
+              <div className="lg:col-span-2 rounded-xl border border-border bg-surface-raised overflow-hidden">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+                  <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
                     <tr>
                       <th className="px-4 py-2">Customer</th>
                       <th className="px-4 py-2">Intermediary</th>
@@ -393,12 +393,12 @@ export function PartiesPage() {
                   </thead>
                   <tbody>
                     {links.map((row) => (
-                      <tr key={row.id} className="border-b border-gray-100 last:border-0">
-                        <td className="px-4 py-2 text-gray-700">{customerName(row.customer_id)}</td>
-                        <td className="px-4 py-2 text-gray-900 font-medium">
+                      <tr key={row.id} className="border-b border-border-subtle last:border-0">
+                        <td className="px-4 py-2 text-text-secondary">{customerName(row.customer_id)}</td>
+                        <td className="px-4 py-2 text-text-primary font-medium">
                           {row.intermediary_name ?? row.intermediary_code ?? `#${row.intermediary_id}`}
                         </td>
-                        <td className="px-4 py-2 text-gray-700">
+                        <td className="px-4 py-2 text-text-secondary">
                           {row.commission_type || row.commission_value != null
                             ? `${row.commission_type ?? "-"} / ${row.commission_value ?? "-"}`
                             : "—"}
@@ -407,14 +407,14 @@ export function PartiesPage() {
                           <button
                             type="button"
                             onClick={() => beginEditLink(row)}
-                            className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                            className="rounded border border-border-strong px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                           >
                             Edit
                           </button>
                           <button
                             type="button"
                             onClick={() => removeLink(row.id)}
-                            className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                            className="rounded border border-status-danger/20 px-2 py-1 text-xs text-status-danger hover:bg-status-danger-subtle"
                           >
                             Delete
                           </button>
@@ -425,18 +425,18 @@ export function PartiesPage() {
                 </table>
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-                <h2 className="text-sm font-semibold text-gray-900">
+              <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
+                <h2 className="text-sm font-semibold text-text-primary">
                   {editingLink ? "Edit customer link" : "New customer link"}
                 </h2>
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Customer **</label>
+                  <label className="block text-xs text-text-secondary mb-1">Customer **</label>
                   <select
                     value={linkForm.customer_id || ""}
                     onChange={(e) =>
                       setLinkForm((prev) => ({ ...prev, customer_id: Number(e.target.value) || 0 }))
                     }
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                   >
                     <option value="">Select customer...</option>
                     {customers.map((c) => (
@@ -447,7 +447,7 @@ export function PartiesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Intermediary **</label>
+                  <label className="block text-xs text-text-secondary mb-1">Intermediary **</label>
                   <select
                     value={linkForm.intermediary_id || ""}
                     onChange={(e) =>
@@ -456,7 +456,7 @@ export function PartiesPage() {
                         intermediary_id: Number(e.target.value) || 0,
                       }))
                     }
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                   >
                     <option value="">Select intermediary...</option>
                     {allIntermediaries.map((p) => (
@@ -468,7 +468,7 @@ export function PartiesPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">Comm. type</label>
+                    <label className="block text-xs text-text-secondary mb-1">Comm. type</label>
                     <select
                       value={linkForm.commission_type ?? ""}
                       onChange={(e) =>
@@ -479,7 +479,7 @@ export function PartiesPage() {
                             : undefined,
                         }))
                       }
-                      className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                     >
                       <option value="">None</option>
                       <option value="PERCENTAGE">PERCENTAGE</option>
@@ -487,7 +487,7 @@ export function PartiesPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">Comm. value</label>
+                    <label className="block text-xs text-text-secondary mb-1">Comm. value</label>
                     <input
                       type="number"
                       step="0.01"
@@ -498,11 +498,11 @@ export function PartiesPage() {
                           commission_value: e.target.value ? Number(e.target.value) : undefined,
                         }))
                       }
-                      className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                     />
                   </div>
                 </div>
-                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <label className="inline-flex items-center gap-2 text-sm text-text-secondary">
                   <input
                     type="checkbox"
                     checked={Boolean(linkForm.is_primary)}
@@ -516,14 +516,14 @@ export function PartiesPage() {
                   <button
                     type="button"
                     onClick={saveLink}
-                    className="rounded bg-primary px-3 py-2 text-sm font-semibold text-white"
+                    className="rounded bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground"
                   >
                     {editingLink ? "Update" : "Create"}
                   </button>
                   <button
                     type="button"
                     onClick={beginCreateLink}
-                    className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                    className="rounded border border-border-strong px-3 py-2 text-sm text-text-secondary"
                   >
                     Clear
                   </button>

@@ -70,28 +70,28 @@ export function PurchaseWorkflowPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Purchase & AP Workflow</h1>
-        <p className="text-sm text-slate-500">Review purchase liabilities and prepare payments from one place.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Purchase & AP Workflow</h1>
+        <p className="text-sm text-text-muted">Review purchase liabilities and prepare payments from one place.</p>
       </div>
-      {error ? <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
       <div className="grid gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs uppercase text-slate-500">Payable Bills</p>
-          <p className="text-xl font-semibold text-slate-900">{overview?.payable_bills_count ?? 0}</p>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <p className="text-xs uppercase text-text-muted">Payable Bills</p>
+          <p className="text-xl font-semibold text-text-primary">{overview?.payable_bills_count ?? 0}</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs uppercase text-slate-500">Open Payables</p>
-          <p className="text-xl font-semibold text-slate-900">{overview?.open_payable_count ?? 0}</p>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <p className="text-xs uppercase text-text-muted">Open Payables</p>
+          <p className="text-xl font-semibold text-text-primary">{overview?.open_payable_count ?? 0}</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs uppercase text-slate-500">Open Amount</p>
-          <p className="text-xl font-semibold text-slate-900">{(overview?.open_payable_amount ?? 0).toLocaleString()}</p>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <p className="text-xs uppercase text-text-muted">Open Amount</p>
+          <p className="text-xl font-semibold text-text-primary">{(overview?.open_payable_amount ?? 0).toLocaleString()}</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs uppercase text-slate-500">Due 7 Days</p>
-          <p className="text-xl font-semibold text-amber-700">{(overview?.due_next_7_days_amount ?? 0).toLocaleString()}</p>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <p className="text-xs uppercase text-text-muted">Due 7 Days</p>
+          <p className="text-xl font-semibold text-status-warning-foreground">{(overview?.due_next_7_days_amount ?? 0).toLocaleString()}</p>
         </div>
       </div>
 
@@ -99,14 +99,14 @@ export function PurchaseWorkflowPage() {
         <Link to="/app/accounts/outstanding-bills" className="rounded border px-3 py-2 text-sm">
           Open Outstanding Bills
         </Link>
-        <Link to="/app/banking/payment-runs" className="rounded bg-slate-900 px-3 py-2 text-sm text-white">
+        <Link to="/app/banking/payment-runs" className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">
           Create Payment Run
         </Link>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">Bill No</th>
               <th className="px-2 py-1">Party</th>
@@ -136,12 +136,12 @@ export function PurchaseWorkflowPage() {
         </table>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <div className="border-b bg-slate-50 px-3 py-2">
-          <h2 className="text-sm font-semibold text-slate-700">Approved Purchase Orders (Create AP Bill from PO)</h2>
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+        <div className="border-b bg-surface-subtle px-3 py-2">
+          <h2 className="text-sm font-semibold text-text-secondary">Approved Purchase Orders (Create AP Bill from PO)</h2>
         </div>
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">PO Code</th>
               <th className="px-2 py-1">Supplier</th>
@@ -178,12 +178,12 @@ export function PurchaseWorkflowPage() {
         </table>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <div className="border-b bg-slate-50 px-3 py-2">
-          <h2 className="text-sm font-semibold text-slate-700">Received GRNs (Create AP Bill from actual receipt)</h2>
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+        <div className="border-b bg-surface-subtle px-3 py-2">
+          <h2 className="text-sm font-semibold text-text-secondary">Received GRNs (Create AP Bill from actual receipt)</h2>
         </div>
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">GRN Code</th>
               <th className="px-2 py-1">PO ID</th>

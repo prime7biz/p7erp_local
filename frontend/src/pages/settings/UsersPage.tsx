@@ -167,19 +167,19 @@ export function UsersPage() {
 
       {(error || success) && (
         <div className="space-y-2">
-          {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-          {success && <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div>}
+          {error && <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div>}
+          {success && <div className="rounded border border-status-success/20 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div>}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-        <h2 className="font-semibold text-gray-900 text-sm">{editingId ? "Edit user" : "Add user"}</h2>
-        <p className="text-xs text-gray-500">Fields marked with ** are mandatory.</p>
+      <form onSubmit={handleSubmit} className="rounded-xl border border-border bg-white p-4 space-y-3">
+        <h2 className="font-semibold text-text-primary text-sm">{editingId ? "Edit user" : "Add user"}</h2>
+        <p className="text-xs text-text-muted">Fields marked with ** are mandatory.</p>
         <div className="grid gap-3 md:grid-cols-2">
           <input
             value={form.email}
             onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
             placeholder="Email **"
             type="email"
             required
@@ -187,26 +187,26 @@ export function UsersPage() {
           <input
             value={form.username}
             onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))}
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
             placeholder="Username **"
             required
           />
           <input
             value={form.first_name}
             onChange={(e) => setForm((prev) => ({ ...prev, first_name: e.target.value }))}
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
             placeholder="First name"
           />
           <input
             value={form.last_name}
             onChange={(e) => setForm((prev) => ({ ...prev, last_name: e.target.value }))}
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
             placeholder="Last name"
           />
           <select
             value={form.role_id}
             onChange={(e) => setForm((prev) => ({ ...prev, role_id: Number(e.target.value) }))}
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
             required
           >
             {roles.map((role) => (
@@ -218,14 +218,14 @@ export function UsersPage() {
           <input
             value={form.password}
             onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
             placeholder={editingId ? "New password (optional)" : "Password **"}
             type="password"
             required={!editingId}
           />
         </div>
 
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+        <label className="inline-flex items-center gap-2 text-sm text-text-secondary">
           <input
             type="checkbox"
             checked={form.is_active}
@@ -246,7 +246,7 @@ export function UsersPage() {
             <button
               type="button"
               onClick={resetForm}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700"
+              className="rounded-lg border border-border px-4 py-2 text-sm text-text-secondary"
             >
               Cancel edit
             </button>
@@ -278,19 +278,19 @@ export function UsersPage() {
                   <button
                     type="button"
                     onClick={() => setOpenActionsId(openActionsId === u.id ? null : u.id)}
-                    className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                    className="rounded-lg border border-border px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                   >
                     Actions
                   </button>
                   {openActionsId === u.id && (
-                    <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                    <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
                       <button
                         type="button"
                         onClick={() => {
                           startEdit(u);
                           setOpenActionsId(null);
                         }}
-                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                       >
                         Edit
                       </button>
@@ -301,7 +301,7 @@ export function UsersPage() {
                             handleDeactivate(u);
                             setOpenActionsId(null);
                           }}
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                         >
                           Deactivate
                         </button>
@@ -312,7 +312,7 @@ export function UsersPage() {
                             handleActivate(u);
                             setOpenActionsId(null);
                           }}
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                         >
                           Activate
                         </button>
@@ -323,7 +323,7 @@ export function UsersPage() {
                           handleDelete(u);
                           setOpenActionsId(null);
                         }}
-                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger-foreground hover:bg-status-danger-subtle"
                       >
                         Delete
                       </button>

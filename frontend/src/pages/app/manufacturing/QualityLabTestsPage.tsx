@@ -64,23 +64,23 @@ export function QualityLabTestsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Lab Tests</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-text-primary">Lab Tests</h1>
+        <p className="text-sm text-text-muted">
           Record and view lab test results (fabric, trim, or finished goods) linked to work orders.
         </p>
       </div>
       {error ? (
-        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div>
       ) : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">New Lab Test</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">New Lab Test</h2>
         <form
           className="grid grid-cols-1 gap-3 md:grid-cols-3"
           onSubmit={submit}
         >
           <input
-            className="rounded border border-slate-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
             type="number"
             min={1}
             placeholder="Work Order ID"
@@ -88,7 +88,7 @@ export function QualityLabTestsPage() {
             onChange={(e) => setForm((prev) => ({ ...prev, work_order_id: Number(e.target.value) }))}
           />
           <input
-            className="rounded border border-slate-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
             type="number"
             min={0}
             placeholder="Operation ID (optional)"
@@ -96,7 +96,7 @@ export function QualityLabTestsPage() {
             onChange={(e) => setForm((prev) => ({ ...prev, work_order_operation_id: e.target.value }))}
           />
           <select
-            className="rounded border border-slate-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
             value={form.result}
             onChange={(e) => setForm((prev) => ({ ...prev, result: e.target.value }))}
           >
@@ -105,19 +105,19 @@ export function QualityLabTestsPage() {
             <option value="reject">Reject</option>
           </select>
           <input
-            className="rounded border border-slate-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
             placeholder="Defect code (optional)"
             value={form.defect_code}
             onChange={(e) => setForm((prev) => ({ ...prev, defect_code: e.target.value }))}
           />
           <input
-            className="rounded border border-slate-300 px-3 py-2 text-sm md:col-span-2"
+            className="rounded border border-border px-3 py-2 text-sm md:col-span-2"
             placeholder="Remarks"
             value={form.remarks}
             onChange={(e) => setForm((prev) => ({ ...prev, remarks: e.target.value }))}
           />
           <button
-            className="rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+            className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60"
             disabled={saving}
             type="submit"
           >
@@ -126,9 +126,9 @@ export function QualityLabTestsPage() {
         </form>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr>
               <th className="px-4 py-2">ID</th>
               <th className="px-4 py-2">Work Order</th>
@@ -141,7 +141,7 @@ export function QualityLabTestsPage() {
           </thead>
           <tbody>
             {checks.map((row) => (
-              <tr key={row.id} className="border-t border-slate-100">
+              <tr key={row.id} className="border-t border-border-subtle">
                 <td className="px-4 py-2">{row.id}</td>
                 <td className="px-4 py-2">{row.work_order_id}</td>
                 <td className="px-4 py-2">{row.work_order_operation_id ?? "–"}</td>
@@ -150,14 +150,14 @@ export function QualityLabTestsPage() {
                 <td className="px-4 py-2 max-w-[200px] truncate" title={row.remarks ?? ""}>
                   {row.remarks ?? "–"}
                 </td>
-                <td className="px-4 py-2 text-slate-600">
+                <td className="px-4 py-2 text-text-secondary">
                   {row.created_at ? new Date(row.created_at).toLocaleDateString() : "–"}
                 </td>
               </tr>
             ))}
             {checks.length === 0 ? (
               <tr>
-                <td className="px-4 py-8 text-center text-slate-500" colSpan={7}>
+                <td className="px-4 py-8 text-center text-text-muted" colSpan={7}>
                   No lab tests found. Create one above or ensure checks use type &quot;lab&quot;.
                 </td>
               </tr>

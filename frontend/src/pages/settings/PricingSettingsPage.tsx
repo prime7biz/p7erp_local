@@ -15,32 +15,32 @@ export function PricingSettingsPage() {
   }, []);
 
   if (loading) return <p>Loading subscription...</p>;
-  if (error) return <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>;
+  if (error) return <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">{error}</div>;
 
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h2 className="text-xl font-bold text-gray-900">Subscription & Pricing</h2>
-        <p className="text-sm text-gray-600">
+        <h2 className="text-xl font-bold text-text-primary">Subscription & Pricing</h2>
+        <p className="text-sm text-text-muted">
           Current plan and usage for this tenant.
         </p>
       </div>
       {data && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
+        <div className="rounded-xl border border-border bg-surface-raised p-6">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-lg font-semibold text-gray-900">{data.display_name}</span>
+            <span className="text-lg font-semibold text-text-primary">{data.display_name}</span>
             {data.max_users != null && (
-              <span className="text-sm text-gray-500">Up to {data.max_users} users</span>
+              <span className="text-sm text-text-muted">Up to {data.max_users} users</span>
             )}
           </div>
-          <ul className="space-y-2 text-sm text-gray-700">
+          <ul className="space-y-2 text-sm text-text-secondary">
             {data.features.map((f, i) => (
               <li key={i} className="flex items-center gap-2">
-                <span className="text-emerald-500">✓</span> {f}
+                <span className="text-status-success-foreground">✓</span> {f}
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-sm text-gray-500">
+          <p className="mt-4 text-sm text-text-muted">
             Contact support to upgrade or change your plan.
           </p>
         </div>

@@ -70,13 +70,13 @@ export function AppBottomNav({ tenantType }: { tenantType: TenantType }) {
 
   return (
     <>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-gray-50/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/85 lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface-subtle/95 backdrop-blur supports-[backdrop-filter]:bg-surface-subtle/85 lg:hidden">
         <div className="grid h-16 grid-cols-5 px-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const active = isTabActive(location.pathname, tab, hasPrimaryActive, isMoreOpen);
             const baseClassName = `flex h-full flex-col items-center justify-center gap-1 rounded-md text-[11px] font-medium transition ${
-              active ? "bg-primary/10 text-primary" : "text-gray-600 hover:text-gray-900"
+              active ? "bg-brand-primary/10 text-brand-primary" : "text-text-secondary hover:text-text-primary"
             }`;
 
             if (tab.isMore) {
@@ -121,14 +121,14 @@ export function AppBottomNav({ tenantType }: { tenantType: TenantType }) {
           />
           <div
             id="mobile-more-menu"
-            className="absolute inset-x-0 bottom-0 max-h-[75vh] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-gray-50 p-4 shadow-2xl"
+            className="absolute inset-x-0 bottom-0 max-h-[75vh] overflow-y-auto rounded-t-2xl border-t border-border bg-surface-subtle p-4 shadow-2xl"
           >
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-900">All Modules</h2>
+              <h2 className="text-sm font-semibold text-text-primary">All Modules</h2>
               <button
                 type="button"
                 onClick={() => setIsMoreOpen(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-base"
                 aria-label="Close modules"
               >
                 <X className="h-4 w-4" />
@@ -139,10 +139,10 @@ export function AppBottomNav({ tenantType }: { tenantType: TenantType }) {
               {filteredSections.map((section) => {
                 const SectionIcon = section.icon;
                 return (
-                  <section key={section.section} className="rounded-xl border border-gray-200 bg-white p-3">
+                  <section key={section.section} className="rounded-xl border border-border bg-surface-raised p-3">
                     <div className="mb-2 flex items-center gap-2">
-                      <SectionIcon className="h-4 w-4 text-gray-700" />
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{section.section}</h3>
+                      <SectionIcon className="h-4 w-4 text-text-secondary" />
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">{section.section}</h3>
                     </div>
                     <div className="space-y-1">
                       {section.directLink && (
@@ -150,7 +150,7 @@ export function AppBottomNav({ tenantType }: { tenantType: TenantType }) {
                           to={section.directLink}
                           onMouseEnter={() => prefetchSidebarRoute(section.directLink as string)}
                           onFocus={() => prefetchSidebarRoute(section.directLink as string)}
-                          className="block rounded-md px-2 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          className="block rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
                         >
                           {section.section}
                         </Link>
@@ -163,9 +163,9 @@ export function AppBottomNav({ tenantType }: { tenantType: TenantType }) {
                             to={item.href}
                             onMouseEnter={() => prefetchSidebarRoute(item.href)}
                             onFocus={() => prefetchSidebarRoute(item.href)}
-                            className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
                           >
-                            <ItemIcon className="h-4 w-4 text-gray-500" />
+                            <ItemIcon className="h-4 w-4 text-text-muted" />
                             <span className="truncate">{item.label}</span>
                           </Link>
                         );

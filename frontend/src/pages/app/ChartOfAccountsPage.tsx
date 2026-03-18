@@ -167,28 +167,28 @@ export function ChartOfAccountsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Chart of Accounts</h1>
-          <p className="mt-1 text-sm text-slate-500">Ledger accounts, opening balances, and group-based classification.</p>
+          <h1 className="text-2xl font-semibold text-text-primary">Chart of Accounts</h1>
+          <p className="mt-1 text-sm text-text-muted">Ledger accounts, opening balances, and group-based classification.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => void handleExport()}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
           >
             Export CoA
           </button>
           <button
             type="button"
             onClick={() => setShowImport((i) => !i)}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
           >
             Import CoA
           </button>
           <button
             type="button"
             onClick={() => setShowCoaConfig((c) => !c)}
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
           >
             CoA settings
           </button>
@@ -200,8 +200,8 @@ export function ChartOfAccountsPage() {
       </div>
 
       {showImport && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="mb-2 text-sm font-medium text-slate-800">Import Chart of Accounts (CSV)</h3>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <h3 className="mb-2 text-sm font-medium text-text-primary">Import Chart of Accounts (CSV)</h3>
           <div className="flex flex-wrap items-end gap-3">
             <input
               type="file"
@@ -224,20 +224,20 @@ export function ChartOfAccountsPage() {
             <button
               type="button"
               onClick={() => void handleImport()}
-              className="rounded bg-slate-800 px-3 py-1.5 text-sm text-white hover:bg-slate-700"
+              className="rounded bg-surface-inverse px-3 py-1.5 text-sm text-brand-primary-foreground hover:bg-surface-inverse/90"
             >
               Import
             </button>
           </div>
           {importResult && (
-            <div className="mt-3 rounded border border-slate-100 bg-slate-50 p-2 text-sm">
+            <div className="mt-3 rounded border border-border-subtle bg-surface-subtle p-2 text-sm">
               {importResult.ok ? (
-                <p className="text-slate-700">
+                <p className="text-text-secondary">
                   Done. Groups: {importResult.groups_created} created, {importResult.groups_updated} updated. Accounts: {importResult.accounts_created} created, {importResult.accounts_updated} updated.
                   {importResult.errors.length > 0 && ` Warnings: ${importResult.errors.join("; ")}`}
                 </p>
               ) : (
-                <p className="text-rose-700">Import failed. {importResult.errors.join("; ")}</p>
+                <p className="text-status-danger-foreground">Import failed. {importResult.errors.join("; ")}</p>
               )}
             </div>
           )}
@@ -245,11 +245,11 @@ export function ChartOfAccountsPage() {
       )}
 
       {showCoaConfig && coaConfig && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="mb-3 text-sm font-medium text-slate-800">CoA code format (admin)</h3>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <h3 className="mb-3 text-sm font-medium text-text-primary">CoA code format (admin)</h3>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <label className="text-xs text-slate-500">Account number prefix</label>
+              <label className="text-xs text-text-muted">Account number prefix</label>
               <input
                 className="w-full rounded border px-2 py-1.5 text-sm"
                 value={coaConfig.account_number_prefix}
@@ -257,7 +257,7 @@ export function ChartOfAccountsPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-slate-500">Account number width</label>
+              <label className="text-xs text-text-muted">Account number width</label>
               <input
                 type="number"
                 min={1}
@@ -268,7 +268,7 @@ export function ChartOfAccountsPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-slate-500">Group code prefix</label>
+              <label className="text-xs text-text-muted">Group code prefix</label>
               <input
                 className="w-full rounded border px-2 py-1.5 text-sm"
                 value={coaConfig.group_code_prefix}
@@ -276,7 +276,7 @@ export function ChartOfAccountsPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-slate-500">Group code width</label>
+              <label className="text-xs text-text-muted">Group code width</label>
               <input
                 type="number"
                 min={1}
@@ -303,7 +303,7 @@ export function ChartOfAccountsPage() {
               Validate normal balance vs group
             </label>
             <div>
-              <label className="text-xs text-slate-500">Max group depth (optional)</label>
+              <label className="text-xs text-text-muted">Max group depth (optional)</label>
               <input
                 type="number"
                 min={0}
@@ -313,7 +313,7 @@ export function ChartOfAccountsPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-slate-500">Max account depth (optional)</label>
+              <label className="text-xs text-text-muted">Max account depth (optional)</label>
               <input
                 type="number"
                 min={0}
@@ -326,18 +326,18 @@ export function ChartOfAccountsPage() {
           <button
             type="button"
             onClick={() => void saveCoaConfig()}
-            className="mt-3 rounded bg-slate-800 px-3 py-1.5 text-sm text-white hover:bg-slate-700"
+            className="mt-3 rounded bg-surface-inverse px-3 py-1.5 text-sm text-brand-primary-foreground hover:bg-surface-inverse/90"
           >
             Save CoA settings
           </button>
         </div>
       )}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-500">Account Number</label>
+          <label className="text-xs text-text-muted">Account Number</label>
           <input
-            className="rounded border bg-slate-50 px-3 py-2 text-sm"
+            className="rounded border bg-surface-subtle px-3 py-2 text-sm"
             readOnly
             placeholder="Auto-generated"
             value={editingId ? form.account_number : ""}
@@ -397,7 +397,7 @@ export function ChartOfAccountsPage() {
         <div className="flex items-center gap-2 sm:col-span-2">
           <button
             type="button"
-            className="text-sm text-slate-600 underline"
+            className="text-sm text-text-secondary underline"
             onClick={() => setShowAdvanced((a) => !a)}
           >
             {showAdvanced ? "Hide advanced" : "Show advanced"}
@@ -462,15 +462,15 @@ export function ChartOfAccountsPage() {
               Cancel
             </button>
           ) : null}
-          <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white">{editingId ? "Update" : "Create"}</button>
+          <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">{editingId ? "Update" : "Create"}</button>
         </div>
       </form>
 
-      {error ? <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr>
               <th className="px-4 py-3">No</th>
               <th className="px-4 py-3">Name</th>
@@ -485,13 +485,13 @@ export function ChartOfAccountsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td className="px-4 py-6 text-slate-500" colSpan={8}>
+                <td className="px-4 py-6 text-text-muted" colSpan={8}>
                   Loading chart of accounts...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 text-slate-500" colSpan={8}>
+                <td className="px-4 py-6 text-text-muted" colSpan={8}>
                   No ledger accounts found.
                 </td>
               </tr>
@@ -510,19 +510,19 @@ export function ChartOfAccountsPage() {
                       <button
                         type="button"
                         onClick={() => setOpenActionsId((prev) => (prev === r.id ? null : r.id))}
-                        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                        className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                       >
                         Actions
                       </button>
                       {openActionsId === r.id && (
-                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
                           <button
                             type="button"
                             onClick={() => {
                               setOpenActionsId(null);
                               startEdit(r);
                             }}
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                           >
                             Edit
                           </button>
@@ -532,7 +532,7 @@ export function ChartOfAccountsPage() {
                               setOpenActionsId(null);
                               void remove(r.id);
                             }}
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
                           >
                             Delete
                           </button>

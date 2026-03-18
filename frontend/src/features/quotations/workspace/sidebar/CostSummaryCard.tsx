@@ -23,27 +23,27 @@ export function CostSummaryCard(props: CostSummaryCardProps) {
   const total = toSafeNumber(props.totalFobCost) || rows.reduce((acc, row) => acc + row.value, 0);
 
   return (
-    <section className="overflow-hidden rounded-2xl bg-slate-950 text-slate-100 shadow-lg print-card">
+    <section className="overflow-hidden rounded-2xl bg-surface-inverse text-text-inverse shadow-lg print-card">
       <div className="space-y-3 p-4">
         <h3 className="text-xl font-bold">Cost Summary</h3>
         <div className="space-y-2 text-sm">
           {rows.map((row) => (
             <div key={row.label} className="flex items-center justify-between gap-2">
-              <span className="text-slate-300">{row.label}</span>
+              <span className="text-text-inverse/80">{row.label}</span>
               <span className="font-semibold">
                 {formatMoney(row.value)} {props.currency}
               </span>
             </div>
           ))}
         </div>
-        <div className="border-t border-slate-700 pt-3">
-          <div className="text-xs uppercase tracking-wide text-orange-300">Total FOB Cost</div>
+        <div className="border-t border-border pt-3">
+          <div className="text-xs uppercase tracking-wide text-brand-primary">Total FOB Cost</div>
           <div className="mt-1 text-4xl font-extrabold">
             {formatMoney(total)} <span className="text-base font-semibold">{props.currency}</span>
           </div>
         </div>
       </div>
-      <div className="bg-orange-500 px-4 py-3 text-white">
+      <div className="bg-brand-primary px-4 py-3 text-brand-primary-foreground">
         <div className="flex items-center justify-between">
           <span className="text-xs uppercase tracking-wider">Factory Margin</span>
           <span className="text-2xl font-bold">

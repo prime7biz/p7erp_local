@@ -14,7 +14,7 @@ const ADVANCE_ITEMS: Array<{
     description:
       "Manage chart of accounts hierarchy with standard and advanced fields: description, reporting code, default normal balance, allow posting, summary group, and last reviewed date. Use list, hierarchy tree, or advance design view.",
     href: `${PREFIX}/accounts/groups`,
-    icon: <FolderTree className="h-8 w-8 text-indigo-600" />,
+    icon: <FolderTree className="h-8 w-8 text-brand-primary" />,
   },
 ];
 
@@ -22,8 +22,8 @@ export function AdvanceOptionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Finance — Advance Options</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-text-primary">Finance — Advance Options</h1>
+        <p className="mt-1 text-sm text-text-muted">
           Advanced configuration for finance masters: account groups hierarchy, reporting codes, and structure design.
         </p>
       </div>
@@ -33,15 +33,15 @@ export function AdvanceOptionsPage() {
           <Link
             key={item.href}
             to={item.href}
-            className="flex gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow-md"
+            className="flex gap-4 rounded-xl border border-border bg-surface-raised p-5 shadow-sm transition hover:border-border-strong hover:shadow-md"
           >
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-indigo-50">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-surface-subtle">
               {item.icon}
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="font-medium text-slate-900">{item.title}</h2>
-              <p className="mt-1 text-sm text-slate-500">{item.description}</p>
-              <span className="mt-2 inline-block text-sm font-medium text-indigo-600">Open →</span>
+              <h2 className="font-medium text-text-primary">{item.title}</h2>
+              <p className="mt-1 text-sm text-text-muted">{item.description}</p>
+              <span className="mt-2 inline-block text-sm font-medium text-brand-primary">Open →</span>
             </div>
           </Link>
         ))}

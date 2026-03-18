@@ -189,19 +189,19 @@ export function RolesPage() {
 
       {(error || success) && (
         <div className="space-y-2">
-          {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-          {success && <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div>}
+          {error && <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div>}
+          {success && <div className="rounded border border-status-success/20 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div>}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-        <h2 className="font-semibold text-gray-900 text-sm">{editingRoleId ? "Edit role" : "Add role"}</h2>
-        <p className="text-xs text-gray-500">Fields marked with ** are mandatory.</p>
+      <form onSubmit={handleSubmit} className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
+        <h2 className="font-semibold text-text-primary text-sm">{editingRoleId ? "Edit role" : "Add role"}</h2>
+        <p className="text-xs text-text-muted">Fields marked with ** are mandatory.</p>
         <div className="grid gap-3 md:grid-cols-2">
           <input
             value={form.name}
             onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
             placeholder="System name (e.g. merch_manager) **"
             required
             disabled={!!editingRoleId}
@@ -209,19 +209,19 @@ export function RolesPage() {
           <input
             value={form.display_name}
             onChange={(e) => setForm((prev) => ({ ...prev, display_name: e.target.value }))}
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
             placeholder="Display name **"
             required
           />
         </div>
-        <p className="text-xs text-gray-500">Choose permissions for this role:</p>
+        <p className="text-xs text-text-muted">Choose permissions for this role:</p>
         <div className="grid gap-3 md:grid-cols-2">
           {PERMISSION_GROUPS.map((group) => (
-            <div key={group.title} className="rounded border border-gray-200 p-3">
-              <p className="text-sm font-semibold text-gray-800">{group.title}</p>
+            <div key={group.title} className="rounded border border-border p-3">
+              <p className="text-sm font-semibold text-text-primary">{group.title}</p>
               <div className="mt-2 space-y-1">
                 {group.items.map((item) => (
-                  <label key={item.key} className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <label key={item.key} className="inline-flex items-center gap-2 text-sm text-text-secondary">
                     <input
                       type="checkbox"
                       checked={form.permissions[item.key] ?? false}
@@ -246,7 +246,7 @@ export function RolesPage() {
             <button
               type="button"
               onClick={resetForm}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700"
+              className="rounded-lg border border-border px-4 py-2 text-sm text-text-secondary"
             >
               Cancel edit
             </button>
@@ -256,7 +256,7 @@ export function RolesPage() {
 
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
-          <tr style={{ borderBottom: "2px solid #e2e8f0", textAlign: "left" }}>
+            <tr className="border-b-2 border-border text-left">
             <th style={{ padding: 8 }}>Name</th>
             <th style={{ padding: 8 }}>Display name</th>
             <th style={{ padding: 8 }}>Enabled permissions</th>
@@ -265,7 +265,7 @@ export function RolesPage() {
         </thead>
         <tbody>
           {roles.map((r) => (
-            <tr key={r.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+            <tr key={r.id} className="border-b border-border">
               <td style={{ padding: 8 }}>{r.name}</td>
               <td style={{ padding: 8 }}>{r.display_name}</td>
               <td style={{ padding: 8 }}>{Object.keys(r.permissions || {}).length}</td>
@@ -274,19 +274,19 @@ export function RolesPage() {
                   <button
                     type="button"
                     onClick={() => setOpenActionsId(openActionsId === r.id ? null : r.id)}
-                    className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                    className="rounded-lg border border-border px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                   >
                     Actions
                   </button>
                   {openActionsId === r.id && (
-                    <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                    <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
                       <button
                         type="button"
                         onClick={() => {
                           startEdit(r);
                           setOpenActionsId(null);
                         }}
-                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                       >
                         Edit
                       </button>
@@ -298,7 +298,7 @@ export function RolesPage() {
                         }}
                         disabled={r.name.toLowerCase() === "admin"}
                         title={r.name.toLowerCase() === "admin" ? "Admin role cannot be deleted" : undefined}
-                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:pointer-events-none"
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger-foreground hover:bg-status-danger-subtle disabled:opacity-50 disabled:pointer-events-none"
                       >
                         Delete
                       </button>

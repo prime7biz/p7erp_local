@@ -49,38 +49,38 @@ const steps = [
 export function HowItWorksPage() {
   return (
     <>
-      <section className="relative bg-gradient-to-br from-primary/5 via-white to-white py-20 lg:py-28 overflow-hidden">
+      <section className="relative bg-gradient-to-br from-brand-primary/5 via-surface-raised to-surface-raised py-20 lg:py-28 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative">
-          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 leading-tight">
-            How It <span className="text-primary">Works</span>
+          <h1 className="text-4xl sm:text-5xl font-bold text-text-primary leading-tight">
+            How It <span className="text-brand-primary">Works</span>
           </h1>
-          <p className="mt-6 text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
+          <p className="mt-6 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">
             Get from sign-up to go-live in three clear steps. Prime7 ERP is designed for fast setup and ongoing growth.
           </p>
           <div className="mt-8">
-            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-white hover:bg-primary/90 transition-colors">
+            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-primary px-6 py-3 text-base font-semibold text-brand-primary-foreground hover:bg-brand-primary/90 transition-colors">
               Get Started <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
       </section>
 
-      <section className="py-16 lg:py-24 bg-white">
+      <section className="py-16 lg:py-24 bg-surface-raised">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="space-y-20">
             {steps.map((step, idx) => (
               <div key={idx} className="flex flex-col lg:flex-row gap-10 items-start">
-                <div className="flex-shrink-0 w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                <div className="flex-shrink-0 w-16 h-16 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
                   <step.icon className="w-8 h-8" />
                 </div>
                 <div className="flex-1">
-                  <span className="text-sm font-medium text-primary">{step.number}</span>
-                  <h2 className="text-2xl font-semibold text-gray-900 mt-1">{step.title}</h2>
-                  <p className="mt-3 text-gray-600">{step.description}</p>
+                  <span className="text-sm font-medium text-brand-primary">{step.number}</span>
+                  <h2 className="text-2xl font-semibold text-text-primary mt-1">{step.title}</h2>
+                  <p className="mt-3 text-text-secondary">{step.description}</p>
                   <ul className="mt-4 space-y-2">
                     {step.details.map((d, i) => (
-                      <li key={i} className="flex items-center gap-2 text-gray-700">
-                        <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                      <li key={i} className="flex items-center gap-2 text-text-secondary">
+                        <CheckCircle2 className="w-5 h-5 text-brand-primary flex-shrink-0" />
                         {d}
                       </li>
                     ))}
@@ -92,12 +92,12 @@ export function HowItWorksPage() {
         </div>
       </section>
 
-      <section className="py-16 lg:py-24 bg-gray-50">
+      <section className="py-16 lg:py-24 bg-surface-subtle">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-gray-600 mb-6">Ready to get started?</p>
+          <p className="text-text-secondary mb-6">Ready to get started?</p>
           <Link
             to="/signup"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-white font-semibold hover:bg-primary/90 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-6 py-3 text-brand-primary-foreground font-semibold hover:bg-brand-primary/90 transition-colors"
           >
             Create your account
             <ArrowRight className="w-4 h-4" />

@@ -28,21 +28,21 @@ export function StockSummaryPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Stock Summary</h1>
-          <p className="text-sm text-gray-500">Live stock on hand by item and warehouse.</p>
+          <h1 className="text-2xl font-bold text-text-primary">Stock Summary</h1>
+          <p className="text-sm text-text-muted">Live stock on hand by item and warehouse.</p>
         </div>
         <input className="w-64 rounded border px-3 py-2 text-sm" placeholder="Search item code or name…" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
-      {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-      <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
+      {error && <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div>}
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         <table className="min-w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-surface-subtle">
             <tr>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Item</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Warehouse</th>
-              <th className="px-3 py-2 text-right text-xs font-medium uppercase text-gray-500">In Qty</th>
-              <th className="px-3 py-2 text-right text-xs font-medium uppercase text-gray-500">Out Qty</th>
-              <th className="px-3 py-2 text-right text-xs font-medium uppercase text-gray-500">On Hand</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Item</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Warehouse</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">In Qty</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">Out Qty</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">On Hand</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">

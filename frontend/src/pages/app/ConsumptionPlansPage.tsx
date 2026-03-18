@@ -27,11 +27,11 @@ export function ConsumptionPlansPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Consumption Plans</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Plan required materials by order.</p>
+          <h1 className="text-2xl font-bold text-text-primary">Consumption Plans</h1>
+          <p className="text-sm text-text-muted mt-0.5">Plan required materials by order.</p>
         </div>
         <div className="flex gap-2">
-          <select value={orderId || ""} onChange={(e) => setOrderId(Number(e.target.value) || 0)} className="rounded border border-gray-300 px-3 py-2 text-sm">
+          <select value={orderId || ""} onChange={(e) => setOrderId(Number(e.target.value) || 0)} className="rounded border border-border px-3 py-2 text-sm">
             <option value="">Select order…</option>
             {orders.map((o) => <option key={o.id} value={o.id}>{o.order_code}</option>)}
           </select>
@@ -47,50 +47,50 @@ export function ConsumptionPlansPage() {
           </button>
         </div>
       </div>
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">{error}</div>}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-200 text-sm font-semibold">Plans</div>
-          <div className="divide-y divide-gray-100">
+        <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+          <div className="px-4 py-3 border-b border-border text-sm font-semibold">Plans</div>
+          <div className="divide-y divide-border">
             {plans.map((p) => (
-              <button key={p.id} onClick={() => open(p.id)} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50">
+              <button key={p.id} onClick={() => open(p.id)} className="w-full text-left px-4 py-2 text-sm hover:bg-surface-subtle">
                 Plan #{p.id} · Order {p.order_id} · {p.status}
               </button>
             ))}
-            {plans.length === 0 && <div className="px-4 py-6 text-sm text-gray-500">No plans yet.</div>}
+            {plans.length === 0 && <div className="px-4 py-6 text-sm text-text-muted">No plans yet.</div>}
           </div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-900">Plan Items</h2>
+        <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-text-primary">Plan Items</h2>
           {!selected ? (
-            <div className="text-sm text-gray-500">Select a plan.</div>
+            <div className="text-sm text-text-muted">Select a plan.</div>
           ) : (
             <>
-              <div className="text-xs text-gray-500">Plan #{selected.plan.id} · Order {selected.plan.order_id}</div>
+              <div className="text-xs text-text-muted">Plan #{selected.plan.id} · Order {selected.plan.order_id}</div>
               <div className="flex gap-2">
-                <input value={requiredQty} onChange={(e) => setRequiredQty(e.target.value)} placeholder="Required qty" className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm" />
+                <input value={requiredQty} onChange={(e) => setRequiredQty(e.target.value)} placeholder="Required qty" className="flex-1 rounded border border-border px-2 py-1 text-sm" />
                 <button
                   onClick={async () => {
                     await api.createConsumptionPlanItem(selected.plan.id, { required_qty: requiredQty, item_code: "ITEM" });
                     setRequiredQty("0");
                     await open(selected.plan.id);
                   }}
-                  className="rounded border border-gray-300 px-2 py-1 text-xs"
+                  className="rounded border border-border px-2 py-1 text-xs"
                 >
                   Add
                 </button>
               </div>
               <div className="space-y-1">
                 {selected.items.map((i) => (
-                  <div key={i.id} className="flex items-center justify-between rounded border border-gray-200 px-2 py-1 text-sm">
+                  <div key={i.id} className="flex items-center justify-between rounded border border-border px-2 py-1 text-sm">
                     <span>{i.item_code ?? "ITEM"} · Qty {i.required_qty} {i.uom ?? ""}</span>
                     <button
                       onClick={async () => {
                         await api.deleteConsumptionPlanItem(selected.plan.id, i.id);
                         await open(selected.plan.id);
                       }}
-                      className="text-xs text-red-600"
+                      className="text-xs text-status-danger-foreground"
                     >
                       Delete
                     </button>

@@ -65,14 +65,14 @@ export function FinancialStatementsPage() {
 
   return (
     <div className="space-y-6 print-report">
-      <div className="print-only mb-3 border-b border-slate-300 pb-2">
+      <div className="print-only mb-3 border-b border-border pb-2">
         <h1 className="text-lg font-semibold">Financial Statements</h1>
-        <p className="text-xs text-slate-600">As of: {asOfDate}</p>
+        <p className="text-xs text-text-muted">As of: {asOfDate}</p>
       </div>
       <div className="no-print flex flex-wrap items-end gap-2">
         <div className="mr-auto">
-        <h1 className="text-2xl font-semibold text-slate-900">Financial Statements</h1>
-        <p className="text-sm text-slate-500">Profit & loss and balance sheet summary.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Financial Statements</h1>
+        <p className="text-sm text-text-muted">Profit & loss and balance sheet summary.</p>
         </div>
         <input type="date" className="rounded border px-3 py-2 text-sm" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
         <select className="rounded border px-3 py-2 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value ? Number(e.target.value) : "")}>
@@ -83,18 +83,18 @@ export function FinancialStatementsPage() {
             </option>
           ))}
         </select>
-        <button className={`rounded border px-3 py-2 text-sm ${compactView ? "bg-slate-900 text-white" : ""}`} onClick={() => setCompactView((v) => !v)}>
+        <button className={`rounded border px-3 py-2 text-sm ${compactView ? "bg-brand-primary text-brand-primary-foreground" : ""}`} onClick={() => setCompactView((v) => !v)}>
           {compactView ? "Comfort View" : "Compact View"}
         </button>
         <button className="rounded border px-3 py-2 text-sm" onClick={() => handlePrint()}>Print</button>
         <button className="rounded border px-3 py-2 text-sm" onClick={() => exportCsv()}>Export CSV</button>
       </div>
 
-      {error ? <div className="no-print rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="no-print rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+      {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="no-print rounded border border-status-success/20 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
       <div className={`grid ${compactView ? "gap-2" : "gap-4"} md:grid-cols-2`}>
-        <div className={`print-card rounded-xl border border-slate-200 bg-white ${compactView ? "p-2" : "p-4"} print:p-2`}>
+        <div className={`print-card rounded-xl border border-border bg-surface-raised ${compactView ? "p-2" : "p-4"} print:p-2`}>
           <h2 className={`mb-3 ${compactView ? "text-base" : "text-lg"} font-semibold`}>Profit & Loss</h2>
           <div className={`space-y-2 ${compactView ? "text-xs" : "text-sm"} print:text-xs`}>
             <div className="flex justify-between">
@@ -111,7 +111,7 @@ export function FinancialStatementsPage() {
             </div>
           </div>
         </div>
-        <div className={`print-card rounded-xl border border-slate-200 bg-white ${compactView ? "p-2" : "p-4"} print:p-2`}>
+        <div className={`print-card rounded-xl border border-border bg-surface-raised ${compactView ? "p-2" : "p-4"} print:p-2`}>
           <h2 className={`mb-3 ${compactView ? "text-base" : "text-lg"} font-semibold`}>Balance Sheet</h2>
           <div className={`space-y-2 ${compactView ? "text-xs" : "text-sm"} print:text-xs`}>
             <div className="flex justify-between">

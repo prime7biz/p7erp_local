@@ -1723,6 +1723,16 @@ export const api = {
   async getOrder(id: number): Promise<OrderResponse> {
     return request<OrderResponse>(`/api/v1/orders/${id}`);
   },
+  async getOrderPromiseCheck(id: number): Promise<OrderPromiseCheckResponse> {
+    return request<OrderPromiseCheckResponse>(`/api/v1/orders/${id}/promise-check`);
+  },
+  async getOrderPromiseSummary(params?: { statuses?: string; limit?: number }): Promise<OrderPromiseSummaryResponse> {
+    const q = new URLSearchParams();
+    if (params?.statuses) q.set("statuses", params.statuses);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<OrderPromiseSummaryResponse>(`/api/v1/orders/promise-summary${suffix}`);
+  },
   async createOrder(data: OrderCreate): Promise<OrderResponse> {
     return request<OrderResponse>("/api/v1/orders", {
       method: "POST",
@@ -2576,6 +2586,15 @@ export const api = {
   async deleteBom(id: number): Promise<void> {
     return request<void>(`/api/v1/merch/boms/${id}`, { method: "DELETE" });
   },
+  async submitBom(id: number): Promise<BomResponse> {
+    return request<BomResponse>(`/api/v1/merch/boms/${id}/submit`, { method: "POST" });
+  },
+  async approveBom(id: number): Promise<BomResponse> {
+    return request<BomResponse>(`/api/v1/merch/boms/${id}/approve`, { method: "POST" });
+  },
+  async freezeBom(id: number): Promise<BomResponse> {
+    return request<BomResponse>(`/api/v1/merch/boms/${id}/freeze`, { method: "POST" });
+  },
   async createBomItem(bomId: number, data: BomItemCreate): Promise<BomItemResponse> {
     return request<BomItemResponse>(`/api/v1/merch/boms/${bomId}/items`, {
       method: "POST",
@@ -2721,6 +2740,30 @@ export const api = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<FollowupSummaryResponse>(`/api/v1/merch/followup-actions/summary${suffix}`);
   },
+  async listUnifiedTnaActions(params?: {
+    order_id?: number;
+    status_filter?: string;
+    source?: "all" | "merch" | "manufacturing";
+    overdue_only?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<UnifiedTnaActionResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    if (params?.status_filter) q.set("status_filter", params.status_filter);
+    if (params?.source) q.set("source", params.source);
+    if (params?.overdue_only) q.set("overdue_only", "true");
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<UnifiedTnaActionResponse[]>(`/api/v1/tna-unified/actions${suffix}`);
+  },
+  async getUnifiedTnaSummary(params?: { order_id?: number }): Promise<UnifiedTnaSummaryResponse> {
+    const q = new URLSearchParams();
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<UnifiedTnaSummaryResponse>(`/api/v1/tna-unified/summary${suffix}`);
+  },
   async searchFollowupActions(q: string): Promise<OrderFollowupActionResponse[]> {
     return request<OrderFollowupActionResponse[]>(`/api/v1/merch/followup-actions/search?q=${encodeURIComponent(q)}`);
   },
@@ -2814,6 +2857,8 @@ export const api = {
     alert_type?: string;
     order_id?: number;
     assigned_to_id?: number;
+    min_priority_score?: number;
+    sla_bucket?: "at_risk" | "breach" | "met";
     page?: number;
     page_size?: number;
     sort?: string;
@@ -2824,6 +2869,8 @@ export const api = {
     if (params?.alert_type) q.set("alert_type", params.alert_type);
     if (params?.order_id != null) q.set("order_id", String(params.order_id));
     if (params?.assigned_to_id != null) q.set("assigned_to_id", String(params.assigned_to_id));
+    if (params?.min_priority_score != null) q.set("min_priority_score", String(params.min_priority_score));
+    if (params?.sla_bucket) q.set("sla_bucket", params.sla_bucket);
     if (params?.page != null) q.set("page", String(params.page));
     if (params?.page_size != null) q.set("page_size", String(params.page_size));
     if (params?.sort) q.set("sort", params.sort);
@@ -3747,6 +3794,111 @@ export const api = {
   },
   async updateMasterContract(id: number, body: MasterContractUpdate): Promise<MasterContractRow> {
     return request<MasterContractRow>(`/api/v1/commercial/master-contracts/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+  async listTradeCases(params?: {
+    status?: string;
+    direction?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<TradeCaseRow[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.direction) q.set("direction", params.direction);
+    if (params?.search) q.set("search", params.search);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<TradeCaseRow[]>(`/api/v1/trade-cases${suffix}`);
+  },
+  async getTradeCase(id: number): Promise<TradeCaseRow> {
+    return request<TradeCaseRow>(`/api/v1/trade-cases/${id}`);
+  },
+  async createTradeCase(body: TradeCaseCreate): Promise<TradeCaseRow> {
+    return request<TradeCaseRow>("/api/v1/trade-cases", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async updateTradeCase(id: number, body: TradeCaseUpdate): Promise<TradeCaseRow> {
+    return request<TradeCaseRow>(`/api/v1/trade-cases/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+  async transitionTradeCase(id: number, body: TradeCaseTransitionBody): Promise<TradeCaseRow> {
+    return request<TradeCaseRow>(`/api/v1/trade-cases/${id}/transition`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async getTradeCaseStages(id: number): Promise<TradeCaseStageRow[]> {
+    return request<TradeCaseStageRow[]>(`/api/v1/trade-cases/${id}/stages`);
+  },
+  async getTradeCaseStageLog(id: number): Promise<TradeCaseStageLogRow[]> {
+    return request<TradeCaseStageLogRow[]>(`/api/v1/trade-cases/${id}/stage-log`);
+  },
+  async uploadTradeDocument(
+    tradeCaseId: number,
+    payload: {
+      file: File;
+      document_type: string;
+      shipment_id?: number | null;
+      linked_entity_type?: string | null;
+      linked_entity_id?: number | null;
+    }
+  ): Promise<{ id: number; trade_case_id: number; document_type: string; file_name: string; version: number; created_at: string }> {
+    const form = new FormData();
+    form.append("file", payload.file);
+    form.append("document_type", payload.document_type);
+    if (payload.shipment_id != null) form.append("shipment_id", String(payload.shipment_id));
+    if (payload.linked_entity_type) form.append("linked_entity_type", payload.linked_entity_type);
+    if (payload.linked_entity_id != null) form.append("linked_entity_id", String(payload.linked_entity_id));
+    return request(`/api/v1/trade-cases/${tradeCaseId}/documents`, {
+      method: "POST",
+      body: form,
+    });
+  },
+  async listTradeDocuments(tradeCaseId: number): Promise<TradeDocumentRow[]> {
+    return request<TradeDocumentRow[]>(`/api/v1/trade-cases/${tradeCaseId}/documents`);
+  },
+  async downloadTradeDocument(tradeCaseId: number, documentId: number): Promise<Blob> {
+    return requestBlob(`/api/v1/trade-cases/${tradeCaseId}/documents/${documentId}/download`);
+  },
+  async getTradeCaseMargin(tradeCaseId: number): Promise<TradeCaseMarginResponse> {
+    return request<TradeCaseMarginResponse>(`/api/v1/trade-cases/${tradeCaseId}/margin`);
+  },
+  async getTradeDashboardSummary(): Promise<TradeCaseDashboardResponse> {
+    return request<TradeCaseDashboardResponse>("/api/v1/trade-cases/dashboard/summary");
+  },
+  async listShipments(params?: {
+    trade_case_id?: number;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ShipmentRow[]> {
+    const q = new URLSearchParams();
+    if (params?.trade_case_id != null) q.set("trade_case_id", String(params.trade_case_id));
+    if (params?.status) q.set("status", params.status);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<ShipmentRow[]>(`/api/v1/logistics/shipments${suffix}`);
+  },
+  async getShipment(id: number): Promise<ShipmentRow> {
+    return request<ShipmentRow>(`/api/v1/logistics/shipments/${id}`);
+  },
+  async createShipment(body: ShipmentCreate): Promise<ShipmentRow> {
+    return request<ShipmentRow>("/api/v1/logistics/shipments", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async updateShipment(id: number, body: ShipmentUpdate): Promise<ShipmentRow> {
+    return request<ShipmentRow>(`/api/v1/logistics/shipments/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     });
@@ -5515,6 +5667,43 @@ export interface OrderUpdate {
   remarks?: string;
 }
 
+export interface OrderPromiseCheckLine {
+  item_id: number;
+  item_code: string;
+  required_qty: number;
+  available_qty: number;
+  shortage_qty: number;
+}
+
+export interface OrderPromiseCheckOut {
+  order_id: number;
+  atp_ok: boolean;
+  ctp_ok: boolean;
+  reasons: string[];
+  lines: OrderPromiseCheckLine[];
+}
+
+export type OrderPromiseCheckResponse = OrderPromiseCheckOut;
+
+export interface OrderPromiseSummaryItem {
+  order_id: number;
+  order_code: string;
+  status: string;
+  atp_ok: boolean;
+  ctp_ok: boolean;
+  reasons: string[];
+}
+
+export interface OrderPromiseSummaryOut {
+  scanned_count: number;
+  blocked_count: number;
+  atp_fail_count: number;
+  ctp_fail_count: number;
+  items: OrderPromiseSummaryItem[];
+}
+
+export type OrderPromiseSummaryResponse = OrderPromiseSummaryOut;
+
 export interface OrderAmendmentResponse {
   id: number;
   tenant_id: number;
@@ -5938,6 +6127,40 @@ export interface TnaGenerateRequest {
   template_ids?: number[] | null;
 }
 
+export interface UnifiedTnaActionOut {
+  source_system: "merch" | "manufacturing";
+  source_action_id: number;
+  source_plan_id?: number | null;
+  order_id?: number | null;
+  order_code?: string | null;
+  title: string;
+  phase?: string | null;
+  department?: string | null;
+  planned_date?: string | null;
+  actual_date?: string | null;
+  status: string;
+  assigned_to_id?: number | null;
+  dependency_seq_no?: number | null;
+  dependency_status?: string | null;
+  dependency_ready: boolean;
+  severity?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type UnifiedTnaActionResponse = UnifiedTnaActionOut;
+
+export interface UnifiedTnaSummaryOut {
+  total_count: number;
+  open_count: number;
+  overdue_count: number;
+  completed_count: number;
+  merch_count: number;
+  manufacturing_count: number;
+}
+
+export type UnifiedTnaSummaryResponse = UnifiedTnaSummaryOut;
+
 export interface MerchCriticalAlert {
   id: string;
   severity: string;
@@ -6121,6 +6344,8 @@ export interface MerchAlertItem {
   order_code: string | null;
   reason_text: string | null;
   recommended_action: string | null;
+  priority_score?: number;
+  sla_bucket?: "at_risk" | "breach" | "met";
   snoozed_until: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -7023,6 +7248,7 @@ export interface ExportCaseRow {
   case_date?: string | null;
   amount?: number | null;
   order_id?: number | null;
+  trade_case_id?: number | null;
   created_at?: string;
   [key: string]: unknown;
 }
@@ -7242,3 +7468,143 @@ export interface MasterContractCreate {
 }
 
 export type MasterContractUpdate = Partial<MasterContractCreate>;
+
+export interface TradeCaseRow {
+  id: number;
+  tenant_id: number;
+  direction: "EXPORT" | "IMPORT" | string;
+  reference: string;
+  status: string;
+  current_stage: string;
+  order_id?: number | null;
+  customer_id?: number | null;
+  vendor_id?: number | null;
+  proforma_invoice_id?: number | null;
+  master_contract_id?: number | null;
+  btb_lc_id?: number | null;
+  etd?: string | null;
+  eta?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  cost_amount?: number | null;
+  margin_amount?: number | null;
+  margin_pct?: number | null;
+  closed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TradeCaseCreate {
+  direction?: "EXPORT" | "IMPORT" | string;
+  reference: string;
+  status?: string;
+  current_stage?: string;
+  order_id?: number | null;
+  customer_id?: number | null;
+  vendor_id?: number | null;
+  proforma_invoice_id?: number | null;
+  master_contract_id?: number | null;
+  btb_lc_id?: number | null;
+  etd?: string | null;
+  eta?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+}
+
+export type TradeCaseUpdate = Partial<TradeCaseCreate>;
+
+export interface TradeCaseStageRow {
+  id: number;
+  tenant_id: number;
+  stage_key: string;
+  name: string;
+  sort_order: number;
+  required_doc_types?: string[] | null;
+  next_stage_keys?: string[] | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TradeCaseTransitionBody {
+  to_stage: string;
+  notes?: string | null;
+}
+
+export interface TradeCaseStageLogRow {
+  id: number;
+  tenant_id: number;
+  trade_case_id: number;
+  from_stage?: string | null;
+  to_stage: string;
+  user_id?: number | null;
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface ShipmentRow {
+  id: number;
+  tenant_id: number;
+  trade_case_id: number;
+  reference: string;
+  status: string;
+  carrier?: string | null;
+  booking_ref?: string | null;
+  bl_awb?: string | null;
+  etd?: string | null;
+  eta?: string | null;
+  origin_port?: string | null;
+  dest_port?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShipmentCreate {
+  trade_case_id: number;
+  reference: string;
+  status?: string | null;
+  carrier?: string | null;
+  booking_ref?: string | null;
+  bl_awb?: string | null;
+  etd?: string | null;
+  eta?: string | null;
+  origin_port?: string | null;
+  dest_port?: string | null;
+  notes?: string | null;
+}
+
+export type ShipmentUpdate = Partial<ShipmentCreate>;
+
+export interface TradeDocumentRow {
+  id: number;
+  trade_case_id: number;
+  shipment_id?: number | null;
+  document_type: string;
+  file_name: string;
+  storage_path: string;
+  version: number;
+  linked_entity_type?: string | null;
+  linked_entity_id?: number | null;
+  uploaded_by_id?: number | null;
+  created_at: string;
+}
+
+export interface TradeCaseMarginResponse {
+  trade_case_id: number;
+  amount?: number | null;
+  estimated_cost?: number | null;
+  margin_amount?: number | null;
+  margin_pct?: number | null;
+  currency?: string | null;
+}
+
+export interface TradeCaseDashboardResponse {
+  total_cases: number;
+  open_cases: number;
+  shipped_cases: number;
+  settled_cases: number;
+  missing_docs_cases: number;
+  overdue_shipments: number;
+  at_risk_case_ids: number[];
+}

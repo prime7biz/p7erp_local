@@ -57,6 +57,7 @@ class ExportCaseCreate(BaseModel):
     status: str | None = Field(default="DRAFT", max_length=32)
     case_date: date | None = None
     amount: float | None = Field(None, ge=0)
+    trade_case_id: int | None = None
 
 
 class ExportCaseResponse(BaseModel):
@@ -66,6 +67,7 @@ class ExportCaseResponse(BaseModel):
     status: str
     case_date: str | None
     amount: float | None
+    trade_case_id: int | None = None
     created_at: str
     updated_at: str
 

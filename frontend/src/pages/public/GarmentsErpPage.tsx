@@ -152,12 +152,12 @@ export function GarmentsErpPage() {
               <Factory className="w-4 h-4" />
               Purpose-Built for Garment Manufacturers
             </div>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-text-primary mb-6 leading-tight">
               The Only ERP Built Specifically for
               <br />
               <span className="text-primary">Garment Manufacturers</span>
             </h1>
-            <p className="text-lg md:text-xl text-gray-600 max-w-3xl mx-auto mb-8 leading-relaxed">
+            <p className="text-lg md:text-xl text-text-secondary max-w-3xl mx-auto mb-8 leading-relaxed">
               From buyer inquiry to LC realization — Prime7 ERP understands your factory&apos;s unique challenges.
               Built by garment industry professionals for garment manufacturers and buying houses.
             </p>
@@ -165,7 +165,7 @@ export function GarmentsErpPage() {
               <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-8 py-3 text-base font-semibold text-white hover:bg-primary/90 transition-colors">
                 Start Free Trial <ArrowRight className="w-4 h-4" />
               </Link>
-              <Link to="/features" className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-8 py-3 text-base font-semibold text-gray-700 hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors">
+              <Link to="/features" className="inline-flex items-center justify-center gap-2 rounded-lg border border-border px-8 py-3 text-base font-semibold text-text-secondary hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors">
                 Explore All Features
               </Link>
             </div>
@@ -177,25 +177,25 @@ export function GarmentsErpPage() {
       <section className="py-16 lg:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 bg-red-50 text-red-600 px-4 py-1.5 rounded-full text-sm font-medium mb-4">
+            <div className="inline-flex items-center gap-2 bg-status-danger-subtle text-status-danger-foreground px-4 py-1.5 rounded-full text-sm font-medium mb-4">
               <AlertTriangle className="w-4 h-4" />
               Common Challenges
             </div>
-            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">
               Challenges Every RMG Factory Faces
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-text-secondary max-w-2xl mx-auto">
               If any of these sound familiar, you&apos;re not alone — and Prime7 ERP was built to solve each one.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {painPoints.map((point) => (
               <div key={point.title} className="bg-white rounded-xl border border-primary/20 p-6 hover:shadow-lg hover:border-primary/30 transition-all">
-                <div className="inline-flex items-center justify-center w-12 h-12 bg-red-50 text-red-500 rounded-lg mb-4">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-status-danger-subtle text-status-danger-foreground rounded-lg mb-4">
                   <point.icon className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{point.title}</h3>
-                <p className="text-gray-600 text-sm">{point.pain}</p>
+                <h3 className="text-lg font-semibold text-text-primary mb-2">{point.title}</h3>
+                <p className="text-text-secondary text-sm">{point.pain}</p>
               </div>
             ))}
           </div>
@@ -203,17 +203,17 @@ export function GarmentsErpPage() {
       </section>
 
       {/* How Prime7 ERP Solves Each */}
-      <section className="py-16 lg:py-24 bg-gray-50">
+      <section className="py-16 lg:py-24 bg-surface-subtle">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-1.5 rounded-full text-sm font-medium mb-4">
+            <div className="inline-flex items-center gap-2 bg-status-success-subtle text-status-success-foreground px-4 py-1.5 rounded-full text-sm font-medium mb-4">
               <CheckCircle2 className="w-4 h-4" />
               The Prime7 ERP Solution
             </div>
-            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">
               How Prime7 ERP Solves Each Challenge
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-text-secondary max-w-2xl mx-auto">
               See the before and after for every pain point in your factory operations.
             </p>
           </div>
@@ -221,26 +221,26 @@ export function GarmentsErpPage() {
             {painPoints.map((point, i) => (
               <div key={i} className="bg-white rounded-xl border border-primary/20 overflow-hidden">
                 <div className="grid md:grid-cols-12 gap-0">
-                  <div className="md:col-span-4 p-6 border-b md:border-b-0 md:border-r border-gray-100">
+                  <div className="md:col-span-4 p-6 border-b md:border-b-0 md:border-r border-border-subtle">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-8 h-8 bg-primary/10 text-primary rounded-lg flex items-center justify-center">
                         <point.icon className="w-4 h-4" />
                       </div>
-                      <h3 className="font-semibold text-gray-900">{point.title}</h3>
+                      <h3 className="font-semibold text-text-primary">{point.title}</h3>
                     </div>
-                    <p className="text-sm text-gray-600">{point.solution}</p>
+                    <p className="text-sm text-text-secondary">{point.solution}</p>
                   </div>
-                  <div className="md:col-span-4 p-6 bg-red-50/30 border-b md:border-b-0 md:border-r border-gray-100">
-                    <div className="flex items-center gap-2 text-red-600 text-xs font-medium mb-2">
+                  <div className="md:col-span-4 p-6 bg-status-danger-subtle/30 border-b md:border-b-0 md:border-r border-border-subtle">
+                    <div className="flex items-center gap-2 text-status-danger-foreground text-xs font-medium mb-2">
                       <XCircle className="w-3.5 h-3.5" /> BEFORE
                     </div>
-                    <p className="text-sm text-gray-700">{point.before}</p>
+                    <p className="text-sm text-text-secondary">{point.before}</p>
                   </div>
-                  <div className="md:col-span-4 p-6 bg-emerald-50/30">
-                    <div className="flex items-center gap-2 text-emerald-600 text-xs font-medium mb-2">
+                  <div className="md:col-span-4 p-6 bg-status-success-subtle/30">
+                    <div className="flex items-center gap-2 text-status-success-foreground text-xs font-medium mb-2">
                       <CheckCircle2 className="w-3.5 h-3.5" /> AFTER
                     </div>
-                    <p className="text-sm text-gray-700">{point.after}</p>
+                    <p className="text-sm text-text-secondary">{point.after}</p>
                   </div>
                 </div>
               </div>
@@ -253,22 +253,22 @@ export function GarmentsErpPage() {
       <section className="py-16 lg:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">
               Complete Order Lifecycle
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-text-secondary max-w-2xl mx-auto">
               Prime7 ERP covers every step from the first buyer inquiry to final LC realization.
             </p>
           </div>
           <div className="relative">
             <div className="hidden lg:flex items-center justify-between relative">
-              <div className="absolute top-1/2 left-0 right-0 h-1 bg-gray-200 -translate-y-1/2 z-0" />
+              <div className="absolute top-1/2 left-0 right-0 h-1 bg-border -translate-y-1/2 z-0" />
               {processSteps.map((step, i) => (
                 <div key={step.label} className="relative z-10 flex flex-col items-center">
                   <div className={`w-12 h-12 rounded-full ${step.color} text-white flex items-center justify-center text-sm font-bold shadow-lg`}>
                     {i + 1}
                   </div>
-                  <p className="mt-3 text-xs font-medium text-gray-700 text-center max-w-[80px]">{step.label}</p>
+                  <p className="mt-3 text-xs font-medium text-text-secondary text-center max-w-[80px]">{step.label}</p>
                 </div>
               ))}
             </div>
@@ -279,8 +279,8 @@ export function GarmentsErpPage() {
                     {i + 1}
                   </div>
                   <div className="flex-1 flex items-center gap-2">
-                    <p className="text-sm font-medium text-gray-800">{step.label}</p>
-                    {i < processSteps.length - 1 && <ChevronRight className="w-4 h-4 text-gray-400" />}
+                    <p className="text-sm font-medium text-text-primary">{step.label}</p>
+                    {i < processSteps.length - 1 && <ChevronRight className="w-4 h-4 text-text-muted" />}
                   </div>
                 </div>
               ))}
@@ -293,10 +293,10 @@ export function GarmentsErpPage() {
       <section className="py-16 lg:py-24 bg-gradient-to-br from-primary/5 to-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">
               Why Prime7 vs Generic ERPs
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-text-secondary max-w-2xl mx-auto">
               Generic ERPs force garment manufacturers to adapt their processes. Prime7 ERP adapts to you.
             </p>
           </div>
@@ -306,8 +306,8 @@ export function GarmentsErpPage() {
                 <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 text-primary rounded-lg mb-4">
                   <diff.icon className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{diff.title}</h3>
-                <p className="text-gray-600 text-sm">{diff.description}</p>
+                <h3 className="text-lg font-semibold text-text-primary mb-2">{diff.title}</h3>
+                <p className="text-text-secondary text-sm">{diff.description}</p>
               </div>
             ))}
           </div>
@@ -318,8 +318,8 @@ export function GarmentsErpPage() {
       <section className="py-16 lg:py-24 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">Frequently Asked Questions</h2>
-            <p className="text-lg text-gray-600">Common questions about Prime7 ERP for garment manufacturers.</p>
+            <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">Frequently Asked Questions</h2>
+            <p className="text-lg text-text-secondary">Common questions about Prime7 ERP for garment manufacturers.</p>
           </div>
           <div className="space-y-3">
             {faqs.map((faq, i) => (
@@ -329,11 +329,11 @@ export function GarmentsErpPage() {
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-primary/5 transition-colors"
                 >
-                  <span className="font-semibold text-gray-900 pr-4">{faq.q}</span>
-                  <ChevronDown className={`h-5 w-5 text-gray-400 shrink-0 transition-transform duration-200 ${openFaq === i ? "rotate-180" : ""}`} />
+                  <span className="font-semibold text-text-primary pr-4">{faq.q}</span>
+                  <ChevronDown className={`h-5 w-5 text-text-muted shrink-0 transition-transform duration-200 ${openFaq === i ? "rotate-180" : ""}`} />
                 </button>
                 {openFaq === i && (
-                  <div className="px-6 pb-5 text-gray-600 leading-relaxed border-t border-gray-100 pt-4">{faq.a}</div>
+                  <div className="px-6 pb-5 text-text-secondary leading-relaxed border-t border-border-subtle pt-4">{faq.a}</div>
                 )}
               </div>
             ))}
@@ -349,7 +349,7 @@ export function GarmentsErpPage() {
             Join garment manufacturers who run their operations on Prime7 ERP. Start your free trial today.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white text-primary px-8 py-3 font-semibold hover:bg-gray-50 transition-colors">
+            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white text-primary px-8 py-3 font-semibold hover:bg-surface-subtle transition-colors">
               Start Free Trial <ArrowRight className="w-4 h-4" />
             </Link>
             <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/50 text-white px-8 py-3 font-semibold hover:bg-white/10 transition-colors">

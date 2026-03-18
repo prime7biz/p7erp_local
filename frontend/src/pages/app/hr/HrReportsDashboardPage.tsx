@@ -44,68 +44,68 @@ export function HrReportsDashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">HR Reports Dashboard</h1>
-          <p className="text-sm text-gray-500">Attendance, leave, and payroll insights in one place.</p>
+          <h1 className="text-2xl font-bold text-text-primary">HR Reports Dashboard</h1>
+          <p className="text-sm text-text-muted">Attendance, leave, and payroll insights in one place.</p>
         </div>
         <button
           type="button"
           onClick={() => void load()}
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+          className="rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
         >
           Refresh
         </button>
       </div>
 
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
+      {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">{error}</div>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="text-xs uppercase text-gray-500">Total Employees</div>
-          <div className="mt-2 text-2xl font-semibold text-gray-900">{loading || !summary ? "-" : summary.total_employees}</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <div className="text-xs uppercase text-text-muted">Total Employees</div>
+          <div className="mt-2 text-2xl font-semibold text-text-primary">{loading || !summary ? "-" : summary.total_employees}</div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="text-xs uppercase text-gray-500">Attendance Rate</div>
-          <div className="mt-2 text-2xl font-semibold text-gray-900">
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <div className="text-xs uppercase text-text-muted">Attendance Rate</div>
+          <div className="mt-2 text-2xl font-semibold text-text-primary">
             {loading || !summary ? "-" : `${summary.attendance_rate_percent}%`}
           </div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="text-xs uppercase text-gray-500">Pending Leave Requests</div>
-          <div className="mt-2 text-2xl font-semibold text-gray-900">
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <div className="text-xs uppercase text-text-muted">Pending Leave Requests</div>
+          <div className="mt-2 text-2xl font-semibold text-text-primary">
             {loading || !summary ? "-" : summary.pending_leave_requests}
           </div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="text-xs uppercase text-gray-500">Payroll Runs (Month)</div>
-          <div className="mt-2 text-2xl font-semibold text-gray-900">
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <div className="text-xs uppercase text-text-muted">Payroll Runs (Month)</div>
+          <div className="mt-2 text-2xl font-semibold text-text-primary">
             {loading || !summary ? "-" : summary.payroll_runs_this_month}
           </div>
         </div>
       </div>
 
-      <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-        <div className="border-b border-gray-200 px-4 py-3">
-          <h2 className="text-base font-semibold text-gray-900">Attendance Report</h2>
+      <section className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-base font-semibold text-text-primary">Attendance Report</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-surface-subtle">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Code</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Present</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Absent</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Leave</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Code</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Present</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Absent</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Leave</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
+            <tbody className="divide-y divide-gray-200 bg-surface-raised">
               {attendanceRows.map((row) => (
                 <tr key={`${row.employee_code}-${row.employee_name}`}>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.employee_code}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.employee_name}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.present_days}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.absent_days}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.leave_days}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.employee_code}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.employee_name}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.present_days}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.absent_days}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.leave_days}</td>
                 </tr>
               ))}
             </tbody>
@@ -113,29 +113,29 @@ export function HrReportsDashboardPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-        <div className="border-b border-gray-200 px-4 py-3">
-          <h2 className="text-base font-semibold text-gray-900">Leave Report</h2>
+      <section className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-base font-semibold text-text-primary">Leave Report</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-surface-subtle">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Leave Type</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Total</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Approved</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Pending</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Rejected</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Leave Type</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Total</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Approved</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Pending</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Rejected</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
+            <tbody className="divide-y divide-gray-200 bg-surface-raised">
               {leaveRows.map((row) => (
                 <tr key={row.leave_type}>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.leave_type}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.total_requests}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.approved_requests}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.pending_requests}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.rejected_requests}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.leave_type}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.total_requests}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.approved_requests}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.pending_requests}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.rejected_requests}</td>
                 </tr>
               ))}
             </tbody>
@@ -143,29 +143,29 @@ export function HrReportsDashboardPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-        <div className="border-b border-gray-200 px-4 py-3">
-          <h2 className="text-base font-semibold text-gray-900">Payroll Report</h2>
+      <section className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-base font-semibold text-text-primary">Payroll Report</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-surface-subtle">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Period</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Employees</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Gross</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Deductions</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Net</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Period</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Employees</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Gross</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Deductions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Net</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
+            <tbody className="divide-y divide-gray-200 bg-surface-raised">
               {payrollRows.map((row) => (
                 <tr key={row.payroll_period}>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.payroll_period}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.total_employees}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.gross_total}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.deduction_total}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{row.net_total}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.payroll_period}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.total_employees}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.gross_total}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.deduction_total}</td>
+                  <td className="px-4 py-3 text-sm text-text-secondary">{row.net_total}</td>
                 </tr>
               ))}
             </tbody>

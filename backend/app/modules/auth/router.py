@@ -2,7 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy import func
 
-from app.common.auth import create_access_token, get_current_user, hash_password, verify_password
+from app.common.auth import (
+    create_access_token,
+    get_current_user,
+    get_current_user_optional,
+    hash_password,
+    verify_password,
+)
+from app.common.authz import ensure_user_is_tenant_admin
+from app.config import get_settings
 from app.database import get_db
 from app.models import Tenant, User, Role
 from app.modules.auth.me_schema import MeResponse
@@ -76,25 +84,32 @@ async def login(
     return TokenResponse(access_token=token, tenant_id=tenant.id)
 
 
-@router.post("/register", response_model=UserResponse)
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     body: RegisterRequest,
+    current_user: User | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
-    """Register a new user under a tenant. Requires tenant to exist; creates user with default role."""
+    """Register a new user under a tenant with admin-controlled access by default."""
+    settings = get_settings()
     tenant_result = await db.execute(select(Tenant).where(Tenant.id == body.tenant_id, Tenant.is_active.is_(True)))
     tenant = tenant_result.scalar_one_or_none()
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    if not getattr(settings, "allow_public_registration", False):
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required for registration",
+            )
+        await ensure_user_is_tenant_admin(db, current_user, tenant.id)
+
     existing = await db.execute(
         select(User).where(User.tenant_id == body.tenant_id, User.email == body.email)
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered for this tenant")
-    # First user gets Admin role; subsequent users get User role
-    count_result = await db.execute(select(func.count()).select_from(User).where(User.tenant_id == body.tenant_id))
-    user_count = count_result.scalar() or 0
-    role_name = "admin" if user_count == 0 else "user"
+    role_name = "user"
     role_result = await db.execute(
         select(Role).where(Role.tenant_id == body.tenant_id, Role.name == role_name).limit(1)
     )
@@ -134,7 +149,9 @@ async def me(
     from app.models import Tenant
 
     tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
-    tenant = tenant_result.scalar_one()
+    tenant = tenant_result.scalar_one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
     return MeResponse(
         user_id=user.id,
         tenant_id=user.tenant_id,

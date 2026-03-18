@@ -231,16 +231,16 @@ export function CustomerEditPage() {
   };
 
   if (loading) {
-    return <div className="p-6 text-slate-500">Loading customer for edit...</div>;
+    return <div className="p-6 text-text-muted">Loading customer for edit...</div>;
   }
 
   if (!form) {
     return (
       <div className="space-y-3 p-6">
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error || "Customer not found."}
         </div>
-        <Link to="/app/customers" className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+        <Link to="/app/customers" className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle">
           Back to customers
         </Link>
       </div>
@@ -251,19 +251,19 @@ export function CustomerEditPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <Link to={`/app/customers/${id}`} className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-primary">
+          <Link to={`/app/customers/${id}`} className="inline-flex items-center gap-1 text-sm font-medium text-text-secondary hover:text-brand-primary">
             <ArrowLeft className="h-4 w-4" />
             Back to customer details
           </Link>
-          <h1 className="mt-2 text-3xl font-bold text-slate-900">Edit Customer Profile</h1>
-          <p className="mt-1 text-sm text-slate-500">Update full customer profile details using the advanced form.</p>
-          <p className="mt-1 text-xs text-slate-500">Fields marked with ** are mandatory.</p>
+          <h1 className="mt-2 text-3xl font-bold text-text-primary">Edit Customer Profile</h1>
+          <p className="mt-1 text-sm text-text-muted">Update full customer profile details using the advanced form.</p>
+          <p className="mt-1 text-xs text-text-muted">Fields marked with ** are mandatory.</p>
         </div>
       </div>
 
-      {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {error && <div className="rounded-xl border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">{error}</div>}
       {success && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        <div className="rounded-xl border border-status-success/30 bg-status-success-subtle px-4 py-3 text-sm text-status-success-foreground">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4" />
             {success}
@@ -278,55 +278,55 @@ export function CustomerEditPage() {
         }}
         className="space-y-6"
       >
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-orange-500">
+        <section className="rounded-xl border border-border bg-surface-raised p-5">
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-status-warning">
             <Building2 className="h-4 w-4" />
             General Information
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-slate-700">Legal Entity Name **</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Legal Entity Name **</label>
               <input
                 type="text"
                 value={form.legalEntityName}
                 onChange={(e) => setForm((prev) => (prev ? { ...prev, legalEntityName: e.target.value } : prev))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 required
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Trade Name / Brand</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Trade Name / Brand</label>
               <input
                 type="text"
                 value={form.tradeName}
                 onChange={(e) => setForm((prev) => (prev ? { ...prev, tradeName: e.target.value } : prev))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Tax ID / VAT Number</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Tax ID / VAT Number</label>
               <input
                 type="text"
                 value={form.taxIdVatNumber}
                 onChange={(e) => setForm((prev) => (prev ? { ...prev, taxIdVatNumber: e.target.value } : prev))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Website URL</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Website URL</label>
               <input
                 type="url"
                 value={form.website}
                 onChange={(e) => setForm((prev) => (prev ? { ...prev, website: e.target.value } : prev))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Customer Type</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Customer Type</label>
               <select
                 value={form.customerType}
                 onChange={(e) => setForm((prev) => (prev ? { ...prev, customerType: e.target.value } : prev))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
               >
                 <option value="enterprise">Enterprise</option>
                 <option value="sme">SME</option>
@@ -334,31 +334,31 @@ export function CustomerEditPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Status</label>
               <select
                 value={form.status}
                 onChange={(e) => setForm((prev) => (prev ? { ...prev, status: e.target.value as "active" | "inactive" } : prev))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
             </div>
             <div className="md:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-slate-700">Company Logo (Optional)</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Company Logo (Optional)</label>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   type="url"
                   value={form.companyLogoUrl}
                   onChange={(e) => setForm((prev) => (prev ? { ...prev, companyLogoUrl: e.target.value } : prev))}
                   placeholder="Upload a logo or paste URL"
-                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="flex-1 rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 />
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={logoUploading}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
                 >
                   <Upload className="h-4 w-4" />
                   {logoUploading ? "Uploading..." : "Upload"}
@@ -372,81 +372,81 @@ export function CustomerEditPage() {
                 className="hidden"
               />
               {form.companyLogoUrl ? (
-                <div className="mt-3 inline-flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="mt-3 inline-flex items-center gap-3 rounded-lg border border-border bg-surface-subtle px-3 py-2">
                   <img src={resolveAssetUrl(form.companyLogoUrl)} alt="Company logo preview" className="h-10 w-10 rounded object-cover" />
                   <button
                     type="button"
                     onClick={() => setForm((prev) => (prev ? { ...prev, companyLogoUrl: "" } : prev))}
-                    className="text-xs font-medium text-slate-600 hover:text-slate-900"
+                    className="text-xs font-medium text-text-secondary hover:text-text-primary"
                   >
                     Remove
                   </button>
                 </div>
               ) : null}
-              <p className="mt-1 text-xs text-slate-500">Accepted: PNG, JPG, GIF, WEBP (max 2MB).</p>
+              <p className="mt-1 text-xs text-text-muted">Accepted: PNG, JPG, GIF, WEBP (max 2MB).</p>
             </div>
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-orange-500">
+        <section className="rounded-xl border border-border bg-surface-raised p-5">
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-status-warning">
             <Mail className="h-4 w-4" />
             Contact & Communication
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Primary Contact Name **</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Primary Contact Name **</label>
               <input
                 type="text"
                 value={form.primaryContactName}
                 onChange={(e) => setForm((prev) => (prev ? { ...prev, primaryContactName: e.target.value } : prev))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 required
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Designation / Role</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Designation / Role</label>
               <input
                 type="text"
                 value={form.designation}
                 onChange={(e) => setForm((prev) => (prev ? { ...prev, designation: e.target.value } : prev))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Email Address **</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Email Address **</label>
               <input
                 type="email"
                 value={form.contactEmail}
                 onChange={(e) => setForm((prev) => (prev ? { ...prev, contactEmail: e.target.value } : prev))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 required
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Phone Number</label>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Phone Number</label>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={form.countryCode}
                   onChange={(e) => setForm((prev) => (prev ? { ...prev, countryCode: e.target.value } : prev))}
-                  className="w-20 rounded-lg border border-slate-300 px-2 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-20 rounded-lg border border-border-strong px-2 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 />
                 <input
                   type="text"
                   value={form.contactPhone}
                   onChange={(e) => setForm((prev) => (prev ? { ...prev, contactPhone: e.target.value } : prev))}
-                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="flex-1 rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 />
               </div>
             </div>
             <div className="md:col-span-2">
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle">
                 <input
                   type="checkbox"
                   checked={form.subscribeNewsletter}
                   onChange={(e) => setForm((prev) => (prev ? { ...prev, subscribeNewsletter: e.target.checked } : prev))}
-                  className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                  className="h-4 w-4 rounded border-border-strong text-brand-primary focus:ring-focus-ring"
                 />
                 Subscribe to newsletter & updates
               </label>
@@ -454,110 +454,110 @@ export function CustomerEditPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-orange-500">
+        <section className="rounded-xl border border-border bg-surface-raised p-5">
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-status-warning">
             <MapPin className="h-4 w-4" />
             Addresses
           </div>
           <div className="grid gap-6 md:grid-cols-2">
-            <div className="space-y-3 rounded-lg border border-slate-200 p-4">
-              <h3 className="text-sm font-semibold text-slate-800">Billing Address</h3>
+            <div className="space-y-3 rounded-lg border border-border p-4">
+              <h3 className="text-sm font-semibold text-text-primary">Billing Address</h3>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Street Address **</label>
+                <label className="mb-1 block text-sm font-medium text-text-secondary">Street Address **</label>
                 <input
                   type="text"
                   value={form.billingAddressLine1}
                   onChange={(e) => setForm((prev) => (prev ? { ...prev, billingAddressLine1: e.target.value } : prev))}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   required
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">City **</label>
+                  <label className="mb-1 block text-sm font-medium text-text-secondary">City **</label>
                   <input
                     type="text"
                     value={form.billingCity}
                     onChange={(e) => setForm((prev) => (prev ? { ...prev, billingCity: e.target.value } : prev))}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                     required
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Postal Code</label>
+                  <label className="mb-1 block text-sm font-medium text-text-secondary">Postal Code</label>
                   <input
                     type="text"
                     value={form.billingPostalCode}
                     onChange={(e) => setForm((prev) => (prev ? { ...prev, billingPostalCode: e.target.value } : prev))}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   />
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Country **</label>
+                <label className="mb-1 block text-sm font-medium text-text-secondary">Country **</label>
                 <input
                   type="text"
                   value={form.billingCountry}
                   onChange={(e) => setForm((prev) => (prev ? { ...prev, billingCountry: e.target.value } : prev))}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   required
                 />
               </div>
             </div>
 
-            <div className="space-y-3 rounded-lg border border-slate-200 p-4">
+            <div className="space-y-3 rounded-lg border border-border p-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800">Shipping Address</h3>
-                <label className="inline-flex items-center gap-2 text-xs font-medium text-orange-500">
+                <h3 className="text-sm font-semibold text-text-primary">Shipping Address</h3>
+                <label className="inline-flex items-center gap-2 text-xs font-medium text-status-warning">
                   <input
                     type="checkbox"
                     checked={form.sameAsBilling}
                     onChange={(e) => setForm((prev) => (prev ? { ...prev, sameAsBilling: e.target.checked } : prev))}
-                    className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                    className="h-4 w-4 rounded border-border-strong text-brand-primary focus:ring-focus-ring"
                   />
                   Same as billing
                 </label>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Street Address **</label>
+                <label className="mb-1 block text-sm font-medium text-text-secondary">Street Address **</label>
                 <input
                   type="text"
                   value={shippingValues.shippingAddressLine1}
                   onChange={(e) => setForm((prev) => (prev ? { ...prev, shippingAddressLine1: e.target.value } : prev))}
                   disabled={form.sameAsBilling}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">City **</label>
+                  <label className="mb-1 block text-sm font-medium text-text-secondary">City **</label>
                   <input
                     type="text"
                     value={shippingValues.shippingCity}
                     onChange={(e) => setForm((prev) => (prev ? { ...prev, shippingCity: e.target.value } : prev))}
                     disabled={form.sameAsBilling}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Postal Code</label>
+                  <label className="mb-1 block text-sm font-medium text-text-secondary">Postal Code</label>
                   <input
                     type="text"
                     value={shippingValues.shippingPostalCode}
                     onChange={(e) => setForm((prev) => (prev ? { ...prev, shippingPostalCode: e.target.value } : prev))}
                     disabled={form.sameAsBilling}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   />
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Country **</label>
+                <label className="mb-1 block text-sm font-medium text-text-secondary">Country **</label>
                 <input
                   type="text"
                   value={shippingValues.shippingCountry}
                   onChange={(e) => setForm((prev) => (prev ? { ...prev, shippingCountry: e.target.value } : prev))}
                   disabled={form.sameAsBilling}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 />
               </div>
             </div>
@@ -565,13 +565,13 @@ export function CustomerEditPage() {
         </section>
 
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <Link to={`/app/customers/${id}`} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <Link to={`/app/customers/${id}`} className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle">
             Cancel
           </Link>
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground hover:bg-brand-primary/90 disabled:opacity-60"
           >
             <Save className="h-4 w-4" />
             {submitting ? "Updating..." : "Update Customer"}

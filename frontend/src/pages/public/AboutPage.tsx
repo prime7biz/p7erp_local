@@ -24,10 +24,10 @@ export function AboutPage() {
         <div className="absolute bottom-10 -right-20 w-72 h-72 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative">
           <p className="text-sm font-medium text-primary uppercase tracking-wide mb-3">About Prime7 ERP</p>
-          <h1 id="about-hero-heading" className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
+          <h1 id="about-hero-heading" className="text-4xl sm:text-5xl lg:text-6xl font-bold text-text-primary leading-tight">
             Transforming Bangladesh&apos;s Garment Industry <span className="text-primary">Through Technology</span>
           </h1>
-          <p className="mt-6 text-lg sm:text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+          <p className="mt-6 text-lg sm:text-xl text-text-secondary max-w-3xl mx-auto leading-relaxed">
             Prime7 ERP is built by industry veterans who understand the unique challenges of garment
             manufacturing in Bangladesh. We combine deep domain expertise with cutting-edge AI to
             deliver software that truly works for the RMG sector.
@@ -36,7 +36,7 @@ export function AboutPage() {
             <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-white hover:bg-primary/90 transition-colors">
               Start Free Trial <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-6 py-3 text-base font-semibold text-gray-700 hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors">
+            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-border px-6 py-3 text-base font-semibold text-text-secondary hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors">
               Get In Touch
             </Link>
           </div>
@@ -44,7 +44,7 @@ export function AboutPage() {
       </section>
 
       {/* Mission & Vision — what drives us */}
-      <section className="relative py-16 lg:py-24 bg-white overflow-hidden" aria-labelledby="mission-vision-heading">
+      <section className="relative py-16 lg:py-24 bg-surface-raised overflow-hidden" aria-labelledby="mission-vision-heading">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <p id="mission-vision-heading" className="sr-only">What drives us</p>
           <div className="grid md:grid-cols-2 gap-12 lg:gap-20">
@@ -53,13 +53,13 @@ export function AboutPage() {
                 <Target className="h-4 w-4" />
                 Our Mission
               </div>
-              <h2 className="text-3xl font-semibold text-gray-900">Empowering Manufacturers to Compete Globally</h2>
-              <p className="text-gray-600 leading-relaxed">
+              <h2 className="text-3xl font-semibold text-text-primary">Empowering Manufacturers to Compete Globally</h2>
+              <p className="text-text-secondary leading-relaxed">
                 Our mission is to empower garment manufacturers and buying houses in Bangladesh with
                 AI-driven tools that streamline operations, reduce waste, and unlock data-driven
                 decision making — enabling them to compete on the global stage with confidence.
               </p>
-              <p className="text-gray-600 leading-relaxed">
+              <p className="text-text-secondary leading-relaxed">
                 We believe that every factory, regardless of size, deserves access to enterprise-grade
                 technology. Prime7 ERP levels the playing field by making sophisticated ERP capabilities
                 affordable and accessible to manufacturers across Bangladesh.
@@ -70,13 +70,13 @@ export function AboutPage() {
                 <Eye className="h-4 w-4" />
                 Our Vision
               </div>
-              <h2 className="text-3xl font-semibold text-gray-900">The Most Digitally Advanced Garment Hub</h2>
-              <p className="text-gray-600 leading-relaxed">
+              <h2 className="text-3xl font-semibold text-text-primary">The Most Digitally Advanced Garment Hub</h2>
+              <p className="text-text-secondary leading-relaxed">
                 We envision Bangladesh as the most digitally advanced garment manufacturing hub in the
                 world. A place where every factory runs on real-time data, AI-powered insights guide
                 production decisions, and paperless workflows are the norm — not the exception.
               </p>
-              <p className="text-gray-600 leading-relaxed">
+              <p className="text-text-secondary leading-relaxed">
                 By 2030, we aim to power over 1,000 garment factories across Bangladesh, helping the
                 country&apos;s $45+ billion RMG sector achieve new levels of efficiency, transparency, and
                 sustainability through technology.
@@ -88,16 +88,16 @@ export function AboutPage() {
       </section>
 
       {/* Our Story */}
-      <section className="relative py-16 lg:py-24 bg-gray-50 overflow-hidden" aria-labelledby="story-heading">
+      <section className="relative py-16 lg:py-24 bg-surface-subtle overflow-hidden" aria-labelledby="story-heading">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="max-w-3xl mx-auto text-center mb-12">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
               <BookOpen className="h-4 w-4" />
               Our Story
             </div>
-            <h2 id="story-heading" className="text-3xl sm:text-4xl font-semibold text-gray-900">Born From Industry Experience</h2>
+            <h2 id="story-heading" className="text-3xl sm:text-4xl font-semibold text-text-primary">Born From Industry Experience</h2>
           </div>
-          <div className="max-w-4xl mx-auto space-y-6 text-gray-600 leading-relaxed">
+          <div className="max-w-4xl mx-auto space-y-6 text-text-secondary leading-relaxed">
             <p>
               Prime7 ERP was founded by a team of industry veterans who spent decades working inside
               Bangladesh&apos;s garment manufacturing ecosystem. They experienced firsthand the pain points
@@ -124,22 +124,22 @@ export function AboutPage() {
       </section>
 
       {/* Core Values — guiding principles */}
-      <section className="relative py-16 lg:py-24 bg-white overflow-hidden" aria-labelledby="values-heading">
+      <section className="relative py-16 lg:py-24 bg-surface-raised overflow-hidden" aria-labelledby="values-heading">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center mb-12">
-            <h2 id="values-heading" className="text-3xl sm:text-4xl font-bold text-gray-900">Our Core Values</h2>
-            <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
+            <h2 id="values-heading" className="text-3xl sm:text-4xl font-bold text-text-primary">Our Core Values</h2>
+            <p className="mt-4 text-lg text-text-secondary max-w-2xl mx-auto">
               These principles guide every decision we make, from product development to customer support.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {values.map((value) => (
-              <div key={value.title} className="bg-white border border-primary/20 rounded-xl p-6 hover:shadow-lg hover:border-primary/30 transition-all">
+              <div key={value.title} className="bg-surface-raised border border-primary/20 rounded-xl p-6 hover:shadow-lg hover:border-primary/30 transition-all">
                 <div className={`inline-flex p-3 rounded-lg ${value.color} mb-4`}>
                   <value.icon className="h-6 w-6" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">{value.title}</h3>
-                <p className="text-gray-600 text-sm leading-relaxed">{value.description}</p>
+                <h3 className="text-xl font-semibold text-text-primary mb-2">{value.title}</h3>
+                <p className="text-text-secondary text-sm leading-relaxed">{value.description}</p>
               </div>
             ))}
           </div>
@@ -147,28 +147,28 @@ export function AboutPage() {
       </section>
 
       {/* Team */}
-      <section className="relative py-16 lg:py-24 bg-gray-50 overflow-hidden" aria-labelledby="team-heading">
+      <section className="relative py-16 lg:py-24 bg-surface-subtle overflow-hidden" aria-labelledby="team-heading">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center mb-12">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
               <Users className="h-4 w-4" />
               Leadership
             </div>
-            <h2 id="team-heading" className="text-3xl sm:text-4xl font-bold text-gray-900">Meet Our Team</h2>
-            <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
+            <h2 id="team-heading" className="text-3xl sm:text-4xl font-bold text-text-primary">Meet Our Team</h2>
+            <p className="mt-4 text-lg text-text-secondary max-w-2xl mx-auto">
               Industry veterans and technology leaders united by a shared passion for transforming garment manufacturing.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 gap-6 max-w-4xl mx-auto">
             {team.map((member) => (
-              <div key={member.role} className="bg-white border border-primary/20 rounded-xl p-6 hover:shadow-lg hover:border-primary/30 transition-all">
+              <div key={member.role} className="bg-surface-raised border border-primary/20 rounded-xl p-6 hover:shadow-lg hover:border-primary/30 transition-all">
                 <div className="flex items-center gap-4 mb-4">
                   <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
                     <Users className="h-6 w-6 text-primary" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">{member.role}</h3>
+                  <h3 className="text-lg font-semibold text-text-primary">{member.role}</h3>
                 </div>
-                <p className="text-gray-600 text-sm leading-relaxed">{member.description}</p>
+                <p className="text-text-secondary text-sm leading-relaxed">{member.description}</p>
               </div>
             ))}
           </div>
@@ -188,7 +188,7 @@ export function AboutPage() {
             professional passionate about transforming industries — we&apos;d love to hear from you.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white text-primary px-8 py-3 font-semibold hover:bg-gray-50 transition-colors">
+            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg bg-surface-raised text-primary px-8 py-3 font-semibold hover:bg-surface-subtle transition-colors">
               Get In Touch <ArrowRight className="w-4 h-4" />
             </Link>
             <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/50 text-white px-8 py-3 font-semibold hover:bg-white/10 transition-colors">

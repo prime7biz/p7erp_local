@@ -110,18 +110,18 @@ export function MerchPipelinePage() {
   }, [data, documentType]);
 
   const stageColor = (stage: PipelineStageOut) => {
-    if (stage.document_type === "inquiry") return "bg-slate-100 border-slate-300";
-    if (stage.document_type === "quotation") return "bg-amber-50 border-amber-200";
-    return "bg-emerald-50 border-emerald-200";
+    if (stage.document_type === "inquiry") return "bg-status-neutral-subtle border-border-strong";
+    if (stage.document_type === "quotation") return "bg-status-warning-subtle border-status-warning/30";
+    return "bg-status-success-subtle border-status-success/30";
   };
 
   const docTypeBadge = (doc: string) => {
     const c =
       doc === "inquiry"
-        ? "bg-slate-200 text-slate-800"
+        ? "bg-status-neutral-subtle text-status-neutral-foreground"
         : doc === "quotation"
-          ? "bg-amber-200 text-amber-900"
-          : "bg-emerald-200 text-emerald-900";
+          ? "bg-status-warning-subtle text-status-warning-foreground"
+          : "bg-status-success-subtle text-status-success-foreground";
     return (
       <span className={`inline-flex rounded px-1.5 py-0.5 text-xs font-medium ${c}`}>
         {doc}
@@ -133,13 +133,13 @@ export function MerchPipelinePage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Order Pipeline</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-brand-primary">Order Pipeline</h1>
+          <p className="mt-0.5 text-sm text-text-muted">
             Full lifecycle from inquiry → quotation → order. Move deals through stages; win probability per column.
           </p>
           <Link
             to="/app/merchandising/pipeline-analytics"
-            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10"
+            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-brand-primary/30 bg-brand-primary/10 px-3 py-1.5 text-sm font-medium text-brand-primary hover:bg-brand-primary/15"
           >
             <BarChart3 className="h-4 w-4" />
             Month-wise &amp; quarterly report
@@ -150,15 +150,15 @@ export function MerchPipelinePage() {
       {/* Summary + filters */}
       <div className="flex flex-wrap items-center gap-3">
         {data && (
-          <div className="flex flex-wrap gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
-            <span className="text-xs font-semibold uppercase text-gray-500">Summary</span>
-            <span className="rounded bg-slate-100 px-2 py-0.5 text-sm font-medium text-slate-700">
+          <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-surface-raised px-3 py-2">
+            <span className="text-xs font-semibold uppercase text-text-muted">Summary</span>
+            <span className="rounded bg-status-neutral-subtle px-2 py-0.5 text-sm font-medium text-status-neutral-foreground">
               Inquiries: {data.summary.inquiries}
             </span>
-            <span className="rounded bg-amber-100 px-2 py-0.5 text-sm font-medium text-amber-800">
+            <span className="rounded bg-status-warning-subtle px-2 py-0.5 text-sm font-medium text-status-warning-foreground">
               Quotations: {data.summary.quotations}
             </span>
-            <span className="rounded bg-emerald-100 px-2 py-0.5 text-sm font-medium text-emerald-800">
+            <span className="rounded bg-status-success-subtle px-2 py-0.5 text-sm font-medium text-status-success-foreground">
               Orders: {data.summary.orders}
             </span>
           </div>
@@ -166,7 +166,7 @@ export function MerchPipelinePage() {
         <select
           value={documentType}
           onChange={(e) => setDocumentType(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+          className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"
         >
           {DOCUMENT_TYPE_OPTIONS.map((o) => (
             <option key={o.value || "all"} value={o.value}>
@@ -177,7 +177,7 @@ export function MerchPipelinePage() {
         <select
           value={customerId}
           onChange={(e) => setCustomerId(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+          className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"
         >
           <option value="">All customers</option>
           {customers.map((c) => (
@@ -191,13 +191,13 @@ export function MerchPipelinePage() {
           placeholder="Search code or style…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-48 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+          className="w-48 rounded-lg border border-border-strong px-3 py-1.5 text-sm"
         />
-        <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-subtle p-1">
           <button
             type="button"
             onClick={() => setViewMode("kanban")}
-            className={`rounded-md p-1.5 ${viewMode === "kanban" ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"}`}
+            className={`rounded-md p-1.5 ${viewMode === "kanban" ? "bg-surface-raised shadow text-brand-primary" : "text-text-muted hover:text-text-secondary"}`}
             title="Kanban"
           >
             <LayoutGrid className="h-4 w-4" />
@@ -205,7 +205,7 @@ export function MerchPipelinePage() {
           <button
             type="button"
             onClick={() => setViewMode("list")}
-            className={`rounded-md p-1.5 ${viewMode === "list" ? "bg-white shadow text-primary" : "text-gray-500 hover:text-gray-700"}`}
+            className={`rounded-md p-1.5 ${viewMode === "list" ? "bg-surface-raised shadow text-brand-primary" : "text-text-muted hover:text-text-secondary"}`}
             title="List"
           >
             <List className="h-4 w-4" />
@@ -215,7 +215,7 @@ export function MerchPipelinePage() {
           type="button"
           onClick={() => loadPipeline()}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           Refresh
@@ -223,13 +223,13 @@ export function MerchPipelinePage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
 
       {loading && !data ? (
-        <div className="py-12 text-center text-gray-500">Loading pipeline…</div>
+        <div className="py-12 text-center text-text-muted">Loading pipeline…</div>
       ) : !data ? null : viewMode === "kanban" ? (
         <div className="overflow-x-auto pb-4">
           <div className="flex gap-4 min-w-max">
@@ -241,14 +241,14 @@ export function MerchPipelinePage() {
                   className={`w-72 shrink-0 rounded-xl border-2 ${stageColor(stage)} p-3`}
                 >
                   <div className="mb-2 flex items-center justify-between">
-                    <h3 className="font-semibold text-gray-900">{stage.label}</h3>
-                    <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-medium text-gray-600">
+                    <h3 className="font-semibold text-brand-primary">{stage.label}</h3>
+                    <span className="rounded-full bg-surface-raised/80 px-2 py-0.5 text-xs font-medium text-text-secondary">
                       {stage.win_probability}%
                     </span>
                   </div>
                   <div className="space-y-2">
                     {items.length === 0 ? (
-                      <div className="rounded-lg border border-dashed border-gray-300 py-6 text-center text-xs text-gray-400">
+                      <div className="rounded-lg border border-dashed border-border-strong py-6 text-center text-xs text-text-muted">
                         No items
                       </div>
                     ) : (
@@ -272,9 +272,9 @@ export function MerchPipelinePage() {
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
+        <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="border-b border-gray-200 bg-gray-50 text-left text-gray-600">
+            <thead className="border-b border-border bg-surface-subtle text-left text-text-secondary">
               <tr>
                 <th className="px-4 py-2.5 font-medium">Type</th>
                 <th className="px-4 py-2.5 font-medium">Code</th>
@@ -290,7 +290,7 @@ export function MerchPipelinePage() {
             <tbody>
               {data.items.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-text-muted">
                     No pipeline items match your filters.
                   </td>
                 </tr>
@@ -300,30 +300,30 @@ export function MerchPipelinePage() {
                   return (
                     <tr
                       key={`${item.document_type}-${item.id}`}
-                      className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50"
+                      className="border-b border-border-subtle last:border-0 hover:bg-surface-subtle/50"
                     >
                       <td className="px-4 py-2.5">{docTypeBadge(item.document_type)}</td>
                       <td className="px-4 py-2.5 font-medium">
-                        <Link to={item.detail_path} className="text-primary hover:underline">
+                        <Link to={item.detail_path} className="text-brand-primary hover:underline">
                           {item.code}
                         </Link>
                       </td>
-                      <td className="px-4 py-2.5 text-gray-600">{stage?.label ?? item.stage_key}</td>
-                      <td className="px-4 py-2.5 text-gray-700">{item.customer_name}</td>
-                      <td className="px-4 py-2.5 text-gray-700">
+                      <td className="px-4 py-2.5 text-text-secondary">{stage?.label ?? item.stage_key}</td>
+                      <td className="px-4 py-2.5 text-text-secondary">{item.customer_name}</td>
+                      <td className="px-4 py-2.5 text-text-secondary">
                         {item.style_name || item.style_ref || "—"}
                       </td>
-                      <td className="px-4 py-2.5 text-gray-700">
+                      <td className="px-4 py-2.5 text-text-secondary">
                         {item.quantity != null ? item.quantity.toLocaleString() : "—"}
                       </td>
-                      <td className="px-4 py-2.5 text-gray-700">{formatAmount(item.total_amount)}</td>
-                      <td className="px-4 py-2.5 text-gray-500">
+                      <td className="px-4 py-2.5 text-text-secondary">{formatAmount(item.total_amount)}</td>
+                      <td className="px-4 py-2.5 text-text-muted">
                         {new Date(item.created_at).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <Link
                           to={item.detail_path}
-                          className="text-primary hover:underline mr-2"
+                          className="text-brand-primary hover:underline mr-2"
                         >
                           Open
                         </Link>
@@ -336,18 +336,18 @@ export function MerchPipelinePage() {
                                   moveMenuId === `${item.document_type}-${item.id}` ? null : `${item.document_type}-${item.id}`
                                 )
                               }
-                              className="inline-flex items-center gap-0.5 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                              className="inline-flex items-center gap-0.5 rounded border border-border-strong px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                             >
                               Move <ChevronDown className="h-3 w-3" />
                             </button>
                             {moveMenuId === `${item.document_type}-${item.id}` && (
-                              <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                              <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-border bg-surface-raised py-1 shadow-lg">
                                 {item.next_status_options.map((opt) => (
                                   <button
                                     key={opt}
                                     type="button"
                                     onClick={() => handleMoveTo(item, opt)}
-                                    className="block w-full px-3 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                    className="block w-full px-3 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                                   >
                                     → {opt.replace(/_/g, " ")}
                                   </button>
@@ -367,7 +367,7 @@ export function MerchPipelinePage() {
       )}
 
       {moving && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+        <div className="rounded-lg border border-status-warning/30 bg-status-warning-subtle px-4 py-2 text-sm text-status-warning-foreground">
           Updating status…
         </div>
       )}
@@ -395,25 +395,25 @@ function PipelineCard({
   const menuId = `${item.document_type}-${item.id}`;
   const isOpen = moveMenuId === menuId;
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm">
+    <div className="rounded-lg border border-border bg-surface-raised p-2.5 shadow-sm">
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0 flex-1">
           {docTypeBadge(item.document_type)}
           <Link
             to={item.detail_path}
-            className="mt-1 block font-medium text-gray-900 hover:text-primary hover:underline"
+            className="mt-1 block font-medium text-brand-primary hover:text-brand-primary hover:underline"
           >
             {item.code}
           </Link>
-          <p className="mt-0.5 truncate text-xs text-gray-600" title={item.customer_name}>
+          <p className="mt-0.5 truncate text-xs text-text-secondary" title={item.customer_name}>
             {item.customer_name}
           </p>
           {(item.style_ref || item.style_name) && (
-            <p className="truncate text-xs text-gray-500" title={item.style_ref || item.style_name || ""}>
+            <p className="truncate text-xs text-text-muted" title={item.style_ref || item.style_name || ""}>
               {item.style_name || item.style_ref}
             </p>
           )}
-          <div className="mt-1 flex flex-wrap gap-1 text-xs text-gray-500">
+          <div className="mt-1 flex flex-wrap gap-1 text-xs text-text-muted">
             {item.quantity != null && <span>Qty: {item.quantity.toLocaleString()}</span>}
             {(item.total_amount != null && item.total_amount !== "") && (
               <span>· {formatAmount(item.total_amount)}</span>
@@ -426,19 +426,19 @@ function PipelineCard({
               type="button"
               onClick={() => setMoveMenuId(isOpen ? null : menuId)}
               disabled={moving}
-              className="rounded border border-gray-300 p-1 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+              className="rounded border border-border-strong p-1 text-text-muted hover:bg-surface-subtle disabled:opacity-50"
               title="Move to next stage"
             >
               <ChevronDown className="h-3.5 w-3.5" />
             </button>
             {isOpen && (
-              <div className="absolute right-0 top-full z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+              <div className="absolute right-0 top-full z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised py-1 shadow-lg">
                 {item.next_status_options.map((opt) => (
                   <button
                     key={opt}
                     type="button"
                     onClick={() => onMoveTo(item, opt)}
-                    className="block w-full px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                    className="block w-full px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                   >
                     → {opt.replace(/_/g, " ")}
                   </button>

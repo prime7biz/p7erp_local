@@ -9,12 +9,12 @@ interface Props {
 
 export function AiChatThread({ messages, loading }: Props) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="mb-3 text-sm font-semibold text-slate-800">Conversation</h2>
+    <div className="rounded-xl border border-border bg-surface-raised p-4">
+      <h2 className="mb-3 text-sm font-semibold text-text-primary">Conversation</h2>
       {loading ? (
-        <p className="text-sm text-slate-500">Loading conversation...</p>
+        <p className="text-sm text-text-muted">Loading conversation...</p>
       ) : messages.length === 0 ? (
-        <p className="text-sm text-slate-500">Start by asking a question or using a quick action.</p>
+        <p className="text-sm text-text-muted">Start by asking a question or using a quick action.</p>
       ) : (
         <div className="space-y-3">
           {messages.map((message) => {
@@ -25,12 +25,12 @@ export function AiChatThread({ messages, loading }: Props) {
               <div key={message.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
                 <div
                   className={`max-w-[90%] rounded-xl px-4 py-3 text-sm ${
-                    isUser ? "bg-primary text-white" : "border border-slate-200 bg-slate-50 text-slate-800"
+                    isUser ? "bg-primary text-white" : "border border-border bg-surface-subtle text-text-primary"
                   }`}
                 >
                   <p className="whitespace-pre-wrap">{message.content}</p>
                   {!isUser && meta.request_id ? (
-                    <p className="mt-1 text-[11px] text-slate-500">Trace: {meta.request_id}</p>
+                    <p className="mt-1 text-[11px] text-text-muted">Trace: {meta.request_id}</p>
                   ) : null}
                   {!isUser && toolResults.length > 0 ? (
                     <div className="mt-3 space-y-2">

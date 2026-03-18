@@ -299,13 +299,13 @@ export function ProformaInvoiceFormPage() {
   };
 
   const inputClass =
-    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20";
-  const labelClass = "mb-1.5 block text-sm font-medium text-slate-700";
+    "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-focus-ring/20";
+  const labelClass = "mb-1.5 block text-sm font-medium text-text-secondary";
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white py-16 text-slate-500">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600" />
+      <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-surface-raised py-16 text-text-muted">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-indigo-600" />
         <span className="text-sm">Loading…</span>
       </div>
     );
@@ -315,17 +315,17 @@ export function ProformaInvoiceFormPage() {
     <div className="space-y-8">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
-            <FileText className="h-7 w-7 text-indigo-600" aria-hidden />
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-text-primary">
+            <FileText className="h-7 w-7 text-brand-primary" aria-hidden />
             {isEdit ? "Edit Proforma Invoice" : "Create Proforma Invoice"}
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-text-muted">
             {isEdit ? "Update details, save as draft, or issue. Use Print to open the printable template." : "Select orders and fill commercial details."}
           </p>
         </div>
         <Link
           to="/app/commercial/proforma-invoices"
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="inline-flex items-center gap-2 rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Back to list
@@ -333,16 +333,16 @@ export function ProformaInvoiceFormPage() {
       </header>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-xl border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSaveDraft} className="space-y-8">
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-3">
-            <h2 className="text-base font-semibold text-slate-800">Flow linkage</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Define whether this PI is export (our PI) or import (vendor PI).</p>
+        <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+          <div className="border-b border-border bg-surface-subtle/80 px-5 py-3">
+            <h2 className="text-base font-semibold text-text-primary">Flow linkage</h2>
+            <p className="mt-0.5 text-xs text-text-muted">Define whether this PI is export (our PI) or import (vendor PI).</p>
           </div>
           <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
             <div>
@@ -406,35 +406,35 @@ export function ProformaInvoiceFormPage() {
         </section>
 
         {/* Orders (mandatory) */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-3">
-            <h2 className="text-base font-semibold text-slate-800">Orders ({form.direction === "IMPORT" ? "optional" : "required"})</h2>
-            <p className="mt-0.5 text-xs text-slate-500">
+        <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+          <div className="border-b border-border bg-surface-subtle/80 px-5 py-3">
+            <h2 className="text-base font-semibold text-text-primary">Orders ({form.direction === "IMPORT" ? "optional" : "required"})</h2>
+            <p className="mt-0.5 text-xs text-text-muted">
               {form.direction === "IMPORT"
                 ? "For vendor PI this can stay empty, or link related orders if available."
                 : "Select at least one order to include in this proforma invoice."}
             </p>
           </div>
           <div className="p-5">
-            <div className="grid max-h-52 grid-cols-1 gap-2 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+            <div className="grid max-h-52 grid-cols-1 gap-2 overflow-y-auto rounded-lg border border-border-subtle bg-surface-subtle/50 p-3">
               {orders.map((o) => (
-                <label key={o.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-2 py-1.5 hover:bg-white">
+                <label key={o.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-2 py-1.5 hover:bg-surface-raised">
                   <input
                     type="checkbox"
                     checked={form.order_ids.includes(o.id)}
                     onChange={() => toggleOrder(o.id)}
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    className="h-4 w-4 rounded border-border-strong text-brand-primary focus:ring-focus-ring"
                   />
-                  <span className="text-sm text-slate-700">
+                  <span className="text-sm text-text-secondary">
                     {o.order_code} — {customerMap.get(o.customer_id)?.name ?? `#${o.customer_id}`} — Qty: {o.quantity ?? "—"} — Delivery: {o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : "—"}
                   </span>
                 </label>
               ))}
             </div>
             {selectedOrders.length > 0 && (
-              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div className="mb-2 text-sm font-medium text-slate-700">Selected ({selectedOrders.length})</div>
-                <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
+              <div className="mt-4 rounded-lg border border-border bg-surface-subtle p-4">
+                <div className="mb-2 text-sm font-medium text-text-secondary">Selected ({selectedOrders.length})</div>
+                <ul className="list-disc space-y-1 pl-5 text-sm text-text-secondary">
                   {selectedOrders.map((o) => (
                     <li key={o.id}>
                       {o.order_code} — {customerMap.get(o.customer_id)?.name ?? `#${o.customer_id}`} — {o.quantity ?? "—"} pcs — {o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : "—"}
@@ -447,10 +447,10 @@ export function ProformaInvoiceFormPage() {
         </section>
 
         {/* Buyer */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-3">
-            <h2 className="text-base font-semibold text-slate-800">Buyer</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Buyer / importer details.</p>
+        <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+          <div className="border-b border-border bg-surface-subtle/80 px-5 py-3">
+            <h2 className="text-base font-semibold text-text-primary">Buyer</h2>
+            <p className="mt-0.5 text-xs text-text-muted">Buyer / importer details.</p>
           </div>
           <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
             <div className="md:col-span-2">
@@ -488,10 +488,10 @@ export function ProformaInvoiceFormPage() {
 
         {/* Consignee & Notify party — two columns */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-3">
-              <h2 className="text-base font-semibold text-slate-800">Consignee</h2>
-              <p className="mt-0.5 text-xs text-slate-500">Consignee details.</p>
+          <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+            <div className="border-b border-border bg-surface-subtle/80 px-5 py-3">
+              <h2 className="text-base font-semibold text-text-primary">Consignee</h2>
+              <p className="mt-0.5 text-xs text-text-muted">Consignee details.</p>
             </div>
             <div className="grid grid-cols-1 gap-4 p-5">
               <div>
@@ -514,10 +514,10 @@ export function ProformaInvoiceFormPage() {
               </div>
             </div>
           </section>
-          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-3">
-              <h2 className="text-base font-semibold text-slate-800">Notify party</h2>
-              <p className="mt-0.5 text-xs text-slate-500">Notify party details.</p>
+          <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+            <div className="border-b border-border bg-surface-subtle/80 px-5 py-3">
+              <h2 className="text-base font-semibold text-text-primary">Notify party</h2>
+              <p className="mt-0.5 text-xs text-text-muted">Notify party details.</p>
             </div>
             <div className="grid grid-cols-1 gap-4 p-5">
               <div>
@@ -543,10 +543,10 @@ export function ProformaInvoiceFormPage() {
         </div>
 
         {/* Beneficiary / Shipper */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-3">
-            <h2 className="text-base font-semibold text-slate-800">Beneficiary / Shipper</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Beneficiary or shipper details.</p>
+        <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+          <div className="border-b border-border bg-surface-subtle/80 px-5 py-3">
+            <h2 className="text-base font-semibold text-text-primary">Beneficiary / Shipper</h2>
+            <p className="mt-0.5 text-xs text-text-muted">Beneficiary or shipper details.</p>
           </div>
           <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
             <div>
@@ -571,10 +571,10 @@ export function ProformaInvoiceFormPage() {
         </section>
 
         {/* Shipping terms & Invoice details */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-3">
-            <h2 className="text-base font-semibold text-slate-800">Shipping terms &amp; ports</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Incoterms, payment, ports.</p>
+        <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+          <div className="border-b border-border bg-surface-subtle/80 px-5 py-3">
+            <h2 className="text-base font-semibold text-text-primary">Shipping terms &amp; ports</h2>
+            <p className="mt-0.5 text-xs text-text-muted">Incoterms, payment, ports.</p>
           </div>
           <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 lg:grid-cols-3">
             <div>
@@ -646,10 +646,10 @@ export function ProformaInvoiceFormPage() {
         </section>
 
         {/* Invoice details */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-3">
-            <h2 className="text-base font-semibold text-slate-800">Invoice details</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Reference, date, and amount.</p>
+        <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+          <div className="border-b border-border bg-surface-subtle/80 px-5 py-3">
+            <h2 className="text-base font-semibold text-text-primary">Invoice details</h2>
+            <p className="mt-0.5 text-xs text-text-muted">Reference, date, and amount.</p>
           </div>
           <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
             <div>
@@ -685,10 +685,10 @@ export function ProformaInvoiceFormPage() {
         </section>
 
         {/* Documents to be provided */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-3">
-            <h2 className="text-base font-semibold text-slate-800">Documents to be provided</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Check all documents that will be supplied.</p>
+        <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+          <div className="border-b border-border bg-surface-subtle/80 px-5 py-3">
+            <h2 className="text-base font-semibold text-text-primary">Documents to be provided</h2>
+            <p className="mt-0.5 text-xs text-text-muted">Check all documents that will be supplied.</p>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 p-5">
             {DOCUMENTS_OPTIONS.map((doc) => (
@@ -697,19 +697,19 @@ export function ProformaInvoiceFormPage() {
                   type="checkbox"
                   checked={(form.documents_to_provide ?? []).includes(doc)}
                   onChange={() => toggleDocument(doc)}
-                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="h-4 w-4 rounded border-border-strong text-brand-primary focus:ring-focus-ring"
                 />
-                <span className="text-sm text-slate-700">{doc}</span>
+                <span className="text-sm text-text-secondary">{doc}</span>
               </label>
             ))}
           </div>
         </section>
 
         {/* Terms and conditions */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-3">
-            <h2 className="text-base font-semibold text-slate-800">Terms and conditions</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Add one or more terms.</p>
+        <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+          <div className="border-b border-border bg-surface-subtle/80 px-5 py-3">
+            <h2 className="text-base font-semibold text-text-primary">Terms and conditions</h2>
+            <p className="mt-0.5 text-xs text-text-muted">Add one or more terms.</p>
           </div>
           <div className="space-y-3 p-5">
             {(form.terms_and_conditions ?? [""]).map((term, index) => (
@@ -724,7 +724,7 @@ export function ProformaInvoiceFormPage() {
                 <button
                   type="button"
                   onClick={() => removeTerm(index)}
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                  className="rounded-lg border border-border-strong px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
                 >
                   Remove
                 </button>
@@ -733,7 +733,7 @@ export function ProformaInvoiceFormPage() {
             <button
               type="button"
               onClick={addTerm}
-              className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
             >
               Add term
             </button>
@@ -741,10 +741,10 @@ export function ProformaInvoiceFormPage() {
         </section>
 
         {/* Shipper bank */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-3">
-            <h2 className="text-base font-semibold text-slate-800">Shipper bank</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Bank details for payment.</p>
+        <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+          <div className="border-b border-border bg-surface-subtle/80 px-5 py-3">
+            <h2 className="text-base font-semibold text-text-primary">Shipper bank</h2>
+            <p className="mt-0.5 text-xs text-text-muted">Bank details for payment.</p>
           </div>
           <div className="p-5">
             {bankAccounts.length > 0 && (
@@ -825,11 +825,11 @@ export function ProformaInvoiceFormPage() {
         </section>
 
         {/* Actions */}
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-subtle/50 px-5 py-4">
           <button
             type="submit"
             disabled={saving || form.order_ids.length === 0}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-70 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-brand-primary-foreground shadow-sm hover:bg-brand-primary/90 disabled:opacity-70 focus:outline-none focus:ring-2 focus:ring-focus-ring focus:ring-offset-2"
           >
             <Save className="h-4 w-4" aria-hidden />
             {saving ? "Saving…" : "Save as Draft"}
@@ -840,14 +840,14 @@ export function ProformaInvoiceFormPage() {
                 type="button"
                 onClick={handleIssue}
                 disabled={issuing || form.order_ids.length === 0}
-                className="inline-flex items-center gap-2 rounded-xl border-2 border-emerald-600 bg-emerald-50 px-5 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-70"
+                className="inline-flex items-center gap-2 rounded-xl border-2 border-status-success bg-status-success-subtle px-5 py-2.5 text-sm font-semibold text-status-success-foreground hover:bg-status-success-subtle disabled:opacity-70"
               >
                 <Send className="h-4 w-4" aria-hidden />
                 {issuing ? "Issuing…" : "Issue"}
               </button>
               <Link
                 to={`/app/commercial/proforma-invoices/${numericId}/print`}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                className="inline-flex items-center gap-2 rounded-xl border border-border-strong bg-surface-raised px-5 py-2.5 text-sm font-semibold text-text-secondary shadow-sm hover:bg-surface-subtle"
               >
                 <Printer className="h-4 w-4" aria-hidden />
                 Print
@@ -856,7 +856,7 @@ export function ProformaInvoiceFormPage() {
           )}
           <Link
             to="/app/commercial/proforma-invoices"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-border-strong bg-surface-raised px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
           >
             Cancel
           </Link>

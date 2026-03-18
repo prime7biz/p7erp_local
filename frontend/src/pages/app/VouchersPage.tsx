@@ -30,9 +30,9 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 function workflowActionClass(action: string) {
-  if (action === "reject") return "rounded border border-rose-300 bg-rose-50 px-2 py-1 text-xs text-rose-700";
-  if (action === "post" || action === "approve") return "rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs text-emerald-700";
-  if (action === "check" || action === "recommend" || action === "submit") return "rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700";
+  if (action === "reject") return "rounded border border-status-danger/20 bg-status-danger-subtle px-2 py-1 text-xs text-status-danger-foreground";
+  if (action === "post" || action === "approve") return "rounded border border-status-success/30 bg-status-success-subtle px-2 py-1 text-xs text-status-success-foreground";
+  if (action === "check" || action === "recommend" || action === "submit") return "rounded border border-status-info/30 bg-status-info-subtle px-2 py-1 text-xs text-status-info-foreground";
   return "rounded border px-2 py-1 text-xs";
 }
 
@@ -281,8 +281,8 @@ export function VouchersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Vouchers</h1>
-        <p className="mt-1 text-sm text-slate-500">Journal-style voucher entry with workflow actions and balances.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Vouchers</h1>
+        <p className="mt-1 text-sm text-text-muted">Journal-style voucher entry with workflow actions and balances.</p>
       </div>
 
       <form
@@ -296,7 +296,7 @@ export function VouchersPage() {
             void createVoucher(false);
           }
         }}
-        className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
+        className="space-y-3 rounded-xl border border-border bg-surface-raised p-4"
       >
         <div className="grid gap-3 md:grid-cols-4">
           <select className="rounded border px-3 py-2 text-sm" value={form.voucher_type} onChange={(e) => setForm((p) => ({ ...p, voucher_type: e.target.value }))}>
@@ -329,7 +329,7 @@ export function VouchersPage() {
 
         <div className="overflow-x-auto rounded border">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left">
+            <thead className="bg-surface-subtle text-left">
               <tr>
                 <th className="px-3 py-2">Account</th>
                 <th className="px-3 py-2 text-right">Debit</th>
@@ -453,28 +453,28 @@ export function VouchersPage() {
           </div>
           <div className="text-sm">
             Debit: <b>{debitTotal.toFixed(2)}</b> | Credit: <b>{creditTotal.toFixed(2)}</b> |{" "}
-            <span className={isBalanced ? "text-emerald-600" : "text-rose-600"}>{isBalanced ? "Balanced" : "Not Balanced"}</span>
+            <span className={isBalanced ? "text-status-success-foreground" : "text-status-danger-foreground"}>{isBalanced ? "Balanced" : "Not Balanced"}</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-700"
+              className="rounded border border-status-info/30 bg-status-info-subtle px-3 py-2 text-sm text-status-info-foreground"
               onClick={() => void createVoucher(true)}
             >
               Create and Submit
             </button>
-            <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white">Create Draft</button>
+            <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">Create Draft</button>
           </div>
         </div>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-text-muted">
           Shortcuts: Enter moves to next cell; Enter on Notes adds new line; Ctrl+D duplicates current line; Ctrl+Enter creates voucher; Ctrl+Shift+Enter creates and submits.
         </p>
       </form>
 
-      {error ? <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Voucher List</h2>
           <div className="flex flex-wrap gap-2">
@@ -496,7 +496,7 @@ export function VouchersPage() {
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left">
+            <thead className="bg-surface-subtle text-left">
               <tr>
                 <th className="px-3 py-2">No</th>
                 <th className="px-3 py-2">Date</th>
@@ -509,13 +509,13 @@ export function VouchersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="px-3 py-5 text-slate-500" colSpan={6}>
+                  <td className="px-3 py-5 text-text-muted" colSpan={6}>
                     Loading vouchers...
                   </td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-5 text-slate-500" colSpan={6}>
+                  <td className="px-3 py-5 text-text-muted" colSpan={6}>
                     No vouchers found.
                   </td>
                 </tr>
@@ -528,7 +528,7 @@ export function VouchersPage() {
                       <td className="px-3 py-2">{r.voucher_date}</td>
                       <td className="px-3 py-2">{r.voucher_type}</td>
                       <td className="px-3 py-2">
-                        <span className="rounded bg-slate-100 px-2 py-1 text-xs">{r.status}</span>
+                        <span className="rounded bg-surface-subtle px-2 py-1 text-xs">{r.status}</span>
                       </td>
                       <td className="px-3 py-2">{amount.toLocaleString()}</td>
                       <td className="px-3 py-2">

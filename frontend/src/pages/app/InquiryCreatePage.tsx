@@ -300,19 +300,19 @@ export function InquiryCreatePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-text-primary">
             {isEdit ? `Edit Inquiry ${currentInquiryCode || ""}` : "New Inquiry"}
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p className="text-sm text-text-muted mt-0.5">
             Full-page inquiry entry with style, party, and commercial details.
           </p>
-          <p className="text-xs text-gray-500 mt-1">Fields marked with ** are mandatory.</p>
+          <p className="text-xs text-text-muted mt-1">Fields marked with ** are mandatory.</p>
         </div>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={() => navigate(isEdit && id ? `/app/inquiries/${id}` : "/app/inquiries")}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
           >
             Cancel
           </button>
@@ -320,7 +320,7 @@ export function InquiryCreatePage() {
             type="button"
             onClick={handleSave}
             disabled={saving || loading || creatingStyle}
-            className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
+            className="rounded-lg bg-brand-primary px-4 py-1.5 text-sm font-semibold text-brand-primary-foreground disabled:opacity-60"
           >
             {saving ? "Saving..." : "Save inquiry"}
           </button>
@@ -328,26 +328,26 @@ export function InquiryCreatePage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-10 text-center text-gray-500">
+        <div className="rounded-xl border border-border bg-surface-raised p-10 text-center text-text-muted">
           Loading...
         </div>
       ) : (
         <>
-          <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-900">Inquiry Header</h2>
+          <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
+            <h2 className="text-sm font-semibold text-text-primary">Inquiry Header</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Customer **</label>
+                <label className="block text-xs text-text-secondary mb-1">Customer **</label>
                 <select
                   value={form.customer_id || ""}
                   onChange={(e) => onCustomerChange(Number(e.target.value) || 0)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">Select customer...</option>
                   {customers.map((c) => (
@@ -358,14 +358,14 @@ export function InquiryCreatePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">
+                <label className="block text-xs text-text-secondary mb-1">
                   Style **
                 </label>
                 <div className="space-y-2">
                   <select
                     value={form.style_id ?? ""}
                     onChange={(e) => onStyleChange(e.target.value ? Number(e.target.value) : undefined)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                   >
                     <option value="">Select style...</option>
                     {styles.map((s) => (
@@ -377,7 +377,7 @@ export function InquiryCreatePage() {
                   <button
                     type="button"
                     onClick={() => setShowQuickStyleCreate((v) => !v)}
-                    className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                    className="rounded border border-border-strong px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                   >
                     {showQuickStyleCreate ? "Close quick add" : "Quick add new style"}
                   </button>
@@ -386,33 +386,33 @@ export function InquiryCreatePage() {
             </div>
 
             {showQuickStyleCreate && (
-              <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3 space-y-3">
-                <h3 className="text-xs font-semibold text-blue-900">Quick Add Style</h3>
+              <div className="rounded-lg border border-status-info/30 bg-status-info-subtle/50 p-3 space-y-3">
+                <h3 className="text-xs font-semibold text-status-info-foreground">Quick Add Style</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <input
                     type="text"
                     value={quickStyleName}
                     onChange={(e) => setQuickStyleName(e.target.value)}
                     placeholder="Style name **"
-                    className="rounded border border-blue-200 px-3 py-2 text-sm"
+                    className="rounded border border-status-info/30 px-3 py-2 text-sm"
                   />
                   <input
                     type="text"
                     value={quickStyleSeason}
                     onChange={(e) => setQuickStyleSeason(e.target.value)}
                     placeholder="Season (optional)"
-                    className="rounded border border-blue-200 px-3 py-2 text-sm"
+                    className="rounded border border-status-info/30 px-3 py-2 text-sm"
                   />
                   <input
                     type="text"
                     value={quickStyleDepartment}
                     onChange={(e) => setQuickStyleDepartment(e.target.value)}
                     placeholder="Department (optional)"
-                    className="rounded border border-blue-200 px-3 py-2 text-sm"
+                    className="rounded border border-status-info/30 px-3 py-2 text-sm"
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <label className="rounded border border-blue-200 px-2 py-1 text-xs text-blue-800 hover:bg-blue-100 cursor-pointer">
+                  <label className="rounded border border-status-info/30 px-2 py-1 text-xs text-status-info-foreground hover:bg-status-info-subtle cursor-pointer">
                     {quickStyleImageFile ? `Image: ${quickStyleImageFile.name}` : "Choose picture (optional)"}
                     <input
                       type="file"
@@ -425,73 +425,73 @@ export function InquiryCreatePage() {
                     type="button"
                     onClick={createStyleInline}
                     disabled={creatingStyle}
-                    className="rounded bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                    className="rounded bg-brand-primary px-3 py-1.5 text-xs font-semibold text-brand-primary-foreground disabled:opacity-60"
                   >
                     {creatingStyle ? "Creating..." : "Create style"}
                   </button>
                 </div>
-                <p className="text-xs text-blue-900/80">
+                <p className="text-xs text-status-info-foreground/80">
                   Style picture is optional. You can upload now or keep it empty.
                 </p>
               </div>
             )}
             {quickStyleNotice && (
-              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <div className="rounded border border-status-warning/30 bg-status-warning-subtle px-3 py-2 text-xs text-status-warning-foreground">
                 {quickStyleNotice}
               </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Season</label>
+                <label className="block text-xs text-text-secondary mb-1">Season</label>
                 <input
                   type="text"
                   value={form.season ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, season: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Department</label>
+                <label className="block text-xs text-text-secondary mb-1">Department</label>
                 <input
                   type="text"
                   value={form.department ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, department: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Style ref fallback</label>
+                <label className="block text-xs text-text-secondary mb-1">Style ref fallback</label>
                 <input
                   type="text"
                   value={form.style_ref ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, style_ref: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
             </div>
 
             {selectedStyle && (
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div className="rounded-lg border border-border bg-surface-subtle p-3">
                 <div className="flex items-center gap-3">
                   {selectedStyle.style_image_url ? (
                     <img
                       src={selectedStyle.style_image_url}
                       alt={selectedStyle.name}
-                      className="h-16 w-16 rounded object-cover border border-gray-200"
+                      className="h-16 w-16 rounded object-cover border border-border"
                     />
                   ) : (
-                    <div className="h-16 w-16 rounded bg-gray-200 text-xs text-gray-600 flex items-center justify-center">
+                    <div className="h-16 w-16 rounded bg-border-subtle text-xs text-text-secondary flex items-center justify-center">
                       No image
                     </div>
                   )}
-                  <div className="text-sm text-gray-700">
-                    <div className="font-semibold text-gray-900">{selectedStyle.name}</div>
+                  <div className="text-sm text-text-secondary">
+                    <div className="font-semibold text-text-primary">{selectedStyle.name}</div>
                     <div>{selectedStyle.style_code}</div>
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <label className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100 cursor-pointer">
+                  <label className="rounded border border-border-strong px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle cursor-pointer">
                     {uploadingSelectedStyleImage ? "Uploading..." : "Upload/replace style image (optional)"}
                     <input
                       type="file"
@@ -501,10 +501,10 @@ export function InquiryCreatePage() {
                       className="hidden"
                     />
                   </label>
-                  <span className="text-xs text-gray-500">Leave empty if you do not want image now.</span>
+                  <span className="text-xs text-text-muted">Leave empty if you do not want image now.</span>
                 </div>
                 {styleImageNotice && (
-                  <div className="mt-2 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700">
+                  <div className="mt-2 rounded border border-status-success/30 bg-status-success-subtle px-2 py-1 text-xs text-status-success-foreground">
                     {styleImageNotice}
                   </div>
                 )}
@@ -512,15 +512,15 @@ export function InquiryCreatePage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-900">Intermediary and Commercial Terms</h2>
+          <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
+            <h2 className="text-sm font-semibold text-text-primary">Intermediary and Commercial Terms</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Customer Link</label>
+                <label className="block text-xs text-text-secondary mb-1">Customer Link</label>
                 <select
                   value={form.customer_intermediary_id ?? ""}
                   onChange={(e) => onLinkChange(e.target.value ? Number(e.target.value) : undefined)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">No linked intermediary</option>
                   {customerLinks.map((l) => (
@@ -531,11 +531,11 @@ export function InquiryCreatePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Shipping term</label>
+                <label className="block text-xs text-text-secondary mb-1">Shipping term</label>
                 <select
                   value={form.shipping_term ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, shipping_term: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">Select shipping term</option>
                   {withLegacyOption(form.shipping_term, SHIPPING_TERM_OPTIONS).map((term) => (
@@ -550,11 +550,11 @@ export function InquiryCreatePage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Commission mode</label>
+                <label className="block text-xs text-text-secondary mb-1">Commission mode</label>
                 <select
                   value={form.commission_mode ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, commission_mode: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">Select mode</option>
                   {withLegacyOption(form.commission_mode, COMMISSION_MODE_OPTIONS).map((mode) => (
@@ -567,11 +567,11 @@ export function InquiryCreatePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Commission type</label>
+                <label className="block text-xs text-text-secondary mb-1">Commission type</label>
                 <select
                   value={form.commission_type ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, commission_type: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">Select type</option>
                   {withLegacyOption(form.commission_type, COMMISSION_TYPE_OPTIONS).map((type) => (
@@ -584,18 +584,18 @@ export function InquiryCreatePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Commission value</label>
+                <label className="block text-xs text-text-secondary mb-1">Commission value</label>
                 <input
                   type="text"
                   value={form.commission_value ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, commission_value: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Expected quantity</label>
+                <label className="block text-xs text-text-secondary mb-1">Expected quantity</label>
                 <input
                   type="number"
                   value={form.quantity ?? ""}
@@ -605,40 +605,40 @@ export function InquiryCreatePage() {
                       quantity: e.target.value ? Number(e.target.value) : undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Target price</label>
+                <label className="block text-xs text-text-secondary mb-1">Target price</label>
                 <input
                   type="text"
                   value={form.target_price ?? ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, target_price: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
+          <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-900">Garment Items</h2>
+              <h2 className="text-sm font-semibold text-text-primary">Garment Items</h2>
               <button
                 type="button"
                 onClick={addItem}
-                className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-700"
+                className="rounded border border-border-strong px-3 py-1 text-xs text-text-secondary"
               >
                 Add item
               </button>
             </div>
             {(form.items ?? []).map((line, index) => (
-              <div key={index} className="rounded-lg border border-gray-200 p-3 space-y-2">
+              <div key={index} className="rounded-lg border border-border p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-gray-700">Item #{index + 1}</p>
+                  <p className="text-xs font-semibold text-text-secondary">Item #{index + 1}</p>
                   <button
                     type="button"
                     onClick={() => removeItem(index)}
-                    className="rounded border border-red-200 px-2 py-1 text-xs text-red-600"
+                    className="rounded border border-status-danger/20 px-2 py-1 text-xs text-status-danger"
                   >
                     Remove
                   </button>
@@ -649,14 +649,14 @@ export function InquiryCreatePage() {
                     value={line.item_name ?? ""}
                     onChange={(e) => updateItem(index, { item_name: e.target.value })}
                     placeholder="Item name"
-                    className="rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="rounded border border-border-strong px-3 py-2 text-sm"
                   />
                   <input
                     type="text"
                     value={line.description ?? ""}
                     onChange={(e) => updateItem(index, { description: e.target.value })}
                     placeholder="Description"
-                    className="rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="rounded border border-border-strong px-3 py-2 text-sm"
                   />
                   <input
                     type="number"
@@ -667,20 +667,20 @@ export function InquiryCreatePage() {
                       })
                     }
                     placeholder="Quantity"
-                    className="rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="rounded border border-border-strong px-3 py-2 text-sm"
                   />
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <label className="block text-xs text-gray-600 mb-1">Notes</label>
+          <div className="rounded-xl border border-border bg-surface-raised p-4">
+            <label className="block text-xs text-text-secondary mb-1">Notes</label>
             <textarea
               rows={3}
               value={form.notes ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
             />
           </div>
         </>

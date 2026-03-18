@@ -27,10 +27,10 @@ export function ConsumptionControlPage() {
 
   const crStatusBadgeClass = (status: string) => {
     const s = status.toUpperCase();
-    if (s === "PENDING") return "bg-amber-100 text-amber-700";
-    if (s === "APPROVED") return "bg-green-100 text-green-700";
-    if (s === "REJECTED") return "bg-red-100 text-red-700";
-    return "bg-slate-100 text-slate-700";
+    if (s === "PENDING") return "bg-status-warning-subtle text-status-warning-foreground";
+    if (s === "APPROVED") return "bg-status-success-subtle text-status-success-foreground";
+    if (s === "REJECTED") return "bg-status-danger-subtle text-status-danger-foreground";
+    return "bg-surface-subtle text-text-secondary";
   };
   const trend = (key: keyof typeof kpi) => {
     if (!prevKpi) return "";
@@ -224,20 +224,20 @@ export function ConsumptionControlPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Consumption Control</h1>
-        <p className="text-sm text-slate-500">Finalize order BOM snapshots and keep material usage controlled.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Consumption Control</h1>
+        <p className="text-sm text-text-muted">Finalize order BOM snapshots and keep material usage controlled.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><div className="text-slate-500">Open PO</div><div className="text-xl font-semibold">{kpi.openPo} <span className="text-xs text-slate-400">{trend("openPo")}</span></div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><div className="text-slate-500">Open GRN</div><div className="text-xl font-semibold">{kpi.openGrn} <span className="text-xs text-slate-400">{trend("openGrn")}</span></div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><div className="text-slate-500">Pending CR</div><div className="text-xl font-semibold">{kpi.pendingCr} <span className="text-xs text-slate-400">{trend("pendingCr")}</span></div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><div className="text-slate-500">Low Stock Items</div><div className="text-xl font-semibold">{kpi.lowStock} <span className="text-xs text-slate-400">{trend("lowStock")}</span></div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Open PO</div><div className="text-xl font-semibold">{kpi.openPo} <span className="text-xs text-text-muted">{trend("openPo")}</span></div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Open GRN</div><div className="text-xl font-semibold">{kpi.openGrn} <span className="text-xs text-text-muted">{trend("openGrn")}</span></div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Pending CR</div><div className="text-xl font-semibold">{kpi.pendingCr} <span className="text-xs text-text-muted">{trend("pendingCr")}</span></div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Low Stock Items</div><div className="text-xl font-semibold">{kpi.lowStock} <span className="text-xs text-text-muted">{trend("lowStock")}</span></div></div>
       </div>
 
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <select
             className="min-w-[260px] rounded border px-3 py-2 text-sm"
@@ -250,18 +250,18 @@ export function ConsumptionControlPage() {
               </option>
             ))}
           </select>
-          <button className="rounded bg-slate-900 px-4 py-2 text-sm text-white" onClick={() => void finalize()}>
+          <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-text-inverse" onClick={() => void finalize()}>
             Finalize Order Snapshot
           </button>
         </div>
-        <div className="rounded border border-slate-200 p-3 text-sm">
+        <div className="rounded border border-border p-3 text-sm">
           <div className="mb-2 font-medium">Snapshot Status</div>
-          <div className="text-slate-600">{snapshot?.snapshot_locked ? "Locked" : "Open"}</div>
+          <div className="text-text-secondary">{snapshot?.snapshot_locked ? "Locked" : "Open"}</div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Issue Reserved Material</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">Issue Reserved Material</h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
           <select
             className="rounded border px-3 py-2 text-sm"
@@ -297,15 +297,15 @@ export function ConsumptionControlPage() {
             onChange={(e) => setIssueRemarks(e.target.value)}
             placeholder="Remarks"
           />
-          <button className="rounded bg-slate-900 px-4 py-2 text-sm text-white" onClick={() => void issueMaterial()}>
+          <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-text-inverse" onClick={() => void issueMaterial()}>
             Issue
           </button>
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr>
               <th className="px-4 py-3">Item</th>
               <th className="px-4 py-3">Required Qty</th>
@@ -322,7 +322,7 @@ export function ConsumptionControlPage() {
             ))}
             {!snapshot?.items?.length ? (
               <tr>
-                <td className="px-4 py-8 text-center text-slate-500" colSpan={3}>
+                <td className="px-4 py-8 text-center text-text-muted" colSpan={3}>
                   No snapshot item rows found for this order.
                 </td>
               </tr>
@@ -331,9 +331,9 @@ export function ConsumptionControlPage() {
         </table>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr>
               <th className="px-4 py-3">Item</th>
               <th className="px-4 py-3">Reserved</th>
@@ -352,7 +352,7 @@ export function ConsumptionControlPage() {
             ))}
             {!reservations.length ? (
               <tr>
-                <td className="px-4 py-8 text-center text-slate-500" colSpan={4}>
+                <td className="px-4 py-8 text-center text-text-muted" colSpan={4}>
                   No reservation rows available.
                 </td>
               </tr>
@@ -361,8 +361,8 @@ export function ConsumptionControlPage() {
         </table>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Consumption Change Requests</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">Consumption Change Requests</h2>
         <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-3">
           <select className="rounded border px-3 py-2 text-sm" value={crType} onChange={(e) => setCrType(e.target.value)}>
             <option value="QUANTITY_INCREASE">Quantity Increase</option>
@@ -412,7 +412,7 @@ export function ConsumptionControlPage() {
         </div>
 
         <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <button className="rounded bg-slate-900 px-4 py-2 text-sm text-white" onClick={() => void createChangeRequest()}>
+          <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-text-inverse" onClick={() => void createChangeRequest()}>
             Submit CR
           </button>
           <div />
@@ -423,7 +423,7 @@ export function ConsumptionControlPage() {
           {canReview ? (
             <input className="rounded border px-3 py-2 text-sm" value={reviewReason} onChange={(e) => setReviewReason(e.target.value)} placeholder="Review reason (for approve/reject)" />
           ) : (
-            <div className="rounded border bg-slate-50 px-3 py-2 text-xs text-slate-500">Review actions are available for manager/admin only.</div>
+            <div className="rounded border bg-surface-subtle px-3 py-2 text-xs text-text-muted">Review actions are available for manager/admin only.</div>
           )}
           <input className="rounded border px-3 py-2 text-sm" value={crFilter} onChange={(e) => setCrFilter(e.target.value)} placeholder="Filter status (PENDING/APPROVED/REJECTED)" />
           <button className="rounded border px-4 py-2 text-sm" onClick={() => void loadSnapshot(selectedOrderId)}>
@@ -431,9 +431,9 @@ export function ConsumptionControlPage() {
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded border border-slate-200">
+        <div className="overflow-x-auto rounded border border-border">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600">
+            <thead className="bg-surface-subtle text-left text-text-secondary">
               <tr>
                 <th className="px-4 py-3">ID</th>
                 <th className="px-4 py-3">Type</th>
@@ -453,7 +453,7 @@ export function ConsumptionControlPage() {
                     <td className="px-4 py-3">
                       <span className={`rounded px-2 py-1 text-xs font-semibold ${crStatusBadgeClass(cr.status)}`}>{cr.status}</span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-600">
+                    <td className="px-4 py-3 text-xs text-text-secondary">
                       <div>Requested: {new Date(cr.created_at).toLocaleString()}</div>
                       {cr.reviewed_at ? <div>Reviewed: {new Date(cr.reviewed_at).toLocaleString()}</div> : null}
                       {cr.review_note ? <div>Note: {cr.review_note}</div> : null}
@@ -480,15 +480,15 @@ export function ConsumptionControlPage() {
                     </td>
                   </tr>
                   {expandedCrId === cr.id ? (
-                    <tr className="border-t bg-slate-50">
-                      <td className="px-4 py-3 text-xs text-slate-600" colSpan={6}>
-                        <div className="mb-2 font-semibold text-slate-700">Requested Item Changes</div>
+                    <tr className="border-t bg-surface-subtle">
+                      <td className="px-4 py-3 text-xs text-text-secondary" colSpan={6}>
+                        <div className="mb-2 font-semibold text-text-secondary">Requested Item Changes</div>
                         <div className="space-y-2">
                           {(cr.items || []).map((row, idx) => {
                             const planItemId = Number(row.plan_item_id ?? 0);
                             const current = snapshot?.items?.find((it) => Number(it.planItemId ?? 0) === planItemId);
                             return (
-                              <div key={idx} className="rounded border bg-white p-2">
+                              <div key={idx} className="rounded border bg-surface-raised p-2">
                                 <div>
                                   Item: {String(current?.itemName ?? `PlanItem#${planItemId}`)} | Current Qty: {String(current?.requiredQty ?? "-")}
                                 </div>
@@ -506,7 +506,7 @@ export function ConsumptionControlPage() {
               ))}
               {!changeRequests.length ? (
                 <tr>
-                  <td className="px-4 py-8 text-center text-slate-500" colSpan={6}>
+                  <td className="px-4 py-8 text-center text-text-muted" colSpan={6}>
                     No change requests yet.
                   </td>
                 </tr>

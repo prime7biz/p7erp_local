@@ -51,12 +51,12 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 function actionButtonClass(action: string) {
-  if (action === "reject") return "rounded border border-rose-300 bg-rose-50 px-2 py-1 text-xs text-rose-700";
+  if (action === "reject") return "rounded border border-status-danger/30 bg-status-danger-subtle px-2 py-1 text-xs text-status-danger-foreground";
   if (action === "approve" || action === "post" || action === "execute" || action === "finalize" || action === "close") {
-    return "rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs text-emerald-700";
+    return "rounded border border-status-success/30 bg-status-success-subtle px-2 py-1 text-xs text-status-success-foreground";
   }
   if (action === "check" || action === "recommend" || action === "submit" || action === "process" || action === "reopen") {
-    return "rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700";
+    return "rounded border border-status-info/30 bg-status-info-subtle px-2 py-1 text-xs text-status-info-foreground";
   }
   return "rounded border px-2 py-1 text-xs";
 }
@@ -264,36 +264,36 @@ export function AllApprovalsPage() {
 
   return (
     <div className="space-y-6 print-report">
-      <div className="print-only mb-3 border-b border-slate-300 pb-2">
+      <div className="print-only mb-3 border-b border-border-strong pb-2">
         <h1 className="text-lg font-semibold">All Approvals</h1>
       </div>
       <div className="no-print">
-        <h1 className="text-2xl font-semibold text-slate-900">All Approvals</h1>
-        <p className="mt-1 text-sm text-slate-500">Generic cross-document approval hub for vouchers, payment runs, reconciliation, and accounting periods.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">All Approvals</h1>
+        <p className="mt-1 text-sm text-text-muted">Generic cross-document approval hub for vouchers, payment runs, reconciliation, and accounting periods.</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <span className="text-xs font-medium text-slate-500">Quick links:</span>
-          <Link to="/app/accounts/vouchers/approval-queue" className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">Voucher Approvals</Link>
-          <Link to="/app/hr/leave/approvals" className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">Leave Approvals</Link>
-          <Link to="/app/hr/payroll/approvals" className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">Payroll Approvals</Link>
-          <Link to="/app/accounts/purchase-workflow" className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">Purchase & AP</Link>
+          <span className="text-xs font-medium text-text-muted">Quick links:</span>
+          <Link to="/app/accounts/vouchers/approval-queue" className="rounded border border-border bg-surface-raised px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle">Voucher Approvals</Link>
+          <Link to="/app/hr/leave/approvals" className="rounded border border-border bg-surface-raised px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle">Leave Approvals</Link>
+          <Link to="/app/hr/payroll/approvals" className="rounded border border-border bg-surface-raised px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle">Payroll Approvals</Link>
+          <Link to="/app/accounts/purchase-workflow" className="rounded border border-border bg-surface-raised px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle">Purchase & AP</Link>
         </div>
       </div>
-      {error ? <div className="no-print rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="no-print rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+      {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="no-print rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
       <div className="no-print grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded border bg-white p-2 text-sm">
+        <div className="rounded border bg-surface-raised p-2 text-sm">
           Total Queue Items: <b>{totalRows}</b>
         </div>
-        <div className="rounded border bg-white p-2 text-sm">
+        <div className="rounded border bg-surface-raised p-2 text-sm">
           Actionable Now: <b>{actionableRows}</b>
         </div>
-        <div className="rounded border bg-white p-2 text-sm">
+        <div className="rounded border bg-surface-raised p-2 text-sm">
           Shown by Filters: <b>{filteredRows.length}</b>
         </div>
       </div>
 
-      <div className="no-print grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="no-print grid gap-2 rounded-xl border border-border bg-surface-raised p-3 sm:grid-cols-2 lg:grid-cols-6">
         <input
           className="rounded border px-3 py-2 text-sm sm:col-span-2 lg:col-span-2"
           placeholder="Search number/details..."
@@ -326,9 +326,9 @@ export function AllApprovalsPage() {
         </button>
       </div>
 
-      <div className="print-card overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="print-card overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-3 py-2">Doc Type</th>
               <th className="px-3 py-2">Number</th>
@@ -342,13 +342,13 @@ export function AllApprovalsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td className="px-3 py-5 text-slate-500" colSpan={7}>
+                <td className="px-3 py-5 text-text-muted" colSpan={7}>
                   Loading approval queue...
                 </td>
               </tr>
             ) : filteredRows.length === 0 ? (
               <tr>
-                <td className="px-3 py-5 text-slate-500" colSpan={7}>
+                <td className="px-3 py-5 text-text-muted" colSpan={7}>
                   No approvals found for the current filters.
                 </td>
               </tr>
@@ -363,7 +363,7 @@ export function AllApprovalsPage() {
                   <td className="px-3 py-2">{r.details}</td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
-                      {r.actions.length === 0 ? <span className="text-xs text-slate-500">No action</span> : null}
+                      {r.actions.length === 0 ? <span className="text-xs text-text-muted">No action</span> : null}
                       {r.actions.map((action) => (
                         <button key={action} className={actionButtonClass(action)} onClick={() => void takeAction(r, action)}>
                           {ACTION_LABEL[action] ?? action}

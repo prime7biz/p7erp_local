@@ -69,15 +69,15 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
   const location = useLocation();
   const isPrintMode = new URLSearchParams(location.search).get("print") === "1";
 
-  if (loading) return <div className="p-6 text-gray-500">Loading quotation...</div>;
+  if (loading) return <div className="p-6 text-text-muted">Loading quotation...</div>;
   if (error && !quotation) {
     return (
       <div className="p-6 space-y-3">
-        <div className="text-red-600 text-sm">{error}</div>
+        <div className="text-status-danger-foreground text-sm">{error}</div>
         <button
           type="button"
           onClick={() => navigate("/app/quotations")}
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+          className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-secondary"
         >
           Back to quotations
         </button>
@@ -113,27 +113,27 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
 
   return (
     <div className="print-report space-y-4 p-4 lg:space-y-6 lg:p-6">
-      <div className="print-only mb-3 border-b border-gray-200 pb-2">
-        <h1 className="text-2xl font-bold text-gray-900">Quotation {quotation.quotation_code}</h1>
-        <div className="text-sm text-gray-600">
+      <div className="print-only mb-3 border-b border-border pb-2">
+        <h1 className="text-2xl font-bold text-text-primary">Quotation {quotation.quotation_code}</h1>
+        <div className="text-sm text-text-secondary">
           {customer?.name ?? `Customer #${quotation.customer_id}`} · {quotation.status}
         </div>
       </div>
 
       <header className="no-print flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quotation {quotation.quotation_code}</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-text-primary">Quotation {quotation.quotation_code}</h1>
+          <p className="text-sm text-text-muted">
             {customer?.name ?? `Customer #${quotation.customer_id}`} · {quotation.status}
           </p>
-          {showEditableHeader && <p className="mt-1 text-xs text-gray-500">Fields marked with ** are mandatory.</p>}
+          {showEditableHeader && <p className="mt-1 text-xs text-text-muted">Fields marked with ** are mandatory.</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           {!isNew && (
             <button
               type="button"
               onClick={() => window.open(`/app/quotations/${quotation.id}/print`, "_blank", "noopener,noreferrer")}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700"
+              className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary"
             >
               Print / Save PDF
             </button>
@@ -143,7 +143,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               type="button"
               onClick={duplicateAsNewVersion}
               disabled={duplicatingVersion}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 disabled:opacity-60"
+              className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary disabled:opacity-60"
             >
               {duplicatingVersion ? "Duplicating..." : "Duplicate as new version"}
             </button>
@@ -152,7 +152,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
             <button
               type="button"
               onClick={() => navigate("/app/quotations")}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700"
+              className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary"
             >
               Cancel
             </button>
@@ -161,14 +161,14 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               <button
                 type="button"
                 onClick={() => setIsEditing((v) => !v)}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700"
+                className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary"
               >
                 {isEditing ? "Cancel edit" : "Edit costing"}
               </button>
               <button
                 type="button"
                 onClick={() => navigate("/app/quotations")}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700"
+                className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary"
               >
                 Back to list
               </button>
@@ -189,8 +189,8 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
 
       {(error || success) && (
         <div className="space-y-2">
-          {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-          {success && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div>}
+          {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">{error}</div>}
+          {success && <div className="rounded-lg border border-status-success/20 bg-status-success-subtle px-4 py-3 text-sm text-status-success-foreground">{success}</div>}
         </div>
       )}
 
@@ -202,11 +202,11 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                 {isNew && (
                   <>
                     <div>
-                      <label className="mb-0.5 block font-medium text-gray-700">Customer **</label>
+                      <label className="mb-0.5 block font-medium text-text-secondary">Customer **</label>
                       <select
                         value={quotation.customer_id || ""}
                         onChange={(e) => handleCustomerSelect(Number(e.target.value) || 0)}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                       >
                         <option value="">Select customer...</option>
                         {customers.map((c) => (
@@ -217,11 +217,11 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       </select>
                     </div>
                     <div>
-                      <label className="mb-0.5 block font-medium text-gray-700">Link to inquiry (optional)</label>
+                      <label className="mb-0.5 block font-medium text-text-secondary">Link to inquiry (optional)</label>
                       <select
                         value={quotation.inquiry_id ?? ""}
                         onChange={(e) => handleInquirySelect(e.target.value ? Number(e.target.value) : null)}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                       >
                         <option value="">None</option>
                         {inquiries.map((inq) => (
@@ -235,14 +235,14 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                 )}
 
                 {!isNew && (
-                  <div className="space-y-1 text-gray-700">
+                  <div className="space-y-1 text-text-secondary">
                     <div>
                       <span className="font-medium">Customer:</span> {customer?.name ?? `#${quotation.customer_id}`}
                     </div>
                     <div>
                       <span className="font-medium">Linked inquiry:</span>{" "}
                       {inquiry ? (
-                        <Link to={`/app/inquiries/${inquiry.id}`} className="text-indigo-600 hover:underline">
+                        <Link to={`/app/inquiries/${inquiry.id}`} className="text-brand-primary hover:underline">
                           {inquiry.inquiry_code}
                         </Link>
                       ) : (
@@ -254,12 +254,12 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-2 sm:col-span-2">
-                    <label className="mb-0.5 block font-medium text-gray-700">Style</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Style</label>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
                       <select
                         value={quotation.style_id ?? ""}
                         onChange={(e) => onStyleSelect(e.target.value ? Number(e.target.value) : null)}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                       >
                         <option value="">Select style...</option>
                         {styles.map((s) => (
@@ -271,38 +271,38 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       <button
                         type="button"
                         onClick={() => setShowQuickStyleCreate((v) => !v)}
-                        className="rounded border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
+                        className="rounded border border-border px-3 py-2 text-xs text-text-secondary hover:bg-surface-subtle"
                       >
                         {showQuickStyleCreate ? "Close quick add" : "Quick add style"}
                       </button>
                     </div>
                     {showQuickStyleCreate && (
-                      <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
+                      <div className="space-y-2 rounded-lg border border-status-info/20 bg-status-info-subtle p-3">
                         <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                           <input
                             type="text"
                             value={quickStyleName}
                             onChange={(e) => setQuickStyleName(e.target.value)}
                             placeholder="Style name **"
-                            className="rounded border border-blue-200 px-3 py-2 text-sm"
+                            className="rounded border border-border px-3 py-2 text-sm"
                           />
                           <input
                             type="text"
                             value={quickStyleSeason}
                             onChange={(e) => setQuickStyleSeason(e.target.value)}
                             placeholder="Season (optional)"
-                            className="rounded border border-blue-200 px-3 py-2 text-sm"
+                            className="rounded border border-border px-3 py-2 text-sm"
                           />
                           <input
                             type="text"
                             value={quickStyleDepartment}
                             onChange={(e) => setQuickStyleDepartment(e.target.value)}
                             placeholder="Department (optional)"
-                            className="rounded border border-blue-200 px-3 py-2 text-sm"
+                            className="rounded border border-border px-3 py-2 text-sm"
                           />
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <label className="cursor-pointer rounded border border-blue-200 px-2 py-1 text-xs text-blue-800 hover:bg-blue-100">
+                          <label className="cursor-pointer rounded border border-border px-2 py-1 text-xs text-status-info-foreground hover:bg-status-info-subtle">
                             {quickStyleImageFile ? `Image: ${quickStyleImageFile.name}` : "Choose picture (optional)"}
                             <input
                               type="file"
@@ -323,23 +323,23 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       </div>
                     )}
                     {quickStyleNotice && (
-                      <div className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                      <div className="rounded border border-status-warning/20 bg-status-warning-subtle px-2 py-1 text-xs text-status-warning-foreground">
                         {quickStyleNotice}
                       </div>
                     )}
                     {(selectedStyle || quotation.style_ref) && (
-                      <div className="text-xs text-gray-600">
+                      <div className="text-xs text-text-muted">
                         {selectedStyle ? `${selectedStyle.style_code} - ${selectedStyle.name}` : quotation.style_ref}
                       </div>
                     )}
                   </div>
 
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Shipping term</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Shipping term</label>
                     <select
                       value={quotation.shipping_term ?? ""}
                       onChange={(e) => updateQuotationHeader({ shipping_term: e.target.value || null })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     >
                       <option value="">Select shipping term</option>
                       {withLegacyOption(quotation.shipping_term, SHIPPING_TERM_OPTIONS).map((term) => (
@@ -352,16 +352,16 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Department</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Department</label>
                     <input
                       type="text"
                       value={quotation.department ?? ""}
                       onChange={(e) => updateQuotationHeader({ department: e.target.value || null })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Projected quantity</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Projected quantity</label>
                     <input
                       type="number"
                       min={0}
@@ -369,39 +369,39 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       onChange={(e) =>
                         updateQuotationHeader({ projected_quantity: e.target.value ? Number(e.target.value) : null })
                       }
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Target price</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Target price</label>
                     <div className="flex gap-1">
                       <input
                         type="text"
                         value={quotation.target_price ?? ""}
                         onChange={(e) => updateQuotationHeader({ target_price: e.target.value || null })}
-                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        className="flex-1 rounded-lg border border-border px-3 py-2 text-sm"
                       />
                       <input
                         type="text"
                         value={quotation.target_price_currency ?? "USD"}
                         onChange={(e) => updateQuotationHeader({ target_price_currency: e.target.value || null })}
-                        className="w-16 rounded-lg border border-gray-300 px-2 py-2 text-sm"
+                        className="w-16 rounded-lg border border-border px-2 py-2 text-sm"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Quotation date</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Quotation date</label>
                     <input
                       type="date"
                       value={quotation.quotation_date ? quotation.quotation_date.slice(0, 10) : ""}
                       onChange={(e) =>
                         updateQuotationHeader({ quotation_date: e.target.value ? `${e.target.value}T00:00:00` : null })
                       }
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Projected delivery date</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Projected delivery date</label>
                     <input
                       type="date"
                       value={quotation.projected_delivery_date ? quotation.projected_delivery_date.slice(0, 10) : ""}
@@ -410,44 +410,44 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                           projected_delivery_date: e.target.value ? `${e.target.value}T00:00:00` : null,
                         })
                       }
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Valid until</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Valid until</label>
                     <input
                       type="date"
                       value={quotation.valid_until ? quotation.valid_until.slice(0, 10) : ""}
                       onChange={(e) =>
                         updateQuotationHeader({ valid_until: e.target.value ? `${e.target.value}T00:00:00` : null })
                       }
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Exchange rate</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Exchange rate</label>
                     <input
                       type="text"
                       value={quotation.exchange_rate ?? "1"}
                       onChange={(e) => updateQuotationHeader({ exchange_rate: e.target.value || null })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Currency</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Currency</label>
                     <input
                       type="text"
                       value={quotation.currency ?? "USD"}
                       onChange={(e) => updateQuotationHeader({ currency: e.target.value || null })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Commission mode</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Commission mode</label>
                     <select
                       value={quotation.commission_mode ?? ""}
                       onChange={(e) => updateQuotationHeader({ commission_mode: e.target.value || null })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     >
                       <option value="">Select mode</option>
                       {withLegacyOption(quotation.commission_mode, COMMISSION_MODE_OPTIONS).map((mode) => (
@@ -460,11 +460,11 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Commission type</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Commission type</label>
                     <select
                       value={quotation.commission_type ?? ""}
                       onChange={(e) => updateQuotationHeader({ commission_type: e.target.value || null })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     >
                       <option value="">Select type</option>
                       {withLegacyOption(quotation.commission_type, COMMISSION_TYPE_OPTIONS).map((type) => (
@@ -477,48 +477,48 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Commission value</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Commission value</label>
                     <input
                       type="text"
                       value={quotation.commission_value ?? ""}
                       onChange={(e) => updateQuotationHeader({ commission_value: e.target.value || null })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">Pack ratio</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Pack ratio</label>
                     <input
                       type="text"
                       value={quotation.pack_ratio ?? ""}
                       onChange={(e) => updateQuotationHeader({ pack_ratio: e.target.value || null })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-gray-700">PCS per carton</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">PCS per carton</label>
                     <input
                       type="number"
                       value={quotation.pcs_per_carton ?? ""}
                       onChange={(e) =>
                         updateQuotationHeader({ pcs_per_carton: e.target.value ? Number(e.target.value) : null })
                       }
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                 </div>
                 <div className="mt-2">
-                  <label className="mb-0.5 block font-medium text-gray-700">Notes / Assumptions</label>
+                  <label className="mb-0.5 block font-medium text-text-secondary">Notes / Assumptions</label>
                   <textarea
                     rows={3}
                     value={quotation.notes ?? ""}
                     onChange={(e) => updateQuotationHeader({ notes: e.target.value || null })}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     placeholder="Add commercial assumptions, exclusions, and remarks."
                   />
                 </div>
               </div>
             ) : (
-              <div className="space-y-1 text-sm text-gray-700">
+              <div className="space-y-1 text-sm text-text-secondary">
                 <div><span className="font-medium">Customer:</span> {customer?.name ?? `#${quotation.customer_id}`}</div>
                 <div><span className="font-medium">Department:</span> {quotation.department ?? "—"}</div>
                 <div><span className="font-medium">Style:</span> {quotation.style_name ?? quotation.style_ref ?? "—"}</div>
@@ -553,18 +553,18 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     },
                   ])
                 }
-                className="no-print rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-700 bg-white"
+                className="no-print rounded-lg border border-border px-3 py-1 text-xs text-text-secondary bg-surface-raised"
               >
                 + Add Fabric
               </button>
             ) : null}
           >
             {materials.length === 0 ? (
-              <div className="text-xs text-gray-500">No material lines.</div>
+              <div className="text-xs text-text-muted">No material lines.</div>
             ) : (
               <div className="relative max-h-[420px] overflow-auto">
                 <table className="min-w-[980px] w-full text-xs">
-                  <thead className="border-b border-gray-200 bg-gray-50 text-gray-500">
+                  <thead className="border-b border-border bg-surface-subtle text-text-muted">
                     <tr>
                       <th className="px-2 py-2 text-left">#</th>
                       <th className="px-2 py-2 text-left">Fabric Type / Category</th>
@@ -578,14 +578,14 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   </thead>
                   <tbody>
                     {materials.map((m, idx) => (
-                      <tr key={idx} className="border-b border-gray-100 last:border-0">
+                      <tr key={idx} className="border-b border-border-subtle last:border-0">
                         <td className="px-2 py-1">{idx + 1}</td>
                         <td className="px-2 py-1">
                           {isEditing ? (
                             <select
                               value={m.category_id ?? ""}
                               onChange={(e) => onMaterialChange(idx, { category_id: e.target.value ? Number(e.target.value) : null })}
-                              className="w-full rounded border border-gray-300 px-1 py-1 text-xs"
+                              className="w-full rounded border border-border px-1 py-1 text-xs"
                             >
                               <option value="">—</option>
                               {categories.map((c) => (
@@ -602,7 +602,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               <select
                                 value={m.item_id ?? ""}
                                 onChange={(e) => onMaterialChange(idx, { item_id: e.target.value ? Number(e.target.value) : null })}
-                                className="w-full rounded border border-gray-300 px-1 py-1 text-xs"
+                                className="w-full rounded border border-border px-1 py-1 text-xs"
                               >
                                 <option value="">Select item…</option>
                                 {items.map((it) => (
@@ -613,7 +613,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                                 type="text"
                                 value={m.description ?? ""}
                                 onChange={(e) => onMaterialChange(idx, { description: e.target.value || null })}
-                                className="w-full rounded border border-gray-300 px-1 py-1 text-xs"
+                                className="w-full rounded border border-border px-1 py-1 text-xs"
                               />
                             </div>
                           ) : (
@@ -626,7 +626,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               type="text"
                               value={m.unit ?? ""}
                               onChange={(e) => onMaterialChange(idx, { unit: e.target.value || null })}
-                              className="w-full rounded border border-gray-300 px-1 py-1 text-xs"
+                              className="w-full rounded border border-border px-1 py-1 text-xs"
                             />
                           ) : (
                             m.unit ?? "—"
@@ -639,7 +639,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               step="0.0001"
                               value={m.consumption_per_dozen}
                               onChange={(e) => onMaterialChange(idx, { consumption_per_dozen: e.target.value || "0" })}
-                              className="w-20 rounded border border-gray-300 px-1 py-1 text-right text-xs"
+                              className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
                             m.consumption_per_dozen
@@ -652,7 +652,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               step="0.0001"
                               value={m.unit_price}
                               onChange={(e) => onMaterialChange(idx, { unit_price: e.target.value || "0" })}
-                              className="w-20 rounded border border-gray-300 px-1 py-1 text-right text-xs"
+                              className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
                             m.unit_price
@@ -663,12 +663,12 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="sticky bottom-0 bg-white">
-                    <tr className="border-t border-gray-200 bg-gray-50">
-                      <td colSpan={7} className="px-2 py-2 text-right text-sm font-semibold text-gray-700">
+                  <tfoot className="sticky bottom-0 bg-surface-raised">
+                    <tr className="border-t border-border bg-surface-subtle">
+                      <td colSpan={7} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
                         Fabric Total Cost
                       </td>
-                      <td className="px-2 py-2 text-right text-sm font-bold text-gray-900">
+                      <td className="px-2 py-2 text-right text-sm font-bold text-text-primary">
                         {formatMoney(totals.matTotal)} {quotation.currency ?? ""}
                       </td>
                     </tr>
@@ -704,18 +704,18 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     },
                   ])
                 }
-                className="no-print rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-700 bg-white"
+                className="no-print rounded-lg border border-border px-3 py-1 text-xs text-text-secondary bg-surface-raised"
               >
                 + Add CM
               </button>
             ) : null}
           >
             {manufacturing.length === 0 ? (
-              <div className="text-xs text-gray-500">No manufacturing lines.</div>
+              <div className="text-xs text-text-muted">No manufacturing lines.</div>
             ) : (
               <div className="relative max-h-[420px] overflow-auto">
                 <table className="min-w-[900px] w-full text-xs">
-                  <thead className="border-b border-gray-200 bg-gray-50 text-gray-500">
+                  <thead className="border-b border-border bg-surface-subtle text-text-muted">
                     <tr>
                       <th className="px-2 py-2 text-left">#</th>
                       <th className="px-2 py-2 text-left">Style part</th>
@@ -729,7 +729,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   </thead>
                   <tbody>
                     {manufacturing.map((m, idx) => (
-                      <tr key={idx} className="border-b border-gray-100 last:border-0">
+                      <tr key={idx} className="border-b border-border-subtle last:border-0">
                         <td className="px-2 py-1">{idx + 1}</td>
                         <td className="px-2 py-1">
                           {isEditing ? (
@@ -737,7 +737,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               type="text"
                               value={m.style_part}
                               onChange={(e) => onManufacturingChange(idx, { style_part: e.target.value })}
-                              className="w-full rounded border border-gray-300 px-1 py-1 text-xs"
+                              className="w-full rounded border border-border px-1 py-1 text-xs"
                             />
                           ) : (
                             m.style_part || "—"
@@ -749,7 +749,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               type="number"
                               value={m.machines_required}
                               onChange={(e) => onManufacturingChange(idx, { machines_required: Number(e.target.value || "0") })}
-                              className="w-16 rounded border border-gray-300 px-1 py-1 text-right text-xs"
+                              className="w-16 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
                             m.machines_required
@@ -761,7 +761,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               type="number"
                               value={m.production_per_hour}
                               onChange={(e) => onManufacturingChange(idx, { production_per_hour: e.target.value || "0" })}
-                              className="w-20 rounded border border-gray-300 px-1 py-1 text-right text-xs"
+                              className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
                             m.production_per_hour
@@ -773,7 +773,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               type="number"
                               value={m.cost_per_machine}
                               onChange={(e) => onManufacturingChange(idx, { cost_per_machine: e.target.value || "0" })}
-                              className="w-20 rounded border border-gray-300 px-1 py-1 text-right text-xs"
+                              className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
                             m.cost_per_machine
@@ -785,12 +785,12 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="sticky bottom-0 bg-white">
-                    <tr className="border-t border-gray-200 bg-gray-50">
-                      <td colSpan={7} className="px-2 py-2 text-right text-sm font-semibold text-gray-700">
+                  <tfoot className="sticky bottom-0 bg-surface-raised">
+                    <tr className="border-t border-border bg-surface-subtle">
+                      <td colSpan={7} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
                         Labor / CM Total
                       </td>
-                      <td className="px-2 py-2 text-right text-sm font-bold text-gray-900">
+                      <td className="px-2 py-2 text-right text-sm font-bold text-text-primary">
                         {formatMoney(totals.mfgTotal)} {quotation.currency ?? ""}
                       </td>
                     </tr>
@@ -825,18 +825,18 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     },
                   ])
                 }
-                className="no-print rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-700 bg-white"
+                className="no-print rounded-lg border border-border px-3 py-1 text-xs text-text-secondary bg-surface-raised"
               >
                 + Add Cost Head
               </button>
             ) : null}
           >
             {otherCosts.length === 0 ? (
-              <div className="text-xs text-gray-500">No other cost lines.</div>
+              <div className="text-xs text-text-muted">No other cost lines.</div>
             ) : (
               <div className="relative max-h-[420px] overflow-auto">
                 <table className="min-w-[900px] w-full text-xs">
-                  <thead className="border-b border-gray-200 bg-gray-50 text-gray-500">
+                  <thead className="border-b border-border bg-surface-subtle text-text-muted">
                     <tr>
                       <th className="px-2 py-2 text-left">#</th>
                       <th className="px-2 py-2 text-left">Cost head</th>
@@ -848,7 +848,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   </thead>
                   <tbody>
                     {otherCosts.map((c, idx) => (
-                      <tr key={idx} className="border-b border-gray-100 last:border-0">
+                      <tr key={idx} className="border-b border-border-subtle last:border-0">
                         <td className="px-2 py-1">{idx + 1}</td>
                         <td className="px-2 py-1">
                           {isEditing ? (
@@ -856,7 +856,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               type="text"
                               value={c.cost_head}
                               onChange={(e) => onOtherCostChange(idx, { cost_head: e.target.value })}
-                              className="w-full rounded border border-gray-300 px-1 py-1 text-xs"
+                              className="w-full rounded border border-border px-1 py-1 text-xs"
                             />
                           ) : (
                             c.cost_head || "—"
@@ -867,7 +867,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                             <select
                               value={c.cost_type}
                               onChange={(e) => onOtherCostChange(idx, { cost_type: e.target.value })}
-                              className="w-full rounded border border-gray-300 px-1 py-1 text-xs"
+                              className="w-full rounded border border-border px-1 py-1 text-xs"
                             >
                               <option value="fixed">Fixed</option>
                               <option value="percentage">Percentage</option>
@@ -882,7 +882,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               type="number"
                               value={c.value}
                               onChange={(e) => onOtherCostChange(idx, { value: e.target.value || "0" })}
-                              className="w-20 rounded border border-gray-300 px-1 py-1 text-right text-xs"
+                              className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
                             c.value
@@ -893,12 +893,12 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="sticky bottom-0 bg-white">
-                    <tr className="border-t border-gray-200 bg-gray-50">
-                      <td colSpan={5} className="px-2 py-2 text-right text-sm font-semibold text-gray-700">
+                  <tfoot className="sticky bottom-0 bg-surface-raised">
+                    <tr className="border-t border-border bg-surface-subtle">
+                      <td colSpan={5} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
                         Other Costs Total
                       </td>
-                      <td className="px-2 py-2 text-right text-sm font-bold text-gray-900">
+                      <td className="px-2 py-2 text-right text-sm font-bold text-text-primary">
                         {formatMoney(totals.otherTotal)} {quotation.currency ?? ""}
                       </td>
                     </tr>
@@ -919,18 +919,18 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     { serial_no: rows.length + 1, size: "", ratio_percentage: "0", fabric_factor: "1.0", quantity: 0 },
                   ])
                 }
-                className="no-print rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-700 bg-white"
+                className="no-print rounded-lg border border-border px-3 py-1 text-xs text-text-secondary bg-surface-raised"
               >
                 + Add Size
               </button>
             ) : null}
           >
             {sizeRatios.length === 0 ? (
-              <div className="text-xs text-gray-500">No size ratios.</div>
+              <div className="text-xs text-text-muted">No size ratios.</div>
             ) : (
               <div className="relative max-h-[360px] overflow-auto">
                 <table className="min-w-[740px] w-full text-xs">
-                  <thead className="border-b border-gray-200 bg-gray-50 text-gray-500">
+                  <thead className="border-b border-border bg-surface-subtle text-text-muted">
                     <tr>
                       <th className="px-2 py-2 text-left">#</th>
                       <th className="px-2 py-2 text-left">Size</th>
@@ -941,7 +941,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   </thead>
                   <tbody>
                     {sizeRatios.map((s, idx) => (
-                      <tr key={idx} className="border-b border-gray-100 last:border-0">
+                      <tr key={idx} className="border-b border-border-subtle last:border-0">
                         <td className="px-2 py-1">{idx + 1}</td>
                         <td className="px-2 py-1">
                           {isEditing ? (
@@ -949,7 +949,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               type="text"
                               value={s.size}
                               onChange={(e) => onSizeRatioChange(idx, { size: e.target.value })}
-                              className="w-20 rounded border border-gray-300 px-1 py-1 text-xs"
+                              className="w-20 rounded border border-border px-1 py-1 text-xs"
                             />
                           ) : (
                             s.size
@@ -961,7 +961,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               type="number"
                               value={s.ratio_percentage}
                               onChange={(e) => onSizeRatioChange(idx, { ratio_percentage: e.target.value || "0" })}
-                              className="w-16 rounded border border-gray-300 px-1 py-1 text-right text-xs"
+                              className="w-16 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
                             s.ratio_percentage
@@ -973,7 +973,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               type="number"
                               value={s.fabric_factor}
                               onChange={(e) => onSizeRatioChange(idx, { fabric_factor: e.target.value || "1.0" })}
-                              className="w-16 rounded border border-gray-300 px-1 py-1 text-right text-xs"
+                              className="w-16 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
                             s.fabric_factor
@@ -985,7 +985,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                               type="number"
                               value={s.quantity}
                               onChange={(e) => onSizeRatioChange(idx, { quantity: Number(e.target.value || "0") })}
-                              className="w-20 rounded border border-gray-300 px-1 py-1 text-right text-xs"
+                              className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
                             />
                           ) : (
                             s.quantity
@@ -994,12 +994,12 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="sticky bottom-0 bg-white">
-                    <tr className="border-t border-gray-200 bg-gray-50">
-                      <td colSpan={4} className="px-2 py-2 text-right text-sm font-semibold text-gray-700">
+                  <tfoot className="sticky bottom-0 bg-surface-raised">
+                    <tr className="border-t border-border bg-surface-subtle">
+                      <td colSpan={4} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
                         Total Qty
                       </td>
-                      <td className="px-2 py-2 text-right text-sm font-bold text-gray-900">
+                      <td className="px-2 py-2 text-right text-sm font-bold text-text-primary">
                         {sizeRatios.reduce((acc, row) => acc + (row.quantity ?? 0), 0).toLocaleString()}
                       </td>
                     </tr>
@@ -1011,39 +1011,39 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
 
           <CollapsibleSection title="Final Commercial Breakdown" defaultOpen={!isPrintMode}>
             <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">FOB Cost</div>
-                <div className="text-xl font-bold text-gray-900">
+              <div className="rounded-xl border border-border bg-surface-subtle p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">FOB Cost</div>
+                <div className="text-xl font-bold text-text-primary">
                   {formatMoney(toSafeNumber(quotation.total_cost) || totals.total)} {quotation.currency ?? ""}
                 </div>
               </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Factory Margin</div>
-                <div className="text-xl font-bold text-orange-600">
+              <div className="rounded-xl border border-border bg-surface-subtle p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">Factory Margin</div>
+                <div className="text-xl font-bold text-brand-primary">
                   {formatMoney(factoryMarginAmount)} ({factoryMarginPercent.toFixed(1)}%)
                 </div>
               </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Agency Commission</div>
-                <div className="text-xl font-bold text-gray-900">{toSafeNumber(quotation.commission_value).toFixed(1)}%</div>
+              <div className="rounded-xl border border-border bg-surface-subtle p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">Agency Commission</div>
+                <div className="text-xl font-bold text-text-primary">{toSafeNumber(quotation.commission_value).toFixed(1)}%</div>
               </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Final Quoted Price</div>
-                <div className="text-xl font-bold text-primary">
+              <div className="rounded-xl border border-border bg-surface-subtle p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">Final Quoted Price</div>
+                <div className="text-xl font-bold text-brand-primary">
                   {formatMoney(toSafeNumber(quotation.quoted_price ?? quotation.total_amount))} {quotation.currency ?? ""}
                 </div>
               </div>
             </div>
           </CollapsibleSection>
 
-          <div className="text-xs text-gray-500">
+          <div className="text-xs text-text-muted">
             Created at {new Date(quotation.created_at).toLocaleString()} · Updated at{" "}
             {new Date(quotation.updated_at).toLocaleString()}
           </div>
 
-          <section className="print-only print-card rounded-xl border border-gray-300 bg-white p-4">
-            <h3 className="text-sm font-semibold text-gray-900">Legal / Commercial Sign-off</h3>
-            <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-gray-700 md:grid-cols-2">
+          <section className="print-only print-card rounded-xl border border-border bg-surface-raised p-4">
+            <h3 className="text-sm font-semibold text-text-primary">Legal / Commercial Sign-off</h3>
+            <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-text-secondary md:grid-cols-2">
               <div>
                 <div><span className="font-semibold">Quotation Code:</span> {quotation.quotation_code}</div>
                 <div><span className="font-semibold">Version:</span> {quotation.version_no}</div>
@@ -1059,16 +1059,16 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
             </div>
             <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-3">
               <div>
-                <div className="h-10 border-b border-gray-500" />
-                <div className="mt-1 text-[11px] text-gray-600">Prepared By</div>
+                <div className="h-10 border-b border-border-strong" />
+                <div className="mt-1 text-[11px] text-text-secondary">Prepared By</div>
               </div>
               <div>
-                <div className="h-10 border-b border-gray-500" />
-                <div className="mt-1 text-[11px] text-gray-600">Reviewed By</div>
+                <div className="h-10 border-b border-border-strong" />
+                <div className="mt-1 text-[11px] text-text-secondary">Reviewed By</div>
               </div>
               <div>
-                <div className="h-10 border-b border-gray-500" />
-                <div className="mt-1 text-[11px] text-gray-600">Approved By</div>
+                <div className="h-10 border-b border-border-strong" />
+                <div className="mt-1 text-[11px] text-text-secondary">Approved By</div>
               </div>
             </div>
           </section>
@@ -1103,47 +1103,47 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               { label: "Commission", value: quotation.commission_value },
             ]}
           />
-          <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm print-card">
-            <h3 className="text-sm font-semibold text-gray-900">
+          <section className="rounded-2xl border border-border bg-surface-raised p-4 shadow-sm print-card">
+            <h3 className="text-sm font-semibold text-text-primary">
               Scenario Compare (v{previousVersionQuote?.version_no ?? "-"} vs v{quotation.version_no})
             </h3>
             {previousVersionQuote ? (
               <div className="mt-3 space-y-2 text-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">FOB Change</span>
-                  <span className="font-semibold text-gray-900">
+                  <span className="text-text-secondary">FOB Change</span>
+                  <span className="font-semibold text-text-primary">
                     {(toSafeNumber(quotation.total_cost) || totals.total) - toSafeNumber(previousVersionQuote.total_cost) >= 0 ? "+" : ""}
                     {formatMoney((toSafeNumber(quotation.total_cost) || totals.total) - toSafeNumber(previousVersionQuote.total_cost))} {quotation.currency ?? ""}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Quoted Price Change</span>
-                  <span className="font-semibold text-gray-900">
+                  <span className="text-text-secondary">Quoted Price Change</span>
+                  <span className="font-semibold text-text-primary">
                     {(toSafeNumber(quotation.quoted_price ?? quotation.total_amount) - toSafeNumber(previousVersionQuote.quoted_price ?? previousVersionQuote.total_amount)) >= 0 ? "+" : ""}
                     {formatMoney(toSafeNumber(quotation.quoted_price ?? quotation.total_amount) - toSafeNumber(previousVersionQuote.quoted_price ?? previousVersionQuote.total_amount))} {quotation.currency ?? ""}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Profit % Change</span>
-                  <span className="font-semibold text-gray-900">
+                  <span className="text-text-secondary">Profit % Change</span>
+                  <span className="font-semibold text-text-primary">
                     {(toSafeNumber(quotation.profit_percentage) - toSafeNumber(previousVersionQuote.profit_percentage)) >= 0 ? "+" : ""}
                     {(toSafeNumber(quotation.profit_percentage) - toSafeNumber(previousVersionQuote.profit_percentage)).toFixed(2)}%
                   </span>
                 </div>
               </div>
             ) : (
-              <p className="mt-2 text-xs text-gray-500">
+              <p className="mt-2 text-xs text-text-muted">
                 No previous version found yet. Create a duplicate version to compare scenarios.
               </p>
             )}
           </section>
           {quotation.style_image_url && (
-            <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm print-card">
-              <h3 className="text-sm font-semibold text-gray-900">Style Preview</h3>
+            <section className="rounded-2xl border border-border bg-surface-raised p-4 shadow-sm print-card">
+              <h3 className="text-sm font-semibold text-text-primary">Style Preview</h3>
               <img
                 src={quotation.style_image_url}
                 alt={quotation.style_name ?? quotation.style_ref ?? "Style"}
-                className="mt-2 h-36 w-full rounded object-cover border border-gray-200"
+                className="mt-2 h-36 w-full rounded object-cover border border-border"
               />
             </section>
           )}

@@ -46,24 +46,24 @@ export function AccountsCurrencyPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Multi-Currency</h1>
-        <p className="text-sm text-slate-500">Exchange rate maintenance and FX revaluation preview.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Multi-Currency</h1>
+        <p className="text-sm text-text-muted">Exchange rate maintenance and FX revaluation preview.</p>
       </div>
-      {error ? <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-5">
+      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-5">
         <input className="rounded border px-3 py-2 text-sm" value={form.from_currency} onChange={(e) => setForm((p) => ({ ...p, from_currency: e.target.value.toUpperCase() }))} />
         <input className="rounded border px-3 py-2 text-sm" value={form.to_currency} onChange={(e) => setForm((p) => ({ ...p, to_currency: e.target.value.toUpperCase() }))} />
         <input className="rounded border px-3 py-2 text-sm" value={form.exchange_rate} onChange={(e) => setForm((p) => ({ ...p, exchange_rate: e.target.value }))} />
         <input type="date" className="rounded border px-3 py-2 text-sm" value={form.effective_date} onChange={(e) => setForm((p) => ({ ...p, effective_date: e.target.value }))} />
-        <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white">Add Rate</button>
+        <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">Add Rate</button>
       </form>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="mb-2 text-lg font-semibold">Exchange Rates</h2>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left">
+            <thead className="bg-surface-subtle text-left">
               <tr>
                 <th className="px-2 py-1">Pair</th>
                 <th className="px-2 py-1">Rate</th>
@@ -89,7 +89,7 @@ export function AccountsCurrencyPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="mb-2 text-lg font-semibold">Revaluation Summary</h2>
         {reval ? (
           <>
@@ -106,7 +106,7 @@ export function AccountsCurrencyPage() {
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 text-left">
+                <thead className="bg-surface-subtle text-left">
                   <tr>
                     <th className="px-2 py-1">Receipt</th>
                     <th className="px-2 py-1">Currency</th>

@@ -54,6 +54,9 @@ class ExportCase(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
     case_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
+    trade_case_id: Mapped[int | None] = mapped_column(
+        ForeignKey("trade_cases.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

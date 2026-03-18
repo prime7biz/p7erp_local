@@ -36,12 +36,17 @@ async def require_tenant(
     tenant_id: Annotated[int | None, Depends(get_tenant_id_from_header)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Tenant:
-    """Dependency: resolve and return the current tenant. Raises 404 if not found or not provided."""
+    """Dependency: resolve and return the current tenant from X-Tenant-Id header."""
+    if tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Tenant-Id header is required",
+        )
     tenant = await get_tenant(db, tenant_id)
     if tenant is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tenant not found or X-Tenant-Id missing",
+            detail="Tenant not found",
         )
     return tenant
 

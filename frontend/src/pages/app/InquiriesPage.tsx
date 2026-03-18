@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type CustomerResponse, type InquiryResponse } from "@/api/client";
+import {
+  canConvertInquiryToQuotation,
+  humanizeStatus,
+  INQUIRY_STATUS_FILTER_OPTIONS,
+} from "@/features/merch/workflow";
 
 const statusClass = (status: string) => {
   const value = status.toUpperCase();
-  if (value === "WON" || value === "APPROVED") return "bg-emerald-100 text-emerald-700";
-  if (value === "LOST" || value === "REJECTED") return "bg-red-100 text-red-700";
-  if (value === "SUBMITTED") return "bg-blue-100 text-blue-700";
-  return "bg-gray-100 text-gray-700";
+  if (value === "CONVERTED") return "bg-status-success-subtle text-status-success-foreground";
+  if (value === "LOST" || value === "CANCELLED") return "bg-status-danger-subtle text-status-danger-foreground";
+  if (value === "SUBMITTED") return "bg-status-info-subtle text-status-info-foreground";
+  return "bg-status-neutral-subtle text-status-neutral-foreground";
 };
 
 export function InquiriesPage() {
@@ -60,8 +65,8 @@ export function InquiriesPage() {
     <div className="space-y-6">
       <header className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Inquiries</h1>
-          <p className="text-gray-500 text-sm mt-0.5">
+          <h1 className="text-2xl font-bold text-text-primary">Inquiries</h1>
+          <p className="text-text-muted text-sm mt-0.5">
             Manage buyer inquiries before they become quotations and confirmed orders.
           </p>
         </div>
@@ -71,23 +76,24 @@ export function InquiriesPage() {
             placeholder="Search by code..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:w-48 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+            className="w-full sm:w-48 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
           />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full sm:w-40 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+            className="w-full sm:w-40 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
           >
             <option value="">All statuses</option>
-            <option value="DRAFT">Draft</option>
-            <option value="SUBMITTED">Submitted</option>
-            <option value="WON">Won</option>
-            <option value="LOST">Lost</option>
+            {INQUIRY_STATUS_FILTER_OPTIONS.map((statusValue) => (
+              <option key={statusValue} value={statusValue}>
+                {humanizeStatus(statusValue)}
+              </option>
+            ))}
           </select>
           <select
             value={departmentFilter}
             onChange={(e) => setDepartmentFilter(e.target.value)}
-            className="w-full sm:w-40 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+            className="w-full sm:w-40 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
           >
             <option value="">All departments</option>
             <option value="Infant">Infant</option>
@@ -102,7 +108,7 @@ export function InquiriesPage() {
           <button
             type="button"
             onClick={() => navigate("/app/inquiries/new")}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-primary/90"
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
           >
             New Inquiry
           </button>
@@ -110,20 +116,20 @@ export function InquiriesPage() {
       </header>
 
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         {loading ? (
-          <div className="p-12 text-center text-gray-500">Loading inquiries...</div>
+          <div className="p-12 text-center text-text-muted">Loading inquiries...</div>
         ) : items.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">No inquiries yet.</div>
+          <div className="p-12 text-center text-text-muted">No inquiries yet.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-[1100px] w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+              <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
                 <tr>
                   <th className="py-2.5 px-4 w-24 whitespace-nowrap">Code</th>
                   <th className="py-2.5 px-4 min-w-[120px]">Customer</th>
@@ -137,13 +143,13 @@ export function InquiriesPage() {
               </thead>
               <tbody>
                 {filteredItems.map((inq) => (
-                  <tr key={inq.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
-                    <td className="py-2.5 px-4 font-medium text-gray-900 whitespace-nowrap">
-                      <Link to={`/app/inquiries/${inq.id}`} className="text-indigo-600 hover:underline">
+                  <tr key={inq.id} className="border-b border-border-subtle last:border-0 hover:bg-surface-subtle/70">
+                    <td className="py-2.5 px-4 font-medium text-text-primary whitespace-nowrap">
+                      <Link to={`/app/inquiries/${inq.id}`} className="text-status-info hover:underline">
                         {inq.inquiry_code}
                       </Link>
                     </td>
-                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={customerName(inq.customer_id)}>
+                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={customerName(inq.customer_id)}>
                       {customerName(inq.customer_id)}
                     </td>
                     <td className="py-2.5 px-4">
@@ -152,16 +158,16 @@ export function InquiriesPage() {
                           <img
                             src={inq.style_image_url}
                             alt={inq.style_name ?? inq.style_ref ?? "style"}
-                            className="h-9 w-9 shrink-0 rounded object-cover border border-gray-200"
+                            className="h-9 w-9 shrink-0 rounded object-cover border border-border"
                           />
                         ) : (
-                          <div className="h-9 w-9 shrink-0 rounded bg-gray-100 border border-gray-200" />
+                          <div className="h-9 w-9 shrink-0 rounded bg-surface-subtle border border-border" />
                         )}
                         <div className="min-w-0 flex-1">
-                          <div className="font-medium text-gray-900 truncate" title={inq.style_name ?? inq.style_ref ?? undefined}>
+                          <div className="font-medium text-text-primary truncate" title={inq.style_name ?? inq.style_ref ?? undefined}>
                             {inq.style_name ?? inq.style_ref ?? "—"}
                           </div>
-                          <div className="text-xs text-gray-500 whitespace-nowrap truncate" title={inq.style_ref && inq.style_name && inq.style_ref !== inq.style_name ? inq.style_ref : inq.department ?? undefined}>
+                          <div className="text-xs text-text-muted whitespace-nowrap truncate" title={inq.style_ref && inq.style_name && inq.style_ref !== inq.style_name ? inq.style_ref : inq.department ?? undefined}>
                             {inq.style_ref && inq.style_name && inq.style_ref !== inq.style_name
                               ? inq.style_ref
                               : inq.department ?? "—"}
@@ -169,22 +175,22 @@ export function InquiriesPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={inq.intermediary_name ?? undefined}>
+                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={inq.intermediary_name ?? undefined}>
                       {inq.intermediary_name ?? "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={inq.shipping_term ?? undefined}>
+                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={inq.shipping_term ?? undefined}>
                       {inq.shipping_term ?? "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-right text-gray-700 whitespace-nowrap">
+                    <td className="py-2.5 px-4 text-right text-text-secondary whitespace-nowrap">
                       {inq.quantity != null ? inq.quantity.toLocaleString() : "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-gray-700 overflow-hidden text-ellipsis" title={[inq.status, inq.is_converted_to_quotation ? "Converted to quotation" : null].filter(Boolean).join(" · ")}>
+                    <td className="py-2.5 px-4 text-text-secondary overflow-hidden text-ellipsis" title={[inq.status, inq.is_converted_to_quotation ? "Converted to quotation" : null].filter(Boolean).join(" · ")}>
                       <div className="flex items-center gap-1.5 flex-wrap whitespace-nowrap min-w-0">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(inq.status)}`}>
                           {inq.status}
                         </span>
                         {inq.is_converted_to_quotation && (
-                          <span className="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                          <span className="inline-flex rounded-full bg-status-info-subtle px-2 py-0.5 text-xs font-medium text-status-info-foreground">
                             Converted to quotation
                           </span>
                         )}
@@ -195,16 +201,16 @@ export function InquiriesPage() {
                         <button
                           type="button"
                           onClick={() => setOpenActionsId((prev) => (prev === inq.id ? null : inq.id))}
-                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                          className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                         >
                           Actions
                         </button>
                         {openActionsId === inq.id && (
-                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
                             <Link
                               to={`/app/inquiries/${inq.id}`}
                               onClick={() => setOpenActionsId(null)}
-                              className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                             >
                               View
                             </Link>
@@ -214,20 +220,24 @@ export function InquiriesPage() {
                                 setOpenActionsId(null);
                                 navigate(`/app/inquiries/${inq.id}/edit`);
                               }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                             >
                               Edit
                             </button>
                             <Link
                               to={`/app/inquiries/${inq.id}/print`}
                               onClick={() => setOpenActionsId(null)}
-                              className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                             >
                               Print
                             </Link>
                             {inq.is_converted_to_quotation ? (
-                              <div className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-400">
+                              <div className="block rounded-md px-2 py-1.5 text-left text-xs text-text-muted">
                                 Already converted
+                              </div>
+                            ) : !canConvertInquiryToQuotation(inq.status) ? (
+                              <div className="block rounded-md px-2 py-1.5 text-left text-xs text-text-muted">
+                                Submit first
                               </div>
                             ) : (
                               <button
@@ -245,7 +255,7 @@ export function InquiriesPage() {
                                     setError(e instanceof Error ? e.message : "Convert to quotation failed");
                                   }
                                 }}
-                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-indigo-700 hover:bg-indigo-50"
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-info-foreground hover:bg-status-info-subtle"
                               >
                                 To quotation
                               </button>
@@ -263,7 +273,7 @@ export function InquiriesPage() {
                                   setError(e instanceof Error ? e.message : "Delete failed");
                                 }
                               }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
                             >
                               Delete
                             </button>
@@ -279,12 +289,12 @@ export function InquiriesPage() {
         )}
       </div>
 
-      <div className="flex items-center justify-between text-xs text-gray-500">
+      <div className="flex items-center justify-between text-xs text-text-muted">
         <button
           type="button"
           disabled={page === 1}
           onClick={() => setPage((p) => Math.max(1, p - 1))}
-          className="rounded-lg border border-gray-300 px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-lg border border-border-strong px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Previous
         </button>
@@ -293,7 +303,7 @@ export function InquiriesPage() {
           type="button"
           disabled={items.length < pageSize}
           onClick={() => setPage((p) => p + 1)}
-          className="rounded-lg border border-gray-300 px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-lg border border-border-strong px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Next
         </button>

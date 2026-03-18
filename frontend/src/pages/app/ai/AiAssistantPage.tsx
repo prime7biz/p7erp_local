@@ -293,8 +293,8 @@ export function AiAssistantPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">AI Tool</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-text-primary">AI Tool</h1>
+        <p className="text-sm text-text-muted">
           Tenant-safe ERP assistant for summaries, reports, forecasts, knowledge retrieval, and controlled draft automation.
         </p>
       </div>

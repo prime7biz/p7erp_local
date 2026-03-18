@@ -47,20 +47,20 @@ export function ArApAgingReportPage() {
 
   return (
     <div className="space-y-6 print-report">
-      <div className="print-only mb-3 border-b border-slate-300 pb-2">
+      <div className="print-only mb-3 border-b border-border-strong pb-2">
         <h1 className="text-lg font-semibold">AR/AP Aging Report</h1>
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-text-secondary">
           Type: {billType} | As of: {asOfDate}
         </p>
       </div>
       <div className="no-print">
-        <h1 className="text-2xl font-semibold text-slate-900">AR/AP Aging Report</h1>
-        <p className="text-sm text-slate-500">Dedicated aging analysis view for receivables and payables.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">AR/AP Aging Report</h1>
+        <p className="text-sm text-text-muted">Dedicated aging analysis view for receivables and payables.</p>
       </div>
-      {error ? <div className="no-print rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="no-print rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+      {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="no-print rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
-      <div className="no-print grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="no-print grid gap-2 rounded-xl border border-border bg-surface-raised p-3 sm:grid-cols-2 lg:grid-cols-4">
         <select className="rounded border px-3 py-2 text-sm" value={billType} onChange={(e) => setBillType(e.target.value as "PAYABLE" | "RECEIVABLE")}>
           <option value="RECEIVABLE">Receivable</option>
           <option value="PAYABLE">Payable</option>
@@ -85,17 +85,17 @@ export function ArApAgingReportPage() {
 
       {data ? (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="print-card rounded border bg-white p-2 text-sm">Current: <b>{(data.buckets.current ?? 0).toLocaleString()}</b></div>
-          <div className="print-card rounded border bg-white p-2 text-sm">1-30: <b>{(data.buckets["1_30"] ?? 0).toLocaleString()}</b></div>
-          <div className="print-card rounded border bg-white p-2 text-sm">31-60: <b>{(data.buckets["31_60"] ?? 0).toLocaleString()}</b></div>
-          <div className="print-card rounded border bg-white p-2 text-sm">61-90: <b>{(data.buckets["61_90"] ?? 0).toLocaleString()}</b></div>
-          <div className="print-card rounded border bg-white p-2 text-sm">90+: <b>{(data.buckets["90_plus"] ?? 0).toLocaleString()}</b></div>
+          <div className="print-card rounded border border-border bg-surface-raised p-2 text-sm">Current: <b>{(data.buckets.current ?? 0).toLocaleString()}</b></div>
+          <div className="print-card rounded border border-border bg-surface-raised p-2 text-sm">1-30: <b>{(data.buckets["1_30"] ?? 0).toLocaleString()}</b></div>
+          <div className="print-card rounded border border-border bg-surface-raised p-2 text-sm">31-60: <b>{(data.buckets["31_60"] ?? 0).toLocaleString()}</b></div>
+          <div className="print-card rounded border border-border bg-surface-raised p-2 text-sm">61-90: <b>{(data.buckets["61_90"] ?? 0).toLocaleString()}</b></div>
+          <div className="print-card rounded border border-border bg-surface-raised p-2 text-sm">90+: <b>{(data.buckets["90_plus"] ?? 0).toLocaleString()}</b></div>
         </div>
       ) : null}
 
-      <div className="print-card overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="print-card overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">Bill</th>
               <th className="px-2 py-1">Party</th>

@@ -152,7 +152,7 @@ export function BuyingHouseErpPage() {
               <br />
               <span className="text-primary">Purpose-Built ERP Software</span>
             </h1>
-            <p className="text-lg md:text-xl text-gray-300 max-w-3xl mx-auto mb-8">
+            <p className="text-lg md:text-xl text-text-inverse max-w-3xl mx-auto mb-8">
               From PO receipt to shipment delivery — manage T&A calendars, track orders across multiple factories,
               coordinate samples, and handle LC documentation in one integrated platform.
             </p>
@@ -169,7 +169,7 @@ export function BuyingHouseErpPage() {
       </section>
 
       {/* Global Buying House Operations Image Section */}
-      <section className="relative py-16 lg:py-24 bg-gray-900 overflow-hidden">
+      <section className="relative py-16 lg:py-24 bg-surface-inverse overflow-hidden">
         <div className="absolute top-10 -right-20 w-72 h-72 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-10 -left-20 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -177,7 +177,7 @@ export function BuyingHouseErpPage() {
             <h2 className="text-3xl md:text-4xl font-semibold text-white mb-4">
               Global Buying House Operations
             </h2>
-            <p className="text-lg text-gray-400 max-w-2xl mx-auto">
+            <p className="text-lg text-text-inverse max-w-2xl mx-auto">
               Manage international trade operations across multiple countries, buyers, and factories from a single platform.
             </p>
           </div>
@@ -189,29 +189,29 @@ export function BuyingHouseErpPage() {
       </section>
 
       {/* Pain Points */}
-      <section className="relative py-16 lg:py-24 bg-white overflow-hidden">
+      <section className="relative py-16 lg:py-24 bg-surface-raised overflow-hidden">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: "radial-gradient(circle, #F97316 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 bg-red-50 text-red-600 px-4 py-1.5 rounded-full text-sm font-medium mb-4">
+            <div className="inline-flex items-center gap-2 bg-status-danger-subtle text-status-danger-foreground px-4 py-1.5 rounded-full text-sm font-medium mb-4">
               <AlertTriangle className="w-4 h-4" />
               Common Buying House Challenges
             </div>
-            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">
               Challenges Every Buying House Faces
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-text-secondary max-w-2xl mx-auto">
               If your merchandising team is drowning in spreadsheets and WhatsApp follow-ups, P7 was built to solve exactly these problems.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {painPoints.map((point) => (
-              <div key={point.title} className="bg-white rounded-xl border border-primary/20 p-6 hover:shadow-lg hover:border-primary/30 transition-all">
-                <div className="inline-flex items-center justify-center w-12 h-12 bg-red-50 text-red-500 rounded-lg mb-4">
+              <div key={point.title} className="bg-surface-raised rounded-xl border border-primary/20 p-6 hover:shadow-lg hover:border-primary/30 transition-all">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-status-danger-subtle text-status-danger-foreground rounded-lg mb-4">
                   <point.icon className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{point.title}</h3>
-                <p className="text-gray-600 text-sm">{point.description}</p>
+                <h3 className="text-lg font-semibold text-text-primary mb-2">{point.title}</h3>
+                <p className="text-text-secondary text-sm">{point.description}</p>
               </div>
             ))}
           </div>
@@ -219,7 +219,7 @@ export function BuyingHouseErpPage() {
       </section>
 
       {/* Key Features */}
-      <section className="relative py-16 lg:py-24 bg-gray-50 overflow-hidden">
+      <section className="relative py-16 lg:py-24 bg-surface-subtle overflow-hidden">
         <div className="absolute top-20 -left-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-10 -right-20 w-72 h-72 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
@@ -228,21 +228,21 @@ export function BuyingHouseErpPage() {
               <CheckCircle2 className="w-4 h-4" />
               Comprehensive Feature Set
             </div>
-            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">
               Everything Your Buying House Needs
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-text-secondary max-w-2xl mx-auto">
               Purpose-built modules for every aspect of buying house operations — from order receipt to shipment closure.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((feature) => (
-              <div key={feature.title} className="bg-white rounded-xl p-6 shadow-sm border border-primary/20 hover:shadow-md hover:border-primary/30 transition-all">
+              <div key={feature.title} className="bg-surface-raised rounded-xl p-6 shadow-sm border border-primary/20 hover:shadow-md hover:border-primary/30 transition-all">
                 <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 text-primary rounded-lg mb-4">
                   <feature.icon className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{feature.title}</h3>
-                <p className="text-gray-600 text-sm">{feature.description}</p>
+                <h3 className="text-lg font-semibold text-text-primary mb-2">{feature.title}</h3>
+                <p className="text-text-secondary text-sm">{feature.description}</p>
               </div>
             ))}
           </div>
@@ -250,13 +250,13 @@ export function BuyingHouseErpPage() {
       </section>
 
       {/* Process Workflow */}
-      <section className="relative py-16 lg:py-24 bg-white overflow-hidden">
+      <section className="relative py-16 lg:py-24 bg-surface-raised overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">
               Buying House Order Lifecycle
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-text-secondary max-w-2xl mx-auto">
               Prime7 ERP covers the complete buying house workflow — from receiving buyer POs to final delivery and closure.
             </p>
           </div>
@@ -268,7 +268,7 @@ export function BuyingHouseErpPage() {
                   <div className={`w-12 h-12 rounded-full ${step.color} text-white flex items-center justify-center text-sm font-bold shadow-lg`}>
                     {i + 1}
                   </div>
-                  <p className="mt-3 text-xs font-medium text-gray-700 text-center max-w-[80px]">{step.label}</p>
+                  <p className="mt-3 text-xs font-medium text-text-secondary text-center max-w-[80px]">{step.label}</p>
                 </div>
               ))}
             </div>
@@ -279,8 +279,8 @@ export function BuyingHouseErpPage() {
                     {i + 1}
                   </div>
                   <div className="flex-1 flex items-center gap-2">
-                    <p className="text-sm font-medium text-gray-800">{step.label}</p>
-                    {i < processSteps.length - 1 && <ChevronRight className="w-4 h-4 text-gray-400" />}
+                    <p className="text-sm font-medium text-text-primary">{step.label}</p>
+                    {i < processSteps.length - 1 && <ChevronRight className="w-4 h-4 text-text-muted" />}
                   </div>
                 </div>
               ))}
@@ -290,13 +290,13 @@ export function BuyingHouseErpPage() {
       </section>
 
       {/* FAQ */}
-      <section className="py-16 lg:py-24 bg-white">
+      <section className="py-16 lg:py-24 bg-surface-raised">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">
               Frequently Asked Questions
             </h2>
-            <p className="text-lg text-gray-600">
+            <p className="text-lg text-text-secondary">
               Common questions from buying houses considering Prime7 ERP.
             </p>
           </div>
@@ -308,11 +308,11 @@ export function BuyingHouseErpPage() {
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   className="w-full flex items-center justify-between p-5 text-left hover:bg-primary/5 transition-colors"
                 >
-                  <span className="font-medium text-gray-900 pr-4">{faq.q}</span>
-                  <ChevronDown className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${openFaq === i ? "rotate-180" : ""}`} />
+                  <span className="font-medium text-text-primary pr-4">{faq.q}</span>
+                  <ChevronDown className={`w-5 h-5 text-text-muted flex-shrink-0 transition-transform ${openFaq === i ? "rotate-180" : ""}`} />
                 </button>
                 {openFaq === i && (
-                  <div className="px-5 pb-5 text-gray-600 text-sm leading-relaxed border-t border-gray-100 pt-4">
+                  <div className="px-5 pb-5 text-text-secondary text-sm leading-relaxed border-t border-border pt-4">
                     {faq.a}
                   </div>
                 )}
@@ -323,7 +323,7 @@ export function BuyingHouseErpPage() {
       </section>
 
       {/* CTA */}
-      <section className="relative py-16 lg:py-24 bg-gradient-to-br from-gray-900 to-gray-800 overflow-hidden">
+      <section className="relative py-16 lg:py-24 bg-surface-inverse overflow-hidden">
         <img src="/images/tech-pattern.svg" alt="" width={1920} height={1080} className="absolute inset-0 w-full h-full object-cover opacity-[0.05] pointer-events-none" loading="lazy" />
         <div className="absolute top-10 -left-20 w-72 h-72 bg-primary/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-10 -right-20 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
@@ -335,7 +335,7 @@ export function BuyingHouseErpPage() {
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
             Ready to Transform Your Buying House Operations?
           </h2>
-          <p className="text-lg text-gray-400 max-w-2xl mx-auto mb-8">
+          <p className="text-lg text-text-inverse max-w-2xl mx-auto mb-8">
             Join buying houses who manage T&A, POs, samples, and shipments in one platform. Start your free trial today.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">

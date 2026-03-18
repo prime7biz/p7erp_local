@@ -71,13 +71,13 @@ export function PurchaseOrdersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Purchase Orders</h1>
-        <p className="text-sm text-gray-500">Create POs and move them through approval status.</p>
-        <p className="text-xs text-gray-500 mt-1">Fields marked with ** are mandatory.</p>
+        <h1 className="text-2xl font-bold text-text-primary">Purchase Orders</h1>
+        <p className="text-sm text-text-muted">Create POs and move them through approval status.</p>
+        <p className="text-xs text-text-muted mt-1">Fields marked with ** are mandatory.</p>
       </div>
-      {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-      <div className="rounded-xl border border-gray-200 bg-white p-3">
-        <label className="mr-2 text-xs font-semibold text-gray-600">Status Filter</label>
+      {error && <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div>}
+      <div className="rounded-xl border border-border bg-surface-raised p-3">
+        <label className="mr-2 text-xs font-semibold text-text-secondary">Status Filter</label>
         <input
           className="rounded border px-2 py-1 text-xs"
           value={statusFilter}
@@ -119,9 +119,9 @@ export function PurchaseOrdersPage() {
           });
           await load();
         }}
-        className="rounded-xl border border-gray-200 bg-white p-4 space-y-3"
+        className="rounded-xl border border-border bg-surface-raised p-4 space-y-3"
       >
-        <h2 className="text-sm font-semibold text-gray-900">New Purchase Order</h2>
+        <h2 className="text-sm font-semibold text-text-primary">New Purchase Order</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
           <select
             className="rounded border px-3 py-2 text-sm"
@@ -191,39 +191,39 @@ export function PurchaseOrdersPage() {
           </select>
           <input className="rounded border px-3 py-2 text-sm" placeholder="Qty" value={line.quantity} onChange={(e) => setLine((p) => ({ ...p, quantity: e.target.value }))} />
           <input className="rounded border px-3 py-2 text-sm" placeholder="Unit price" value={line.unit_price} onChange={(e) => setLine((p) => ({ ...p, unit_price: e.target.value }))} />
-          <button type="button" className="rounded border border-gray-300 px-3 py-2 text-sm" onClick={() => setForm((p) => ({ ...p, items: [...p.items, line] }))}>
+          <button type="button" className="rounded border border-border-strong px-3 py-2 text-sm" onClick={() => setForm((p) => ({ ...p, items: [...p.items, line] }))}>
             Add Line
           </button>
         </div>
         {form.items.length > 0 && (
-          <div className="text-xs text-gray-600">
+          <div className="text-xs text-text-secondary">
             {form.items.map((ln, i) => (
               <div key={`${ln.item_id}-${i}`}>Line {i + 1}: {itemName.get(ln.item_id)} · Qty {ln.quantity}</div>
             ))}
-            <div className="mt-1 font-medium text-gray-800">
+            <div className="mt-1 font-medium text-text-secondary">
               Est. base total: {(lineTotal * Number(form.exchange_rate_to_base ?? 1)).toFixed(2)}
             </div>
           </div>
         )}
         {selectedVendor?.default_currency && (
-          <div className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded px-2 py-1">
+          <div className="text-xs text-status-info-foreground bg-status-info-subtle border border-status-info/20 rounded px-2 py-1">
             Vendor default currency applied: {selectedVendor.default_currency}
           </div>
         )}
-        <button className="rounded bg-primary px-3 py-2 text-sm font-medium text-white">Create Purchase Order</button>
+        <button className="rounded bg-brand-primary px-3 py-2 text-sm font-medium text-brand-primary-foreground">Create Purchase Order</button>
       </form>
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         <table className="min-w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-surface-subtle">
             <tr>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">PO Code</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Supplier</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Vendor</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Currency</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Status</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Items</th>
-              <th className="px-3 py-2 text-right text-xs font-medium uppercase text-gray-500">Actions</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">PO Code</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Supplier</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Vendor</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Currency</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Status</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Items</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -234,7 +234,7 @@ export function PurchaseOrdersPage() {
                 <td className="px-3 py-2 text-sm">{row.vendor_id ? `#${row.vendor_id}` : "—"}</td>
                 <td className="px-3 py-2 text-sm">{row.currency || "—"}</td>
                 <td className="px-3 py-2 text-sm">{row.status}</td>
-                <td className="px-3 py-2 text-xs text-gray-600">
+                <td className="px-3 py-2 text-xs text-text-secondary">
                   {row.items.map((ln) => `${itemName.get(ln.item_id) || `#${ln.item_id}`} (${ln.quantity})`).join(", ")}
                 </td>
                 <td className="px-3 py-2 text-right">
@@ -245,7 +245,7 @@ export function PurchaseOrdersPage() {
                         await api.updatePurchaseOrderStatus(row.id, "APPROVED");
                         await load();
                       }}
-                      className="rounded border border-gray-300 px-2 py-1 text-xs"
+                      className="rounded border border-border-strong px-2 py-1 text-xs"
                     >
                       Approve
                     </button>

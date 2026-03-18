@@ -177,43 +177,43 @@ export function BtbLcsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-bold text-gray-900">BTB LCs</h1>
-        <p className="text-gray-500 text-sm mt-0.5">
+        <h1 className="text-2xl font-bold text-text-primary">BTB LCs</h1>
+        <p className="text-text-muted text-sm mt-0.5">
           Open back-to-back LCs against a parent Master Contract/LC, with vendor PI and PO linkage.
         </p>
       </header>
 
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
 
       <section className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-2xl font-semibold text-gray-900">{totals.total}</p>
-          <p className="text-xs text-gray-500 uppercase tracking-wide">Total BTB LC</p>
+        <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+          <p className="text-2xl font-semibold text-text-primary">{totals.total}</p>
+          <p className="text-xs text-text-muted uppercase tracking-wide">Total BTB LC</p>
         </div>
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-sm">
-          <p className="text-2xl font-semibold text-emerald-700">{totals.openCount}</p>
-          <p className="text-xs text-gray-500 uppercase tracking-wide">Open / Draft</p>
+        <div className="rounded-xl border border-status-success/30 bg-status-success-subtle/70 p-4 shadow-sm">
+          <p className="text-2xl font-semibold text-status-success-foreground">{totals.openCount}</p>
+          <p className="text-xs text-text-muted uppercase tracking-wide">Open / Draft</p>
         </div>
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-4 shadow-sm">
-          <p className="text-2xl font-semibold text-indigo-700">{totals.totalAmount.toLocaleString()}</p>
-          <p className="text-xs text-gray-500 uppercase tracking-wide">Total Value</p>
+        <div className="rounded-xl border border-brand-primary/30 bg-brand-primary/10 p-4 shadow-sm">
+          <p className="text-2xl font-semibold text-brand-primary">{totals.totalAmount.toLocaleString()}</p>
+          <p className="text-xs text-text-muted uppercase tracking-wide">Total Value</p>
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-3">
-          <h2 className="text-base font-semibold text-slate-800">Open BTB LC</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Link master contract, vendor PI, and procurement in one flow.</p>
+      <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
+        <div className="border-b border-border bg-surface-subtle/70 px-5 py-3">
+          <h2 className="text-base font-semibold text-text-primary">Open BTB LC</h2>
+          <p className="mt-0.5 text-xs text-text-muted">Link master contract, vendor PI, and procurement in one flow.</p>
         </div>
         <form onSubmit={createLc} className="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Reference *</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Reference *</label>
             <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.reference ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, reference: e.target.value }))}
               placeholder="BTB-2026-001"
@@ -221,9 +221,9 @@ export function BtbLcsPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Status</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Status</label>
             <select
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.status ?? "DRAFT"}
               onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
             >
@@ -235,9 +235,9 @@ export function BtbLcsPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Master Contract *</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Master Contract *</label>
             <select
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.master_contract_id ?? ""}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, master_contract_id: e.target.value ? Number(e.target.value) : undefined }))
@@ -253,9 +253,9 @@ export function BtbLcsPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Vendor *</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Vendor *</label>
             <select
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.vendor_id ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, vendor_id: e.target.value ? Number(e.target.value) : undefined }))}
               required
@@ -269,9 +269,9 @@ export function BtbLcsPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Vendor PI (IMPORT)</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Vendor PI (IMPORT)</label>
             <select
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.vendor_proforma_invoice_id ?? ""}
               onChange={(e) =>
                 setForm((prev) => ({
@@ -291,9 +291,9 @@ export function BtbLcsPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Export PI (optional)</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Export PI (optional)</label>
             <select
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.proforma_invoice_id ?? ""}
               onChange={(e) =>
                 setForm((prev) => ({
@@ -311,9 +311,9 @@ export function BtbLcsPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Purchase Order</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Purchase Order</label>
             <select
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.purchase_order_id ?? ""}
               onChange={(e) =>
                 setForm((prev) => ({
@@ -333,48 +333,48 @@ export function BtbLcsPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">LC Date</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">LC Date</label>
             <input
               type="date"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.lc_date ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, lc_date: e.target.value || undefined }))}
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Maturity Date</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Maturity Date</label>
             <input
               type="date"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.maturity_date ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, maturity_date: e.target.value || undefined }))}
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Amount</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Amount</label>
             <input
               type="number"
               step="0.01"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.amount ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value ? Number(e.target.value) : undefined }))}
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Currency</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Currency</label>
             <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.currency ?? ""}
               onChange={(e) => setForm((prev) => ({ ...prev, currency: e.target.value.toUpperCase() }))}
               placeholder="USD"
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">FX Rate to Base</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">FX Rate to Base</label>
             <input
               type="number"
               step="0.000001"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.exchange_rate_to_base ?? ""}
               onChange={(e) =>
                 setForm((prev) => ({
@@ -385,11 +385,11 @@ export function BtbLcsPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Base Amount</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-secondary">Base Amount</label>
             <input
               type="number"
               step="0.01"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               value={form.base_currency_amount ?? ""}
               onChange={(e) =>
                 setForm((prev) => ({
@@ -401,18 +401,18 @@ export function BtbLcsPage() {
           </div>
           <div className="md:col-span-3">
             {selectedMasterUtilization && (
-              <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
-                <div className="mb-1 flex items-center justify-between text-xs text-indigo-700">
+              <div className="mb-3 rounded-lg border border-brand-primary/30 bg-brand-primary/10 p-3">
+                <div className="mb-1 flex items-center justify-between text-xs text-brand-primary">
                   <span>Master utilization</span>
                   <span>{selectedMasterUtilization.percent.toFixed(1)}%</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-indigo-100">
+                <div className="h-2 overflow-hidden rounded-full bg-brand-primary/20">
                   <div
-                    className="h-full rounded-full bg-indigo-600"
+                    className="h-full rounded-full bg-brand-primary"
                     style={{ width: `${selectedMasterUtilization.percent}%` }}
                   />
                 </div>
-                <p className="mt-1 text-xs text-indigo-800">
+                <p className="mt-1 text-xs text-brand-primary">
                   Used: {selectedMasterUtilization.usedAmount.toLocaleString()} | Remaining:{" "}
                   {selectedMasterUtilization.remaining.toLocaleString()} | Total:{" "}
                   {selectedMasterUtilization.totalAmount.toLocaleString()}
@@ -422,7 +422,7 @@ export function BtbLcsPage() {
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+              className="inline-flex items-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground shadow-sm hover:bg-brand-primary/90 disabled:opacity-50"
             >
               {saving ? "Saving..." : "Open BTB LC"}
             </button>
@@ -430,12 +430,12 @@ export function BtbLcsPage() {
         </form>
       </section>
 
-      <section className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-gray-50 px-4 py-2">
+      <section className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface-subtle px-4 py-2">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"
           >
             <option value="">All status</option>
             {STATUS_OPTIONS.map((s) => (
@@ -447,7 +447,7 @@ export function BtbLcsPage() {
           <select
             value={selectedMaster ?? ""}
             onChange={(e) => setSelectedMaster(e.target.value ? Number(e.target.value) : undefined)}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"
           >
             <option value="">All master contracts</option>
             {masterContracts.map((m) => (
@@ -459,7 +459,7 @@ export function BtbLcsPage() {
           <select
             value={selectedVendor ?? ""}
             onChange={(e) => setSelectedVendor(e.target.value ? Number(e.target.value) : undefined)}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"
           >
             <option value="">All vendors</option>
             {vendors.map((v) => (
@@ -470,12 +470,12 @@ export function BtbLcsPage() {
           </select>
         </div>
         {loading ? (
-          <div className="p-12 text-center text-gray-500">Loading BTB LCs…</div>
+          <div className="p-12 text-center text-text-muted">Loading BTB LCs…</div>
         ) : items.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">No BTB LC found.</div>
+          <div className="p-12 text-center text-text-muted">No BTB LC found.</div>
         ) : (
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+            <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
               <tr>
                 <th className="py-2 px-4">Reference</th>
                 <th className="py-2 px-4">Status</th>
@@ -491,20 +491,20 @@ export function BtbLcsPage() {
             </thead>
             <tbody>
               {items.map((row) => (
-                <tr key={row.id} className="border-b border-gray-100 last:border-0">
-                  <td className="py-2 px-4 font-medium text-gray-900">{row.reference ?? row.lc_number ?? `#${row.id}`}</td>
-                  <td className="py-2 px-4 text-gray-700">{row.status ?? "—"}</td>
-                  <td className="py-2 px-4 text-gray-700">
+                <tr key={row.id} className="border-b border-border-subtle last:border-0">
+                  <td className="py-2 px-4 font-medium text-text-primary">{row.reference ?? row.lc_number ?? `#${row.id}`}</td>
+                  <td className="py-2 px-4 text-text-secondary">{row.status ?? "—"}</td>
+                  <td className="py-2 px-4 text-text-secondary">
                     {row.master_contract_id ? `#${row.master_contract_id}` : "—"}
                   </td>
-                  <td className="py-2 px-4 text-gray-700">
+                  <td className="py-2 px-4 text-text-secondary">
                     {row.vendor_id ? `#${row.vendor_id}` : "—"}
                   </td>
-                  <td className="py-2 px-4 text-gray-700">{row.currency ?? "—"}</td>
-                  <td className="py-2 px-4 text-right text-gray-700">
+                  <td className="py-2 px-4 text-text-secondary">{row.currency ?? "—"}</td>
+                  <td className="py-2 px-4 text-right text-text-secondary">
                     {row.amount != null ? Number(row.amount).toLocaleString() : "—"}
                   </td>
-                  <td className="py-2 px-4 text-gray-700">
+                  <td className="py-2 px-4 text-text-secondary">
                     {row.master_contract_id ? (
                       (() => {
                         const master = masterContracts.find((m) => m.id === Number(row.master_contract_id));
@@ -513,10 +513,10 @@ export function BtbLcsPage() {
                         const percent = totalAmount > 0 ? Math.min((usedAmount / totalAmount) * 100, 100) : 0;
                         return (
                           <div className="min-w-[130px]">
-                            <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
-                              <div className="h-full rounded-full bg-indigo-600" style={{ width: `${percent}%` }} />
+                            <div className="h-1.5 overflow-hidden rounded-full bg-border-subtle">
+                              <div className="h-full rounded-full bg-brand-primary" style={{ width: `${percent}%` }} />
                             </div>
-                            <div className="mt-1 text-[11px] text-slate-500">{percent.toFixed(1)}%</div>
+                            <div className="mt-1 text-[11px] text-text-muted">{percent.toFixed(1)}%</div>
                           </div>
                         );
                       })()
@@ -524,16 +524,16 @@ export function BtbLcsPage() {
                       "—"
                     )}
                   </td>
-                  <td className="py-2 px-4 text-gray-700">
+                  <td className="py-2 px-4 text-text-secondary">
                     {row.maturity_date ? new Date(row.maturity_date).toLocaleDateString() : "—"}
                   </td>
-                  <td className="py-2 px-4 text-gray-700">
+                  <td className="py-2 px-4 text-text-secondary">
                     {row.created_at ? new Date(row.created_at).toLocaleDateString() : "—"}
                   </td>
                   <td className="py-2 px-4">
                     <div className="flex items-center gap-2">
                       <select
-                        className="rounded border border-slate-300 px-2 py-1 text-xs"
+                        className="rounded border border-border-strong px-2 py-1 text-xs"
                         value={statusDraft[row.id] ?? (row.status || "DRAFT")}
                         onChange={(e) =>
                           setStatusDraft((prev) => ({ ...prev, [row.id]: e.target.value }))
@@ -549,7 +549,7 @@ export function BtbLcsPage() {
                         type="button"
                         onClick={() => void updateLcStatus(row)}
                         disabled={updatingLcId === row.id}
-                        className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 disabled:opacity-50"
+                        className="rounded border border-brand-primary/30 bg-brand-primary/10 px-2 py-1 text-xs font-medium text-brand-primary disabled:opacity-50"
                       >
                         {updatingLcId === row.id ? "Saving..." : "Update"}
                       </button>

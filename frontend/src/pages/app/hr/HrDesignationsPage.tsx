@@ -113,65 +113,65 @@ export function HrDesignationsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">HR Designations</h1>
-          <p className="text-sm text-gray-500">Manage designation/position masters and map to departments.</p>
-          <p className="text-xs text-gray-500 mt-1">Fields marked with ** are mandatory.</p>
+          <h1 className="text-2xl font-bold text-text-primary">HR Designations</h1>
+          <p className="text-sm text-text-muted">Manage designation/position masters and map to departments.</p>
+          <p className="text-xs text-text-muted mt-1">Fields marked with ** are mandatory.</p>
         </div>
         <button
           type="button"
           onClick={openCreate}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
+          className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground"
         >
           Add designation
         </button>
       </div>
 
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
+      {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">{error}</div>}
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
         {loading ? (
-          <div className="p-10 text-center text-sm text-gray-500">Loading designations...</div>
+          <div className="p-10 text-center text-sm text-text-muted">Loading designations...</div>
         ) : designations.length === 0 ? (
-          <div className="p-10 text-center text-sm text-gray-500">No designations found.</div>
+          <div className="p-10 text-center text-sm text-text-muted">No designations found.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-surface-subtle">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Code</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Department</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Status</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Code</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Department</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Status</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-text-muted">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
+              <tbody className="divide-y divide-gray-200 bg-surface-raised">
                 {designations.map((row) => (
                   <tr key={row.id}>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.code}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{row.title}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
+                    <td className="px-4 py-3 text-sm font-medium text-text-primary">{row.code}</td>
+                    <td className="px-4 py-3 text-sm text-text-secondary">{row.title}</td>
+                    <td className="px-4 py-3 text-sm text-text-secondary">
                       {row.department_id ? departmentMap.get(row.department_id) ?? "Unknown" : "Unassigned"}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{row.is_active ? "Active" : "Inactive"}</td>
+                    <td className="px-4 py-3 text-sm text-text-secondary">{row.is_active ? "Active" : "Inactive"}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={() => setOpenActionsId(openActionsId === row.id ? null : row.id)}
-                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                          className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                         >
                           Actions
                         </button>
                         {openActionsId === row.id && (
-                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
                             <button
                               type="button"
                               onClick={() => {
                                 openEdit(row);
                                 setOpenActionsId(null);
                               }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                             >
                               Edit
                             </button>
@@ -181,7 +181,7 @@ export function HrDesignationsPage() {
                                 onDelete(row);
                                 setOpenActionsId(null);
                               }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
                             >
                               Delete
                             </button>
@@ -199,25 +199,25 @@ export function HrDesignationsPage() {
 
       {modalOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" onClick={closeModal}>
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">{editing ? "Edit designation" : "Add designation"}</h2>
+          <div className="w-full max-w-md rounded-xl bg-surface-raised p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">{editing ? "Edit designation" : "Add designation"}</h2>
             <form onSubmit={onSubmit} className="space-y-3">
               <input
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                 placeholder="Designation code **"
                 value={form.code}
                 onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value }))}
                 required
               />
               <input
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                 placeholder="Designation name **"
                 value={form.title}
                 onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
                 required
               />
               <select
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                 value={form.department_id ?? ""}
                 onChange={(e) =>
                   setForm((prev) => ({ ...prev, department_id: e.target.value ? Number(e.target.value) : null }))
@@ -230,7 +230,7 @@ export function HrDesignationsPage() {
                   </option>
                 ))}
               </select>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
+              <label className="flex items-center gap-2 text-sm text-text-secondary">
                 <input
                   type="checkbox"
                   checked={form.is_active ?? true}
@@ -239,10 +239,10 @@ export function HrDesignationsPage() {
                 Active
               </label>
               <div className="flex justify-end gap-2 pt-1">
-                <button type="button" onClick={closeModal} className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700">
+                <button type="button" onClick={closeModal} className="rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary">
                   Cancel
                 </button>
-                <button type="submit" className="rounded bg-primary px-4 py-1.5 text-sm font-semibold text-white">
+                <button type="submit" className="rounded bg-brand-primary px-4 py-1.5 text-sm font-semibold text-brand-primary-foreground">
                   Save
                 </button>
               </div>

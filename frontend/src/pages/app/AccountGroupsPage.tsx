@@ -197,8 +197,8 @@ export function AccountGroupsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Account Groups</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-2xl font-semibold text-text-primary">Account Groups</h1>
+          <p className="mt-1 text-sm text-text-muted">
             Manage chart of accounts hierarchy: Group → Type → Main Account. Use Standard form for daily use; Advanced for reporting and governance.
           </p>
         </div>
@@ -206,18 +206,18 @@ export function AccountGroupsPage() {
           <button
             type="button"
             onClick={() => void seedDefaults()}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            className="rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm font-medium text-text-secondary shadow-sm hover:bg-surface-subtle"
           >
             Seed default groups
           </button>
-          <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          <div className="flex rounded-lg border border-border bg-surface-subtle p-0.5">
             {(["list", "hierarchy", "design"] as const).map((mode) => (
               <button
                 key={mode}
                 type="button"
                 onClick={() => setViewMode(mode)}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize ${
-                  viewMode === mode ? "bg-white text-slate-900 shadow" : "text-slate-600 hover:text-slate-900"
+                  viewMode === mode ? "bg-surface-raised text-text-primary shadow" : "text-text-secondary hover:text-text-primary"
                 }`}
               >
                 {mode === "design" ? "Advance design" : mode}
@@ -228,40 +228,40 @@ export function AccountGroupsPage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
 
       {/* Form: Standard + Advanced */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-medium text-slate-800">
+      <section className="rounded-xl border border-border bg-surface-raised p-5 shadow-sm">
+        <h2 className="mb-4 text-lg font-medium text-text-primary">
           {editingId ? "Edit account group" : "Add account group"}
         </h2>
         <form onSubmit={submit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Name *</label>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Name *</label>
               <input
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-brand-primary focus:ring-1 focus:ring-focus-ring"
                 placeholder="e.g. Current Assets"
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Code (optional, else auto)</label>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Code (optional, else auto)</label>
               <input
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-brand-primary focus:ring-1 focus:ring-focus-ring"
                 placeholder="e.g. CA"
                 value={form.code ?? ""}
                 onChange={(e) => setForm((p) => ({ ...p, code: e.target.value.toUpperCase() }))}
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Nature</label>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Nature</label>
               <select
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-brand-primary focus:ring-1 focus:ring-focus-ring"
                 value={form.nature}
                 onChange={(e) => setForm((p) => ({ ...p, nature: e.target.value }))}
               >
@@ -271,9 +271,9 @@ export function AccountGroupsPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Parent group</label>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Parent group</label>
               <select
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-brand-primary focus:ring-1 focus:ring-focus-ring"
                 value={form.parent_group_id ?? ""}
                 onChange={(e) =>
                   setForm((p) => ({ ...p, parent_group_id: e.target.value ? Number(e.target.value) : null }))
@@ -286,10 +286,10 @@ export function AccountGroupsPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Sort order</label>
+              <label className="mb-1 block text-xs font-medium text-text-muted">Sort order</label>
               <input
                 type="number"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-brand-primary focus:ring-1 focus:ring-focus-ring"
                 value={form.sort_order ?? 0}
                 onChange={(e) => setForm((p) => ({ ...p, sort_order: Number(e.target.value) || 0 }))}
               />
@@ -300,7 +300,7 @@ export function AccountGroupsPage() {
                   type="checkbox"
                   checked={!!form.affects_gross_profit}
                   onChange={(e) => setForm((p) => ({ ...p, affects_gross_profit: e.target.checked }))}
-                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="rounded border border-border text-brand-primary focus:ring-focus-ring"
                 />
                 Affects gross profit
               </label>
@@ -309,7 +309,7 @@ export function AccountGroupsPage() {
                   type="checkbox"
                   checked={!!form.is_bank_group}
                   onChange={(e) => setForm((p) => ({ ...p, is_bank_group: e.target.checked }))}
-                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="rounded border border-border text-brand-primary focus:ring-focus-ring"
                 />
                 Bank group
               </label>
@@ -318,7 +318,7 @@ export function AccountGroupsPage() {
                   type="checkbox"
                   checked={!!form.is_active}
                   onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
-                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="rounded border border-border text-brand-primary focus:ring-focus-ring"
                 />
                 Active
               </label>
@@ -329,34 +329,34 @@ export function AccountGroupsPage() {
             <button
               type="button"
               onClick={() => setShowAdvancedForm(!showAdvancedForm)}
-              className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+              className="text-sm font-medium text-brand-primary hover:text-brand-primary"
             >
               {showAdvancedForm ? "− Hide advanced fields" : "+ Show advanced fields"}
             </button>
             {showAdvancedForm && (
-              <div className="mt-3 grid gap-4 rounded-lg border border-slate-100 bg-slate-50/50 p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-3 grid gap-4 rounded-lg border border-border-subtle bg-surface-subtle/50 p-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="sm:col-span-2">
-                  <label className="mb-1 block text-xs font-medium text-slate-500">Description</label>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">Description</label>
                   <input
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-brand-primary focus:ring-1 focus:ring-focus-ring"
                     placeholder="Audit and documentation note"
                     value={form.description ?? ""}
                     onChange={(e) => setForm((p) => ({ ...p, description: e.target.value || null }))}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-500">Reporting code</label>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">Reporting code</label>
                   <input
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-brand-primary focus:ring-1 focus:ring-focus-ring"
                     placeholder="Statutory / group reporting"
                     value={form.reporting_code ?? ""}
                     onChange={(e) => setForm((p) => ({ ...p, reporting_code: e.target.value || null }))}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-500">Default normal balance</label>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">Default normal balance</label>
                   <select
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-brand-primary focus:ring-1 focus:ring-focus-ring"
                     value={form.default_normal_balance ?? "debit"}
                     onChange={(e) =>
                       setForm((p) => ({ ...p, default_normal_balance: e.target.value as "debit" | "credit" }))
@@ -368,10 +368,10 @@ export function AccountGroupsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-500">Last reviewed (date)</label>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">Last reviewed (date)</label>
                   <input
                     type="date"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-brand-primary focus:ring-1 focus:ring-focus-ring"
                     value={form.last_reviewed_at ?? ""}
                     onChange={(e) => setForm((p) => ({ ...p, last_reviewed_at: e.target.value || null }))}
                   />
@@ -381,7 +381,7 @@ export function AccountGroupsPage() {
                     type="checkbox"
                     checked={!!form.allow_posting}
                     onChange={(e) => setForm((p) => ({ ...p, allow_posting: e.target.checked }))}
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    className="rounded border border-border text-brand-primary focus:ring-focus-ring"
                   />
                   Allow posting to this group
                 </label>
@@ -390,7 +390,7 @@ export function AccountGroupsPage() {
                     type="checkbox"
                     checked={!!form.is_summary_group}
                     onChange={(e) => setForm((p) => ({ ...p, is_summary_group: e.target.checked }))}
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    className="rounded border border-border text-brand-primary focus:ring-focus-ring"
                   />
                   Summary group (aggregate only)
                 </label>
@@ -398,7 +398,7 @@ export function AccountGroupsPage() {
             )}
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+          <div className="flex justify-end gap-2 border-t border-border-subtle pt-4">
             {editingId && (
               <button
                 type="button"
@@ -406,14 +406,14 @@ export function AccountGroupsPage() {
                   setEditingId(null);
                   resetForm();
                 }}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
               >
                 Cancel
               </button>
             )}
             <button
               type="submit"
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+              className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-brand-primary-foreground shadow-sm hover:bg-brand-primary/90"
             >
               {editingId ? "Update" : "Create"}
             </button>
@@ -423,9 +423,9 @@ export function AccountGroupsPage() {
 
       {/* List view */}
       {viewMode === "list" && (
-        <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section className="overflow-x-auto rounded-xl border border-border bg-surface-raised shadow-sm">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600">
+            <thead className="bg-surface-subtle text-left text-text-secondary">
               <tr>
                 <th className="px-4 py-3 font-medium">Code</th>
                 <th className="px-4 py-3 font-medium">Name</th>
@@ -438,26 +438,26 @@ export function AccountGroupsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="px-4 py-6 text-slate-500" colSpan={6}>
+                  <td className="px-4 py-6 text-text-muted" colSpan={6}>
                     Loading account groups…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-6 text-slate-500" colSpan={6}>
+                  <td className="px-4 py-6 text-text-muted" colSpan={6}>
                     No account groups yet. Add one above or seed default groups.
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                    <td className="px-4 py-3 font-mono text-slate-700">{r.code}</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">{r.name}</td>
-                    <td className="px-4 py-3 text-slate-600">{r.nature}</td>
-                    <td className="px-4 py-3 text-slate-600">
+                  <tr key={r.id} className="border-t border-border-subtle hover:bg-surface-subtle/50">
+                    <td className="px-4 py-3 font-mono text-text-secondary">{r.code}</td>
+                    <td className="px-4 py-3 font-medium text-text-primary">{r.name}</td>
+                    <td className="px-4 py-3 text-text-secondary">{r.nature}</td>
+                    <td className="px-4 py-3 text-text-secondary">
                       {rows.find((x) => x.id === r.parent_group_id)?.name ?? "—"}
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-500">
+                    <td className="px-4 py-3 text-xs text-text-muted">
                       {r.affects_gross_profit ? "GP " : ""}
                       {r.is_bank_group ? "Bank " : ""}
                       {r.is_active ? "Active" : "Inactive"}
@@ -467,14 +467,14 @@ export function AccountGroupsPage() {
                         <button
                           type="button"
                           onClick={() => startEdit(r)}
-                          className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                          className="rounded border border-border px-2 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle"
                         >
                           Edit
                         </button>
                         <button
                           type="button"
                           onClick={() => void remove(r.id)}
-                          className="rounded border border-rose-200 px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50"
+                          className="rounded border border-status-danger/20 px-2 py-1 text-xs font-medium text-status-danger-foreground hover:bg-status-danger-subtle"
                         >
                           Delete
                         </button>
@@ -490,12 +490,12 @@ export function AccountGroupsPage() {
 
       {/* Hierarchy tree view */}
       {viewMode === "hierarchy" && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-lg font-medium text-slate-800">Group hierarchy (tree)</h2>
+        <section className="rounded-xl border border-border bg-surface-raised p-5 shadow-sm">
+          <h2 className="mb-4 text-lg font-medium text-text-primary">Group hierarchy (tree)</h2>
           {hierarchyLoading ? (
-            <p className="text-slate-500">Loading hierarchy…</p>
+            <p className="text-text-muted">Loading hierarchy…</p>
           ) : hierarchy.length === 0 ? (
-            <p className="text-slate-500">No groups. Add groups or seed defaults.</p>
+            <p className="text-text-muted">No groups. Add groups or seed defaults.</p>
           ) : (
             <ul className="space-y-0">
               {hierarchy.map((node) => (
@@ -517,17 +517,17 @@ export function AccountGroupsPage() {
       {/* Advance design view: tree + reporting impact + reparent */}
       {viewMode === "design" && (
         <section className="space-y-6">
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="mb-2 text-lg font-medium text-slate-800">Advance design — structure preview</h2>
-            <p className="mb-4 text-sm text-slate-500">
+          <div className="rounded-xl border border-border bg-surface-raised p-5 shadow-sm">
+            <h2 className="mb-2 text-lg font-medium text-text-primary">Advance design — structure preview</h2>
+            <p className="mb-4 text-sm text-text-muted">
               Full Group → Type → Account hierarchy. Use Reparent to move a group; changing nature or reporting code may affect reports (see impact below when a group is selected).
             </p>
             {hierarchyLoading ? (
-              <p className="text-slate-500">Loading…</p>
+              <p className="text-text-muted">Loading…</p>
             ) : hierarchy.length === 0 ? (
-              <p className="text-slate-500">No groups. Add groups or seed defaults.</p>
+              <p className="text-text-muted">No groups. Add groups or seed defaults.</p>
             ) : (
-              <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-4 font-mono text-sm">
+              <div className="rounded-lg border border-border-subtle bg-surface-subtle/50 p-4 font-mono text-sm">
                 {hierarchy.map((node) => (
                   <TreeNode
                     key={node.id}
@@ -550,9 +550,9 @@ export function AccountGroupsPage() {
           {selectedGroupIdForImpact != null && (
             <ReportingImpactPanel groupId={selectedGroupIdForImpact} onClose={() => setSelectedGroupIdForImpact(null)} />
           )}
-          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
-            <h3 className="text-sm font-medium text-amber-800">Reporting impact</h3>
-            <p className="mt-1 text-sm text-amber-700">
+          <div className="rounded-xl border border-status-warning/30 bg-status-warning-subtle/50 p-4">
+            <h3 className="text-sm font-medium text-status-warning-foreground">Reporting impact</h3>
+            <p className="mt-1 text-sm text-status-warning-foreground">
               Click a group in the tree to see which reports use it. Account groups feed into Trial Balance, Financial Statements, Group Summary, and Ratio Analysis.
             </p>
           </div>
@@ -573,21 +573,21 @@ function ReportingImpactPanel({ groupId, onClose }: { groupId: number; onClose: 
     return () => { cancelled = true; };
   }, [groupId]);
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-slate-800">Reports using this group</h3>
-        <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-700">Close</button>
+        <h3 className="text-sm font-medium text-text-primary">Reports using this group</h3>
+        <button type="button" onClick={onClose} className="text-text-muted hover:text-text-secondary">Close</button>
       </div>
       {loading ? (
-        <p className="mt-2 text-sm text-slate-500">Loading…</p>
+        <p className="mt-2 text-sm text-text-muted">Loading…</p>
       ) : impact?.reports?.length ? (
-        <ul className="mt-2 list-inside list-disc text-sm text-slate-600">
+        <ul className="mt-2 list-inside list-disc text-sm text-text-secondary">
           {impact.reports.map((r) => (
             <li key={r.id}>{r.label}</li>
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-sm text-slate-500">No report mapping found.</p>
+        <p className="mt-2 text-sm text-text-muted">No report mapping found.</p>
       )}
     </div>
   );
@@ -638,7 +638,7 @@ function TreeNode({
           <button
             type="button"
             onClick={() => setOpen(!open)}
-            className="text-slate-400 hover:text-slate-600"
+            className="text-text-muted hover:text-text-secondary"
             aria-label={open ? "Collapse" : "Expand"}
           >
             {open ? "▼" : "▶"}
@@ -646,26 +646,26 @@ function TreeNode({
         ) : (
           <span className="w-4" />
         )}
-        <span className="font-medium text-slate-800">{node.name}</span>
-        <span className="text-slate-500">({node.code})</span>
-        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{node.nature}</span>
+        <span className="font-medium text-text-primary">{node.name}</span>
+        <span className="text-text-muted">({node.code})</span>
+        <span className="rounded bg-surface-subtle px-1.5 py-0.5 text-xs text-text-secondary">{node.nature}</span>
         {showAdvanced && node.reporting_code && (
-          <span className="text-xs text-slate-500">Rpt: {node.reporting_code}</span>
+          <span className="text-xs text-text-muted">Rpt: {node.reporting_code}</span>
         )}
         {showAdvanced && node.allow_posting === false && (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">No posting</span>
+          <span className="rounded bg-status-warning-subtle px-1.5 py-0.5 text-xs text-status-warning-foreground">No posting</span>
         )}
         {showAdvanced && node.is_summary_group && (
-          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-700">Summary</span>
+          <span className="rounded bg-surface-subtle px-1.5 py-0.5 text-xs text-text-secondary">Summary</span>
         )}
         {showAdvanced && node.last_reviewed_at && (
-          <span className="text-xs text-slate-400">Reviewed: {node.last_reviewed_at}</span>
+          <span className="text-xs text-text-muted">Reviewed: {node.last_reviewed_at}</span>
         )}
         {showAccountCount && (
-          <span className="text-xs text-slate-400">{node.account_count} account(s)</span>
+          <span className="text-xs text-text-muted">{node.account_count} account(s)</span>
         )}
         {!node.is_active && (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">Inactive</span>
+          <span className="rounded bg-status-warning-subtle px-1.5 py-0.5 text-xs text-status-warning-foreground">Inactive</span>
         )}
         <div className="ml-auto flex flex-wrap gap-1">
           {onReparent && (
@@ -673,7 +673,7 @@ function TreeNode({
               <select
                 value={reparentParent}
                 onChange={(e) => setReparentParent(e.target.value)}
-                className="rounded border border-slate-300 px-1.5 py-0.5 text-xs"
+                className="rounded border border-border px-1.5 py-0.5 text-xs"
               >
                 <option value="">— Reparent —</option>
                 <option value="0">Root (no parent)</option>
@@ -685,7 +685,7 @@ function TreeNode({
                 type="button"
                 onClick={handleReparent}
                 disabled={reparentParent === ""}
-                className="rounded px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                className="rounded px-2 py-0.5 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
               >
                 Move
               </button>
@@ -695,7 +695,7 @@ function TreeNode({
             <button
               type="button"
               onClick={() => onViewImpact(node.id)}
-              className="rounded px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-100"
+              className="rounded px-2 py-0.5 text-xs text-text-secondary hover:bg-surface-subtle"
             >
               View impact
             </button>
@@ -703,21 +703,21 @@ function TreeNode({
           <button
             type="button"
             onClick={() => onEdit(node.id)}
-            className="rounded px-2 py-0.5 text-xs text-indigo-600 hover:bg-indigo-50"
+            className="rounded px-2 py-0.5 text-xs text-brand-primary hover:bg-brand-primary/10"
           >
             Edit
           </button>
           <button
             type="button"
             onClick={() => onDelete(node.id)}
-            className="rounded px-2 py-0.5 text-xs text-rose-600 hover:bg-rose-50"
+            className="rounded px-2 py-0.5 text-xs text-status-danger-foreground hover:bg-status-danger-subtle"
           >
             Delete
           </button>
         </div>
       </div>
       {open && hasChildren && (
-        <ul className="ml-2 space-y-0 border-l border-slate-200">
+        <ul className="ml-2 space-y-0 border-l border-border">
           {node.children.map((child) => (
             <TreeNode
               key={child.id}

@@ -90,54 +90,54 @@ export function TnaTemplatesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">TNA Templates</h1>
-        <p className="text-sm text-slate-500">Define reusable task templates for order/sample TNA planning.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">TNA Templates</h1>
+        <p className="text-sm text-text-muted">Define reusable task templates for order/sample TNA planning.</p>
       </div>
       {!canManage ? (
-        <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="rounded border border-status-warning/20 bg-status-warning-subtle p-3 text-sm text-status-warning-foreground">
           You have view-only access. Supervisor/Manager/Admin role is required for template changes.
         </div>
       ) : null}
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Create Template</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">Create Template</h2>
         <form className="grid grid-cols-1 gap-2 md:grid-cols-4" onSubmit={createTemplate}>
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Optional code" value={templateForm.template_code ?? ""} onChange={(e) => setTemplateForm((prev) => ({ ...prev, template_code: e.target.value }))} />
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Template name" value={templateForm.name ?? ""} onChange={(e) => setTemplateForm((prev) => ({ ...prev, name: e.target.value }))} />
-          <select className="rounded border px-3 py-2 text-sm" value={templateForm.applies_to ?? "order"} onChange={(e) => setTemplateForm((prev) => ({ ...prev, applies_to: e.target.value }))}>
+          <input className="rounded border border-border px-3 py-2 text-sm" placeholder="Optional code" value={templateForm.template_code ?? ""} onChange={(e) => setTemplateForm((prev) => ({ ...prev, template_code: e.target.value }))} />
+          <input className="rounded border border-border px-3 py-2 text-sm" placeholder="Template name" value={templateForm.name ?? ""} onChange={(e) => setTemplateForm((prev) => ({ ...prev, name: e.target.value }))} />
+          <select className="rounded border border-border px-3 py-2 text-sm" value={templateForm.applies_to ?? "order"} onChange={(e) => setTemplateForm((prev) => ({ ...prev, applies_to: e.target.value }))}>
             <option value="order">Order</option>
             <option value="sample">Sample</option>
             <option value="style">Style</option>
           </select>
-          <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60" type="submit" disabled={!canManage}>Create</button>
+          <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-text-inverse disabled:opacity-60" type="submit" disabled={!canManage}>Create</button>
         </form>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-          <select className="rounded border px-3 py-2 text-sm" value={selectedTemplateId ?? ""} onChange={(e) => setSelectedTemplateId(e.target.value ? Number(e.target.value) : null)}>
+          <select className="rounded border border-border px-3 py-2 text-sm" value={selectedTemplateId ?? ""} onChange={(e) => setSelectedTemplateId(e.target.value ? Number(e.target.value) : null)}>
             <option value="">Select template</option>
             {templates.map((row) => <option key={row.id} value={row.id}>{row.template_code} - {row.name}</option>)}
           </select>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Add Template Task</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">Add Template Task</h2>
         <form className="grid grid-cols-1 gap-2 md:grid-cols-6" onSubmit={addTask}>
-          <input className="rounded border px-3 py-2 text-sm" type="number" min={1} value={taskForm.seq_no} onChange={(e) => setTaskForm((prev) => ({ ...prev, seq_no: Number(e.target.value) }))} />
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Task name" value={taskForm.task_name} onChange={(e) => setTaskForm((prev) => ({ ...prev, task_name: e.target.value }))} />
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Department" value={taskForm.department ?? ""} onChange={(e) => setTaskForm((prev) => ({ ...prev, department: e.target.value }))} />
-          <input className="rounded border px-3 py-2 text-sm" type="number" value={taskForm.offset_days ?? 0} onChange={(e) => setTaskForm((prev) => ({ ...prev, offset_days: Number(e.target.value) }))} />
-          <input className="rounded border px-3 py-2 text-sm" type="number" min={1} value={taskForm.duration_days ?? 1} onChange={(e) => setTaskForm((prev) => ({ ...prev, duration_days: Number(e.target.value) }))} />
-          <button className="rounded border px-3 py-2 text-sm disabled:opacity-60" type="submit" disabled={!selectedTemplateId || !canManage}>Add Task</button>
+          <input className="rounded border border-border px-3 py-2 text-sm" type="number" min={1} value={taskForm.seq_no} onChange={(e) => setTaskForm((prev) => ({ ...prev, seq_no: Number(e.target.value) }))} />
+          <input className="rounded border border-border px-3 py-2 text-sm" placeholder="Task name" value={taskForm.task_name} onChange={(e) => setTaskForm((prev) => ({ ...prev, task_name: e.target.value }))} />
+          <input className="rounded border border-border px-3 py-2 text-sm" placeholder="Department" value={taskForm.department ?? ""} onChange={(e) => setTaskForm((prev) => ({ ...prev, department: e.target.value }))} />
+          <input className="rounded border border-border px-3 py-2 text-sm" type="number" value={taskForm.offset_days ?? 0} onChange={(e) => setTaskForm((prev) => ({ ...prev, offset_days: Number(e.target.value) }))} />
+          <input className="rounded border border-border px-3 py-2 text-sm" type="number" min={1} value={taskForm.duration_days ?? 1} onChange={(e) => setTaskForm((prev) => ({ ...prev, duration_days: Number(e.target.value) }))} />
+          <button className="rounded border border-border px-3 py-2 text-sm disabled:opacity-60" type="submit" disabled={!selectedTemplateId || !canManage}>Add Task</button>
         </form>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr><th className="px-3 py-2">Seq</th><th className="px-3 py-2">Task</th><th className="px-3 py-2">Department</th><th className="px-3 py-2">Offset</th><th className="px-3 py-2">Duration</th></tr>
           </thead>
           <tbody>
@@ -150,7 +150,7 @@ export function TnaTemplatesPage() {
                 <td className="px-3 py-2">{row.duration_days}</td>
               </tr>
             ))}
-            {tasks.length === 0 ? <tr><td className="px-3 py-8 text-center text-slate-500" colSpan={5}>No tasks for selected template.</td></tr> : null}
+            {tasks.length === 0 ? <tr><td className="px-3 py-8 text-center text-text-muted" colSpan={5}>No tasks for selected template.</td></tr> : null}
           </tbody>
         </table>
       </div>

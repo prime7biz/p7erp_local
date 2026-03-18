@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -8,8 +8,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
 from app.common.tenant import require_tenant
+from app.common.workflow import (
+  ORDER_TRANSITIONS,
+  QUOTATION_TRANSITIONS,
+  validate_transition,
+)
 from app.database import get_db
-from app.models import Customer, CustomerIntermediary, Order, OrderAmendment, Quotation, Tenant, User
+from app.models import (
+  Bom,
+  BomItem,
+  Customer,
+  CustomerIntermediary,
+  FollowupActionTemplate,
+  Item,
+  Order,
+  OrderAmendment,
+  OrderFollowupAction,
+  Quotation,
+  StockMovement,
+  Tenant,
+  User,
+)
 from app.modules.orders.schemas import OrderCreate, OrderResponse, OrderUpdate
 
 
@@ -76,6 +95,210 @@ async def _get_existing_order_for_quotation(
     .limit(1)
   )
   return result.scalar_one_or_none()
+
+
+async def _auto_generate_followup_actions_if_missing(
+  db: AsyncSession,
+  *,
+  tenant_id: int,
+  order: Order,
+  next_status: str,
+) -> None:
+  status_key = (next_status or "").strip().upper()
+  if status_key not in {"NEW", "IN_PROGRESS"}:
+    return
+
+  existing = await db.execute(
+    select(func.count())
+    .select_from(OrderFollowupAction)
+    .where(
+      OrderFollowupAction.tenant_id == tenant_id,
+      OrderFollowupAction.order_id == order.id,
+    )
+  )
+  if (existing.scalar() or 0) > 0:
+    return
+
+  templates_result = await db.execute(
+    select(FollowupActionTemplate)
+    .where(
+      FollowupActionTemplate.tenant_id == tenant_id,
+      FollowupActionTemplate.is_active == True,
+      or_(
+        FollowupActionTemplate.buyer_id.is_(None),
+        FollowupActionTemplate.buyer_id == order.customer_id,
+      ),
+    )
+    .order_by(FollowupActionTemplate.sequence_no.asc(), FollowupActionTemplate.id.asc())
+  )
+  templates = templates_result.scalars().all()
+  if not templates:
+    return
+
+  for template in templates:
+    planned_date = None
+    if order.delivery_date and template.default_days_before_delivery is not None:
+      planned_date = order.delivery_date - timedelta(days=int(template.default_days_before_delivery))
+    db.add(
+      OrderFollowupAction(
+        tenant_id=tenant_id,
+        order_id=order.id,
+        template_id=template.id,
+        sequence_no=template.sequence_no,
+        phase=template.phase,
+        action_group=template.action_group,
+        title=template.name,
+        is_template_generated=True,
+        is_mandatory=template.is_mandatory,
+        is_active=template.is_active,
+        planned_date=planned_date,
+        status="pending",
+      )
+    )
+
+
+def _safe_float(value: str | int | float | None) -> float:
+  try:
+    return float(value or 0)
+  except (TypeError, ValueError):
+    return 0.0
+
+
+class PromiseCheckLine(BaseModel):
+  item_id: int
+  item_code: str
+  required_qty: float
+  available_qty: float
+  shortage_qty: float
+
+
+class PromiseCheckOut(BaseModel):
+  order_id: int
+  atp_ok: bool
+  ctp_ok: bool
+  reasons: list[str]
+  lines: list[PromiseCheckLine]
+
+
+class PromiseSummaryItem(BaseModel):
+  order_id: int
+  order_code: str
+  status: str
+  atp_ok: bool
+  ctp_ok: bool
+  reasons: list[str]
+
+
+class PromiseSummaryOut(BaseModel):
+  scanned_count: int
+  blocked_count: int
+  atp_fail_count: int
+  ctp_fail_count: int
+  items: list[PromiseSummaryItem]
+
+
+async def _run_promise_check(
+  db: AsyncSession,
+  *,
+  tenant_id: int,
+  order: Order,
+) -> PromiseCheckOut:
+  resolved_order_id = order.id or 0
+  reasons: list[str] = []
+  lines: list[PromiseCheckLine] = []
+  atp_ok = True
+  ctp_ok = True
+
+  if not order.delivery_date:
+    ctp_ok = False
+    reasons.append("Delivery date is missing")
+  elif order.delivery_date < date.today():
+    ctp_ok = False
+    reasons.append("Delivery date is in the past")
+
+  if not order.quotation_id:
+    atp_ok = False
+    reasons.append("Order has no quotation linked for style/BOM resolution")
+    return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
+
+  quotation = await db.get(Quotation, order.quotation_id)
+  if not quotation or quotation.tenant_id != tenant_id or not quotation.style_id:
+    atp_ok = False
+    reasons.append("Order quotation/style is missing")
+    return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
+
+  order_qty = _safe_float(order.quantity)
+  if order_qty <= 0:
+    atp_ok = False
+    reasons.append("Order quantity must be positive")
+    return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
+
+  bom_result = await db.execute(
+    select(Bom)
+    .where(
+      Bom.tenant_id == tenant_id,
+      Bom.style_id == quotation.style_id,
+      Bom.status.in_(("APPROVED", "FROZEN")),
+    )
+    .order_by(Bom.version_no.desc())
+    .limit(1)
+  )
+  bom = bom_result.scalar_one_or_none()
+  if not bom:
+    atp_ok = False
+    reasons.append("No APPROVED/FROZEN BOM found for order style")
+    return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
+
+  bom_lines = (
+    await db.execute(
+      select(BomItem).where(
+        BomItem.tenant_id == tenant_id,
+        BomItem.bom_id == bom.id,
+        BomItem.item_id.isnot(None),
+      )
+    )
+  ).scalars().all()
+  if not bom_lines:
+    atp_ok = False
+    reasons.append("BOM has no inventory-linked items")
+    return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
+
+  for line in bom_lines:
+    if line.item_id is None:
+      continue
+    item = await db.get(Item, line.item_id)
+    if not item or item.tenant_id != tenant_id:
+      continue
+    base = _safe_float(line.base_consumption)
+    wastage = _safe_float(line.wastage_pct) / 100.0
+    required_qty = order_qty * base * (1.0 + wastage)
+    movements = (
+      await db.execute(
+        select(StockMovement).where(
+          StockMovement.tenant_id == tenant_id,
+          StockMovement.item_id == line.item_id,
+        )
+      )
+    ).scalars().all()
+    in_qty = sum(_safe_float(m.quantity) for m in movements if (m.movement_type or "").upper() == "IN")
+    out_qty = sum(_safe_float(m.quantity) for m in movements if (m.movement_type or "").upper() == "OUT")
+    available_qty = round(in_qty - out_qty, 4)
+    shortage_qty = round(max(0.0, required_qty - available_qty), 4)
+    if shortage_qty > 0:
+      atp_ok = False
+    lines.append(
+      PromiseCheckLine(
+        item_id=line.item_id,
+        item_code=item.item_code or str(line.item_id),
+        required_qty=round(required_qty, 4),
+        available_qty=available_qty,
+        shortage_qty=shortage_qty,
+      )
+    )
+
+  if not atp_ok:
+    reasons.append("Insufficient stock for one or more BOM items")
+  return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
 
 
 @router.get("", response_model=list[OrderResponse])
@@ -157,7 +380,13 @@ async def create_order(
     )
 
   code = await _next_order_code(db, tenant.id)
-  status_value = body.status or "DRAFT"
+  status_value = validate_transition(
+    ORDER_TRANSITIONS,
+    "DRAFT",
+    body.status or "DRAFT",
+    fallback="DRAFT",
+    entity_label="order",
+  )
   order = Order(
     tenant_id=tenant.id,
     customer_id=body.customer_id,
@@ -175,12 +404,90 @@ async def create_order(
     status=status_value,
     remarks=body.remarks,
   )
+  if status_value == "IN_PROGRESS":
+    promise = await _run_promise_check(db, tenant_id=tenant.id, order=order)
+    if not (promise.atp_ok and promise.ctp_ok):
+      raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Promise check failed: {'; '.join(promise.reasons) or 'ATP/CTP not satisfied'}",
+      )
   db.add(order)
   if body.quotation_id is not None:
-    quotation.status = "CONVERTED"
+    quotation.status = validate_transition(
+      QUOTATION_TRANSITIONS,
+      quotation.status,
+      "CONVERTED",
+      fallback="DRAFT",
+      entity_label="quotation",
+    )
   await db.flush()
+  await _auto_generate_followup_actions_if_missing(
+    db,
+    tenant_id=tenant.id,
+    order=order,
+    next_status=order.status,
+  )
   await db.refresh(order)
   return _to_order_response(order)
+
+
+@router.get("/promise-summary", response_model=PromiseSummaryOut)
+async def get_orders_promise_summary(
+  statuses: str | None = Query(default="NEW,IN_PROGRESS", description="Comma-separated order statuses to scan"),
+  limit: int = Query(default=25, ge=1, le=100),
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  if user.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+
+  status_values = [s.strip().upper() for s in (statuses or "").split(",") if s.strip()]
+  if not status_values:
+    status_values = ["NEW", "IN_PROGRESS"]
+
+  orders = (
+    await db.execute(
+      select(Order)
+      .where(
+        Order.tenant_id == tenant.id,
+        Order.status.in_(status_values),
+      )
+      .order_by(Order.updated_at.desc())
+      .limit(limit)
+    )
+  ).scalars().all()
+
+  blocked_count = 0
+  atp_fail_count = 0
+  ctp_fail_count = 0
+  items: list[PromiseSummaryItem] = []
+  for order in orders:
+    check = await _run_promise_check(db, tenant_id=tenant.id, order=order)
+    is_blocked = not (check.atp_ok and check.ctp_ok)
+    if is_blocked:
+      blocked_count += 1
+    if not check.atp_ok:
+      atp_fail_count += 1
+    if not check.ctp_ok:
+      ctp_fail_count += 1
+    items.append(
+      PromiseSummaryItem(
+        order_id=order.id,
+        order_code=order.order_code,
+        status=order.status,
+        atp_ok=check.atp_ok,
+        ctp_ok=check.ctp_ok,
+        reasons=check.reasons,
+      )
+    )
+  return PromiseSummaryOut(
+    scanned_count=len(orders),
+    blocked_count=blocked_count,
+    atp_fail_count=atp_fail_count,
+    ctp_fail_count=ctp_fail_count,
+    items=items,
+  )
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
@@ -198,6 +505,21 @@ async def get_order(
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
   return _to_order_response(order)
+
+
+@router.get("/{order_id}/promise-check", response_model=PromiseCheckOut)
+async def get_order_promise_check(
+  order_id: int,
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  if user.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+  order = await db.get(Order, order_id)
+  if not order or order.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+  return await _run_promise_check(db, tenant_id=tenant.id, order=order)
 
 
 @router.patch("/{order_id}", response_model=OrderResponse)
@@ -240,11 +562,30 @@ async def update_order(
   if body.quantity is not None:
     order.quantity = body.quantity
   if body.status is not None:
-    order.status = body.status
+    order.status = validate_transition(
+      ORDER_TRANSITIONS,
+      order.status,
+      body.status,
+      fallback="DRAFT",
+      entity_label="order",
+    )
+    if order.status == "IN_PROGRESS":
+      promise = await _run_promise_check(db, tenant_id=tenant.id, order=order)
+      if not (promise.atp_ok and promise.ctp_ok):
+        raise HTTPException(
+          status_code=status.HTTP_400_BAD_REQUEST,
+          detail=f"Promise check failed: {'; '.join(promise.reasons) or 'ATP/CTP not satisfied'}",
+        )
   if body.remarks is not None:
     order.remarks = body.remarks
 
   await db.flush()
+  await _auto_generate_followup_actions_if_missing(
+    db,
+    tenant_id=tenant.id,
+    order=order,
+    next_status=order.status,
+  )
   await db.refresh(order)
   return _to_order_response(order)
 
@@ -312,8 +653,20 @@ async def create_order_from_quotation(
     remarks=quotation.notes,
   )
   db.add(order)
-  quotation.status = "CONVERTED"
+  quotation.status = validate_transition(
+    QUOTATION_TRANSITIONS,
+    quotation.status,
+    "CONVERTED",
+    fallback="DRAFT",
+    entity_label="quotation",
+  )
   await db.flush()
+  await _auto_generate_followup_actions_if_missing(
+    db,
+    tenant_id=tenant.id,
+    order=order,
+    next_status=order.status,
+  )
   await db.refresh(order)
 
   return _to_order_response(order)
@@ -336,8 +689,27 @@ async def update_order_status(
   order = await db.get(Order, order_id)
   if not order or order.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
-  order.status = body.status
+  order.status = validate_transition(
+    ORDER_TRANSITIONS,
+    order.status,
+    body.status,
+    fallback="DRAFT",
+    entity_label="order",
+  )
+  if order.status == "IN_PROGRESS":
+    promise = await _run_promise_check(db, tenant_id=tenant.id, order=order)
+    if not (promise.atp_ok and promise.ctp_ok):
+      raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Promise check failed: {'; '.join(promise.reasons) or 'ATP/CTP not satisfied'}",
+      )
   await db.flush()
+  await _auto_generate_followup_actions_if_missing(
+    db,
+    tenant_id=tenant.id,
+    order=order,
+    next_status=order.status,
+  )
   await db.refresh(order)
   return _to_order_response(order)
 
@@ -350,7 +722,21 @@ class OrderAmendmentCreate(BaseModel):
   status: str = "APPROVED"
 
 
-@router.get("/{order_id}/amendments")
+class OrderAmendmentOut(BaseModel):
+  id: int
+  tenant_id: int
+  order_id: int
+  amendment_no: int
+  field_changed: str
+  old_value: str | None
+  new_value: str | None
+  reason: str | None
+  status: str
+  created_at: datetime
+  updated_at: datetime
+
+
+@router.get("/{order_id}/amendments", response_model=list[OrderAmendmentOut])
 async def list_order_amendments(
   order_id: int,
   tenant: Tenant = Depends(require_tenant),
@@ -367,7 +753,7 @@ async def list_order_amendments(
   return result.scalars().all()
 
 
-@router.post("/{order_id}/amendments", status_code=201)
+@router.post("/{order_id}/amendments", response_model=OrderAmendmentOut, status_code=201)
 async def create_order_amendment(
   order_id: int,
   body: OrderAmendmentCreate,

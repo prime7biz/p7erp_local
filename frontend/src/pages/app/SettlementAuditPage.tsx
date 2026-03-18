@@ -171,32 +171,32 @@ export function SettlementAuditPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Settlement Audit</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-text-primary">Settlement Audit</h1>
+        <p className="text-sm text-text-muted">
           Track source currency, FX rate, and base settlement values for payment runs.
         </p>
       </div>
 
       {error ? (
-        <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>
+        <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-2xl font-semibold text-slate-900">{totals.row_count}</p>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Rows</p>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <p className="text-2xl font-semibold text-text-primary">{totals.row_count}</p>
+          <p className="text-xs uppercase tracking-wide text-text-muted">Rows</p>
         </div>
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-          <p className="text-2xl font-semibold text-indigo-700">{totals.source_total.toLocaleString()}</p>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Source Total</p>
+        <div className="rounded-xl border border-brand-primary/30 bg-brand-primary/10 p-4">
+          <p className="text-2xl font-semibold text-brand-primary">{totals.source_total.toLocaleString()}</p>
+          <p className="text-xs uppercase tracking-wide text-text-muted">Source Total</p>
         </div>
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-          <p className="text-2xl font-semibold text-emerald-700">{totals.base_total.toLocaleString()}</p>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Base Total</p>
+        <div className="rounded-xl border border-status-success/30 bg-status-success-subtle p-4">
+          <p className="text-2xl font-semibold text-status-success-foreground">{totals.base_total.toLocaleString()}</p>
+          <p className="text-xs uppercase tracking-wide text-text-muted">Base Total</p>
         </div>
       </div>
 
-      <form onSubmit={onFilterSubmit} className="rounded-xl border border-slate-200 bg-white p-4">
+      <form onSubmit={onFilterSubmit} className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="grid gap-3 md:grid-cols-6">
           <input
             type="date"
@@ -244,7 +244,7 @@ export function SettlementAuditPage() {
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="submit"
-            className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded bg-surface-inverse px-3 py-2 text-sm font-medium text-text-inverse disabled:opacity-50"
             disabled={loading}
           >
             {loading ? "Loading..." : "Apply Filters"}
@@ -266,15 +266,15 @@ export function SettlementAuditPage() {
           </button>
           <button
             type="button"
-            className="rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 disabled:opacity-50"
+            className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm font-medium text-status-success-foreground disabled:opacity-50"
             onClick={() => void exportCsv()}
             disabled={exporting}
           >
             {exporting ? "Exporting..." : "Export CSV"}
           </button>
         </div>
-        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Saved Filter Presets</p>
+        <div className="mt-4 rounded-lg border border-border bg-surface-subtle p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Saved Filter Presets</p>
           <div className="mb-2 flex flex-wrap gap-2">
             <input
               className="rounded border px-3 py-1.5 text-sm"
@@ -284,7 +284,7 @@ export function SettlementAuditPage() {
             />
             <button
               type="button"
-              className="rounded border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700"
+              className="rounded border border-brand-primary/40 bg-brand-primary/10 px-3 py-1.5 text-sm font-medium text-brand-primary"
               onClick={() => void savePreset()}
             >
               Save Preset
@@ -292,17 +292,17 @@ export function SettlementAuditPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             {presets.map((preset) => (
-              <div key={preset.id} className="flex items-center gap-1 rounded border bg-white px-2 py-1">
+              <div key={preset.id} className="flex items-center gap-1 rounded border bg-surface-raised px-2 py-1">
                 <button
                   type="button"
-                  className="text-xs font-medium text-slate-700 hover:text-slate-900"
+                  className="text-xs font-medium text-text-secondary hover:text-text-primary"
                   onClick={() => void applyPreset(preset)}
                 >
                   {preset.name}
                 </button>
                 <button
                   type="button"
-                  className="rounded px-1 text-xs text-rose-600 hover:bg-rose-50"
+                  className="rounded px-1 text-xs text-status-danger-foreground hover:bg-status-danger-subtle"
                   onClick={() => void deletePreset(preset.id)}
                   title="Delete preset"
                 >
@@ -311,15 +311,15 @@ export function SettlementAuditPage() {
               </div>
             ))}
             {presets.length === 0 ? (
-              <span className="text-xs text-slate-500">No presets saved yet.</span>
+              <span className="text-xs text-text-muted">No presets saved yet.</span>
             ) : null}
           </div>
         </div>
       </form>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-3 py-2">Run</th>
               <th className="px-3 py-2">Date</th>
@@ -350,7 +350,7 @@ export function SettlementAuditPage() {
             ))}
             {!loading && rows.length === 0 ? (
               <tr className="border-t">
-                <td className="px-3 py-3 text-slate-500" colSpan={10}>
+                <td className="px-3 py-3 text-text-muted" colSpan={10}>
                   No settlement records found for selected filters.
                 </td>
               </tr>

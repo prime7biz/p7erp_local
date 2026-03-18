@@ -19,10 +19,10 @@ function WastageThresholdBadge({ wastagePct, allowedPct }: { wastagePct: number;
   const breach = wastagePct > allowedPct;
   const critical = wastagePct >= 25;
   const style = critical
-    ? "bg-red-100 text-red-800"
+    ? "bg-status-danger-subtle text-status-danger-foreground"
     : breach
-      ? "bg-amber-100 text-amber-800"
-      : "bg-green-100 text-green-800";
+      ? "bg-status-warning-subtle text-status-warning-foreground"
+      : "bg-status-success-subtle text-status-success-foreground";
   const label = critical ? "Critical" : breach ? "Above threshold" : "Within";
   return (
     <span className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${style}`} title={`Allowed: ${allowedPct}%`}>
@@ -218,25 +218,25 @@ export function WastageReportPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Wastage & Loss Analysis</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-text-primary">Wastage & Loss Analysis</h1>
+          <p className="text-sm text-text-muted mt-0.5">
             Profitability control: planned vs actual consumption by order and item. Positive % = over BOM (wastage).
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {lastRefresh && <span className="text-sm text-gray-500">Last refresh: {lastRefresh}</span>}
+          {lastRefresh && <span className="text-sm text-text-muted">Last refresh: {lastRefresh}</span>}
           <button
             type="button"
             onClick={handleExportExcel}
             disabled={exporting}
-            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
           >
             {exporting ? "Exporting…" : "Export Excel"}
           </button>
           <button
             type="button"
             onClick={() => window.print()}
-            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
           >
             Print / PDF
           </button>
@@ -244,26 +244,26 @@ export function WastageReportPage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">{error}</div>
       )}
 
       {(trendsMonthly.length > 0 || trendsByBuyer.length > 0) && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-900">Wastage trends</h2>
+        <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
+          <h2 className="text-sm font-semibold text-text-primary">Wastage trends</h2>
           {trendsMonthly.length > 0 && (
             <div>
-              <p className="text-xs text-gray-500 mb-2">Monthly wastage value</p>
+              <p className="text-xs text-text-muted mb-2">Monthly wastage value</p>
               <div className="flex flex-wrap gap-4 items-end">
                 {trendsMonthly.map((s) => (
                   <div key={s.label} className="flex flex-col items-center gap-1">
-                    <span className="text-xs text-gray-600" title={String(s.value)}>
+                    <span className="text-xs text-text-secondary" title={String(s.value)}>
                       {s.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </span>
                     <div
-                      className="w-10 bg-primary/70 rounded-t min-h-[4px]"
+                      className="w-10 bg-brand-primary/70 rounded-t min-h-[4px]"
                       style={{ height: `${Math.min(100, (s.value / Math.max(1, ...trendsMonthly.map((x) => x.value))) * 80)}px` }}
                     />
-                    <span className="text-xs text-gray-500">{s.label}</span>
+                    <span className="text-xs text-text-muted">{s.label}</span>
                   </div>
                 ))}
               </div>
@@ -271,12 +271,12 @@ export function WastageReportPage() {
           )}
           {trendsByBuyer.length > 0 && (
             <div>
-              <p className="text-xs text-gray-500 mb-2">By buyer</p>
+              <p className="text-xs text-text-muted mb-2">By buyer</p>
               <ul className="text-sm space-y-1">
                 {trendsByBuyer.slice(0, 10).map((b) => (
                   <li key={b.buyer_id} className="flex justify-between gap-2">
-                    <span className="text-gray-700 truncate">{b.buyer_name}</span>
-                    <span className="font-medium text-gray-900 shrink-0">
+                    <span className="text-text-secondary truncate">{b.buyer_name}</span>
+                    <span className="font-medium text-text-primary shrink-0">
                       {b.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </li>
@@ -289,46 +289,46 @@ export function WastageReportPage() {
 
       {summary && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total wastage value</p>
-            <p className="mt-1 text-xl font-semibold text-gray-900">
+          <div className="rounded-xl border border-border bg-surface-raised p-4">
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Total wastage value</p>
+            <p className="mt-1 text-xl font-semibold text-text-primary">
               {summary.total_wastage_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Fabric wastage % (avg)</p>
-            <p className="mt-1 text-xl font-semibold text-gray-900">{summary.fabric_wastage_pct_avg.toFixed(1)}%</p>
+          <div className="rounded-xl border border-border bg-surface-raised p-4">
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Fabric wastage % (avg)</p>
+            <p className="mt-1 text-xl font-semibold text-text-primary">{summary.fabric_wastage_pct_avg.toFixed(1)}%</p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Trim wastage % (avg)</p>
-            <p className="mt-1 text-xl font-semibold text-gray-900">{summary.trim_wastage_pct_avg.toFixed(1)}%</p>
+          <div className="rounded-xl border border-border bg-surface-raised p-4">
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Trim wastage % (avg)</p>
+            <p className="mt-1 text-xl font-semibold text-text-primary">{summary.trim_wastage_pct_avg.toFixed(1)}%</p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Orders above threshold</p>
-            <p className="mt-1 text-xl font-semibold text-amber-700">{summary.above_threshold_orders_count}</p>
+          <div className="rounded-xl border border-border bg-surface-raised p-4">
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Orders above threshold</p>
+            <p className="mt-1 text-xl font-semibold text-status-warning-foreground">{summary.above_threshold_orders_count}</p>
           </div>
         </div>
       )}
 
       {(trendsMonthly.length > 0 || trendsByBuyer.length > 0) && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-900">Wastage trends</h2>
+        <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
+          <h2 className="text-sm font-semibold text-text-primary">Wastage trends</h2>
           {trendsMonthly.length > 0 && (
             <div>
-              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Monthly wastage value</h3>
+              <h3 className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">Monthly wastage value</h3>
               <div className="overflow-x-auto">
                 <table className="min-w-[200px] w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-200 text-left text-gray-500">
+                    <tr className="border-b border-border text-left text-text-muted">
                       <th className="px-3 py-1.5">Month</th>
                       <th className="px-3 py-1.5 text-right">Value</th>
                     </tr>
                   </thead>
                   <tbody>
                     {trendsMonthly.map((s) => (
-                      <tr key={s.label} className="border-b border-gray-100 last:border-0">
-                        <td className="px-3 py-1.5 font-medium text-gray-900">{s.label}</td>
-                        <td className="px-3 py-1.5 text-right text-gray-700">
+                      <tr key={s.label} className="border-b border-border-subtle last:border-0">
+                        <td className="px-3 py-1.5 font-medium text-text-primary">{s.label}</td>
+                        <td className="px-3 py-1.5 text-right text-text-secondary">
                           {s.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
@@ -340,20 +340,20 @@ export function WastageReportPage() {
           )}
           {trendsByBuyer.length > 0 && (
             <div>
-              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">By buyer</h3>
+              <h3 className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">By buyer</h3>
               <div className="overflow-x-auto">
                 <table className="min-w-[280px] w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-200 text-left text-gray-500">
+                    <tr className="border-b border-border text-left text-text-muted">
                       <th className="px-3 py-1.5">Buyer</th>
                       <th className="px-3 py-1.5 text-right">Value</th>
                     </tr>
                   </thead>
                   <tbody>
                     {trendsByBuyer.map((b) => (
-                      <tr key={b.buyer_id} className="border-b border-gray-100 last:border-0">
-                        <td className="px-3 py-1.5 font-medium text-gray-900">{b.buyer_name}</td>
-                        <td className="px-3 py-1.5 text-right text-gray-700">
+                      <tr key={b.buyer_id} className="border-b border-border-subtle last:border-0">
+                        <td className="px-3 py-1.5 font-medium text-text-primary">{b.buyer_name}</td>
+                        <td className="px-3 py-1.5 text-right text-text-secondary">
                           {b.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
@@ -367,14 +367,14 @@ export function WastageReportPage() {
       )}
 
       {managementSummary && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
+        <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900">Management summary</h2>
+            <h2 className="text-sm font-semibold text-text-primary">Management summary</h2>
             <button
               type="button"
               onClick={handleRefreshSummary}
               disabled={refreshingSummary}
-              className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="rounded border border-border-strong bg-surface-raised px-2 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
             >
               {refreshingSummary ? "Refreshing…" : "Refresh summary"}
             </button>
@@ -382,12 +382,12 @@ export function WastageReportPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {managementSummary.top_orders.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Top 10 orders by loss</p>
+                <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">Top 10 orders by loss</p>
                 <ul className="text-sm space-y-1">
                   {managementSummary.top_orders.slice(0, 10).map((o) => (
                     <li key={o.order_id} className="flex justify-between gap-2">
-                      <span className="text-gray-700 truncate">{o.order_code} ({o.buyer_name})</span>
-                      <span className="font-medium text-amber-700 shrink-0">
+                      <span className="text-text-secondary truncate">{o.order_code} ({o.buyer_name})</span>
+                      <span className="font-medium text-status-warning-foreground shrink-0">
                         {o.total_wastage_value.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </span>
                     </li>
@@ -397,12 +397,12 @@ export function WastageReportPage() {
             )}
             {managementSummary.top_materials.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Top 10 materials</p>
+                <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">Top 10 materials</p>
                 <ul className="text-sm space-y-1">
                   {managementSummary.top_materials.slice(0, 10).map((m) => (
                     <li key={m.item_id} className="flex justify-between gap-2">
-                      <span className="text-gray-700 truncate">{m.item_code}</span>
-                      <span className="font-medium text-gray-900 shrink-0">
+                      <span className="text-text-secondary truncate">{m.item_code}</span>
+                      <span className="font-medium text-text-primary shrink-0">
                         {m.total_wastage_value.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </span>
                     </li>
@@ -412,11 +412,11 @@ export function WastageReportPage() {
             )}
             {managementSummary.top_reasons.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Top reasons</p>
+                <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">Top reasons</p>
                 <ul className="text-sm space-y-1">
                   {managementSummary.top_reasons.slice(0, 10).map((r, i) => (
                     <li key={r.reason_code || i} className="flex justify-between gap-2">
-                      <span className="text-gray-700 truncate">{r.reason_name}</span>
+                      <span className="text-text-secondary truncate">{r.reason_name}</span>
                       <span className="shrink-0">{r.value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </li>
                   ))}
@@ -424,14 +424,14 @@ export function WastageReportPage() {
               </div>
             )}
             <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Month-over-month</p>
+              <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">Month-over-month</p>
               <div className="text-sm space-y-1">
                 <p>
                   Current total: <strong>{managementSummary.mom_change.current_total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
                   {" · "}
                   Above threshold: <strong>{managementSummary.mom_change.current_above_threshold}</strong> orders
                 </p>
-                <p className="text-gray-600">
+                <p className="text-text-secondary">
                   Previous total: {managementSummary.mom_change.previous_total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   {" · "}
                   Above threshold: {managementSummary.mom_change.previous_above_threshold} orders
@@ -439,8 +439,8 @@ export function WastageReportPage() {
               </div>
               {managementSummary.suggested_actions.length > 0 && (
                 <div className="mt-2">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Suggested actions</p>
-                  <ul className="text-sm list-disc list-inside text-gray-700 space-y-0.5">
+                  <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">Suggested actions</p>
+                  <ul className="text-sm list-disc list-inside text-text-secondary space-y-0.5">
                     {managementSummary.suggested_actions.map((a, i) => (
                       <li key={i}>{a}</li>
                     ))}
@@ -452,14 +452,14 @@ export function WastageReportPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-        <h2 className="text-sm font-semibold text-gray-900">Filters</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-text-primary">Filters</h2>
         <div className="flex flex-wrap items-center gap-3">
           {savedViews.length > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Saved view:</span>
+              <span className="text-xs text-text-muted">Saved view:</span>
               <select
-                className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                className="rounded border border-border-strong px-2 py-1.5 text-sm"
                 value=""
                 onChange={(e) => {
                   const id = Number(e.target.value);
@@ -479,26 +479,26 @@ export function WastageReportPage() {
           <button
             type="button"
             onClick={() => setSaveViewModalOpen(true)}
-            className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
           >
             Save current view
           </button>
           <input
             type="number"
             placeholder="Order ID"
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm w-24"
+            className="rounded border border-border-strong px-2 py-1.5 text-sm w-24"
             value={orderId}
             onChange={(e) => setOrderId(e.target.value)}
           />
           <input
             type="number"
             placeholder="Style ID"
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm w-24"
+            className="rounded border border-border-strong px-2 py-1.5 text-sm w-24"
             value={styleId}
             onChange={(e) => setStyleId(e.target.value)}
           />
           <select
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm min-w-[140px]"
+            className="rounded border border-border-strong px-2 py-1.5 text-sm min-w-[140px]"
             value={buyerId}
             onChange={(e) => setBuyerId(e.target.value)}
           >
@@ -511,13 +511,13 @@ export function WastageReportPage() {
           </select>
           <input
             type="date"
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+            className="rounded border border-border-strong px-2 py-1.5 text-sm"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
           />
           <input
             type="date"
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+            className="rounded border border-border-strong px-2 py-1.5 text-sm"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
           />
@@ -525,11 +525,11 @@ export function WastageReportPage() {
             type="number"
             step="0.1"
             placeholder="Min wastage %"
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm w-28"
+            className="rounded border border-border-strong px-2 py-1.5 text-sm w-28"
             value={thresholdPct}
             onChange={(e) => setThresholdPct(e.target.value)}
           />
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-sm text-text-secondary">
             <input
               type="checkbox"
               checked={aboveThresholdOnly}
@@ -540,7 +540,7 @@ export function WastageReportPage() {
           <button
             type="button"
             onClick={load}
-            className="rounded bg-primary px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+            className="rounded bg-brand-primary px-3 py-1.5 text-sm font-medium text-brand-primary-foreground hover:opacity-90"
           >
             Apply
           </button>
@@ -548,9 +548,9 @@ export function WastageReportPage() {
       </div>
 
       {thresholds.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <h2 className="text-sm font-semibold text-gray-900 mb-2">Threshold rules</h2>
-          <p className="text-xs text-gray-500 mb-2">Used to mark orders above allowed wastage % (buyer or tenant-wide).</p>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <h2 className="text-sm font-semibold text-text-primary mb-2">Threshold rules</h2>
+          <p className="text-xs text-text-muted mb-2">Used to mark orders above allowed wastage % (buyer or tenant-wide).</p>
           <ul className="text-sm space-y-1">
             {thresholds.map((t) => (
               <li key={t.id} className="flex gap-4">
@@ -565,12 +565,12 @@ export function WastageReportPage() {
       )}
 
       {summary && summary.by_style.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <h2 className="text-sm font-semibold text-gray-900 mb-3">Efficiency by style</h2>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <h2 className="text-sm font-semibold text-text-primary mb-3">Efficiency by style</h2>
           <div className="overflow-x-auto">
             <table className="min-w-[400px] w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-gray-500">
+                <tr className="border-b border-border text-left text-text-muted">
                   <th className="px-3 py-2">Style ID</th>
                   <th className="px-3 py-2 text-right">Order–item lines</th>
                   <th className="px-3 py-2 text-right">Avg wastage %</th>
@@ -579,16 +579,16 @@ export function WastageReportPage() {
               </thead>
               <tbody>
                 {summary.by_style.map((s: WastageSummaryByStyle) => (
-                  <tr key={s.style_id} className="border-b border-gray-100 last:border-0">
-                    <td className="px-3 py-2 font-medium text-gray-900">{s.style_id}</td>
-                    <td className="px-3 py-2 text-right text-gray-700">{s.order_item_count}</td>
+                  <tr key={s.style_id} className="border-b border-border-subtle last:border-0">
+                    <td className="px-3 py-2 font-medium text-text-primary">{s.style_id}</td>
+                    <td className="px-3 py-2 text-right text-text-secondary">{s.order_item_count}</td>
                     <td className="px-3 py-2 text-right">
-                      <span className={s.avg_wastage_pct > 10 ? "text-amber-700 font-medium" : "text-gray-700"}>
+                      <span className={s.avg_wastage_pct > 10 ? "text-status-warning-foreground font-medium" : "text-text-secondary"}>
                         {s.avg_wastage_pct.toFixed(1)}%
                       </span>
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <span className={s.max_wastage_pct > 15 ? "text-amber-700 font-medium" : "text-gray-700"}>
+                      <span className={s.max_wastage_pct > 15 ? "text-status-warning-foreground font-medium" : "text-text-secondary"}>
                         {s.max_wastage_pct.toFixed(1)}%
                       </span>
                     </td>
@@ -597,34 +597,34 @@ export function WastageReportPage() {
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-gray-500 mt-2">Total rows: {summary.total_rows}</p>
+          <p className="text-xs text-text-muted mt-2">Total rows: {summary.total_rows}</p>
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
-        <h2 className="text-sm font-semibold text-gray-900 p-4 pb-0">Detail (order × item)</h2>
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
+        <h2 className="text-sm font-semibold text-text-primary p-4 pb-0">Detail (order × item)</h2>
         {loading ? (
-          <p className="p-4 text-gray-500">Loading…</p>
+          <p className="p-4 text-text-muted">Loading…</p>
         ) : (
           <table className="min-w-[900px] w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-surface-subtle border-b border-border">
               <tr>
-                <th className="px-3 py-2 text-left text-gray-500">Buyer</th>
-                <th className="px-3 py-2 text-left text-gray-500">Order</th>
-                <th className="px-3 py-2 text-left text-gray-500">Style</th>
-                <th className="px-3 py-2 text-left text-gray-500">Item</th>
-                <th className="px-3 py-2 text-left text-gray-500">Category</th>
-                <th className="px-3 py-2 text-right text-gray-500">Expected</th>
-                <th className="px-3 py-2 text-right text-gray-500">Actual</th>
-                <th className="px-3 py-2 text-right text-gray-500">Wastage %</th>
-                <th className="px-3 py-2 text-right text-gray-500">Wastage value</th>
-                <th className="px-3 py-2 text-center text-gray-500">Threshold</th>
+                <th className="px-3 py-2 text-left text-text-muted">Buyer</th>
+                <th className="px-3 py-2 text-left text-text-muted">Order</th>
+                <th className="px-3 py-2 text-left text-text-muted">Style</th>
+                <th className="px-3 py-2 text-left text-text-muted">Item</th>
+                <th className="px-3 py-2 text-left text-text-muted">Category</th>
+                <th className="px-3 py-2 text-right text-text-muted">Expected</th>
+                <th className="px-3 py-2 text-right text-text-muted">Actual</th>
+                <th className="px-3 py-2 text-right text-text-muted">Wastage %</th>
+                <th className="px-3 py-2 text-right text-text-muted">Wastage value</th>
+                <th className="px-3 py-2 text-center text-text-muted">Threshold</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={10} className="px-3 py-8 text-center text-text-muted">
                     No data. Ensure orders have a linked quotation with style, a BOM with item-linked lines, and
                     CONSUMPTION_ISSUE movements for those orders.
                   </td>
@@ -633,39 +633,39 @@ export function WastageReportPage() {
               {rows.map((r) => (
                 <tr
                   key={`${r.order_id}-${r.item_id}`}
-                  className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
+                  className="border-b border-border-subtle last:border-0 hover:bg-surface-subtle cursor-pointer"
                   onClick={() => openDrawer(r.order_id)}
                 >
-                  <td className="px-3 py-2 text-gray-700">{r.buyer_name}</td>
-                  <td className="px-3 py-2 text-gray-900">
-                    {r.order_code} <span className="text-gray-400">#{r.order_id}</span>
+                  <td className="px-3 py-2 text-text-secondary">{r.buyer_name}</td>
+                  <td className="px-3 py-2 text-text-primary">
+                    {r.order_code} <span className="text-text-muted">#{r.order_id}</span>
                   </td>
-                  <td className="px-3 py-2 text-gray-700">{r.style_code}</td>
-                  <td className="px-3 py-2 text-gray-700">
+                  <td className="px-3 py-2 text-text-secondary">{r.style_code}</td>
+                  <td className="px-3 py-2 text-text-secondary">
                     {r.item_code} · {r.item_name}
                   </td>
-                  <td className="px-3 py-2 text-gray-600 capitalize">{r.category}</td>
-                  <td className="px-3 py-2 text-right text-gray-700">
+                  <td className="px-3 py-2 text-text-secondary capitalize">{r.category}</td>
+                  <td className="px-3 py-2 text-right text-text-secondary">
                     {r.expected_qty.toLocaleString(undefined, { maximumFractionDigits: 4 })}
                   </td>
-                  <td className="px-3 py-2 text-right text-gray-700">
+                  <td className="px-3 py-2 text-right text-text-secondary">
                     {r.actual_qty.toLocaleString(undefined, { maximumFractionDigits: 4 })}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <span
                       className={
                         r.wastage_pct_vs_bom > 15
-                          ? "text-amber-700 font-medium"
+                          ? "text-status-warning-foreground font-medium"
                           : r.wastage_pct_vs_bom > 0
-                            ? "text-gray-800"
-                            : "text-gray-600"
+                            ? "text-text-primary"
+                            : "text-text-secondary"
                       }
                     >
                       {r.wastage_pct_vs_bom >= 0 ? "+" : ""}
                       {r.wastage_pct_vs_bom.toFixed(1)}%
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-right font-medium text-gray-900">
+                  <td className="px-3 py-2 text-right font-medium text-text-primary">
                     {r.wastage_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="px-3 py-2 text-center">
@@ -687,14 +687,14 @@ export function WastageReportPage() {
           onClick={() => { setSaveViewModalOpen(false); setSaveViewName(""); }}
         >
           <div
-            className="bg-white rounded-lg shadow-xl p-4 w-full max-w-sm"
+            className="bg-surface-raised rounded-lg shadow-xl p-4 w-full max-w-sm"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Save current view</h3>
+            <h3 className="text-sm font-semibold text-text-primary mb-3">Save current view</h3>
             <input
               type="text"
               placeholder="View name"
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm mb-3"
+              className="w-full rounded border border-border-strong px-2 py-1.5 text-sm mb-3"
               value={saveViewName}
               onChange={(e) => setSaveViewName(e.target.value)}
             />
@@ -702,7 +702,7 @@ export function WastageReportPage() {
               <button
                 type="button"
                 onClick={() => { setSaveViewModalOpen(false); setSaveViewName(""); }}
-                className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded border border-border-strong px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
               >
                 Cancel
               </button>
@@ -710,7 +710,7 @@ export function WastageReportPage() {
                 type="button"
                 onClick={handleSaveCurrentView}
                 disabled={!saveViewName.trim()}
-                className="rounded bg-primary px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                className="rounded bg-brand-primary px-3 py-1.5 text-sm font-medium text-brand-primary-foreground hover:opacity-90 disabled:opacity-50"
               >
                 Save
               </button>
@@ -728,15 +728,15 @@ export function WastageReportPage() {
           aria-label="Order wastage detail"
         >
           <div
-            className="w-full max-w-2xl bg-white shadow-xl overflow-y-auto"
+            className="w-full max-w-2xl bg-surface-raised shadow-xl overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Order wastage detail</h3>
+            <div className="sticky top-0 bg-surface-raised border-b border-border px-4 py-3 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-text-primary">Order wastage detail</h3>
               <button
                 type="button"
                 onClick={closeDrawer}
-                className="rounded p-1 text-gray-500 hover:bg-gray-100"
+                className="rounded p-1 text-text-muted hover:bg-surface-subtle"
                 aria-label="Close"
               >
                 ×
@@ -744,20 +744,20 @@ export function WastageReportPage() {
             </div>
             <div className="p-4">
               {drawerLoading ? (
-                <p className="text-gray-500">Loading…</p>
+                <p className="text-text-muted">Loading…</p>
               ) : drawerDetail ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <span className="text-gray-500">Order</span>
+                    <span className="text-text-muted">Order</span>
                     <span className="font-medium">{drawerDetail.order_code}</span>
-                    <span className="text-gray-500">Buyer</span>
+                    <span className="text-text-muted">Buyer</span>
                     <span className="font-medium">{drawerDetail.buyer_name}</span>
-                    <span className="text-gray-500">Style</span>
+                    <span className="text-text-muted">Style</span>
                     <span className="font-medium">{drawerDetail.style_code}</span>
-                    <span className="text-gray-500">Quantity</span>
+                    <span className="text-text-muted">Quantity</span>
                     <span className="font-medium">{drawerDetail.quantity ?? "—"}</span>
-                    <span className="text-gray-500">Total wastage value</span>
-                    <span className="font-medium text-amber-700">
+                    <span className="text-text-muted">Total wastage value</span>
+                    <span className="font-medium text-status-warning-foreground">
                       {drawerDetail.total_wastage_value.toLocaleString(undefined, {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
@@ -765,10 +765,10 @@ export function WastageReportPage() {
                     </span>
                   </div>
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-900 mb-2">BOM vs actual</h4>
+                    <h4 className="text-sm font-semibold text-text-primary mb-2">BOM vs actual</h4>
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b text-left text-gray-500">
+                        <tr className="border-b text-left text-text-muted">
                           <th className="py-1 pr-2">Item</th>
                           <th className="py-1 text-right">Expected</th>
                           <th className="py-1 text-right">Actual</th>
@@ -778,7 +778,7 @@ export function WastageReportPage() {
                       </thead>
                       <tbody>
                         {drawerDetail.bom_lines.map((line) => (
-                          <tr key={line.item_id} className="border-b border-gray-100">
+                          <tr key={line.item_id} className="border-b border-border-subtle">
                             <td className="py-1 pr-2">{line.item_code}</td>
                             <td className="py-1 text-right">{line.expected_qty.toFixed(2)}</td>
                             <td className="py-1 text-right">{line.actual_qty.toFixed(2)}</td>
@@ -793,11 +793,11 @@ export function WastageReportPage() {
                     </table>
                   </div>
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-900 mb-2">Process-stage breakdown</h4>
+                    <h4 className="text-sm font-semibold text-text-primary mb-2">Process-stage breakdown</h4>
                     {drawerDetail.process_stage_breakdown?.length ? (
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b text-left text-gray-500">
+                          <tr className="border-b text-left text-text-muted">
                             <th className="py-1 pr-2">Stage</th>
                             <th className="py-1 text-right">Value</th>
                             <th className="py-1 text-right">Quantity</th>
@@ -805,7 +805,7 @@ export function WastageReportPage() {
                         </thead>
                         <tbody>
                           {drawerDetail.process_stage_breakdown.map((s, i) => (
-                            <tr key={i} className="border-b border-gray-100">
+                            <tr key={i} className="border-b border-border-subtle">
                               <td className="py-1 pr-2 capitalize">{s.process_stage}</td>
                               <td className="py-1 text-right">{s.value.toFixed(2)}</td>
                               <td className="py-1 text-right">{s.quantity.toFixed(2)}</td>
@@ -814,15 +814,15 @@ export function WastageReportPage() {
                         </tbody>
                       </table>
                     ) : (
-                      <p className="text-sm text-gray-500">No process/reason data captured for this order.</p>
+                      <p className="text-sm text-text-muted">No process/reason data captured for this order.</p>
                     )}
                   </div>
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-900 mb-2">Reason breakdown</h4>
+                    <h4 className="text-sm font-semibold text-text-primary mb-2">Reason breakdown</h4>
                     {drawerDetail.reason_breakdown?.length ? (
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b text-left text-gray-500">
+                          <tr className="border-b text-left text-text-muted">
                             <th className="py-1 pr-2">Reason</th>
                             <th className="py-1 text-right">Value</th>
                             <th className="py-1 text-right">Quantity</th>
@@ -830,7 +830,7 @@ export function WastageReportPage() {
                         </thead>
                         <tbody>
                           {drawerDetail.reason_breakdown.map((r, i) => (
-                            <tr key={i} className="border-b border-gray-100">
+                            <tr key={i} className="border-b border-border-subtle">
                               <td className="py-1 pr-2">{r.reason_name}</td>
                               <td className="py-1 text-right">{r.value.toFixed(2)}</td>
                               <td className="py-1 text-right">{r.quantity.toFixed(2)}</td>
@@ -839,18 +839,18 @@ export function WastageReportPage() {
                         </tbody>
                       </table>
                     ) : (
-                      <p className="text-sm text-gray-500">No process/reason data captured for this order.</p>
+                      <p className="text-sm text-text-muted">No process/reason data captured for this order.</p>
                     )}
                   </div>
                   {drawerDetail.linked_alert_ids.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-900 mb-2">Linked alerts</h4>
+                      <h4 className="text-sm font-semibold text-text-primary mb-2">Linked alerts</h4>
                       <ul className="space-y-1">
                         {drawerDetail.linked_alert_ids.map((aid) => (
                           <li key={aid}>
                             <Link
                               to={`${PREFIX}/merchandising/critical-alerts?alert=${aid}`}
-                              className="text-primary hover:underline"
+                              className="text-brand-primary hover:underline"
                             >
                               Alert #{aid}
                             </Link>
@@ -861,7 +861,7 @@ export function WastageReportPage() {
                   )}
                 </div>
               ) : (
-                <p className="text-gray-500">Could not load order detail.</p>
+                <p className="text-text-muted">Could not load order detail.</p>
               )}
             </div>
           </div>

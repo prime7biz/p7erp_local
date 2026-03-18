@@ -33,46 +33,46 @@ export function AiKnowledgeAskPanel({ disabled, documents, loadingDocuments, onA
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="mb-2 text-sm font-semibold text-slate-800">Document Q&A</h2>
-      <p className="mb-2 text-xs text-slate-500">Ask SOP/manual/policy/help questions from approved sources.</p>
+    <div className="rounded-xl border border-border bg-surface-raised p-4">
+      <h2 className="mb-2 text-sm font-semibold text-text-primary">Document Q&A</h2>
+      <p className="mb-2 text-xs text-text-muted">Ask SOP/manual/policy/help questions from approved sources.</p>
       <textarea
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         rows={3}
-        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+        className="w-full rounded-md border border-border px-3 py-2 text-sm outline-none focus:border-focus-ring"
         disabled={disabled || loading}
       />
       <button
         type="button"
         onClick={() => void run()}
         disabled={disabled || loading}
-        className="mt-2 w-full rounded-md bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+        className="mt-2 w-full rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-surface-subtle"
       >
         {loading ? "Searching..." : "Ask Knowledge Base"}
       </button>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {loadingDocuments ? (
-          <span className="text-[11px] text-slate-500">Loading sources...</span>
+          <span className="text-[11px] text-text-muted">Loading sources...</span>
         ) : (
           sourceTags.map((doc) => (
-            <span key={doc.id} className="rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">
+            <span key={doc.id} className="rounded-full border border-border bg-surface-subtle px-2 py-0.5 text-[11px] text-text-secondary">
               {doc.title}
             </span>
           ))
         )}
       </div>
-      {answer ? <p className="mt-3 text-xs text-slate-700">{answer}</p> : null}
+      {answer ? <p className="mt-3 text-xs text-text-secondary">{answer}</p> : null}
       {sources.length > 0 ? (
         <div className="mt-2 space-y-1">
           {sources.slice(0, 3).map((s, idx) => (
-            <div key={`${s.document_code}-${idx}`} className="rounded border border-violet-100 bg-violet-50 p-2 text-[11px] text-violet-900">
+            <div key={`${s.document_code}-${idx}`} className="rounded border border-status-info/20 bg-status-info-subtle p-2 text-[11px] text-status-info-foreground">
               <span className="font-semibold">{s.document_title}</span>: {s.snippet}
             </div>
           ))}
         </div>
       ) : null}
-      {disclaimer ? <p className="mt-2 text-[11px] text-slate-500">{disclaimer}</p> : null}
+      {disclaimer ? <p className="mt-2 text-[11px] text-text-muted">{disclaimer}</p> : null}
     </div>
   );
 }

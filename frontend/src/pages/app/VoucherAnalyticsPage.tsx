@@ -112,22 +112,22 @@ export function VoucherAnalyticsPage() {
 
   return (
     <div className="space-y-6 print-report">
-      <div className="print-only mb-3 border-b border-slate-300 pb-2">
+      <div className="print-only mb-3 border-b border-border-strong pb-2">
         <h1 className="text-lg font-semibold">Voucher Analytics</h1>
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-text-secondary">
           Period: {fromDate} to {toDate}
         </p>
       </div>
       <div className="no-print">
-        <h1 className="text-2xl font-semibold text-slate-900">Voucher Analytics</h1>
-        <p className="text-sm text-slate-500">Voucher summary, monthly trend and top preparers.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Voucher Analytics</h1>
+        <p className="text-sm text-text-muted">Voucher summary, monthly trend and top preparers.</p>
       </div>
-      {error ? <div className="no-print rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="no-print rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
-      <div className="no-print grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-6">
-        <input type="date" className="rounded border px-3 py-2 text-sm" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-        <input type="date" className="rounded border px-3 py-2 text-sm" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-        <select className="rounded border px-3 py-2 text-sm" value={voucherType} onChange={(e) => setVoucherType(e.target.value)}>
+      {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="no-print rounded border border-status-success/20 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
+      <div className="no-print grid gap-2 rounded-xl border border-border bg-surface-raised p-3 sm:grid-cols-2 lg:grid-cols-6">
+        <input type="date" className="rounded border border-border px-3 py-2 text-sm" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+        <input type="date" className="rounded border border-border px-3 py-2 text-sm" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+        <select className="rounded border border-border px-3 py-2 text-sm" value={voucherType} onChange={(e) => setVoucherType(e.target.value)}>
           <option value="">All Types</option>
           {voucherTypes.map((t) => (
             <option key={t} value={t}>
@@ -135,7 +135,7 @@ export function VoucherAnalyticsPage() {
             </option>
           ))}
         </select>
-        <select className="rounded border px-3 py-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <select className="rounded border border-border px-3 py-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">All Status</option>
           {statuses.map((s) => (
             <option key={s} value={s}>
@@ -143,34 +143,34 @@ export function VoucherAnalyticsPage() {
             </option>
           ))}
         </select>
-        <button className="rounded border px-3 py-2 text-sm" onClick={() => void load()}>
+        <button className="rounded border border-border px-3 py-2 text-sm" onClick={() => void load()}>
           Refresh
         </button>
-        <button className="rounded border px-3 py-2 text-sm" onClick={clearFilters}>
+        <button className="rounded border border-border px-3 py-2 text-sm" onClick={clearFilters}>
           Clear
         </button>
       </div>
       <div className="no-print flex flex-wrap gap-2">
-        <button className="rounded border px-3 py-2 text-sm" onClick={() => handlePrint()}>Print</button>
-        <button className="rounded border px-3 py-2 text-sm" onClick={() => exportCsv()}>Export CSV</button>
+        <button className="rounded border border-border px-3 py-2 text-sm" onClick={() => handlePrint()}>Print</button>
+        <button className="rounded border border-border px-3 py-2 text-sm" onClick={() => exportCsv()}>Export CSV</button>
       </div>
 
-      <div className="print-card rounded-xl border border-slate-200 bg-white p-4">
+      <div className="print-card rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="mb-2 text-lg font-semibold">Summary</h2>
         <p className="text-sm">Total vouchers: <b>{summary?.total_vouchers ?? 0}</b></p>
         <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(summary?.status_counts ?? {}).map(([status, count]) => (
-            <div key={status} className="rounded border bg-slate-50 px-3 py-2 text-sm">
+            <div key={status} className="rounded border border-border bg-surface-subtle px-3 py-2 text-sm">
               {status}: <b>{count}</b>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="print-card overflow-x-auto rounded-xl border border-slate-200 bg-white p-4">
+      <div className="print-card overflow-x-auto rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="mb-2 text-lg font-semibold">Monthly Trend</h2>
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">Month</th>
               <th className="px-2 py-1 text-right">Count</th>
@@ -189,10 +189,10 @@ export function VoucherAnalyticsPage() {
         </table>
       </div>
 
-      <div className="print-card overflow-x-auto rounded-xl border border-slate-200 bg-white p-4">
+      <div className="print-card overflow-x-auto rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="mb-2 text-lg font-semibold">Top Preparers</h2>
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">User</th>
               <th className="px-2 py-1 text-right">Vouchers</th>

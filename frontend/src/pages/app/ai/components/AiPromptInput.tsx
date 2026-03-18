@@ -17,8 +17,8 @@ export function AiPromptInput({ sending, disabled, onSend }: Props) {
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <label className="mb-2 block text-sm font-semibold text-slate-800">Ask AI Tool</label>
+    <div className="rounded-xl border border-border bg-surface-raised p-4">
+      <label className="mb-2 block text-sm font-semibold text-text-primary">Ask AI Tool</label>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="text"
@@ -32,13 +32,13 @@ export function AiPromptInput({ sending, disabled, onSend }: Props) {
           }}
           placeholder="Ask about dashboard, approvals, orders, inventory, production, or finance..."
           disabled={sending || disabled}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-border px-3 py-2 text-sm text-text-primary placeholder:text-text-muted"
         />
         <button
           type="button"
           onClick={() => void handleSend()}
           disabled={sending || disabled || !prompt.trim()}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {sending ? "Sending..." : "Send"}
         </button>

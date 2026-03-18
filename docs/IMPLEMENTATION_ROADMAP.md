@@ -15,6 +15,7 @@ Single reference for what’s done, what’s next, and in what order. Aligns wit
 - **Done (A5):** AI tools – dedicated pages for Assistant, Automation, and Predictions (coming-soon state; no backend yet).
 - **Done (A6):** Workflow/approvals – All Approvals page has quick links (Voucher, Leave, Payroll, Purchase & AP); dashboard KPI “Pending Approvals” uses real count (vouchers, payment runs, recons, leave, payroll) and links to /app/approvals.
 - **Done (A7):** Logistics – dedicated coming-soon page (import/export tracking, shipment, document management).
+- **Done (Trade Expansion):** Trade Cases + Logistics Shipments + Trade Documents + Stage Transition + Trade Control Tower + Trade alert rules and margin endpoint.
 - **Done (A8):** Parties & Document Flow – dedicated coming-soon pages.
 - **Done:** Tutorials – dedicated coming-soon list and article pages.
 - **Done:** Remaining report sub-pages – dedicated coming-soon pages (LC Outstanding, BTB Maturity, Production Efficiency, QC Summary, Employee, Payroll, Shipments, Gate Passes, Challans, Reconciliation, Exceptions).

@@ -51,7 +51,7 @@ export function VendorFilterBar({
         placeholder="Search by code or name..."
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
-        className="w-48 min-w-[140px] rounded-lg border border-gray-300 px-3 py-1.5 text-sm placeholder:text-gray-400"
+        className="w-48 min-w-[140px] rounded-lg border border-border px-3 py-1.5 text-sm placeholder:text-text-muted"
       />
       <select
         value={activeOnly === true ? "active" : activeOnly === false ? "inactive" : ""}
@@ -59,7 +59,7 @@ export function VendorFilterBar({
           const v = e.target.value;
           onActiveOnlyChange(v === "active" ? true : v === "inactive" ? false : undefined);
         }}
-        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+        className="rounded-lg border border-border px-3 py-1.5 text-sm"
       >
         <option value="">All status</option>
         <option value="active">Active only</option>
@@ -68,7 +68,7 @@ export function VendorFilterBar({
       <select
         value={vendorType}
         onChange={(e) => onVendorTypeChange(e.target.value)}
-        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+        className="rounded-lg border border-border px-3 py-1.5 text-sm"
       >
         <option value="">All vendor types</option>
         <option value="local">Local</option>
@@ -79,7 +79,7 @@ export function VendorFilterBar({
         placeholder="Currency (USD, CNY...)"
         value={currency}
         onChange={(e) => onCurrencyChange(e.target.value.toUpperCase())}
-        className="w-44 min-w-[120px] rounded-lg border border-gray-300 px-3 py-1.5 text-sm placeholder:text-gray-400"
+        className="w-44 min-w-[120px] rounded-lg border border-border px-3 py-1.5 text-sm placeholder:text-text-muted"
       />
       <select
         value={hasLedger === true ? "yes" : hasLedger === false ? "no" : ""}
@@ -87,7 +87,7 @@ export function VendorFilterBar({
           const v = e.target.value;
           onHasLedgerChange(v === "yes" ? true : v === "no" ? false : undefined);
         }}
-        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+        className="rounded-lg border border-border px-3 py-1.5 text-sm"
       >
         <option value="">All ledger</option>
         <option value="yes">Ledger linked</option>
@@ -109,11 +109,11 @@ export function VendorFilterBar({
         </button>
       )}
       <div className="ml-auto flex items-center gap-2">
-        <div className="flex rounded-lg border border-gray-300 p-0.5">
+        <div className="flex rounded-lg border border-border p-0.5">
           <button
             type="button"
             onClick={() => onViewModeChange("table")}
-            className={`rounded-md p-1.5 ${viewMode === "table" ? "bg-gray-200 text-gray-900" : "text-gray-500 hover:bg-gray-100"}`}
+            className={`rounded-md p-1.5 ${viewMode === "table" ? "bg-surface-subtle text-text-primary" : "text-text-muted hover:bg-surface-subtle"}`}
             title="Table view"
           >
             <List className="h-4 w-4" />
@@ -121,7 +121,7 @@ export function VendorFilterBar({
           <button
             type="button"
             onClick={() => onViewModeChange("cards")}
-            className={`rounded-md p-1.5 ${viewMode === "cards" ? "bg-gray-200 text-gray-900" : "text-gray-500 hover:bg-gray-100"}`}
+            className={`rounded-md p-1.5 ${viewMode === "cards" ? "bg-surface-subtle text-text-primary" : "text-text-muted hover:bg-surface-subtle"}`}
             title="Card view"
           >
             <LayoutGrid className="h-4 w-4" />
@@ -131,14 +131,14 @@ export function VendorFilterBar({
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
         >
           Refresh
         </button>
         <button
           type="button"
           onClick={onAddClick}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow hover:bg-primary/90"
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90"
         >
           Add vendor
         </button>

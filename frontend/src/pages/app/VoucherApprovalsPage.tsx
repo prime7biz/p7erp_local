@@ -24,10 +24,10 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 function actionButtonClass(action: string) {
-  if (action === "reject") return "rounded border border-rose-300 bg-rose-50 px-2 py-1 text-xs text-rose-700";
-  if (action === "approve" || action === "post") return "rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs text-emerald-700";
-  if (action === "check" || action === "recommend" || action === "submit") return "rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700";
-  return "rounded border px-2 py-1 text-xs";
+  if (action === "reject") return "rounded border border-status-danger/20 bg-status-danger-subtle px-2 py-1 text-xs text-status-danger-foreground";
+  if (action === "approve" || action === "post") return "rounded border border-status-success/20 bg-status-success-subtle px-2 py-1 text-xs text-status-success-foreground";
+  if (action === "check" || action === "recommend" || action === "submit") return "rounded border border-status-info/20 bg-status-info-subtle px-2 py-1 text-xs text-status-info-foreground";
+  return "rounded border border-border px-2 py-1 text-xs";
 }
 
 export function VoucherApprovalsPage() {
@@ -116,39 +116,39 @@ export function VoucherApprovalsPage() {
 
   return (
     <div className="space-y-6 print-report">
-      <div className="print-only mb-3 border-b border-slate-300 pb-2">
+      <div className="print-only mb-3 border-b border-border-strong pb-2">
         <h1 className="text-lg font-semibold">Voucher Approval Queue</h1>
       </div>
       <div className="no-print">
-        <h1 className="text-2xl font-semibold text-slate-900">Voucher Approval Queue</h1>
-        <p className="mt-1 text-sm text-slate-500">Review submitted vouchers and move them through approval workflow.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Voucher Approval Queue</h1>
+        <p className="mt-1 text-sm text-text-muted">Review submitted vouchers and move them through approval workflow.</p>
       </div>
-      {error ? <div className="no-print rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="no-print rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
-      <div className="no-print grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-4">
+      {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="no-print rounded border border-status-success/20 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
+      <div className="no-print grid gap-2 rounded-xl border border-border bg-surface-raised p-3 sm:grid-cols-2 lg:grid-cols-4">
         <input
           className="rounded border px-3 py-2 text-sm"
           placeholder="Search voucher number/reference/description"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select className="rounded border px-3 py-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <select className="rounded border border-border px-3 py-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="ALL">All Queue Statuses</option>
           <option value="SUBMITTED">Submitted</option>
           <option value="CHECKED">Checked</option>
           <option value="RECOMMENDED">Recommended</option>
           <option value="APPROVED">Approved</option>
         </select>
-        <button className="rounded border px-3 py-2 text-sm" onClick={() => printCurrentPage()}>
+        <button className="rounded border border-border px-3 py-2 text-sm" onClick={() => printCurrentPage()}>
           Print Queue
         </button>
-        <button className="rounded border px-3 py-2 text-sm" onClick={() => exportCsv()}>
+        <button className="rounded border border-border px-3 py-2 text-sm" onClick={() => exportCsv()}>
           Export CSV
         </button>
       </div>
-      <div className="print-card overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="print-card overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-3 py-2">Voucher No</th>
               <th className="px-3 py-2">Date</th>
@@ -161,13 +161,13 @@ export function VoucherApprovalsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td className="px-3 py-5 text-slate-500" colSpan={6}>
+                <td className="px-3 py-5 text-text-muted" colSpan={6}>
                   Loading approval queue...
                 </td>
               </tr>
             ) : filteredRows.length === 0 ? (
               <tr>
-                <td className="px-3 py-5 text-slate-500" colSpan={6}>
+                <td className="px-3 py-5 text-text-muted" colSpan={6}>
                   No pending vouchers in approval queue.
                 </td>
               </tr>

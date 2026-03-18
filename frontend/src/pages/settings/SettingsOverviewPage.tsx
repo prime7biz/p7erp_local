@@ -37,8 +37,8 @@ export function SettingsOverviewPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold text-gray-900">Settings overview</h2>
-        <p className="text-sm text-gray-600">
+        <h2 className="text-xl font-bold text-text-primary">Settings overview</h2>
+        <p className="text-sm text-text-muted">
           Use this page as your central hub for system administration.
         </p>
       </div>
@@ -48,10 +48,10 @@ export function SettingsOverviewPage() {
           <Link
             key={card.to}
             to={card.to}
-            className="rounded-xl border border-gray-200 bg-white p-4 hover:border-primary/30 hover:shadow-sm transition"
+            className="rounded-xl border border-border bg-surface-raised p-4 hover:border-brand-primary/30 hover:shadow-sm transition"
           >
-            <h3 className="text-sm font-semibold text-gray-900">{card.title}</h3>
-            <p className="mt-1 text-sm text-gray-600">{card.description}</p>
+            <h3 className="text-sm font-semibold text-text-primary">{card.title}</h3>
+            <p className="mt-1 text-sm text-text-muted">{card.description}</p>
           </Link>
         ))}
       </div>

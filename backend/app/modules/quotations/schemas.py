@@ -60,6 +60,7 @@ class QuotationResponse(BaseModel):
   profit_percentage: str | None = None
   quoted_price: str | None = None
   status: str
+  next_status_options: list[str] = Field(default_factory=list)
   is_converted_to_order: bool = False
   converted_order_id: int | None = None
   version_no: int

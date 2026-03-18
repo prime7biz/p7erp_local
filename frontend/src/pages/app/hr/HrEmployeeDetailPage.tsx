@@ -137,19 +137,19 @@ export function HrEmployeeDetailPage() {
   };
 
   if (loading) {
-    return <div className="rounded-lg border border-gray-200 bg-white p-10 text-center text-sm text-gray-500">Loading employee...</div>;
+    return <div className="rounded-lg border border-border bg-surface-raised p-10 text-center text-sm text-text-muted">Loading employee...</div>;
   }
 
   if (!employee) {
     return (
       <div className="space-y-4">
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error || "Employee not found."}
         </div>
         <button
           type="button"
           onClick={() => navigate("/app/hr/employees")}
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+          className="rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
         >
           Back to employees
         </button>
@@ -161,129 +161,129 @@ export function HrEmployeeDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <Link to="/app/hr/employees" className="text-sm text-primary hover:underline">
+          <Link to="/app/hr/employees" className="text-sm text-brand-primary hover:underline">
             Back to employees
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900 mt-1">Employee Detail</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-text-primary mt-1">Employee Detail</h1>
+          <p className="text-sm text-text-muted">
             {employee.employee_code} - {[employee.first_name, employee.last_name].filter(Boolean).join(" ")}
           </p>
-          <p className="text-xs text-gray-500 mt-1">Fields marked with ** are mandatory.</p>
+          <p className="text-xs text-text-muted mt-1">Fields marked with ** are mandatory.</p>
         </div>
         <button
           type="button"
           disabled={saving}
           onClick={toggleActive}
-          className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-60"
+          className="rounded border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary disabled:opacity-60"
         >
           {employee.is_active ? "Deactivate" : "Activate"}
         </button>
       </div>
 
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
-      {success && <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">{success}</div>}
+      {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">{error}</div>}
+      {success && <div className="rounded-lg border border-status-success/30 bg-status-success-subtle px-4 py-2 text-sm text-status-success-foreground">{success}</div>}
 
-      <form onSubmit={save} className="rounded-xl border border-gray-200 bg-white p-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <form onSubmit={save} className="rounded-xl border border-border bg-surface-raised p-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="Employee code **"
           value={form.employee_code ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, employee_code: e.target.value }))}
           required
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="First name **"
           value={form.first_name ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, first_name: e.target.value }))}
           required
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="Last name"
           value={form.last_name ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, last_name: e.target.value }))}
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="Email"
           value={form.email ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="Phone"
           value={form.phone ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
         />
         <input
           type="date"
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           value={form.date_of_birth ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, date_of_birth: e.target.value }))}
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="Gender"
           value={form.gender ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, gender: e.target.value }))}
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="Marital status"
           value={form.marital_status ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, marital_status: e.target.value }))}
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="Blood group"
           value={form.blood_group ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, blood_group: e.target.value }))}
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="Emergency contact name"
           value={form.emergency_contact_name ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, emergency_contact_name: e.target.value }))}
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="Emergency contact phone"
           value={form.emergency_contact_phone ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, emergency_contact_phone: e.target.value }))}
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="Address"
           value={form.address_line ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, address_line: e.target.value }))}
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="City"
           value={form.city ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))}
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="Country"
           value={form.country ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value }))}
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="National ID"
           value={form.national_id ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, national_id: e.target.value }))}
         />
         <input
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           placeholder="Employment type"
           value={form.employment_type ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, employment_type: e.target.value }))}
         />
         <select
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           value={form.department_id ?? ""}
           onChange={(e) =>
             setForm((prev) => ({
@@ -301,7 +301,7 @@ export function HrEmployeeDetailPage() {
           ))}
         </select>
         <select
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           value={form.designation_id ?? ""}
           onChange={(e) =>
             setForm((prev) => ({ ...prev, designation_id: e.target.value ? Number(e.target.value) : null }))
@@ -316,19 +316,19 @@ export function HrEmployeeDetailPage() {
         </select>
         <input
           type="date"
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           value={form.joining_date ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, joining_date: e.target.value }))}
         />
         <input
           type="date"
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           value={form.confirmation_date ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, confirmation_date: e.target.value }))}
         />
         <input
           type="date"
-          className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
+          className="rounded border border-border-strong px-3 py-2 text-sm sm:col-span-2"
           value={form.exit_date ?? ""}
           onChange={(e) => setForm((prev) => ({ ...prev, exit_date: e.target.value }))}
         />
@@ -336,7 +336,7 @@ export function HrEmployeeDetailPage() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground disabled:opacity-60"
           >
             {saving ? "Saving..." : "Save changes"}
           </button>

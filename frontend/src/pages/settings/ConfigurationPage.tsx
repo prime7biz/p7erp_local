@@ -67,63 +67,63 @@ export function ConfigurationPage() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div>
-        <h2 className="text-xl font-bold text-gray-900">Configuration</h2>
-        <p className="text-sm text-gray-600">
+        <h2 className="text-xl font-bold text-text-primary">Configuration</h2>
+        <p className="text-sm text-text-secondary">
           Update basic company settings for this tenant.
         </p>
-        <p className="text-xs text-gray-500 mt-1">Fields marked with ** are mandatory.</p>
+        <p className="text-xs text-text-muted mt-1">Fields marked with ** are mandatory.</p>
       </div>
 
       {(error || success) && (
         <div className="space-y-2">
-          {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-          {success && <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div>}
+          {error && <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div>}
+          {success && <div className="rounded border border-status-success/20 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div>}
         </div>
       )}
 
-      <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+      <div className="rounded border border-border bg-surface-subtle px-3 py-2 text-sm text-text-secondary">
         Company code: <span className="font-semibold">{companyCode}</span>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-4 rounded-xl border border-gray-200 bg-white p-4">
+      <form onSubmit={handleSave} className="space-y-4 rounded-xl border border-border bg-surface-raised p-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Company name **</label>
+          <label className="mb-1 block text-sm font-medium text-text-secondary">Company name **</label>
           <input
             value={form.company_name}
             onChange={(e) => setForm((prev) => ({ ...prev, company_name: e.target.value }))}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
             required
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Domain (optional)</label>
+          <label className="mb-1 block text-sm font-medium text-text-secondary">Domain (optional)</label>
           <input
             value={form.domain ?? ""}
             onChange={(e) => setForm((prev) => ({ ...prev, domain: e.target.value }))}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
             placeholder="example.com"
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Logo URL (optional)</label>
+          <label className="mb-1 block text-sm font-medium text-text-secondary">Logo URL (optional)</label>
           <input
             value={form.logo ?? ""}
             onChange={(e) => setForm((prev) => ({ ...prev, logo: e.target.value }))}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
             placeholder="https://..."
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Tenant type</label>
+          <label className="mb-1 block text-sm font-medium text-text-secondary">Tenant type</label>
           <select
             value={form.tenant_type}
             onChange={(e) =>
               setForm((prev) => ({ ...prev, tenant_type: e.target.value as TenantType }))
             }
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
           >
             {TENANT_TYPE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>

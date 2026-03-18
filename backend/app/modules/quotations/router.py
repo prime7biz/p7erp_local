@@ -1,4 +1,5 @@
 from datetime import date, datetime, time
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
@@ -10,6 +11,12 @@ from sqlalchemy import delete
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
 from app.common.tenant import require_tenant
+from app.common.workflow import (
+  INQUIRY_TRANSITIONS,
+  QUOTATION_TRANSITIONS,
+  next_status_options,
+  validate_transition,
+)
 from app.database import get_db
 from app.models import (
     CommissionMode,
@@ -85,6 +92,11 @@ def _to_quotation_response(
     profit_percentage=quotation.profit_percentage,
     quoted_price=quotation.quoted_price,
     status=quotation.status,
+    next_status_options=next_status_options(
+      QUOTATION_TRANSITIONS,
+      quotation.status,
+      fallback="DRAFT",
+    ),
     is_converted_to_order=converted_order_id is not None,
     converted_order_id=converted_order_id,
     version_no=quotation.version_no,
@@ -204,9 +216,13 @@ async def submit_quotation(
   quotation = await db.get(Quotation, quotation_id)
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
-  if quotation.status not in ("DRAFT", "NEW"):
-    raise HTTPException(status_code=400, detail="Only draft/new quotation can be submitted")
-  quotation.status = "SUBMITTED"
+  quotation.status = validate_transition(
+    QUOTATION_TRANSITIONS,
+    quotation.status,
+    "SUBMITTED",
+    fallback="DRAFT",
+    entity_label="quotation",
+  )
   await db.flush()
   await db.refresh(quotation)
   return _to_quotation_response(quotation)
@@ -224,9 +240,13 @@ async def approve_quotation(
   quotation = await db.get(Quotation, quotation_id)
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
-  if quotation.status not in ("SUBMITTED",):
-    raise HTTPException(status_code=400, detail="Only submitted quotation can be approved")
-  quotation.status = "APPROVED"
+  quotation.status = validate_transition(
+    QUOTATION_TRANSITIONS,
+    quotation.status,
+    "APPROVED",
+    fallback="DRAFT",
+    entity_label="quotation",
+  )
   await db.flush()
   await db.refresh(quotation)
   return _to_quotation_response(quotation)
@@ -244,9 +264,13 @@ async def send_quotation(
   quotation = await db.get(Quotation, quotation_id)
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
-  if quotation.status not in ("APPROVED",):
-    raise HTTPException(status_code=400, detail="Only approved quotation can be sent")
-  quotation.status = "SENT"
+  quotation.status = validate_transition(
+    QUOTATION_TRANSITIONS,
+    quotation.status,
+    "SENT",
+    fallback="DRAFT",
+    entity_label="quotation",
+  )
   await db.flush()
   await db.refresh(quotation)
   return _to_quotation_response(quotation)
@@ -385,14 +409,20 @@ async def create_quotation_from_inquiry(
   )
   db.add(quotation)
   old_status = inquiry.status
-  inquiry.status = "CONVERTED"
+  inquiry.status = validate_transition(
+    INQUIRY_TRANSITIONS,
+    inquiry.status,
+    "CONVERTED",
+    fallback="DRAFT",
+    entity_label="inquiry",
+  )
   db.add(
     InquiryEvent(
       tenant_id=tenant.id,
       inquiry_id=inquiry.id,
       event_type="converted_to_quotation",
       from_status=old_status,
-      to_status="CONVERTED",
+      to_status=inquiry.status,
       notes=f"Converted to quotation {code}",
     )
   )
@@ -670,7 +700,13 @@ async def update_quotation(
   if body.valid_until is not None:
     quotation.valid_until = body.valid_until
   if body.status is not None:
-    quotation.status = body.status
+    quotation.status = validate_transition(
+      QUOTATION_TRANSITIONS,
+      quotation.status,
+      body.status,
+      fallback="DRAFT",
+      entity_label="quotation",
+    )
   if body.notes is not None:
     quotation.notes = body.notes
 
@@ -679,13 +715,20 @@ async def update_quotation(
   return _to_quotation_response(quotation)
 
 
-def _parse_decimal(s: str | None) -> float:
+FOUR_DP = Decimal("0.0001")
+
+
+def _parse_decimal(s: str | None) -> Decimal:
   if s is None or s == "":
-    return 0.0
+    return Decimal("0")
   try:
-    return float(s)
-  except ValueError:
-    return 0.0
+    return Decimal(str(s))
+  except (InvalidOperation, ValueError, TypeError):
+    return Decimal("0")
+
+
+def _decimal_to_str(value: Decimal) -> str:
+  return str(value.quantize(FOUR_DP, rounding=ROUND_HALF_UP))
 
 
 @router.put("/{quotation_id}", response_model=QuotationDetailResponse)
@@ -745,7 +788,13 @@ async def full_update_quotation(
   if body.total_amount is not None:
     quotation.total_amount = body.total_amount
   if body.status is not None:
-    quotation.status = body.status
+    quotation.status = validate_transition(
+      QUOTATION_TRANSITIONS,
+      quotation.status,
+      body.status,
+      fallback="DRAFT",
+      entity_label="quotation",
+    )
   if body.valid_until is not None:
     quotation.valid_until = body.valid_until
   if body.size_ratio_enabled is not None:
@@ -861,9 +910,9 @@ async def full_update_quotation(
   await db.flush()
 
   # Recompute totals from children if we have any cost lines
-  mat_total = 0.0
-  mfg_total = 0.0
-  other_total = 0.0
+  mat_total = Decimal("0")
+  mfg_total = Decimal("0")
+  other_total = Decimal("0")
   if body.materials:
     for row in body.materials:
       mat_total += _parse_decimal(row.total_amount)
@@ -874,20 +923,21 @@ async def full_update_quotation(
     for row in body.other_costs:
       other_total += _parse_decimal(row.calculated_amount or row.total_amount)
   total_cost = mat_total + mfg_total + other_total
-  qty = quotation.projected_quantity or 0
-  cost_per_piece = str(round(total_cost / qty, 4)) if qty > 0 else "0"
-  quotation.material_cost = str(round(mat_total, 4))
-  quotation.manufacturing_cost = str(round(mfg_total, 4))
-  quotation.other_cost = str(round(other_total, 4))
-  quotation.total_cost = str(round(total_cost, 4))
-  quotation.cost_per_piece = cost_per_piece
+  qty = Decimal(str(quotation.projected_quantity or 0))
+  cost_per_piece = (total_cost / qty).quantize(FOUR_DP, rounding=ROUND_HALF_UP) if qty > 0 else Decimal("0")
+  quotation.material_cost = _decimal_to_str(mat_total)
+  quotation.manufacturing_cost = _decimal_to_str(mfg_total)
+  quotation.other_cost = _decimal_to_str(other_total)
+  quotation.total_cost = _decimal_to_str(total_cost)
+  quotation.cost_per_piece = _decimal_to_str(cost_per_piece)
   if body.profit_percentage is not None:
     quotation.profit_percentage = body.profit_percentage
   if body.quoted_price is not None:
     quotation.quoted_price = body.quoted_price
   elif total_cost > 0 and quotation.profit_percentage:
-    pct = _parse_decimal(quotation.profit_percentage) / 100.0
-    quotation.quoted_price = str(round(total_cost * (1.0 + pct), 4))
+    pct = _parse_decimal(quotation.profit_percentage) / Decimal("100")
+    quoted_price = total_cost * (Decimal("1") + pct)
+    quotation.quoted_price = _decimal_to_str(quoted_price)
   await db.flush()
   await db.refresh(quotation)
   # Return full detail (same session sees flushed children)

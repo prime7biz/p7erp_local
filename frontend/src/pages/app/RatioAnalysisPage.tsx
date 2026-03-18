@@ -73,14 +73,14 @@ export function RatioAnalysisPage() {
 
   return (
     <div className="space-y-6 print-report">
-      <div className="print-only mb-3 border-b border-slate-300 pb-2">
+      <div className="print-only mb-3 border-b border-border-strong pb-2">
         <h1 className="text-lg font-semibold">Ratio Analysis</h1>
-        <p className="text-xs text-slate-600">As of: {asOfDate}</p>
+        <p className="text-xs text-text-secondary">As of: {asOfDate}</p>
       </div>
       <div className="no-print flex flex-wrap items-end gap-2">
         <div className="mr-auto">
-        <h1 className="text-2xl font-semibold text-slate-900">Ratio Analysis</h1>
-        <p className="text-sm text-slate-500">Financial health metrics based on current statements.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Ratio Analysis</h1>
+        <p className="text-sm text-text-muted">Financial health metrics based on current statements.</p>
         </div>
         <input type="date" className="rounded border px-3 py-2 text-sm" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
         <select className="rounded border px-3 py-2 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value ? Number(e.target.value) : "")}>
@@ -91,29 +91,29 @@ export function RatioAnalysisPage() {
             </option>
           ))}
         </select>
-        <button className={`rounded border px-3 py-2 text-sm ${compactView ? "bg-slate-900 text-white" : ""}`} onClick={() => setCompactView((v) => !v)}>
+        <button className={`rounded border px-3 py-2 text-sm ${compactView ? "bg-surface-inverse text-brand-primary-foreground" : ""}`} onClick={() => setCompactView((v) => !v)}>
           {compactView ? "Comfort View" : "Compact View"}
         </button>
         <button className="rounded border px-3 py-2 text-sm" onClick={() => handlePrint()}>Print</button>
         <button className="rounded border px-3 py-2 text-sm" onClick={() => exportCsv()}>Export CSV</button>
       </div>
-      {error ? <div className="no-print rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="no-print rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+      {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="no-print rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
       <div className={`grid ${compactView ? "gap-2" : "gap-3"} md:grid-cols-4`}>
-        <div className={`print-card rounded-xl border bg-white ${compactView ? "p-2" : "p-3"} print:p-2`}>
-          <div className={`${compactView ? "text-[11px]" : "text-xs"} text-slate-500`}>Debt to Equity</div>
+        <div className={`print-card rounded-xl border bg-surface-raised ${compactView ? "p-2" : "p-3"} print:p-2`}>
+          <div className={`${compactView ? "text-[11px]" : "text-xs"} text-text-muted`}>Debt to Equity</div>
           <div className={`${compactView ? "text-lg" : "text-xl"} font-semibold`}>{debtToEquity.toFixed(2)}</div>
         </div>
-        <div className={`print-card rounded-xl border bg-white ${compactView ? "p-2" : "p-3"} print:p-2`}>
-          <div className={`${compactView ? "text-[11px]" : "text-xs"} text-slate-500`}>Profit Margin %</div>
+        <div className={`print-card rounded-xl border bg-surface-raised ${compactView ? "p-2" : "p-3"} print:p-2`}>
+          <div className={`${compactView ? "text-[11px]" : "text-xs"} text-text-muted`}>Profit Margin %</div>
           <div className={`${compactView ? "text-lg" : "text-xl"} font-semibold`}>{profitMargin.toFixed(2)}%</div>
         </div>
-        <div className={`print-card rounded-xl border bg-white ${compactView ? "p-2" : "p-3"} print:p-2`}>
-          <div className={`${compactView ? "text-[11px]" : "text-xs"} text-slate-500`}>ROE %</div>
+        <div className={`print-card rounded-xl border bg-surface-raised ${compactView ? "p-2" : "p-3"} print:p-2`}>
+          <div className={`${compactView ? "text-[11px]" : "text-xs"} text-text-muted`}>ROE %</div>
           <div className={`${compactView ? "text-lg" : "text-xl"} font-semibold`}>{roe.toFixed(2)}%</div>
         </div>
-        <div className={`print-card rounded-xl border bg-white ${compactView ? "p-2" : "p-3"} print:p-2`}>
-          <div className={`${compactView ? "text-[11px]" : "text-xs"} text-slate-500`}>ROA %</div>
+        <div className={`print-card rounded-xl border bg-surface-raised ${compactView ? "p-2" : "p-3"} print:p-2`}>
+          <div className={`${compactView ? "text-[11px]" : "text-xs"} text-text-muted`}>ROA %</div>
           <div className={`${compactView ? "text-lg" : "text-xl"} font-semibold`}>{roa.toFixed(2)}%</div>
         </div>
       </div>

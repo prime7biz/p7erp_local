@@ -60,27 +60,27 @@ export function FxReceiptsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">FX Receipts & Settlement</h1>
-        <p className="mt-1 text-sm text-slate-500">Track foreign currency receipts and settlement workflow.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">FX Receipts & Settlement</h1>
+        <p className="mt-1 text-sm text-text-muted">Track foreign currency receipts and settlement workflow.</p>
       </div>
       {summary ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border bg-white p-3">
-            <div className="text-xs text-slate-500">Total Base</div>
+          <div className="rounded-xl border bg-surface-raised p-3">
+            <div className="text-xs text-text-muted">Total Base</div>
             <div className="text-xl font-semibold">{summary.total_base_amount.toLocaleString()}</div>
           </div>
-          <div className="rounded-xl border bg-white p-3">
-            <div className="text-xs text-slate-500">Total Settled</div>
-            <div className="text-xl font-semibold text-emerald-600">{summary.total_settled_amount.toLocaleString()}</div>
+          <div className="rounded-xl border bg-surface-raised p-3">
+            <div className="text-xs text-text-muted">Total Settled</div>
+            <div className="text-xl font-semibold text-status-success-foreground">{summary.total_settled_amount.toLocaleString()}</div>
           </div>
-          <div className="rounded-xl border bg-white p-3">
-            <div className="text-xs text-slate-500">Unsettled</div>
-            <div className="text-xl font-semibold text-amber-600">{summary.total_unsettled_amount.toLocaleString()}</div>
+          <div className="rounded-xl border bg-surface-raised p-3">
+            <div className="text-xs text-text-muted">Unsettled</div>
+            <div className="text-xl font-semibold text-status-warning-foreground">{summary.total_unsettled_amount.toLocaleString()}</div>
           </div>
         </div>
       ) : null}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-4">
         <input className="rounded border px-3 py-2 text-sm" placeholder="Receipt No (optional)" value={form.receipt_no} onChange={(e) => setForm((p) => ({ ...p, receipt_no: e.target.value }))} />
         <input type="date" className="rounded border px-3 py-2 text-sm" value={form.receipt_date} onChange={(e) => setForm((p) => ({ ...p, receipt_date: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Source Ref" value={form.source_ref} onChange={(e) => setForm((p) => ({ ...p, source_ref: e.target.value }))} />
@@ -88,10 +88,10 @@ export function FxReceiptsPage() {
         <input className="rounded border px-3 py-2 text-sm" placeholder="FC Amount" value={form.fc_amount} onChange={(e) => setForm((p) => ({ ...p, fc_amount: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Rate to Base" value={form.rate_to_base} onChange={(e) => setForm((p) => ({ ...p, rate_to_base: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm sm:col-span-2 lg:col-span-2" placeholder="Notes" value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
-        <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white sm:col-span-2 lg:col-span-1">Create Receipt</button>
+        <button className="rounded bg-brand-primary px-3 py-2 text-sm text-brand-primary-foreground sm:col-span-2 lg:col-span-1">Create Receipt</button>
       </form>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold">Receipt List</h2>
           <select className="rounded border px-2 py-1 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -101,10 +101,10 @@ export function FxReceiptsPage() {
             <option value="SETTLED">SETTLED</option>
           </select>
         </div>
-        {error ? <div className="mb-2 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+        {error ? <div className="mb-2 rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left">
+            <thead className="bg-surface-subtle text-left">
               <tr>
                 <th className="px-3 py-2">Receipt</th>
                 <th className="px-3 py-2">Date</th>
@@ -118,13 +118,13 @@ export function FxReceiptsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="px-3 py-5 text-slate-500" colSpan={7}>
+                  <td className="px-3 py-5 text-text-muted" colSpan={7}>
                     Loading FX receipts...
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-5 text-slate-500" colSpan={7}>
+                  <td className="px-3 py-5 text-text-muted" colSpan={7}>
                     No FX receipts found.
                   </td>
                 </tr>

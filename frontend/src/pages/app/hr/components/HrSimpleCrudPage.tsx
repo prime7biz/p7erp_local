@@ -99,43 +99,43 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-          <p className="text-sm text-gray-500">{description}</p>
+          <h1 className="text-2xl font-bold text-text-primary">{title}</h1>
+          <p className="text-sm text-text-muted">{description}</p>
         </div>
         <button
           type="button"
           onClick={() => void refresh()}
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+          className="rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
         >
           Refresh
         </button>
       </div>
 
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
-      {success && <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">{success}</div>}
+      {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">{error}</div>}
+      {success && <div className="rounded-lg border border-status-success/20 bg-status-success-subtle px-4 py-2 text-sm text-status-success-foreground">{success}</div>}
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
         {loading ? (
-          <div className="p-10 text-center text-sm text-gray-500">Loading...</div>
+          <div className="p-10 text-center text-sm text-text-muted">Loading...</div>
         ) : items.length === 0 ? (
-          <div className="p-10 text-center text-sm text-gray-500">{emptyMessage}</div>
+          <div className="p-10 text-center text-sm text-text-muted">{emptyMessage}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-surface-subtle">
                 <tr>
                   {columns.map((column) => (
-                    <th key={column.header} className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                    <th key={column.header} className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">
                       {column.header}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
+              <tbody className="divide-y divide-border bg-surface-raised">
                 {items.map((item, idx) => (
                   <tr key={idx}>
                     {columns.map((column) => (
-                      <td key={`${column.header}-${idx}`} className="px-4 py-3 text-sm text-gray-700">
+                      <td key={`${column.header}-${idx}`} className="px-4 py-3 text-sm text-text-secondary">
                         {String(column.cell(item) ?? "-")}
                       </td>
                     ))}
@@ -148,17 +148,17 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
       </div>
 
       {createItem && form && fields.length > 0 && (
-        <form onSubmit={onSubmit} className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-          <h2 className="text-lg font-semibold text-gray-900">{createLabel}</h2>
-          <p className="text-xs text-gray-500">Fields marked with ** are mandatory.</p>
+        <form onSubmit={onSubmit} className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
+          <h2 className="text-lg font-semibold text-text-primary">{createLabel}</h2>
+          <p className="text-xs text-text-muted">Fields marked with ** are mandatory.</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {fields.map((field) => (
-              <label key={String(field.key)} className="space-y-1 text-sm text-gray-700">
+              <label key={String(field.key)} className="space-y-1 text-sm text-text-secondary">
                 <span>{field.required ? `${field.label} **` : field.label}</span>
                 <input
                   type={field.type}
                   required={field.required}
-                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded border border-border-strong px-3 py-2 text-sm"
                   value={String(form[field.key] ?? "")}
                   onChange={(e) => setField(field.key, e.target.value)}
                 />
@@ -169,7 +169,7 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
             <button
               type="submit"
               disabled={submitting}
-              className="rounded bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground disabled:opacity-60"
             >
               {submitting ? "Saving..." : "Save"}
             </button>

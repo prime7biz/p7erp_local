@@ -91,40 +91,40 @@ export function TnaPlanDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">TNA Plan Detail</h1>
-        <p className="text-sm text-slate-500">Track a single plan with task-by-task execution updates.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">TNA Plan Detail</h1>
+        <p className="text-sm text-text-muted">Track a single plan with task-by-task execution updates.</p>
       </div>
 
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
       {plan ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            <div><div className="text-xs text-slate-500">Plan</div><div className="text-sm font-semibold">{plan.plan_code}</div></div>
-            <div><div className="text-xs text-slate-500">Status</div><div className="text-sm font-semibold">{plan.status}</div></div>
-            <div><div className="text-xs text-slate-500">Start</div><div className="text-sm font-semibold">{plan.start_date}</div></div>
-            <div><div className="text-xs text-slate-500">Target End</div><div className="text-sm font-semibold">{plan.target_end_date ?? "-"}</div></div>
-            <div><div className="text-xs text-slate-500">Role</div><div className="text-sm font-semibold">{myRole || "-"}</div></div>
+            <div><div className="text-xs text-text-muted">Plan</div><div className="text-sm font-semibold">{plan.plan_code}</div></div>
+            <div><div className="text-xs text-text-muted">Status</div><div className="text-sm font-semibold">{plan.status}</div></div>
+            <div><div className="text-xs text-text-muted">Start</div><div className="text-sm font-semibold">{plan.start_date}</div></div>
+            <div><div className="text-xs text-text-muted">Target End</div><div className="text-sm font-semibold">{plan.target_end_date ?? "-"}</div></div>
+            <div><div className="text-xs text-text-muted">Role</div><div className="text-sm font-semibold">{myRole || "-"}</div></div>
           </div>
         </div>
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Total Tasks</div><div className="text-xl font-semibold">{kpis.total}</div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Done</div><div className="text-xl font-semibold">{kpis.done}</div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Delayed</div><div className="text-xl font-semibold">{kpis.delayed}</div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Completion</div><div className="text-xl font-semibold">{kpis.completion.toFixed(1)}%</div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Total Tasks</div><div className="text-xl font-semibold">{kpis.total}</div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Done</div><div className="text-xl font-semibold">{kpis.done}</div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Delayed</div><div className="text-xl font-semibold">{kpis.delayed}</div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Completion</div><div className="text-xl font-semibold">{kpis.completion.toFixed(1)}%</div></div>
       </div>
 
       {!canManage ? (
-        <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="rounded border border-status-warning/30 bg-status-warning-subtle p-3 text-sm text-status-warning-foreground">
           You have view-only access. Supervisor/Manager/Admin role is required for task updates.
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr><th className="px-3 py-2">Seq</th><th className="px-3 py-2">Task</th><th className="px-3 py-2">Dependency</th><th className="px-3 py-2">Planned</th><th className="px-3 py-2">Actual</th><th className="px-3 py-2">Owner</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Remarks</th><th className="px-3 py-2">Action</th></tr>
           </thead>
           <tbody>
@@ -134,7 +134,7 @@ export function TnaPlanDetailPage() {
                 <td className="px-3 py-2">{row.task_name}</td>
                 <td className="px-3 py-2">
                   {row.depends_on_seq ? (
-                    <span className={row.dependency_ready ? "text-emerald-700" : "text-amber-700"}>
+                    <span className={row.dependency_ready ? "text-status-success-foreground" : "text-status-warning-foreground"}>
                       Seq {row.depends_on_seq} ({row.dependency_status ?? "missing"})
                     </span>
                   ) : (
@@ -224,7 +224,7 @@ export function TnaPlanDetailPage() {
                 </td>
               </tr>
             ))}
-            {tasks.length === 0 ? <tr><td className="px-3 py-8 text-center text-slate-500" colSpan={9}>No tasks in this plan.</td></tr> : null}
+            {tasks.length === 0 ? <tr><td className="px-3 py-8 text-center text-text-muted" colSpan={9}>No tasks in this plan.</td></tr> : null}
           </tbody>
         </table>
       </div>

@@ -37,56 +37,56 @@ export function HrPayrollApprovalsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Payroll Approvals</h1>
-          <p className="text-sm text-gray-500">Review pending payroll approvals.</p>
+          <h1 className="text-2xl font-bold text-text-primary">Payroll Approvals</h1>
+          <p className="text-sm text-text-muted">Review pending payroll approvals.</p>
         </div>
         <button
           type="button"
           onClick={() => void load()}
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+          className="rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
         >
           Refresh
         </button>
       </div>
 
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
+      {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">{error}</div>}
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
         {loading ? (
-          <div className="p-10 text-center text-sm text-gray-500">Loading pending approvals...</div>
+          <div className="p-10 text-center text-sm text-text-muted">Loading pending approvals...</div>
         ) : rows.length === 0 ? (
-          <div className="p-10 text-center text-sm text-gray-500">No pending approvals.</div>
+          <div className="p-10 text-center text-sm text-text-muted">No pending approvals.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-surface-subtle">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Payroll Run ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Approver User ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Decision</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Decision Time</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Payroll Run ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Approver User ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Decision</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">Decision Time</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-text-muted">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
+              <tbody className="divide-y divide-gray-200 bg-surface-raised">
                 {rows.map((row) => (
                   <tr key={row.id}>
-                    <td className="px-4 py-3 text-sm text-gray-700">{row.payroll_run_id}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{row.approver_user_id}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{row.decision}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{row.decided_at ?? "-"}</td>
+                    <td className="px-4 py-3 text-sm text-text-secondary">{row.payroll_run_id}</td>
+                    <td className="px-4 py-3 text-sm text-text-secondary">{row.approver_user_id}</td>
+                    <td className="px-4 py-3 text-sm text-text-secondary">{row.decision}</td>
+                    <td className="px-4 py-3 text-sm text-text-secondary">{row.decided_at ?? "-"}</td>
                     <td className="px-4 py-3 text-right space-x-2">
                       <button
                         type="button"
                         onClick={() => void decide(row.id, "approved")}
-                        className="rounded border border-green-300 px-3 py-1 text-xs text-green-700 hover:bg-green-50"
+                        className="rounded border border-status-success/30 px-3 py-1 text-xs text-status-success-foreground hover:bg-status-success-subtle"
                       >
                         Approve
                       </button>
                       <button
                         type="button"
                         onClick={() => void decide(row.id, "rejected")}
-                        className="rounded border border-red-300 px-3 py-1 text-xs text-red-700 hover:bg-red-50"
+                        className="rounded border border-status-danger/30 px-3 py-1 text-xs text-status-danger-foreground hover:bg-status-danger-subtle"
                       >
                         Reject
                       </button>

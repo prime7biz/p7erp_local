@@ -12,11 +12,11 @@ import { useAuth } from "@/context/AuthContext";
 const RUN_STATUSES = ["DRAFT", "APPROVED", "PROCESSED", "EXECUTED"] as const;
 
 function statusBadgeClass(status: string) {
-  if (status === "DRAFT") return "bg-slate-100 text-slate-700";
-  if (status === "APPROVED") return "bg-blue-100 text-blue-700";
-  if (status === "PROCESSED") return "bg-amber-100 text-amber-700";
-  if (status === "EXECUTED") return "bg-emerald-100 text-emerald-700";
-  return "bg-slate-100 text-slate-700";
+  if (status === "DRAFT") return "bg-surface-subtle text-text-secondary";
+  if (status === "APPROVED") return "bg-status-info-subtle text-status-info-foreground";
+  if (status === "PROCESSED") return "bg-status-warning-subtle text-status-warning-foreground";
+  if (status === "EXECUTED") return "bg-status-success-subtle text-status-success-foreground";
+  return "bg-surface-subtle text-text-secondary";
 }
 
 export function PaymentRunsPage() {
@@ -191,16 +191,16 @@ export function PaymentRunsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Payment Runs</h1>
-        <p className="text-sm text-slate-500">Batch payable bills through DRAFT - APPROVED - PROCESSED - EXECUTED workflow.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Payment Runs</h1>
+        <p className="text-sm text-text-muted">Batch payable bills through DRAFT - APPROVED - PROCESSED - EXECUTED workflow.</p>
       </div>
-      {error ? <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
-      <form onSubmit={submit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+      <form onSubmit={submit} className="space-y-3 rounded-xl border border-border bg-surface-raised p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-700">Create Payment Run</h2>
-          <div className="text-xs text-slate-500">
+          <h2 className="text-sm font-semibold text-text-secondary">Create Payment Run</h2>
+          <div className="text-xs text-text-muted">
             Selected bills: <b>{selectedBillIds.length}</b>
           </div>
         </div>
@@ -218,23 +218,23 @@ export function PaymentRunsPage() {
           <input className="rounded border px-3 py-2 text-sm sm:col-span-2 lg:col-span-2" placeholder="Remarks (optional)" value={form.remarks ?? ""} onChange={(e) => setForm((p) => ({ ...p, remarks: e.target.value }))} />
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-slate-500">Required: Bank account and at least one payable bill.</p>
-          <button className="w-full rounded bg-slate-900 px-3 py-2 text-sm text-white sm:w-auto">Create Run (Draft)</button>
+          <p className="text-xs text-text-muted">Required: Bank account and at least one payable bill.</p>
+          <button className="w-full rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground sm:w-auto">Create Run (Draft)</button>
         </div>
 
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3">
+        <div className="rounded-lg border border-brand-primary/30 bg-brand-primary/10 p-3">
           <div className="mb-2 flex flex-wrap items-center gap-3">
-            <h3 className="text-xs font-semibold uppercase text-indigo-700">Settlement Preview</h3>
-            <label className="text-xs text-slate-600">
+            <h3 className="text-xs font-semibold uppercase text-brand-primary">Settlement Preview</h3>
+            <label className="text-xs text-text-secondary">
               Base Currency:
               <input
-                className="ml-2 w-20 rounded border border-slate-300 px-2 py-1 text-xs"
+                className="ml-2 w-20 rounded border border-border-strong px-2 py-1 text-xs"
                 value={baseCurrency}
                 onChange={(e) => setBaseCurrency(e.target.value.toUpperCase())}
               />
             </label>
           </div>
-          <p className="text-xs text-slate-700">
+          <p className="text-xs text-text-secondary">
             Selected Source Total: <b>{selectedSettlementPreview.sourceTotal.toLocaleString()}</b> | Estimated Base Total (
             {baseCurrency}): <b>{selectedSettlementPreview.baseTotal.toLocaleString()}</b>
           </p>
@@ -242,7 +242,7 @@ export function PaymentRunsPage() {
 
         <div>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-medium text-slate-700">Open Payable Bills</h2>
+            <h2 className="text-sm font-medium text-text-secondary">Open Payable Bills</h2>
             <input
               className="w-full rounded border px-3 py-2 text-sm md:w-72"
               placeholder="Search bill no or party..."
@@ -250,9 +250,9 @@ export function PaymentRunsPage() {
               onChange={(e) => setBillSearch(e.target.value)}
             />
           </div>
-          <div className="max-h-52 overflow-auto rounded border border-slate-200">
+          <div className="max-h-52 overflow-auto rounded border border-border">
             <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-left">
+              <thead className="bg-surface-subtle text-left">
                 <tr>
                   <th className="px-2 py-1">Pick</th>
                   <th className="px-2 py-1">Bill</th>
@@ -293,7 +293,7 @@ export function PaymentRunsPage() {
                           <input
                             type="number"
                             step="0.0001"
-                            className="w-20 rounded border border-slate-300 px-1.5 py-1 text-right text-xs"
+                            className="w-20 rounded border border-border-strong px-1.5 py-1 text-right text-xs"
                             value={fxRates[sourceCurrency] ?? ""}
                             onChange={(e) =>
                               setFxRates((prev) => ({
@@ -310,7 +310,7 @@ export function PaymentRunsPage() {
                 })}
                 {filteredPayables.length === 0 ? (
                   <tr className="border-t">
-                    <td className="px-2 py-2 text-slate-500" colSpan={7}>
+                    <td className="px-2 py-2 text-text-muted" colSpan={7}>
                       No open payable bills for the current search.
                     </td>
                   </tr>
@@ -321,11 +321,11 @@ export function PaymentRunsPage() {
         </div>
       </form>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
-          <h2 className="text-sm font-semibold text-slate-700">Payment Run Queue</h2>
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-subtle px-3 py-2">
+          <h2 className="text-sm font-semibold text-text-secondary">Payment Run Queue</h2>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-slate-600">Status:</span>
+            <span className="text-xs text-text-secondary">Status:</span>
             <select
               className="rounded border px-2 py-1 text-xs"
               value={runStatusFilter}
@@ -350,7 +350,7 @@ export function PaymentRunsPage() {
           />
         </div>
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">Run Code</th>
               <th className="px-2 py-1">Date</th>
@@ -377,26 +377,26 @@ export function PaymentRunsPage() {
                 <td className="px-2 py-1">
                   <div className="flex flex-wrap gap-2">
                     {r.status === "DRAFT" && canApproveOrProcess ? (
-                      <button type="button" className="rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700" onClick={() => void approve(r.id)}>
+                      <button type="button" className="rounded border border-status-info/30 bg-status-info-subtle px-2 py-1 text-xs text-status-info-foreground" onClick={() => void approve(r.id)}>
                         Approve
                       </button>
                     ) : null}
                     {r.status === "APPROVED" && canApproveOrProcess ? (
-                      <button type="button" className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-700" onClick={() => void processRun(r.id)}>
+                      <button type="button" className="rounded border border-status-warning/30 bg-status-warning-subtle px-2 py-1 text-xs text-status-warning-foreground" onClick={() => void processRun(r.id)}>
                         Process
                       </button>
                     ) : null}
                     {r.status === "PROCESSED" && canExecute ? (
-                      <button type="button" className="rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs text-emerald-700" onClick={() => void execute(r.id)}>
+                      <button type="button" className="rounded border border-status-success/30 bg-status-success-subtle px-2 py-1 text-xs text-status-success-foreground" onClick={() => void execute(r.id)}>
                         Execute
                       </button>
                     ) : null}
-                    {r.status === "EXECUTED" ? <span className="text-xs text-emerald-600">Completed</span> : null}
+                    {r.status === "EXECUTED" ? <span className="text-xs text-status-success">Completed</span> : null}
                     {(r.status === "DRAFT" || r.status === "APPROVED" || r.status === "PROCESSED") &&
                     !canApproveOrProcess ? (
-                      <span className="text-xs text-slate-500">Manager/Admin action</span>
+                      <span className="text-xs text-text-muted">Manager/Admin action</span>
                     ) : null}
-                    <Link className="rounded border px-2 py-1 text-xs text-slate-700" to={`/app/banking/payment-advice?run_id=${r.id}`}>
+                    <Link className="rounded border px-2 py-1 text-xs text-text-secondary" to={`/app/banking/payment-advice?run_id=${r.id}`}>
                       Open Advice
                     </Link>
                   </div>
@@ -405,7 +405,7 @@ export function PaymentRunsPage() {
             ))}
             {filteredRuns.length === 0 ? (
               <tr className="border-t">
-                <td className="px-2 py-2 text-slate-500" colSpan={7}>
+                <td className="px-2 py-2 text-text-muted" colSpan={7}>
                   No payment runs found for the current filters.
                 </td>
               </tr>

@@ -6,7 +6,7 @@ Merchandising linked module (PrimeX parity slice):
 - order followups and pipeline/alerts aggregates
 """
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -21,6 +21,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
 from app.common.tenant import require_tenant
+from app.common.workflow import (
+    BOM_TRANSITIONS,
+    INQUIRY_TRANSITIONS,
+    ORDER_TRANSITIONS,
+    QUOTATION_TRANSITIONS,
+    next_status_options,
+    validate_transition,
+)
 from app.database import get_db
 from app.models import (
     AlertDefinition,
@@ -567,7 +575,15 @@ async def create_bom(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = Bom(tenant_id=tenant.id, **body.model_dump())
+    payload = body.model_dump()
+    payload["status"] = validate_transition(
+        BOM_TRANSITIONS,
+        "DRAFT",
+        payload.get("status") or "DRAFT",
+        fallback="DRAFT",
+        entity_label="bom",
+    )
+    row = Bom(tenant_id=tenant.id, **payload)
     db.add(row)
     await db.flush()
     await db.refresh(row)
@@ -608,7 +624,13 @@ async def update_bom(
     if body.version_no is not None:
         row.version_no = body.version_no
     if body.status is not None:
-        row.status = body.status
+        row.status = validate_transition(
+            BOM_TRANSITIONS,
+            row.status,
+            body.status,
+            fallback="DRAFT",
+            entity_label="bom",
+        )
     if body.notes is not None:
         row.notes = body.notes
     await db.flush()
@@ -627,8 +649,82 @@ async def delete_bom(
     row = await db.get(Bom, bom_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="BOM not found")
+    if (row.status or "").upper() in GOVERNED_BOM_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Approved/Frozen BOM cannot be deleted. Create a new BOM version instead.",
+        )
     await db.delete(row)
     await db.flush()
+
+
+@router.post("/boms/{bom_id}/submit")
+async def submit_bom(
+    bom_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(Bom, bom_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="BOM not found")
+    row.status = validate_transition(
+        BOM_TRANSITIONS,
+        row.status,
+        "SUBMITTED",
+        fallback="DRAFT",
+        entity_label="bom",
+    )
+    await db.flush()
+    await db.refresh(row)
+    return row
+
+
+@router.post("/boms/{bom_id}/approve")
+async def approve_bom(
+    bom_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(Bom, bom_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="BOM not found")
+    row.status = validate_transition(
+        BOM_TRANSITIONS,
+        row.status,
+        "APPROVED",
+        fallback="DRAFT",
+        entity_label="bom",
+    )
+    await db.flush()
+    await db.refresh(row)
+    return row
+
+
+@router.post("/boms/{bom_id}/freeze")
+async def freeze_bom(
+    bom_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(Bom, bom_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="BOM not found")
+    row.status = validate_transition(
+        BOM_TRANSITIONS,
+        row.status,
+        "FROZEN",
+        fallback="DRAFT",
+        entity_label="bom",
+    )
+    await db.flush()
+    await db.refresh(row)
+    return row
 
 
 @router.post("/boms/{bom_id}/items", status_code=201)
@@ -640,6 +736,11 @@ async def create_bom_item(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    bom = await db.get(Bom, bom_id)
+    if not bom or bom.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="BOM not found")
+    if (bom.status or "").upper() in GOVERNED_BOM_STATUSES:
+        raise HTTPException(status_code=400, detail="BOM is approved/frozen and cannot be edited.")
     payload = body.model_dump()
     item_id = payload.get("item_id")
     if item_id is not None:
@@ -670,6 +771,11 @@ async def update_bom_item(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    bom = await db.get(Bom, bom_id)
+    if not bom or bom.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="BOM not found")
+    if (bom.status or "").upper() in GOVERNED_BOM_STATUSES:
+        raise HTTPException(status_code=400, detail="BOM is approved/frozen and cannot be edited.")
     row = await db.get(BomItem, item_id)
     if not row or row.tenant_id != tenant.id or row.bom_id != bom_id:
         raise HTTPException(status_code=404, detail="BOM item not found")
@@ -689,6 +795,11 @@ async def delete_bom_item(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    bom = await db.get(Bom, bom_id)
+    if not bom or bom.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="BOM not found")
+    if (bom.status or "").upper() in GOVERNED_BOM_STATUSES:
+        raise HTTPException(status_code=400, detail="BOM is approved/frozen and cannot be edited.")
     row = await db.get(BomItem, item_id)
     if not row or row.tenant_id != tenant.id or row.bom_id != bom_id:
         raise HTTPException(status_code=404, detail="BOM item not found")
@@ -715,6 +826,11 @@ async def generate_purchase_order_from_bom(
     bom = await db.get(Bom, bom_id)
     if not bom or bom.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="BOM not found")
+    if (bom.status or "").upper() not in GOVERNED_BOM_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Only APPROVED/FROZEN BOM can generate purchase order.",
+        )
     result = await db.execute(
         select(BomItem)
         .where(
@@ -799,6 +915,28 @@ def _to_float_safe(value: str | None) -> float:
         return 0.0
 
 
+GOVERNED_BOM_STATUSES = {"APPROVED", "FROZEN"}
+
+
+async def _get_latest_governed_bom(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    style_id: int,
+) -> Bom | None:
+    result = await db.execute(
+        select(Bom)
+        .where(
+            Bom.tenant_id == tenant_id,
+            Bom.style_id == style_id,
+            Bom.status.in_(GOVERNED_BOM_STATUSES),
+        )
+        .order_by(Bom.version_no.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 class MaterialRequirementLineOut(BaseModel):
     item_id: int
     item_code: str
@@ -843,18 +981,16 @@ async def get_order_material_requirement(
     order_qty = _to_float_safe(str(order.quantity)) if order.quantity is not None else 0.0
     if order_qty <= 0:
         raise HTTPException(status_code=400, detail="Order quantity must be positive")
-    bom_result = await db.execute(
-        select(Bom)
-        .where(
-            Bom.tenant_id == tenant.id,
-            Bom.style_id == style_id,
-        )
-        .order_by(Bom.version_no.desc())
-        .limit(1)
+    bom = await _get_latest_governed_bom(
+        db,
+        tenant_id=tenant.id,
+        style_id=style_id,
     )
-    bom = bom_result.scalar_one_or_none()
     if not bom:
-        raise HTTPException(status_code=404, detail="No BOM found for this order's style")
+        raise HTTPException(
+            status_code=400,
+            detail="No APPROVED/FROZEN BOM found for this order style.",
+        )
     bom_lines_result = await db.execute(
         select(BomItem)
         .where(
@@ -938,9 +1074,45 @@ async def create_consumption_plan(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    order = await db.get(Order, body.order_id)
+    if not order or order.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Order not found")
+    style_id: int | None = None
+    if order.quotation_id:
+        quotation = await db.get(Quotation, order.quotation_id)
+        if quotation and quotation.tenant_id == tenant.id:
+            style_id = quotation.style_id
+    if not style_id:
+        raise HTTPException(status_code=400, detail="Order has no style linked for BOM-driven plan")
+    bom = await _get_latest_governed_bom(db, tenant_id=tenant.id, style_id=style_id)
+    if not bom:
+        raise HTTPException(status_code=400, detail="No APPROVED/FROZEN BOM found for order style")
+    bom_lines = (
+        await db.execute(
+            select(BomItem).where(
+                BomItem.tenant_id == tenant.id,
+                BomItem.bom_id == bom.id,
+            )
+        )
+    ).scalars().all()
+
     row = ConsumptionPlan(tenant_id=tenant.id, **body.model_dump())
     db.add(row)
     await db.flush()
+    order_qty = _to_float_safe(str(order.quantity)) if order.quantity is not None else 0.0
+    for line in bom_lines:
+        base = _to_float_safe(line.base_consumption)
+        wastage = _to_float_safe(line.wastage_pct) / 100.0
+        required_qty = order_qty * base * (1.0 + wastage)
+        db.add(
+            ConsumptionPlanItem(
+                tenant_id=tenant.id,
+                plan_id=row.id,
+                item_code=line.item_code,
+                required_qty=str(round(required_qty, 4)),
+                uom=line.uom,
+            )
+        )
     await db.refresh(row)
     return row
 
@@ -1007,11 +1179,10 @@ async def create_consumption_plan_item(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = ConsumptionPlanItem(tenant_id=tenant.id, plan_id=plan_id, **body.model_dump())
-    db.add(row)
-    await db.flush()
-    await db.refresh(row)
-    return row
+    raise HTTPException(
+        status_code=400,
+        detail="Consumption plan items are BOM-driven. Use approved BOM changes/change request flow.",
+    )
 
 
 @router.patch("/consumption-plans/{plan_id}/items/{item_id}")
@@ -1024,15 +1195,10 @@ async def update_consumption_plan_item(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = await db.get(ConsumptionPlanItem, item_id)
-    if not row or row.tenant_id != tenant.id or row.plan_id != plan_id:
-        raise HTTPException(status_code=404, detail="Consumption item not found")
-    row.item_code = body.item_code
-    row.required_qty = body.required_qty
-    row.uom = body.uom
-    await db.flush()
-    await db.refresh(row)
-    return row
+    raise HTTPException(
+        status_code=400,
+        detail="Manual item override is disabled. Use approved BOM changes/change request flow.",
+    )
 
 
 @router.delete("/consumption-plans/{plan_id}/items/{item_id}", status_code=204)
@@ -1044,11 +1210,10 @@ async def delete_consumption_plan_item(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = await db.get(ConsumptionPlanItem, item_id)
-    if not row or row.tenant_id != tenant.id or row.plan_id != plan_id:
-        raise HTTPException(status_code=404, detail="Consumption item not found")
-    await db.delete(row)
-    await db.flush()
+    raise HTTPException(
+        status_code=400,
+        detail="Manual deletion is disabled. Use approved BOM changes/change request flow.",
+    )
 
 
 @router.get("/followups")
@@ -1603,7 +1768,7 @@ async def search_followup_actions(
     if q:
         order_stmt = order_stmt.where(Order.order_code.ilike(f"%{q}%"))
     ord_result = await db.execute(order_stmt.limit(50))
-    order_ids = [r[0] for r in ord_result.scalars().all()]
+    order_ids = list(ord_result.scalars().all())
     conds = [
         OrderFollowupAction.title.ilike(f"%{q}%"),
     ]
@@ -1828,7 +1993,7 @@ async def add_followup_action_rejection_log(
     log_entry = FollowupActionRejectionLog(
         tenant_id=tenant.id,
         action_id=action_id,
-        rejected_at=datetime.utcnow(),
+        rejected_at=datetime.now(timezone.utc),
         rejection_reason=body.rejection_reason,
         resubmission_date=body.resubmission_date,
         created_by_id=user.id,
@@ -2017,7 +2182,7 @@ async def update_followup_action(
         log_entry = FollowupActionRejectionLog(
             tenant_id=tenant.id,
             action_id=row.id,
-            rejected_at=datetime.utcnow(),
+            rejected_at=datetime.now(timezone.utc),
             rejection_reason=row.rejection_reason,
             resubmission_date=row.resubmission_date,
             created_by_id=user.id,
@@ -2054,7 +2219,7 @@ async def complete_followup_action(
     row.approval_status = "approved"
     row.is_rejected = False
     row.actual_completion_date = date.today()
-    row.completed_at = datetime.utcnow()
+    row.completed_at = datetime.now(timezone.utc)
     row.completed_by_id = user.id
     await db.commit()
     await db.refresh(row)
@@ -2130,7 +2295,7 @@ PIPELINE_STAGES = [
     {"stage_key": "quotation_submitted", "label": "Quotation · Submitted", "document_type": "quotation", "status_value": "SUBMITTED", "win_probability": 35, "sort_order": 6},
     {"stage_key": "quotation_approved", "label": "Quotation · Approved", "document_type": "quotation", "status_value": "APPROVED", "win_probability": 50, "sort_order": 7},
     {"stage_key": "quotation_sent", "label": "Quotation · Sent", "document_type": "quotation", "status_value": "SENT", "win_probability": 60, "sort_order": 8},
-    {"stage_key": "quotation_converted", "label": "Quotation · Won", "document_type": "quotation", "status_value": "CONVERTED", "win_probability": 100, "sort_order": 9},
+    {"stage_key": "quotation_converted", "label": "Quotation · Converted", "document_type": "quotation", "status_value": "CONVERTED", "win_probability": 100, "sort_order": 9},
     {"stage_key": "order_draft", "label": "Order · Draft", "document_type": "order", "status_value": "DRAFT", "win_probability": 70, "sort_order": 10},
     {"stage_key": "order_new", "label": "Order · New", "document_type": "order", "status_value": "NEW", "win_probability": 80, "sort_order": 11},
     {"stage_key": "order_in_progress", "label": "Order · In Progress", "document_type": "order", "status_value": "IN_PROGRESS", "win_probability": 90, "sort_order": 12},
@@ -2243,11 +2408,13 @@ async def get_pipeline_full(
     inq_result = await db.execute(inq_stmt.order_by(Inquiry.created_at.desc()))
     for inq, cust_name in inq_result.all():
         stage_key = _inquiry_stage_key(inq.status)
-        next_options = []
-        if inq.status == "DRAFT":
-            next_options = ["SUBMITTED"]
-        elif inq.status == "SUBMITTED":
-            next_options = []  # converted via create quotation
+        next_options = next_status_options(
+            INQUIRY_TRANSITIONS,
+            inq.status,
+            fallback="DRAFT",
+        )
+        # Conversion to quotation is a dedicated action, not a direct status update action.
+        next_options = [opt for opt in next_options if opt != "CONVERTED"]
         items_out.append(
             PipelineItemOut(
                 document_type="inquiry",
@@ -2282,15 +2449,13 @@ async def get_pipeline_full(
     qt_result = await db.execute(qt_stmt.order_by(Quotation.created_at.desc()))
     for qt, cust_name in qt_result.all():
         stage_key = _quotation_stage_key(qt.status)
-        next_options = []
-        if qt.status in ("DRAFT", "NEW"):
-            next_options = ["SUBMITTED"]
-        elif qt.status == "SUBMITTED":
-            next_options = ["APPROVED"]
-        elif qt.status == "APPROVED":
-            next_options = ["SENT"]
-        elif qt.status == "SENT":
-            next_options = []  # convert to order via orders/from-quotation
+        next_options = next_status_options(
+            QUOTATION_TRANSITIONS,
+            qt.status,
+            fallback="DRAFT",
+        )
+        # Conversion to order is a dedicated action, not a direct status update action.
+        next_options = [opt for opt in next_options if opt != "CONVERTED"]
         items_out.append(
             PipelineItemOut(
                 document_type="quotation",
@@ -2325,13 +2490,11 @@ async def get_pipeline_full(
     ord_result = await db.execute(ord_stmt.order_by(Order.created_at.desc()))
     for ord_row, cust_name in ord_result.all():
         stage_key = _order_stage_key(ord_row.status)
-        next_options = []
-        if ord_row.status == "DRAFT":
-            next_options = ["NEW"]
-        elif ord_row.status == "NEW":
-            next_options = ["IN_PROGRESS"]
-        elif ord_row.status == "IN_PROGRESS":
-            next_options = ["COMPLETED"]
+        next_options = next_status_options(
+            ORDER_TRANSITIONS,
+            ord_row.status,
+            fallback="DRAFT",
+        )
         items_out.append(
             PipelineItemOut(
                 document_type="order",
@@ -2710,10 +2873,11 @@ async def get_wastage_report(
         order_qty = _to_float_safe(str(order.quantity)) if order.quantity is not None else 0.0
         if order_qty <= 0:
             continue
-        bom_result = await db.execute(
-            select(Bom).where(Bom.tenant_id == tenant.id, Bom.style_id == sid).order_by(Bom.version_no.desc()).limit(1)
+        bom = await _get_latest_governed_bom(
+            db,
+            tenant_id=tenant.id,
+            style_id=sid,
         )
-        bom = bom_result.scalar_one_or_none()
         if not bom:
             continue
         lines_result = await db.execute(
@@ -3456,12 +3620,13 @@ async def get_wastage_order_detail(
     style = await db.get(GarmentStyle, sid)
     style_code = style.style_code if style else str(sid)
     order_qty = _to_float_safe(str(order.quantity)) if order.quantity is not None else 0.0
-    bom_result = await db.execute(
-        select(Bom).where(Bom.tenant_id == tenant.id, Bom.style_id == sid).order_by(Bom.version_no.desc()).limit(1)
+    bom = await _get_latest_governed_bom(
+        db,
+        tenant_id=tenant.id,
+        style_id=sid,
     )
-    bom = bom_result.scalar_one_or_none()
     if not bom:
-        raise HTTPException(status_code=404, detail="No BOM for style")
+        raise HTTPException(status_code=400, detail="No APPROVED/FROZEN BOM for style")
     lines_result = await db.execute(
         select(BomItem).where(
             BomItem.tenant_id == tenant.id,
@@ -3594,6 +3759,62 @@ class AlertAssignBody(BaseModel):
     assigned_to_id: int | None
 
 
+class AlertMutationOut(BaseModel):
+    id: int
+    status: str
+    assigned_to_id: int | None
+    acknowledged_at: datetime | None
+    acknowledged_by_id: int | None
+    resolved_at: datetime | None
+    resolved_by_id: int | None
+    snoozed_until: datetime | None
+    escalated_at: datetime | None
+    escalation_level: int | None
+    updated_at: datetime | None
+
+
+def _alert_mutation_out(row: AlertInstance) -> AlertMutationOut:
+    return AlertMutationOut(
+        id=row.id,
+        status=row.status,
+        assigned_to_id=row.assigned_to_id,
+        acknowledged_at=row.acknowledged_at,
+        acknowledged_by_id=row.acknowledged_by_id,
+        resolved_at=row.resolved_at,
+        resolved_by_id=row.resolved_by_id,
+        snoozed_until=row.snoozed_until,
+        escalated_at=row.escalated_at,
+        escalation_level=row.escalation_level,
+        updated_at=row.updated_at,
+    )
+
+
+def _alert_priority_score(alert: AlertInstance, now: datetime) -> int:
+    severity_weight = {
+        "critical": 100,
+        "high": 70,
+        "medium": 40,
+        "low": 20,
+        "informational": 10,
+    }.get((alert.severity or "").lower(), 10)
+    age_hours = 0
+    if alert.created_at:
+        age_hours = max(0, int((now - alert.created_at).total_seconds() // 3600))
+    escalation_weight = int(alert.escalation_level or 0) * 15
+    return severity_weight + min(age_hours, 240) + escalation_weight
+
+
+def _alert_sla_bucket(alert: AlertInstance, now: datetime) -> str:
+    if (alert.status or "").lower() in {"resolved", "closed"}:
+        return "met"
+    age_hours = 0
+    if alert.created_at:
+        age_hours = max(0, int((now - alert.created_at).total_seconds() // 3600))
+    sev = (alert.severity or "").lower()
+    breach_hours = {"critical": 24, "high": 48, "medium": 72, "low": 120, "informational": 168}.get(sev, 72)
+    return "breach" if age_hours > breach_hours else "at_risk"
+
+
 @router.get("/alerts")
 async def list_alerts(
     severity: str | None = Query(default=None),
@@ -3601,6 +3822,8 @@ async def list_alerts(
     alert_type: str | None = Query(default=None, alias="alert_type"),
     order_id: int | None = Query(default=None),
     assigned_to_id: int | None = Query(default=None),
+    min_priority_score: int | None = Query(default=None, ge=0),
+    sla_bucket: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     sort: str = Query(default="-created_at"),
@@ -3635,6 +3858,11 @@ async def list_alerts(
             AlertInstance.snoozed_until <= now,
         )
     )
+    needs_python_pagination = (
+        min_priority_score is not None
+        or (sla_bucket is not None and sla_bucket.strip() != "")
+        or sort.lstrip("-") == "priority_score"
+    )
     total_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
     total = total_result.scalar() or 0
     sort_col = AlertInstance.created_at
@@ -3648,11 +3876,13 @@ async def list_alerts(
         stmt = stmt.order_by(sort_col.desc())
     else:
         stmt = stmt.order_by(sort_col.asc())
-    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+    if not needs_python_pagination:
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(stmt)
     rows = result.scalars().all()
     # Enrich with order_id / order_code from related_entity
     items = []
+    normalized_sla_bucket = (sla_bucket or "").strip().lower() or None
     for r in rows:
         rel_result = await db.execute(
             select(AlertRelatedEntity).where(
@@ -3668,7 +3898,9 @@ async def list_alerts(
             order_row = await db.get(Order, rel.entity_id)
             if order_row and order_row.tenant_id == tenant.id:
                 order_code = order_row.order_code
-        items.append({
+        priority_score = _alert_priority_score(r, now)
+        item_sla_bucket = _alert_sla_bucket(r, now)
+        item = {
             "id": r.id,
             "natural_key": r.natural_key,
             "title": r.title,
@@ -3681,10 +3913,24 @@ async def list_alerts(
             "order_code": order_code,
             "reason_text": r.reason_text,
             "recommended_action": r.recommended_action,
+            "priority_score": priority_score,
+            "sla_bucket": item_sla_bucket,
             "snoozed_until": r.snoozed_until.isoformat() if r.snoozed_until else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "updated_at": r.updated_at.isoformat() if r.updated_at else None,
-        })
+        }
+        if min_priority_score is not None and priority_score < min_priority_score:
+            continue
+        if normalized_sla_bucket and normalized_sla_bucket != item_sla_bucket:
+            continue
+        items.append(item)
+    if sort.lstrip("-") == "priority_score":
+        items.sort(key=lambda x: x["priority_score"], reverse=sort.startswith("-"))
+    if needs_python_pagination:
+        total = len(items)
+        start = (page - 1) * page_size
+        end = start + page_size
+        items = items[start:end]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
@@ -3755,6 +4001,7 @@ async def get_alert_detail(
             if o and o.tenant_id == tenant.id:
                 order_code = o.order_code
             break
+    now = datetime.now(timezone.utc)
     return {
         "id": row.id,
         "natural_key": row.natural_key,
@@ -3768,6 +4015,8 @@ async def get_alert_detail(
         "order_code": order_code,
         "reason_text": row.reason_text,
         "recommended_action": row.recommended_action,
+        "priority_score": _alert_priority_score(row, now),
+        "sla_bucket": _alert_sla_bucket(row, now),
         "snoozed_until": row.snoozed_until.isoformat() if row.snoozed_until else None,
         "escalated_at": row.escalated_at.isoformat() if row.escalated_at else None,
         "escalation_level": row.escalation_level,
@@ -3777,7 +4026,7 @@ async def get_alert_detail(
     }
 
 
-@router.patch("/alerts/{alert_id}/status")
+@router.patch("/alerts/{alert_id}/status", response_model=AlertMutationOut)
 async def update_alert_status(
     alert_id: int,
     body: AlertStatusUpdateBody,
@@ -3793,10 +4042,10 @@ async def update_alert_status(
     old_status = row.status
     row.status = body.status.lower()
     if body.status.lower() in ("resolved", "closed"):
-        row.resolved_at = datetime.utcnow()
+        row.resolved_at = datetime.now(timezone.utc)
         row.resolved_by_id = user.id
     elif body.status.lower() == "acknowledged":
-        row.acknowledged_at = datetime.utcnow()
+        row.acknowledged_at = datetime.now(timezone.utc)
         row.acknowledged_by_id = user.id
     hist = AlertHistory(
         tenant_id=tenant.id,
@@ -3810,10 +4059,10 @@ async def update_alert_status(
     db.add(hist)
     await db.flush()
     await db.refresh(row)
-    return row
+    return _alert_mutation_out(row)
 
 
-@router.post("/alerts/{alert_id}/snooze")
+@router.post("/alerts/{alert_id}/snooze", response_model=AlertMutationOut)
 async def snooze_alert(
     alert_id: int,
     body: AlertSnoozeBody,
@@ -3839,10 +4088,10 @@ async def snooze_alert(
     db.add(hist)
     await db.flush()
     await db.refresh(row)
-    return row
+    return _alert_mutation_out(row)
 
 
-@router.post("/alerts/{alert_id}/assign")
+@router.post("/alerts/{alert_id}/assign", response_model=AlertMutationOut)
 async def assign_alert(
     alert_id: int,
     body: AlertAssignBody,
@@ -3869,7 +4118,7 @@ async def assign_alert(
     db.add(hist)
     await db.flush()
     await db.refresh(row)
-    return row
+    return _alert_mutation_out(row)
 
 
 async def _run_scan_background(tenant_id: int) -> None:
@@ -4021,7 +4270,7 @@ async def list_alert_history(
     ]
 
 
-@router.post("/alerts/{alert_id}/escalate")
+@router.post("/alerts/{alert_id}/escalate", response_model=AlertMutationOut)
 async def escalate_alert(
     alert_id: int,
     body: AlertEscalateBody,
@@ -4036,7 +4285,7 @@ async def escalate_alert(
         raise HTTPException(status_code=404, detail="Alert not found")
     from_level = row.escalation_level
     row.status = "escalated"
-    row.escalated_at = datetime.utcnow()
+    row.escalated_at = datetime.now(timezone.utc)
     row.escalation_level = body.to_level
     if body.assigned_to_id is not None:
         row.assigned_to_id = body.assigned_to_id
@@ -4062,7 +4311,7 @@ async def escalate_alert(
     db.add(hist)
     await db.flush()
     await db.refresh(row)
-    return row
+    return _alert_mutation_out(row)
 
 
 @router.get("/alerts/views")
@@ -4300,10 +4549,11 @@ async def _get_consumption_recon_data(
     sid = quotation.style_id
     style = await db.get(GarmentStyle, sid)
     style_code = style.style_code if style else str(sid)
-    bom_result = await db.execute(
-        select(Bom).where(Bom.tenant_id == tenant.id, Bom.style_id == sid).order_by(Bom.version_no.desc()).limit(1)
+    bom = await _get_latest_governed_bom(
+        db,
+        tenant_id=tenant.id,
+        style_id=sid,
     )
-    bom = bom_result.scalar_one_or_none()
     if not bom:
         return ConsumptionReconResponse(
             order=ConsumptionReconOrderOut(

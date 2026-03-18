@@ -13,6 +13,9 @@ import { ProformaInvoicesPage } from "@/pages/app/commercial/ProformaInvoicesPag
 import { BtbLcsPage } from "@/pages/app/commercial/BtbLcsPage";
 import { MasterContractsPage } from "@/pages/app/commercial/MasterContractsPage";
 import { LogisticsPage } from "@/pages/app/logistics/LogisticsPage";
+import { TradeCasesPage } from "@/pages/app/trade/TradeCasesPage";
+import { TradeCaseDetailPage } from "@/pages/app/trade/TradeCaseDetailPage";
+import { TradeDashboardPage } from "@/pages/app/trade/TradeDashboardPage";
 import { PartiesPage } from "@/pages/app/parties/PartiesPage";
 import { DocumentFlowPage } from "@/pages/app/flow/DocumentFlowPage";
 import { CustomersPage } from "@/pages/app/CustomersPage";
@@ -327,7 +330,7 @@ export function AppProtectedRouter() {
         <Route path="commercial/proforma-invoices/:id/print" element={<ProformaInvoicePrintPage />} />
       <Route
         element={
-          <Suspense fallback={<div className="min-h-[40vh] flex items-center justify-center text-sm text-slate-500">Loading module...</div>}>
+          <Suspense fallback={<div className="min-h-[40vh] flex items-center justify-center text-sm text-text-muted">Loading module...</div>}>
             <Layout />
           </Suspense>
         }
@@ -410,6 +413,9 @@ export function AppProtectedRouter() {
         <Route path="commercial/proforma-invoices/new" element={<ProformaInvoiceFormPage />} />
         <Route path="commercial/proforma-invoices/:id/edit" element={<ProformaInvoiceFormPage />} />
         <Route path="commercial/btb-lcs" element={<BtbLcsPage />} />
+        <Route path="trade/cases" element={<TradeCasesPage />} />
+        <Route path="trade/cases/:caseId" element={<TradeCaseDetailPage />} />
+        <Route path="trade/dashboard" element={<TradeDashboardPage />} />
         <Route path="logistics" element={<LogisticsPage />} />
         <Route path="followup" element={<FollowupPage />} />
         <Route path="parties" element={<PartiesPage />} />

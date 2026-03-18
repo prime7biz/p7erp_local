@@ -8,6 +8,12 @@ import {
 } from "@/api/client";
 import { QuotationStatusBadge } from "./quotations/QuotationStatusBadge";
 import { QuotationListSkeleton } from "./quotations/QuotationListSkeleton";
+import {
+  canConvertQuotationToOrder,
+  getQuotationWorkflowAction,
+  humanizeStatus,
+  QUOTATION_STATUS_FILTER_OPTIONS,
+} from "@/features/merch/workflow";
 
 export function QuotationsPage() {
   const navigate = useNavigate();
@@ -49,7 +55,7 @@ export function QuotationsPage() {
     if (quickFilter === "has_inquiry") return items.filter((q) => q.inquiry_id != null);
     if (quickFilter === "has_style_image") return items.filter((q) => Boolean(q.style_image_url));
     if (quickFilter === "ready_to_convert") {
-      return items.filter((q) => q.status === "APPROVED" && !q.is_converted_to_order);
+      return items.filter((q) => canConvertQuotationToOrder(q.status) && !q.is_converted_to_order);
     }
     return items;
   }, [items, quickFilter]);
@@ -93,8 +99,8 @@ export function QuotationsPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quotations</h1>
-          <p className="text-gray-500 text-sm mt-0.5">
+          <h1 className="text-2xl font-bold text-text-primary">Quotations</h1>
+          <p className="text-text-muted text-sm mt-0.5">
             Track price quotations generated from inquiries and convert them into sales orders.
           </p>
         </div>
@@ -107,7 +113,7 @@ export function QuotationsPage() {
               setSearch(e.target.value);
               setPage(1);
             }}
-            className="w-full sm:w-48 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+            className="w-full sm:w-48 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
           />
           <select
             value={statusFilter}
@@ -115,14 +121,14 @@ export function QuotationsPage() {
               setStatusFilter(e.target.value);
               setPage(1);
             }}
-            className="w-full sm:w-40 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+            className="w-full sm:w-40 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
           >
             <option value="">All statuses</option>
-            <option value="DRAFT">Draft</option>
-            <option value="NEW">New</option>
-            <option value="SUBMITTED">Submitted</option>
-            <option value="APPROVED">Approved</option>
-            <option value="SENT">Sent</option>
+            {QUOTATION_STATUS_FILTER_OPTIONS.map((statusValue) => (
+              <option key={statusValue} value={statusValue}>
+                {humanizeStatus(statusValue)}
+              </option>
+            ))}
           </select>
           <button
             type="button"
@@ -132,14 +138,14 @@ export function QuotationsPage() {
               setQuickFilter("all");
               setPage(1);
             }}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
           >
             Clear filters
           </button>
           <button
             type="button"
             onClick={load}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
           >
             Refresh
           </button>
@@ -148,7 +154,7 @@ export function QuotationsPage() {
           <button
             type="button"
             onClick={openCreate}
-            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-primary/90"
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
           >
             New quotation
           </button>
@@ -167,7 +173,7 @@ export function QuotationsPage() {
             type="button"
             onClick={() => setQuickFilter(chip.key as typeof quickFilter)}
             className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-              quickFilter === chip.key ? "border-primary bg-primary/10 text-primary" : "border-gray-200 text-gray-600"
+              quickFilter === chip.key ? "border-brand-primary bg-brand-primary/10 text-brand-primary" : "border-border text-text-secondary"
             }`}
           >
             {chip.label}
@@ -176,37 +182,37 @@ export function QuotationsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-3">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Total on page</div>
-          <div className="text-xl font-bold text-gray-900">{filteredItems.length}</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Total on page</div>
+          <div className="text-xl font-bold text-text-primary">{filteredItems.length}</div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-3">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Approved</div>
-          <div className="text-xl font-bold text-emerald-700">{approvedCount}</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Approved</div>
+          <div className="text-xl font-bold text-status-success-foreground">{approvedCount}</div>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-3">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Needs action</div>
-          <div className="text-xl font-bold text-orange-600">{pendingCount}</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3">
+          <div className="text-xs uppercase tracking-wide text-text-muted">Needs action</div>
+          <div className="text-xl font-bold text-status-warning-foreground">{pendingCount}</div>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         {loading ? (
           <QuotationListSkeleton />
         ) : filteredItems.length === 0 ? (
-          <div className="p-12 text-center text-gray-500 space-y-3">
+          <div className="p-12 text-center text-text-muted space-y-3">
             <div>No quotations found for current filters.</div>
             <div className="flex justify-center gap-2">
               <button
                 type="button"
                 onClick={openCreate}
-                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white"
+                className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-brand-primary-foreground"
               >
                 New quotation
               </button>
@@ -217,7 +223,7 @@ export function QuotationsPage() {
                   setStatusFilter("");
                   setQuickFilter("all");
                 }}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-700"
+                className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-secondary"
               >
                 Clear filters
               </button>
@@ -226,7 +232,7 @@ export function QuotationsPage() {
         ) : (
           <div className="overflow-x-auto">
           <table className="min-w-[1120px] w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200 text-left text-gray-500">
+            <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
               <tr>
                 <th className="py-2.5 px-4 w-24 whitespace-nowrap">Code</th>
                 <th className="py-2.5 px-4 min-w-[120px]">Customer</th>
@@ -252,14 +258,7 @@ export function QuotationsPage() {
                 const target = inq?.target_price ? Number(inq.target_price) : null;
                 const quoted = q.total_amount ? Number(q.total_amount) : null;
                 let profitPct: string | null = null;
-                const workflowLabel =
-                  q.status === "DRAFT" || q.status === "NEW"
-                    ? "Submit"
-                    : q.status === "SUBMITTED"
-                      ? "Approve"
-                      : q.status === "APPROVED"
-                        ? "Send"
-                        : "Revise";
+                const workflowAction = getQuotationWorkflowAction(q.status);
                 if (
                   qty != null &&
                   target != null &&
@@ -275,19 +274,19 @@ export function QuotationsPage() {
                   }
                 }
                 return (
-                  <tr key={q.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
-                    <td className="py-2.5 px-4 font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={q.quotation_code}>
+                  <tr key={q.id} className="border-b border-border-subtle last:border-0 hover:bg-surface-subtle/70">
+                    <td className="py-2.5 px-4 font-medium text-text-primary whitespace-nowrap overflow-hidden text-ellipsis" title={q.quotation_code}>
                       <Link
                         to={`/app/quotations/${q.id}`}
-                        className="text-indigo-600 hover:underline"
+                        className="text-status-info hover:underline"
                       >
                         {q.quotation_code}
                       </Link>
                     </td>
-                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={customerName(q.customer_id)}>
+                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={customerName(q.customer_id)}>
                       {customerName(q.customer_id)}
                     </td>
-                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={inquiryCode(q.inquiry_id)}>
+                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={inquiryCode(q.inquiry_id)}>
                       {inquiryCode(q.inquiry_id)}
                     </td>
                     <td className="py-2.5 px-4">
@@ -296,47 +295,47 @@ export function QuotationsPage() {
                           <img
                             src={q.style_image_url}
                             alt={q.style_name ?? q.style_ref ?? "Style"}
-                            className="h-8 w-8 shrink-0 rounded object-cover border border-gray-200"
+                            className="h-8 w-8 shrink-0 rounded object-cover border border-border"
                           />
                         ) : (
-                          <div className="h-8 w-8 shrink-0 rounded bg-gray-100 border border-gray-200" />
+                          <div className="h-8 w-8 shrink-0 rounded bg-surface-subtle border border-border" />
                         )}
-                        <span className="text-gray-700 truncate block min-w-0" title={q.style_name ?? q.style_ref ?? undefined}>
+                        <span className="text-text-secondary truncate block min-w-0" title={q.style_name ?? q.style_ref ?? undefined}>
                           {q.style_name ?? q.style_ref ?? "—"}
                         </span>
                       </div>
                     </td>
-                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={q.intermediary_name ?? undefined}>
+                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={q.intermediary_name ?? undefined}>
                       {q.intermediary_name ?? "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={q.shipping_term ?? undefined}>
+                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={q.shipping_term ?? undefined}>
                       {q.shipping_term ?? "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={q.commission_mode || q.commission_type || q.commission_value ? `${q.commission_mode ?? "-"} / ${q.commission_type ?? "-"} / ${q.commission_value ?? "-"}` : undefined}>
+                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={q.commission_mode || q.commission_type || q.commission_value ? `${q.commission_mode ?? "-"} / ${q.commission_type ?? "-"} / ${q.commission_value ?? "-"}` : undefined}>
                       {q.commission_mode || q.commission_type || q.commission_value
                         ? `${q.commission_mode ?? "-"} / ${q.commission_type ?? "-"} / ${q.commission_value ?? "-"}`
                         : "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-right text-gray-700 whitespace-nowrap">
+                    <td className="py-2.5 px-4 text-right text-text-secondary whitespace-nowrap">
                       {qty != null ? qty.toLocaleString() : "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-right text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={`${formatAmount(q.total_amount)} ${q.currency ?? ""}`.trim()}>
+                    <td className="py-2.5 px-4 text-right text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={`${formatAmount(q.total_amount)} ${q.currency ?? ""}`.trim()}>
                       {formatAmount(q.total_amount)} {q.currency ?? ""}
                     </td>
-                    <td className="py-2.5 px-4 text-right text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={profitPct ?? undefined}>
+                    <td className="py-2.5 px-4 text-right text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={profitPct ?? undefined}>
                       {profitPct ?? "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-gray-700 overflow-hidden text-ellipsis" title={[q.status, q.is_converted_to_order ? "Converted to order" : null].filter(Boolean).join(" · ")}>
+                    <td className="py-2.5 px-4 text-text-secondary overflow-hidden text-ellipsis" title={[q.status, q.is_converted_to_order ? "Converted to order" : null].filter(Boolean).join(" · ")}>
                       <div className="flex items-center gap-1.5 flex-wrap whitespace-nowrap min-w-0">
                         <QuotationStatusBadge status={q.status} />
                         {q.is_converted_to_order && (
-                          <span className="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                          <span className="inline-flex rounded-full bg-status-info-subtle px-2 py-0.5 text-xs font-medium text-status-info-foreground">
                             Converted to order
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="py-2.5 px-4 text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis" title={new Date(q.created_at).toLocaleDateString()}>
+                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={new Date(q.created_at).toLocaleDateString()}>
                       {new Date(q.created_at).toLocaleDateString()}
                     </td>
                     <td className="py-2.5 px-4 text-right whitespace-nowrap">
@@ -344,50 +343,50 @@ export function QuotationsPage() {
                         <button
                           type="button"
                           onClick={() => setOpenActionsId((prev) => (prev === q.id ? null : q.id))}
-                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                          className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                         >
                           Actions
                         </button>
                         {openActionsId === q.id && (
-                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
                             <Link
                               to={`/app/quotations/${q.id}`}
                               onClick={() => setOpenActionsId(null)}
-                              className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                             >
                               View
                             </Link>
                             <Link
                               to={`/app/quotations/${q.id}/print`}
                               onClick={() => setOpenActionsId(null)}
-                              className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                             >
                               Print
                             </Link>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                setOpenActionsId(null);
-                                try {
-                                  setError("");
-                                  if (q.status === "DRAFT" || q.status === "NEW") {
-                                    await api.submitQuotation(q.id);
-                                  } else if (q.status === "SUBMITTED") {
-                                    await api.approveQuotation(q.id);
-                                  } else if (q.status === "APPROVED") {
-                                    await api.sendQuotation(q.id);
-                                  } else {
-                                    await api.reviseQuotation(q.id);
+                            {workflowAction && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setOpenActionsId(null);
+                                  try {
+                                    setError("");
+                                    if (workflowAction.action === "submit") {
+                                      await api.submitQuotation(q.id);
+                                    } else if (workflowAction.action === "approve") {
+                                      await api.approveQuotation(q.id);
+                                    } else {
+                                      await api.sendQuotation(q.id);
+                                    }
+                                    await load();
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : "Workflow action failed");
                                   }
-                                  await load();
-                                } catch (e) {
-                                  setError(e instanceof Error ? e.message : "Workflow action failed");
-                                }
-                              }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            >
-                              {workflowLabel}
-                            </button>
+                                }}
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                              >
+                                {workflowAction.label}
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={async () => {
@@ -400,7 +399,7 @@ export function QuotationsPage() {
                                   setError(e instanceof Error ? e.message : "Duplicate version failed");
                                 }
                               }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                             >
                               Duplicate
                             </button>
@@ -417,13 +416,17 @@ export function QuotationsPage() {
                                   setError(e instanceof Error ? e.message : "Delete failed");
                                 }
                               }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
                             >
                               Delete
                             </button>
                             {q.is_converted_to_order ? (
-                              <div className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-400">
+                              <div className="block rounded-md px-2 py-1.5 text-left text-xs text-text-muted">
                                 Already converted
+                              </div>
+                            ) : !canConvertQuotationToOrder(q.status) ? (
+                              <div className="block rounded-md px-2 py-1.5 text-left text-xs text-text-muted">
+                                Send first
                               </div>
                             ) : (
                               <button
@@ -439,7 +442,7 @@ export function QuotationsPage() {
                                     setError(e instanceof Error ? e.message : "Conversion failed");
                                   }
                                 }}
-                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                               >
                                 Convert to order
                               </button>
@@ -457,12 +460,12 @@ export function QuotationsPage() {
         )}
       </div>
 
-      <div className="flex items-center justify-between text-xs text-gray-500">
+      <div className="flex items-center justify-between text-xs text-text-muted">
         <button
           type="button"
           disabled={page === 1}
           onClick={() => setPage((p) => Math.max(1, p - 1))}
-          className="rounded-lg border border-gray-300 px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-lg border border-border-strong px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Previous
         </button>
@@ -471,7 +474,7 @@ export function QuotationsPage() {
           type="button"
           disabled={items.length < pageSize}
           onClick={() => setPage((p) => p + 1)}
-          className="rounded-lg border border-gray-300 px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-lg border border-border-strong px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Next
         </button>

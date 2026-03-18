@@ -39,12 +39,12 @@ export function GoodsReceivingPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Goods Receiving (GRN)</h1>
-        <p className="text-sm text-gray-500">Receive materials from approved purchase orders into stock.</p>
+        <h1 className="text-2xl font-bold text-text-primary">Goods Receiving (GRN)</h1>
+        <p className="text-sm text-text-muted">Receive materials from approved purchase orders into stock.</p>
       </div>
-      {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-      <div className="rounded-xl border border-gray-200 bg-white p-3">
-        <label className="mr-2 text-xs font-semibold text-gray-600">Status Filter</label>
+      {error && <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div>}
+      <div className="rounded-xl border border-border bg-surface-raised p-3">
+        <label className="mr-2 text-xs font-semibold text-text-secondary">Status Filter</label>
         <input className="rounded border px-2 py-1 text-xs" value={statusFilter} placeholder="e.g. DRAFT" onChange={(e) => setStatusFilter(e.target.value.toUpperCase())} />
       </div>
 
@@ -55,7 +55,7 @@ export function GoodsReceivingPage() {
           setForm({ purchase_order_id: null, status: "DRAFT", items: [] });
           await load();
         }}
-        className="rounded-xl border border-gray-200 bg-white p-4 grid grid-cols-1 md:grid-cols-4 gap-2"
+        className="rounded-xl border border-border bg-surface-raised p-4 grid grid-cols-1 md:grid-cols-4 gap-2"
       >
         <select className="rounded border px-3 py-2 text-sm" value={form.purchase_order_id ?? ""} onChange={(e) => setForm((p) => ({ ...p, purchase_order_id: e.target.value ? Number(e.target.value) : null }))}>
           <option value="">Select PO</option>
@@ -65,18 +65,18 @@ export function GoodsReceivingPage() {
         </select>
         <input className="rounded border px-3 py-2 text-sm" type="date" value={form.received_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, received_date: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Notes" value={form.notes ?? ""} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
-        <button className="rounded bg-primary px-3 py-2 text-sm font-medium text-white">Create GRN</button>
+        <button className="rounded bg-brand-primary px-3 py-2 text-sm font-medium text-brand-primary-foreground">Create GRN</button>
       </form>
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         <table className="min-w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-surface-subtle">
             <tr>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">GRN Code</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">PO</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Status</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Date</th>
-              <th className="px-3 py-2 text-right text-xs font-medium uppercase text-gray-500">Action</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">GRN Code</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">PO</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Status</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Date</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -94,7 +94,7 @@ export function GoodsReceivingPage() {
                         await api.receiveGoods(row.id);
                         await load();
                       }}
-                      className="rounded border border-gray-300 px-2 py-1 text-xs"
+                      className="rounded border border-border-strong px-2 py-1 text-xs"
                     >
                       Receive to Stock
                     </button>

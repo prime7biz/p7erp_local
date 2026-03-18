@@ -63,15 +63,15 @@ export function InquiryPrintPage() {
     void load();
   }, [id]);
 
-  if (loading) return <div className="min-h-[40vh] p-6 text-sm text-slate-600">Preparing print template...</div>;
+  if (loading) return <div className="min-h-[40vh] p-6 text-sm text-text-secondary">Preparing print template...</div>;
   if (error || !inquiry) {
     return (
       <div className="min-h-[40vh] space-y-3 p-6">
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error || "Inquiry not found."}</div>
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">{error || "Inquiry not found."}</div>
         <button
           type="button"
           onClick={() => navigate("/app/inquiries")}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+          className="rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
         >
           Back to inquiries
         </button>
@@ -85,7 +85,7 @@ export function InquiryPrintPage() {
   const tenantName = settings?.company_name || me?.tenant_name || "Tenant";
   const tenantAddress = settings?.domain ? `Domain: ${settings.domain}` : "Address not configured in settings";
   const itemCount = inquiry.items.length;
-  const watermarkText = ["WON", "APPROVED"].includes((inquiry.status || "").toUpperCase()) ? "Final" : "Draft";
+  const watermarkText = ["CONVERTED"].includes((inquiry.status || "").toUpperCase()) ? "Final" : "Draft";
   const watermarkClass = watermarkText === "Final" ? "qp-watermark-final" : "qp-watermark-draft";
 
   return (
@@ -95,14 +95,14 @@ export function InquiryPrintPage() {
         <div className="qp-toolbar-actions">
           <Link
             to={`/app/inquiries/${inquiry.id}`}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-subtle"
           >
             Back to inquiry
           </Link>
           <button
             type="button"
             onClick={() => window.print()}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+            className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-brand-primary-foreground hover:bg-brand-primary/90"
           >
             Print / Save PDF
           </button>

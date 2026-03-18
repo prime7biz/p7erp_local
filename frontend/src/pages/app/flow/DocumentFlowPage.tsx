@@ -216,8 +216,8 @@ export function DocumentFlowPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Document Flow</h1>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <h1 className="text-2xl font-bold text-text-primary">Document Flow</h1>
+          <p className="mt-0.5 text-sm text-text-muted">
             Track the full document chain: Inquiry → Quotation → Order → Proforma Invoice. See at a glance which
             documents exist at each stage for every order.
           </p>
@@ -227,7 +227,7 @@ export function DocumentFlowPage() {
             type="button"
             onClick={() => load()}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -236,7 +236,7 @@ export function DocumentFlowPage() {
             type="button"
             onClick={downloadCsv}
             disabled={filteredRows.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
             Export CSV
@@ -245,90 +245,90 @@ export function DocumentFlowPage() {
       </header>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        <div className="rounded-xl border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">{error}</div>
       )}
 
       {/* KPI summary cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Link
           to={`${PREFIX}/inquiries`}
-          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-primary/30 hover:shadow"
+          className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm transition hover:border-brand-primary/30 hover:shadow"
         >
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-violet-100 p-2">
-              <ClipboardList className="h-5 w-5 text-violet-600" />
+            <div className="rounded-lg bg-brand-primary/10 p-2">
+              <ClipboardList className="h-5 w-5 text-brand-primary" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Inquiries</p>
-              <p className="text-2xl font-bold text-slate-900">{inquiries.length}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Inquiries</p>
+              <p className="text-2xl font-bold text-text-primary">{inquiries.length}</p>
             </div>
           </div>
         </Link>
         <Link
           to={`${PREFIX}/quotations`}
-          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-primary/30 hover:shadow"
+          className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm transition hover:border-brand-primary/30 hover:shadow"
         >
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-100 p-2">
-              <FileText className="h-5 w-5 text-blue-600" />
+            <div className="rounded-lg bg-status-info-subtle p-2">
+              <FileText className="h-5 w-5 text-status-info" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Quotations</p>
-              <p className="text-2xl font-bold text-slate-900">{quotations.length}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Quotations</p>
+              <p className="text-2xl font-bold text-text-primary">{quotations.length}</p>
             </div>
           </div>
         </Link>
         <Link
           to={`${PREFIX}/orders`}
-          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-primary/30 hover:shadow"
+          className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm transition hover:border-brand-primary/30 hover:shadow"
         >
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-amber-100 p-2">
-              <ShoppingCart className="h-5 w-5 text-amber-600" />
+            <div className="rounded-lg bg-status-warning-subtle p-2">
+              <ShoppingCart className="h-5 w-5 text-status-warning-foreground" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Orders</p>
-              <p className="text-2xl font-bold text-slate-900">{orders.length}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Orders</p>
+              <p className="text-2xl font-bold text-text-primary">{orders.length}</p>
             </div>
           </div>
         </Link>
         <Link
           to={`${PREFIX}/commercial/proforma-invoices`}
-          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-primary/30 hover:shadow"
+          className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm transition hover:border-brand-primary/30 hover:shadow"
         >
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-emerald-100 p-2">
-              <Receipt className="h-5 w-5 text-emerald-600" />
+            <div className="rounded-lg bg-status-success-subtle p-2">
+              <Receipt className="h-5 w-5 text-status-success" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Proforma Invoices</p>
-              <p className="text-2xl font-bold text-slate-900">{proformas.length}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Proforma Invoices</p>
+              <p className="text-2xl font-bold text-text-primary">{proformas.length}</p>
             </div>
           </div>
         </Link>
       </div>
 
       {/* Filters */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+      <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-text-secondary">
           <Filter className="h-4 w-4" />
           Filters
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
             <input
               type="text"
               placeholder="Search order, style, customer, quote, inquiry..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full rounded-lg border border-border-strong py-2 pl-9 pr-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
             />
           </div>
           <select
             value={filterCustomerId}
             onChange={(e) => setFilterCustomerId(e.target.value)}
-            className="rounded-lg border border-slate-300 py-2 px-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="rounded-lg border border-border-strong py-2 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
           >
             <option value="">All customers</option>
             {customers.map((c) => (
@@ -340,7 +340,7 @@ export function DocumentFlowPage() {
           <select
             value={filterOrderStatus}
             onChange={(e) => setFilterOrderStatus(e.target.value)}
-            className="rounded-lg border border-slate-300 py-2 px-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="rounded-lg border border-border-strong py-2 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
           >
             <option value="">All statuses</option>
             {orderStatuses.map((s) => (
@@ -353,14 +353,14 @@ export function DocumentFlowPage() {
             type="date"
             value={filterOrderDateFrom}
             onChange={(e) => setFilterOrderDateFrom(e.target.value)}
-            className="rounded-lg border border-slate-300 py-2 px-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="rounded-lg border border-border-strong py-2 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
             placeholder="From"
           />
           <input
             type="date"
             value={filterOrderDateTo}
             onChange={(e) => setFilterOrderDateTo(e.target.value)}
-            className="rounded-lg border border-slate-300 py-2 px-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="rounded-lg border border-border-strong py-2 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
             placeholder="To"
           />
           <button
@@ -372,7 +372,7 @@ export function DocumentFlowPage() {
               setFilterOrderDateFrom("");
               setFilterOrderDateTo("");
             }}
-            className="rounded-lg border border-slate-300 py-2 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-lg border border-border-strong py-2 px-3 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
           >
             Clear filters
           </button>
@@ -380,19 +380,19 @@ export function DocumentFlowPage() {
       </div>
 
       {/* Flow table */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-border bg-surface-raised shadow-sm overflow-hidden">
         {loading ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16">
-            <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-primary" />
-            <p className="text-sm text-slate-500">Loading document flow…</p>
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-border border-t-primary" />
+            <p className="text-sm text-text-muted">Loading document flow…</p>
           </div>
         ) : filteredRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <div className="rounded-full bg-slate-100 p-4">
-              <ArrowRight className="h-8 w-8 text-slate-400" />
+            <div className="rounded-full bg-surface-subtle p-4">
+              <ArrowRight className="h-8 w-8 text-text-muted" />
             </div>
-            <p className="font-medium text-slate-700">No orders match the current filters</p>
-            <p className="text-sm text-slate-500">
+            <p className="font-medium text-text-secondary">No orders match the current filters</p>
+            <p className="text-sm text-text-muted">
               Add orders from Quotations or create orders directly. Document flow will show the chain Inquiry → Quotation → Order → Proforma.
             </p>
             <button
@@ -404,7 +404,7 @@ export function DocumentFlowPage() {
                 setFilterOrderDateFrom("");
                 setFilterOrderDateTo("");
               }}
-              className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
+              className="mt-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-brand-primary-foreground hover:bg-brand-primary/90"
             >
               Clear filters
             </button>
@@ -412,79 +412,79 @@ export function DocumentFlowPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-left">
+              <thead className="border-b border-border bg-surface-subtle text-left">
                 <tr>
-                  <th className="px-4 py-3 font-semibold text-slate-600 uppercase tracking-wider">Flow</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600 uppercase tracking-wider">Order</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600 uppercase tracking-wider">Customer</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600 uppercase tracking-wider">Inquiry</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600 uppercase tracking-wider">Quotation</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600 uppercase tracking-wider">Delivery</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600 uppercase tracking-wider">Proforma</th>
-                  <th className="px-4 py-3 text-right font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
+                  <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Flow</th>
+                  <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Order</th>
+                  <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Customer</th>
+                  <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Inquiry</th>
+                  <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Quotation</th>
+                  <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Delivery</th>
+                  <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Proforma</th>
+                  <th className="px-4 py-3 text-right font-semibold text-text-secondary uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.map((row) => (
                   <tr
                     key={row.order.id}
-                    className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50"
+                    className="border-b border-border-subtle last:border-0 hover:bg-surface-subtle/50"
                   >
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-1 text-xs">
                         {row.inquiry ? (
                           <Link
                             to={`${PREFIX}/inquiries/${row.inquiry.id}`}
-                            className="inline-flex items-center rounded bg-violet-100 px-2 py-0.5 font-medium text-violet-700 hover:bg-violet-200"
+                            className="inline-flex items-center rounded bg-brand-primary/10 px-2 py-0.5 font-medium text-brand-primary hover:bg-brand-primary/15"
                           >
                             INQ
                           </Link>
                         ) : (
-                          <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-400">—</span>
+                          <span className="rounded bg-surface-subtle px-2 py-0.5 text-text-muted">—</span>
                         )}
-                        <ChevronRight className="h-3.5 w-3 text-slate-300" />
+                        <ChevronRight className="h-3.5 w-3 text-border-strong" />
                         {row.quotation ? (
                           <Link
                             to={`${PREFIX}/quotations/${row.quotation.id}`}
-                            className="inline-flex items-center rounded bg-blue-100 px-2 py-0.5 font-medium text-blue-700 hover:bg-blue-200"
+                            className="inline-flex items-center rounded bg-status-info-subtle px-2 py-0.5 font-medium text-status-info-foreground hover:bg-status-info-subtle/80"
                           >
                             QT
                           </Link>
                         ) : (
-                          <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-400">—</span>
+                          <span className="rounded bg-surface-subtle px-2 py-0.5 text-text-muted">—</span>
                         )}
-                        <ChevronRight className="h-3.5 w-3 text-slate-300" />
+                        <ChevronRight className="h-3.5 w-3 text-border-strong" />
                         <Link
                           to={`${PREFIX}/orders/${row.order.id}`}
-                          className="inline-flex items-center rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-700 hover:bg-amber-200"
+                          className="inline-flex items-center rounded bg-status-warning-subtle px-2 py-0.5 font-medium text-status-warning-foreground hover:bg-status-warning-subtle"
                         >
                           ORD
                         </Link>
-                        <ChevronRight className="h-3.5 w-3 text-slate-300" />
+                        <ChevronRight className="h-3.5 w-3 text-border-strong" />
                         {row.proformas.length > 0 ? (
-                          <span className="rounded bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700">
+                          <span className="rounded bg-status-success-subtle px-2 py-0.5 font-medium text-status-success-foreground">
                             PI ×{row.proformas.length}
                           </span>
                         ) : (
-                          <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-400">—</span>
+                          <span className="rounded bg-surface-subtle px-2 py-0.5 text-text-muted">—</span>
                         )}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <Link to={`${PREFIX}/orders/${row.order.id}`} className="font-medium text-primary hover:underline">
+                      <Link to={`${PREFIX}/orders/${row.order.id}`} className="font-medium text-brand-primary hover:underline">
                         {row.order.order_code ?? `#${row.order.id}`}
                       </Link>
                       {row.order.style_ref && (
-                        <span className="ml-1 block text-xs text-slate-500">{row.order.style_ref}</span>
+                        <span className="ml-1 block text-xs text-text-muted">{row.order.style_ref}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-slate-700">
+                    <td className="px-4 py-3 text-text-secondary">
                       {row.customer?.name ?? `#${row.order.customer_id}`}
                     </td>
                     <td className="px-4 py-3">
                       {row.inquiry ? (
-                        <Link to={`${PREFIX}/inquiries/${row.inquiry.id}`} className="text-primary hover:underline">
+                        <Link to={`${PREFIX}/inquiries/${row.inquiry.id}`} className="text-brand-primary hover:underline">
                           {row.inquiry.inquiry_code}
                         </Link>
                       ) : (
@@ -493,7 +493,7 @@ export function DocumentFlowPage() {
                     </td>
                     <td className="px-4 py-3">
                       {row.quotation ? (
-                        <Link to={`${PREFIX}/quotations/${row.quotation.id}`} className="text-primary hover:underline">
+                        <Link to={`${PREFIX}/quotations/${row.quotation.id}`} className="text-brand-primary hover:underline">
                           {row.quotation.quotation_code}
                         </Link>
                       ) : (
@@ -501,11 +501,11 @@ export function DocumentFlowPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                      <span className="inline-flex rounded-full bg-surface-subtle px-2 py-0.5 text-xs font-medium text-text-secondary">
                         {row.order.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{formatDate(row.order.delivery_date)}</td>
+                    <td className="px-4 py-3 text-text-secondary">{formatDate(row.order.delivery_date)}</td>
                     <td className="px-4 py-3">
                       {row.proformas.length === 0 ? (
                         "—"
@@ -515,13 +515,13 @@ export function DocumentFlowPage() {
                             <Link
                               key={pi.id}
                               to={`${PREFIX}/commercial/proforma-invoices/${pi.id}/edit`}
-                              className="inline-flex rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                              className="inline-flex rounded border border-status-success/30 bg-status-success-subtle px-2 py-0.5 text-xs font-medium text-status-success-foreground hover:bg-status-success-subtle"
                             >
                               {pi.reference ?? `#${pi.id}`}
                             </Link>
                           ))}
                           {row.proformas.length > 3 && (
-                            <span className="text-xs text-slate-500">+{row.proformas.length - 3}</span>
+                            <span className="text-xs text-text-muted">+{row.proformas.length - 3}</span>
                           )}
                         </div>
                       )}
@@ -529,7 +529,7 @@ export function DocumentFlowPage() {
                     <td className="px-4 py-3 text-right">
                       <Link
                         to={`${PREFIX}/orders/${row.order.id}`}
-                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        className="rounded-lg border border-border-strong px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-subtle"
                       >
                         View order
                       </Link>
@@ -543,7 +543,7 @@ export function DocumentFlowPage() {
       </div>
 
       {!loading && filteredRows.length > 0 && (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-text-muted">
           Showing {filteredRows.length} of {orders.length} orders. Use filters to narrow down. Export CSV for the
           current view.
         </p>

@@ -94,16 +94,16 @@ export function VendorsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-bold text-gray-900">Vendors</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
+        <h1 className="text-2xl font-bold text-text-primary">Vendors</h1>
+        <p className="text-sm text-text-muted mt-0.5">
           Manage supplier/vendor master. Use vendors when creating purchase orders for a consistent supplier list.
         </p>
       </header>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center justify-between">
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground flex items-center justify-between">
           <span>{error}</span>
-          <button type="button" onClick={() => setError("")} className="text-red-500 hover:text-red-700">
+          <button type="button" onClick={() => setError("")} className="text-status-danger-foreground hover:text-status-danger-foreground">
             Dismiss
           </button>
         </div>
@@ -117,7 +117,7 @@ export function VendorsPage() {
         foreignCurrency={kpis.foreignCurrency}
       />
 
-      <div className="rounded-xl border border-gray-200 bg-white p-3">
+      <div className="rounded-xl border border-border bg-surface-raised p-3">
         <VendorFilterBar
           search={search}
           onSearchChange={setSearch}
@@ -137,9 +137,9 @@ export function VendorsPage() {
         />
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden shadow-sm">
         {loading ? (
-          <div className="px-4 py-12 text-center text-gray-500 text-sm">Loading vendors…</div>
+          <div className="px-4 py-12 text-center text-text-muted text-sm">Loading vendors…</div>
         ) : viewMode === "table" ? (
           <VendorTable items={items} onRowClick={handleVendorClick} />
         ) : (

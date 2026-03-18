@@ -5,11 +5,11 @@ type TabKey = "po" | "grn" | "challan" | "gatepass" | "stock";
 
 function statusBadgeClass(status: string) {
   const s = status.toUpperCase();
-  if (["DRAFT", "PENDING", "OPEN"].includes(s)) return "bg-slate-100 text-slate-700";
-  if (["APPROVED", "SUBMITTED", "CHECKED", "RECOMMENDED"].includes(s)) return "bg-blue-100 text-blue-700";
-  if (["RECEIVED", "POSTED", "RELEASED", "CLOSED"].includes(s)) return "bg-green-100 text-green-700";
-  if (["REJECTED", "CANCELLED"].includes(s)) return "bg-red-100 text-red-700";
-  return "bg-slate-100 text-slate-700";
+  if (["DRAFT", "PENDING", "OPEN"].includes(s)) return "bg-surface-subtle text-text-secondary";
+  if (["APPROVED", "SUBMITTED", "CHECKED", "RECOMMENDED"].includes(s)) return "bg-status-info-subtle text-status-info-foreground";
+  if (["RECEIVED", "POSTED", "RELEASED", "CLOSED"].includes(s)) return "bg-status-success-subtle text-status-success-foreground";
+  if (["REJECTED", "CANCELLED"].includes(s)) return "bg-status-danger-subtle text-status-danger-foreground";
+  return "bg-surface-subtle text-text-secondary";
 }
 
 export function InventoryReconciliationPage() {
@@ -148,51 +148,51 @@ export function InventoryReconciliationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Inventory Reconciliation</h1>
-        <p className="text-sm text-slate-500">Single view of PO, GRN, Challan, Gate Pass, and current stock.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Inventory Reconciliation</h1>
+        <p className="text-sm text-text-muted">Single view of PO, GRN, Challan, Gate Pass, and current stock.</p>
       </div>
 
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
       {overview ? (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-          <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-            <div className="text-slate-500">PO Open</div>
-            <div className="text-xl font-semibold">{overview.purchase_orders_open} <span className="text-xs text-slate-400">{trend(overview.purchase_orders_open, prevOverview?.purchase_orders_open)}</span></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">PO Open</div>
+            <div className="text-xl font-semibold">{overview.purchase_orders_open} <span className="text-xs text-text-muted">{trend(overview.purchase_orders_open, prevOverview?.purchase_orders_open)}</span></div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-            <div className="text-slate-500">GRN Open</div>
-            <div className="text-xl font-semibold">{overview.goods_receiving_open} <span className="text-xs text-slate-400">{trend(overview.goods_receiving_open, prevOverview?.goods_receiving_open)}</span></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">GRN Open</div>
+            <div className="text-xl font-semibold">{overview.goods_receiving_open} <span className="text-xs text-text-muted">{trend(overview.goods_receiving_open, prevOverview?.goods_receiving_open)}</span></div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-            <div className="text-slate-500">Challan Posted</div>
-            <div className="text-xl font-semibold">{overview.delivery_challans_posted} <span className="text-xs text-slate-400">{trend(overview.delivery_challans_posted, prevOverview?.delivery_challans_posted)}</span></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Challan Posted</div>
+            <div className="text-xl font-semibold">{overview.delivery_challans_posted} <span className="text-xs text-text-muted">{trend(overview.delivery_challans_posted, prevOverview?.delivery_challans_posted)}</span></div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-            <div className="text-slate-500">Gate Pass Released</div>
-            <div className="text-xl font-semibold">{overview.gate_pass_released} <span className="text-xs text-slate-400">{trend(overview.gate_pass_released, prevOverview?.gate_pass_released)}</span></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Gate Pass Released</div>
+            <div className="text-xl font-semibold">{overview.gate_pass_released} <span className="text-xs text-text-muted">{trend(overview.gate_pass_released, prevOverview?.gate_pass_released)}</span></div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-            <div className="text-slate-500">Items On Hand</div>
-            <div className="text-xl font-semibold">{overview.stock_items_on_hand} <span className="text-xs text-slate-400">{trend(overview.stock_items_on_hand, prevOverview?.stock_items_on_hand)}</span></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Items On Hand</div>
+            <div className="text-xl font-semibold">{overview.stock_items_on_hand} <span className="text-xs text-text-muted">{trend(overview.stock_items_on_hand, prevOverview?.stock_items_on_hand)}</span></div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-            <div className="text-slate-500">Pending CR</div>
-            <div className="text-xl font-semibold">{pendingCrCount} <span className="text-xs text-slate-400">{trend(pendingCrCount, prevOverview?.pending_cr_count)}</span></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Pending CR</div>
+            <div className="text-xl font-semibold">{pendingCrCount} <span className="text-xs text-text-muted">{trend(pendingCrCount, prevOverview?.pending_cr_count)}</span></div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-            <div className="text-slate-500">Low Stock Items</div>
-            <div className="text-xl font-semibold">{stockRows.filter((r) => r.on_hand_qty > 0 && r.on_hand_qty <= 5).length} <span className="text-xs text-slate-400">{trend(stockRows.filter((r) => r.on_hand_qty > 0 && r.on_hand_qty <= 5).length, prevOverview?.low_stock_count)}</span></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Low Stock Items</div>
+            <div className="text-xl font-semibold">{stockRows.filter((r) => r.on_hand_qty > 0 && r.on_hand_qty <= 5).length} <span className="text-xs text-text-muted">{trend(stockRows.filter((r) => r.on_hand_qty > 0 && r.on_hand_qty <= 5).length, prevOverview?.low_stock_count)}</span></div>
           </div>
         </div>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <button className={`rounded border px-3 py-1 text-sm ${tab === "po" ? "bg-slate-900 text-white" : ""}`} onClick={() => setTab("po")}>PO</button>
-        <button className={`rounded border px-3 py-1 text-sm ${tab === "grn" ? "bg-slate-900 text-white" : ""}`} onClick={() => setTab("grn")}>GRN</button>
-        <button className={`rounded border px-3 py-1 text-sm ${tab === "challan" ? "bg-slate-900 text-white" : ""}`} onClick={() => setTab("challan")}>Challan</button>
-        <button className={`rounded border px-3 py-1 text-sm ${tab === "gatepass" ? "bg-slate-900 text-white" : ""}`} onClick={() => setTab("gatepass")}>Gate Pass</button>
-        <button className={`rounded border px-3 py-1 text-sm ${tab === "stock" ? "bg-slate-900 text-white" : ""}`} onClick={() => setTab("stock")}>Stock</button>
+        <button className={`rounded border px-3 py-1 text-sm ${tab === "po" ? "bg-surface-inverse text-brand-primary-foreground" : ""}`} onClick={() => setTab("po")}>PO</button>
+        <button className={`rounded border px-3 py-1 text-sm ${tab === "grn" ? "bg-surface-inverse text-brand-primary-foreground" : ""}`} onClick={() => setTab("grn")}>GRN</button>
+        <button className={`rounded border px-3 py-1 text-sm ${tab === "challan" ? "bg-surface-inverse text-brand-primary-foreground" : ""}`} onClick={() => setTab("challan")}>Challan</button>
+        <button className={`rounded border px-3 py-1 text-sm ${tab === "gatepass" ? "bg-surface-inverse text-brand-primary-foreground" : ""}`} onClick={() => setTab("gatepass")}>Gate Pass</button>
+        <button className={`rounded border px-3 py-1 text-sm ${tab === "stock" ? "bg-surface-inverse text-brand-primary-foreground" : ""}`} onClick={() => setTab("stock")}>Stock</button>
         <input
           className="w-full rounded border px-3 py-1 text-sm sm:w-auto"
           placeholder="Status (e.g. DRAFT)"
@@ -215,34 +215,34 @@ export function InventoryReconciliationPage() {
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         {tab === "po" ? (
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600"><tr><th className="px-4 py-3">PO</th><th className="px-4 py-3">Supplier</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Quick Link</th></tr></thead>
-            <tbody>{fpo.map((r) => <tr key={r.id} className="border-t"><td className="px-4 py-3">{r.po_code}</td><td className="px-4 py-3">{r.supplier_name}</td><td className="px-4 py-3"><span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(r.status)}`}>{r.status}</span></td><td className="px-4 py-3"><a className="text-xs text-blue-600 hover:underline" href={`/app/inventory/purchase-orders?status=${encodeURIComponent(r.status)}`}>Open PO Page</a></td></tr>)}</tbody>
+            <thead className="bg-surface-subtle text-left text-text-secondary"><tr><th className="px-4 py-3">PO</th><th className="px-4 py-3">Supplier</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Quick Link</th></tr></thead>
+            <tbody>{fpo.map((r) => <tr key={r.id} className="border-t"><td className="px-4 py-3">{r.po_code}</td><td className="px-4 py-3">{r.supplier_name}</td><td className="px-4 py-3"><span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(r.status)}`}>{r.status}</span></td><td className="px-4 py-3"><a className="text-xs text-status-info hover:underline" href={`/app/inventory/purchase-orders?status=${encodeURIComponent(r.status)}`}>Open PO Page</a></td></tr>)}</tbody>
           </table>
         ) : null}
         {tab === "grn" ? (
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600"><tr><th className="px-4 py-3">GRN</th><th className="px-4 py-3">PO Ref</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Quick Link</th></tr></thead>
-            <tbody>{fgrn.map((r) => <tr key={r.id} className="border-t"><td className="px-4 py-3">{r.grn_code}</td><td className="px-4 py-3">{r.purchase_order_id ?? "-"}</td><td className="px-4 py-3"><span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(r.status)}`}>{r.status}</span></td><td className="px-4 py-3"><a className="text-xs text-blue-600 hover:underline" href={`/app/inventory/goods-receiving?status=${encodeURIComponent(r.status)}`}>Open GRN Page</a></td></tr>)}</tbody>
+            <thead className="bg-surface-subtle text-left text-text-secondary"><tr><th className="px-4 py-3">GRN</th><th className="px-4 py-3">PO Ref</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Quick Link</th></tr></thead>
+            <tbody>{fgrn.map((r) => <tr key={r.id} className="border-t"><td className="px-4 py-3">{r.grn_code}</td><td className="px-4 py-3">{r.purchase_order_id ?? "-"}</td><td className="px-4 py-3"><span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(r.status)}`}>{r.status}</span></td><td className="px-4 py-3"><a className="text-xs text-status-info hover:underline" href={`/app/inventory/goods-receiving?status=${encodeURIComponent(r.status)}`}>Open GRN Page</a></td></tr>)}</tbody>
           </table>
         ) : null}
         {tab === "challan" ? (
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600"><tr><th className="px-4 py-3">Challan</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Quick Link</th></tr></thead>
-            <tbody>{fchallan.map((r) => <tr key={r.id} className="border-t"><td className="px-4 py-3">{r.challan_code}</td><td className="px-4 py-3">{r.customer_name}</td><td className="px-4 py-3"><span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(r.status)}`}>{r.status}</span></td><td className="px-4 py-3"><a className="text-xs text-blue-600 hover:underline" href={`/app/inventory/delivery-challans?status=${encodeURIComponent(r.status)}`}>Open Challan Page</a></td></tr>)}</tbody>
+            <thead className="bg-surface-subtle text-left text-text-secondary"><tr><th className="px-4 py-3">Challan</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Quick Link</th></tr></thead>
+            <tbody>{fchallan.map((r) => <tr key={r.id} className="border-t"><td className="px-4 py-3">{r.challan_code}</td><td className="px-4 py-3">{r.customer_name}</td><td className="px-4 py-3"><span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(r.status)}`}>{r.status}</span></td><td className="px-4 py-3"><a className="text-xs text-status-info hover:underline" href={`/app/inventory/delivery-challans?status=${encodeURIComponent(r.status)}`}>Open Challan Page</a></td></tr>)}</tbody>
           </table>
         ) : null}
         {tab === "gatepass" ? (
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600"><tr><th className="px-4 py-3">Gate Pass</th><th className="px-4 py-3">Purpose</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Quick Link</th></tr></thead>
-            <tbody>{fgate.map((r) => <tr key={r.id} className="border-t"><td className="px-4 py-3">{r.gate_pass_code}</td><td className="px-4 py-3">{r.purpose}</td><td className="px-4 py-3"><span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(r.status)}`}>{r.status}</span></td><td className="px-4 py-3"><a className="text-xs text-blue-600 hover:underline" href={`/app/inventory/enhanced-gate-passes?status=${encodeURIComponent(r.status)}`}>Open Gate Pass Page</a></td></tr>)}</tbody>
+            <thead className="bg-surface-subtle text-left text-text-secondary"><tr><th className="px-4 py-3">Gate Pass</th><th className="px-4 py-3">Purpose</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Quick Link</th></tr></thead>
+            <tbody>{fgate.map((r) => <tr key={r.id} className="border-t"><td className="px-4 py-3">{r.gate_pass_code}</td><td className="px-4 py-3">{r.purpose}</td><td className="px-4 py-3"><span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(r.status)}`}>{r.status}</span></td><td className="px-4 py-3"><a className="text-xs text-status-info hover:underline" href={`/app/inventory/enhanced-gate-passes?status=${encodeURIComponent(r.status)}`}>Open Gate Pass Page</a></td></tr>)}</tbody>
           </table>
         ) : null}
         {tab === "stock" ? (
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600"><tr><th className="px-4 py-3">Item</th><th className="px-4 py-3">Warehouse</th><th className="px-4 py-3">In</th><th className="px-4 py-3">Out</th><th className="px-4 py-3">On Hand</th></tr></thead>
+            <thead className="bg-surface-subtle text-left text-text-secondary"><tr><th className="px-4 py-3">Item</th><th className="px-4 py-3">Warehouse</th><th className="px-4 py-3">In</th><th className="px-4 py-3">Out</th><th className="px-4 py-3">On Hand</th></tr></thead>
             <tbody>{fstock.map((r) => <tr key={`${r.item_id}-${r.warehouse_id ?? 0}`} className="border-t"><td className="px-4 py-3">{r.item_name}</td><td className="px-4 py-3">{r.warehouse_name ?? "-"}</td><td className="px-4 py-3">{r.in_qty}</td><td className="px-4 py-3">{r.out_qty}</td><td className="px-4 py-3 font-semibold">{r.on_hand_qty}</td></tr>)}</tbody>
           </table>
         ) : null}

@@ -90,20 +90,20 @@ export function CashFlowReportPage() {
 
   return (
     <div className="space-y-6 print-report">
-      <div className="print-only mb-3 border-b border-slate-300 pb-2">
+      <div className="print-only mb-3 border-b border-border pb-2">
         <h1 className="text-lg font-semibold">Cash Flow Report</h1>
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-text-muted">
           Mode: {mode === "statement" ? "Statement" : "Forecast"}
           {mode === "statement" ? ` | Period: ${fromDate} to ${toDate}` : ""}
         </p>
       </div>
       <div className="no-print flex flex-wrap items-end gap-2">
         <div className="mr-auto">
-          <h1 className="text-2xl font-semibold text-slate-900">Cash Flow Report</h1>
-          <p className="text-sm text-slate-500">Accounting statement view plus forecast scenario planning view.</p>
+          <h1 className="text-2xl font-semibold text-text-primary">Cash Flow Report</h1>
+          <p className="text-sm text-text-muted">Accounting statement view plus forecast scenario planning view.</p>
         </div>
-        <button className={`rounded border px-3 py-2 text-sm ${mode === "statement" ? "bg-slate-900 text-white" : ""}`} onClick={() => setMode("statement")}>Statement</button>
-        <button className={`rounded border px-3 py-2 text-sm ${mode === "forecast" ? "bg-slate-900 text-white" : ""}`} onClick={() => setMode("forecast")}>Forecast</button>
+        <button className={`rounded border px-3 py-2 text-sm ${mode === "statement" ? "bg-brand-primary text-brand-primary-foreground" : ""}`} onClick={() => setMode("statement")}>Statement</button>
+        <button className={`rounded border px-3 py-2 text-sm ${mode === "forecast" ? "bg-brand-primary text-brand-primary-foreground" : ""}`} onClick={() => setMode("forecast")}>Forecast</button>
         {mode === "statement" ? (
           <>
             <input type="date" className="rounded border px-3 py-2 text-sm" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
@@ -113,28 +113,28 @@ export function CashFlowReportPage() {
         <button className="rounded border px-3 py-2 text-sm" onClick={() => handlePrint()}>Print</button>
         <button className="rounded border px-3 py-2 text-sm" onClick={() => exportCsv()}>Export CSV</button>
       </div>
-      {error ? <div className="no-print rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="no-print rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+      {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="no-print rounded border border-status-success/20 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
       {mode === "statement" ? (
         <div className="space-y-4">
           <div className="grid gap-2 md:grid-cols-4">
-            <div className="print-card rounded border bg-white p-2 text-sm">Opening Cash: <b>{Number(statement?.opening_cash_balance ?? 0).toLocaleString()}</b></div>
-            <div className="print-card rounded border bg-white p-2 text-sm">Inflow: <b>{Number(statement?.totals.inflow ?? 0).toLocaleString()}</b></div>
-            <div className="print-card rounded border bg-white p-2 text-sm">Outflow: <b>{Number(statement?.totals.outflow ?? 0).toLocaleString()}</b></div>
-            <div className="print-card rounded border bg-white p-2 text-sm">Closing Cash: <b>{Number(statement?.closing_cash_balance ?? 0).toLocaleString()}</b></div>
+            <div className="print-card rounded border bg-surface-raised p-2 text-sm">Opening Cash: <b>{Number(statement?.opening_cash_balance ?? 0).toLocaleString()}</b></div>
+            <div className="print-card rounded border bg-surface-raised p-2 text-sm">Inflow: <b>{Number(statement?.totals.inflow ?? 0).toLocaleString()}</b></div>
+            <div className="print-card rounded border bg-surface-raised p-2 text-sm">Outflow: <b>{Number(statement?.totals.outflow ?? 0).toLocaleString()}</b></div>
+            <div className="print-card rounded border bg-surface-raised p-2 text-sm">Closing Cash: <b>{Number(statement?.closing_cash_balance ?? 0).toLocaleString()}</b></div>
           </div>
           {(["operating", "investing", "financing"] as const).map((section) => (
-            <div key={section} className="print-card rounded-xl border border-slate-200 bg-white p-4">
+            <div key={section} className="print-card rounded-xl border border-border bg-surface-raised p-4">
               <div className="mb-2 font-semibold capitalize">
                 {section} Activities
-                <span className="ml-2 text-xs text-slate-500">
+                <span className="ml-2 text-xs text-text-muted">
                   (Inflow {Number(statement?.sections[section].inflow ?? 0).toLocaleString()} | Outflow {Number(statement?.sections[section].outflow ?? 0).toLocaleString()} | Net {Number(statement?.sections[section].net ?? 0).toLocaleString()})
                 </span>
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-left">
+                  <thead className="bg-surface-subtle text-left">
                     <tr>
                       <th className="px-2 py-1">Voucher</th>
                       <th className="px-2 py-1">Date</th>
@@ -164,13 +164,13 @@ export function CashFlowReportPage() {
       ) : (
         <div className="space-y-4">
           {rows.map((scenario) => (
-            <div key={scenario.id} className="print-card rounded-xl border border-slate-200 bg-white p-4">
+            <div key={scenario.id} className="print-card rounded-xl border border-border bg-surface-raised p-4">
               <div className="mb-2 font-semibold">
-                {scenario.name} <span className="text-xs text-slate-500">({scenario.status})</span>
+                {scenario.name} <span className="text-xs text-text-muted">({scenario.status})</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-left">
+                  <thead className="bg-surface-subtle text-left">
                     <tr>
                       <th className="px-2 py-1">Month</th>
                       <th className="px-2 py-1 text-right">Inflow</th>

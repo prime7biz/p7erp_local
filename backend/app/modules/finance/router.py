@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import calendar
 from collections import defaultdict
 from io import StringIO
 from datetime import date, datetime, timedelta
@@ -85,6 +86,14 @@ def _to_float(value: str | None) -> float:
         return float(value or "0")
     except (TypeError, ValueError):
         return 0.0
+
+
+def _add_months(base_date: date, months: int) -> date:
+    month_index = (base_date.month - 1) + months
+    year = base_date.year + month_index // 12
+    month = (month_index % 12) + 1
+    day = min(base_date.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
 
 
 async def _require_manager_or_admin(db: AsyncSession, user: User) -> None:
@@ -1341,6 +1350,8 @@ async def coa_import(
     if conflict not in ("skip", "update", "abort"):
         raise HTTPException(status_code=400, detail="conflict must be skip, update, or abort")
     content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="CSV file is too large (max 5 MB)")
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError:
@@ -1348,6 +1359,8 @@ async def coa_import(
     sio = StringIO(text)
     reader = csv.DictReader(sio)
     rows = list(reader)
+    if len(rows) > 20000:
+        raise HTTPException(status_code=400, detail="CSV has too many rows (max 20000)")
     if not rows:
         return {"ok": True, "groups_created": 0, "groups_updated": 0, "accounts_created": 0, "accounts_updated": 0, "errors": []}
     # Separate group and account rows by section column or by column count
@@ -1366,6 +1379,14 @@ async def coa_import(
     created_g = 0
     updated_g = 0
     errors = []
+    aborted = False
+
+    def _safe_int(value: str | None, *, default: int = 0) -> int:
+        try:
+            return int((value or "").strip() or default)
+        except (TypeError, ValueError):
+            return default
+
     for r in group_rows:
         code = (r.get("code") or "").strip()
         if not code:
@@ -1376,7 +1397,7 @@ async def coa_import(
             parent_id = code_to_group[parent_code].id
         name = (r.get("name") or "").strip() or code
         nature = (r.get("nature") or "Asset").strip()
-        sort_order = int(r.get("sort_order") or 0)
+        sort_order = _safe_int(r.get("sort_order"), default=0)
         is_active = (r.get("is_active") or "true").strip().lower() not in ("false", "0", "no")
         desc = (r.get("description") or "").strip() or None
         reporting_code = (r.get("reporting_code") or "").strip() or None
@@ -1388,7 +1409,8 @@ async def coa_import(
         if code in code_to_group:
             if conflict == "abort":
                 errors.append(f"Group code already exists: {code}")
-                return {"ok": False, "groups_created": created_g, "groups_updated": updated_g, "accounts_created": 0, "accounts_updated": 0, "errors": errors}
+                aborted = True
+                break
             if conflict == "update":
                 g = code_to_group[code]
                 g.name = name
@@ -1422,10 +1444,10 @@ async def coa_import(
             await db.flush()
             code_to_group[code] = new_group
             created_g += 1
-    await db.commit()
-    # Refresh to get ids for new groups
-    existing_groups = (await db.execute(select(AccountGroup).where(AccountGroup.tenant_id == tenant.id))).scalars().all()
-    code_to_group = {g.code: g for g in existing_groups}
+    if aborted:
+        await db.rollback()
+        return {"ok": False, "groups_created": 0, "groups_updated": 0, "accounts_created": 0, "accounts_updated": 0, "errors": errors}
+
     existing_accounts = (await db.execute(select(ChartOfAccount).where(ChartOfAccount.tenant_id == tenant.id))).scalars().all()
     num_to_account = {a.account_number: a for a in existing_accounts}
     created_a = 0
@@ -1453,7 +1475,7 @@ async def coa_import(
         if account_type not in ("posting", "statistical", "header"):
             account_type = "posting"
         reporting_code = (r.get("reporting_code") or "").strip() or None
-        display_order = int(r.get("display_order") or 0)
+        display_order = _safe_int(r.get("display_order"), default=0)
         statistical_unit = (r.get("statistical_unit") or "").strip() or None
         parent_account_number = (r.get("parent_account_number") or "").strip()
         parent_account_id = None
@@ -1462,7 +1484,8 @@ async def coa_import(
         if account_number in num_to_account:
             if conflict == "abort":
                 errors.append(f"Account number already exists: {account_number}")
-                return {"ok": False, "groups_created": created_g, "groups_updated": updated_g, "accounts_created": created_a, "accounts_updated": updated_a, "errors": errors}
+                aborted = True
+                break
             if conflict == "update":
                 acct = num_to_account[account_number]
                 acct.name = name
@@ -1503,6 +1526,9 @@ async def coa_import(
             await db.flush()
             num_to_account[account_number] = new_acct
             created_a += 1
+    if aborted:
+        await db.rollback()
+        return {"ok": False, "groups_created": 0, "groups_updated": 0, "accounts_created": 0, "accounts_updated": 0, "errors": errors}
     await db.commit()
     return {"ok": True, "groups_created": created_g, "groups_updated": updated_g, "accounts_created": created_a, "accounts_updated": updated_a, "errors": errors}
 
@@ -2217,7 +2243,7 @@ async def generate_cash_forecast(
     running = 0.0
     start = scenario.start_date
     for idx in range(scenario.months):
-        month_date = start + timedelta(days=idx * 30)
+        month_date = _add_months(start, idx)
         inflow = round(avg_monthly * (0.95 + (idx % 3) * 0.05), 2)
         outflow = round(avg_monthly * (0.85 + ((idx + 1) % 4) * 0.07), 2)
         if idx == 0 and fx_buffer > 0:
@@ -2337,8 +2363,13 @@ async def settle_fx_receipt(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = await db.get(FxReceipt, receipt_id)
-    if not row or row.tenant_id != tenant.id:
+    row_result = await db.execute(
+        select(FxReceipt)
+        .where(FxReceipt.id == receipt_id, FxReceipt.tenant_id == tenant.id)
+        .with_for_update()
+    )
+    row = row_result.scalar_one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="FX receipt not found")
     settle = _to_float(body.settle_amount)
     if settle <= 0:
@@ -2662,8 +2693,13 @@ async def settle_bill(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = await db.get(OutstandingBill, bill_id)
-    if not row or row.tenant_id != tenant.id:
+    row_result = await db.execute(
+        select(OutstandingBill)
+        .where(OutstandingBill.id == bill_id, OutstandingBill.tenant_id == tenant.id)
+        .with_for_update()
+    )
+    row = row_result.scalar_one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Bill not found")
     settle = _to_float(body.get("settle_amount"))
     if settle <= 0:
@@ -3574,14 +3610,27 @@ async def execute_payment_run(
 ):
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user)
-    run = await db.get(PaymentRun, run_id)
-    if not run or run.tenant_id != tenant.id:
+    run_result = await db.execute(
+        select(PaymentRun)
+        .where(PaymentRun.id == run_id, PaymentRun.tenant_id == tenant.id)
+        .with_for_update()
+    )
+    run = run_result.scalar_one_or_none()
+    if not run:
         raise HTTPException(status_code=404, detail="Payment run not found")
     if run.status == "EXECUTED":
         return await _payment_run_out(db, run)
     if run.status != "PROCESSED":
         raise HTTPException(status_code=400, detail="Only processed payment runs can be executed")
-    items = list((await db.execute(select(PaymentRunItem).where(PaymentRunItem.payment_run_id == run.id))).scalars().all())
+    items = list(
+        (
+            await db.execute(
+                select(PaymentRunItem)
+                .where(PaymentRunItem.payment_run_id == run.id)
+                .with_for_update()
+            )
+        ).scalars().all()
+    )
     if not items:
         raise HTTPException(status_code=400, detail="Payment run has no items")
     bank: BankAccount | None = None

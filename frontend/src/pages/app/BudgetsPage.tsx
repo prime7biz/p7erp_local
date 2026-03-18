@@ -65,12 +65,12 @@ export function BudgetsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Budgets & Budget vs Actual</h1>
-        <p className="text-sm text-slate-500">Create finance budgets and compare with posted actuals.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Budgets & Budget vs Actual</h1>
+        <p className="text-sm text-text-muted">Create finance budgets and compare with posted actuals.</p>
       </div>
-      {error ? <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <form onSubmit={submit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+      <form onSubmit={submit} className="space-y-3 rounded-xl border border-border bg-surface-raised p-4">
         <div className="grid gap-3 md:grid-cols-3">
           <input className="rounded border px-3 py-2 text-sm" placeholder="Budget Name" value={form.budget_name} onChange={(e) => setForm((p) => ({ ...p, budget_name: e.target.value }))} />
           <input className="rounded border px-3 py-2 text-sm" placeholder="Fiscal Year" value={form.fiscal_year} onChange={(e) => setForm((p) => ({ ...p, fiscal_year: e.target.value }))} />
@@ -82,7 +82,7 @@ export function BudgetsPage() {
 
         <div className="overflow-x-auto rounded border">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left">
+            <thead className="bg-surface-subtle text-left">
               <tr>
                 <th className="px-2 py-1">Month</th>
                 <th className="px-2 py-1">Account</th>
@@ -179,11 +179,11 @@ export function BudgetsPage() {
           >
             Add Line
           </button>
-          <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white">Create Budget</button>
+          <button className="rounded bg-brand-primary px-3 py-2 text-sm text-brand-primary-foreground">Create Budget</button>
         </div>
       </form>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Budget List</h2>
           <select className="rounded border px-2 py-1 text-sm" value={selectedBudgetId ?? ""} onChange={(e) => setSelectedBudgetId(e.target.value ? Number(e.target.value) : null)}>
@@ -197,7 +197,7 @@ export function BudgetsPage() {
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left">
+            <thead className="bg-surface-subtle text-left">
               <tr>
                 <th className="px-2 py-1">Budget</th>
                 <th className="px-2 py-1">Fiscal Year</th>
@@ -220,7 +220,7 @@ export function BudgetsPage() {
       </div>
 
       {vsActual ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
           <h2 className="mb-2 text-lg font-semibold">Budget vs Actual</h2>
           <div className="mb-3 grid gap-2 md:grid-cols-3 text-sm">
             <div className="rounded border p-2">Budget: <b>{vsActual.total_budget.toLocaleString()}</b></div>
@@ -229,7 +229,7 @@ export function BudgetsPage() {
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-left">
+              <thead className="bg-surface-subtle text-left">
                 <tr>
                   <th className="px-2 py-1">Month</th>
                   <th className="px-2 py-1">Budget</th>

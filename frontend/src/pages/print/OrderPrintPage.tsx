@@ -118,15 +118,15 @@ export function OrderPrintPage() {
     void load();
   }, [id]);
 
-  if (loading) return <div className="min-h-[40vh] p-6 text-sm text-slate-600">Preparing print template...</div>;
+  if (loading) return <div className="min-h-[40vh] p-6 text-sm text-text-secondary">Preparing print template...</div>;
   if (error || !order) {
     return (
       <div className="min-h-[40vh] space-y-3 p-6">
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error || "Order not found."}</div>
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">{error || "Order not found."}</div>
         <button
           type="button"
           onClick={() => navigate("/app/orders")}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+          className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
         >
           Back to orders
         </button>
@@ -156,27 +156,27 @@ export function OrderPrintPage() {
         <div className="qp-toolbar-actions">
           <Link
             to={`/app/orders/${order.id}`}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-subtle"
           >
             Back to order
           </Link>
           <button
             type="button"
             onClick={() => window.print()}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
           >
             Print / Save PDF
           </button>
         </div>
       </div>
-      <div className="no-print mx-auto mb-3 w-full max-w-[210mm] rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+      <div className="no-print mx-auto mb-3 w-full max-w-[210mm] rounded-xl border border-border bg-status-info-subtle p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="text-xs font-semibold text-indigo-900">Print template settings</div>
+          <div className="text-xs font-semibold text-status-info-foreground">Print template settings</div>
           <div className="flex items-center gap-2">
             <select
               value={templatePreset}
               onChange={(e) => applyPreset(e.target.value as "standard" | "minimal" | "factory")}
-              className="rounded-md border border-indigo-300 bg-white px-2 py-1 text-xs text-indigo-900"
+              className="rounded-md border border-border bg-surface-raised px-2 py-1 text-xs text-text-primary"
             >
               <option value="standard">Standard</option>
               <option value="minimal">Minimal</option>
@@ -185,13 +185,13 @@ export function OrderPrintPage() {
             <button
               type="button"
               onClick={() => applyPreset("standard")}
-              className="rounded-md border border-indigo-300 bg-white px-2 py-1 text-xs font-medium text-indigo-900 hover:bg-indigo-100"
+              className="rounded-md border border-border bg-surface-raised px-2 py-1 text-xs font-medium text-text-primary hover:bg-surface-subtle"
             >
               Reset default
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-xs text-indigo-900 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2 text-xs text-text-primary md:grid-cols-3">
           <label className="inline-flex items-center gap-1.5">
             <input
               type="checkbox"
@@ -342,15 +342,15 @@ export function OrderPrintPage() {
         {printPrefs.showSignatureBlock && (
           <section className="qp-section">
             <h2>Approval Signatures</h2>
-            <div className="grid grid-cols-3 gap-6 px-3 pt-6 pb-2 text-[10px] text-slate-700">
+            <div className="grid grid-cols-3 gap-6 px-3 pt-6 pb-2 text-[10px] text-text-secondary">
               <div className="text-center">
-                <div className="border-t border-slate-400 pt-1">Prepared By</div>
+                <div className="border-t border-border pt-1">Prepared By</div>
               </div>
               <div className="text-center">
-                <div className="border-t border-slate-400 pt-1">Checked By</div>
+                <div className="border-t border-border pt-1">Checked By</div>
               </div>
               <div className="text-center">
-                <div className="border-t border-slate-400 pt-1">Approved By</div>
+                <div className="border-t border-border pt-1">Approved By</div>
               </div>
             </div>
           </section>

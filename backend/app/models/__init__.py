@@ -2,6 +2,7 @@ from app.models.audit import AuditLog
 from app.models.tenant import CommissionMode, Tenant, TenantType
 from app.models.user import User, Role
 from app.models.customer import Customer
+from app.models.codegen import TenantCodeCounter
 from app.models.merch import (
     Inquiry,
     InquiryItem,
@@ -185,6 +186,13 @@ from app.models.wastage import (
     WastageOrderSummary,
     WastageSavedView,
 )
+from app.models.trade import (
+    TradeCase,
+    TradeCaseStage,
+    TradeCaseStageLog,
+    Shipment,
+    TradeDocument,
+)
 
 __all__ = [
     "AuditLog",
@@ -194,6 +202,7 @@ __all__ = [
     "User",
     "Role",
     "Customer",
+    "TenantCodeCounter",
     "Inquiry",
     "InquiryItem",
     "Quotation",
@@ -346,4 +355,9 @@ __all__ = [
     "WastageThresholdRule",
     "WastageOrderSummary",
     "WastageSavedView",
+    "TradeCase",
+    "TradeCaseStage",
+    "TradeCaseStageLog",
+    "Shipment",
+    "TradeDocument",
 ]

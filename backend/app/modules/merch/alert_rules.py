@@ -17,6 +17,11 @@ from app.models import (
     OrderFollowupAction,
     Quotation,
     StockMovement,
+    TradeCase,
+    Shipment,
+    TradeDocument,
+    MasterContract,
+    BtbLc,
 )
 from app.models.merch import ConsumptionPlanItem
 from app.models.inventory import Item
@@ -369,99 +374,6 @@ async def rule_trim_overconsumption_above(
     return out
 
 
-async def rule_trim_overconsumption_above(
-    db: AsyncSession, tenant_id: int, config: dict[str, Any] | None
-) -> list[dict[str, Any]]:
-    """Trim items only: actual consumption vs BOM above threshold (e.g. 10%)."""
-    threshold = (config or {}).get("trim_wastage_threshold_pct", TRIM_WASTAGE_THRESHOLD_PCT)
-    mov_result = await db.execute(
-        select(StockMovement.reference_id).where(
-            StockMovement.tenant_id == tenant_id,
-            StockMovement.reference_type == "CONSUMPTION_ISSUE",
-            StockMovement.reference_id.isnot(None),
-        ).distinct()
-    )
-    ref_ids = [r[0] for r in mov_result.scalars().all() if r[0] is not None]
-    if not ref_ids:
-        return []
-    from app.models import GarmentStyle
-    ord_stmt = select(Order).where(
-        Order.tenant_id == tenant_id,
-        Order.id.in_(ref_ids),
-        Order.quotation_id.isnot(None),
-    )
-    ord_result = await db.execute(ord_stmt)
-    orders = list(ord_result.scalars().all())
-    out: list[dict[str, Any]] = []
-    for order in orders:
-        if not order.quotation_id:
-            continue
-        quotation = await db.get(Quotation, order.quotation_id)
-        if not quotation or quotation.tenant_id != tenant_id or not quotation.style_id:
-            continue
-        style_id = quotation.style_id
-        order_qty = _to_float(str(order.quantity)) if order.quantity is not None else 0.0
-        if order_qty <= 0:
-            continue
-        bom_result = await db.execute(
-            select(Bom).where(
-                Bom.tenant_id == tenant_id,
-                Bom.style_id == style_id,
-            ).order_by(Bom.version_no.desc()).limit(1)
-        )
-        bom = bom_result.scalar_one_or_none()
-        if not bom:
-            continue
-        lines_result = await db.execute(
-            select(BomItem).where(
-                BomItem.tenant_id == tenant_id,
-                BomItem.bom_id == bom.id,
-                BomItem.item_id.isnot(None),
-            )
-        )
-        for line in lines_result.scalars().all():
-            item = await db.get(Item, line.item_id)
-            if not item or item.tenant_id != tenant_id:
-                continue
-            cat = await db.get(ItemCategory, item.category_id) if item.category_id else None
-            if _wastage_category_from_item(item, cat) != "trim":
-                continue
-            base = _to_float(line.base_consumption)
-            wastage = _to_float(line.wastage_pct) / 100.0
-            expected = order_qty * base * (1.0 + wastage)
-            mov_q = await db.execute(
-                select(StockMovement).where(
-                    StockMovement.tenant_id == tenant_id,
-                    StockMovement.reference_type == "CONSUMPTION_ISSUE",
-                    StockMovement.reference_id == order.id,
-                    StockMovement.item_id == line.item_id,
-                )
-            )
-            actual = sum(
-                _to_float(m.quantity) for m in mov_q.scalars().all()
-                if (m.movement_type or "").upper() == "OUT"
-            )
-            if expected <= 0:
-                continue
-            wastage_pct = (actual - expected) / expected * 100.0
-            if wastage_pct < threshold:
-                continue
-            severity = "high"
-            item_code = item.item_code or str(line.item_id)
-            out.append({
-                "natural_key": f"trim_overconsumption:order:{order.id}:item:{line.item_id}",
-                "title": f"Order {order.order_code} · {item_code} trim overconsumption",
-                "description": f"Trim wastage vs BOM: {wastage_pct:+.1f}% (expected {expected:.2f}, actual {actual:.2f}).",
-                "severity": severity,
-                "reason_text": f"Trim item; expected {expected:.2f}, actual {actual:.2f}; {wastage_pct:+.1f}%.",
-                "recommended_action": "Review trim issue policy; tighten trim BOM or process.",
-                "entity_type": "order",
-                "entity_id": order.id,
-                "order_id": order.id,
-            })
-    return out
-
-
 CLOSED_TNA_ACTION_STATUSES = ("completed", "approved", "cancelled")
 TNA_DUE_SOON_DAYS = 7
 
@@ -536,6 +448,172 @@ async def rule_tna_action_due_soon(
     return out
 
 
+async def rule_trade_lc_expiry_soon(
+    db: AsyncSession, tenant_id: int, config: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Trade case with linked LC expiring soon."""
+    days = int((config or {}).get("trade_lc_expiry_days", 14))
+    cutoff = date.today() + timedelta(days=days)
+    cases = (
+        await db.execute(
+            select(TradeCase).where(
+                TradeCase.tenant_id == tenant_id,
+                TradeCase.current_stage.notin_(("SETTLED",)),
+            )
+        )
+    ).scalars().all()
+    out: list[dict[str, Any]] = []
+    for c in cases:
+        expiry_date: date | None = None
+        if c.master_contract_id:
+            contract = await db.get(MasterContract, c.master_contract_id)
+            if contract and contract.tenant_id == tenant_id:
+                expiry_date = contract.expiry_date
+        if not expiry_date and c.btb_lc_id:
+            btb = await db.get(BtbLc, c.btb_lc_id)
+            if btb and btb.tenant_id == tenant_id:
+                expiry_date = btb.expiry_date
+        if not expiry_date:
+            continue
+        if expiry_date <= cutoff:
+            days_left = (expiry_date - date.today()).days
+            severity = "critical" if days_left <= 3 else "high"
+            out.append(
+                {
+                    "natural_key": f"trade_lc_expiry_soon:trade_case:{c.id}",
+                    "title": f"Trade case {c.reference} LC expiry soon",
+                    "description": f"Linked LC/contract expires in {days_left} day(s).",
+                    "severity": severity,
+                    "reason_text": f"Expiry date {expiry_date}.",
+                    "recommended_action": "Review LC extension or expedite shipment and docs.",
+                    "entity_type": "trade_case",
+                    "entity_id": c.id,
+                    "order_id": c.order_id,
+                }
+            )
+    return out
+
+
+async def rule_trade_docs_missing_before_etd(
+    db: AsyncSession, tenant_id: int, config: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Trade case near ETD with missing core docs."""
+    days = int((config or {}).get("trade_docs_before_etd_days", 5))
+    required_docs = {str(x).upper() for x in ((config or {}).get("trade_required_docs") or ["PI", "INVOICE", "PACKING_LIST"])}
+    cutoff = date.today() + timedelta(days=days)
+    cases = (
+        await db.execute(
+            select(TradeCase).where(
+                TradeCase.tenant_id == tenant_id,
+                TradeCase.current_stage.notin_(("SETTLED",)),
+                TradeCase.etd.isnot(None),
+                TradeCase.etd <= cutoff,
+            )
+        )
+    ).scalars().all()
+    out: list[dict[str, Any]] = []
+    for c in cases:
+        docs = (
+            await db.execute(
+                select(TradeDocument.document_type).where(
+                    TradeDocument.tenant_id == tenant_id,
+                    TradeDocument.trade_case_id == c.id,
+                )
+            )
+        ).scalars().all()
+        have = {str(d).upper() for d in docs}
+        missing = sorted(required_docs - have)
+        if not missing:
+            continue
+        days_left = (c.etd - date.today()).days if c.etd else 999
+        severity = "critical" if days_left <= 2 else "high"
+        out.append(
+            {
+                "natural_key": f"trade_docs_missing_before_etd:trade_case:{c.id}",
+                "title": f"Trade case {c.reference} missing docs before ETD",
+                "description": f"Missing documents before ETD: {', '.join(missing)}.",
+                "severity": severity,
+                "reason_text": f"ETD {c.etd}; missing {', '.join(missing)}.",
+                "recommended_action": "Upload missing shipping/commercial documents immediately.",
+                "entity_type": "trade_case",
+                "entity_id": c.id,
+                "order_id": c.order_id,
+            }
+        )
+    return out
+
+
+async def rule_trade_shipment_delayed(
+    db: AsyncSession, tenant_id: int, config: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Shipment has ETA in the past and not delivered/closed."""
+    delayed_status_block = {"DELIVERED", "CLOSED"}
+    rows = (
+        await db.execute(
+            select(Shipment).where(
+                Shipment.tenant_id == tenant_id,
+                Shipment.eta.isnot(None),
+                Shipment.eta < date.today(),
+            )
+        )
+    ).scalars().all()
+    out: list[dict[str, Any]] = []
+    for s in rows:
+        if (s.status or "").upper() in delayed_status_block:
+            continue
+        days_over = (date.today() - s.eta).days if s.eta else 0
+        case = await db.get(TradeCase, s.trade_case_id)
+        if not case or case.tenant_id != tenant_id:
+            continue
+        out.append(
+            {
+                "natural_key": f"trade_shipment_delayed:shipment:{s.id}",
+                "title": f"Shipment {s.reference} delayed",
+                "description": f"Shipment ETA passed by {days_over} day(s).",
+                "severity": "high" if days_over < 5 else "critical",
+                "reason_text": f"ETA {s.eta}, status {s.status}.",
+                "recommended_action": "Follow up with carrier and update ETA/status.",
+                "entity_type": "shipment",
+                "entity_id": s.id,
+                "order_id": case.order_id,
+            }
+        )
+    return out
+
+
+async def rule_trade_case_stuck(
+    db: AsyncSession, tenant_id: int, config: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Trade case not updated for configured days and not settled."""
+    days = int((config or {}).get("trade_case_stuck_days", 10))
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    rows = (
+        await db.execute(
+            select(TradeCase).where(
+                TradeCase.tenant_id == tenant_id,
+                TradeCase.current_stage.notin_(("SETTLED",)),
+                TradeCase.updated_at < cutoff,
+            )
+        )
+    ).scalars().all()
+    out: list[dict[str, Any]] = []
+    for c in rows:
+        out.append(
+            {
+                "natural_key": f"trade_case_stuck:trade_case:{c.id}",
+                "title": f"Trade case {c.reference} stuck in {c.current_stage}",
+                "description": f"No updates in the last {days} day(s).",
+                "severity": "medium",
+                "reason_text": f"Last update at {c.updated_at.isoformat()}.",
+                "recommended_action": "Review blockers and move case to next stage.",
+                "entity_type": "trade_case",
+                "entity_id": c.id,
+                "order_id": c.order_id,
+            }
+        )
+    return out
+
+
 RULE_REGISTRY: dict[str, callable] = {
     "followup_overdue": rule_followup_overdue,
     "tna_action_overdue": rule_tna_action_overdue,
@@ -545,6 +623,10 @@ RULE_REGISTRY: dict[str, callable] = {
     "order_missing_tna": rule_order_missing_tna,
     "wastage_vs_bom": rule_wastage_vs_bom,
     "trim_overconsumption_above": rule_trim_overconsumption_above,
+    "trade_lc_expiry_soon": rule_trade_lc_expiry_soon,
+    "trade_docs_missing_before_etd": rule_trade_docs_missing_before_etd,
+    "trade_shipment_delayed": rule_trade_shipment_delayed,
+    "trade_case_stuck": rule_trade_case_stuck,
 }
 
 DEFAULT_DEFINITIONS: list[dict[str, Any]] = [
@@ -556,4 +638,8 @@ DEFAULT_DEFINITIONS: list[dict[str, Any]] = [
     {"rule_key": "order_missing_tna", "name": "Order has no TNA plan", "severity_default": "high", "entity_type": "order"},
     {"rule_key": "wastage_vs_bom", "name": "High wastage vs BOM", "severity_default": "medium", "entity_type": "order"},
     {"rule_key": "trim_overconsumption_above", "name": "Trim overconsumption above threshold", "severity_default": "high", "entity_type": "order"},
+    {"rule_key": "trade_lc_expiry_soon", "name": "Trade LC expiry soon", "severity_default": "high", "entity_type": "trade_case"},
+    {"rule_key": "trade_docs_missing_before_etd", "name": "Trade docs missing before ETD", "severity_default": "high", "entity_type": "trade_case"},
+    {"rule_key": "trade_shipment_delayed", "name": "Trade shipment delayed", "severity_default": "high", "entity_type": "shipment"},
+    {"rule_key": "trade_case_stuck", "name": "Trade case stuck in stage", "severity_default": "medium", "entity_type": "trade_case"},
 ]

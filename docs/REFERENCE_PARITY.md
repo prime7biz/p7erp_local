@@ -65,7 +65,8 @@ Implementation order: first **scaffold all routes** with placeholder pages (titl
 ## 5. Phases
 
 - **Phase 1–4 (done):** Auth (company code + username login), public pages, full app sidebar and routes, core merchandising, Inventory, Manufacturing, Quality, Finance/Accounts, Commercial (export cases, PI, BTB LCs), HR, Reports, Settings, Workflow. All app routes have dedicated or coming-soon pages. See `docs/IMPLEMENTATION_ROADMAP.md` for current state.
-- **Optional later:** Register approval status (PENDING/APPROVED/REJECTED); `/modules/*` and `/resources` public pages; filling in coming-soon modules (AI, Logistics, etc.) with full backend and UI.
+- **Trade expansion (done):** Trade Cases module (`/app/trade/cases`), Trade Control Tower (`/app/trade/dashboard`), Logistics shipments, trade documents, stage transitions, and trade alerts integrated with existing alert center.
+- **Optional later:** Register approval status (PENDING/APPROVED/REJECTED); `/modules/*` and `/resources` public pages; filling in remaining coming-soon modules with full backend and UI.
 
 ---
 

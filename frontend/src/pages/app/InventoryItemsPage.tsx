@@ -290,12 +290,12 @@ export function InventoryItemsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Stock Master</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold tracking-tight text-text-primary">Stock Master</h1>
+          <p className="mt-1 text-sm text-text-muted">
             Manage categories, subcategories, units, and inventory items.
           </p>
         </div>
-        <div className="flex rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
+        <div className="flex rounded-xl border border-border bg-surface-raised p-1 shadow-sm">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -303,8 +303,8 @@ export function InventoryItemsPage() {
               onClick={() => setActiveTab(id)}
               className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === id
-                  ? "bg-primary text-white shadow-sm"
-                  : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  ? "bg-brand-primary text-brand-primary-foreground shadow-sm"
+                  : "border-border text-text-secondary hover:bg-surface-subtle"
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -315,7 +315,7 @@ export function InventoryItemsPage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
@@ -323,7 +323,7 @@ export function InventoryItemsPage() {
       {loading && (
         <Card>
           <CardContent className="flex items-center justify-center py-12">
-            <p className="text-sm text-gray-500">Loading…</p>
+            <p className="text-sm text-text-muted">Loading…</p>
           </CardContent>
         </Card>
       )}
@@ -333,21 +333,21 @@ export function InventoryItemsPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <FolderTree className="h-4 w-4 text-gray-500" />
+                <FolderTree className="h-4 w-4 text-text-muted" />
                 Add Category
               </CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={submitCategory} className="space-y-3">
                 <input
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Code (e.g. FAB)"
                   value={categoryForm.category_code}
                   onChange={(e) => setCategoryForm((p) => ({ ...p, category_code: e.target.value }))}
                   required
                 />
                 <input
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Name"
                   value={categoryForm.name}
                   onChange={(e) => setCategoryForm((p) => ({ ...p, name: e.target.value }))}
@@ -364,14 +364,14 @@ export function InventoryItemsPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <Layers className="h-4 w-4 text-gray-500" />
+                <Layers className="h-4 w-4 text-text-muted" />
                 Add Subcategory
               </CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={submitSubcategory} className="space-y-3">
                 <select
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   value={subcategoryForm.category_id}
                   onChange={(e) => setSubcategoryForm((p) => ({ ...p, category_id: Number(e.target.value) }))}
                   required
@@ -384,14 +384,14 @@ export function InventoryItemsPage() {
                   ))}
                 </select>
                 <input
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Code (e.g. COTTON)"
                   value={subcategoryForm.subcategory_code}
                   onChange={(e) => setSubcategoryForm((p) => ({ ...p, subcategory_code: e.target.value }))}
                   required
                 />
                 <input
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Name"
                   value={subcategoryForm.name}
                   onChange={(e) => setSubcategoryForm((p) => ({ ...p, name: e.target.value }))}
@@ -408,21 +408,21 @@ export function InventoryItemsPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <Layers className="h-4 w-4 text-gray-500" />
+                <Layers className="h-4 w-4 text-text-muted" />
                 Add Unit
               </CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={submitUnit} className="space-y-3">
                 <input
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Code (e.g. PCS)"
                   value={unitForm.unit_code}
                   onChange={(e) => setUnitForm((p) => ({ ...p, unit_code: e.target.value }))}
                   required
                 />
                 <input
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Name"
                   value={unitForm.name}
                   onChange={(e) => setUnitForm((p) => ({ ...p, name: e.target.value }))}
@@ -443,21 +443,21 @@ export function InventoryItemsPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <Scale className="h-4 w-4 text-gray-500" />
+                <Scale className="h-4 w-4 text-text-muted" />
                 Add Unit
               </CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={submitUnit} className="space-y-3">
                 <input
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Code (e.g. PCS)"
                   value={unitForm.unit_code}
                   onChange={(e) => setUnitForm((p) => ({ ...p, unit_code: e.target.value }))}
                   required
                 />
                 <input
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Name"
                   value={unitForm.name}
                   onChange={(e) => setUnitForm((p) => ({ ...p, name: e.target.value }))}
@@ -475,7 +475,7 @@ export function InventoryItemsPage() {
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-base">All Units</CardTitle>
               <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-64 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm sm:w-64 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 placeholder="Search by code or name…"
                 value={unitSearch}
                 onChange={(e) => setUnitSearch(e.target.value)}
@@ -484,23 +484,23 @@ export function InventoryItemsPage() {
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="min-w-full">
-                  <thead className="border-b border-gray-200 bg-gray-50 text-left text-gray-500">
+                  <thead className="border-b border-border bg-surface-subtle text-left text-text-muted">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Code
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Name
                       </th>
-                      <th className="w-24 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="w-24 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-border-subtle">
                     {filteredUnits.length === 0 && (
                       <tr>
-                        <td colSpan={3} className="px-4 py-10 text-center text-sm text-gray-500">
+                        <td colSpan={3} className="px-4 py-10 text-center text-sm text-text-muted">
                           {units.length === 0
                             ? "No units yet. Add one using the form above."
                             : "No units match your search."}
@@ -508,31 +508,31 @@ export function InventoryItemsPage() {
                       </tr>
                     )}
                     {filteredUnits.map((row) => (
-                      <tr key={row.id} className="hover:bg-gray-50/50">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.unit_code}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{row.name}</td>
+                      <tr key={row.id} className="hover:bg-surface-subtle/50">
+                        <td className="px-4 py-3 text-sm font-medium text-text-primary">{row.unit_code}</td>
+                        <td className="px-4 py-3 text-sm text-text-secondary">{row.name}</td>
                         <td className="px-4 py-3 text-right">
                           <div className="relative inline-block text-left">
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); setOpenUnitActionsId((prev) => (prev === row.id ? null : row.id)); }}
-                              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                              className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                             >
                               Actions
                             </button>
                             {openUnitActionsId === row.id && (
-                              <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                              <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
                                   onClick={() => { openUnitEdit(row); setOpenUnitActionsId(null); }}
-                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                                 >
                                   Edit
                                 </button>
                                 <button
                                   type="button"
                                   onClick={async () => { await deleteUnit(row); setOpenUnitActionsId(null); }}
-                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
                                 >
                                   Delete
                                 </button>
@@ -555,28 +555,28 @@ export function InventoryItemsPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <Building2 className="h-4 w-4 text-gray-500" />
+                <Building2 className="h-4 w-4 text-text-muted" />
                 Add Warehouse
               </CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={submitWarehouse} className="space-y-3">
                 <input
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Code (e.g. WH01)"
                   value={warehouseForm.warehouse_code}
                   onChange={(e) => setWarehouseForm((p) => ({ ...p, warehouse_code: e.target.value }))}
                   required
                 />
                 <input
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Name"
                   value={warehouseForm.name}
                   onChange={(e) => setWarehouseForm((p) => ({ ...p, name: e.target.value }))}
                   required
                 />
                 <input
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Address (optional)"
                   value={warehouseForm.address ?? ""}
                   onChange={(e) => setWarehouseForm((p) => ({ ...p, address: e.target.value }))}
@@ -593,7 +593,7 @@ export function InventoryItemsPage() {
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-base">All Warehouses</CardTitle>
               <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-64 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm sm:w-64 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 placeholder="Search by code, name, or address…"
                 value={warehouseSearch}
                 onChange={(e) => setWarehouseSearch(e.target.value)}
@@ -602,26 +602,26 @@ export function InventoryItemsPage() {
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="min-w-full">
-                  <thead className="border-b border-gray-200 bg-gray-50 text-left text-gray-500">
+                  <thead className="border-b border-border bg-surface-subtle text-left text-text-muted">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Code
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Name
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Address
                       </th>
-                      <th className="w-24 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="w-24 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-border-subtle">
                     {filteredWarehouses.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-4 py-10 text-center text-sm text-gray-500">
+                        <td colSpan={4} className="px-4 py-10 text-center text-sm text-text-muted">
                           {warehouses.length === 0
                             ? "No warehouses yet. Add one using the form above."
                             : "No warehouses match your search."}
@@ -629,32 +629,32 @@ export function InventoryItemsPage() {
                       </tr>
                     )}
                     {filteredWarehouses.map((row) => (
-                      <tr key={row.id} className="hover:bg-gray-50/50">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.warehouse_code}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{row.name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{row.address ?? "—"}</td>
+                      <tr key={row.id} className="hover:bg-surface-subtle/50">
+                        <td className="px-4 py-3 text-sm font-medium text-text-primary">{row.warehouse_code}</td>
+                        <td className="px-4 py-3 text-sm text-text-secondary">{row.name}</td>
+                        <td className="px-4 py-3 text-sm text-text-secondary">{row.address ?? "—"}</td>
                         <td className="px-4 py-3 text-right">
                           <div className="relative inline-block text-left">
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); setOpenWarehouseActionsId((prev) => (prev === row.id ? null : row.id)); }}
-                              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                              className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                             >
                               Actions
                             </button>
                             {openWarehouseActionsId === row.id && (
-                              <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                              <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
                                   onClick={() => { openWarehouseEdit(row); setOpenWarehouseActionsId(null); }}
-                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                                 >
                                   Edit
                                 </button>
                                 <button
                                   type="button"
                                   onClick={async () => { await deleteWarehouse(row); setOpenWarehouseActionsId(null); }}
-                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
                                 >
                                   Delete
                                 </button>
@@ -684,21 +684,21 @@ export function InventoryItemsPage() {
                 className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 xl:gap-4"
               >
                 <input
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Item code *"
                   value={itemForm.item_code}
                   onChange={(e) => setItemForm((p) => ({ ...p, item_code: e.target.value }))}
                   required
                 />
                 <input
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   placeholder="Item name *"
                   value={itemForm.name}
                   onChange={(e) => setItemForm((p) => ({ ...p, name: e.target.value }))}
                   required
                 />
                 <select
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   value={itemForm.category_id}
                   onChange={(e) => setItemForm((p) => ({ ...p, category_id: Number(e.target.value) }))}
                   required
@@ -710,7 +710,7 @@ export function InventoryItemsPage() {
                   ))}
                 </select>
                 <select
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   value={itemForm.subcategory_id ?? ""}
                   onChange={(e) =>
                     setItemForm((p) => ({ ...p, subcategory_id: e.target.value ? Number(e.target.value) : null }))
@@ -726,7 +726,7 @@ export function InventoryItemsPage() {
                     ))}
                 </select>
                 <select
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                   value={itemForm.unit_id}
                   onChange={(e) => setItemForm((p) => ({ ...p, unit_id: Number(e.target.value) }))}
                   required
@@ -739,7 +739,7 @@ export function InventoryItemsPage() {
                 </select>
                 <div className="flex gap-2">
                   <input
-                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    className="flex-1 rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                     placeholder="Default cost"
                     value={itemForm.default_cost ?? "0"}
                     onChange={(e) => setItemForm((p) => ({ ...p, default_cost: e.target.value }))}
@@ -756,7 +756,7 @@ export function InventoryItemsPage() {
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-base">All Items</CardTitle>
               <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-64 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm sm:w-64 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 placeholder="Search by code or name…"
                 value={itemSearch}
                 onChange={(e) => setItemSearch(e.target.value)}
@@ -765,32 +765,32 @@ export function InventoryItemsPage() {
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="min-w-full">
-                  <thead className="border-b border-gray-200 bg-gray-50 text-left text-gray-500">
+                  <thead className="border-b border-border bg-surface-subtle text-left text-text-muted">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Code
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Name
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Category
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Unit
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Default Cost
                       </th>
-                      <th className="w-24 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      <th className="w-24 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-border-subtle">
                     {filteredItems.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-500">
+                        <td colSpan={6} className="px-4 py-10 text-center text-sm text-text-muted">
                           {items.length === 0
                             ? "No items yet. Add one using the form above."
                             : "No items match your search."}
@@ -798,36 +798,36 @@ export function InventoryItemsPage() {
                       </tr>
                     )}
                     {filteredItems.map((row) => (
-                      <tr key={row.id} className="hover:bg-gray-50/50">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.item_code}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{row.name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
+                      <tr key={row.id} className="hover:bg-surface-subtle/50">
+                        <td className="px-4 py-3 text-sm font-medium text-text-primary">{row.item_code}</td>
+                        <td className="px-4 py-3 text-sm text-text-secondary">{row.name}</td>
+                        <td className="px-4 py-3 text-sm text-text-secondary">
                           {categoryMap.get(row.category_id) ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{unitMap.get(row.unit_id) ?? "—"}</td>
-                        <td className="px-4 py-3 text-right text-sm text-gray-700">{row.default_cost}</td>
+                        <td className="px-4 py-3 text-sm text-text-secondary">{unitMap.get(row.unit_id) ?? "—"}</td>
+                        <td className="px-4 py-3 text-right text-sm text-text-secondary">{row.default_cost}</td>
                         <td className="px-4 py-3 text-right">
                           <div className="relative inline-block text-left">
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); setOpenItemActionsId((prev) => (prev === row.id ? null : row.id)); }}
-                              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                              className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                             >
                               Actions
                             </button>
                             {openItemActionsId === row.id && (
-                              <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                              <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
                                   onClick={() => { openEdit(row); setOpenItemActionsId(null); }}
-                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                                 >
                                   Edit
                                 </button>
                                 <button
                                   type="button"
                                   onClick={async () => { await deleteItem(row); setOpenItemActionsId(null); }}
-                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
                                 >
                                   Delete
                                 </button>
@@ -848,7 +848,7 @@ export function InventoryItemsPage() {
       {/* Edit Item modal */}
       {editingItem && editForm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-inverse/50 p-4"
           onClick={closeEdit}
           role="dialog"
           aria-modal="true"
@@ -858,7 +858,7 @@ export function InventoryItemsPage() {
             className="w-full max-w-lg shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <CardHeader className="flex flex-row items-center justify-between border-b border-gray-100 pb-3">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-border-subtle pb-3">
               <CardTitle id="edit-item-title" className="text-lg">
                 Edit Item
               </CardTitle>
@@ -870,18 +870,18 @@ export function InventoryItemsPage() {
               <form onSubmit={saveEdit} className="space-y-4">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500">Code</label>
+                    <label className="mb-1 block text-xs font-medium text-text-muted">Code</label>
                     <input
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                       value={editForm.item_code}
                       onChange={(e) => setEditForm((p) => p && { ...p, item_code: e.target.value })}
                       required
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500">Name</label>
+                    <label className="mb-1 block text-xs font-medium text-text-muted">Name</label>
                     <input
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                       value={editForm.name}
                       onChange={(e) => setEditForm((p) => p && { ...p, name: e.target.value })}
                       required
@@ -890,9 +890,9 @@ export function InventoryItemsPage() {
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500">Category</label>
+                    <label className="mb-1 block text-xs font-medium text-text-muted">Category</label>
                     <select
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                       value={editForm.category_id}
                       onChange={(e) =>
                         setEditForm((p) => p && { ...p, category_id: Number(e.target.value) })
@@ -907,9 +907,9 @@ export function InventoryItemsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500">Subcategory</label>
+                    <label className="mb-1 block text-xs font-medium text-text-muted">Subcategory</label>
                     <select
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                       value={editForm.subcategory_id ?? ""}
                       onChange={(e) =>
                         setEditForm((p) =>
@@ -930,9 +930,9 @@ export function InventoryItemsPage() {
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500">Unit</label>
+                    <label className="mb-1 block text-xs font-medium text-text-muted">Unit</label>
                     <select
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                       value={editForm.unit_id}
                       onChange={(e) => setEditForm((p) => p && { ...p, unit_id: Number(e.target.value) })}
                       required
@@ -945,9 +945,9 @@ export function InventoryItemsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-500">Default cost</label>
+                    <label className="mb-1 block text-xs font-medium text-text-muted">Default cost</label>
                     <input
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                       value={editForm.default_cost ?? "0"}
                       onChange={(e) => setEditForm((p) => p && { ...p, default_cost: e.target.value })}
                     />
@@ -968,7 +968,7 @@ export function InventoryItemsPage() {
       {/* Edit Unit modal */}
       {editingUnit && unitEditForm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-inverse/50 p-4"
           onClick={closeUnitEdit}
           role="dialog"
           aria-modal="true"
@@ -978,7 +978,7 @@ export function InventoryItemsPage() {
             className="w-full max-w-md shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <CardHeader className="flex flex-row items-center justify-between border-b border-gray-100 pb-3">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-border-subtle pb-3">
               <CardTitle id="edit-unit-title" className="text-lg">
                 Edit Unit
               </CardTitle>
@@ -989,18 +989,18 @@ export function InventoryItemsPage() {
             <CardContent className="pt-4">
               <form onSubmit={saveUnitEdit} className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">Code</label>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">Code</label>
                   <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                     value={unitEditForm.unit_code}
                     onChange={(e) => setUnitEditForm((p) => p && { ...p, unit_code: e.target.value })}
                     required
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">Name</label>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">Name</label>
                   <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                     value={unitEditForm.name}
                     onChange={(e) => setUnitEditForm((p) => p && { ...p, name: e.target.value })}
                     required
@@ -1021,7 +1021,7 @@ export function InventoryItemsPage() {
       {/* Edit Warehouse modal */}
       {editingWarehouse && warehouseEditForm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-inverse/50 p-4"
           onClick={closeWarehouseEdit}
           role="dialog"
           aria-modal="true"
@@ -1031,7 +1031,7 @@ export function InventoryItemsPage() {
             className="w-full max-w-lg shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <CardHeader className="flex flex-row items-center justify-between border-b border-gray-100 pb-3">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-border-subtle pb-3">
               <CardTitle id="edit-warehouse-title" className="text-lg">
                 Edit Warehouse
               </CardTitle>
@@ -1042,9 +1042,9 @@ export function InventoryItemsPage() {
             <CardContent className="pt-4">
               <form onSubmit={saveWarehouseEdit} className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">Code</label>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">Code</label>
                   <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                     value={warehouseEditForm.warehouse_code}
                     onChange={(e) =>
                       setWarehouseEditForm((p) => p && { ...p, warehouse_code: e.target.value })
@@ -1053,18 +1053,18 @@ export function InventoryItemsPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">Name</label>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">Name</label>
                   <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                     value={warehouseEditForm.name}
                     onChange={(e) => setWarehouseEditForm((p) => p && { ...p, name: e.target.value })}
                     required
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">Address (optional)</label>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">Address (optional)</label>
                   <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                     value={warehouseEditForm.address ?? ""}
                     onChange={(e) =>
                       setWarehouseEditForm((p) => p && { ...p, address: e.target.value })

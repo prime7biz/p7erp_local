@@ -127,9 +127,9 @@ export function BankReconciliationPage() {
 
   function selectedStatusClass() {
     const label = selectedStatusLabel();
-    if (label === "FINALIZED") return "bg-slate-100 text-slate-700 border-slate-300";
-    if (label === "MATCHED") return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    return "bg-amber-50 text-amber-700 border-amber-200";
+    if (label === "FINALIZED") return "bg-surface-subtle text-text-secondary border-border-strong";
+    if (label === "MATCHED") return "bg-status-success-subtle text-status-success-foreground border-status-success/30";
+    return "bg-status-warning-subtle text-status-warning-foreground border-status-warning/30";
   }
 
   async function loadReconDetails(reconId: number) {
@@ -318,16 +318,16 @@ export function BankReconciliationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Bank Reconciliation</h1>
-        <p className="text-sm text-slate-500">Compare statement balance with book balance and close differences.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Bank Reconciliation</h1>
+        <p className="text-sm text-text-muted">Compare statement balance with book balance and close differences.</p>
         <div className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-medium ${selectedStatusClass()}`}>
           Selected Status: {selectedStatusLabel()}
         </div>
       </div>
-      {error ? <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-4">
         <select className="rounded border px-3 py-2 text-sm" value={form.bank_account_id} onChange={(e) => void onBankChange(Number(e.target.value))}>
           <option value={0}>Select bank account</option>
           {accounts.map((a) => (
@@ -338,12 +338,12 @@ export function BankReconciliationPage() {
         </select>
         <input type="date" className="rounded border px-3 py-2 text-sm" value={form.statement_date} onChange={(e) => setForm((p) => ({ ...p, statement_date: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Statement balance" value={form.statement_balance} onChange={(e) => setForm((p) => ({ ...p, statement_balance: e.target.value }))} />
-        <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white">Add Statement</button>
+        <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">Add Statement</button>
       </form>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">Date</th>
               <th className="px-2 py-1 text-right">Statement</th>
@@ -364,13 +364,13 @@ export function BankReconciliationPage() {
                 <td className="px-2 py-1">{r.status}{r.is_finalized ? " / FINALIZED" : ""}</td>
                 <td className="px-2 py-1">
                   {r.is_finalized ? (
-                    <span className="text-xs text-slate-500">Locked</span>
+                    <span className="text-xs text-text-muted">Locked</span>
                   ) : r.status !== "MATCHED" ? (
                     <button className="rounded border px-2 py-1 text-xs" onClick={() => void resolve(r.id)}>
                       Resolve
                     </button>
                   ) : (
-                    <span className="text-xs text-emerald-600">Done</span>
+                    <span className="text-xs text-status-success">Done</span>
                   )}
                 </td>
                 <td className="px-2 py-1">
@@ -384,9 +384,9 @@ export function BankReconciliationPage() {
         </table>
       </div>
 
-      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+      <div className="space-y-3 rounded-xl border border-border bg-surface-raised p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Statement Lines</h2>
+          <h2 className="text-lg font-semibold text-text-primary">Statement Lines</h2>
           <div className="flex gap-2">
             <button className="rounded border px-3 py-1 text-sm" onClick={() => void autoMatch()} disabled={!selectedReconId || selectedReconciliation?.is_finalized}>
               Auto Match
@@ -409,12 +409,12 @@ export function BankReconciliationPage() {
               disabled={selectedReconciliation?.is_finalized}
             />
           ) : (
-            <div className="rounded border bg-slate-50 px-3 py-2 text-sm">
+            <div className="rounded border bg-surface-subtle px-3 py-2 text-sm">
               Only manager/admin can finalize reconciliation.
             </div>
           )}
           {selectedReconciliation?.is_finalized ? (
-            <div className="rounded border bg-slate-50 px-3 py-2 text-sm">
+            <div className="rounded border bg-surface-subtle px-3 py-2 text-sm">
               Finalized reason: {selectedReconciliation.finalize_reason || "-"}
             </div>
           ) : null}
@@ -422,19 +422,19 @@ export function BankReconciliationPage() {
 
         {summary ? (
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded border bg-slate-50 px-3 py-2 text-sm">Lines: {summary.line_count}</div>
-            <div className="rounded border bg-emerald-50 px-3 py-2 text-sm">Matched: {summary.matched_count}</div>
-            <div className="rounded border bg-amber-50 px-3 py-2 text-sm">Unmatched: {summary.unmatched_count}</div>
-            <div className="rounded border bg-slate-50 px-3 py-2 text-sm">Difference: {summary.difference_amount.toLocaleString()}</div>
+            <div className="rounded border bg-surface-subtle px-3 py-2 text-sm">Lines: {summary.line_count}</div>
+            <div className="rounded border bg-status-success-subtle px-3 py-2 text-sm">Matched: {summary.matched_count}</div>
+            <div className="rounded border bg-status-warning-subtle px-3 py-2 text-sm">Unmatched: {summary.unmatched_count}</div>
+            <div className="rounded border bg-surface-subtle px-3 py-2 text-sm">Difference: {summary.difference_amount.toLocaleString()}</div>
           </div>
         ) : null}
 
         {showFinalizeConfirm && canFinalize && selectedReconciliation && !selectedReconciliation.is_finalized ? (
-          <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
-            <p className="mb-2 font-medium text-amber-800">Confirm finalize?</p>
-            <p className="mb-3 text-amber-700">After finalize, this reconciliation will be locked for edits and matching changes.</p>
+          <div className="rounded border border-status-warning/30 bg-status-warning-subtle p-3 text-sm">
+            <p className="mb-2 font-medium text-status-warning-foreground">Confirm finalize?</p>
+            <p className="mb-3 text-status-warning-foreground">After finalize, this reconciliation will be locked for edits and matching changes.</p>
             <div className="flex gap-2">
-              <button className="rounded bg-amber-700 px-3 py-1 text-white" onClick={() => void finalizeSelected()}>
+              <button className="rounded bg-status-warning px-3 py-1 text-brand-primary-foreground" onClick={() => void finalizeSelected()}>
                 {isFinalizing ? "Finalizing..." : "Yes, Finalize"}
               </button>
               <button className="rounded border px-3 py-1" onClick={() => setShowFinalizeConfirm(false)} disabled={isFinalizing}>
@@ -450,11 +450,11 @@ export function BankReconciliationPage() {
           <input className="rounded border px-3 py-2 text-sm" placeholder="Reference" value={lineForm.reference ?? ""} onChange={(e) => setLineForm((p) => ({ ...p, reference: e.target.value }))} />
           <input className="rounded border px-3 py-2 text-sm" placeholder="Debit" value={lineForm.debit_amount ?? "0"} onChange={(e) => setLineForm((p) => ({ ...p, debit_amount: e.target.value }))} />
           <input className="rounded border px-3 py-2 text-sm" placeholder="Credit" value={lineForm.credit_amount ?? "0"} onChange={(e) => setLineForm((p) => ({ ...p, credit_amount: e.target.value }))} />
-          <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white" disabled={selectedReconciliation?.is_finalized}>Add Line</button>
+          <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground" disabled={selectedReconciliation?.is_finalized}>Add Line</button>
         </form>
 
         <div className="space-y-2">
-          <p className="text-sm font-medium text-slate-700">CSV Import (paste CSV text)</p>
+          <p className="text-sm font-medium text-text-secondary">CSV Import (paste CSV text)</p>
           <textarea
             className="h-24 w-full rounded border px-3 py-2 text-sm"
             placeholder="transaction_date,description,reference,debit_amount,credit_amount,running_balance"
@@ -468,7 +468,7 @@ export function BankReconciliationPage() {
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left">
+            <thead className="bg-surface-subtle text-left">
               <tr>
                 <th className="px-2 py-1">Date</th>
                 <th className="px-2 py-1">Description</th>
@@ -528,7 +528,7 @@ export function BankReconciliationPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-4">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised p-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Match Audit Trail</h2>
           <button className="rounded border px-3 py-1 text-sm" onClick={() => void exportAuditCsv()} disabled={!selectedReconId || isExporting}>
@@ -536,7 +536,7 @@ export function BankReconciliationPage() {
           </button>
         </div>
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">When</th>
               <th className="px-2 py-1">Action</th>

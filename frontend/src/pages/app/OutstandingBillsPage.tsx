@@ -80,8 +80,8 @@ export function OutstandingBillsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Outstanding Bills</h1>
-          <p className="text-sm text-slate-500">AP/AR bill tracking with aging buckets.</p>
+          <h1 className="text-2xl font-semibold text-text-primary">Outstanding Bills</h1>
+          <p className="text-sm text-text-muted">AP/AR bill tracking with aging buckets.</p>
         </div>
         <select className="rounded border px-2 py-1 text-sm" value={billType} onChange={(e) => setBillType(e.target.value as "PAYABLE" | "RECEIVABLE")}>
           <option value="RECEIVABLE">Receivable</option>
@@ -109,15 +109,15 @@ export function OutstandingBillsPage() {
 
       {aging ? (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="rounded border bg-white p-2 text-sm">Current: <b>{(aging.buckets.current ?? 0).toLocaleString()}</b></div>
-          <div className="rounded border bg-white p-2 text-sm">1-30: <b>{(aging.buckets["1_30"] ?? 0).toLocaleString()}</b></div>
-          <div className="rounded border bg-white p-2 text-sm">31-60: <b>{(aging.buckets["31_60"] ?? 0).toLocaleString()}</b></div>
-          <div className="rounded border bg-white p-2 text-sm">61-90: <b>{(aging.buckets["61_90"] ?? 0).toLocaleString()}</b></div>
-          <div className="rounded border bg-white p-2 text-sm">90+: <b>{(aging.buckets["90_plus"] ?? 0).toLocaleString()}</b></div>
+          <div className="rounded border bg-surface-raised p-2 text-sm">Current: <b>{(aging.buckets.current ?? 0).toLocaleString()}</b></div>
+          <div className="rounded border bg-surface-raised p-2 text-sm">1-30: <b>{(aging.buckets["1_30"] ?? 0).toLocaleString()}</b></div>
+          <div className="rounded border bg-surface-raised p-2 text-sm">31-60: <b>{(aging.buckets["31_60"] ?? 0).toLocaleString()}</b></div>
+          <div className="rounded border bg-surface-raised p-2 text-sm">61-90: <b>{(aging.buckets["61_90"] ?? 0).toLocaleString()}</b></div>
+          <div className="rounded border bg-surface-raised p-2 text-sm">90+: <b>{(aging.buckets["90_plus"] ?? 0).toLocaleString()}</b></div>
         </div>
       ) : null}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 sm:grid-cols-2 lg:grid-cols-4">
         <input className="rounded border px-3 py-2 text-sm" placeholder="Bill No (optional)" value={form.bill_no} onChange={(e) => setForm((p) => ({ ...p, bill_no: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Party Name" value={form.party_name} onChange={(e) => setForm((p) => ({ ...p, party_name: e.target.value }))} />
         <input type="date" className="rounded border px-3 py-2 text-sm" value={form.bill_date} onChange={(e) => setForm((p) => ({ ...p, bill_date: e.target.value }))} />
@@ -125,15 +125,15 @@ export function OutstandingBillsPage() {
         <input className="rounded border px-3 py-2 text-sm" placeholder="Amount" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Paid Amount" value={form.paid_amount} onChange={(e) => setForm((p) => ({ ...p, paid_amount: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Currency" value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value.toUpperCase() }))} />
-        <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white">Create Bill</button>
+        <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">Create Bill</button>
       </form>
 
-      {error ? <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">Bill</th>
               <th className="px-2 py-1">Party</th>
@@ -165,7 +165,7 @@ export function OutstandingBillsPage() {
             ))}
             {filteredRows.length === 0 ? (
               <tr className="border-t">
-                <td className="px-2 py-2 text-slate-500" colSpan={7}>
+                <td className="px-2 py-2 text-text-muted" colSpan={7}>
                   No bills found for the current filters.
                 </td>
               </tr>

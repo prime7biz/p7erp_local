@@ -42,7 +42,7 @@ export function VerifyProformaPage() {
   if (loading) {
     return (
       <div className="min-h-[40vh] flex items-center justify-center p-6">
-        <p className="text-slate-600">Verifying proforma invoice…</p>
+        <p className="text-text-muted">Verifying proforma invoice…</p>
       </div>
     );
   }
@@ -51,21 +51,21 @@ export function VerifyProformaPage() {
 
   return (
     <div className="min-h-[40vh] flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="w-full max-w-md rounded-xl border border-border bg-surface-raised p-6 shadow-sm">
         {invalid ? (
           <>
-            <h1 className="text-lg font-bold text-red-700">Invalid or expired token</h1>
-            <p className="mt-2 text-sm text-slate-600">
+            <h1 className="text-lg font-bold text-status-danger-foreground">Invalid or expired token</h1>
+            <p className="mt-2 text-sm text-text-muted">
               {error || result?.message || "This link is invalid or has expired. Please request a new verification link."}
             </p>
           </>
         ) : (
           <>
-            <h1 className="text-lg font-bold text-emerald-700">Proforma invoice verified</h1>
-            <p className="mt-2 text-sm text-slate-700">
+            <h1 className="text-lg font-bold text-status-success-foreground">Proforma invoice verified</h1>
+            <p className="mt-2 text-sm text-text-secondary">
               This proforma invoice was issued by <strong>{result?.company_name ?? "—"}</strong>.
             </p>
-            <ul className="mt-4 space-y-1 text-sm text-slate-700">
+            <ul className="mt-4 space-y-1 text-sm text-text-secondary">
               <li><span className="font-medium">Reference:</span> {result?.reference ?? "—"}</li>
               <li><span className="font-medium">Date:</span> {formatDate(result?.invoice_date)}</li>
               <li><span className="font-medium">Amount:</span> {formatMoney(result?.amount ?? undefined)} {result?.currency ?? ""}</li>

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
 from app.common.tenant import require_tenant
+from app.common.workflow import INQUIRY_TRANSITIONS, next_status_options, validate_transition
 from app.database import get_db
 from app.models import (
   CommissionMode,
@@ -164,6 +165,11 @@ def _serialize_inquiry(
     commission_type=inquiry.commission_type,
     commission_value=commission_value,
     status=inquiry.status,
+    next_status_options=next_status_options(
+      INQUIRY_TRANSITIONS,
+      inquiry.status,
+      fallback="DRAFT",
+    ),
     is_converted_to_quotation=converted_quotation_id is not None,
     converted_quotation_id=converted_quotation_id,
     notes=inquiry.notes,
@@ -421,7 +427,13 @@ async def update_inquiry(
   if body.commission_value is not None:
     inquiry.commission_value = body.commission_value
   if body.status is not None:
-    inquiry.status = body.status
+    inquiry.status = validate_transition(
+      INQUIRY_TRANSITIONS,
+      inquiry.status,
+      body.status,
+      fallback="DRAFT",
+      entity_label="inquiry",
+    )
   if body.notes is not None:
     inquiry.notes = body.notes
   if body.items is not None:
@@ -475,6 +487,17 @@ class InquiryStatusBody(BaseModel):
   notes: str | None = None
 
 
+class InquiryTraceEventOut(BaseModel):
+  id: int
+  tenant_id: int
+  inquiry_id: int
+  event_type: str
+  from_status: str | None
+  to_status: str | None
+  notes: str | None
+  created_at: datetime
+
+
 @router.patch("/{inquiry_id}/status", response_model=InquiryResponse)
 async def update_inquiry_status(
   inquiry_id: int,
@@ -489,14 +512,20 @@ async def update_inquiry_status(
   if not inquiry or inquiry.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
   old_status = inquiry.status
-  inquiry.status = body.status
+  inquiry.status = validate_transition(
+    INQUIRY_TRANSITIONS,
+    inquiry.status,
+    body.status,
+    fallback="DRAFT",
+    entity_label="inquiry",
+  )
   db.add(
     InquiryEvent(
       tenant_id=tenant.id,
       inquiry_id=inquiry.id,
       event_type="status_change",
       from_status=old_status,
-      to_status=body.status,
+      to_status=inquiry.status,
       notes=body.notes,
     )
   )
@@ -519,7 +548,7 @@ async def update_inquiry_status(
   )
 
 
-@router.get("/{inquiry_id}/trace")
+@router.get("/{inquiry_id}/trace", response_model=list[InquiryTraceEventOut])
 async def get_inquiry_trace(
   inquiry_id: int,
   tenant: Tenant = Depends(require_tenant),

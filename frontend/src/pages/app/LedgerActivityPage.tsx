@@ -68,20 +68,20 @@ export function LedgerActivityPage() {
 
   return (
     <div className="space-y-6 print-report">
-      <div className="print-only mb-3 border-b border-slate-300 pb-2">
+      <div className="print-only mb-3 border-b border-border-strong pb-2">
         <h1 className="text-lg font-semibold">Ledger Activity Report</h1>
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-text-secondary">
           Period: {fromDate} to {toDate}
         </p>
       </div>
       <div className="no-print">
-        <h1 className="text-2xl font-semibold text-slate-900">Ledger Activity Report</h1>
-        <p className="text-sm text-slate-500">Account-wise posted voucher activity with running balance.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Ledger Activity Report</h1>
+        <p className="text-sm text-text-muted">Account-wise posted voucher activity with running balance.</p>
       </div>
-      {error ? <div className="no-print rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="no-print rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+      {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="no-print rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
-      <div className="no-print grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="no-print grid gap-2 rounded-xl border border-border bg-surface-raised p-3 sm:grid-cols-2 lg:grid-cols-5">
         <select className="rounded border px-3 py-2 text-sm sm:col-span-2 lg:col-span-2" value={selectedAccountId ?? ""} onChange={(e) => setSelectedAccountId(Number(e.target.value))}>
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
@@ -98,19 +98,19 @@ export function LedgerActivityPage() {
 
       {data ? (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <div className={`print-card rounded border bg-white ${compactView ? "p-1 text-xs" : "p-2 text-sm"}`}>Opening: <b>{data.opening_balance.toLocaleString()}</b></div>
-          <div className={`print-card rounded border bg-white ${compactView ? "p-1 text-xs" : "p-2 text-sm"}`}>Closing: <b>{data.closing_balance.toLocaleString()}</b></div>
-          <button className={`no-print rounded border bg-white px-3 py-2 text-sm ${compactView ? "bg-slate-900 text-white" : ""}`} onClick={() => setCompactView((v) => !v)}>
+          <div className={`print-card rounded border border-border bg-surface-raised ${compactView ? "p-1 text-xs" : "p-2 text-sm"}`}>Opening: <b>{data.opening_balance.toLocaleString()}</b></div>
+          <div className={`print-card rounded border border-border bg-surface-raised ${compactView ? "p-1 text-xs" : "p-2 text-sm"}`}>Closing: <b>{data.closing_balance.toLocaleString()}</b></div>
+          <button className={`no-print rounded border border-border-strong bg-surface-raised px-3 py-2 text-sm ${compactView ? "bg-surface-inverse text-text-inverse" : ""}`} onClick={() => setCompactView((v) => !v)}>
             {compactView ? "Comfort View" : "Compact View"}
           </button>
-          <button className="no-print rounded border bg-white px-3 py-2 text-sm" onClick={() => handlePrint()}>Print</button>
-          <button className="no-print rounded border bg-white px-3 py-2 text-sm" onClick={() => exportCsv()}>Export CSV</button>
+          <button className="no-print rounded border border-border-strong bg-surface-raised px-3 py-2 text-sm" onClick={() => handlePrint()}>Print</button>
+          <button className="no-print rounded border border-border-strong bg-surface-raised px-3 py-2 text-sm" onClick={() => exportCsv()}>Export CSV</button>
         </div>
       ) : null}
 
-      <div className="print-card overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="print-card overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className={`min-w-full ${compactView ? "text-xs" : "text-sm"} print:text-xs`}>
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className={compactView ? "px-1 py-1" : "px-2 py-1"}>Date</th>
               <th className={compactView ? "px-1 py-1" : "px-2 py-1"}>Voucher</th>

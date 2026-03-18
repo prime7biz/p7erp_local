@@ -50,10 +50,10 @@ export function ContactPage() {
     <>
       <section className="relative bg-gradient-to-br from-primary/5 via-white to-white py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-text-primary leading-tight">
             Let&apos;s Talk About <span className="text-primary">Your Business</span>
           </h1>
-          <p className="mt-6 text-lg sm:text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+          <p className="mt-6 text-lg sm:text-xl text-text-secondary max-w-3xl mx-auto leading-relaxed">
             Whether you&apos;re exploring ERP options or ready to get started, our team is here to help you
             find the right solution for your garment manufacturing operations.
           </p>
@@ -70,7 +70,7 @@ export function ContactPage() {
           <div className="grid lg:grid-cols-5 gap-12 lg:gap-16">
             <div className="lg:col-span-2 space-y-8">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Contact Information</h2>
+                <h2 className="text-2xl font-bold text-text-primary mb-6">Contact Information</h2>
                 <div className="space-y-6">
                   {contactInfo.map((item) => (
                     <div key={item.label} className="flex items-start gap-4">
@@ -78,16 +78,16 @@ export function ContactPage() {
                         <item.icon className="h-5 w-5 text-primary" />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-600">{item.label}</p>
+                        <p className="text-sm text-text-secondary">{item.label}</p>
                         {"href" in item && item.href ? (
-                          <a href={item.href} className="text-gray-900 font-medium hover:text-primary transition-colors">
+                          <a href={item.href} className="text-text-primary font-medium hover:text-primary transition-colors">
                             {item.value}
                           </a>
                         ) : (
-                          <p className="text-gray-900 font-medium">{item.value}</p>
+                          <p className="text-text-primary font-medium">{item.value}</p>
                         )}
                         {"detail" in item && item.detail && (
-                          <p className="text-sm text-gray-600 mt-0.5">{item.detail}</p>
+                          <p className="text-sm text-text-secondary mt-0.5">{item.detail}</p>
                         )}
                       </div>
                     </div>
@@ -95,41 +95,41 @@ export function ContactPage() {
                 </div>
               </div>
 
-              <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+              <div className="bg-surface-subtle rounded-xl p-6 border border-border">
                 <div className="flex items-center gap-3 mb-3">
                   <Clock className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold text-gray-900">Office Hours</h3>
+                  <h3 className="font-semibold text-text-primary">Office Hours</h3>
                 </div>
-                <div className="space-y-2 text-sm text-gray-600">
+                <div className="space-y-2 text-sm text-text-secondary">
                   <div className="flex justify-between">
                     <span>Saturday – Thursday</span>
-                    <span className="font-medium text-gray-900">9:00 AM – 6:00 PM</span>
+                    <span className="font-medium text-text-primary">9:00 AM – 6:00 PM</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Friday</span>
-                    <span className="font-medium text-gray-500">Closed</span>
+                    <span className="font-medium text-text-muted">Closed</span>
                   </div>
-                  <p className="text-xs text-gray-600 pt-2">All times in Bangladesh Standard Time (BST, UTC+6)</p>
+                  <p className="text-xs text-text-secondary pt-2">All times in Bangladesh Standard Time (BST, UTC+6)</p>
                 </div>
               </div>
 
-              <div id="support" className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+              <div id="support" className="bg-surface-subtle rounded-xl p-6 border border-border">
                 <div className="flex items-center gap-3 mb-3">
                   <Mail className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold text-gray-900">Support & Help</h3>
+                  <h3 className="font-semibold text-text-primary">Support & Help</h3>
                 </div>
-                <div className="space-y-2 text-sm text-gray-600">
+                <div className="space-y-2 text-sm text-text-secondary">
                   <div className="flex justify-between gap-2">
                     <span>Email Support</span>
                     <a href="mailto:support@prime7erp.com" className="font-medium text-primary hover:underline shrink-0">support@prime7erp.com</a>
                   </div>
                   <div className="flex justify-between">
                     <span>Business Hours</span>
-                    <span className="font-medium text-gray-900">Sunday–Thursday, 9:00 AM – 6:00 PM (BST)</span>
+                    <span className="font-medium text-text-primary">Sunday–Thursday, 9:00 AM – 6:00 PM (BST)</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Response Time</span>
-                    <span className="font-medium text-gray-900">Within 24 hours</span>
+                    <span className="font-medium text-text-primary">Within 24 hours</span>
                   </div>
                 </div>
               </div>
@@ -139,23 +139,23 @@ export function ContactPage() {
               <div className="bg-white border border-primary/20 rounded-xl p-6 sm:p-8 shadow-sm">
                 <div className="flex items-center gap-3 mb-6">
                   <Building2 className="h-5 w-5 text-primary" />
-                  <h2 className="text-2xl font-bold text-gray-900">Send Us a Message</h2>
+                  <h2 className="text-2xl font-bold text-text-primary">Send Us a Message</h2>
                 </div>
-                <p className="text-xs text-gray-600 mb-5">Fields marked with ** are mandatory.</p>
+                <p className="text-xs text-text-secondary mb-5">Fields marked with ** are mandatory.</p>
 
                 {submitted ? (
                   <div className="text-center py-12">
-                    <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-                      <Send className="h-7 w-7 text-emerald-600" />
+                    <div className="w-16 h-16 rounded-full bg-status-success-subtle flex items-center justify-center mx-auto mb-4">
+                      <Send className="h-7 w-7 text-status-success-foreground" />
                     </div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Message Sent!</h3>
-                    <p className="text-gray-600 max-w-md mx-auto">
+                    <h3 className="text-xl font-semibold text-text-primary mb-2">Message Sent!</h3>
+                    <p className="text-text-secondary max-w-md mx-auto">
                       Thank you for reaching out. Our team will get back to you within 24 hours.
                     </p>
                     <button
                       type="button"
                       onClick={() => setSubmitted(false)}
-                      className="mt-6 px-5 py-2.5 rounded-lg border border-gray-200 font-medium hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+                      className="mt-6 px-5 py-2.5 rounded-lg border border-border font-medium hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
                     >
                       Send Another Message
                     </button>
@@ -164,27 +164,27 @@ export function ContactPage() {
                   <form onSubmit={handleSubmit} className="space-y-5">
                     <div className="grid sm:grid-cols-2 gap-5">
                       <div>
-                        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Full Name **</label>
-                        <input type="text" id="name" name="name" required value={form.name} onChange={handleChange} placeholder="Your full name" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
+                        <label htmlFor="name" className="block text-sm font-medium text-text-secondary mb-1">Full Name **</label>
+                        <input type="text" id="name" name="name" required value={form.name} onChange={handleChange} placeholder="Your full name" className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
                       </div>
                       <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email Address **</label>
-                        <input type="email" id="email" name="email" required value={form.email} onChange={handleChange} placeholder="john@company.com" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
+                        <label htmlFor="email" className="block text-sm font-medium text-text-secondary mb-1">Email Address **</label>
+                        <input type="email" id="email" name="email" required value={form.email} onChange={handleChange} placeholder="john@company.com" className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
                       </div>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-5">
                       <div>
-                        <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
-                        <input type="text" id="company" name="company" value={form.company} onChange={handleChange} placeholder="Your Company Ltd." className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
+                        <label htmlFor="company" className="block text-sm font-medium text-text-secondary mb-1">Company Name</label>
+                        <input type="text" id="company" name="company" value={form.company} onChange={handleChange} placeholder="Your Company Ltd." className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
                       </div>
                       <div>
-                        <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                        <input type="tel" id="phone" name="phone" value={form.phone} onChange={handleChange} placeholder="+880 1XXX-XXXXXX" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
+                        <label htmlFor="phone" className="block text-sm font-medium text-text-secondary mb-1">Phone Number</label>
+                        <input type="tel" id="phone" name="phone" value={form.phone} onChange={handleChange} placeholder="+880 1XXX-XXXXXX" className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" />
                       </div>
                     </div>
                     <div>
-                      <label htmlFor="companySize" className="block text-sm font-medium text-gray-700 mb-1">Company Size</label>
-                      <select id="companySize" name="companySize" value={form.companySize} onChange={handleChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-white">
+                      <label htmlFor="companySize" className="block text-sm font-medium text-text-secondary mb-1">Company Size</label>
+                      <select id="companySize" name="companySize" value={form.companySize} onChange={handleChange} className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none bg-white">
                         <option value="">Select company size</option>
                         {companySizes.map((s) => (
                           <option key={s.value} value={s.value}>{s.label}</option>
@@ -192,8 +192,8 @@ export function ContactPage() {
                       </select>
                     </div>
                     <div>
-                      <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">Message **</label>
-                      <textarea id="message" name="message" required rows={5} value={form.message} onChange={handleChange} placeholder="Tell us about your requirements..." className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none" />
+                      <label htmlFor="message" className="block text-sm font-medium text-text-secondary mb-1">Message **</label>
+                      <textarea id="message" name="message" required rows={5} value={form.message} onChange={handleChange} placeholder="Tell us about your requirements..." className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none" />
                     </div>
                     <button type="submit" disabled={loading} className="w-full py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary/90 disabled:opacity-60 flex items-center justify-center gap-2 transition-colors">
                       {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending...</> : <><Send className="h-4 w-4" /> Send Message</>}

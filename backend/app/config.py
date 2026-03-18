@@ -3,6 +3,7 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    app_env: str = "development"
     database_url: str = "postgresql://p7erp:p7erp@localhost:5432/p7erp"
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
@@ -12,6 +13,7 @@ class Settings(BaseSettings):
     redis_url: str | None = None
     api_v1_prefix: str = "/api/v1"
     ai_confirmation_token_pepper: str = "change-me-ai-token-pepper"
+    allow_public_registration: bool = False
     ai_rate_limit_window_seconds: int = 60
     ai_rate_limit_chat_per_window: int = 30
     ai_rate_limit_read_per_window: int = 50
@@ -26,4 +28,13 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    is_dev = settings.app_env.lower() in {"dev", "development", "local", "test", "testing"}
+    if not is_dev:
+        if settings.jwt_secret == "change-me-in-production":
+            raise RuntimeError("JWT_SECRET must be set to a strong value in non-development environments.")
+        if settings.ai_confirmation_token_pepper == "change-me-ai-token-pepper":
+            raise RuntimeError(
+                "AI_CONFIRMATION_TOKEN_PEPPER must be set to a strong value in non-development environments."
+            )
+    return settings

@@ -41,55 +41,55 @@ export function AuditPage() {
   };
 
   if (loading) return <p>Loading activity logs...</p>;
-  if (error) return <p style={{ color: "#dc2626" }}>{error}</p>;
+  if (error) return <p className="text-status-danger-foreground">{error}</p>;
 
   return (
     <div className="space-y-4">
       <h1 style={{ marginTop: 0 }}>Activity logs</h1>
-      <form onSubmit={applyFilters} className="rounded-xl border border-gray-200 bg-white p-4">
+      <form onSubmit={applyFilters} className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="grid gap-3 md:grid-cols-3">
           <input
             value={action}
             onChange={(e) => setAction(e.target.value)}
             placeholder="Filter by action (e.g. SETTINGS_USER_UPDATE)"
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
           />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search details"
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
+            className="rounded border border-border px-3 py-2 text-sm"
           />
           <button
             type="submit"
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
+            className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground"
           >
             Apply filters
           </button>
         </div>
       </form>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+      <table className="w-full border-collapse text-sm">
         <thead>
-          <tr style={{ borderBottom: "2px solid #e2e8f0", textAlign: "left" }}>
-            <th style={{ padding: 8 }}>Time</th>
-            <th style={{ padding: 8 }}>Action</th>
-            <th style={{ padding: 8 }}>Resource</th>
-            <th style={{ padding: 8 }}>Details</th>
+          <tr className="border-b-2 border-border text-left">
+            <th className="p-2">Time</th>
+            <th className="p-2">Action</th>
+            <th className="p-2">Resource</th>
+            <th className="p-2">Details</th>
           </tr>
         </thead>
         <tbody>
           {logs.map((log) => (
-            <tr key={log.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-              <td style={{ padding: 8 }}>{new Date(log.created_at).toLocaleString()}</td>
-              <td style={{ padding: 8 }}>{log.action}</td>
-              <td style={{ padding: 8 }}>{log.resource ?? "—"}</td>
-              <td style={{ padding: 8 }}>{log.details ?? "—"}</td>
+            <tr key={log.id} className="border-b border-border">
+              <td className="p-2">{new Date(log.created_at).toLocaleString()}</td>
+              <td className="p-2">{log.action}</td>
+              <td className="p-2">{log.resource ?? "—"}</td>
+              <td className="p-2">{log.details ?? "—"}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <div className="flex items-center justify-between text-sm text-gray-600">
+      <div className="flex items-center justify-between text-sm text-text-muted">
         <p>
           Showing {logs.length} of {total} logs
         </p>
@@ -98,7 +98,7 @@ export function AuditPage() {
             type="button"
             onClick={() => setOffset((prev) => Math.max(0, prev - limit))}
             disabled={offset === 0}
-            className="rounded border border-gray-300 px-3 py-1.5 disabled:opacity-50"
+            className="rounded border border-border px-3 py-1.5 disabled:opacity-50"
           >
             Previous
           </button>
@@ -106,7 +106,7 @@ export function AuditPage() {
             type="button"
             onClick={() => setOffset((prev) => prev + limit)}
             disabled={offset + limit >= total}
-            className="rounded border border-gray-300 px-3 py-1.5 disabled:opacity-50"
+            className="rounded border border-border px-3 py-1.5 disabled:opacity-50"
           >
             Next
           </button>

@@ -5,23 +5,52 @@ Multi-tenant SaaS ERP for garments (manufacturing and buying house).
 
 ---
 
-## Technical summary (for live server deployment)
+## Technical stack (current)
 
 | Layer | Technology | Version / notes |
 |-------|------------|-----------------|
-| **Backend** | Python | 3.12 |
-| | Framework | FastAPI 0.115.x |
-| | ASGI server | Uvicorn 0.32.x |
-| | ORM | SQLAlchemy 2.x (async) |
-| | DB driver | asyncpg |
-| | Migrations | Alembic 1.14.x |
-| | Auth | JWT (python-jose), bcrypt |
-| **Frontend** | Node | 20 LTS (for build) |
-| | Runtime | React 18, TypeScript 5.6 |
-| | Build tool | Vite 6.x |
-| | UI | Tailwind CSS 3.x, Radix UI, Lucide icons |
-| **Database** | PostgreSQL | 16 (recommended; 14+ supported) |
-| **Optional** | Redis | 7 (sessions/cache; optional) |
+| **Backend runtime** | Python | 3.12 (`python:3.12-slim` in Docker) |
+| | API framework | FastAPI `0.115.6` |
+| | ASGI server | Uvicorn `0.32.1` |
+| | Validation/settings | Pydantic `2.10.3`, pydantic-settings `2.6.1` |
+| | ORM / DB access | SQLAlchemy async `2.0.36` + asyncpg `0.30.0` |
+| | Migrations | Alembic `1.14.0` |
+| | Auth/security | JWT (`python-jose`), passlib + bcrypt |
+| | API/form helpers | python-multipart, email-validator |
+| | Reporting import/export | openpyxl |
+| **Frontend runtime/build** | Node.js | 20 LTS (`node:20-alpine` for build/dev) |
+| | Framework | React `18.3.1` + React DOM |
+| | Language | TypeScript `5.6.x` |
+| | Routing | React Router DOM `7.0.2` |
+| | Build tool | Vite `6.0.1` + `@vitejs/plugin-react` |
+| | Styling | Tailwind CSS `3.4.x`, PostCSS, Autoprefixer |
+| | UI/UX libraries | Radix UI, Framer Motion, Lucide React |
+| | Utility libraries | clsx, class-variance-authority, tailwind-merge, react-helmet-async, qrcode.react |
+| **Database** | PostgreSQL | 16 (`postgres:16-alpine`) |
+| **Cache (optional)** | Redis | 7 (`redis:7-alpine`) |
+| **Containers/orchestration** | Docker + Docker Compose | Dev and production compose files |
+| **Frontend serving (prod)** | Nginx | `nginx:1.27-alpine` serving built `frontend/dist` |
+
+### Stack notes
+
+- **Frontend production image:** multi-stage build (`node:20-alpine` -> `nginx:1.27-alpine`), static files served by Nginx.
+- **Backend production command:** Uvicorn serving `app.main:app` on port `8000`.
+- **Tenant/auth model:** Multi-tenant app (`manufacturer` | `buying_house` | `both`) with JWT-based authentication.
+- **Reference parity:** Workflows are aligned with PrimeX (`replit-legacy/primeX-ERP/`) where applicable.
+
+### Version update checklist
+
+Use this quick list whenever dependencies or runtime versions change:
+
+1. Update backend versions in `backend/requirements.txt`.
+2. Update frontend versions in `frontend/package.json`.
+3. Update runtime image tags in `backend/Dockerfile`, `frontend/Dockerfile`, and `frontend/Dockerfile.prod`.
+4. Update service image tags in `docker-compose.yml` and `docker-compose.prod.yml` (Postgres/Redis/Nginx if changed).
+5. Reflect the same version changes in this README table (`Technical stack (current)`).
+6. Run a quick verification:
+   - Backend: `cd backend` -> `pip install -r requirements.txt`
+   - Frontend: `cd frontend` -> `npm ci`
+   - Docker: `docker compose config` (checks compose syntax and final values)
 
 ---
 

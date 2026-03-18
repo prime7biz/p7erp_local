@@ -67,20 +67,20 @@ export function BackupRestorePage() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div>
-        <h2 className="text-xl font-bold text-gray-900">Backup & Restore</h2>
-        <p className="text-sm text-gray-600">
+        <h2 className="text-xl font-bold text-text-primary">Backup & Restore</h2>
+        <p className="text-sm text-text-secondary">
           View backup health and trigger a manual backup run.
         </p>
       </div>
 
       {(error || success) && (
         <div className="space-y-2">
-          {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-          {success && <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div>}
+          {error && <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div>}
+          {success && <div className="rounded border border-status-success/20 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div>}
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700 space-y-2">
+      <div className="rounded-xl border border-border bg-surface-raised p-4 text-sm text-text-secondary space-y-2">
         <p>
           Backup enabled: <span className="font-semibold">{status?.enabled ? "Yes" : "No"}</span>
         </p>
@@ -113,14 +113,14 @@ export function BackupRestorePage() {
         {triggering ? "Triggering..." : "Trigger manual backup"}
       </button>
 
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-        <h3 className="border-b border-gray-200 p-4 text-sm font-semibold text-gray-900">Backup history</h3>
+      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+        <h3 className="border-b border-border p-4 text-sm font-semibold text-text-primary">Backup history</h3>
         {history.length === 0 ? (
-          <div className="p-4 text-sm text-gray-500">No backup history found yet.</div>
+          <div className="p-4 text-sm text-text-muted">No backup history found yet.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-gray-500">
+              <thead className="bg-surface-subtle text-left text-text-muted">
                 <tr>
                   <th className="px-4 py-2">Snapshot ID</th>
                   <th className="px-4 py-2">Time</th>
@@ -131,7 +131,7 @@ export function BackupRestorePage() {
               </thead>
               <tbody>
                 {history.map((row) => (
-                  <tr key={row.id} className="border-t border-gray-100">
+                  <tr key={row.id} className="border-t border-border">
                     <td className="px-4 py-2 font-mono">#{row.id}</td>
                     <td className="px-4 py-2">{new Date(row.created_at).toLocaleString()}</td>
                     <td className="px-4 py-2">{row.status}</td>
@@ -141,7 +141,7 @@ export function BackupRestorePage() {
                         type="button"
                         onClick={() => handleRestore(row.id)}
                         disabled={restoringId === row.id}
-                        className="rounded border border-indigo-200 px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
+                        className="rounded border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
                       >
                         {restoringId === row.id ? "Starting..." : "Restore"}
                       </button>

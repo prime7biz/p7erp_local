@@ -180,22 +180,22 @@ export function ShopFloorExecutionPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
-        <p className="text-sm text-slate-500">Operation queue, control actions, and downtime logging for factory floor use.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">{title}</h1>
+        <p className="text-sm text-text-muted">Operation queue, control actions, and downtime logging for factory floor use.</p>
       </div>
 
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
       {dashboard ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Active WOs</div><div className="text-xl font-semibold">{dashboard.active_work_orders}</div></div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Completed Ops</div><div className="text-xl font-semibold">{dashboard.completed_operations}/{dashboard.total_operations}</div></div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Downtime (min)</div><div className="text-xl font-semibold">{dashboard.total_downtime_minutes.toFixed(2)}</div></div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">OEE-like %</div><div className="text-xl font-semibold">{dashboard.oee_like_percent.toFixed(2)}%</div></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Active WOs</div><div className="text-xl font-semibold">{dashboard.active_work_orders}</div></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Completed Ops</div><div className="text-xl font-semibold">{dashboard.completed_operations}/{dashboard.total_operations}</div></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Downtime (min)</div><div className="text-xl font-semibold">{dashboard.total_downtime_minutes.toFixed(2)}</div></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">OEE-like %</div><div className="text-xl font-semibold">{dashboard.oee_like_percent.toFixed(2)}%</div></div>
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
           <select className="rounded border px-3 py-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All Status</option>
@@ -222,15 +222,15 @@ export function ShopFloorExecutionPage() {
           >
             Log Downtime
           </button>
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-text-muted">
             Tip: use assignment panel below to bind operator to operation.
             {myRole ? ` Current role: ${myRole}.` : ""}
           </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Assign Operator</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">Assign Operator</h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <select className="rounded border px-3 py-2 text-sm" value={assignOpId ?? ""} onChange={(e) => setAssignOpId(e.target.value ? Number(e.target.value) : null)}>
             <option value="">Select operation</option>
@@ -264,32 +264,32 @@ export function ShopFloorExecutionPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <div className="grid grid-cols-2 gap-3 border-b border-slate-200 p-4 md:grid-cols-4">
-          <div className="rounded border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Avg Downtime / Day</div>
-            <div className="text-lg font-semibold text-slate-900">{trendKpis.avgPerDay.toFixed(2)} min</div>
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+        <div className="grid grid-cols-2 gap-3 border-b border-border p-4 md:grid-cols-4">
+          <div className="rounded border border-border bg-surface-subtle p-3">
+            <div className="text-xs text-text-muted">Avg Downtime / Day</div>
+            <div className="text-lg font-semibold text-text-primary">{trendKpis.avgPerDay.toFixed(2)} min</div>
           </div>
-          <div className="rounded border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Worst Day</div>
-            <div className="text-lg font-semibold text-slate-900">
+          <div className="rounded border border-border bg-surface-subtle p-3">
+            <div className="text-xs text-text-muted">Worst Day</div>
+            <div className="text-lg font-semibold text-text-primary">
               {trendKpis.worstDay ? `${trendKpis.worstDay.date} (${trendKpis.worstDay.minutes.toFixed(2)})` : "-"}
             </div>
           </div>
-          <div className="rounded border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Top Reason</div>
-            <div className="text-lg font-semibold text-slate-900">
+          <div className="rounded border border-border bg-surface-subtle p-3">
+            <div className="text-xs text-text-muted">Top Reason</div>
+            <div className="text-lg font-semibold text-text-primary">
               {trendKpis.topReason ? `${trendKpis.topReason.reason} (${trendKpis.topReason.minutes.toFixed(2)})` : "-"}
             </div>
           </div>
-          <div className="rounded border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Total Events</div>
-            <div className="text-lg font-semibold text-slate-900">{trendKpis.totalEvents}</div>
+          <div className="rounded border border-border bg-surface-subtle p-3">
+            <div className="text-xs text-text-muted">Total Events</div>
+            <div className="text-lg font-semibold text-text-primary">{trendKpis.totalEvents}</div>
           </div>
         </div>
-        <div className="border-b px-4 py-3 text-sm font-semibold text-slate-700">Downtime Trend (Daily)</div>
+        <div className="border-b px-4 py-3 text-sm font-semibold text-text-secondary">Downtime Trend (Daily)</div>
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr>
               <th className="px-3 py-2">Date</th>
               <th className="px-3 py-2">Events</th>
@@ -306,9 +306,9 @@ export function ShopFloorExecutionPage() {
                 <td className="px-3 py-2">{row.open_events}</td>
                 <td className="px-3 py-2">{row.total_minutes.toFixed(2)}</td>
                 <td className="px-3 py-2">
-                  <div className="h-2 w-full rounded bg-slate-100">
+                  <div className="h-2 w-full rounded bg-surface-subtle">
                     <div
-                      className="h-2 rounded bg-emerald-500"
+                      className="h-2 rounded bg-status-success-subtle"
                       style={{
                         width: `${maxTrendMinutes > 0 ? (row.total_minutes / maxTrendMinutes) * 100 : 0}%`,
                       }}
@@ -319,16 +319,16 @@ export function ShopFloorExecutionPage() {
             ))}
             {downtimeTrendRows.length === 0 ? (
               <tr>
-                <td className="px-3 py-8 text-center text-slate-500" colSpan={5}>No downtime trend data.</td>
+                <td className="px-3 py-8 text-center text-text-muted" colSpan={5}>No downtime trend data.</td>
               </tr>
             ) : null}
           </tbody>
         </table>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <div className="border-b px-4 py-3">
-          <div className="mb-2 text-sm font-semibold text-slate-700">Downtime By Reason</div>
+          <div className="mb-2 text-sm font-semibold text-text-secondary">Downtime By Reason</div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
             <input
               className="rounded border px-3 py-2 text-sm"
@@ -351,11 +351,11 @@ export function ShopFloorExecutionPage() {
             >
               Clear Range
             </button>
-            <div className="text-xs text-slate-500">Filters use downtime start date.</div>
+            <div className="text-xs text-text-muted">Filters use downtime start date.</div>
           </div>
         </div>
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr>
               <th className="px-3 py-2">Reason</th>
               <th className="px-3 py-2">Events</th>
@@ -372,9 +372,9 @@ export function ShopFloorExecutionPage() {
                 <td className="px-3 py-2">{row.open_events}</td>
                 <td className="px-3 py-2">{row.total_minutes.toFixed(2)}</td>
                 <td className="px-3 py-2">
-                  <div className="h-2 w-full rounded bg-slate-100">
+                  <div className="h-2 w-full rounded bg-surface-subtle">
                     <div
-                      className="h-2 rounded bg-indigo-500"
+                      className="h-2 rounded bg-brand-primary"
                       style={{
                         width: `${maxReasonMinutes > 0 ? (row.total_minutes / maxReasonMinutes) * 100 : 0}%`,
                       }}
@@ -385,16 +385,16 @@ export function ShopFloorExecutionPage() {
             ))}
             {downtimeReasonRows.length === 0 ? (
               <tr>
-                <td className="px-3 py-8 text-center text-slate-500" colSpan={5}>No downtime analytics yet.</td>
+                <td className="px-3 py-8 text-center text-text-muted" colSpan={5}>No downtime analytics yet.</td>
               </tr>
             ) : null}
           </tbody>
         </table>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr>
               <th className="px-3 py-2">MO</th>
               <th className="px-3 py-2">Step</th>
@@ -507,17 +507,17 @@ export function ShopFloorExecutionPage() {
             ))}
             {filteredRows.length === 0 ? (
               <tr>
-                <td className="px-3 py-8 text-center text-slate-500" colSpan={8}>No operations found for current filter.</td>
+                <td className="px-3 py-8 text-center text-text-muted" colSpan={8}>No operations found for current filter.</td>
               </tr>
             ) : null}
           </tbody>
         </table>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <div className="border-b px-4 py-3 text-sm font-semibold text-slate-700">Open Downtime Events</div>
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+        <div className="border-b px-4 py-3 text-sm font-semibold text-text-secondary">Open Downtime Events</div>
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr>
               <th className="px-3 py-2">ID</th>
               <th className="px-3 py-2">Operation ID</th>
@@ -547,7 +547,7 @@ export function ShopFloorExecutionPage() {
             ))}
             {openDowntimeRows.length === 0 ? (
               <tr>
-                <td className="px-3 py-8 text-center text-slate-500" colSpan={5}>No open downtime events.</td>
+                <td className="px-3 py-8 text-center text-text-muted" colSpan={5}>No open downtime events.</td>
               </tr>
             ) : null}
           </tbody>

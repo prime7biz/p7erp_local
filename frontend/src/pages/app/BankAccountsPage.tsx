@@ -84,12 +84,12 @@ export function BankAccountsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Bank Accounts</h1>
-        <p className="text-sm text-slate-500">Maintain bank master, linked ledger, and working balance.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Bank Accounts</h1>
+        <p className="text-sm text-text-muted">Maintain bank master, linked ledger, and working balance.</p>
       </div>
-      {error ? <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-4">
+      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 md:grid-cols-4">
         <input className="rounded border px-3 py-2 text-sm" placeholder="Account Name" value={form.account_name} onChange={(e) => setForm((p) => ({ ...p, account_name: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Bank Name" value={form.bank_name} onChange={(e) => setForm((p) => ({ ...p, bank_name: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Account Number" value={form.account_number} onChange={(e) => setForm((p) => ({ ...p, account_number: e.target.value }))} />
@@ -104,12 +104,12 @@ export function BankAccountsPage() {
         <input className="rounded border px-3 py-2 text-sm" placeholder="Currency (e.g. BDT)" value={form.currency ?? "BDT"} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Opening Balance" value={form.opening_balance ?? "0"} onChange={(e) => setForm((p) => ({ ...p, opening_balance: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Current Balance" value={form.current_balance ?? "0"} onChange={(e) => setForm((p) => ({ ...p, current_balance: e.target.value }))} />
-        <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white">{editingId ? "Update" : "Create"}</button>
+        <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">{editingId ? "Update" : "Create"}</button>
       </form>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">Account</th>
               <th className="px-2 py-1">Bank</th>
@@ -134,19 +134,19 @@ export function BankAccountsPage() {
                     <button
                       type="button"
                       onClick={() => setOpenActionsId((prev) => (prev === r.id ? null : r.id))}
-                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                      className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                     >
                       Actions
                     </button>
                     {openActionsId === r.id && (
-                      <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                      <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
                         <button
                           type="button"
                           onClick={() => {
                             setOpenActionsId(null);
                             startEdit(r);
                           }}
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                         >
                           Edit
                         </button>

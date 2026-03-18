@@ -18,12 +18,12 @@ export function CollapsibleSection({
 }: CollapsibleSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className={cn("rounded-2xl border border-gray-200 bg-white", className)}>
-      <header className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+    <section className={cn("rounded-2xl border border-border bg-surface-raised", className)}>
+      <header className="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-3">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="text-left text-sm font-semibold text-gray-900"
+          className="text-left text-sm font-semibold text-text-primary"
         >
           {open ? "▼" : "▶"} {title}
         </button>

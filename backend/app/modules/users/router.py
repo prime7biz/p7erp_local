@@ -53,7 +53,9 @@ async def get_me(
     """Get current user with role. X-Tenant-Id must match user's tenant."""
     _ensure_user_tenant(current_user, tenant)
     role_result = await db.execute(select(Role).where(Role.id == current_user.role_id))
-    role = role_result.scalar_one()
+    role = role_result.scalar_one_or_none()
+    if role is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Current user role not found")
     return UserWithRoleResponse(
         id=current_user.id,
         tenant_id=current_user.tenant_id,

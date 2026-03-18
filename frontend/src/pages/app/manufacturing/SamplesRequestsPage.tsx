@@ -121,19 +121,19 @@ export function SamplesRequestsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Sample Requests</h1>
-        <p className="text-sm text-slate-500">Create and track sample requests from draft to buyer approval.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Sample Requests</h1>
+        <p className="text-sm text-text-muted">Create and track sample requests from draft to buyer approval.</p>
       </div>
       {!canManage ? (
-        <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="rounded border border-status-warning/20 bg-status-warning-subtle p-3 text-sm text-status-warning-foreground">
           You have view-only access. Supervisor/Manager/Admin role is required for sample updates.
         </div>
       ) : null}
 
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Create Sample Request</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">Create Sample Request</h2>
         <form className="grid grid-cols-1 gap-2 md:grid-cols-4" onSubmit={createSample}>
           <input
             className="rounded border px-3 py-2 text-sm"
@@ -197,13 +197,13 @@ export function SamplesRequestsPage() {
             value={form.target_date ?? ""}
             onChange={(e) => setForm((prev) => ({ ...prev, target_date: e.target.value || null }))}
           />
-          <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60" disabled={saving || !canManage} type="submit">
+          <button className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-60" disabled={saving || !canManage} type="submit">
             {saving ? "Saving..." : "Create"}
           </button>
         </form>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
           <select className="rounded border px-3 py-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All statuses</option>
@@ -219,9 +219,9 @@ export function SamplesRequestsPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr>
               <th className="px-3 py-2">Sample No</th>
               <th className="px-3 py-2">Type</th>
@@ -303,7 +303,7 @@ export function SamplesRequestsPage() {
             ))}
             {rows.length === 0 ? (
               <tr>
-                <td className="px-3 py-8 text-center text-slate-500" colSpan={9}>No sample requests found.</td>
+                <td className="px-3 py-8 text-center text-text-muted" colSpan={9}>No sample requests found.</td>
               </tr>
             ) : null}
           </tbody>

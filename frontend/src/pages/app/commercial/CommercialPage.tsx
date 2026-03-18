@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { api } from "@/api/client";
 import {
   ArrowRightLeft,
+  BarChart3,
   FileText,
+  FolderTree,
   Globe,
   Truck,
 } from "lucide-react";
@@ -17,16 +19,18 @@ export function CommercialPage() {
   const [masterContractsCount, setMasterContractsCount] = useState<CountState>("loading");
   const [proformaCount, setProformaCount] = useState<CountState>("loading");
   const [btbLcsCount, setBtbLcsCount] = useState<CountState>("loading");
+  const [tradeCasesCount, setTradeCasesCount] = useState<CountState>("loading");
 
   useEffect(() => {
     let cancelled = false;
 
     const loadCounts = async () => {
-      const [exportRes, masterRes, proformaRes, btbRes] = await Promise.allSettled([
+      const [exportRes, masterRes, proformaRes, btbRes, tradeRes] = await Promise.allSettled([
         api.listExportCases(),
         api.listMasterContracts(),
         api.listProformaInvoices(),
         api.listBtbLcs(),
+        api.listTradeCases(),
       ]);
 
       if (cancelled) return;
@@ -51,6 +55,11 @@ export function CommercialPage() {
           ? btbRes.value.length
           : "error"
       );
+      setTradeCasesCount(
+        tradeRes.status === "fulfilled" && Array.isArray(tradeRes.value)
+          ? tradeRes.value.length
+          : "error"
+      );
     };
 
     void loadCounts();
@@ -62,14 +71,14 @@ export function CommercialPage() {
   function Badge({ state }: { state: CountState }) {
     if (state === "loading") {
       return (
-        <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-gray-100 px-2 text-xs font-medium text-gray-500">
+        <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-surface-subtle px-2 text-xs font-medium text-text-muted">
           …
         </span>
       );
     }
     if (state === "error") {
       return (
-        <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-amber-50 px-2 text-xs font-medium text-amber-700" title="Count unavailable">
+        <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-status-warning-subtle px-2 text-xs font-medium text-status-warning-foreground" title="Count unavailable">
           —
         </span>
       );
@@ -104,11 +113,25 @@ export function CommercialPage() {
       count: proformaCount,
     },
     {
+      title: "Trade Cases",
+      description: "Unified export/import case management linked with PI, LC, shipment, and document workflow.",
+      to: `${BASE}/trade/cases`,
+      icon: FolderTree,
+      count: tradeCasesCount,
+    },
+    {
       title: "BTB LCs",
       description: "Back-to-back letters of credit for commercial and export finance.",
       to: `${BASE}/commercial/btb-lcs`,
       icon: ArrowRightLeft,
       count: btbLcsCount,
+    },
+    {
+      title: "Trade Control Tower",
+      description: "Monitor at-risk trade cases, overdue shipments, and missing document readiness in one view.",
+      to: `${BASE}/trade/dashboard`,
+      icon: BarChart3,
+      count: null as CountState | null,
     },
     {
       title: "Logistics",
@@ -122,8 +145,8 @@ export function CommercialPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-bold text-gray-900">Commercial / Export & Import</h1>
-        <p className="mt-1 text-sm text-gray-600 max-w-2xl">
+        <h1 className="text-2xl font-bold text-text-primary">Commercial / Export & Import</h1>
+        <p className="mt-1 text-sm text-text-secondary max-w-2xl">
           Central hub for export and import operations: letters of credit (LC), advance TT, proforma invoices,
           export cases, and logistics. Manage documentation and track shipments in one place.
         </p>
@@ -136,7 +159,7 @@ export function CommercialPage() {
             <Link
               key={card.to}
               to={card.to}
-              className="group rounded-xl border border-gray-200 bg-white p-5 transition hover:border-primary/30 hover:shadow-sm"
+              className="group rounded-xl border border-border bg-surface-raised p-5 transition hover:border-primary/30 hover:shadow-sm"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -146,10 +169,10 @@ export function CommercialPage() {
                   <Badge state={card.count} />
                 )}
               </div>
-              <h3 className="mt-3 text-sm font-semibold text-gray-900 group-hover:text-primary">
+              <h3 className="mt-3 text-sm font-semibold text-text-primary group-hover:text-primary">
                 {card.title}
               </h3>
-              <p className="mt-1 text-sm text-gray-600 line-clamp-2">
+              <p className="mt-1 text-sm text-text-secondary line-clamp-2">
                 {card.description}
               </p>
               <span className="mt-3 inline-flex items-center text-xs font-medium text-primary">

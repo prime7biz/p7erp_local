@@ -40,25 +40,25 @@ export function ProductionOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Production Overview</h1>
-        <p className="text-sm text-slate-500">Advanced manufacturing visibility for work orders and capacity loads.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Production Overview</h1>
+        <p className="text-sm text-text-muted">Advanced manufacturing visibility for work orders and capacity loads.</p>
       </div>
 
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Work Orders</div><div className="text-xl font-semibold">{totals.total}</div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">In Progress</div><div className="text-xl font-semibold">{totals.inProgress}</div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Completed</div><div className="text-xl font-semibold">{totals.completed}</div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Planned Qty</div><div className="text-xl font-semibold">{totals.plannedQty.toFixed(2)}</div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Completed Qty</div><div className="text-xl font-semibold">{totals.completedQty.toFixed(2)}</div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Work Orders</div><div className="text-xl font-semibold">{totals.total}</div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">In Progress</div><div className="text-xl font-semibold">{totals.inProgress}</div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Completed</div><div className="text-xl font-semibold">{totals.completed}</div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Planned Qty</div><div className="text-xl font-semibold">{totals.plannedQty.toFixed(2)}</div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Completed Qty</div><div className="text-xl font-semibold">{totals.completedQty.toFixed(2)}</div></div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <div className="border-b px-4 py-3 text-sm font-semibold text-slate-700">Recent Work Orders</div>
+        <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+          <div className="border-b px-4 py-3 text-sm font-semibold text-text-secondary">Recent Work Orders</div>
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600">
+            <thead className="bg-surface-subtle text-left text-text-secondary">
               <tr>
                 <th className="px-4 py-2">MO</th>
                 <th className="px-4 py-2">Item</th>
@@ -78,16 +78,16 @@ export function ProductionOverviewPage() {
                 </tr>
               ))}
               {workOrders.length === 0 ? (
-                <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={5}>No work orders found.</td></tr>
+                <tr><td className="px-4 py-8 text-center text-text-muted" colSpan={5}>No work orders found.</td></tr>
               ) : null}
             </tbody>
           </table>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <div className="border-b px-4 py-3 text-sm font-semibold text-slate-700">Capacity Load</div>
+        <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+          <div className="border-b px-4 py-3 text-sm font-semibold text-text-secondary">Capacity Load</div>
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600">
+            <thead className="bg-surface-subtle text-left text-text-secondary">
               <tr>
                 <th className="px-4 py-2">Work Center</th>
                 <th className="px-4 py-2">Orders</th>
@@ -107,7 +107,7 @@ export function ProductionOverviewPage() {
                 </tr>
               ))}
               {capacity.length === 0 ? (
-                <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={5}>No capacity records yet.</td></tr>
+                <tr><td className="px-4 py-8 text-center text-text-muted" colSpan={5}>No capacity records yet.</td></tr>
               ) : null}
             </tbody>
           </table>

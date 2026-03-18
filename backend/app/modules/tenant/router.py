@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
+from app.common.auth import get_current_user
+from app.common.authz import ensure_user_in_tenant
 from app.common.tenant import require_tenant
 from app.database import get_db
-from app.models import Tenant, Role
+from app.models import Tenant, Role, User
 from app.modules.audit.service import log_action
 from app.modules.tenant.schemas import TenantCreate, TenantResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
 
-@router.post("", response_model=TenantResponse)
+@router.post("", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(
     body: TenantCreate,
     db: AsyncSession = Depends(get_db),
@@ -83,8 +85,10 @@ async def create_tenant(
 @router.get("/me", response_model=TenantResponse)
 async def get_my_tenant(
     tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
 ):
     """Return current tenant (from X-Tenant-Id). Use after login to show tenant name and type in UI."""
+    ensure_user_in_tenant(user, tenant.id)
     return TenantResponse(
         id=tenant.id,
         name=tenant.name,

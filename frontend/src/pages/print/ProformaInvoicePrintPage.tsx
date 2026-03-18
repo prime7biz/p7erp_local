@@ -51,8 +51,8 @@ export function ProformaInvoicePrintPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 p-6 text-slate-600">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600" />
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 p-6 text-text-secondary">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
         <span className="text-sm">Preparing print template…</span>
       </div>
     );
@@ -61,12 +61,12 @@ export function ProformaInvoicePrintPage() {
   if (error || !data) {
     return (
       <div className="min-h-[40vh] space-y-3 p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-xl border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error || "Proforma invoice not found."}
         </div>
         <Link
           to="/app/commercial/proforma-invoices"
-          className="inline-block rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+          className="inline-block rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
         >
           Back to proforma invoices
         </Link>
@@ -82,23 +82,23 @@ export function ProformaInvoicePrintPage() {
     <div className="qp-root">
       <div className="qp-toolbar no-print">
         <div className="qp-toolbar-left">
-          <span className="font-medium text-slate-700">Proforma Invoice – Print view</span>
+          <span className="font-medium text-text-secondary">Proforma Invoice – Print view</span>
         </div>
         <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-          <p className="hidden text-xs text-slate-500 sm:block">
+          <p className="hidden text-xs text-text-muted sm:block">
             Use <strong>Print</strong> or <strong>Save as PDF</strong> — in the dialog choose &quot;Save as PDF&quot; as destination to download.
           </p>
           <div className="qp-toolbar-actions flex gap-2">
             <Link
               to={`/app/commercial/proforma-invoices/${data.id}/edit`}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-border bg-surface-raised px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
             >
               Back to edit
             </Link>
             <button
               type="button"
               onClick={() => window.print()}
-              className="rounded-lg border border-indigo-600 bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              className="rounded-lg border border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
               title="Open print dialog (choose printer or Save as PDF)"
             >
               Print
@@ -106,7 +106,7 @@ export function ProformaInvoicePrintPage() {
             <button
               type="button"
               onClick={() => window.print()}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-border bg-surface-raised px-4 py-2 text-sm font-semibold text-text-secondary hover:bg-surface-subtle"
               title="Open print dialog and select Save as PDF"
             >
               Save as PDF
@@ -114,7 +114,7 @@ export function ProformaInvoicePrintPage() {
           </div>
         </div>
       </div>
-      <p className="no-print mx-auto max-w-[210mm] text-center text-xs text-slate-500">
+      <p className="no-print mx-auto max-w-[210mm] text-center text-xs text-text-muted">
         Both buttons open the print dialog. Select &quot;Save as PDF&quot; or &quot;Microsoft Print to PDF&quot; to save the document.
       </p>
 
@@ -170,19 +170,19 @@ export function ProformaInvoicePrintPage() {
         <section className="qp-section">
           <h2>Consignee</h2>
           <p><strong>{data.consignee_name ?? "—"}</strong></p>
-          <p className="whitespace-pre-wrap text-slate-700">{data.consignee_address ?? "—"}</p>
+          <p className="whitespace-pre-wrap text-text-secondary">{data.consignee_address ?? "—"}</p>
         </section>
 
         <section className="qp-section">
           <h2>Notify party</h2>
           <p><strong>{data.notify_party_name ?? "—"}</strong></p>
-          <p className="whitespace-pre-wrap text-slate-700">{data.notify_party_address ?? "—"}</p>
+          <p className="whitespace-pre-wrap text-text-secondary">{data.notify_party_address ?? "—"}</p>
         </section>
 
         <section className="qp-section">
           <h2>Beneficiary / Shipper</h2>
           <p><strong>{data.beneficiary_name ?? "—"}</strong></p>
-          <p className="whitespace-pre-wrap text-slate-700">{data.beneficiary_address ?? "—"}</p>
+          <p className="whitespace-pre-wrap text-text-secondary">{data.beneficiary_address ?? "—"}</p>
         </section>
 
         <section className="qp-section">

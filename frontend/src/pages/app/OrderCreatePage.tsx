@@ -75,7 +75,7 @@ export function OrderCreatePage() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-12 text-center text-gray-500">
+      <div className="rounded-xl border border-border bg-surface-raised p-12 text-center text-text-muted">
         Loading order form...
       </div>
     );
@@ -85,32 +85,32 @@ export function OrderCreatePage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">New Order</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-text-primary">New Order</h1>
+          <p className="text-sm text-text-muted">
             Create a polished final order with customer, quotation link, delivery schedule, and commercial terms.
           </p>
         </div>
         <Link
           to="/app/orders"
-          className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          className="inline-flex items-center rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
         >
           Back to orders
         </Link>
       </header>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <form onSubmit={handleSubmit} className="rounded-xl border border-gray-200 bg-white p-5 space-y-5">
+        <form onSubmit={handleSubmit} className="rounded-xl border border-border bg-surface-raised p-5 space-y-5">
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-gray-800">Basic information</h2>
+            <h2 className="text-sm font-semibold text-text-primary">Basic information</h2>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Customer</label>
                 <select
                   value={form.customer_id || ""}
                   onChange={(e) =>
@@ -119,7 +119,7 @@ export function OrderCreatePage() {
                       customer_id: Number(e.target.value) || 0,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">Select customer...</option>
                   {customers.map((c) => (
@@ -130,7 +130,7 @@ export function OrderCreatePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Linked quotation (optional)</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Linked quotation (optional)</label>
                 <select
                   value={form.quotation_id ?? ""}
                   onChange={(e) =>
@@ -152,7 +152,7 @@ export function OrderCreatePage() {
                       };
                     })
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">No linked quotation</option>
                   {quotations.map((q) => (
@@ -167,10 +167,10 @@ export function OrderCreatePage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-gray-800">Style and shipment</h2>
+            <h2 className="text-sm font-semibold text-text-primary">Style and shipment</h2>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Style reference</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Style reference</label>
                 <input
                   type="text"
                   value={form.style_ref ?? ""}
@@ -180,11 +180,11 @@ export function OrderCreatePage() {
                       style_ref: e.target.value || undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Style ID</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Style ID</label>
                 <input
                   type="number"
                   value={form.style_id ?? ""}
@@ -194,11 +194,11 @@ export function OrderCreatePage() {
                       style_id: e.target.value ? Number(e.target.value) : undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Shipping term</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Shipping term</label>
                 <select
                   value={form.shipping_term ?? ""}
                   onChange={(e) =>
@@ -207,7 +207,7 @@ export function OrderCreatePage() {
                       shipping_term: e.target.value || undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">Select shipping term</option>
                   {withLegacyOption(form.shipping_term, SHIPPING_TERM_OPTIONS).map((term) => (
@@ -223,10 +223,10 @@ export function OrderCreatePage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-gray-800">Commission and timeline</h2>
+            <h2 className="text-sm font-semibold text-text-primary">Commission and timeline</h2>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Commission mode</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Commission mode</label>
                 <select
                   value={form.commission_mode ?? ""}
                   onChange={(e) =>
@@ -235,7 +235,7 @@ export function OrderCreatePage() {
                       commission_mode: e.target.value || undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">Select mode</option>
                   {withLegacyOption(form.commission_mode, COMMISSION_MODE_OPTIONS).map((mode) => (
@@ -248,7 +248,7 @@ export function OrderCreatePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Commission type</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Commission type</label>
                 <select
                   value={form.commission_type ?? ""}
                   onChange={(e) =>
@@ -257,7 +257,7 @@ export function OrderCreatePage() {
                       commission_type: e.target.value || undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">Select type</option>
                   {withLegacyOption(form.commission_type, COMMISSION_TYPE_OPTIONS).map((type) => (
@@ -270,7 +270,7 @@ export function OrderCreatePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Commission value</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Commission value</label>
                 <input
                   type="text"
                   value={form.commission_value ?? ""}
@@ -280,14 +280,14 @@ export function OrderCreatePage() {
                       commission_value: e.target.value || undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Order date</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Order date</label>
                 <input
                   type="date"
                   value={form.order_date ?? ""}
@@ -297,11 +297,11 @@ export function OrderCreatePage() {
                       order_date: e.target.value || undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Delivery date</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Delivery date</label>
                 <input
                   type="date"
                   value={form.delivery_date ?? ""}
@@ -311,11 +311,11 @@ export function OrderCreatePage() {
                       delivery_date: e.target.value || undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Quantity</label>
                 <input
                   type="number"
                   value={form.quantity ?? ""}
@@ -325,11 +325,11 @@ export function OrderCreatePage() {
                       quantity: e.target.value ? Number(e.target.value) : undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Status</label>
                 <select
                   value={form.status ?? ""}
                   onChange={(e) =>
@@ -338,7 +338,7 @@ export function OrderCreatePage() {
                       status: e.target.value || undefined,
                     }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">Select status...</option>
                   <option value="DRAFT">Draft</option>
@@ -351,7 +351,7 @@ export function OrderCreatePage() {
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-sm font-semibold text-gray-800">Notes</h2>
+            <h2 className="text-sm font-semibold text-text-primary">Notes</h2>
             <textarea
               value={form.remarks ?? ""}
               onChange={(e) =>
@@ -361,7 +361,7 @@ export function OrderCreatePage() {
                 }))
               }
               rows={4}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
               placeholder="Add any important order notes..."
             />
           </section>
@@ -370,14 +370,14 @@ export function OrderCreatePage() {
             <button
               type="button"
               onClick={() => navigate("/app/orders")}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+              className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+              className="rounded-lg bg-brand-primary px-4 py-1.5 text-sm font-semibold text-brand-primary-foreground disabled:cursor-not-allowed disabled:opacity-70"
             >
               {saving ? "Saving..." : "Create order"}
             </button>
@@ -385,9 +385,9 @@ export function OrderCreatePage() {
         </form>
 
         <aside className="space-y-4">
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <h3 className="text-sm font-semibold text-gray-900">Live summary</h3>
-            <div className="mt-3 space-y-1 text-sm text-gray-700">
+          <div className="rounded-xl border border-border bg-surface-raised p-4">
+            <h3 className="text-sm font-semibold text-text-primary">Live summary</h3>
+            <div className="mt-3 space-y-1 text-sm text-text-secondary">
               <div><span className="font-medium">Customer:</span> {selectedCustomer?.name ?? "Not selected"}</div>
               <div><span className="font-medium">Quotation:</span> {selectedQuotation?.quotation_code ?? "Not linked"}</div>
               <div><span className="font-medium">Style:</span> {form.style_ref ?? "—"}</div>
@@ -397,9 +397,9 @@ export function OrderCreatePage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-            <h3 className="text-sm font-semibold text-indigo-900">Helpful tip</h3>
-            <p className="mt-2 text-xs text-indigo-800">
+          <div className="rounded-xl border border-brand-primary/30 bg-brand-primary/10 p-4">
+            <h3 className="text-sm font-semibold text-brand-primary">Helpful tip</h3>
+            <p className="mt-2 text-xs text-brand-primary">
               If you select a quotation, customer and commercial terms are auto-filled.
               You can still adjust fields before saving.
             </p>

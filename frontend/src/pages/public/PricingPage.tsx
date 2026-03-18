@@ -39,7 +39,7 @@ const comparisonCategories = [
 ];
 
 function CellValue({ value }: { value: boolean }) {
-  return value ? <Check className="w-5 h-5 text-primary mx-auto" /> : <X className="w-4 h-4 text-gray-300 mx-auto" />;
+  return value ? <Check className="w-5 h-5 text-primary mx-auto" /> : <X className="w-4 h-4 text-text-muted mx-auto" />;
 }
 
 const faqs = [
@@ -105,20 +105,20 @@ export function PricingPage() {
             <Zap className="w-4 h-4" />
             14-Day Free Trial
           </div>
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-text-primary mb-6 leading-tight">
             Simple, Transparent
             <br />
             <span className="text-primary">Pricing</span>
           </h1>
-          <p className="text-lg md:text-xl text-gray-600 max-w-3xl mx-auto mb-6 leading-relaxed">
+          <p className="text-lg md:text-xl text-text-secondary max-w-3xl mx-auto mb-6 leading-relaxed">
             No hidden fees. Choose the plan that fits your factory and scale as you grow.
           </p>
           <div className="inline-flex items-center gap-2">
-            <Globe className="w-4 h-4 text-gray-600" />
+            <Globe className="w-4 h-4 text-text-secondary" />
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              className="appearance-none bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-50"
+              className="appearance-none bg-white border border-border rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary cursor-pointer hover:bg-surface-subtle"
             >
               {currencies.map((c) => (
                 <option key={c.code} value={c.code}>{c.label}</option>
@@ -137,7 +137,7 @@ export function PricingPage() {
               <div
                 key={plan.name}
                 className={`relative rounded-xl border ${
-                  plan.popular ? "border-primary shadow-xl shadow-primary/10 scale-[1.02] lg:scale-105" : "border-gray-200 shadow-sm"
+                  plan.popular ? "border-primary shadow-xl shadow-primary/10 scale-[1.02] lg:scale-105" : "border-border shadow-sm"
                 } bg-white overflow-hidden flex flex-col`}
               >
                 {plan.popular && (
@@ -146,23 +146,23 @@ export function PricingPage() {
                   </div>
                 )}
                 <div className="p-6 lg:p-8 flex-1 flex flex-col">
-                  <h3 className="text-xl font-bold text-gray-900 mb-1">{plan.name}</h3>
-                  <p className="text-sm text-gray-600 mb-6">{plan.description}</p>
+                  <h3 className="text-xl font-bold text-text-primary mb-1">{plan.name}</h3>
+                  <p className="text-sm text-text-secondary mb-6">{plan.description}</p>
                   <div className="mb-6">
-                    <span className="text-4xl font-bold text-gray-900">{plan.price}</span>
-                    <span className="text-gray-500 text-sm">{plan.period}</span>
+                    <span className="text-4xl font-bold text-text-primary">{plan.price}</span>
+                    <span className="text-text-muted text-sm">{plan.period}</span>
                   </div>
                   <ul className="space-y-3 mb-8 flex-1">
                     {plan.features.map((f) => (
                       <li key={f} className="flex items-start gap-2.5">
                         <Check className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                        <span className="text-sm text-gray-700">{f}</span>
+                        <span className="text-sm text-text-secondary">{f}</span>
                       </li>
                     ))}
                   </ul>
                   <Link
                     to={plan.href}
-                    className={`block w-full text-center rounded-lg py-3 font-semibold transition-colors ${plan.popular ? "bg-primary text-white hover:bg-primary/90" : "border border-gray-200 text-gray-700 hover:border-primary hover:text-primary hover:bg-primary/5"}`}
+                    className={`block w-full text-center rounded-lg py-3 font-semibold transition-colors ${plan.popular ? "bg-primary text-white hover:bg-primary/90" : "border border-border text-text-secondary hover:border-primary hover:text-primary hover:bg-primary/5"}`}
                   >
                     {plan.cta} <ArrowRight className="inline w-4 h-4 ml-1" />
                   </Link>
@@ -170,41 +170,41 @@ export function PricingPage() {
               </div>
             ))}
           </div>
-          <p className="text-center text-sm text-gray-600 mt-8">
+          <p className="text-center text-sm text-text-secondary mt-8">
             All plans include SSL encryption, daily backups, and 99.9% uptime.
           </p>
         </div>
       </section>
 
       {/* Comparison Table */}
-      <section className="py-16 lg:py-24 bg-gray-50">
+      <section className="py-16 lg:py-24 bg-surface-subtle">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">Compare Plans in Detail</h2>
-            <p className="text-lg text-gray-600">See exactly what&apos;s included in each plan.</p>
+            <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">Compare Plans in Detail</h2>
+            <p className="text-lg text-text-secondary">See exactly what&apos;s included in each plan.</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="bg-white rounded-xl border border-border overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <div className="min-w-[680px]">
-                <div className="grid grid-cols-4 border-b border-gray-200 bg-gray-50">
-                  <div className="p-4 lg:p-6"><span className="text-sm font-medium text-gray-500">Features</span></div>
-                  <div className="p-4 lg:p-6 text-center border-l border-gray-200"><span className="text-sm font-bold text-gray-900">Starter</span></div>
-                  <div className="p-4 lg:p-6 text-center border-l border-gray-200 bg-primary/5"><span className="text-sm font-bold text-primary">Growth</span></div>
-                  <div className="p-4 lg:p-6 text-center border-l border-gray-200"><span className="text-sm font-bold text-gray-900">Enterprise</span></div>
+                <div className="grid grid-cols-4 border-b border-border bg-surface-subtle">
+                  <div className="p-4 lg:p-6"><span className="text-sm font-medium text-text-muted">Features</span></div>
+                  <div className="p-4 lg:p-6 text-center border-l border-border"><span className="text-sm font-bold text-text-primary">Starter</span></div>
+                  <div className="p-4 lg:p-6 text-center border-l border-border bg-primary/5"><span className="text-sm font-bold text-primary">Growth</span></div>
+                  <div className="p-4 lg:p-6 text-center border-l border-border"><span className="text-sm font-bold text-text-primary">Enterprise</span></div>
                 </div>
                 {comparisonCategories.map((category) => (
                   <div key={category.name}>
-                    <div className="grid grid-cols-4 bg-gray-50/50 border-b border-gray-100">
+                    <div className="grid grid-cols-4 bg-surface-subtle/50 border-b border-border-subtle">
                       <div className="col-span-4 p-3 lg:px-6">
-                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{category.name}</span>
+                        <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">{category.name}</span>
                       </div>
                     </div>
                     {category.features.map((feature, i) => (
-                      <div key={feature.name} className={`grid grid-cols-4 ${i < category.features.length - 1 ? "border-b border-gray-100" : ""}`}>
-                        <div className="p-3 lg:px-6 lg:py-3.5 flex items-center"><span className="text-sm text-gray-700">{feature.name}</span></div>
-                        <div className="p-3 lg:px-6 lg:py-3.5 flex justify-center border-l border-gray-100"><CellValue value={feature.starter} /></div>
-                        <div className="p-3 lg:px-6 lg:py-3.5 flex justify-center border-l border-gray-100 bg-primary/[0.02]"><CellValue value={feature.growth} /></div>
-                        <div className="p-3 lg:px-6 lg:py-3.5 flex justify-center border-l border-gray-100"><CellValue value={feature.enterprise} /></div>
+                      <div key={feature.name} className={`grid grid-cols-4 ${i < category.features.length - 1 ? "border-b border-border-subtle" : ""}`}>
+                        <div className="p-3 lg:px-6 lg:py-3.5 flex items-center"><span className="text-sm text-text-secondary">{feature.name}</span></div>
+                        <div className="p-3 lg:px-6 lg:py-3.5 flex justify-center border-l border-border-subtle"><CellValue value={feature.starter} /></div>
+                        <div className="p-3 lg:px-6 lg:py-3.5 flex justify-center border-l border-border-subtle bg-primary/[0.02]"><CellValue value={feature.growth} /></div>
+                        <div className="p-3 lg:px-6 lg:py-3.5 flex justify-center border-l border-border-subtle"><CellValue value={feature.enterprise} /></div>
                       </div>
                     ))}
                   </div>
@@ -222,22 +222,22 @@ export function PricingPage() {
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center flex-shrink-0"><Shield className="w-6 h-6" /></div>
               <div>
-                <h3 className="font-semibold text-gray-900">30-Day Money Back</h3>
-                <p className="text-sm text-gray-500">Full refund, no questions asked</p>
+                <h3 className="font-semibold text-text-primary">30-Day Money Back</h3>
+                <p className="text-sm text-text-muted">Full refund, no questions asked</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center flex-shrink-0"><Headphones className="w-6 h-6" /></div>
               <div>
-                <h3 className="font-semibold text-gray-900">Free Onboarding</h3>
-                <p className="text-sm text-gray-500">Setup help & team training included</p>
+                <h3 className="font-semibold text-text-primary">Free Onboarding</h3>
+                <p className="text-sm text-text-muted">Setup help & team training included</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center flex-shrink-0"><HelpCircle className="w-6 h-6" /></div>
               <div>
-                <h3 className="font-semibold text-gray-900">Migration Support</h3>
-                <p className="text-sm text-gray-500">We help move your data from Excel/Tally</p>
+                <h3 className="font-semibold text-text-primary">Migration Support</h3>
+                <p className="text-sm text-text-muted">We help move your data from Excel/Tally</p>
               </div>
             </div>
           </div>
@@ -248,8 +248,8 @@ export function PricingPage() {
       <section className="py-16 lg:py-24 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">Pricing FAQ</h2>
-            <p className="text-lg text-gray-600">Common questions about billing and plans.</p>
+            <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">Pricing FAQ</h2>
+            <p className="text-lg text-text-secondary">Common questions about billing and plans.</p>
           </div>
           <div className="space-y-3">
             {faqs.map((faq, i) => (
@@ -259,11 +259,11 @@ export function PricingPage() {
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   className="w-full flex items-center justify-between p-5 text-left hover:bg-primary/5 transition-colors"
                 >
-                  <span className="font-medium text-gray-900 pr-4">{faq.q}</span>
-                  <ChevronDown className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${openFaq === i ? "rotate-180" : ""}`} />
+                  <span className="font-medium text-text-primary pr-4">{faq.q}</span>
+                  <ChevronDown className={`w-5 h-5 text-text-muted flex-shrink-0 transition-transform ${openFaq === i ? "rotate-180" : ""}`} />
                 </button>
                 {openFaq === i && (
-                  <div className="px-5 pb-5 text-gray-600 text-sm leading-relaxed border-t border-gray-100 pt-4">{faq.a}</div>
+                  <div className="px-5 pb-5 text-text-secondary text-sm leading-relaxed border-t border-border-subtle pt-4">{faq.a}</div>
                 )}
               </div>
             ))}
@@ -279,7 +279,7 @@ export function PricingPage() {
             No credit card required. Get full access for 14 days.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white text-primary px-8 py-3 text-base font-semibold hover:bg-gray-50 transition-colors">
+            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white text-primary px-8 py-3 text-base font-semibold hover:bg-surface-subtle transition-colors">
               Start Free Trial <ArrowRight className="w-4 h-4" />
             </Link>
             <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/50 text-white px-8 py-3 text-base font-semibold hover:bg-white/10 transition-colors">

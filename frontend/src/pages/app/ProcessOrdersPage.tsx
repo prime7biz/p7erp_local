@@ -6,15 +6,15 @@ const PROCESS_TYPES = ["KNITTING", "DYEING", "FINISHING", "CUTTING", "WASHING", 
 function statusBadgeClass(status: string) {
   switch (status) {
     case "DRAFT":
-      return "bg-slate-100 text-slate-700";
+      return "bg-surface-subtle text-text-secondary";
     case "ISSUED":
-      return "bg-blue-100 text-blue-700";
+      return "bg-status-info-subtle text-status-info-foreground";
     case "RECEIVED":
-      return "bg-amber-100 text-amber-700";
+      return "bg-status-warning-subtle text-status-warning-foreground";
     case "APPROVED":
-      return "bg-green-100 text-green-700";
+      return "bg-status-success-subtle text-status-success-foreground";
     default:
-      return "bg-slate-100 text-slate-700";
+      return "bg-surface-subtle text-text-secondary";
   }
 }
 
@@ -138,21 +138,21 @@ export function ProcessOrdersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Process Orders</h1>
-        <p className="text-sm text-slate-500">Track conversion flow from input material to output material.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Process Orders</h1>
+        <p className="text-sm text-text-muted">Track conversion flow from input material to output material.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><div className="text-slate-500">Open PO</div><div className="text-xl font-semibold">{kpi.openPo} <span className="text-xs text-slate-400">{trend("openPo")}</span></div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><div className="text-slate-500">Open GRN</div><div className="text-xl font-semibold">{kpi.openGrn} <span className="text-xs text-slate-400">{trend("openGrn")}</span></div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><div className="text-slate-500">Pending CR</div><div className="text-xl font-semibold">{kpi.pendingCr} <span className="text-xs text-slate-400">{trend("pendingCr")}</span></div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><div className="text-slate-500">Low Stock Items</div><div className="text-xl font-semibold">{kpi.lowStock} <span className="text-xs text-slate-400">{trend("lowStock")}</span></div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Open PO</div><div className="text-xl font-semibold">{kpi.openPo} <span className="text-xs text-text-muted">{trend("openPo")}</span></div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Open GRN</div><div className="text-xl font-semibold">{kpi.openGrn} <span className="text-xs text-text-muted">{trend("openGrn")}</span></div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Pending CR</div><div className="text-xl font-semibold">{kpi.pendingCr} <span className="text-xs text-text-muted">{trend("pendingCr")}</span></div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Low Stock Items</div><div className="text-xl font-semibold">{kpi.lowStock} <span className="text-xs text-text-muted">{trend("lowStock")}</span></div></div>
       </div>
 
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Create Process Order</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">Create Process Order</h2>
         <form className="grid grid-cols-1 gap-3 md:grid-cols-4" onSubmit={submit}>
           <select
             className="rounded border px-3 py-2 text-sm"
@@ -217,15 +217,15 @@ export function ProcessOrdersPage() {
             value={form.remarks ?? ""}
             onChange={(e) => setForm((prev) => ({ ...prev, remarks: e.target.value }))}
           />
-          <button className="rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60" disabled={saving} type="submit">
+          <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-brand-primary-foreground disabled:opacity-60" disabled={saving} type="submit">
             {saving ? "Saving..." : "Create"}
           </button>
         </form>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr>
               <th className="px-4 py-3">Process #</th>
               <th className="px-4 py-3">Type</th>
@@ -268,7 +268,7 @@ export function ProcessOrdersPage() {
             ))}
             {rows.length === 0 ? (
               <tr>
-                <td className="px-4 py-8 text-center text-slate-500" colSpan={6}>
+                <td className="px-4 py-8 text-center text-text-muted" colSpan={6}>
                   No process orders found yet.
                 </td>
               </tr>

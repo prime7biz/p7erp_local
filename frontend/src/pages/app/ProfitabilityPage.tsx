@@ -68,25 +68,25 @@ export function ProfitabilityPage({ defaultMode = "style" }: { defaultMode?: Mod
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Profitability & Variance</h1>
-        <p className="mt-1 text-sm text-slate-500">Legacy finance analytics: style margin, order profitability, and costing variance.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Profitability & Variance</h1>
+        <p className="mt-1 text-sm text-text-muted">Legacy finance analytics: style margin, order profitability, and costing variance.</p>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="mb-3 flex flex-wrap gap-2">
-          <button className={`rounded border px-3 py-1 text-sm ${mode === "style" ? "bg-slate-900 text-white" : ""}`} onClick={() => setMode("style")}>
+          <button className={`rounded border border-border-strong px-3 py-1 text-sm ${mode === "style" ? "bg-surface-inverse text-text-inverse" : ""}`} onClick={() => setMode("style")}>
             Style Profitability
           </button>
-          <button className={`rounded border px-3 py-1 text-sm ${mode === "lc" ? "bg-slate-900 text-white" : ""}`} onClick={() => setMode("lc")}>
+          <button className={`rounded border border-border-strong px-3 py-1 text-sm ${mode === "lc" ? "bg-surface-inverse text-text-inverse" : ""}`} onClick={() => setMode("lc")}>
             LC Profitability
           </button>
-          <button className={`rounded border px-3 py-1 text-sm ${mode === "variance" ? "bg-slate-900 text-white" : ""}`} onClick={() => setMode("variance")}>
+          <button className={`rounded border border-border-strong px-3 py-1 text-sm ${mode === "variance" ? "bg-surface-inverse text-text-inverse" : ""}`} onClick={() => setMode("variance")}>
             Costing Variance
           </button>
         </div>
         <div className="mb-2 flex flex-wrap gap-2">
           <select
-            className="min-w-80 rounded border px-3 py-2 text-sm"
+            className="min-w-80 rounded border border-border-strong px-3 py-2 text-sm"
             value={entityId}
             onChange={(e) => setEntityId(e.target.value)}
           >
@@ -97,32 +97,32 @@ export function ProfitabilityPage({ defaultMode = "style" }: { defaultMode?: Mod
               </option>
             ))}
           </select>
-          <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void loadQuickOptions()}>
+          <button type="button" className="rounded border border-border-strong px-3 py-2 text-sm" onClick={() => void loadQuickOptions()}>
             Refresh Options
           </button>
         </div>
         <div className="flex gap-2">
           <input
-            className="w-60 rounded border px-3 py-2 text-sm"
+            className="w-60 rounded border border-border-strong px-3 py-2 text-sm"
             placeholder={placeholder}
             value={entityId}
             onChange={(e) => setEntityId(e.target.value)}
           />
-          <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white" onClick={() => void run()}>
+          <button className="rounded bg-brand-primary px-3 py-2 text-sm text-brand-primary-foreground" onClick={() => void run()}>
             {loading ? "Loading..." : `Run ${title}`}
           </button>
         </div>
       </div>
 
-      {error ? <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
 
       {data ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
           <h2 className="mb-3 text-lg font-semibold">{title} Result</h2>
           <div className="grid gap-3 md:grid-cols-3">
             {Object.entries(data).map(([k, v]) => (
-              <div key={k} className="rounded border border-slate-200 p-3">
-                <div className="text-xs uppercase text-slate-500">{k.replaceAll("_", " ")}</div>
+              <div key={k} className="rounded border border-border p-3">
+                <div className="text-xs uppercase text-text-muted">{k.replaceAll("_", " ")}</div>
                 <div className="mt-1 text-lg font-semibold">{typeof v === "number" ? v.toLocaleString() : String(v)}</div>
               </div>
             ))}

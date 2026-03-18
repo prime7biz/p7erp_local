@@ -110,14 +110,14 @@ export function QualityCapaPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">NCR and CAPA</h1>
-        <p className="text-sm text-slate-500">Track non-conformance and corrective/preventive actions.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">NCR and CAPA</h1>
+        <p className="text-sm text-text-muted">Track non-conformance and corrective/preventive actions.</p>
       </div>
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Create NCR</h2>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <h2 className="mb-3 text-sm font-semibold text-text-secondary">Create NCR</h2>
           <form className="grid grid-cols-1 gap-2" onSubmit={createNcr}>
             <input className="rounded border px-3 py-2 text-sm" type="number" min={1} placeholder="Work Order ID" value={ncrForm.work_order_id || ""} onChange={(e) => setNcrForm((prev) => ({ ...prev, work_order_id: Number(e.target.value) }))} />
             <input className="rounded border px-3 py-2 text-sm" placeholder="Defect Code" value={ncrForm.defect_code} onChange={(e) => setNcrForm((prev) => ({ ...prev, defect_code: e.target.value }))} />
@@ -127,27 +127,27 @@ export function QualityCapaPage() {
               <option value="critical">Critical</option>
             </select>
             <input className="rounded border px-3 py-2 text-sm" placeholder="Description" value={ncrForm.description} onChange={(e) => setNcrForm((prev) => ({ ...prev, description: e.target.value }))} />
-            <button className="rounded bg-slate-900 px-4 py-2 text-sm text-white" type="submit">Create NCR</button>
+            <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-brand-primary-foreground" type="submit">Create NCR</button>
           </form>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Create CAPA</h2>
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <h2 className="mb-3 text-sm font-semibold text-text-secondary">Create CAPA</h2>
           <form className="grid grid-cols-1 gap-2" onSubmit={createCapa}>
             <input className="rounded border px-3 py-2 text-sm" type="number" min={1} placeholder="NCR ID" value={capaForm.ncr_id || ""} onChange={(e) => setCapaForm((prev) => ({ ...prev, ncr_id: Number(e.target.value) }))} />
             <input className="rounded border px-3 py-2 text-sm" placeholder="Corrective Action" value={capaForm.corrective_action} onChange={(e) => setCapaForm((prev) => ({ ...prev, corrective_action: e.target.value }))} />
             <input className="rounded border px-3 py-2 text-sm" placeholder="Preventive Action" value={capaForm.preventive_action} onChange={(e) => setCapaForm((prev) => ({ ...prev, preventive_action: e.target.value }))} />
             <input className="rounded border px-3 py-2 text-sm" type="date" value={capaForm.due_date} onChange={(e) => setCapaForm((prev) => ({ ...prev, due_date: e.target.value }))} />
-            <button className="rounded bg-slate-900 px-4 py-2 text-sm text-white" type="submit">Create CAPA</button>
+            <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-brand-primary-foreground" type="submit">Create CAPA</button>
           </form>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <div className="border-b px-4 py-3 text-sm font-semibold text-slate-700">NCR List</div>
+        <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+          <div className="border-b px-4 py-3 text-sm font-semibold text-text-secondary">NCR List</div>
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600"><tr><th className="px-3 py-2">Code</th><th className="px-3 py-2">WO</th><th className="px-3 py-2">Severity</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Action</th></tr></thead>
+            <thead className="bg-surface-subtle text-left text-text-secondary"><tr><th className="px-3 py-2">Code</th><th className="px-3 py-2">WO</th><th className="px-3 py-2">Severity</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Action</th></tr></thead>
             <tbody>
               {ncrs.map((row) => (
                 <tr key={row.id} className="border-t">
@@ -176,15 +176,15 @@ export function QualityCapaPage() {
                   </td>
                 </tr>
               ))}
-              {ncrs.length === 0 ? <tr><td className="px-3 py-6 text-center text-slate-500" colSpan={5}>No NCR found.</td></tr> : null}
+              {ncrs.length === 0 ? <tr><td className="px-3 py-6 text-center text-text-muted" colSpan={5}>No NCR found.</td></tr> : null}
             </tbody>
           </table>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <div className="border-b px-4 py-3 text-sm font-semibold text-slate-700">CAPA List</div>
+        <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+          <div className="border-b px-4 py-3 text-sm font-semibold text-text-secondary">CAPA List</div>
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600"><tr><th className="px-3 py-2">ID</th><th className="px-3 py-2">NCR</th><th className="px-3 py-2">Due Date</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Action</th></tr></thead>
+            <thead className="bg-surface-subtle text-left text-text-secondary"><tr><th className="px-3 py-2">ID</th><th className="px-3 py-2">NCR</th><th className="px-3 py-2">Due Date</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Action</th></tr></thead>
             <tbody>
               {capas.map((row) => (
                 <tr key={row.id} className="border-t">
@@ -212,7 +212,7 @@ export function QualityCapaPage() {
                   </td>
                 </tr>
               ))}
-              {capas.length === 0 ? <tr><td className="px-3 py-6 text-center text-slate-500" colSpan={5}>No CAPA found.</td></tr> : null}
+              {capas.length === 0 ? <tr><td className="px-3 py-6 text-center text-text-muted" colSpan={5}>No CAPA found.</td></tr> : null}
             </tbody>
           </table>
         </div>

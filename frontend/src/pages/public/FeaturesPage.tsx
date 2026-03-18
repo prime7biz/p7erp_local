@@ -38,7 +38,7 @@ const modules = [
   {
     icon: Package,
     title: "Inventory Management",
-    color: "bg-emerald-50 text-emerald-600",
+    color: "bg-status-success-subtle text-status-success-foreground",
     description: "Real-time visibility into every yard of fabric, cone of yarn, and carton of trims.",
     features: [
       "Real-time stock ledger with running balances",
@@ -52,7 +52,7 @@ const modules = [
   {
     icon: Factory,
     title: "Production & WIP",
-    color: "bg-orange-50 text-orange-600",
+    color: "bg-brand-primary/10 text-brand-primary",
     description: "Track every stage from yarn receiving to packed cartons with real-time WIP visibility.",
     features: [
       "Production orders linked to sales orders",
@@ -65,7 +65,7 @@ const modules = [
   {
     icon: Palette,
     title: "Merchandising",
-    color: "bg-purple-50 text-purple-600",
+    color: "bg-status-info-subtle text-status-info-foreground",
     description: "Centralized style management from buyer inquiry to shipment with full BOM control.",
     features: [
       "Style master with components & colorways",
@@ -91,7 +91,7 @@ const modules = [
   {
     icon: Users,
     title: "HR & Payroll",
-    color: "bg-pink-50 text-pink-600",
+    color: "bg-status-neutral-subtle text-status-neutral-foreground",
     description: "Complete workforce management from hiring to payslips, built for factory environments.",
     features: [
       "Employee master with full profile management",
@@ -103,7 +103,7 @@ const modules = [
   {
     icon: ShieldCheck,
     title: "Quality Management",
-    color: "bg-red-50 text-red-600",
+    color: "bg-status-danger-subtle text-status-danger-foreground",
     description: "Ensure every shipment meets buyer standards with systematic QC workflows.",
     features: [
       "Inline, endline & final inspection workflows",
@@ -115,7 +115,7 @@ const modules = [
   {
     icon: Brain,
     title: "AI & Analytics",
-    color: "bg-violet-50 text-violet-600",
+    color: "bg-status-info-subtle text-status-info-foreground",
     description: "AI-powered insights that help you make smarter decisions across your business.",
     features: [
       "Demand forecasting based on historical data",
@@ -127,7 +127,7 @@ const modules = [
   {
     icon: Landmark,
     title: "Banking & Reconciliation",
-    color: "bg-amber-50 text-amber-600",
+    color: "bg-status-warning-subtle text-status-warning-foreground",
     description: "Streamline bank transactions and reconciliation with automated matching.",
     features: [
       "Multi-bank account management",
@@ -156,20 +156,20 @@ function ModuleVisual({ mod, index }: { mod: typeof modules[0]; index: number })
   const imageData = moduleImages[index];
   if (imageData) {
     return (
-      <div className="relative rounded-2xl overflow-hidden shadow-xl border border-gray-200">
+      <div className="relative rounded-2xl overflow-hidden shadow-xl border border-border">
         <img src={imageData.src} alt={imageData.alt} width={1200} height={800} className="w-full h-auto" loading="lazy" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
       </div>
     );
   }
   return (
-    <div className={`relative rounded-xl p-8 lg:p-12 ${mod.color.split(" ")[0]} border border-gray-100 overflow-hidden`}>
+    <div className={`relative rounded-xl p-8 lg:p-12 ${mod.color.split(" ")[0]} border border-border-subtle overflow-hidden`}>
       <div className="absolute inset-0 border-2 border-transparent bg-gradient-to-br from-primary/10 via-transparent to-primary/5 rounded-xl pointer-events-none" />
       <mod.icon className="w-20 h-20 mx-auto mb-6 opacity-20 relative" />
       <div className="grid grid-cols-2 gap-4 relative">
         {mod.features.slice(0, 4).map((feature) => (
           <div key={feature} className="bg-white/80 rounded-lg p-3 text-center">
-            <p className="text-xs font-medium text-gray-700">{feature.split(",")[0]}</p>
+            <p className="text-xs font-medium text-text-secondary">{feature.split(",")[0]}</p>
           </div>
         ))}
       </div>
@@ -192,12 +192,12 @@ export function FeaturesPage() {
             <Layers className="w-4 h-4" />
             9 Integrated Modules
           </div>
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-text-primary mb-6 leading-tight">
             Everything You Need to Run
             <br />
             <span className="text-primary">Your Garment Business</span>
           </h1>
-          <p className="text-lg md:text-xl text-gray-600 max-w-3xl mx-auto mb-8 leading-relaxed">
+          <p className="text-lg md:text-xl text-text-secondary max-w-3xl mx-auto mb-8 leading-relaxed">
             From buyer inquiry to LC realization, Prime7 ERP covers every aspect of garment manufacturing
             and export operations with deeply integrated modules.
           </p>
@@ -205,7 +205,7 @@ export function FeaturesPage() {
             <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-8 py-3 text-base font-semibold text-white hover:bg-primary/90 transition-colors">
               Start Free Trial <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-primary/20 px-8 py-3 text-base font-semibold text-gray-700 hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors">
+            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-primary/20 px-8 py-3 text-base font-semibold text-text-secondary hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors">
               Request a Demo
             </Link>
           </div>
@@ -220,7 +220,7 @@ export function FeaturesPage() {
               <a
                 key={mod.title}
                 href={`#${mod.title.toLowerCase().replace(/[^a-z]/g, "-")}`}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-gray-600 hover:bg-primary/5 hover:text-primary whitespace-nowrap transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-text-secondary hover:bg-primary/5 hover:text-primary whitespace-nowrap transition-colors"
               >
                 <mod.icon className="w-3.5 h-3.5" />
                 {mod.title.split(" ")[0]}
@@ -238,7 +238,7 @@ export function FeaturesPage() {
           )}
           <section
             id={mod.title.toLowerCase().replace(/[^a-z]/g, "-")}
-            className={`py-16 lg:py-24 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`}
+            className={`py-16 lg:py-24 ${index % 2 === 0 ? "bg-white" : "bg-surface-subtle/50"}`}
           >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className={`grid lg:grid-cols-2 gap-12 items-center ${index % 2 === 1 ? "lg:grid-flow-dense" : ""}`}>
@@ -247,13 +247,13 @@ export function FeaturesPage() {
                     <mod.icon className="w-4 h-4" />
                     Module {index + 1} of 9
                   </div>
-                  <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">{mod.title}</h2>
-                  <p className="text-lg text-gray-600 mb-8">{mod.description}</p>
+                  <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">{mod.title}</h2>
+                  <p className="text-lg text-text-secondary mb-8">{mod.description}</p>
                   <ul className="space-y-3">
                     {mod.features.map((feature) => (
                       <li key={feature} className="flex items-start gap-3">
                         <CheckCircle2 className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
-                        <span className="text-gray-700">{feature}</span>
+                        <span className="text-text-secondary">{feature}</span>
                       </li>
                     ))}
                   </ul>
@@ -274,26 +274,26 @@ export function FeaturesPage() {
             <RefreshCw className="w-4 h-4" />
             Unified Platform
           </div>
-          <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">Seamlessly Connected</h2>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto mb-12 leading-relaxed">
+          <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">Seamlessly Connected</h2>
+          <p className="text-lg text-text-secondary max-w-3xl mx-auto mb-12 leading-relaxed">
             Every module in Prime7 ERP shares a single source of truth. When merchandising creates a BOM,
             inventory knows what to order. When production consumes material, accounting records the cost.
           </p>
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:border-primary/20 transition-colors">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-border-subtle hover:border-primary/20 transition-colors">
               <Globe className="w-10 h-10 text-primary mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Single Source of Truth</h3>
-              <p className="text-gray-600 text-sm">One database, one login, one platform.</p>
+              <h3 className="text-lg font-semibold text-text-primary mb-2">Single Source of Truth</h3>
+              <p className="text-text-secondary text-sm">One database, one login, one platform.</p>
             </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:border-primary/20 transition-colors">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-border-subtle hover:border-primary/20 transition-colors">
               <Zap className="w-10 h-10 text-primary mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Automatic Workflows</h3>
-              <p className="text-gray-600 text-sm">GRN updates stock and triggers accounting entries.</p>
+              <h3 className="text-lg font-semibold text-text-primary mb-2">Automatic Workflows</h3>
+              <p className="text-text-secondary text-sm">GRN updates stock and triggers accounting entries.</p>
             </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:border-primary/20 transition-colors">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-border-subtle hover:border-primary/20 transition-colors">
               <BarChart3 className="w-10 h-10 text-primary mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Cross-Module Analytics</h3>
-              <p className="text-gray-600 text-sm">AI insights across production, inventory, and finance.</p>
+              <h3 className="text-lg font-semibold text-text-primary mb-2">Cross-Module Analytics</h3>
+              <p className="text-text-secondary text-sm">AI insights across production, inventory, and finance.</p>
             </div>
           </div>
         </div>
@@ -303,8 +303,8 @@ export function FeaturesPage() {
       <section className="py-16 lg:py-24 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-4">Frequently Asked Questions</h2>
-            <p className="text-lg text-gray-600">Common questions about Prime7 ERP features and capabilities.</p>
+            <h2 className="text-3xl md:text-4xl font-semibold text-text-primary mb-4">Frequently Asked Questions</h2>
+            <p className="text-lg text-text-secondary">Common questions about Prime7 ERP features and capabilities.</p>
           </div>
           <div className="space-y-3">
             {featureFaqs.map((faq, i) => (
@@ -314,11 +314,11 @@ export function FeaturesPage() {
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-primary/5 transition-colors"
                 >
-                  <span className="font-semibold text-gray-900 pr-4">{faq.q}</span>
-                  <ChevronDown className={`h-5 w-5 text-gray-400 shrink-0 transition-transform duration-200 ${openFaq === i ? "rotate-180" : ""}`} />
+                  <span className="font-semibold text-text-primary pr-4">{faq.q}</span>
+                  <ChevronDown className={`h-5 w-5 text-text-muted shrink-0 transition-transform duration-200 ${openFaq === i ? "rotate-180" : ""}`} />
                 </button>
                 {openFaq === i && (
-                  <div className="px-6 pb-5 text-gray-600 leading-relaxed border-t border-gray-100 pt-4">{faq.a}</div>
+                  <div className="px-6 pb-5 text-text-secondary leading-relaxed border-t border-border-subtle pt-4">{faq.a}</div>
                 )}
               </div>
             ))}
@@ -334,7 +334,7 @@ export function FeaturesPage() {
             Experience how Prime7 ERP can transform your garment manufacturing operations.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-white text-primary px-8 py-3 text-base font-semibold hover:bg-gray-50 transition-colors">
+            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-surface-raised text-primary px-8 py-3 text-base font-semibold hover:bg-surface-subtle transition-colors">
               Start Free Trial <ArrowRight className="w-4 h-4" />
             </Link>
             <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/50 text-white px-8 py-3 text-base font-semibold hover:bg-white/10 transition-colors">

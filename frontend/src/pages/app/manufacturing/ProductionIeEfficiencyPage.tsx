@@ -90,35 +90,35 @@ export function ProductionIeEfficiencyPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">IE & Operation Master</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-text-primary">IE & Operation Master</h1>
+        <p className="text-sm text-text-muted">
           Maintain operation process areas for strict cutting/sewing/finishing queue control.
         </p>
       </div>
 
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <div className="text-xs text-slate-500">Cutting Ops</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3">
+          <div className="text-xs text-text-muted">Cutting Ops</div>
           <div className="text-xl font-semibold">{areaSummary.cutting}</div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <div className="text-xs text-slate-500">Sewing Ops</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3">
+          <div className="text-xs text-text-muted">Sewing Ops</div>
           <div className="text-xl font-semibold">{areaSummary.sewing}</div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <div className="text-xs text-slate-500">Finishing Ops</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3">
+          <div className="text-xs text-text-muted">Finishing Ops</div>
           <div className="text-xl font-semibold">{areaSummary.finishing}</div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
-          <div className="text-xs text-slate-500">General Ops</div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3">
+          <div className="text-xs text-text-muted">General Ops</div>
           <div className="text-xl font-semibold">{areaSummary.general}</div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Create Operation</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">Create Operation</h2>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
           <input
             className="rounded border px-3 py-2 text-sm"
@@ -162,17 +162,17 @@ export function ProductionIeEfficiencyPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="mb-3 flex items-center gap-3">
-          <h2 className="text-sm font-semibold text-slate-700">Operation Area Mapping</h2>
-          <label className="flex items-center gap-2 text-xs text-slate-600">
+          <h2 className="text-sm font-semibold text-text-secondary">Operation Area Mapping</h2>
+          <label className="flex items-center gap-2 text-xs text-text-secondary">
             <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} />
             Active only
           </label>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600">
+            <thead className="bg-surface-subtle text-left text-text-secondary">
               <tr>
                 <th className="px-3 py-2">Code</th>
                 <th className="px-3 py-2">Name</th>
@@ -215,7 +215,7 @@ export function ProductionIeEfficiencyPage() {
               ))}
               {rows.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-8 text-center text-slate-500" colSpan={5}>
+                  <td className="px-3 py-8 text-center text-text-muted" colSpan={5}>
                     No operation masters found.
                   </td>
                 </tr>

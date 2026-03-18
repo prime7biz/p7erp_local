@@ -49,24 +49,24 @@ export function PipelineAnalyticsPage() {
         <div>
           <Link
             to="/app/merchandising/pipeline"
-            className="mb-2 inline-flex items-center gap-1 text-sm text-gray-600 hover:text-primary"
+            className="mb-2 inline-flex items-center gap-1 text-sm text-text-secondary hover:text-brand-primary"
           >
             <ArrowLeft className="h-4 w-4" /> Back to pipeline
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Pipeline Analytics</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-text-primary">Pipeline Analytics</h1>
+          <p className="mt-0.5 text-sm text-text-muted">
             Month-wise and quarterly picture for marketing: inquiries received, confirmed orders by delivery, under processing, and potential orders.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 text-sm text-gray-600">
+          <label className="flex items-center gap-1.5 text-sm text-text-secondary">
             <Calendar className="h-4 w-4" />
             Years back:
           </label>
           <select
             value={yearsBack}
             onChange={(e) => setYearsBack(Number(e.target.value))}
-            className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+            className="rounded-lg border border-border-strong px-2.5 py-1.5 text-sm"
           >
             {[1, 2, 3, 4, 5].map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -76,7 +76,7 @@ export function PipelineAnalyticsPage() {
             type="button"
             onClick={() => load()}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -85,13 +85,13 @@ export function PipelineAnalyticsPage() {
       </header>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
       )}
 
       {loading && !data ? (
-        <div className="py-12 text-center text-gray-500">Loading analytics…</div>
+        <div className="py-12 text-center text-text-muted">Loading analytics…</div>
       ) : !data ? null : (
         <>
           {/* Summary KPIs */}
@@ -99,38 +99,38 @@ export function PipelineAnalyticsPage() {
             <SummaryCard
               label="Inquiries received (total)"
               value={data.summary.inquiries_received_total}
-              icon={<TrendingUp className="h-5 w-5 text-slate-600" />}
+              icon={<TrendingUp className="h-5 w-5 text-text-secondary" />}
             />
             <SummaryCard
               label="Confirmed orders (count)"
               value={data.summary.confirmed_orders_total}
-              icon={<BarChart3 className="h-5 w-5 text-emerald-600" />}
+              icon={<BarChart3 className="h-5 w-5 text-status-success" />}
             />
             <SummaryCard
               label="Confirmed orders (quantity)"
               value={formatNum(data.summary.confirmed_orders_quantity_total)}
-              icon={<BarChart3 className="h-5 w-5 text-emerald-600" />}
+              icon={<BarChart3 className="h-5 w-5 text-status-success" />}
               subLabel="pcs"
             />
             <SummaryCard
               label="Inquiry under processing"
               value={data.summary.inquiry_under_processing_total}
-              icon={<RefreshCw className="h-5 w-5 text-amber-600" />}
+              icon={<RefreshCw className="h-5 w-5 text-status-warning" />}
             />
             <SummaryCard
               label="Potential orders"
               value={data.summary.potential_orders_total}
-              icon={<TrendingUp className="h-5 w-5 text-violet-600" />}
+              icon={<TrendingUp className="h-5 w-5 text-brand-primary" />}
             />
           </div>
 
           {/* View toggle */}
-          <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+          <div className="flex rounded-lg border border-border bg-surface-subtle p-1">
             <button
               type="button"
               onClick={() => setViewMode("month")}
               className={`flex-1 rounded-md px-4 py-2 text-sm font-medium ${
-                viewMode === "month" ? "bg-white text-primary shadow" : "text-gray-600 hover:text-gray-900"
+                viewMode === "month" ? "bg-surface-raised text-brand-primary shadow" : "text-text-secondary hover:text-text-primary"
               }`}
             >
               Month-wise
@@ -139,7 +139,7 @@ export function PipelineAnalyticsPage() {
               type="button"
               onClick={() => setViewMode("quarter")}
               className={`flex-1 rounded-md px-4 py-2 text-sm font-medium ${
-                viewMode === "quarter" ? "bg-white text-primary shadow" : "text-gray-600 hover:text-gray-900"
+                viewMode === "quarter" ? "bg-surface-raised text-brand-primary shadow" : "text-text-secondary hover:text-text-primary"
               }`}
             >
               Quarterly
@@ -147,23 +147,23 @@ export function PipelineAnalyticsPage() {
           </div>
 
           {/* Table */}
-          <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50">
+                <thead className="border-b border-border bg-surface-subtle">
                   <tr>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Period</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-700">Inquiries received</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-700">Confirmed orders (count)</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-700">Confirmed orders (qty)</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-700">Inquiry under processing</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-700">Potential orders</th>
+                    <th className="px-4 py-3 text-left font-semibold text-text-secondary">Period</th>
+                    <th className="px-4 py-3 text-right font-semibold text-text-secondary">Inquiries received</th>
+                    <th className="px-4 py-3 text-right font-semibold text-text-secondary">Confirmed orders (count)</th>
+                    <th className="px-4 py-3 text-right font-semibold text-text-secondary">Confirmed orders (qty)</th>
+                    <th className="px-4 py-3 text-right font-semibold text-text-secondary">Inquiry under processing</th>
+                    <th className="px-4 py-3 text-right font-semibold text-text-secondary">Potential orders</th>
                   </tr>
                 </thead>
                 <tbody>
                   {displayBuckets.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={6} className="px-4 py-8 text-center text-text-muted">
                         No data for the selected period.
                       </td>
                     </tr>
@@ -178,7 +178,7 @@ export function PipelineAnalyticsPage() {
           </div>
 
           {/* Short legend */}
-          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
+          <div className="rounded-lg border border-border bg-surface-subtle px-4 py-3 text-xs text-text-secondary">
             <strong>Definitions:</strong> Inquiries received = count by created month/quarter. Confirmed orders = orders (non-draft) by expected delivery date. Inquiry under processing = inquiries not yet led to an order. Potential orders = quotations sent/approved not yet converted to order.
           </div>
         </>
@@ -199,14 +199,14 @@ function SummaryCard({
   subLabel?: string;
 }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
+    <div className="rounded-xl border border-border bg-surface-raised p-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-text-muted">{label}</span>
         {icon}
       </div>
       <div className="mt-2 flex items-baseline gap-1">
-        <span className="text-2xl font-bold text-gray-900">{value}</span>
-        {subLabel && <span className="text-sm text-gray-500">{subLabel}</span>}
+        <span className="text-2xl font-bold text-text-primary">{value}</span>
+        {subLabel && <span className="text-sm text-text-muted">{subLabel}</span>}
       </div>
     </div>
   );
@@ -220,21 +220,21 @@ function AnalyticsRow({ bucket }: { bucket: PipelineAnalyticsBucket }) {
     bucket.inquiry_under_processing > 0 ||
     bucket.potential_orders_count > 0;
   return (
-    <tr className={`border-b border-gray-100 last:border-0 ${hasAny ? "bg-white" : "bg-gray-50/50"}`}>
-      <td className="whitespace-nowrap px-4 py-2.5 font-medium text-gray-900">{bucket.period_label}</td>
-      <td className="whitespace-nowrap px-4 py-2.5 text-right text-gray-700">
+    <tr className={`border-b border-border-subtle last:border-0 ${hasAny ? "bg-surface-raised" : "bg-surface-subtle/50"}`}>
+      <td className="whitespace-nowrap px-4 py-2.5 font-medium text-text-primary">{bucket.period_label}</td>
+      <td className="whitespace-nowrap px-4 py-2.5 text-right text-text-secondary">
         {bucket.inquiries_received > 0 ? bucket.inquiries_received : "—"}
       </td>
-      <td className="whitespace-nowrap px-4 py-2.5 text-right text-gray-700">
+      <td className="whitespace-nowrap px-4 py-2.5 text-right text-text-secondary">
         {bucket.confirmed_orders_count > 0 ? bucket.confirmed_orders_count : "—"}
       </td>
-      <td className="whitespace-nowrap px-4 py-2.5 text-right text-gray-700">
+      <td className="whitespace-nowrap px-4 py-2.5 text-right text-text-secondary">
         {bucket.confirmed_orders_quantity > 0 ? formatNum(bucket.confirmed_orders_quantity) : "—"}
       </td>
-      <td className="whitespace-nowrap px-4 py-2.5 text-right text-gray-700">
+      <td className="whitespace-nowrap px-4 py-2.5 text-right text-text-secondary">
         {bucket.inquiry_under_processing > 0 ? bucket.inquiry_under_processing : "—"}
       </td>
-      <td className="whitespace-nowrap px-4 py-2.5 text-right text-gray-700">
+      <td className="whitespace-nowrap px-4 py-2.5 text-right text-text-secondary">
         {bucket.potential_orders_count > 0 ? bucket.potential_orders_count : "—"}
       </td>
     </tr>

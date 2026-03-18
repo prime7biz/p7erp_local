@@ -89,14 +89,14 @@ export function ProductionPlanningPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Production Planning</h1>
-        <p className="text-sm text-slate-500">Create plans and generate work orders from planned demand.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Production Planning</h1>
+        <p className="text-sm text-text-muted">Create plans and generate work orders from planned demand.</p>
       </div>
 
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Create Production Plan</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">Create Production Plan</h2>
         <form className="space-y-3" onSubmit={createPlan}>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <input className="rounded border px-3 py-2 text-sm" type="date" value={form.period_start} onChange={(e) => setForm((prev) => ({ ...prev, period_start: e.target.value }))} />
@@ -104,8 +104,8 @@ export function ProductionPlanningPage() {
             <input className="rounded border px-3 py-2 text-sm" placeholder="Optional plan code" value={form.plan_code ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, plan_code: e.target.value }))} />
           </div>
 
-          <div className="rounded border border-slate-200 p-3">
-            <div className="mb-2 text-xs font-medium text-slate-600">Add line</div>
+          <div className="rounded border border-border p-3">
+            <div className="mb-2 text-xs font-medium text-text-secondary">Add line</div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
               <select className="rounded border px-3 py-2 text-sm" value={line.item_id} onChange={(e) => setLine((prev) => ({ ...prev, item_id: Number(e.target.value) }))}>
                 {items.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
@@ -117,9 +117,9 @@ export function ProductionPlanningPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded border border-slate-200">
+          <div className="overflow-x-auto rounded border border-border">
             <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-600">
+              <thead className="bg-surface-subtle text-left text-text-secondary">
                 <tr><th className="px-3 py-2">Item</th><th className="px-3 py-2">Planned Qty</th><th className="px-3 py-2">Due Date</th><th className="px-3 py-2">Priority</th></tr>
               </thead>
               <tbody>
@@ -131,20 +131,20 @@ export function ProductionPlanningPage() {
                     <td className="px-3 py-2">{row.priority ?? 5}</td>
                   </tr>
                 ))}
-                {form.lines.length === 0 ? <tr><td className="px-3 py-6 text-center text-slate-500" colSpan={4}>No lines added yet.</td></tr> : null}
+                {form.lines.length === 0 ? <tr><td className="px-3 py-6 text-center text-text-muted" colSpan={4}>No lines added yet.</td></tr> : null}
               </tbody>
             </table>
           </div>
 
-          <button className="rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60" disabled={saving} type="submit">
+          <button className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60" disabled={saving} type="submit">
             {saving ? "Saving..." : "Create Plan"}
           </button>
         </form>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr><th className="px-4 py-2">Plan Code</th><th className="px-4 py-2">Period</th><th className="px-4 py-2">Status</th><th className="px-4 py-2">Lines</th><th className="px-4 py-2">Action</th></tr>
           </thead>
           <tbody>
@@ -159,7 +159,7 @@ export function ProductionPlanningPage() {
                 </td>
               </tr>
             ))}
-            {plans.length === 0 ? <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={5}>No production plans found.</td></tr> : null}
+            {plans.length === 0 ? <tr><td className="px-4 py-8 text-center text-text-muted" colSpan={5}>No production plans found.</td></tr> : null}
           </tbody>
         </table>
       </div>

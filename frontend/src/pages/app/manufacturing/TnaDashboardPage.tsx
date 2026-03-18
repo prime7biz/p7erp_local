@@ -25,25 +25,25 @@ export function TnaDashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">TNA Dashboard</h1>
-        <p className="text-sm text-slate-500">Track active plans, delayed tasks, and execution health.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">TNA Dashboard</h1>
+        <p className="text-sm text-text-muted">Track active plans, delayed tasks, and execution health.</p>
       </div>
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
       {summary ? (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-          <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Total Plans</div><div className="text-xl font-semibold">{summary.total_plans}</div></div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Active Plans</div><div className="text-xl font-semibold">{summary.active_plans}</div></div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Done Tasks</div><div className="text-xl font-semibold">{summary.done_tasks}</div></div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Delayed Tasks</div><div className="text-xl font-semibold">{summary.delayed_tasks}</div></div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Upcoming (7d)</div><div className="text-xl font-semibold">{summary.upcoming_tasks_7d}</div></div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3"><div className="text-xs text-slate-500">Overdue</div><div className="text-xl font-semibold">{summary.overdue_tasks}</div></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Total Plans</div><div className="text-xl font-semibold">{summary.total_plans}</div></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Active Plans</div><div className="text-xl font-semibold">{summary.active_plans}</div></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Done Tasks</div><div className="text-xl font-semibold">{summary.done_tasks}</div></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Delayed Tasks</div><div className="text-xl font-semibold">{summary.delayed_tasks}</div></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Upcoming (7d)</div><div className="text-xl font-semibold">{summary.upcoming_tasks_7d}</div></div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3"><div className="text-xs text-text-muted">Overdue</div><div className="text-xl font-semibold">{summary.overdue_tasks}</div></div>
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr><th className="px-3 py-2">Plan Code</th><th className="px-3 py-2">Start</th><th className="px-3 py-2">Target End</th><th className="px-3 py-2">Status</th></tr>
           </thead>
           <tbody>
@@ -55,7 +55,7 @@ export function TnaDashboardPage() {
                 <td className="px-3 py-2">{row.status}</td>
               </tr>
             ))}
-            {plans.length === 0 ? <tr><td className="px-3 py-8 text-center text-slate-500" colSpan={4}>No TNA plans yet.</td></tr> : null}
+            {plans.length === 0 ? <tr><td className="px-3 py-8 text-center text-text-muted" colSpan={4}>No TNA plans yet.</td></tr> : null}
           </tbody>
         </table>
       </div>

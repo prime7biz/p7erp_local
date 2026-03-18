@@ -85,7 +85,7 @@ export function SignUp() {
       <div className="min-h-screen flex">
         <div className="hidden lg:flex lg:w-[55%] relative flex-col items-center justify-center p-12 overflow-hidden">
           <img src="/images/auth-bg-register.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/80 via-gray-900/60 to-primary/25" />
+          <div className="absolute inset-0 bg-gradient-to-br from-surface-inverse/80 via-surface-inverse/60 to-primary/25" />
           <div className="absolute top-1/4 -left-20 w-64 h-64 bg-primary/20 rounded-full blur-3xl" />
           <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
           <div className="relative z-10 text-center max-w-md">
@@ -107,29 +107,29 @@ export function SignUp() {
             </div>
           </div>
         </div>
-        <div className="flex-1 flex items-center justify-center relative p-6 bg-gradient-to-b from-gray-50 to-white min-h-[60vh]">
+        <div className="flex-1 flex items-center justify-center relative p-6 bg-gradient-to-b from-surface-subtle to-surface-raised min-h-[60vh]">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_70%_20%,rgba(249,115,22,0.06),transparent)] pointer-events-none" aria-hidden="true" />
           <div className="w-full max-w-md space-y-6 relative z-10">
             <div className="text-center mb-6">
               <img src="/images/logo.png" alt="Prime7 ERP" className="mx-auto h-14 w-auto mb-2" />
             </div>
-            <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-8">
+            <div className="bg-white rounded-xl shadow-lg border border-border-subtle p-8">
               <div className="text-center mb-6">
-                <div className="mx-auto w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mb-3">
-                  <CheckCircle className="h-6 w-6 text-green-600" />
+                <div className="mx-auto w-12 h-12 bg-status-success-subtle rounded-full flex items-center justify-center mb-3">
+                  <CheckCircle className="h-6 w-6 text-status-success-foreground" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Registration Successful!</h2>
-                <p className="text-sm text-gray-500 mt-1">Your company has been registered</p>
+                <h2 className="text-xl font-semibold text-text-primary">Registration Successful!</h2>
+                <p className="text-sm text-text-muted mt-1">Your company has been registered</p>
               </div>
               <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 text-center mb-4">
-                <p className="text-sm text-gray-600 mb-2">Your Company Code</p>
+                <p className="text-sm text-text-secondary mb-2">Your Company Code</p>
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-2xl font-bold font-mono text-primary tracking-wider">{successData.companyCode}</span>
-                  <button type="button" onClick={copyCompanyCode} className="p-1 rounded hover:bg-gray-100">
-                    <Copy className="h-4 w-4 text-gray-400" />
+                  <button type="button" onClick={copyCompanyCode} className="p-1 rounded hover:bg-surface-subtle">
+                    <Copy className="h-4 w-4 text-text-muted" />
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">Save this code — you&apos;ll need it to log in</p>
+                <p className="text-xs text-text-muted mt-2">Save this code — you&apos;ll need it to log in</p>
               </div>
               <button
                 type="button"
@@ -140,7 +140,7 @@ export function SignUp() {
               </button>
             </div>
             <div className="text-center">
-              <Link to="/" className="text-sm text-gray-500 hover:text-primary transition-colors inline-flex items-center gap-1.5">
+              <Link to="/" className="text-sm text-text-muted hover:text-primary transition-colors inline-flex items-center gap-1.5">
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Back to Website
               </Link>
@@ -155,7 +155,7 @@ export function SignUp() {
     <div className="min-h-screen flex">
       <div className="hidden lg:flex lg:w-[55%] relative flex-col items-center justify-center p-12 overflow-hidden">
         <img src="/images/auth-bg-register.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/80 via-gray-900/60 to-primary/25" />
+        <div className="absolute inset-0 bg-gradient-to-br from-surface-inverse/80 via-surface-inverse/60 to-primary/25" />
         <div className="absolute top-1/4 -left-20 w-64 h-64 bg-primary/20 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
         <div className="relative z-10 text-center max-w-md">
@@ -192,41 +192,41 @@ export function SignUp() {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center relative p-4 lg:p-6 overflow-y-auto bg-gradient-to-b from-gray-50 to-white min-h-[60vh]">
+      <div className="flex-1 flex items-center justify-center relative p-4 lg:p-6 overflow-y-auto bg-gradient-to-b from-surface-subtle to-surface-raised min-h-[60vh]">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_70%_20%,rgba(249,115,22,0.05),transparent)] pointer-events-none" aria-hidden="true" />
         <div className="w-full max-w-lg space-y-4 py-6 relative z-10">
           <div className="text-center mb-4">
             <img src="/images/logo.png" alt="Prime7 ERP" className="mx-auto h-12 w-auto mb-2" />
-            <p className="text-gray-500 text-xs">Garment Manufacturing ERP</p>
+            <p className="text-text-muted text-xs">Garment Manufacturing ERP</p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 lg:p-8">
+          <div className="bg-white rounded-xl shadow-lg border border-border-subtle p-6 lg:p-8">
             <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Register Your Company</h2>
-              <p className="text-sm text-gray-500 mt-1">Create an account to get started</p>
-              <p className="text-xs text-gray-500 mt-1">Fields marked with ** are mandatory.</p>
+              <h2 className="text-xl font-semibold text-text-primary">Register Your Company</h2>
+              <p className="text-sm text-text-muted mt-1">Create an account to get started</p>
+              <p className="text-xs text-text-muted mt-1">Fields marked with ** are mandatory.</p>
             </div>
 
             {error && (
-              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
+              <div className="mb-4 rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">{error}</div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                <h3 className="text-sm font-medium text-text-secondary mb-3 flex items-center gap-2">
                   <User className="h-4 w-4 text-primary" />
                   Account Information
                 </h3>
                 <div className="space-y-3">
                   <div>
-                    <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">Company Name **</label>
+                    <label htmlFor="companyName" className="block text-sm font-medium text-text-secondary">Company Name **</label>
                     <div className="relative mt-1">
-                      <Building2 className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Building2 className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
                       <input
                         id="companyName"
                         type="text"
                         placeholder="Your Company Ltd."
-                        className="w-full pl-10 pr-4 py-2.5 rounded-md border border-gray-200 bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
                         required
@@ -235,37 +235,37 @@ export function SignUp() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">First Name</label>
+                      <label htmlFor="firstName" className="block text-sm font-medium text-text-secondary">First Name</label>
                       <input
                         id="firstName"
                         type="text"
                         placeholder="John"
-                        className="mt-1 w-full px-4 py-2.5 rounded-md border border-gray-200 bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                        className="mt-1 w-full px-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                       />
                     </div>
                     <div>
-                      <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">Last Name</label>
+                      <label htmlFor="lastName" className="block text-sm font-medium text-text-secondary">Last Name</label>
                       <input
                         id="lastName"
                         type="text"
                         placeholder="Doe"
-                        className="mt-1 w-full px-4 py-2.5 rounded-md border border-gray-200 bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                        className="mt-1 w-full px-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                       />
                     </div>
                   </div>
                   <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email **</label>
+                    <label htmlFor="email" className="block text-sm font-medium text-text-secondary">Email **</label>
                     <div className="relative mt-1">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
                       <input
                         id="email"
                         type="email"
                         placeholder="john@company.com"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-md border border-gray-200 bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
@@ -274,14 +274,14 @@ export function SignUp() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username **</label>
+                      <label htmlFor="username" className="block text-sm font-medium text-text-secondary">Username **</label>
                       <div className="relative mt-1">
-                        <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                        <User className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
                         <input
                           id="username"
                           type="text"
                           placeholder="johndoe"
-                          className="w-full pl-10 pr-4 py-2.5 rounded-md border border-gray-200 bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                          className="w-full pl-10 pr-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
                           required
@@ -289,14 +289,14 @@ export function SignUp() {
                       </div>
                     </div>
                     <div>
-                      <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password **</label>
+                      <label htmlFor="password" className="block text-sm font-medium text-text-secondary">Password **</label>
                       <div className="relative mt-1">
-                        <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                        <Lock className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
                         <input
                           id="password"
                           type="password"
                           placeholder="Min 8 characters"
-                          className="w-full pl-10 pr-4 py-2.5 rounded-md border border-gray-200 bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                          className="w-full pl-10 pr-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required
@@ -308,43 +308,43 @@ export function SignUp() {
                 </div>
               </div>
 
-              <div className="border-t border-gray-100 pt-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+              <div className="border-t border-border-subtle pt-4">
+                <h3 className="text-sm font-medium text-text-secondary mb-3 flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-primary" />
                   Company Details
                 </h3>
                 <div className="space-y-3">
                   <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700">Phone **</label>
+                    <label htmlFor="phone" className="block text-sm font-medium text-text-secondary">Phone **</label>
                     <div className="relative mt-1">
-                      <Phone className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Phone className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
                       <input
                         id="phone"
                         type="tel"
                         placeholder="+880 1XXX-XXXXXX"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-md border border-gray-200 bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                       />
                     </div>
                   </div>
                   <div>
-                    <label htmlFor="address" className="block text-sm font-medium text-gray-700">Address</label>
+                    <label htmlFor="address" className="block text-sm font-medium text-text-secondary">Address</label>
                     <input
                       id="address"
                       type="text"
                       placeholder="Company address"
-                      className="mt-1 w-full px-4 py-2.5 rounded-md border border-gray-200 bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                      className="mt-1 w-full px-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label htmlFor="country" className="block text-sm font-medium text-gray-700">Country</label>
+                      <label htmlFor="country" className="block text-sm font-medium text-text-secondary">Country</label>
                       <select
                         id="country"
-                        className="mt-1 w-full px-4 py-2.5 rounded-md border border-gray-200 bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                        className="mt-1 w-full px-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
                         value={country}
                         onChange={(e) => setCountry(e.target.value)}
                       >
@@ -365,10 +365,10 @@ export function SignUp() {
                       </select>
                     </div>
                     <div>
-                      <label htmlFor="businessType" className="block text-sm font-medium text-gray-700">Business Type</label>
+                      <label htmlFor="businessType" className="block text-sm font-medium text-text-secondary">Business Type</label>
                       <select
                         id="businessType"
-                        className="mt-1 w-full px-4 py-2.5 rounded-md border border-gray-200 bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                        className="mt-1 w-full px-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
                         value={businessType}
                         onChange={(e) => setBusinessType(e.target.value as TenantType)}
                       >
@@ -390,7 +390,7 @@ export function SignUp() {
               </button>
             </form>
 
-            <div className="text-center text-sm text-gray-500 mt-4">
+            <div className="text-center text-sm text-text-muted mt-4">
               Already have an account?{" "}
               <Link to="/login" className="text-primary hover:text-primary/80 font-medium">
                 Sign in
@@ -399,7 +399,7 @@ export function SignUp() {
           </div>
 
           <div className="text-center">
-            <Link to="/" className="text-sm text-gray-500 hover:text-primary transition-colors inline-flex items-center gap-1.5">
+            <Link to="/" className="text-sm text-text-muted hover:text-primary transition-colors inline-flex items-center gap-1.5">
               <ArrowLeft className="h-3.5 w-3.5" />
               Back to Website
             </Link>

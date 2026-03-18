@@ -5,19 +5,19 @@ function statusBadgeClass(status: string) {
   switch (status) {
     case "draft":
     case "pending":
-      return "bg-slate-100 text-slate-700";
+      return "bg-surface-subtle text-text-secondary";
     case "planned":
-      return "bg-blue-100 text-blue-700";
+      return "bg-status-info-subtle text-status-info-foreground";
     case "in_progress":
-      return "bg-amber-100 text-amber-700";
+      return "bg-status-warning-subtle text-status-warning-foreground";
     case "on_hold":
-      return "bg-orange-100 text-orange-700";
+      return "bg-status-warning-subtle text-status-warning-foreground";
     case "completed":
-      return "bg-green-100 text-green-700";
+      return "bg-status-success-subtle text-status-success-foreground";
     case "skipped":
       return "bg-purple-100 text-purple-700";
     default:
-      return "bg-slate-100 text-slate-700";
+      return "bg-surface-subtle text-text-secondary";
   }
 }
 
@@ -119,21 +119,21 @@ export function ManufacturingOrdersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Manufacturing Orders</h1>
-        <p className="text-sm text-slate-500">Manage stage-by-stage production progress with safe controls.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Manufacturing Orders</h1>
+        <p className="text-sm text-text-muted">Manage stage-by-stage production progress with safe controls.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><div className="text-slate-500">Open PO</div><div className="text-xl font-semibold">{kpi.openPo} <span className="text-xs text-slate-400">{trend("openPo")}</span></div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><div className="text-slate-500">Open GRN</div><div className="text-xl font-semibold">{kpi.openGrn} <span className="text-xs text-slate-400">{trend("openGrn")}</span></div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><div className="text-slate-500">Pending CR</div><div className="text-xl font-semibold">{kpi.pendingCr} <span className="text-xs text-slate-400">{trend("pendingCr")}</span></div></div>
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><div className="text-slate-500">Low Stock Items</div><div className="text-xl font-semibold">{kpi.lowStock} <span className="text-xs text-slate-400">{trend("lowStock")}</span></div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Open PO</div><div className="text-xl font-semibold">{kpi.openPo} <span className="text-xs text-text-muted">{trend("openPo")}</span></div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Open GRN</div><div className="text-xl font-semibold">{kpi.openGrn} <span className="text-xs text-text-muted">{trend("openGrn")}</span></div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Pending CR</div><div className="text-xl font-semibold">{kpi.pendingCr} <span className="text-xs text-text-muted">{trend("pendingCr")}</span></div></div>
+        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Low Stock Items</div><div className="text-xl font-semibold">{kpi.lowStock} <span className="text-xs text-text-muted">{trend("lowStock")}</span></div></div>
       </div>
 
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Create Manufacturing Order</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">Create Manufacturing Order</h2>
         <form className="grid grid-cols-1 gap-3 md:grid-cols-4" onSubmit={create}>
           <select
             className="rounded border px-3 py-2 text-sm"
@@ -158,7 +158,7 @@ export function ManufacturingOrdersPage() {
             value={form.notes ?? ""}
             onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
           />
-          <button className="rounded bg-slate-900 px-4 py-2 text-sm text-white" type="submit">
+          <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-brand-primary-foreground" type="submit">
             Create
           </button>
         </form>
@@ -167,11 +167,11 @@ export function ManufacturingOrdersPage() {
       {orders.map((order) => {
         const stages = stagesByOrder[order.id] ?? [];
         return (
-          <div key={order.id} className="rounded-xl border border-slate-200 bg-white p-4">
+          <div key={order.id} className="rounded-xl border border-border bg-surface-raised p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="font-semibold text-slate-800">{order.mo_number}</h3>
-                <p className="text-xs text-slate-500">
+                <h3 className="font-semibold text-text-primary">{order.mo_number}</h3>
+                <p className="text-xs text-text-muted">
                   {itemName.get(order.finished_item_id) ?? order.finished_item_id} | Planned: {order.planned_quantity}
                 </p>
                 <div className="mt-1">
@@ -204,8 +204,8 @@ export function ManufacturingOrdersPage() {
 
             <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
               {stages.map((stage) => (
-                <div key={stage.id} className="rounded border border-slate-200 p-3">
-                  <div className="mb-2 text-sm font-medium text-slate-700">
+                <div key={stage.id} className="rounded border border-border p-3">
+                  <div className="mb-2 text-sm font-medium text-text-secondary">
                     {stage.stage_order}. {stage.stage_name.replaceAll("_", " ")}
                   </div>
                   <div className="mb-2 text-xs">

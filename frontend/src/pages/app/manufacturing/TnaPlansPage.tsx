@@ -127,13 +127,13 @@ export function TnaPlansPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">TNA Plans</h1>
-        <p className="text-sm text-slate-500">Generate plans from templates and update task execution status.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">TNA Plans</h1>
+        <p className="text-sm text-text-muted">Generate plans from templates and update task execution status.</p>
       </div>
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Create Plan</h2>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="mb-3 text-sm font-semibold text-text-secondary">Create Plan</h2>
         <form className="grid grid-cols-1 gap-2 md:grid-cols-5" onSubmit={createPlan}>
           <input className="rounded border px-3 py-2 text-sm" placeholder="Optional plan code" value={form.plan_code ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, plan_code: e.target.value }))} />
           <select className="rounded border px-3 py-2 text-sm" value={form.template_id || ""} onChange={(e) => setForm((prev) => ({ ...prev, template_id: Number(e.target.value) }))}>
@@ -150,11 +150,11 @@ export function TnaPlansPage() {
             <option value="on_hold">On Hold</option>
             <option value="completed">Completed</option>
           </select>
-          <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60" type="submit" disabled={!canManage}>Create Plan</button>
+          <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-text-inverse disabled:opacity-60" type="submit" disabled={!canManage}>Create Plan</button>
         </form>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           <select className="rounded border px-3 py-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All statuses</option>
@@ -173,9 +173,9 @@ export function TnaPlansPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr><th className="px-3 py-2">Plan Code</th><th className="px-3 py-2">Template</th><th className="px-3 py-2">Start</th><th className="px-3 py-2">Target End</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Action</th></tr>
           </thead>
           <tbody>
@@ -193,15 +193,15 @@ export function TnaPlansPage() {
                 </td>
               </tr>
             ))}
-            {plans.length === 0 ? <tr><td className="px-3 py-8 text-center text-slate-500" colSpan={6}>No TNA plans found.</td></tr> : null}
+            {plans.length === 0 ? <tr><td className="px-3 py-8 text-center text-text-muted" colSpan={6}>No TNA plans found.</td></tr> : null}
           </tbody>
         </table>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <div className="border-b px-4 py-3 text-sm font-semibold text-slate-700">Plan Tasks</div>
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+        <div className="border-b border-border px-4 py-3 text-sm font-semibold text-text-secondary">Plan Tasks</div>
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
             <tr><th className="px-3 py-2">Seq</th><th className="px-3 py-2">Task</th><th className="px-3 py-2">Dependency</th><th className="px-3 py-2">Planned</th><th className="px-3 py-2">Actual</th><th className="px-3 py-2">Owner</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Remarks</th><th className="px-3 py-2">Action</th></tr>
           </thead>
           <tbody>
@@ -211,7 +211,7 @@ export function TnaPlansPage() {
                 <td className="px-3 py-2">{row.task_name}</td>
                 <td className="px-3 py-2">
                   {row.depends_on_seq ? (
-                    <span className={row.dependency_ready ? "text-emerald-700" : "text-amber-700"}>
+                    <span className={row.dependency_ready ? "text-status-success-foreground" : "text-status-warning-foreground"}>
                       Seq {row.depends_on_seq} ({row.dependency_status ?? "missing"})
                     </span>
                   ) : (
@@ -297,7 +297,7 @@ export function TnaPlansPage() {
                 </td>
               </tr>
             ))}
-            {tasks.length === 0 ? <tr><td className="px-3 py-8 text-center text-slate-500" colSpan={9}>No tasks for selected plan.</td></tr> : null}
+            {tasks.length === 0 ? <tr><td className="px-3 py-8 text-center text-text-muted" colSpan={9}>No tasks for selected plan.</td></tr> : null}
           </tbody>
         </table>
       </div>

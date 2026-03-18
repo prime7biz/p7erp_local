@@ -55,21 +55,21 @@ export function CostCentersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Cost Centers</h1>
-        <p className="text-sm text-slate-500">Department or operation wise financial tracking.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">Cost Centers</h1>
+        <p className="text-sm text-text-muted">Department or operation wise financial tracking.</p>
       </div>
-      {error ? <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
 
-      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-4">
+      <form onSubmit={submit} className="grid gap-3 rounded-xl border border-border bg-surface-raised p-4 md:grid-cols-4">
         <input className="rounded border px-3 py-2 text-sm" placeholder="Center Code" value={form.center_code} onChange={(e) => setForm((p) => ({ ...p, center_code: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Name" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Department" value={form.department ?? ""} onChange={(e) => setForm((p) => ({ ...p, department: e.target.value }))} />
-        <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white">{editingId ? "Update" : "Create"}</button>
+        <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-text-inverse">{editingId ? "Update" : "Create"}</button>
       </form>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">Code</th>
               <th className="px-2 py-1">Name</th>
@@ -96,10 +96,10 @@ export function CostCentersPage() {
         </table>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-4">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="mb-2 text-lg font-semibold">Cost Center Dashboard</h2>
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left">
+          <thead className="bg-surface-subtle text-left">
             <tr>
               <th className="px-2 py-1">Code</th>
               <th className="px-2 py-1">Name</th>

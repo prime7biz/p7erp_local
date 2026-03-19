@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -34,7 +34,7 @@ export function HrEmployeesPage() {
   const departmentMap = useMemo(() => new Map(departments.map((d) => [d.id, d.name])), [departments]);
   const designationMap = useMemo(() => new Map(designations.map((d) => [d.id, d.title])), [designations]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -51,11 +51,11 @@ export function HrEmployeesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showInactive, search]);
 
   useEffect(() => {
-    load();
-  }, [showInactive, search]);
+    void load();
+  }, [load]);
 
   useEffect(() => {
     const close = () => setOpenActionsId(null);

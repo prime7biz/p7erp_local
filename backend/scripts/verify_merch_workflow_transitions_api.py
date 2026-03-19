@@ -10,40 +10,23 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
+
+from app.common.workflow import INQUIRY_TRANSITIONS, ORDER_TRANSITIONS, QUOTATION_TRANSITIONS
 
 BASE_URL = os.getenv("UAT_API_BASE_URL", "http://localhost:8000")
 TENANT_CODE = os.getenv("UAT_TENANT_CODE", "LAKHSMA4821")
 USERNAME = os.getenv("UAT_USERNAME", "shahriyar")
 EMAIL = os.getenv("UAT_EMAIL", "shahriyar@lakhsma.com")
 PASSWORD = os.getenv("UAT_PASSWORD", "Lakhsma123")
-
-INQUIRY_TRANSITIONS = {
-    "DRAFT": {"SUBMITTED", "CANCELLED"},
-    "SUBMITTED": {"CONVERTED", "LOST", "CANCELLED"},
-    "CONVERTED": set(),
-    "LOST": set(),
-    "CANCELLED": set(),
-}
-QUOTATION_TRANSITIONS = {
-    "DRAFT": {"SUBMITTED", "CANCELLED"},
-    "NEW": {"SUBMITTED", "CANCELLED"},
-    "SUBMITTED": {"APPROVED", "REJECTED", "CANCELLED"},
-    "APPROVED": {"SENT", "REJECTED", "CANCELLED"},
-    "SENT": {"CONVERTED", "REJECTED", "CANCELLED"},
-    "CONVERTED": set(),
-    "REJECTED": set(),
-    "CANCELLED": set(),
-}
-ORDER_TRANSITIONS = {
-    "DRAFT": {"NEW", "CANCELLED"},
-    "NEW": {"IN_PROGRESS", "CANCELLED"},
-    "IN_PROGRESS": {"COMPLETED", "CANCELLED"},
-    "COMPLETED": set(),
-    "CANCELLED": set(),
-}
 
 
 @dataclass

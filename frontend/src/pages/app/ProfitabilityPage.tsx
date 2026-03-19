@@ -74,13 +74,25 @@ export function ProfitabilityPage({ defaultMode = "style" }: { defaultMode?: Mod
 
       <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="mb-3 flex flex-wrap gap-2">
-          <button className={`rounded border border-border-strong px-3 py-1 text-sm ${mode === "style" ? "bg-surface-inverse text-text-inverse" : ""}`} onClick={() => setMode("style")}>
+          <button
+            type="button"
+            className={`rounded border border-border-strong px-3 py-1 text-sm ${mode === "style" ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "text-text-secondary"}`}
+            onClick={() => setMode("style")}
+          >
             Style Profitability
           </button>
-          <button className={`rounded border border-border-strong px-3 py-1 text-sm ${mode === "lc" ? "bg-surface-inverse text-text-inverse" : ""}`} onClick={() => setMode("lc")}>
+          <button
+            type="button"
+            className={`rounded border border-border-strong px-3 py-1 text-sm ${mode === "lc" ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "text-text-secondary"}`}
+            onClick={() => setMode("lc")}
+          >
             LC Profitability
           </button>
-          <button className={`rounded border border-border-strong px-3 py-1 text-sm ${mode === "variance" ? "bg-surface-inverse text-text-inverse" : ""}`} onClick={() => setMode("variance")}>
+          <button
+            type="button"
+            className={`rounded border border-border-strong px-3 py-1 text-sm ${mode === "variance" ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "text-text-secondary"}`}
+            onClick={() => setMode("variance")}
+          >
             Costing Variance
           </button>
         </div>

@@ -96,7 +96,12 @@ async def register(
     tenant = tenant_result.scalar_one_or_none()
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-    if not getattr(settings, "allow_public_registration", False):
+    user_count_result = await db.execute(
+        select(func.count()).select_from(User).where(User.tenant_id == body.tenant_id)
+    )
+    user_count = int(user_count_result.scalar() or 0)
+    is_bootstrap = user_count == 0
+    if not is_bootstrap and not getattr(settings, "allow_public_registration", False):
         if current_user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -109,7 +114,7 @@ async def register(
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered for this tenant")
-    role_name = "user"
+    role_name = "admin" if is_bootstrap else "user"
     role_result = await db.execute(
         select(Role).where(Role.tenant_id == body.tenant_id, Role.name == role_name).limit(1)
     )

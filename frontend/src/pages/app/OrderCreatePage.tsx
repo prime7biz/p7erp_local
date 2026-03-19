@@ -343,8 +343,10 @@ export function OrderCreatePage() {
                   <option value="">Select status...</option>
                   <option value="DRAFT">Draft</option>
                   <option value="NEW">New</option>
+                  <option value="CONFIRMED">Confirmed</option>
                   <option value="IN_PROGRESS">In Progress</option>
                   <option value="COMPLETED">Completed</option>
+                  <option value="CANCELLED">Cancelled</option>
                 </select>
               </div>
             </div>

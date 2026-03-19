@@ -99,7 +99,12 @@ export function CashForecastPage() {
           value={form.months ?? 6}
           onChange={(e) => setForm((p) => ({ ...p, months: Number(e.target.value) }))}
         />
-        <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-text-inverse">Create Scenario</button>
+        <button
+          type="submit"
+          className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+        >
+          Create Scenario
+        </button>
       </form>
 
       {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}

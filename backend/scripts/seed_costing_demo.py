@@ -47,12 +47,14 @@ async def seed_costing(db) -> None:
 
     # Item categories (tenant)
     existing_cat = await db.execute(
-        select(ItemCategory).where(
+        select(ItemCategory)
+        .where(
             ItemCategory.tenant_id == tenant.id,
             ItemCategory.category_code == "FABRIC",
         )
+        .limit(1)
     )
-    if existing_cat.scalar_one_or_none() is None:
+    if existing_cat.scalars().first() is None:
         for code, name in [
             ("FABRIC", "Fabric"),
             ("TRIM", "Trim"),
@@ -82,12 +84,14 @@ async def seed_costing(db) -> None:
 
     # Item units (tenant)
     existing_unit = await db.execute(
-        select(ItemUnit).where(
+        select(ItemUnit)
+        .where(
             ItemUnit.tenant_id == tenant.id,
             ItemUnit.unit_code == "KG",
         )
+        .limit(1)
     )
-    if existing_unit.scalar_one_or_none() is None:
+    if existing_unit.scalars().first() is None:
         for code, name in [
             ("KG", "Kilogram"),
             ("Yard", "Yard"),
@@ -118,12 +122,14 @@ async def seed_costing(db) -> None:
 
     # Items (tenant) – for material dropdown
     existing_item = await db.execute(
-        select(Item).where(
+        select(Item)
+        .where(
             Item.tenant_id == tenant.id,
             Item.item_code == "FAB-160GSM",
         )
+        .limit(1)
     )
-    if existing_item.scalar_one_or_none() is None:
+    if existing_item.scalars().first() is None:
         db.add(
             Item(
                 tenant_id=tenant.id,

@@ -22,6 +22,7 @@ from app.models import (
     TradeDocument,
     MasterContract,
     BtbLc,
+    BtbLcAccounting,
 )
 from app.models.merch import ConsumptionPlanItem
 from app.models.inventory import Item
@@ -30,6 +31,15 @@ from app.models.costing import ItemCategory, ItemUnit
 
 ACTIVE_ORDER_STATUSES = ("NEW", "IN_PROGRESS", "CONFIRMED")
 QUOTATION_PENDING_DAYS = 7
+
+TRADE_RULE_KEYS = frozenset({
+    "trade_lc_expiry_soon",
+    "trade_docs_missing_before_etd",
+    "trade_shipment_delayed",
+    "trade_case_stuck",
+    "master_contract_btb_utilization_risk",
+    "btb_lc_maturity_due_or_overdue",
+})
 FOLLOWUP_CRITICAL_DAYS = 7
 WASTAGE_THRESHOLD_PCT = 15.0
 TRIM_WASTAGE_THRESHOLD_PCT = 10.0
@@ -614,6 +624,137 @@ async def rule_trade_case_stuck(
     return out
 
 
+def _utilization_band(percent: float) -> str:
+    if percent < 50:
+        return "VERY_GOOD"
+    if percent < 60:
+        return "GOOD"
+    if percent < 65:
+        return "SATISFACTORY"
+    if percent <= 70:
+        return "NO_CREDIT"
+    return "RED_FLAG"
+
+
+async def rule_master_contract_btb_utilization_risk(
+    db: AsyncSession, tenant_id: int, config: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Alert when master contract BTB utilization reaches risk zone.
+
+    Defaults:
+    - minimum_alert_pct = 65
+    - red_flag_pct = 70
+    """
+    minimum_alert_pct = float((config or {}).get("minimum_alert_pct", 65))
+    red_flag_pct = float((config or {}).get("red_flag_pct", 70))
+    rows = (
+        await db.execute(
+            select(MasterContract).where(
+                MasterContract.tenant_id == tenant_id,
+                MasterContract.amount.isnot(None),
+                MasterContract.amount > 0,
+            )
+        )
+    ).scalars().all()
+    out: list[dict[str, Any]] = []
+    for contract in rows:
+        amount = float(contract.amount or 0)
+        utilized = float(contract.btb_utilized_amount or 0)
+        if amount <= 0:
+            continue
+        pct = (utilized / amount) * 100
+        if pct < minimum_alert_pct:
+            continue
+        band = _utilization_band(pct)
+        if pct > red_flag_pct:
+            severity = "critical"
+        elif pct >= red_flag_pct:
+            severity = "high"
+        else:
+            severity = "medium"
+        out.append(
+            {
+                "natural_key": f"master_contract_btb_utilization_risk:master_contract:{contract.id}",
+                "title": f"Master contract {contract.reference} BTB utilization at {pct:.1f}%",
+                "description": (
+                    f"BTB utilization is {pct:.1f}% ({utilized:.2f} of {amount:.2f}), "
+                    f"band: {band.replace('_', ' ')}."
+                ),
+                "severity": severity,
+                "reason_text": (
+                    f"Utilized {utilized:.2f} against amount {amount:.2f}; threshold {minimum_alert_pct:.1f}%."
+                ),
+                "recommended_action": (
+                    "Review BTB opening approvals and raw material costing to stay within policy."
+                ),
+                "entity_type": "master_contract",
+                "entity_id": contract.id,
+                "order_id": None,
+            }
+        )
+    return out
+
+
+async def rule_btb_lc_maturity_due_or_overdue(
+    db: AsyncSession, tenant_id: int, config: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Alert when BTB LC maturity is near or overdue and not realized.
+
+    Defaults:
+    - due_soon_days = 7
+    """
+    due_soon_days = int((config or {}).get("due_soon_days", 7))
+    today = date.today()
+    due_cutoff = today + timedelta(days=due_soon_days)
+    rows = (
+        await db.execute(
+            select(BtbLcAccounting, BtbLc)
+            .join(BtbLc, BtbLc.id == BtbLcAccounting.btb_lc_id)
+            .where(
+                BtbLcAccounting.tenant_id == tenant_id,
+                BtbLc.tenant_id == tenant_id,
+                BtbLcAccounting.status != "REALIZED",
+                BtbLcAccounting.maturity_date.isnot(None),
+            )
+        )
+    ).all()
+    out: list[dict[str, Any]] = []
+    for acc, lc in rows:
+        maturity = acc.maturity_date
+        if maturity is None:
+            continue
+        if maturity > due_cutoff:
+            continue
+        days_delta = (maturity - today).days
+        if days_delta < 0:
+            severity = "critical"
+            description = f"Maturity overdue by {abs(days_delta)} day(s)."
+        elif days_delta <= 2:
+            severity = "high"
+            description = f"Maturity due in {days_delta} day(s)."
+        else:
+            severity = "medium"
+            description = f"Maturity due in {days_delta} day(s)."
+        out.append(
+            {
+                "natural_key": f"btb_lc_maturity_due_or_overdue:btb_lc:{lc.id}",
+                "title": f"BTB LC {lc.reference} maturity risk",
+                "description": description,
+                "severity": severity,
+                "reason_text": (
+                    f"Maturity date {maturity.isoformat()}, status {acc.status}, due soon window {due_soon_days} days."
+                ),
+                "recommended_action": (
+                    "Complete documents acceptance/realization and ensure payment readiness before maturity."
+                ),
+                "entity_type": "btb_lc",
+                "entity_id": lc.id,
+                "order_id": None,
+            }
+        )
+    return out
+
+
 RULE_REGISTRY: dict[str, callable] = {
     "followup_overdue": rule_followup_overdue,
     "tna_action_overdue": rule_tna_action_overdue,
@@ -627,6 +768,8 @@ RULE_REGISTRY: dict[str, callable] = {
     "trade_docs_missing_before_etd": rule_trade_docs_missing_before_etd,
     "trade_shipment_delayed": rule_trade_shipment_delayed,
     "trade_case_stuck": rule_trade_case_stuck,
+    "master_contract_btb_utilization_risk": rule_master_contract_btb_utilization_risk,
+    "btb_lc_maturity_due_or_overdue": rule_btb_lc_maturity_due_or_overdue,
 }
 
 DEFAULT_DEFINITIONS: list[dict[str, Any]] = [
@@ -642,4 +785,6 @@ DEFAULT_DEFINITIONS: list[dict[str, Any]] = [
     {"rule_key": "trade_docs_missing_before_etd", "name": "Trade docs missing before ETD", "severity_default": "high", "entity_type": "trade_case"},
     {"rule_key": "trade_shipment_delayed", "name": "Trade shipment delayed", "severity_default": "high", "entity_type": "shipment"},
     {"rule_key": "trade_case_stuck", "name": "Trade case stuck in stage", "severity_default": "medium", "entity_type": "trade_case"},
+    {"rule_key": "master_contract_btb_utilization_risk", "name": "Master contract BTB utilization risk", "severity_default": "high", "entity_type": "master_contract"},
+    {"rule_key": "btb_lc_maturity_due_or_overdue", "name": "BTB LC maturity due/overdue", "severity_default": "high", "entity_type": "btb_lc"},
 ]

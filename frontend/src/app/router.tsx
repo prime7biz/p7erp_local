@@ -1,5 +1,5 @@
-import { Suspense, lazy } from "react";
-import { Navigate, Route, Routes, useParams } from "react-router-dom";
+import { Suspense, lazy, useEffect } from "react";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Landing } from "@/pages/Landing";
 import { Login } from "@/pages/Login";
 import { SignUp } from "@/pages/SignUp";
@@ -36,41 +36,54 @@ function BlogSlugRedirect() {
   return <Navigate to={slug ? `/resources/${slug}` : "/resources"} replace />;
 }
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
+
 export function AppRouter() {
   return (
-    <Routes>
-      <Route path="/" element={<PublicLayout><Landing /></PublicLayout>} />
-      <Route path="/features" element={<PublicLayout><FeaturesPage /></PublicLayout>} />
-      <Route path="/pricing" element={<PublicLayout><PricingPage /></PublicLayout>} />
-      <Route path="/about" element={<PublicLayout><AboutPage /></PublicLayout>} />
-      <Route path="/contact" element={<PublicLayout><ContactPage /></PublicLayout>} />
-      <Route path="/garments-erp" element={<PublicLayout><GarmentsErpPage /></PublicLayout>} />
-      <Route path="/buying-house-erp" element={<PublicLayout><BuyingHouseErpPage /></PublicLayout>} />
-      <Route path="/privacy" element={<PublicLayout><PrivacyPage /></PublicLayout>} />
-      <Route path="/terms" element={<PublicLayout><TermsPage /></PublicLayout>} />
-      <Route path="/how-it-works" element={<PublicLayout><HowItWorksPage /></PublicLayout>} />
-      <Route path="/security" element={<PublicLayout><SecurityPage /></PublicLayout>} />
-      <Route path="/erp-bangladesh" element={<PublicLayout><ErpBangladeshPage /></PublicLayout>} />
-      <Route path="/erp-comparison" element={<PublicLayout><ErpComparisonPage /></PublicLayout>} />
-      <Route path="/blog" element={<Navigate to="/resources" replace />} />
-      <Route path="/blog/:slug" element={<BlogSlugRedirect />} />
-      <Route path="/resources" element={<PublicLayout><ResourcesPage /></PublicLayout>} />
-      <Route path="/resources/:slug" element={<PublicLayout><ResourcesPage /></PublicLayout>} />
-      <Route path="/support" element={<PublicLayout><SupportPage /></PublicLayout>} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<SignUp />} />
-      <Route path="/verify/proforma" element={<VerifyProformaPage />} />
-      <Route
-        path="/app/*"
-        element={
-          <ProtectedRoute>
-            <Suspense fallback={<div className="min-h-[50vh] flex items-center justify-center text-sm text-text-muted">Loading app...</div>}>
-              <AppProtectedRouter />
-            </Suspense>
-          </ProtectedRoute>
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
+        <Route path="/" element={<PublicLayout><Landing /></PublicLayout>} />
+        <Route path="/features" element={<PublicLayout><FeaturesPage /></PublicLayout>} />
+        <Route path="/pricing" element={<PublicLayout><PricingPage /></PublicLayout>} />
+        <Route path="/about" element={<PublicLayout><AboutPage /></PublicLayout>} />
+        <Route path="/contact" element={<PublicLayout><ContactPage /></PublicLayout>} />
+        <Route path="/garments-erp" element={<PublicLayout><GarmentsErpPage /></PublicLayout>} />
+        <Route path="/buying-house-erp" element={<PublicLayout><BuyingHouseErpPage /></PublicLayout>} />
+        <Route path="/privacy" element={<PublicLayout><PrivacyPage /></PublicLayout>} />
+        <Route path="/terms" element={<PublicLayout><TermsPage /></PublicLayout>} />
+        <Route path="/how-it-works" element={<PublicLayout><HowItWorksPage /></PublicLayout>} />
+        <Route path="/security" element={<PublicLayout><SecurityPage /></PublicLayout>} />
+        <Route path="/erp-bangladesh" element={<PublicLayout><ErpBangladeshPage /></PublicLayout>} />
+        <Route path="/erp-comparison" element={<PublicLayout><ErpComparisonPage /></PublicLayout>} />
+        <Route path="/blog" element={<Navigate to="/resources" replace />} />
+        <Route path="/blog/:slug" element={<BlogSlugRedirect />} />
+        <Route path="/resources" element={<PublicLayout><ResourcesPage /></PublicLayout>} />
+        <Route path="/resources/:slug" element={<PublicLayout><ResourcesPage /></PublicLayout>} />
+        <Route path="/support" element={<PublicLayout><SupportPage /></PublicLayout>} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<SignUp />} />
+        <Route path="/verify/proforma" element={<VerifyProformaPage />} />
+        <Route
+          path="/app/*"
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<div className="min-h-[50vh] flex items-center justify-center text-sm text-text-muted">Loading app...</div>}>
+                <AppProtectedRouter />
+              </Suspense>
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }

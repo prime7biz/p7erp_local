@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   api,
+  type CurrencyMasterResponse,
   type CustomerIntermediaryLinkResponse,
   type CustomerResponse,
   type InquiryCreate,
@@ -14,6 +15,7 @@ import {
   SHIPPING_TERM_OPTIONS,
   withLegacyOption,
 } from "@/lib/commercialTerms";
+import { InquiryCreateSidebar } from "@/features/inquiries/create/InquiryCreateSidebar";
 
 const emptyItem = (): InquiryItemCreate => ({
   item_name: "",
@@ -27,6 +29,10 @@ const emptyForm = (): InquiryCreate => ({
   department: "",
   quantity: undefined,
   target_price: "",
+  target_price_currency: "USD",
+  currency: "USD",
+  exchange_rate: "1",
+  expected_delivery_date: "",
   shipping_term: "",
   commission_mode: "",
   commission_type: "",
@@ -44,6 +50,7 @@ export function InquiryCreatePage() {
   const [styles, setStyles] = useState<StyleResponse[]>([]);
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [allLinks, setAllLinks] = useState<CustomerIntermediaryLinkResponse[]>([]);
+  const [currencies, setCurrencies] = useState<CurrencyMasterResponse[]>([]);
   const [tenantDefaultCommissionMode, setTenantDefaultCommissionMode] = useState<string>("");
   const [currentInquiryCode, setCurrentInquiryCode] = useState<string>("");
 
@@ -59,6 +66,8 @@ export function InquiryCreatePage() {
   const [styleImageNotice, setStyleImageNotice] = useState("");
   const [error, setError] = useState("");
   const [uploadingSelectedStyleImage, setUploadingSelectedStyleImage] = useState(false);
+  const [fetchingRates, setFetchingRates] = useState(false);
+  const [rateSource, setRateSource] = useState<"" | "live" | "fallback">("");
 
   const selectedStyle = useMemo(
     () => styles.find((s) => s.id === form.style_id) ?? null,
@@ -69,21 +78,30 @@ export function InquiryCreatePage() {
     if (!form.customer_id) return [];
     return allLinks.filter((l) => l.customer_id === form.customer_id);
   }, [allLinks, form.customer_id]);
+  const currencyOptions = currencies.length > 0 ? currencies.map((c) => c.code) : ["USD", "BDT", "EUR", "GBP", "JPY"];
+  const selectedCustomerName =
+    customers.find((customer) => customer.id === form.customer_id)?.name ?? "-";
+  const selectedIntermediaryLabel =
+    customerLinks.find((link) => link.id === form.customer_intermediary_id)?.intermediary_name ??
+    customerLinks.find((link) => link.id === form.customer_intermediary_id)?.intermediary_code ??
+    (form.customer_intermediary_id ? `#${form.customer_intermediary_id}` : "No linked intermediary");
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError("");
       try {
-        const [styleRows, customerRows, linkRows, settings] = await Promise.all([
+        const [styleRows, customerRows, linkRows, settings, currencyRows] = await Promise.all([
           api.listStyles({ status: "ACTIVE" }),
           api.listCustomers(),
           api.listCustomerIntermediaryLinks(),
           api.getSettingsConfig(),
+          api.listCurrencies(),
         ]);
         setStyles(styleRows);
         setCustomers(customerRows);
         setAllLinks(linkRows);
+        setCurrencies(currencyRows.filter((c) => c.is_active));
         setTenantDefaultCommissionMode(settings.default_commission_mode ?? "");
         if (!isEdit && settings.default_commission_mode) {
           setForm((prev) => ({ ...prev, commission_mode: prev.commission_mode || settings.default_commission_mode || "" }));
@@ -100,6 +118,10 @@ export function InquiryCreatePage() {
             department: inquiry.department ?? "",
             quantity: inquiry.quantity ?? undefined,
             target_price: inquiry.target_price ?? "",
+            target_price_currency: inquiry.target_price_currency ?? "USD",
+            currency: inquiry.currency ?? inquiry.target_price_currency ?? "USD",
+            exchange_rate: inquiry.exchange_rate ?? "1",
+            expected_delivery_date: inquiry.expected_delivery_date ?? "",
             customer_intermediary_id: inquiry.customer_intermediary_id ?? undefined,
             shipping_term: inquiry.shipping_term ?? "",
             commission_mode: inquiry.commission_mode ?? "",
@@ -211,6 +233,28 @@ export function InquiryCreatePage() {
     }
   };
 
+  const syncLiveExchangeRate = async () => {
+    setFetchingRates(true);
+    setError("");
+    try {
+      const live = await api.getLiveRates("USD");
+      setRateSource(live.live ? "live" : "fallback");
+      const targetCode = (form.target_price_currency || "USD").toUpperCase();
+      const bdtRate = live.rates?.BDT;
+      const targetRate = live.rates?.[targetCode];
+      if (bdtRate && targetRate) {
+        setForm((prev) => ({
+          ...prev,
+          exchange_rate: (bdtRate / targetRate).toFixed(4),
+        }));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to fetch exchange rates");
+    } finally {
+      setFetchingRates(false);
+    }
+  };
+
   const onQuickStyleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
     if (!file) {
@@ -307,6 +351,9 @@ export function InquiryCreatePage() {
             Full-page inquiry entry with style, party, and commercial details.
           </p>
           <p className="text-xs text-text-muted mt-1">Fields marked with ** are mandatory.</p>
+          {!isEdit && (
+            <p className="text-xs text-text-muted mt-1">Inquiry code is auto generated when you save (e.g. INQ-0001).</p>
+          )}
         </div>
         <div className="flex gap-2">
           <button
@@ -338,8 +385,9 @@ export function InquiryCreatePage() {
           Loading...
         </div>
       ) : (
-        <>
-          <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-6">
+          <div className="space-y-5 xl:col-span-8 2xl:col-span-9">
+            <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
             <h2 className="text-sm font-semibold text-text-primary">Inquiry Header</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
@@ -512,178 +560,263 @@ export function InquiryCreatePage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
-            <h2 className="text-sm font-semibold text-text-primary">Intermediary and Commercial Terms</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Customer Link</label>
-                <select
-                  value={form.customer_intermediary_id ?? ""}
-                  onChange={(e) => onLinkChange(e.target.value ? Number(e.target.value) : undefined)}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
-                >
-                  <option value="">No linked intermediary</option>
-                  {customerLinks.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.intermediary_name ?? l.intermediary_code ?? `#${l.intermediary_id}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Shipping term</label>
-                <select
-                  value={form.shipping_term ?? ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, shipping_term: e.target.value }))}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
-                >
-                  <option value="">Select shipping term</option>
-                  {withLegacyOption(form.shipping_term, SHIPPING_TERM_OPTIONS).map((term) => (
-                    <option key={term} value={term}>
-                      {SHIPPING_TERM_OPTIONS.includes(term as (typeof SHIPPING_TERM_OPTIONS)[number])
-                        ? term
-                        : `${term} (legacy)`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Commission mode</label>
-                <select
-                  value={form.commission_mode ?? ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, commission_mode: e.target.value }))}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
-                >
-                  <option value="">Select mode</option>
-                  {withLegacyOption(form.commission_mode, COMMISSION_MODE_OPTIONS).map((mode) => (
-                    <option key={mode} value={mode}>
-                      {COMMISSION_MODE_OPTIONS.includes(mode as (typeof COMMISSION_MODE_OPTIONS)[number])
-                        ? mode
-                        : `${mode} (legacy)`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Commission type</label>
-                <select
-                  value={form.commission_type ?? ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, commission_type: e.target.value }))}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
-                >
-                  <option value="">Select type</option>
-                  {withLegacyOption(form.commission_type, COMMISSION_TYPE_OPTIONS).map((type) => (
-                    <option key={type} value={type}>
-                      {COMMISSION_TYPE_OPTIONS.includes(type as (typeof COMMISSION_TYPE_OPTIONS)[number])
-                        ? type
-                        : `${type} (legacy)`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Commission value</label>
-                <input
-                  type="text"
-                  value={form.commission_value ?? ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, commission_value: e.target.value }))}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Expected quantity</label>
-                <input
-                  type="number"
-                  value={form.quantity ?? ""}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      quantity: e.target.value ? Number(e.target.value) : undefined,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Target price</label>
-                <input
-                  type="text"
-                  value={form.target_price ?? ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, target_price: e.target.value }))}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-text-primary">Garment Items</h2>
-              <button
-                type="button"
-                onClick={addItem}
-                className="rounded border border-border-strong px-3 py-1 text-xs text-text-secondary"
-              >
-                Add item
-              </button>
-            </div>
-            {(form.items ?? []).map((line, index) => (
-              <div key={index} className="rounded-lg border border-border p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-text-secondary">Item #{index + 1}</p>
-                  <button
-                    type="button"
-                    onClick={() => removeItem(index)}
-                    className="rounded border border-status-danger/20 px-2 py-1 text-xs text-status-danger"
+            <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
+              <h2 className="text-sm font-semibold text-text-primary">Intermediary and Commercial Terms</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Customer Link</label>
+                  <select
+                    value={form.customer_intermediary_id ?? ""}
+                    onChange={(e) => onLinkChange(e.target.value ? Number(e.target.value) : undefined)}
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                   >
-                    Remove
-                  </button>
+                    <option value="">No linked intermediary</option>
+                    {customerLinks.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.intermediary_name ?? l.intermediary_code ?? `#${l.intermediary_id}`}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Shipping term</label>
+                  <select
+                    value={form.shipping_term ?? ""}
+                    onChange={(e) => setForm((prev) => ({ ...prev, shipping_term: e.target.value }))}
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  >
+                    <option value="">Select shipping term</option>
+                    {withLegacyOption(form.shipping_term, SHIPPING_TERM_OPTIONS).map((term) => (
+                      <option key={term} value={term}>
+                        {SHIPPING_TERM_OPTIONS.includes(term as (typeof SHIPPING_TERM_OPTIONS)[number])
+                          ? term
+                          : `${term} (legacy)`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Commission mode</label>
+                  <select
+                    value={form.commission_mode ?? ""}
+                    onChange={(e) => setForm((prev) => ({ ...prev, commission_mode: e.target.value }))}
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  >
+                    <option value="">Select mode</option>
+                    {withLegacyOption(form.commission_mode, COMMISSION_MODE_OPTIONS).map((mode) => (
+                      <option key={mode} value={mode}>
+                        {COMMISSION_MODE_OPTIONS.includes(mode as (typeof COMMISSION_MODE_OPTIONS)[number])
+                          ? mode
+                          : `${mode} (legacy)`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Commission type</label>
+                  <select
+                    value={form.commission_type ?? ""}
+                    onChange={(e) => setForm((prev) => ({ ...prev, commission_type: e.target.value }))}
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  >
+                    <option value="">Select type</option>
+                    {withLegacyOption(form.commission_type, COMMISSION_TYPE_OPTIONS).map((type) => (
+                      <option key={type} value={type}>
+                        {COMMISSION_TYPE_OPTIONS.includes(type as (typeof COMMISSION_TYPE_OPTIONS)[number])
+                          ? type
+                          : `${type} (legacy)`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Commission value</label>
                   <input
                     type="text"
-                    value={line.item_name ?? ""}
-                    onChange={(e) => updateItem(index, { item_name: e.target.value })}
-                    placeholder="Item name"
-                    className="rounded border border-border-strong px-3 py-2 text-sm"
+                    value={form.commission_value ?? ""}
+                    onChange={(e) => setForm((prev) => ({ ...prev, commission_value: e.target.value }))}
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                   />
-                  <input
-                    type="text"
-                    value={line.description ?? ""}
-                    onChange={(e) => updateItem(index, { description: e.target.value })}
-                    placeholder="Description"
-                    className="rounded border border-border-strong px-3 py-2 text-sm"
-                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Expected quantity</label>
                   <input
                     type="number"
-                    value={line.quantity ?? ""}
+                    value={form.quantity ?? ""}
                     onChange={(e) =>
-                      updateItem(index, {
+                      setForm((prev) => ({
+                        ...prev,
                         quantity: e.target.value ? Number(e.target.value) : undefined,
-                      })
+                      }))
                     }
-                    placeholder="Quantity"
-                    className="rounded border border-border-strong px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Target price</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={form.target_price ?? ""}
+                      onChange={(e) => setForm((prev) => ({ ...prev, target_price: e.target.value }))}
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    />
+                    <select
+                      value={form.target_price_currency ?? "USD"}
+                      onChange={(e) => setForm((prev) => ({ ...prev, target_price_currency: e.target.value }))}
+                      className="w-28 rounded-lg border border-border-strong px-2 py-2 text-sm"
+                    >
+                      {currencyOptions.map((code) => (
+                        <option key={code} value={code}>
+                          {code}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Document currency</label>
+                  <select
+                    value={form.currency ?? "USD"}
+                    onChange={(e) => setForm((prev) => ({ ...prev, currency: e.target.value }))}
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  >
+                    {currencyOptions.map((code) => (
+                      <option key={code} value={code}>
+                        {code}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Exchange rate</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={form.exchange_rate ?? "1"}
+                      onChange={(e) => setForm((prev) => ({ ...prev, exchange_rate: e.target.value }))}
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={syncLiveExchangeRate}
+                      disabled={fetchingRates}
+                      className="rounded-lg border border-border-strong px-3 py-2 text-xs text-text-secondary disabled:opacity-60"
+                    >
+                      {fetchingRates ? "Syncing..." : "Sync rate"}
+                    </button>
+                  </div>
+                  {rateSource && (
+                    <p className="mt-1 text-xs text-text-muted">
+                      {rateSource === "live" ? "Live rate loaded." : "Fallback rate loaded."}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs text-text-secondary mb-1">Expected delivery date</label>
+                  <input
+                    type="date"
+                    value={(form.expected_delivery_date ?? "").slice(0, 10)}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, expected_delivery_date: e.target.value || undefined }))
+                    }
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                   />
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
 
-          <div className="rounded-xl border border-border bg-surface-raised p-4">
-            <label className="block text-xs text-text-secondary mb-1">Notes</label>
-            <textarea
-              rows={3}
-              value={form.notes ?? ""}
-              onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
-            />
+            <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-text-primary">Garment Items</h2>
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="rounded border border-border-strong px-3 py-1 text-xs text-text-secondary"
+                >
+                  Add item
+                </button>
+              </div>
+              {(form.items ?? []).map((line, index) => (
+                <div key={index} className="rounded-lg border border-border p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-text-secondary">Item #{index + 1}</p>
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="rounded border border-status-danger/20 px-2 py-1 text-xs text-status-danger"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      value={line.item_name ?? ""}
+                      onChange={(e) => updateItem(index, { item_name: e.target.value })}
+                      placeholder="Item name"
+                      className="rounded border border-border-strong px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="text"
+                      value={line.description ?? ""}
+                      onChange={(e) => updateItem(index, { description: e.target.value })}
+                      placeholder="Description"
+                      className="rounded border border-border-strong px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="number"
+                      value={line.quantity ?? ""}
+                      onChange={(e) =>
+                        updateItem(index, {
+                          quantity: e.target.value ? Number(e.target.value) : undefined,
+                        })
+                      }
+                      placeholder="Quantity"
+                      className="rounded border border-border-strong px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl border border-border bg-surface-raised p-4">
+              <label className="block text-xs text-text-secondary mb-1">Notes</label>
+              <textarea
+                rows={3}
+                value={form.notes ?? ""}
+                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+              />
+            </div>
           </div>
-        </>
+          <InquiryCreateSidebar
+            isEdit={isEdit}
+            inquiryCode={currentInquiryCode}
+            customerName={selectedCustomerName}
+            selectedStyle={selectedStyle}
+            garmentLineCount={(form.items ?? []).length}
+            expectedQuantity={form.quantity}
+            targetPrice={form.target_price}
+            targetPriceCurrency={form.target_price_currency}
+            currency={form.currency}
+            exchangeRate={form.exchange_rate}
+            rateSource={rateSource}
+            shippingTerm={form.shipping_term}
+            intermediaryLabel={selectedIntermediaryLabel}
+            commissionMode={form.commission_mode}
+            commissionType={form.commission_type}
+            commissionValue={form.commission_value}
+          />
+        </div>
       )}
     </div>
   );

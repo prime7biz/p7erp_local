@@ -17,6 +17,10 @@ class MasterContractCreate(BaseModel):
     buyer_name: str | None = Field(None, max_length=255)
     bank_name: str | None = Field(None, max_length=255)
     expiry_date: date | None = None
+    cost_center_id: int | None = Field(
+        None,
+        description="Cost center for payments and COGS under this contract; optional, can be created when contract is opened.",
+    )
 
 
 class MasterContractUpdate(BaseModel):
@@ -29,6 +33,7 @@ class MasterContractUpdate(BaseModel):
     buyer_name: str | None = Field(None, max_length=255)
     bank_name: str | None = Field(None, max_length=255)
     expiry_date: date | None = None
+    cost_center_id: int | None = None
 
 
 class MasterContractResponse(BaseModel):
@@ -44,6 +49,9 @@ class MasterContractResponse(BaseModel):
     buyer_name: str | None
     bank_name: str | None
     expiry_date: str | None
+    cost_center_id: int | None = None
+    btb_utilization_pct: float | None = None
+    btb_warning_band: str | None = None
     created_at: str
     updated_at: str
 
@@ -323,8 +331,84 @@ class BtbLcResponse(BaseModel):
     expiry_date: str | None = None
     maturity_date: str | None = None
     maturity_amount: float | None = None
+    master_cost_center_id: int | None = None
+    accounting_status: str | None = None
+    lc_open_voucher_id: int | None = None
+    import_bill_voucher_id: int | None = None
+    realization_voucher_id: int | None = None
     created_at: str
     updated_at: str
 
     class Config:
         from_attributes = True
+
+
+class BtbLcAccountingResponse(BaseModel):
+    id: int
+    tenant_id: int
+    btb_lc_id: int
+    lc_open_voucher_id: int | None = None
+    import_bill_voucher_id: int | None = None
+    maturity_date: str | None = None
+    realization_voucher_id: int | None = None
+    status: str
+    created_at: str
+    updated_at: str
+
+
+class BtbLcRecordOpeningBody(BaseModel):
+    upcoming_lc_liability_account_id: int = Field(
+        ...,
+        description="Debit account for upcoming import LC liability.",
+    )
+    blocked_credit_facility_account_id: int = Field(
+        ...,
+        description="Credit account for blocked bank LC credit facility.",
+    )
+    voucher_date: date | None = None
+    amount: float | None = Field(
+        default=None,
+        ge=0,
+        description="Defaults to BTB LC amount when omitted.",
+    )
+    description: str | None = Field(default=None, max_length=512)
+    reference: str | None = Field(default=None, max_length=128)
+
+
+class BtbLcRecordDocumentsAcceptanceBody(BaseModel):
+    lc_liability_account_id: int = Field(
+        ...,
+        description="Debit account that clears LC liability from opening stage.",
+    )
+    import_bill_liability_account_id: int = Field(
+        ...,
+        description="Credit account for maturity/import bill liability.",
+    )
+    maturity_date: date | None = None
+    voucher_date: date | None = None
+    amount: float | None = Field(
+        default=None,
+        ge=0,
+        description="Defaults to BTB LC maturity_amount, or BTB LC amount if maturity_amount missing.",
+    )
+    description: str | None = Field(default=None, max_length=512)
+    reference: str | None = Field(default=None, max_length=128)
+
+
+class BtbLcRecordRealizationBody(BaseModel):
+    import_bill_liability_account_id: int = Field(
+        ...,
+        description="Debit account for import bill liability settlement.",
+    )
+    payment_account_id: int = Field(
+        ...,
+        description="Credit account used for settlement payment (bank/cash).",
+    )
+    voucher_date: date | None = None
+    amount: float | None = Field(
+        default=None,
+        ge=0,
+        description="Defaults to BTB LC maturity_amount, or BTB LC amount if maturity_amount missing.",
+    )
+    description: str | None = Field(default=None, max_length=512)
+    reference: str | None = Field(default=None, max_length=128)

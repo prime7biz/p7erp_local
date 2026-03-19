@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { api } from "@/api/client";
@@ -16,7 +16,7 @@ export function TnaPlanDetailPage() {
   const [savingTaskId, setSavingTaskId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!numericPlanId) return;
     setError("");
     try {
@@ -31,11 +31,11 @@ export function TnaPlanDetailPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load plan detail");
     }
-  };
+  }, [numericPlanId]);
 
   useEffect(() => {
     void load();
-  }, [numericPlanId]);
+  }, [load]);
 
   useEffect(() => {
     setTaskEditById(

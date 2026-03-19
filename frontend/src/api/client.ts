@@ -2855,6 +2855,8 @@ export const api = {
     severity?: string;
     status?: string;
     alert_type?: string;
+    entity_type?: string;
+    entity_id?: number;
     order_id?: number;
     assigned_to_id?: number;
     min_priority_score?: number;
@@ -2867,6 +2869,8 @@ export const api = {
     if (params?.severity) q.set("severity", params.severity);
     if (params?.status) q.set("status", params.status);
     if (params?.alert_type) q.set("alert_type", params.alert_type);
+    if (params?.entity_type) q.set("entity_type", params.entity_type);
+    if (params?.entity_id != null) q.set("entity_id", String(params.entity_id));
     if (params?.order_id != null) q.set("order_id", String(params.order_id));
     if (params?.assigned_to_id != null) q.set("assigned_to_id", String(params.assigned_to_id));
     if (params?.min_priority_score != null) q.set("min_priority_score", String(params.min_priority_score));
@@ -2877,10 +2881,17 @@ export const api = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<MerchAlertsListResponse>(`/api/v1/merch/alerts${suffix}`);
   },
-  async getMerchAlertsSummary(params?: { severity?: string; status?: string }): Promise<MerchAlertsSummaryResponse> {
+  async getMerchAlertsSummary(params?: {
+    severity?: string;
+    status?: string;
+    entity_type?: string;
+    entity_id?: number;
+  }): Promise<MerchAlertsSummaryResponse> {
     const q = new URLSearchParams();
     if (params?.severity) q.set("severity", params.severity);
     if (params?.status) q.set("status", params.status);
+    if (params?.entity_type) q.set("entity_type", params.entity_type);
+    if (params?.entity_id != null) q.set("entity_id", String(params.entity_id));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<MerchAlertsSummaryResponse>(`/api/v1/merch/alerts/summary${suffix}`);
   },
@@ -3245,6 +3256,20 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  async getVoucher(id: number): Promise<VoucherResponse> {
+    return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}`);
+  },
+  async updateVoucher(id: number, data: VoucherUpdate): Promise<VoucherResponse> {
+    return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async deleteVoucher(id: number): Promise<{ ok: boolean; message: string }> {
+    return request<{ ok: boolean; message: string }>(`/api/v1/finance/vouchers/${id}`, {
+      method: "DELETE",
+    });
+  },
   async updateVoucherStatus(id: number, status: string): Promise<VoucherResponse> {
     return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/status`, {
       method: "POST",
@@ -3500,6 +3525,9 @@ export const api = {
   },
   async getVoucherPrint(voucherId: number): Promise<VoucherPrintResponse> {
     return request<VoucherPrintResponse>(`/api/v1/finance/vouchers/${voucherId}/print`);
+  },
+  async verifyVoucher(verificationId: string): Promise<VoucherVerificationResponse> {
+    return request<VoucherVerificationResponse>(`/api/v1/finance/vouchers/verify/${encodeURIComponent(verificationId)}`);
   },
   async listAccountingPeriods(): Promise<AccountingPeriodResponse[]> {
     return request<AccountingPeriodResponse[]>("/api/v1/finance/accounting-periods");
@@ -3777,6 +3805,33 @@ export const api = {
       body: JSON.stringify(body),
     });
   },
+  async getBtbLc(id: number): Promise<BtbLcRow> {
+    return request<BtbLcRow>(`/api/v1/commercial/btb-lcs/${id}`);
+  },
+  async getBtbLcAccounting(id: number): Promise<BtbLcAccountingRow> {
+    return request<BtbLcAccountingRow>(`/api/v1/commercial/btb-lcs/${id}/accounting`);
+  },
+  async recordBtbLcOpening(id: number, body: BtbLcRecordOpeningBody): Promise<BtbLcAccountingRow> {
+    return request<BtbLcAccountingRow>(`/api/v1/commercial/btb-lcs/${id}/record-opening`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async recordBtbLcDocumentsAcceptance(
+    id: number,
+    body: BtbLcRecordDocumentsAcceptanceBody
+  ): Promise<BtbLcAccountingRow> {
+    return request<BtbLcAccountingRow>(`/api/v1/commercial/btb-lcs/${id}/record-documents-acceptance`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async recordBtbLcRealization(id: number, body: BtbLcRecordRealizationBody): Promise<BtbLcAccountingRow> {
+    return request<BtbLcAccountingRow>(`/api/v1/commercial/btb-lcs/${id}/record-realization`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
   async listMasterContracts(params?: { status?: string }): Promise<MasterContractRow[]> {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
@@ -3802,6 +3857,8 @@ export const api = {
     status?: string;
     direction?: string;
     search?: string;
+    date_from?: string;
+    date_to?: string;
     limit?: number;
     offset?: number;
   }): Promise<TradeCaseRow[]> {
@@ -3809,6 +3866,8 @@ export const api = {
     if (params?.status) q.set("status", params.status);
     if (params?.direction) q.set("direction", params.direction);
     if (params?.search) q.set("search", params.search);
+    if (params?.date_from) q.set("date_from", params.date_from);
+    if (params?.date_to) q.set("date_to", params.date_to);
     if (params?.limit != null) q.set("limit", String(params.limit));
     if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
@@ -3902,6 +3961,39 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     });
+  },
+
+  // ── Bill-Wise Tracking ──
+  async listBillReferences(params?: { bill_type?: string; status_filter?: string; account_id?: number; search?: string }): Promise<BillReferenceRow[]> {
+    const q = new URLSearchParams();
+    if (params?.bill_type) q.set("bill_type", params.bill_type);
+    if (params?.status_filter) q.set("status_filter", params.status_filter);
+    if (params?.account_id) q.set("account_id", String(params.account_id));
+    if (params?.search) q.set("search", params.search);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<BillReferenceRow[]>(`/api/v1/finance/bill-references${suffix}`);
+  },
+  async createBillReference(body: BillReferenceCreate): Promise<BillReferenceRow> {
+    return request<BillReferenceRow>("/api/v1/finance/bill-references", { method: "POST", body: JSON.stringify(body) });
+  },
+  async getBillReferenceDetail(id: number): Promise<BillReferenceDetail> {
+    return request<BillReferenceDetail>(`/api/v1/finance/bill-references/${id}`);
+  },
+  async allocateBillWise(body: BillAllocationCreate): Promise<{ ok: boolean; allocation_id: number; message: string }> {
+    return request<{ ok: boolean; allocation_id: number; message: string }>("/api/v1/finance/bill-references/allocate", { method: "POST", body: JSON.stringify(body) });
+  },
+  async autoCreateBillRefs(voucherId: number): Promise<{ ok: boolean; bills_created: number; bill_numbers: string[] }> {
+    return request<{ ok: boolean; bills_created: number; bill_numbers: string[] }>(`/api/v1/finance/bill-references/auto-create/${voucherId}`, { method: "POST" });
+  },
+  async billWiseOutstandingReport(): Promise<BillWiseOutstandingReport> {
+    return request<BillWiseOutstandingReport>("/api/v1/finance/bill-references/report/outstanding");
+  },
+  async billWiseAgingReport(billType?: string): Promise<BillWiseAgingReport> {
+    const q = billType ? `?bill_type=${encodeURIComponent(billType)}` : "";
+    return request<BillWiseAgingReport>(`/api/v1/finance/bill-references/report/aging${q}`);
+  },
+  async backfillVoucherSignatures(): Promise<{ signed_count: number; message: string }> {
+    return request<{ signed_count: number; message: string }>("/api/v1/finance/vouchers/backfill-signatures", { method: "POST" });
   },
 };
 
@@ -4286,6 +4378,10 @@ export interface InquiryResponse {
   department: string | null;
   quantity: number | null;
   target_price: string | null;
+  target_price_currency?: string | null;
+  currency?: string | null;
+  exchange_rate?: string | null;
+  expected_delivery_date?: string | null;
   customer_intermediary_id?: number | null;
   intermediary_name?: string | null;
   shipping_term?: string | null;
@@ -4324,6 +4420,10 @@ export interface InquiryCreate {
   department?: string;
   quantity?: number;
   target_price?: string;
+  target_price_currency?: string;
+  currency?: string;
+  exchange_rate?: string;
+  expected_delivery_date?: string;
   customer_intermediary_id?: number;
   shipping_term?: string;
   commission_mode?: string;
@@ -4340,6 +4440,10 @@ export interface InquiryUpdate {
   department?: string;
   quantity?: number;
   target_price?: string;
+  target_price_currency?: string;
+  currency?: string;
+  exchange_rate?: string;
+  expected_delivery_date?: string;
   customer_intermediary_id?: number;
   shipping_term?: string;
   commission_mode?: string;
@@ -6340,6 +6444,8 @@ export interface MerchAlertItem {
   status: string;
   alert_type: string;
   assigned_to_id: number | null;
+  entity_type?: string | null;
+  entity_id?: number | null;
   order_id: number | null;
   order_code: string | null;
   reason_text: string | null;
@@ -6561,12 +6667,14 @@ export interface ChartOfAccountCreate {
   statistical_formula?: string | null;
   parent_account_id?: number | null;
   last_reviewed_at?: string | null;
+  enable_bill_wise?: boolean;
 }
 
 export interface ChartOfAccountResponse extends ChartOfAccountCreate {
   id: number;
   tenant_id: number;
   balance: string;
+  enable_bill_wise: boolean;
 }
 
 export interface CoAConfigResponse {
@@ -6610,6 +6718,11 @@ export interface CoAImportResult {
 export interface VoucherLineCreate {
   account_id: number;
   cost_center_id?: number | null;
+  currency?: string | null;
+  exchange_rate?: string | null;
+  base_amount?: string | null;
+  is_rate_overridden?: boolean;
+  rate_source?: string | null;
   entry_type: "DEBIT" | "CREDIT";
   amount: string;
   notes?: string;
@@ -6621,6 +6734,23 @@ export interface VoucherCreate {
   voucher_date: string;
   description?: string;
   reference?: string;
+  currency?: string;
+  base_currency?: string;
+  exchange_rate?: string | null;
+  exchange_rate_source?: string | null;
+  trade_case_id?: number | null;
+  btb_lc_id?: number | null;
+  lines: VoucherLineCreate[];
+}
+
+export interface VoucherUpdate {
+  voucher_type: string;
+  voucher_date: string;
+  description?: string;
+  reference?: string;
+  currency?: string;
+  base_currency?: string;
+  exchange_rate?: string | null;
   lines: VoucherLineCreate[];
 }
 
@@ -6639,7 +6769,20 @@ export interface VoucherResponse {
   status: string;
   description: string | null;
   reference: string | null;
+  currency: string;
+  base_currency: string;
+  exchange_rate: string;
+  exchange_rate_source: string;
+  exchange_rate_fetched_at: string | null;
+  verification_id: string | null;
+  signature_hash: string | null;
+  signed_at: string | null;
+  signed_by_system: boolean;
+  trade_case_id?: number | null;
+  btb_lc_id?: number | null;
   created_by: number | null;
+  created_at: string;
+  updated_at: string;
   lines: VoucherLineResponse[];
 }
 
@@ -7206,13 +7349,33 @@ export interface VoucherPrintResponse {
     status: string;
     description: string | null;
     reference: string | null;
+    currency: string;
+    base_currency: string;
+    exchange_rate: string;
+    verification_id: string | null;
+    signature_hash: string | null;
+    signed_at: string | null;
+    created_by: number | null;
+    created_by_name: string;
+    created_at: string | null;
+  };
+  tenant: {
+    name: string;
+    company_code: string | null;
+    domain: string | null;
   };
   lines: Array<{
     line_id: number;
     account_id: number;
+    account_code: string;
     account_name: string;
+    cost_center_id: number | null;
+    cost_center_name: string;
     entry_type: string;
+    currency: string;
+    exchange_rate: string;
     amount: number;
+    base_amount: number;
     notes: string | null;
   }>;
   totals: {
@@ -7220,6 +7383,22 @@ export interface VoucherPrintResponse {
     credit_total: number;
     is_balanced: boolean;
   };
+  print_meta?: {
+    copy_labels: string[];
+    verification_url: string | null;
+    generated_at: string;
+  };
+}
+
+export interface VoucherVerificationResponse {
+  voucher_id: number;
+  voucher_number: string;
+  verification_id: string | null;
+  status: string;
+  signed_at: string | null;
+  is_valid: boolean;
+  signature_hash: string | null;
+  recalculated_hash: string;
 }
 
 export interface AccountingPeriodCreate {
@@ -7322,7 +7501,7 @@ export interface ProformaInvoiceCreate {
   shipper_bank_swift?: string | null;
 }
 
-export interface ProformaInvoiceUpdate extends Partial<ProformaInvoiceCreate> {}
+export type ProformaInvoiceUpdate = Partial<ProformaInvoiceCreate>;
 
 export interface ProformaInvoiceForPrintOrder {
   id: number;
@@ -7412,6 +7591,11 @@ export interface BtbLcRow {
   expiry_date?: string | null;
   maturity_date?: string | null;
   maturity_amount?: number | null;
+  master_cost_center_id?: number | null;
+  accounting_status?: "OPEN" | "DOCUMENTS_ACCEPTED" | "REALIZED" | string | null;
+  lc_open_voucher_id?: number | null;
+  import_bill_voucher_id?: number | null;
+  realization_voucher_id?: number | null;
   created_at?: string;
   [key: string]: unknown;
 }
@@ -7438,6 +7622,47 @@ export interface BtbLcCreate {
 
 export type BtbLcUpdate = Partial<BtbLcCreate>;
 
+export interface BtbLcAccountingRow {
+  id: number;
+  tenant_id: number;
+  btb_lc_id: number;
+  lc_open_voucher_id?: number | null;
+  import_bill_voucher_id?: number | null;
+  maturity_date?: string | null;
+  realization_voucher_id?: number | null;
+  status: "OPEN" | "DOCUMENTS_ACCEPTED" | "REALIZED" | string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BtbLcRecordOpeningBody {
+  upcoming_lc_liability_account_id: number;
+  blocked_credit_facility_account_id: number;
+  voucher_date?: string | null;
+  amount?: number | null;
+  description?: string | null;
+  reference?: string | null;
+}
+
+export interface BtbLcRecordDocumentsAcceptanceBody {
+  lc_liability_account_id: number;
+  import_bill_liability_account_id: number;
+  maturity_date?: string | null;
+  voucher_date?: string | null;
+  amount?: number | null;
+  description?: string | null;
+  reference?: string | null;
+}
+
+export interface BtbLcRecordRealizationBody {
+  import_bill_liability_account_id: number;
+  payment_account_id: number;
+  voucher_date?: string | null;
+  amount?: number | null;
+  description?: string | null;
+  reference?: string | null;
+}
+
 export interface MasterContractRow {
   id: number;
   tenant_id?: number;
@@ -7451,6 +7676,10 @@ export interface MasterContractRow {
   buyer_name?: string | null;
   bank_name?: string | null;
   expiry_date?: string | null;
+  /** Cost center for payments and COGS under this contract */
+  cost_center_id?: number | null;
+  btb_utilization_pct?: number | null;
+  btb_warning_band?: "VERY_GOOD" | "GOOD" | "SATISFACTORY" | "NO_CREDIT" | "RED_FLAG" | string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -7465,6 +7694,8 @@ export interface MasterContractCreate {
   buyer_name?: string | null;
   bank_name?: string | null;
   expiry_date?: string | null;
+  /** Cost center for payments and COGS; optional, can be auto-created when contract is opened */
+  cost_center_id?: number | null;
 }
 
 export type MasterContractUpdate = Partial<MasterContractCreate>;
@@ -7607,4 +7838,87 @@ export interface TradeCaseDashboardResponse {
   missing_docs_cases: number;
   overdue_shipments: number;
   at_risk_case_ids: number[];
+}
+
+// ── Bill-Wise Tracking ──
+export interface BillReferenceRow {
+  id: number;
+  tenant_id: number;
+  bill_number: string;
+  bill_date: string;
+  due_date: string | null;
+  bill_type: "PAYABLE" | "RECEIVABLE";
+  party_name: string;
+  account_id: number;
+  account_name: string | null;
+  original_amount: string;
+  pending_amount: string;
+  source_voucher_id: number | null;
+  source_doc_type: string | null;
+  source_doc_number: string | null;
+  status: "OPEN" | "PARTIALLY_SETTLED" | "SETTLED";
+  credit_period_days: number | null;
+  is_overdue: boolean;
+  notes: string | null;
+  created_at: string | null;
+}
+
+export interface BillReferenceCreate {
+  bill_number?: string | null;
+  bill_date: string;
+  due_date?: string | null;
+  bill_type: "PAYABLE" | "RECEIVABLE";
+  party_name: string;
+  account_id: number;
+  original_amount: string;
+  credit_period_days?: number | null;
+  source_voucher_id?: number | null;
+  source_doc_type?: string | null;
+  source_doc_number?: string | null;
+  notes?: string | null;
+}
+
+export interface BillAllocationRow {
+  id: number;
+  allocation_type: string;
+  amount: string;
+  allocation_date: string;
+  voucher_id: number;
+  voucher_number: string | null;
+  notes: string | null;
+  created_at: string | null;
+}
+
+export interface BillReferenceDetail {
+  bill: BillReferenceRow;
+  allocations: BillAllocationRow[];
+}
+
+export interface BillAllocationCreate {
+  allocation_type: "AGAINST_REF" | "NEW_REF" | "ADVANCE" | "ON_ACCOUNT";
+  bill_reference_id?: number | null;
+  voucher_id: number;
+  voucher_line_id?: number | null;
+  account_id: number;
+  amount: string;
+  notes?: string | null;
+}
+
+export interface BillWiseOutstandingReport {
+  receivable: { total: number; count: number };
+  payable: { total: number; count: number };
+  overdue_total: number;
+}
+
+export interface BillWiseAgingReport {
+  bill_type: string;
+  buckets: { "0_30": number; "31_60": number; "61_90": number; "91_120": number; "120_plus": number };
+  rows: Array<{
+    bill_number: string;
+    party_name: string;
+    bill_date: string;
+    due_date: string | null;
+    days_outstanding: number;
+    pending_amount: number;
+  }>;
 }

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -82,6 +82,8 @@ def _trade_case_to_response(row: TradeCase) -> TradeCaseResponse:
         cost_amount=float(row.cost_amount) if row.cost_amount is not None else None,
         margin_amount=float(row.margin_amount) if row.margin_amount is not None else None,
         margin_pct=float(row.margin_pct) if row.margin_pct is not None else None,
+        base_currency=row.base_currency,
+        base_currency_margin=float(row.base_currency_margin) if row.base_currency_margin is not None else None,
         closed_at=row.closed_at.isoformat() if row.closed_at else None,
         created_at=row.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
@@ -152,6 +154,8 @@ async def list_trade_cases(
     status_filter: str | None = Query(default=None, alias="status"),
     direction: str | None = Query(default=None),
     search: str | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
@@ -164,6 +168,10 @@ async def list_trade_cases(
         stmt = stmt.where(TradeCase.status == status_filter.strip().upper())
     if direction:
         stmt = stmt.where(TradeCase.direction == direction.strip().upper())
+    if date_from is not None:
+        stmt = stmt.where(TradeCase.created_at >= datetime.combine(date_from, datetime.min.time()))
+    if date_to is not None:
+        stmt = stmt.where(TradeCase.created_at <= datetime.combine(date_to, datetime.max.time()))
     if search:
         pattern = f"%{search.lower()}%"
         stmt = stmt.where(
@@ -526,6 +534,51 @@ async def list_trade_documents(
     ]
 
 
+@router.delete("/{trade_case_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_trade_document(
+    trade_case_id: int,
+    document_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a trade document. Allowed only when the trade case status is DRAFT."""
+    await _ensure_tenant_user(user, tenant)
+    trade_case = await db.get(TradeCase, trade_case_id)
+    if not trade_case or trade_case.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Trade case not found")
+    if (trade_case.status or "").upper() != "DRAFT":
+        raise HTTPException(
+            status_code=400,
+            detail="Documents can only be deleted when the trade case is in DRAFT status",
+        )
+    doc = await db.get(TradeDocument, document_id)
+    if (
+        not doc
+        or doc.tenant_id != tenant.id
+        or doc.trade_case_id != trade_case_id
+    ):
+        raise HTTPException(status_code=404, detail="Document not found")
+    doc_type = doc.document_type
+    full_path = Path(doc.storage_path).resolve()
+    if full_path.exists():
+        try:
+            full_path.unlink()
+        except OSError:
+            pass
+    await db.delete(doc)
+    await db.flush()
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="TRADE_DOCUMENT_DELETE",
+        resource="trade.document",
+        details=f"Deleted document {doc_type} (id={document_id}) for trade case {trade_case.reference}",
+    )
+    return None
+
+
 @router.get("/{trade_case_id}/documents/{document_id}/download")
 async def download_trade_document(
     trade_case_id: int,
@@ -599,6 +652,8 @@ async def get_trade_case_margin(
         margin_amount=margin_amount,
         margin_pct=margin_pct,
         currency=trade_case.currency,
+        base_currency=trade_case.base_currency,
+        base_currency_margin=float(trade_case.base_currency_margin) if trade_case.base_currency_margin is not None else None,
     )
 
 

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Download, RefreshCw } from "lucide-react";
 
 import { api, type TradeCaseDashboardResponse, type TradeCaseRow } from "@/api/client";
 
@@ -9,46 +10,64 @@ export function TradeDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const s = await api.getTradeDashboardSummary();
-        setSummary(s);
-        if (s.at_risk_case_ids.length > 0) {
-          const allCases = await api.listTradeCases({ limit: 200 });
-          const mapped = allCases.filter((c) => s.at_risk_case_ids.includes(c.id));
-          setRiskCases(mapped);
-        } else {
-          setRiskCases([]);
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load trade control tower");
-      } finally {
-        setLoading(false);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const s = await api.getTradeDashboardSummary();
+      setSummary(s);
+      if (s.at_risk_case_ids.length > 0) {
+        const allCases = await api.listTradeCases({ limit: 200 });
+        const mapped = allCases.filter((c) => s.at_risk_case_ids.includes(c.id));
+        setRiskCases(mapped);
+      } else {
+        setRiskCases([]);
       }
-    };
-    void load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load trade control tower");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   if (loading) return <div className="p-6 text-sm text-text-muted">Loading control tower...</div>;
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Trade Control Tower</h1>
           <p className="mt-0.5 text-sm text-text-muted">
             Monitor open trade cases, shipment risks, missing documents, and settlement progress.
           </p>
         </div>
-        <Link
-          to="/app/trade/cases"
-          className="rounded-xl border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
-        >
-          Open Trade Cases
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+          <Link
+            to="/app/merch/critical-alerts?entity_type=trade_case"
+            className="rounded-xl border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
+          >
+            Trade alerts
+          </Link>
+          <Link
+            to="/app/trade/cases"
+            className="rounded-xl border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
+          >
+            Open Trade Cases
+          </Link>
+        </div>
       </header>
 
       {error && (
@@ -85,8 +104,34 @@ export function TradeDashboardPage() {
       </section>
 
       <section className="rounded-xl border border-border bg-surface-raised shadow-sm overflow-hidden">
-        <div className="border-b border-border bg-surface-subtle px-4 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-subtle px-4 py-2">
           <h2 className="text-sm font-semibold text-text-primary">At-Risk Cases</h2>
+          <button
+            type="button"
+            onClick={() => {
+              const headers = ["Reference", "Direction", "Stage", "Status"];
+              const escape = (s: string | number | null | undefined) => {
+                const t = String(s ?? "");
+                return t.includes(",") || t.includes('"') ? `"${t.replace(/"/g, '""')}"` : t;
+              };
+              const rows = riskCases.map((r) =>
+                [r.reference, r.direction, r.current_stage ?? "", r.status].map(escape).join(",")
+              );
+              const csv = [headers.join(","), ...rows].join("\n");
+              const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `trade-at-risk-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            disabled={riskCases.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </button>
         </div>
         {riskCases.length === 0 ? (
           <div className="p-6 text-sm text-text-muted">No at-risk cases in current summary.</div>
@@ -110,12 +155,20 @@ export function TradeDashboardPage() {
                     <td className="px-4 py-2.5">{row.current_stage}</td>
                     <td className="px-4 py-2.5">{row.status}</td>
                     <td className="px-4 py-2.5 text-right">
-                      <Link
-                        to={`/app/trade/cases/${row.id}`}
-                        className="rounded border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
-                      >
-                        Open
-                      </Link>
+                      <span className="inline-flex gap-1">
+                        <Link
+                          to={`/app/trade/cases/${row.id}`}
+                          className="rounded border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
+                        >
+                          Open
+                        </Link>
+                        <Link
+                          to={`/app/logistics?trade_case_id=${row.id}`}
+                          className="rounded border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
+                        >
+                          Create Shipment
+                        </Link>
+                      </span>
                     </td>
                   </tr>
                 ))}

@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   api,
   type ChartOfAccountResponse,
+  type CostCenterResponse,
   type VoucherCreate,
   type VoucherLineCreate,
   type VoucherResponse,
@@ -28,20 +30,25 @@ const ACTION_LABEL: Record<string, string> = {
   cancel: "Cancel",
   reverse: "Reverse",
 };
-
-function workflowActionClass(action: string) {
-  if (action === "reject") return "rounded border border-status-danger/20 bg-status-danger-subtle px-2 py-1 text-xs text-status-danger-foreground";
-  if (action === "post" || action === "approve") return "rounded border border-status-success/30 bg-status-success-subtle px-2 py-1 text-xs text-status-success-foreground";
-  if (action === "check" || action === "recommend" || action === "submit") return "rounded border border-status-info/30 bg-status-info-subtle px-2 py-1 text-xs text-status-info-foreground";
-  return "rounded border px-2 py-1 text-xs";
-}
+const CTL =
+  "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
 
 function rowAmount(lines: VoucherLineCreate[], t: "DEBIT" | "CREDIT") {
   return lines.filter((l) => l.entry_type === t).reduce((sum, l) => sum + Number(l.amount || 0), 0);
 }
 
+function makeLine(accountId: number, currency: string, exchangeRate: string, entryType: "DEBIT" | "CREDIT" = "DEBIT"): VoucherLineCreate {
+  return { account_id: accountId, cost_center_id: null, currency, exchange_rate: exchangeRate, entry_type: entryType, amount: "0", notes: "" };
+}
+
 export function VouchersPage() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const voucherIdFromUrl = searchParams.get("voucher_id");
+  const voucherIdFilter = voucherIdFromUrl ? Number(voucherIdFromUrl) : undefined;
+
   const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
+  const [costCenters, setCostCenters] = useState<CostCenterResponse[]>([]);
   const [voucherTypes, setVoucherTypes] = useState<string[]>([]);
   const [rows, setRows] = useState<VoucherResponse[]>([]);
   const [availableActionMap, setAvailableActionMap] = useState<Record<number, string[]>>({});
@@ -50,28 +57,41 @@ export function VouchersPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [editingVoucherId, setEditingVoucherId] = useState<number | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+
+  // Multi-currency
+  const [multiCurrency, setMultiCurrency] = useState(false);
+  const [liveRateStatus, setLiveRateStatus] = useState<"idle" | "loading" | "fetched" | "error">("idle");
+
   const [form, setForm] = useState<VoucherCreate>({
     voucher_type: "JOURNAL",
     voucher_date: new Date().toISOString().slice(0, 10),
     description: "",
     reference: "",
-    lines: [{ account_id: 0, entry_type: "DEBIT", amount: "0", notes: "" }],
+    currency: "BDT",
+    base_currency: "BDT",
+    exchange_rate: "1",
+    trade_case_id: undefined,
+    btb_lc_id: undefined,
+    lines: [makeLine(0, "BDT", "1", "DEBIT")],
   });
-  const [focusTarget, setFocusTarget] = useState<{ row: number; cell: "account" | "debit" | "credit" | "notes" } | null>(null);
 
   async function load() {
     setLoading(true);
-    setSuccess(null);
     setError(null);
     try {
-      const [a, v] = await Promise.all([
+      const [a, c, v, types] = await Promise.all([
         api.listChartOfAccounts({ active_only: true }),
+        api.listCostCenters({ active_only: true }),
         api.listVouchers(statusFilter ? { status_filter: statusFilter } : undefined),
+        api.getVoucherTypesMeta(),
       ]);
-      const types = await api.getVoucherTypesMeta();
       setAccounts(a);
-      setVoucherTypes(types);
+      setCostCenters(c);
       setRows(v);
+      setVoucherTypes(types);
       const actionPairs = await Promise.all(
         v.map(async (row) => {
           try {
@@ -82,20 +102,19 @@ export function VouchersPage() {
           }
         }),
       );
-      const actionMap: Record<number, string[]> = {};
-      for (const [id, actions] of actionPairs) actionMap[id] = actions;
-      setAvailableActionMap(actionMap);
-      const firstAccountId = a[0]?.id;
-      if (form.lines[0]?.account_id === 0 && firstAccountId) {
-        setForm((p) => {
-          const firstLine = p.lines[0];
-          if (!firstLine) return p;
-          return { ...p, lines: [{ ...firstLine, account_id: firstAccountId }] };
-        });
-      }
-      if (types.length > 0 && !types.includes(form.voucher_type) && types[0]) {
-        setForm((p) => ({ ...p, voucher_type: types[0] as string }));
-      }
+      const map: Record<number, string[]> = {};
+      for (const [id, actions] of actionPairs) map[id] = actions;
+      setAvailableActionMap(map);
+      const firstAccountId = a[0]?.id ?? 0;
+      setForm((prev) => {
+        if (prev.lines[0]?.account_id) return prev;
+        const currentLine = prev.lines[0] ?? makeLine(firstAccountId, prev.currency ?? "BDT", prev.exchange_rate ?? "1", "DEBIT");
+        return {
+          ...prev,
+          voucher_type: types.includes(prev.voucher_type) ? prev.voucher_type : (types[0] ?? "JOURNAL"),
+          lines: [{ ...currentLine, account_id: firstAccountId }],
+        };
+      });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -111,134 +130,139 @@ export function VouchersPage() {
   const debitTotal = useMemo(() => rowAmount(form.lines, "DEBIT"), [form.lines]);
   const creditTotal = useMemo(() => rowAmount(form.lines, "CREDIT"), [form.lines]);
   const isBalanced = Math.abs(debitTotal - creditTotal) < 0.001;
+
   const filteredRows = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return rows;
+    if (Number.isFinite(voucherIdFilter)) return rows.filter((r) => r.id === voucherIdFilter);
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
     return rows.filter(
       (r) =>
-        r.voucher_number.toLowerCase().includes(query) ||
-        r.voucher_type.toLowerCase().includes(query) ||
-        (r.reference ?? "").toLowerCase().includes(query) ||
-        (r.description ?? "").toLowerCase().includes(query),
+        r.voucher_number.toLowerCase().includes(q) ||
+        r.voucher_type.toLowerCase().includes(q) ||
+        (r.reference ?? "").toLowerCase().includes(q) ||
+        (r.description ?? "").toLowerCase().includes(q) ||
+        r.status.toLowerCase().includes(q),
     );
-  }, [rows, search]);
+  }, [rows, search, voucherIdFilter]);
 
-  function setLineAccount(idx: number, accountId: number) {
-    setForm((p) => ({
-      ...p,
-      lines: p.lines.map((r, i) => (i === idx ? { ...r, account_id: accountId } : r)),
+  function setLine(idx: number, patch: Partial<VoucherLineCreate>) {
+    setForm((prev) => ({
+      ...prev,
+      lines: prev.lines.map((line, i) => (i === idx ? { ...line, ...patch } : line)),
     }));
   }
 
-  function setLineNotes(idx: number, notes: string) {
-    setForm((p) => ({
-      ...p,
-      lines: p.lines.map((r, i) => (i === idx ? { ...r, notes } : r)),
+  function addLine(entryType: "DEBIT" | "CREDIT" = "DEBIT") {
+    setForm((prev) => ({
+      ...prev,
+      lines: [...prev.lines, makeLine(accounts[0]?.id ?? 0, prev.currency ?? "BDT", prev.exchange_rate ?? "1", entryType)],
     }));
-  }
-
-  function focusLineCell(row: number, cell: "account" | "debit" | "credit" | "notes") {
-    setFocusTarget({ row, cell });
-  }
-
-  function addLine(entryType: "DEBIT" | "CREDIT" = "DEBIT", focusCell: "account" | "debit" | "credit" | "notes" = "account") {
-    const nextRow = form.lines.length;
-    setForm((p) => ({
-      ...p,
-      lines: [
-        ...p.lines,
-        {
-          account_id: accounts[0]?.id ?? 0,
-          entry_type: entryType,
-          amount: "0",
-          notes: "",
-        },
-      ],
-    }));
-    focusLineCell(nextRow, focusCell);
   }
 
   function copyLine(idx: number) {
-    setForm((p) => {
-      const source = p.lines[idx];
-      if (!source) return p;
-      return {
-        ...p,
-        lines: [
-          ...p.lines,
-          {
-            account_id: source.account_id,
-            entry_type: source.entry_type,
-            amount: source.amount,
-            notes: source.notes ?? "",
-          },
-        ],
-      };
+    setForm((prev) => {
+      const source = prev.lines[idx];
+      if (!source) return prev;
+      return { ...prev, lines: [...prev.lines, { ...source }] };
     });
-    focusLineCell(form.lines.length, "account");
+  }
+
+  function removeLine(idx: number) {
+    setForm((prev) => (prev.lines.length <= 1 ? prev : { ...prev, lines: prev.lines.filter((_, i) => i !== idx) }));
   }
 
   function setLineSideAmount(idx: number, side: "DEBIT" | "CREDIT", value: string) {
-    setForm((p) => ({
-      ...p,
-      lines: p.lines.map((r, i) => (i === idx ? { ...r, entry_type: side, amount: value } : r)),
-    }));
+    setLine(idx, { entry_type: side, amount: value });
   }
 
   function autoBalanceVoucher() {
     const diff = debitTotal - creditTotal;
-    if (Math.abs(diff) < 0.001) {
-      setSuccess("Voucher is already balanced.");
-      return;
-    }
+    if (Math.abs(diff) < 0.001) { setSuccess("Voucher is already balanced."); return; }
     const entryType: "DEBIT" | "CREDIT" = diff > 0 ? "CREDIT" : "DEBIT";
     const amount = Math.abs(diff).toFixed(2);
-    setForm((p) => ({
-      ...p,
-      lines: [
-        ...p.lines,
-        {
-          account_id: accounts[0]?.id ?? 0,
-          entry_type: entryType,
-          amount,
-          notes: "Auto balance line",
-        },
-      ],
+    setForm((prev) => ({
+      ...prev,
+      lines: [...prev.lines, { ...makeLine(accounts[0]?.id ?? 0, prev.currency ?? "BDT", prev.exchange_rate ?? "1", entryType), amount, notes: "Auto balance line" }],
     }));
-    focusLineCell(form.lines.length, "account");
-    setSuccess("Auto balance line added. Select correct account before submit.");
+    setSuccess("Auto-balance line added.");
   }
 
   function validateVoucherForm() {
-    if (!form.voucher_type.trim()) throw new Error("Voucher type is required");
-    if (!form.voucher_date) throw new Error("Voucher date is required");
-    if (form.lines.length < 2) throw new Error("Use at least two lines (debit + credit)");
-    if (form.lines.some((line) => !line.account_id)) throw new Error("Select account for each line");
-    if (form.lines.some((line) => Number(line.amount) <= 0)) throw new Error("Line amount must be greater than zero");
-    if (!isBalanced) throw new Error("Voucher is not balanced");
+    if (!form.voucher_type.trim()) throw new Error("Voucher type is required.");
+    if (!form.voucher_date) throw new Error("Voucher date is required.");
+    if (!(form.description ?? "").trim()) throw new Error("Narration is required for audit purposes.");
+    if (multiCurrency) {
+      if (!form.currency?.trim()) throw new Error("Transaction currency is required.");
+      if (!form.base_currency?.trim()) throw new Error("Base currency is required.");
+      if (Number(form.exchange_rate ?? 0) <= 0) throw new Error("Exchange rate must be greater than zero.");
+    }
+    if (form.lines.length < 2) throw new Error("Use at least two lines (debit and credit).");
+    if (form.lines.some((line) => !line.account_id)) throw new Error("Select account for each line.");
+    if (form.lines.some((line) => Number(line.amount) <= 0)) throw new Error("Line amount must be greater than zero.");
+    if (!isBalanced) throw new Error("Voucher is not balanced.");
   }
 
-  function resetVoucherForm() {
-    setForm((p) => ({
-      ...p,
+  function resetForm() {
+    setEditingVoucherId(null);
+    setMultiCurrency(false);
+    setLiveRateStatus("idle");
+    setForm({
+      voucher_type: voucherTypes[0] ?? "JOURNAL",
+      voucher_date: new Date().toISOString().slice(0, 10),
       description: "",
       reference: "",
-      lines: [{ account_id: accounts[0]?.id ?? 0, entry_type: "DEBIT", amount: "0", notes: "" }],
-    }));
-    focusLineCell(0, "account");
+      currency: "BDT",
+      base_currency: "BDT",
+      exchange_rate: "1",
+      trade_case_id: undefined,
+      btb_lc_id: undefined,
+      lines: [makeLine(accounts[0]?.id ?? 0, "BDT", "1", "DEBIT")],
+    });
   }
 
-  async function createVoucher(quickSubmit: boolean) {
-    setSuccess(null);
+  async function fetchLiveRate() {
+    const cur = (form.currency ?? "BDT").toUpperCase();
+    const base = (form.base_currency ?? "BDT").toUpperCase();
+    if (cur === base) { setForm((p) => ({ ...p, exchange_rate: "1" })); return; }
+    setLiveRateStatus("loading");
+    try {
+      const res = await fetch(`https://open.er-api.com/v6/latest/${cur}`);
+      const json = await res.json();
+      if (json.result === "success" && json.rates?.[base]) {
+        setForm((p) => ({ ...p, exchange_rate: String(json.rates[base]), exchange_rate_source: `open.er-api.com ${new Date().toISOString().slice(0, 10)}` }));
+        setLiveRateStatus("fetched");
+      } else {
+        setLiveRateStatus("error");
+      }
+    } catch {
+      setLiveRateStatus("error");
+    }
+  }
+
+  async function submitVoucher(quickSubmit: boolean) {
     setError(null);
+    setSuccess(null);
     try {
       validateVoucherForm();
-      const created = await api.createVoucher(form);
-      if (quickSubmit) {
-        await api.updateVoucherStatus(created.id, "SUBMITTED");
+      let voucher: VoucherResponse;
+      if (editingVoucherId) {
+        voucher = await api.updateVoucher(editingVoucherId, {
+          voucher_type: form.voucher_type,
+          voucher_date: form.voucher_date,
+          description: form.description,
+          reference: form.reference,
+          currency: form.currency,
+          base_currency: form.base_currency,
+          exchange_rate: form.exchange_rate,
+          lines: form.lines,
+        });
+      } else {
+        voucher = await api.createVoucher(form);
       }
-      resetVoucherForm();
-      setSuccess(quickSubmit ? "Voucher created and submitted for approval." : "Voucher created successfully.");
+      if (quickSubmit) await api.updateVoucherStatus(voucher.id, "SUBMITTED");
+      setSuccess(quickSubmit ? "Voucher saved and submitted." : editingVoucherId ? "Voucher updated." : "Voucher created.");
+      resetForm();
+      setShowCreate(false);
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -247,253 +271,324 @@ export function VouchersPage() {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    await createVoucher(false);
+    await submitVoucher(false);
   }
 
-  async function takeAction(id: number, action: string) {
+  async function takeAction(voucherId: number, action: string) {
+    setError(null);
+    setSuccess(null);
     try {
-      if (action === "post") {
-        await api.postVoucher(id);
-      } else if (action === "reverse") {
-        await api.reverseVoucher(id);
-      } else {
-        const mappedStatus = ACTION_TO_STATUS[action];
-        if (!mappedStatus) throw new Error(`Unsupported action: ${action}`);
-        await api.updateVoucherStatus(id, mappedStatus);
+      if (action === "post") await api.postVoucher(voucherId);
+      else if (action === "reverse") await api.reverseVoucher(voucherId);
+      else {
+        const nextStatus = ACTION_TO_STATUS[action];
+        if (!nextStatus) throw new Error(`Unsupported action: ${action}`);
+        await api.updateVoucherStatus(voucherId, nextStatus);
       }
-      setSuccess(`Voucher action completed: ${ACTION_LABEL[action] ?? action}.`);
+      setSuccess(`Action complete: ${ACTION_LABEL[action] ?? action}`);
       await load();
     } catch (e) {
       setError((e as Error).message);
     }
   }
 
-  useEffect(() => {
-    if (!focusTarget) return;
-    const el = document.getElementById(`voucher-line-${focusTarget.row}-${focusTarget.cell}`) as HTMLInputElement | HTMLSelectElement | null;
-    if (el) {
-      el.focus();
-      if (el instanceof HTMLInputElement && el.type !== "date") el.select();
+  function startEdit(voucher: VoucherResponse) {
+    setEditingVoucherId(voucher.id);
+    const isMc = voucher.currency !== voucher.base_currency;
+    setMultiCurrency(isMc);
+    setShowCreate(true);
+    setForm({
+      voucher_type: voucher.voucher_type,
+      voucher_date: voucher.voucher_date,
+      description: voucher.description ?? "",
+      reference: voucher.reference ?? "",
+      currency: voucher.currency,
+      base_currency: voucher.base_currency,
+      exchange_rate: voucher.exchange_rate,
+      trade_case_id: voucher.trade_case_id,
+      btb_lc_id: voucher.btb_lc_id,
+      lines: voucher.lines.map((line) => ({
+        account_id: line.account_id,
+        cost_center_id: line.cost_center_id ?? null,
+        currency: line.currency ?? voucher.currency,
+        exchange_rate: line.exchange_rate ?? voucher.exchange_rate,
+        base_amount: line.base_amount ?? undefined,
+        is_rate_overridden: line.is_rate_overridden ?? false,
+        rate_source: line.rate_source ?? "system",
+        entry_type: line.entry_type,
+        amount: line.amount,
+        notes: line.notes ?? "",
+      })),
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleDelete(voucherId: number) {
+    if (!window.confirm("Delete this voucher? This cannot be undone.")) return;
+    try {
+      await api.deleteVoucher(voucherId);
+      setSuccess("Voucher deleted.");
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
     }
-    setFocusTarget(null);
-  }, [focusTarget, form.lines.length]);
+  }
+
+  const bdtEquivalent = multiCurrency ? (debitTotal * Number(form.exchange_rate || 1)).toFixed(2) : null;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Vouchers</h1>
-        <p className="mt-1 text-sm text-text-muted">Journal-style voucher entry with workflow actions and balances.</p>
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-text-primary">Vouchers</h1>
+          <p className="mt-1 text-sm text-text-muted">Create, manage and track accounting vouchers with multi-currency, cost center and digital verification.</p>
+        </div>
+        <button
+          type="button"
+          className="rounded-lg bg-brand-primary px-5 py-2.5 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+          onClick={() => { resetForm(); setShowCreate(true); }}
+        >
+          + New Voucher
+        </button>
       </div>
 
-      <form
-        onSubmit={submit}
-        onKeyDown={(e) => {
-          if (e.ctrlKey && e.shiftKey && e.key === "Enter") {
-            e.preventDefault();
-            void createVoucher(true);
-          } else if (e.ctrlKey && e.key === "Enter") {
-            e.preventDefault();
-            void createVoucher(false);
-          }
-        }}
-        className="space-y-3 rounded-xl border border-border bg-surface-raised p-4"
-      >
-        <div className="grid gap-3 md:grid-cols-4">
-          <select className="rounded border px-3 py-2 text-sm" value={form.voucher_type} onChange={(e) => setForm((p) => ({ ...p, voucher_type: e.target.value }))}>
-            {voucherTypes.length === 0 ? <option value="JOURNAL">JOURNAL</option> : null}
-            {voucherTypes.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          <input
-            type="date"
-            className="rounded border px-3 py-2 text-sm"
-            value={form.voucher_date}
-            onChange={(e) => setForm((p) => ({ ...p, voucher_date: e.target.value }))}
-          />
-          <input
-            className="rounded border px-3 py-2 text-sm"
-            placeholder="Reference"
-            value={form.reference ?? ""}
-            onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))}
-          />
-          <input
-            className="rounded border px-3 py-2 text-sm"
-            placeholder="Description"
-            value={form.description ?? ""}
-            onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-          />
-        </div>
+      {error ? <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {success ? <div className="rounded-lg border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
 
-        <div className="overflow-x-auto rounded border">
-          <table className="min-w-full text-sm">
-            <thead className="bg-surface-subtle text-left">
-              <tr>
-                <th className="px-3 py-2">Account</th>
-                <th className="px-3 py-2 text-right">Debit</th>
-                <th className="px-3 py-2 text-right">Credit</th>
-                <th className="px-3 py-2">Notes</th>
-                <th className="px-3 py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {form.lines.map((line, idx) => (
-                <tr key={idx} className="border-t">
-                  <td className="px-3 py-2">
-                    <select
-                      id={`voucher-line-${idx}-account`}
-                      className="w-full rounded border px-2 py-1"
-                      value={line.account_id}
-                      onChange={(e) => setLineAccount(idx, Number(e.target.value))}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          focusLineCell(idx, "debit");
-                        }
-                      }}
+      {/* ─────────────── CREATE / EDIT FORM ─────────────── */}
+      {showCreate ? (
+        <form onSubmit={submit} className="space-y-5">
+          {/* Card: Voucher Information */}
+          <div className="rounded-xl border border-border bg-surface-raised p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-text-primary">{editingVoucherId ? `Edit Voucher #${editingVoucherId}` : "New Voucher"}</h2>
+              <button type="button" className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => { resetForm(); setShowCreate(false); }}>
+                Cancel
+              </button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text-secondary">Voucher Type</label>
+                <select className={CTL} value={form.voucher_type} onChange={(e) => setForm((p) => ({ ...p, voucher_type: e.target.value }))}>
+                  {voucherTypes.length === 0 ? <option value="JOURNAL">JOURNAL</option> : null}
+                  {voucherTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text-secondary">Voucher Date</label>
+                <input type="date" className={CTL} value={form.voucher_date} onChange={(e) => setForm((p) => ({ ...p, voucher_date: e.target.value }))} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text-secondary">Reference</label>
+                <input className={CTL} placeholder="e.g. INV-001" value={form.reference ?? ""} onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-text-secondary">Narration <span className="text-status-danger-foreground">*</span></label>
+                <input className={CTL} placeholder="Enter narration (required for audit)" value={form.description ?? ""} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} required />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-secondary">Trade Case</label>
+                  <input type="number" className={CTL} placeholder="ID" value={form.trade_case_id ?? ""} onChange={(e) => setForm((p) => ({ ...p, trade_case_id: e.target.value ? Number(e.target.value) : undefined }))} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-secondary">BTB LC</label>
+                  <input type="number" className={CTL} placeholder="ID" value={form.btb_lc_id ?? ""} onChange={(e) => setForm((p) => ({ ...p, btb_lc_id: e.target.value ? Number(e.target.value) : undefined }))} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card: Multi-Currency */}
+          <div className="rounded-xl border border-border bg-surface-raised p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-text-primary">Multi-Currency Entry</h3>
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-border-strong text-brand-primary focus:ring-brand-primary/20"
+                  checked={multiCurrency}
+                  onChange={(e) => {
+                    setMultiCurrency(e.target.checked);
+                    if (!e.target.checked) {
+                      setForm((p) => ({ ...p, currency: "BDT", base_currency: "BDT", exchange_rate: "1" }));
+                      setLiveRateStatus("idle");
+                    }
+                  }}
+                />
+                Enable Multi-Currency
+              </label>
+            </div>
+
+            {multiCurrency ? (
+              <div className="grid gap-4 md:grid-cols-4 items-end">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-secondary">Transaction Currency</label>
+                  <select
+                    className={CTL}
+                    value={form.currency ?? "BDT"}
+                    onChange={(e) => {
+                      setForm((p) => ({ ...p, currency: e.target.value }));
+                      setLiveRateStatus("idle");
+                    }}
+                  >
+                    {["BDT", "USD", "EUR", "GBP", "JPY", "CNY", "INR", "AED", "SAR", "CAD", "AUD", "SGD", "MYR", "CHF"].map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-secondary">Base Currency</label>
+                  <select className={CTL} value={form.base_currency ?? "BDT"} onChange={(e) => { setForm((p) => ({ ...p, base_currency: e.target.value })); setLiveRateStatus("idle"); }}>
+                    {["BDT", "USD", "EUR", "GBP"].map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-secondary">Exchange Rate</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0.000001"
+                      step="0.000001"
+                      className={CTL}
+                      value={form.exchange_rate ?? "1"}
+                      onChange={(e) => { setForm((p) => ({ ...p, exchange_rate: e.target.value })); setLiveRateStatus("idle"); }}
+                    />
+                    <button
+                      type="button"
+                      className="whitespace-nowrap rounded-lg border border-brand-primary/30 bg-brand-primary/10 px-3 py-2 text-xs font-semibold text-brand-primary hover:bg-brand-primary/20"
+                      onClick={() => void fetchLiveRate()}
+                      disabled={liveRateStatus === "loading"}
                     >
-                      {accounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.account_number} - {a.name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      id={`voucher-line-${idx}-debit`}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className="w-full rounded border px-2 py-1 text-right"
-                      value={line.entry_type === "DEBIT" ? line.amount : ""}
-                      onChange={(e) => setLineSideAmount(idx, "DEBIT", e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.ctrlKey && (e.key === "d" || e.key === "D")) {
-                          e.preventDefault();
-                          copyLine(idx);
-                        } else if (e.key === "Enter") {
-                          e.preventDefault();
-                          focusLineCell(idx, "credit");
-                        }
-                      }}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      id={`voucher-line-${idx}-credit`}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className="w-full rounded border px-2 py-1 text-right"
-                      value={line.entry_type === "CREDIT" ? line.amount : ""}
-                      onChange={(e) => setLineSideAmount(idx, "CREDIT", e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.ctrlKey && (e.key === "d" || e.key === "D")) {
-                          e.preventDefault();
-                          copyLine(idx);
-                        } else if (e.key === "Enter") {
-                          e.preventDefault();
-                          focusLineCell(idx, "notes");
-                        }
-                      }}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      id={`voucher-line-${idx}-notes`}
-                      className="w-full rounded border px-2 py-1"
-                      value={line.notes ?? ""}
-                      onChange={(e) => setLineNotes(idx, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.ctrlKey && (e.key === "d" || e.key === "D")) {
-                          e.preventDefault();
-                          copyLine(idx);
-                        } else if (e.key === "Enter") {
-                          e.preventDefault();
-                          addLine(line.entry_type, "account");
-                        }
-                      }}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex gap-1">
-                      <button type="button" className="rounded border px-2 py-1 text-xs" onClick={() => copyLine(idx)}>
-                        Copy
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded border px-2 py-1 text-xs"
-                        onClick={() =>
-                          setForm((p) => ({ ...p, lines: p.lines.filter((_, i) => i !== idx || p.lines.length === 1) }))
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => addLine("DEBIT")}>
-              Add Debit
-            </button>
-            <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => addLine("CREDIT")}>
-              Add Credit
-            </button>
-            <button type="button" className="rounded border px-3 py-2 text-sm" onClick={autoBalanceVoucher}>
-              Auto Balance
-            </button>
+                      {liveRateStatus === "loading" ? "Fetching..." : "Live Rate"}
+                    </button>
+                  </div>
+                  {liveRateStatus === "fetched" ? (
+                    <p className="mt-1 text-xs text-status-success-foreground">Live rate fetched from open.er-api.com</p>
+                  ) : liveRateStatus === "error" ? (
+                    <p className="mt-1 text-xs text-status-danger-foreground">Could not fetch live rate. Enter manually.</p>
+                  ) : null}
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-secondary">BDT Equivalent</label>
+                  <div className="rounded-lg border border-border bg-surface-subtle px-3 py-2 text-sm font-semibold text-text-primary">
+                    {bdtEquivalent ? `${form.base_currency} ${Number(bdtEquivalent).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "—"}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-text-muted">Toggle on to record vouchers in foreign currencies with automatic or manual exchange rates.</p>
+            )}
           </div>
-          <div className="text-sm">
-            Debit: <b>{debitTotal.toFixed(2)}</b> | Credit: <b>{creditTotal.toFixed(2)}</b> |{" "}
-            <span className={isBalanced ? "text-status-success-foreground" : "text-status-danger-foreground"}>{isBalanced ? "Balanced" : "Not Balanced"}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="rounded border border-status-info/30 bg-status-info-subtle px-3 py-2 text-sm text-status-info-foreground"
-              onClick={() => void createVoucher(true)}
-            >
-              Create and Submit
-            </button>
-            <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">Create Draft</button>
-          </div>
-        </div>
-        <p className="text-xs text-text-muted">
-          Shortcuts: Enter moves to next cell; Enter on Notes adds new line; Ctrl+D duplicates current line; Ctrl+Enter creates voucher; Ctrl+Shift+Enter creates and submits.
-        </p>
-      </form>
 
-      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
-      {success ? <div className="rounded border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
+          {/* Card: Voucher Items */}
+          <div className="rounded-xl border border-border bg-surface-raised p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-text-primary">Voucher Items</h3>
+              <div className="flex gap-2">
+                <button type="button" className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => addLine("DEBIT")}>+ Debit Line</button>
+                <button type="button" className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => addLine("CREDIT")}>+ Credit Line</button>
+                <button type="button" className="rounded-lg border border-brand-primary/30 bg-brand-primary/10 px-3 py-1.5 text-xs font-medium text-brand-primary hover:bg-brand-primary/20" onClick={autoBalanceVoucher}>Auto Balance</button>
+              </div>
+            </div>
 
-      <div className="rounded-xl border border-border bg-surface-raised p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Voucher List</h2>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="min-w-full text-sm">
+                <thead className="bg-surface-subtle text-left">
+                  <tr>
+                    <th className="w-10 px-3 py-2 text-center">#</th>
+                    <th className="px-3 py-2">Account</th>
+                    <th className="px-3 py-2">Cost Center</th>
+                    <th className="px-3 py-2 text-right">Debit</th>
+                    <th className="px-3 py-2 text-right">Credit</th>
+                    <th className="px-3 py-2">Notes / Narration</th>
+                    <th className="w-24 px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.lines.map((line, idx) => (
+                    <tr key={idx} className="border-t border-border">
+                      <td className="px-3 py-2 text-center text-text-muted">{idx + 1}</td>
+                      <td className="px-3 py-2">
+                        <select className={CTL} value={line.account_id} onChange={(e) => setLine(idx, { account_id: Number(e.target.value) })}>
+                          <option value={0} disabled>Select account</option>
+                          {accounts.map((a) => <option key={a.id} value={a.id}>{a.account_number} — {a.name}{a.enable_bill_wise ? " [Bill-Wise]" : ""}</option>)}
+                        </select>
+                        {line.account_id > 0 && accounts.find((a) => a.id === line.account_id)?.enable_bill_wise ? (
+                          <span className="mt-0.5 inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">Bill-Wise Enabled</span>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2">
+                        <select className={CTL} value={line.cost_center_id ?? ""} onChange={(e) => setLine(idx, { cost_center_id: e.target.value ? Number(e.target.value) : null })}>
+                          <option value="">None</option>
+                          {costCenters.map((c) => <option key={c.id} value={c.id}>{c.center_code} — {c.name}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <input className={`${CTL} text-right`} type="number" min="0" step="0.01" placeholder="0.00" value={line.entry_type === "DEBIT" ? line.amount : ""} onChange={(e) => setLineSideAmount(idx, "DEBIT", e.target.value)} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input className={`${CTL} text-right`} type="number" min="0" step="0.01" placeholder="0.00" value={line.entry_type === "CREDIT" ? line.amount : ""} onChange={(e) => setLineSideAmount(idx, "CREDIT", e.target.value)} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input className={CTL} placeholder="Line description" value={line.notes ?? ""} onChange={(e) => setLine(idx, { notes: e.target.value })} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex gap-1">
+                          <button type="button" className="rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => copyLine(idx)}>Copy</button>
+                          <button type="button" className="rounded-md border border-status-danger/30 px-2 py-1 text-xs text-status-danger-foreground hover:bg-status-danger-subtle" onClick={() => removeLine(idx)}>Del</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Card: Totals & Actions */}
+          <div className="rounded-xl border border-border bg-surface-raised p-5">
+            <div className="grid gap-4 md:grid-cols-4 items-center">
+              <div className="text-sm">Debit Total: <span className="font-semibold text-text-primary">{debitTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+              <div className="text-sm">Credit Total: <span className="font-semibold text-text-primary">{creditTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+              <div className={`rounded-lg px-3 py-1.5 text-center text-sm font-semibold ${isBalanced ? "bg-status-success-subtle text-status-success-foreground" : "bg-status-danger-subtle text-status-danger-foreground"}`}>
+                {isBalanced ? "Balanced" : `Difference: ${Math.abs(debitTotal - creditTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-status-info/30 bg-status-info-subtle px-4 py-2 text-sm font-medium text-status-info-foreground hover:bg-status-info-subtle/80"
+                  onClick={() => void submitVoucher(true)}
+                >
+                  {editingVoucherId ? "Update & Submit" : "Save & Submit"}
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-brand-primary px-5 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+                >
+                  {editingVoucherId ? "Update Draft" : "Save Draft"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+      ) : null}
+
+      {/* ─────────────── VOUCHER LIST ─────────────── */}
+      <div className="rounded-xl border border-border bg-surface-raised p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-text-primary">Voucher List</h2>
           <div className="flex flex-wrap gap-2">
-            <select className="rounded border px-2 py-1 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <select className={`${CTL} w-auto`} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">All Status</option>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
+              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-            <input
-              className="w-full rounded border px-3 py-1 text-sm md:w-72"
-              placeholder="Search no/type/reference..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <input className={`${CTL} md:w-72`} placeholder="Search number, type, reference, narration..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
+
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-surface-subtle text-left">
@@ -502,42 +597,59 @@ export function VouchersPage() {
                 <th className="px-3 py-2">Date</th>
                 <th className="px-3 py-2">Type</th>
                 <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Amount</th>
-                <th className="px-3 py-2">Workflow</th>
+                <th className="px-3 py-2">Reference</th>
+                <th className="px-3 py-2">Narration</th>
+                <th className="px-3 py-2">Currency</th>
+                <th className="px-3 py-2 text-right">Amount</th>
+                <th className="px-3 py-2">Signed</th>
+                <th className="px-3 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td className="px-3 py-5 text-text-muted" colSpan={6}>
-                    Loading vouchers...
-                  </td>
-                </tr>
+                <tr><td className="px-3 py-5 text-text-muted" colSpan={10}>Loading vouchers...</td></tr>
               ) : filteredRows.length === 0 ? (
-                <tr>
-                  <td className="px-3 py-5 text-text-muted" colSpan={6}>
-                    No vouchers found.
-                  </td>
-                </tr>
+                <tr><td className="px-3 py-5 text-text-muted" colSpan={10}>No vouchers found.</td></tr>
               ) : (
-                filteredRows.map((r) => {
-                  const amount = r.lines.filter((l) => l.entry_type === "DEBIT").reduce((s, l) => s + Number(l.amount || 0), 0);
+                filteredRows.map((row) => {
+                  const amount = row.lines.filter((l) => l.entry_type === "DEBIT").reduce((s, l) => s + Number(l.amount || 0), 0);
                   return (
-                    <tr key={r.id} className="border-t">
-                      <td className="px-3 py-2">{r.voucher_number}</td>
-                      <td className="px-3 py-2">{r.voucher_date}</td>
-                      <td className="px-3 py-2">{r.voucher_type}</td>
+                    <tr
+                      key={row.id}
+                      className="cursor-pointer border-t border-border hover:bg-surface-subtle/50"
+                      onClick={() => navigate(`/app/accounts/vouchers/${row.id}`)}
+                    >
+                      <td className="px-3 py-2 font-medium text-brand-primary">{row.voucher_number}</td>
+                      <td className="px-3 py-2">{row.voucher_date}</td>
+                      <td className="px-3 py-2">{row.voucher_type}</td>
+                      <td className="px-3 py-2"><span className="rounded-md bg-surface-subtle px-2 py-0.5 text-xs font-medium">{row.status}</span></td>
+                      <td className="max-w-[10rem] truncate px-3 py-2">{row.reference ?? "—"}</td>
+                      <td className="max-w-[14rem] truncate px-3 py-2">{row.description ?? "—"}</td>
+                      <td className="px-3 py-2">{row.currency}</td>
+                      <td className="px-3 py-2 text-right font-medium">{amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                      <td className="px-3 py-2">{row.signed_by_system ? <span className="text-status-success-foreground">Yes</span> : <span className="text-text-muted">No</span>}</td>
                       <td className="px-3 py-2">
-                        <span className="rounded bg-surface-subtle px-2 py-1 text-xs">{r.status}</span>
-                      </td>
-                      <td className="px-3 py-2">{amount.toLocaleString()}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-wrap gap-1">
-                          {(availableActionMap[r.id] ?? []).map((action) => (
-                            <button key={action} className={workflowActionClass(action)} onClick={() => void takeAction(r.id, action)}>
-                              {ACTION_LABEL[action] ?? action}
-                            </button>
-                          ))}
+                        <div className="relative" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
+                            onClick={() => setOpenActionsId((prev) => (prev === row.id ? null : row.id))}
+                          >
+                            Actions
+                          </button>
+                          {openActionsId === row.id ? (
+                            <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
+                              <button type="button" className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => navigate(`/app/accounts/vouchers/${row.id}`)}>View Details</button>
+                              <button type="button" className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => startEdit(row)}>Edit</button>
+                              <button type="button" className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => navigate(`/app/accounts/vouchers/print?voucher_id=${row.id}`)}>Print / PDF</button>
+                              {(availableActionMap[row.id] ?? []).map((action) => (
+                                <button key={action} type="button" className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => void takeAction(row.id, action)}>
+                                  {ACTION_LABEL[action] ?? action}
+                                </button>
+                              ))}
+                              <button type="button" className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger-foreground hover:bg-status-danger-subtle" onClick={() => void handleDelete(row.id)}>Delete</button>
+                            </div>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

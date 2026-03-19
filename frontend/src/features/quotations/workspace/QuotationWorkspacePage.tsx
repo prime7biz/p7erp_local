@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import type { QuotationOtherCostLine } from "@/api/client";
 import {
   COMMISSION_MODE_OPTIONS,
   COMMISSION_TYPE_OPTIONS,
@@ -6,11 +8,64 @@ import {
   withLegacyOption,
 } from "@/lib/commercialTerms";
 import { CollapsibleSection } from "./components/CollapsibleSection";
+import { MaterialItemCombobox } from "./components/MaterialItemCombobox";
 import { useQuotationWorkspaceController } from "./useQuotationWorkspaceController";
 import { CostSummaryCard } from "./sidebar/CostSummaryCard";
 import { MarginPricingCard } from "./sidebar/MarginPricingCard";
 import { CostBreakdownCard } from "./sidebar/CostBreakdownCard";
-import { formatMoney, toSafeNumber } from "./mappers/quotationNumeric";
+import { calculateQuotationTotals } from "./mappers/calculateQuotationTotals";
+import { applyOtherCostCalculation, formatMoney, toSafeNumber } from "./mappers/quotationNumeric";
+
+function QuotationRowActions({
+  rowKey,
+  openKey,
+  setOpenKey,
+  onDelete,
+}: {
+  rowKey: string;
+  openKey: string | null;
+  setOpenKey: (k: string | null) => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="relative inline-block text-left" data-quotation-row-actions>
+      <button
+        type="button"
+        onClick={() => setOpenKey(openKey === rowKey ? null : rowKey)}
+        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+      >
+        Actions
+      </button>
+      {openKey === rowKey && (
+        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+          <button
+            type="button"
+            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+            onClick={() => {
+              setOpenKey(null);
+              onDelete();
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const OTHER_COST_PRESETS: ReadonlyArray<{
+  cost_head: string;
+  cost_type: string;
+  value: string;
+  based_on: string;
+}> = [
+  { cost_head: "Washing", cost_type: "percentage", value: "5", based_on: "subtotal" },
+  { cost_head: "Finishing", cost_type: "percentage", value: "3", based_on: "subtotal" },
+  { cost_head: "Factory overhead", cost_type: "percentage", value: "8", based_on: "subtotal" },
+  { cost_head: "Freight / logistics", cost_type: "fixed", value: "0", based_on: "subtotal" },
+  { cost_head: "Bank / LC charges", cost_type: "percentage", value: "1.5", based_on: "subtotal" },
+];
 
 export function QuotationWorkspacePage({ id }: { id?: string }) {
   const {
@@ -50,6 +105,14 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
     setIsEditing,
     duplicatingVersion,
     previousVersionQuote,
+    currencies,
+    fetchingRates,
+    rateSource,
+    runningWorkflowAction,
+    useManualQuotedPrice,
+    setUseManualQuotedPrice,
+    manualQuotedPrice,
+    setManualQuotedPrice,
     selectedStyle,
     totals,
     updateQuotationHeader,
@@ -63,11 +126,53 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
     onQuickStyleImageChange,
     createStyleInline,
     handleSave,
+    refreshExchangeRates,
+    submitForReview,
+    approveQuotation,
     duplicateAsNewVersion,
     navigate,
   } = useQuotationWorkspaceController(id);
   const location = useLocation();
   const isPrintMode = new URLSearchParams(location.search).get("print") === "1";
+  const [sizeRatioCollapsed, setSizeRatioCollapsed] = useState(false);
+  const [openRowActions, setOpenRowActions] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openRowActions) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!t?.closest?.("[data-quotation-row-actions]")) setOpenRowActions(null);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [openRowActions]);
+
+  const appendOtherCostPreset = (preset: (typeof OTHER_COST_PRESETS)[number]) => {
+    const { matTotal, mfgTotal } = calculateQuotationTotals(materials, manufacturing, []);
+    const base = matTotal + mfgTotal;
+    setOtherCosts((rows) => {
+      const serial = rows.length + 1;
+      const row = applyOtherCostCalculation(
+        {
+          serial_no: serial,
+          cost_head: preset.cost_head,
+          percentage: preset.cost_type === "percentage" ? preset.value : "0",
+          total_amount: "0",
+          cost_type: preset.cost_type,
+          value: preset.value,
+          based_on: preset.based_on,
+          calculated_amount: "0",
+          notes: null,
+          currency: quotation?.currency ?? "USD",
+          exchange_rate: quotation?.exchange_rate ?? "1",
+          base_amount: "0",
+          local_amount: "0",
+        },
+        base
+      );
+      return [...rows, row];
+    });
+  };
 
   if (loading) return <div className="p-6 text-text-muted">Loading quotation...</div>;
   if (error && !quotation) {
@@ -87,6 +192,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
   if (!quotation) return null;
 
   const showEditableHeader = isNew || isEditing;
+  const currencyOptions = currencies.length > 0 ? currencies.map((entry) => entry.code) : ["USD", "BDT", "EUR", "GBP", "JPY"];
   const findCategoryName = (value: number | null) =>
     value == null ? "" : categories.find((c) => c.id === value)?.name ?? "";
   const findItemName = (value: number | null) =>
@@ -112,7 +218,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
       (totals.total ? (factoryMarginAmount / totals.total) * 100 : 0));
 
   return (
-    <div className="print-report space-y-4 p-4 lg:space-y-6 lg:p-6">
+    <div className="print-report space-y-5 p-4 lg:space-y-6 lg:p-6">
       <div className="print-only mb-3 border-b border-border pb-2">
         <h1 className="text-2xl font-bold text-text-primary">Quotation {quotation.quotation_code}</h1>
         <div className="text-sm text-text-secondary">
@@ -181,7 +287,27 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               disabled={saving || creatingStyle}
               className="rounded-lg bg-primary px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
             >
-              {saving ? "Saving..." : "Save costing"}
+              {saving ? "Saving..." : "Save draft"}
+            </button>
+          )}
+          {!isNew && ["DRAFT", "NEW"].includes(quotation.status) && (
+            <button
+              type="button"
+              onClick={submitForReview}
+              disabled={runningWorkflowAction !== ""}
+              className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary disabled:opacity-60"
+            >
+              {runningWorkflowAction === "submit" ? "Submitting..." : "Submit for review"}
+            </button>
+          )}
+          {!isNew && quotation.status === "SUBMITTED" && (
+            <button
+              type="button"
+              onClick={approveQuotation}
+              disabled={runningWorkflowAction !== ""}
+              className="rounded-lg border border-status-success/40 bg-status-success-subtle px-3 py-1.5 text-sm text-status-success-foreground disabled:opacity-60"
+            >
+              {runningWorkflowAction === "approve" ? "Approving..." : "Approve"}
             </button>
           )}
         </div>
@@ -194,11 +320,11 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12 xl:gap-6">
-        <div className="space-y-4 xl:col-span-8 2xl:col-span-9">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-6">
+        <div className="space-y-5 xl:col-span-8 2xl:col-span-9">
           <CollapsibleSection title={showEditableHeader ? "Quotation Basics" : "Quotation Summary"}>
             {showEditableHeader ? (
-              <div className="space-y-3 text-sm">
+              <div className="space-y-4 text-sm">
                 {isNew && (
                   <>
                     <div>
@@ -252,7 +378,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div className="space-y-2 sm:col-span-2">
                     <label className="mb-0.5 block font-medium text-text-secondary">Style</label>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
@@ -381,12 +507,17 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                         onChange={(e) => updateQuotationHeader({ target_price: e.target.value || null })}
                         className="flex-1 rounded-lg border border-border px-3 py-2 text-sm"
                       />
-                      <input
-                        type="text"
+                      <select
                         value={quotation.target_price_currency ?? "USD"}
                         onChange={(e) => updateQuotationHeader({ target_price_currency: e.target.value || null })}
-                        className="w-16 rounded-lg border border-border px-2 py-2 text-sm"
-                      />
+                        className="w-24 rounded-lg border border-border px-2 py-2 text-sm"
+                      >
+                        {currencyOptions.map((code) => (
+                          <option key={code} value={code}>
+                            {code}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   <div>
@@ -426,21 +557,74 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   </div>
                   <div>
                     <label className="mb-0.5 block font-medium text-text-secondary">Exchange rate</label>
-                    <input
-                      type="text"
-                      value={quotation.exchange_rate ?? "1"}
-                      onChange={(e) => updateQuotationHeader({ exchange_rate: e.target.value || null })}
-                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        step="0.0001"
+                        value={quotation.exchange_rate ?? "1"}
+                        onChange={(e) => updateQuotationHeader({ exchange_rate: e.target.value || null })}
+                        className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={refreshExchangeRates}
+                        disabled={fetchingRates}
+                        className="rounded-lg border border-border bg-surface-raised px-3 py-2 text-xs text-text-secondary disabled:opacity-60"
+                      >
+                        {fetchingRates ? "Syncing..." : "Sync rate"}
+                      </button>
+                    </div>
+                    {rateSource && (
+                      <p className="mt-1 text-xs text-text-muted">
+                        {rateSource === "live" ? "Live rate loaded." : "Fallback rate loaded."}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="mb-0.5 block font-medium text-text-secondary">Currency</label>
-                    <input
-                      type="text"
+                    <select
                       value={quotation.currency ?? "USD"}
                       onChange={(e) => updateQuotationHeader({ currency: e.target.value || null })}
                       className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    >
+                      {currencyOptions.map((code) => (
+                        <option key={code} value={code}>
+                          {code}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Profit margin (%)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={quotation.profit_percentage ?? "15"}
+                      onChange={(e) => updateQuotationHeader({ profit_percentage: e.target.value || null })}
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
+                  </div>
+                  <div className="sm:col-span-2 rounded-lg border border-border bg-surface-subtle p-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="inline-flex items-center gap-2 text-sm text-text-secondary">
+                        <input
+                          type="checkbox"
+                          checked={useManualQuotedPrice}
+                          onChange={(e) => setUseManualQuotedPrice(e.target.checked)}
+                        />
+                        Manual quoted price override
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        disabled={!useManualQuotedPrice}
+                        value={manualQuotedPrice}
+                        onChange={(e) => setManualQuotedPrice(e.target.value)}
+                        placeholder="Auto"
+                        className="w-40 rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-50"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="mb-0.5 block font-medium text-text-secondary">Commission mode</label>
@@ -506,7 +690,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     />
                   </div>
                 </div>
-                <div className="mt-2">
+                <div className="mt-3">
                   <label className="mb-0.5 block font-medium text-text-secondary">Notes / Assumptions</label>
                   <textarea
                     rows={3}
@@ -562,9 +746,9 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
             {materials.length === 0 ? (
               <div className="text-xs text-text-muted">No material lines.</div>
             ) : (
-              <div className="relative max-h-[420px] overflow-auto">
-                <table className="min-w-[980px] w-full text-xs">
-                  <thead className="border-b border-border bg-surface-subtle text-text-muted">
+              <div className="relative max-h-[440px] overflow-auto rounded-lg border border-border-subtle">
+                <table className="min-w-[980px] w-full text-sm">
+                  <thead className="sticky top-0 z-[1] border-b border-border bg-surface-subtle text-text-muted">
                     <tr>
                       <th className="px-2 py-2 text-left">#</th>
                       <th className="px-2 py-2 text-left">Fabric Type / Category</th>
@@ -572,13 +756,16 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       <th className="px-2 py-2 text-left">UOM</th>
                       <th className="px-2 py-2 text-right">Cons. (Yds)</th>
                       <th className="px-2 py-2 text-right">Unit Price</th>
-                      <th className="px-2 py-2 text-right">Wastage %</th>
+                      <th className="px-2 py-2 text-left">Curr</th>
+                      <th className="px-2 py-2 text-right">Rate</th>
                       <th className="px-2 py-2 text-right">Subtotal</th>
+                      <th className="px-2 py-2 text-right">% Total</th>
+                      <th className="px-2 py-2 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {materials.map((m, idx) => (
-                      <tr key={idx} className="border-b border-border-subtle last:border-0">
+                      <tr key={idx} className="border-b border-border-subtle even:bg-surface-subtle/30 last:border-0">
                         <td className="px-2 py-1">{idx + 1}</td>
                         <td className="px-2 py-1">
                           {isEditing ? (
@@ -599,21 +786,23 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                         <td className="px-2 py-1">
                           {isEditing ? (
                             <div className="space-y-1">
-                              <select
-                                value={m.item_id ?? ""}
-                                onChange={(e) => onMaterialChange(idx, { item_id: e.target.value ? Number(e.target.value) : null })}
-                                className="w-full rounded border border-border px-1 py-1 text-xs"
-                              >
-                                <option value="">Select item…</option>
-                                {items.map((it) => (
-                                  <option key={it.id} value={it.id}>{it.item_code} · {it.name}</option>
-                                ))}
-                              </select>
+                              <MaterialItemCombobox
+                                items={items}
+                                categoryId={m.category_id ?? null}
+                                itemId={m.item_id ?? null}
+                                onSelect={(it) =>
+                                  onMaterialChange(idx, {
+                                    item_id: it?.id ?? null,
+                                    description: it ? it.name : m.description,
+                                  })
+                                }
+                              />
                               <input
                                 type="text"
                                 value={m.description ?? ""}
                                 onChange={(e) => onMaterialChange(idx, { description: e.target.value || null })}
                                 className="w-full rounded border border-border px-1 py-1 text-xs"
+                                placeholder="Description override"
                               />
                             </div>
                           ) : (
@@ -658,19 +847,65 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                             m.unit_price
                           )}
                         </td>
-                        <td className="px-2 py-1 text-right">0</td>
+                        <td className="px-2 py-1">
+                          {isEditing ? (
+                            <select
+                              value={m.currency ?? quotation.currency ?? "USD"}
+                              onChange={(e) => onMaterialChange(idx, { currency: e.target.value || "USD" })}
+                              className="w-full rounded border border-border px-1 py-1 text-xs"
+                            >
+                              {currencyOptions.map((code) => (
+                                <option key={code} value={code}>
+                                  {code}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            m.currency ?? "USD"
+                          )}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.0001"
+                              value={m.exchange_rate}
+                              onChange={(e) => onMaterialChange(idx, { exchange_rate: e.target.value || "1" })}
+                              className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
+                            />
+                          ) : (
+                            m.exchange_rate
+                          )}
+                        </td>
                         <td className="px-2 py-1 text-right font-medium">{m.total_amount}</td>
+                        <td className="px-2 py-1 text-right text-text-muted">
+                          {totals.matTotal > 0
+                            ? `${((toSafeNumber(m.total_amount) / totals.matTotal) * 100).toFixed(1)}%`
+                            : "—"}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {isEditing && (
+                            <QuotationRowActions
+                              rowKey={`fabric-${idx}`}
+                              openKey={openRowActions}
+                              setOpenKey={setOpenRowActions}
+                              onDelete={() => setMaterials((rows) => rows.filter((_, rowIndex) => rowIndex !== idx))}
+                            />
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot className="sticky bottom-0 bg-surface-raised">
                     <tr className="border-t border-border bg-surface-subtle">
-                      <td colSpan={7} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
+                      <td colSpan={8} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
                         Fabric Total Cost
                       </td>
                       <td className="px-2 py-2 text-right text-sm font-bold text-text-primary">
                         {formatMoney(totals.matTotal)} {quotation.currency ?? ""}
                       </td>
+                      <td className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">100%</td>
+                      <td />
                     </tr>
                   </tfoot>
                 </table>
@@ -714,22 +949,25 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               <div className="text-xs text-text-muted">No manufacturing lines.</div>
             ) : (
               <div className="relative max-h-[420px] overflow-auto">
-                <table className="min-w-[900px] w-full text-xs">
-                  <thead className="border-b border-border bg-surface-subtle text-text-muted">
+                <table className="min-w-[900px] w-full text-sm">
+                  <thead className="sticky top-0 z-[1] border-b border-border bg-surface-subtle text-text-muted">
                     <tr>
                       <th className="px-2 py-2 text-left">#</th>
                       <th className="px-2 py-2 text-left">Style part</th>
                       <th className="px-2 py-2 text-right">Machines</th>
                       <th className="px-2 py-2 text-right">Prod/hr</th>
+                      <th className="px-2 py-2 text-right">Prod/day</th>
                       <th className="px-2 py-2 text-right">Cost/machine</th>
                       <th className="px-2 py-2 text-right">Total line</th>
                       <th className="px-2 py-2 text-right">CM/pc</th>
                       <th className="px-2 py-2 text-right">Subtotal</th>
+                      <th className="px-2 py-2 text-right">% Total</th>
+                      <th className="px-2 py-2 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {manufacturing.map((m, idx) => (
-                      <tr key={idx} className="border-b border-border-subtle last:border-0">
+                      <tr key={idx} className="border-b border-border-subtle even:bg-surface-subtle/30 last:border-0">
                         <td className="px-2 py-1">{idx + 1}</td>
                         <td className="px-2 py-1">
                           {isEditing ? (
@@ -771,6 +1009,19 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                           {isEditing ? (
                             <input
                               type="number"
+                              value={m.production_per_day}
+                              onChange={(e) => onManufacturingChange(idx, { production_per_day: e.target.value || "0" })}
+                              className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
+                              title="Auto from prod/hr × machines × 8h; edit to override"
+                            />
+                          ) : (
+                            m.production_per_day
+                          )}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {isEditing ? (
+                            <input
+                              type="number"
                               value={m.cost_per_machine}
                               onChange={(e) => onManufacturingChange(idx, { cost_per_machine: e.target.value || "0" })}
                               className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
@@ -782,17 +1033,34 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                         <td className="px-2 py-1 text-right">{m.total_line_cost}</td>
                         <td className="px-2 py-1 text-right">{m.cm_per_piece}</td>
                         <td className="px-2 py-1 text-right font-medium">{m.total_order_cost}</td>
+                        <td className="px-2 py-1 text-right text-text-muted">
+                          {totals.mfgTotal > 0
+                            ? `${((toSafeNumber(m.total_order_cost) / totals.mfgTotal) * 100).toFixed(1)}%`
+                            : "—"}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {isEditing && (
+                            <QuotationRowActions
+                              rowKey={`cm-${idx}`}
+                              openKey={openRowActions}
+                              setOpenKey={setOpenRowActions}
+                              onDelete={() => setManufacturing((rows) => rows.filter((_, rowIndex) => rowIndex !== idx))}
+                            />
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot className="sticky bottom-0 bg-surface-raised">
                     <tr className="border-t border-border bg-surface-subtle">
-                      <td colSpan={7} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
+                      <td colSpan={8} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
                         Labor / CM Total
                       </td>
                       <td className="px-2 py-2 text-right text-sm font-bold text-text-primary">
                         {formatMoney(totals.mfgTotal)} {quotation.currency ?? ""}
                       </td>
+                      <td className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">100%</td>
+                      <td />
                     </tr>
                   </tfoot>
                 </table>
@@ -802,41 +1070,60 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
 
           <CollapsibleSection
             title="Other Commercial Costs (Washing, Overheads, Logistics)"
-            actions={isEditing ? (
-              <button
-                type="button"
-                onClick={() =>
-                  setOtherCosts((rows) => [
-                    ...rows,
-                    {
-                      serial_no: rows.length + 1,
-                      cost_head: "",
-                      percentage: "0",
-                      total_amount: "0",
-                      cost_type: "fixed",
-                      value: "0",
-                      based_on: "subtotal",
-                      calculated_amount: "0",
-                      notes: null,
-                      currency: quotation.currency ?? "USD",
-                      exchange_rate: quotation.exchange_rate ?? "1",
-                      base_amount: "0",
-                      local_amount: "0",
-                    },
-                  ])
-                }
-                className="no-print rounded-lg border border-border px-3 py-1 text-xs text-text-secondary bg-surface-raised"
-              >
-                + Add Cost Head
-              </button>
-            ) : null}
+            actions={
+              isEditing ? (
+                <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5">
+                  {OTHER_COST_PRESETS.map((p) => (
+                    <button
+                      key={p.cost_head}
+                      type="button"
+                      onClick={() => appendOtherCostPreset(p)}
+                      className="no-print whitespace-nowrap rounded-lg border border-border bg-surface-raised px-2 py-1 text-[10px] text-text-secondary hover:bg-surface-subtle"
+                    >
+                      + {p.cost_head}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { matTotal, mfgTotal } = calculateQuotationTotals(materials, manufacturing, []);
+                      const base = matTotal + mfgTotal;
+                      setOtherCosts((rows) => {
+                        const blank: QuotationOtherCostLine = applyOtherCostCalculation(
+                          {
+                            serial_no: rows.length + 1,
+                            cost_head: "",
+                            percentage: "0",
+                            total_amount: "0",
+                            cost_type: "fixed",
+                            value: "0",
+                            based_on: "subtotal",
+                            calculated_amount: "0",
+                            notes: null,
+                            currency: quotation.currency ?? "USD",
+                            exchange_rate: quotation.exchange_rate ?? "1",
+                            base_amount: "0",
+                            local_amount: "0",
+                          },
+                          base
+                        );
+                        return [...rows, { ...blank, serial_no: rows.length + 1 }];
+                      });
+                    }}
+                    className="no-print rounded-lg border border-border px-3 py-1 text-xs text-text-secondary bg-surface-raised"
+                  >
+                    + Add Cost Head
+                  </button>
+                </div>
+              ) : null
+            }
           >
             {otherCosts.length === 0 ? (
               <div className="text-xs text-text-muted">No other cost lines.</div>
             ) : (
               <div className="relative max-h-[420px] overflow-auto">
-                <table className="min-w-[900px] w-full text-xs">
-                  <thead className="border-b border-border bg-surface-subtle text-text-muted">
+                <table className="min-w-[980px] w-full text-sm">
+                  <thead className="sticky top-0 z-[1] border-b border-border bg-surface-subtle text-text-muted">
                     <tr>
                       <th className="px-2 py-2 text-left">#</th>
                       <th className="px-2 py-2 text-left">Cost head</th>
@@ -844,11 +1131,14 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       <th className="px-2 py-2 text-right">Value</th>
                       <th className="px-2 py-2 text-left">Based on</th>
                       <th className="px-2 py-2 text-right">Amount</th>
+                      <th className="px-2 py-2 text-right">% Total</th>
+                      <th className="px-2 py-2 text-left">Notes</th>
+                      <th className="px-2 py-2 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {otherCosts.map((c, idx) => (
-                      <tr key={idx} className="border-b border-border-subtle last:border-0">
+                      <tr key={idx} className="border-b border-border-subtle even:bg-surface-subtle/30 last:border-0">
                         <td className="px-2 py-1">{idx + 1}</td>
                         <td className="px-2 py-1">
                           {isEditing ? (
@@ -890,6 +1180,34 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                         </td>
                         <td className="px-2 py-1">{c.based_on}</td>
                         <td className="px-2 py-1 text-right font-medium">{c.calculated_amount || c.total_amount}</td>
+                        <td className="px-2 py-1 text-right text-text-muted">
+                          {totals.otherTotal > 0
+                            ? `${((toSafeNumber(c.calculated_amount || c.total_amount) / totals.otherTotal) * 100).toFixed(1)}%`
+                            : "—"}
+                        </td>
+                        <td className="px-2 py-1 align-top">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={c.notes ?? ""}
+                              onChange={(e) => onOtherCostChange(idx, { notes: e.target.value || null })}
+                              className="w-full min-w-[100px] rounded border border-border px-1 py-1 text-xs"
+                              placeholder="Optional"
+                            />
+                          ) : (
+                            <span className="text-xs text-text-muted">{c.notes ?? "—"}</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {isEditing && (
+                            <QuotationRowActions
+                              rowKey={`other-${idx}`}
+                              openKey={openRowActions}
+                              setOpenKey={setOpenRowActions}
+                              onDelete={() => setOtherCosts((rows) => rows.filter((_, rowIndex) => rowIndex !== idx))}
+                            />
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -901,6 +1219,9 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       <td className="px-2 py-2 text-right text-sm font-bold text-text-primary">
                         {formatMoney(totals.otherTotal)} {quotation.currency ?? ""}
                       </td>
+                      <td className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">100%</td>
+                      <td />
+                      <td />
                     </tr>
                   </tfoot>
                 </table>
@@ -911,101 +1232,203 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           <CollapsibleSection
             title="Size Ratios"
             actions={isEditing ? (
-              <button
-                type="button"
-                onClick={() =>
-                  setSizeRatios((rows) => [
-                    ...rows,
-                    { serial_no: rows.length + 1, size: "", ratio_percentage: "0", fabric_factor: "1.0", quantity: 0 },
-                  ])
-                }
-                className="no-print rounded-lg border border-border px-3 py-1 text-xs text-text-secondary bg-surface-raised"
-              >
-                + Add Size
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-2 text-xs text-text-secondary">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(quotation.size_ratio_enabled)}
+                    onChange={(e) => updateQuotationHeader({ size_ratio_enabled: e.target.checked })}
+                  />
+                  Enable
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSizeRatios([
+                      { serial_no: 1, size: "S", ratio_percentage: "25", fabric_factor: "1.0", quantity: 0 },
+                      { serial_no: 2, size: "M", ratio_percentage: "25", fabric_factor: "1.0", quantity: 0 },
+                      { serial_no: 3, size: "L", ratio_percentage: "25", fabric_factor: "1.0", quantity: 0 },
+                      { serial_no: 4, size: "XL", ratio_percentage: "25", fabric_factor: "1.0", quantity: 0 },
+                    ])
+                  }
+                  className="no-print rounded-lg border border-border px-2 py-1 text-xs text-text-secondary bg-surface-raised"
+                >
+                  Equal preset
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSizeRatios([
+                      { serial_no: 1, size: "S", ratio_percentage: "15", fabric_factor: "1.0", quantity: 0 },
+                      { serial_no: 2, size: "M", ratio_percentage: "35", fabric_factor: "1.0", quantity: 0 },
+                      { serial_no: 3, size: "L", ratio_percentage: "35", fabric_factor: "1.0", quantity: 0 },
+                      { serial_no: 4, size: "XL", ratio_percentage: "15", fabric_factor: "1.0", quantity: 0 },
+                    ])
+                  }
+                  className="no-print rounded-lg border border-border px-2 py-1 text-xs text-text-secondary bg-surface-raised"
+                >
+                  Pyramid preset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSizeRatioCollapsed((prev) => !prev)}
+                  className="no-print rounded-lg border border-border px-2 py-1 text-xs text-text-secondary bg-surface-raised"
+                >
+                  {sizeRatioCollapsed ? "Expand" : "Collapse"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSizeRatios((rows) => [
+                      ...rows,
+                      { serial_no: rows.length + 1, size: "", ratio_percentage: "0", fabric_factor: "1.0", quantity: 0 },
+                    ])
+                  }
+                  className="no-print rounded-lg border border-border px-3 py-1 text-xs text-text-secondary bg-surface-raised"
+                >
+                  + Add Size
+                </button>
+              </div>
             ) : null}
           >
-            {sizeRatios.length === 0 ? (
+            {!quotation.size_ratio_enabled ? (
+              <div className="text-xs text-text-muted">Size ratio is disabled.</div>
+            ) : sizeRatioCollapsed ? (
+              <div className="text-xs text-text-muted">Size ratio section collapsed.</div>
+            ) : sizeRatios.length === 0 ? (
               <div className="text-xs text-text-muted">No size ratios.</div>
             ) : (
-              <div className="relative max-h-[360px] overflow-auto">
-                <table className="min-w-[740px] w-full text-xs">
-                  <thead className="border-b border-border bg-surface-subtle text-text-muted">
-                    <tr>
-                      <th className="px-2 py-2 text-left">#</th>
-                      <th className="px-2 py-2 text-left">Size</th>
-                      <th className="px-2 py-2 text-right">Ratio %</th>
-                      <th className="px-2 py-2 text-right">Fabric factor</th>
-                      <th className="px-2 py-2 text-right">Qty</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sizeRatios.map((s, idx) => (
-                      <tr key={idx} className="border-b border-border-subtle last:border-0">
-                        <td className="px-2 py-1">{idx + 1}</td>
-                        <td className="px-2 py-1">
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={s.size}
-                              onChange={(e) => onSizeRatioChange(idx, { size: e.target.value })}
-                              className="w-20 rounded border border-border px-1 py-1 text-xs"
-                            />
-                          ) : (
-                            s.size
-                          )}
-                        </td>
-                        <td className="px-2 py-1 text-right">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={s.ratio_percentage}
-                              onChange={(e) => onSizeRatioChange(idx, { ratio_percentage: e.target.value || "0" })}
-                              className="w-16 rounded border border-border px-1 py-1 text-right text-xs"
-                            />
-                          ) : (
-                            s.ratio_percentage
-                          )}
-                        </td>
-                        <td className="px-2 py-1 text-right">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={s.fabric_factor}
-                              onChange={(e) => onSizeRatioChange(idx, { fabric_factor: e.target.value || "1.0" })}
-                              className="w-16 rounded border border-border px-1 py-1 text-right text-xs"
-                            />
-                          ) : (
-                            s.fabric_factor
-                          )}
-                        </td>
-                        <td className="px-2 py-1 text-right">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              value={s.quantity}
-                              onChange={(e) => onSizeRatioChange(idx, { quantity: Number(e.target.value || "0") })}
-                              className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
-                            />
-                          ) : (
-                            s.quantity
-                          )}
-                        </td>
+              <>
+                <div className="relative max-h-[360px] overflow-auto">
+                  <table className="min-w-[860px] w-full text-sm">
+                    <thead className="sticky top-0 z-[1] border-b border-border bg-surface-subtle text-text-muted">
+                      <tr>
+                        <th className="px-2 py-2 text-left">#</th>
+                        <th className="px-2 py-2 text-left">Size</th>
+                        <th className="px-2 py-2 text-right">Ratio %</th>
+                        <th className="px-2 py-2 text-right">Fabric factor</th>
+                        <th className="px-2 py-2 text-right">Weighted</th>
+                        <th className="px-2 py-2 text-right">Qty</th>
+                        {isEditing && <th className="px-2 py-2 text-right">Actions</th>}
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="sticky bottom-0 bg-surface-raised">
-                    <tr className="border-t border-border bg-surface-subtle">
-                      <td colSpan={4} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
-                        Total Qty
-                      </td>
-                      <td className="px-2 py-2 text-right text-sm font-bold text-text-primary">
-                        {sizeRatios.reduce((acc, row) => acc + (row.quantity ?? 0), 0).toLocaleString()}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {sizeRatios.map((s, idx) => {
+                        const weighted = toSafeNumber(s.ratio_percentage) * toSafeNumber(s.fabric_factor);
+                        return (
+                          <tr key={idx} className="border-b border-border-subtle even:bg-surface-subtle/30 last:border-0">
+                            <td className="px-2 py-1">{idx + 1}</td>
+                            <td className="px-2 py-1">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={s.size}
+                                  onChange={(e) => onSizeRatioChange(idx, { size: e.target.value })}
+                                  className="w-20 rounded border border-border px-1 py-1 text-xs"
+                                />
+                              ) : (
+                                s.size
+                              )}
+                            </td>
+                            <td className="px-2 py-1 text-right">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={s.ratio_percentage}
+                                  onChange={(e) => {
+                                    const nextRatio = e.target.value || "0";
+                                    const qty = Math.round(
+                                      (toSafeNumber(quotation.projected_quantity) * toSafeNumber(nextRatio)) / 100
+                                    );
+                                    onSizeRatioChange(idx, { ratio_percentage: nextRatio, quantity: qty });
+                                  }}
+                                  className="w-16 rounded border border-border px-1 py-1 text-right text-xs"
+                                />
+                              ) : (
+                                s.ratio_percentage
+                              )}
+                            </td>
+                            <td className="px-2 py-1 text-right">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={s.fabric_factor}
+                                  onChange={(e) => onSizeRatioChange(idx, { fabric_factor: e.target.value || "1.0" })}
+                                  className="w-16 rounded border border-border px-1 py-1 text-right text-xs"
+                                />
+                              ) : (
+                                s.fabric_factor
+                              )}
+                            </td>
+                            <td className="px-2 py-1 text-right text-text-muted">{weighted.toFixed(2)}</td>
+                            <td className="px-2 py-1 text-right">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={s.quantity}
+                                  onChange={(e) => onSizeRatioChange(idx, { quantity: Number(e.target.value || "0") })}
+                                  className="w-20 rounded border border-border px-1 py-1 text-right text-xs"
+                                />
+                              ) : (
+                                s.quantity
+                              )}
+                            </td>
+                            {isEditing && (
+                              <td className="px-2 py-1 text-right">
+                                <QuotationRowActions
+                                  rowKey={`size-${idx}`}
+                                  openKey={openRowActions}
+                                  setOpenKey={setOpenRowActions}
+                                  onDelete={() => setSizeRatios((rows) => rows.filter((_, rowIdx) => rowIdx !== idx))}
+                                />
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="sticky bottom-0 bg-surface-raised">
+                      <tr className="border-t border-border bg-surface-subtle">
+                        <td colSpan={5} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
+                          Total Qty
+                        </td>
+                        <td className="px-2 py-2 text-right text-sm font-bold text-text-primary">
+                          {sizeRatios.reduce((acc, row) => acc + (row.quantity ?? 0), 0).toLocaleString()}
+                        </td>
+                        {isEditing && <td />}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <div className="no-print mt-3 grid grid-cols-1 gap-2 rounded-lg border border-border-subtle bg-surface-subtle/50 p-3 text-xs text-text-secondary sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <span className="font-semibold text-text-primary">Ratio total: </span>
+                    {sizeRatios.reduce((a, r) => a + toSafeNumber(r.ratio_percentage), 0).toFixed(1)}%
+                  </div>
+                  <div>
+                    <span className="font-semibold text-text-primary">Weighted total: </span>
+                    {sizeRatios
+                      .reduce((a, r) => a + toSafeNumber(r.ratio_percentage) * toSafeNumber(r.fabric_factor), 0)
+                      .toFixed(2)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-text-primary">Total cartons (est.): </span>
+                    {(() => {
+                      const q = sizeRatios.reduce((acc, row) => acc + (row.quantity ?? 0), 0);
+                      const pcs = toSafeNumber(quotation.pcs_per_carton);
+                      if (pcs <= 0) return "— (set PCS per carton)";
+                      return (q / pcs).toLocaleString(undefined, { maximumFractionDigits: 1 });
+                    })()}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-text-primary">Pack context: </span>
+                    {quotation.pack_ratio?.trim() ? quotation.pack_ratio : "—"} ·{" "}
+                    {quotation.pcs_per_carton != null && quotation.pcs_per_carton > 0
+                      ? `${quotation.pcs_per_carton} pcs/ctn`
+                      : "pcs/ctn not set"}
+                  </div>
+                </div>
+              </>
             )}
           </CollapsibleSection>
 

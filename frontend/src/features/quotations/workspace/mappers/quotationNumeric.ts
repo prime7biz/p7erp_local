@@ -26,13 +26,36 @@ export function resolveOtherCostAmount(row: QuotationOtherCostLine): number {
   return toSafeNumber(row.calculated_amount) || toSafeNumber(row.total_amount);
 }
 
+/** Recalculate derived amounts for one other-cost row (fabric+CM subtotal for % rows). */
+export function applyOtherCostCalculation(
+  row: QuotationOtherCostLine,
+  matMfgSubtotal: number
+): QuotationOtherCostLine {
+  const base = Math.max(0, matMfgSubtotal);
+  if (row.cost_type === "fixed") {
+    const v = toSafeNumber(row.value);
+    const s = v.toFixed(2);
+    return { ...row, calculated_amount: s, total_amount: s };
+  }
+  const pct = toSafeNumber(row.value);
+  const amt = (base * pct) / 100;
+  const s = amt.toFixed(2);
+  return { ...row, calculated_amount: s, total_amount: s, percentage: String(pct) };
+}
+
 export function computeMaterialLineAmounts(
-  row: Pick<QuotationMaterialLine, "consumption_per_dozen" | "unit_price">
+  row: Pick<QuotationMaterialLine, "consumption_per_dozen" | "unit_price" | "exchange_rate" | "currency">,
+  projectedQuantity = 0
 ): { amount_per_dozen: string; total_amount: string } {
-  const amountPerDz = toSafeNumber(row.consumption_per_dozen) * toSafeNumber(row.unit_price);
+  const qty = Math.max(0, projectedQuantity);
+  const dozens = qty / 12;
+  const exchangeRate =
+    row.currency?.toUpperCase() === "BDT" ? 1 : Math.max(0, toSafeNumber(row.exchange_rate) || 1);
+  const amountPerDz =
+    toSafeNumber(row.consumption_per_dozen) * toSafeNumber(row.unit_price) * exchangeRate;
   return {
     amount_per_dozen: toFixedString(amountPerDz),
-    total_amount: toFixedString(amountPerDz),
+    total_amount: toFixedString(amountPerDz * dozens),
   };
 }
 

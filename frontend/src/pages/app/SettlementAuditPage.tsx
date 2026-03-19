@@ -244,7 +244,7 @@ export function SettlementAuditPage() {
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="submit"
-            className="rounded bg-surface-inverse px-3 py-2 text-sm font-medium text-text-inverse disabled:opacity-50"
+            className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 disabled:opacity-50"
             disabled={loading}
           >
             {loading ? "Loading..." : "Apply Filters"}

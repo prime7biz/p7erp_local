@@ -9,6 +9,7 @@ export function InquiryDetailPage() {
   const [customer, setCustomer] = useState<CustomerResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [converting, setConverting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -48,6 +49,27 @@ export function InquiryDetailPage() {
     );
   }
 
+  const missingForQuotation: string[] = [];
+  if (!item.style_id) missingForQuotation.push("Style");
+  if (!item.quantity) missingForQuotation.push("Quantity");
+  if (!item.target_price) missingForQuotation.push("Target Price");
+  if (!item.target_price_currency) missingForQuotation.push("Target Currency");
+  if (!item.exchange_rate) missingForQuotation.push("Exchange Rate");
+
+  const convertInquiry = async () => {
+    if (!item) return;
+    setConverting(true);
+    setError("");
+    try {
+      const quotation = await api.convertInquiryToQuotation(item.id);
+      navigate(`/app/quotations/${quotation.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to convert inquiry");
+    } finally {
+      setConverting(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -75,8 +97,32 @@ export function InquiryDetailPage() {
           >
             Print / Save PDF
           </button>
+          {item.converted_quotation_id ? (
+            <button
+              type="button"
+              onClick={() => navigate(`/app/quotations/${item.converted_quotation_id}`)}
+              className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
+            >
+              Open quotation
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={convertInquiry}
+              disabled={converting}
+              className="rounded-lg bg-brand-primary px-3 py-1.5 text-sm font-semibold text-brand-primary-foreground disabled:opacity-60"
+            >
+              {converting ? "Converting..." : "Convert to quotation"}
+            </button>
+          )}
         </div>
       </div>
+
+      {missingForQuotation.length > 0 && (
+        <div className="rounded-xl border border-status-warning/30 bg-status-warning-subtle px-4 py-3 text-sm text-status-warning-foreground">
+          Missing recommended fields for clean quotation prefill: {missingForQuotation.join(", ")}.
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-2">
@@ -109,8 +155,24 @@ export function InquiryDetailPage() {
               {item.target_price ?? "—"}
             </div>
             <div>
+              <span className="font-medium">Target currency:</span>{" "}
+              {item.target_price_currency ?? "—"}
+            </div>
+            <div>
+              <span className="font-medium">Document currency:</span>{" "}
+              {item.currency ?? "—"}
+            </div>
+            <div>
+              <span className="font-medium">Exchange rate:</span>{" "}
+              {item.exchange_rate ?? "—"}
+            </div>
+            <div>
               <span className="font-medium">Quantity:</span>{" "}
               {item.quantity != null ? item.quantity.toLocaleString() : "—"}
+            </div>
+            <div>
+              <span className="font-medium">Expected delivery:</span>{" "}
+              {item.expected_delivery_date ?? "—"}
             </div>
           </div>
         </div>

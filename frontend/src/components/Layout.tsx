@@ -495,7 +495,7 @@ export function Layout() {
       </div>
       <div className="flex-1 min-w-0 flex flex-col">
         <TopHeader me={me} displayName={displayName} onLogout={logout} />
-        <main className="flex-1 overflow-y-auto bg-surface-base p-3 sm:p-4 md:p-5 lg:p-6 pb-20 lg:pb-6">
+        <main className="erp-main-content flex-1 overflow-y-auto bg-surface-base p-3 sm:p-4 md:p-5 lg:p-6 pb-20 lg:pb-6">
           <Outlet />
         </main>
         <div className="hidden lg:block">

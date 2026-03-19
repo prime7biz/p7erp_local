@@ -219,7 +219,12 @@ export function PaymentRunsPage() {
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-text-muted">Required: Bank account and at least one payable bill.</p>
-          <button className="w-full rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground sm:w-auto">Create Run (Draft)</button>
+          <button
+            type="submit"
+            className="w-full rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 sm:w-auto"
+          >
+            Create Run (Draft)
+          </button>
         </div>
 
         <div className="rounded-lg border border-brand-primary/30 bg-brand-primary/10 p-3">

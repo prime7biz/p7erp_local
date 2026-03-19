@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -99,7 +99,7 @@ export function AllApprovalsPage() {
   const canApproveOrProcess = myRole === "admin" || myRole === "manager";
   const canExecute = canApproveOrProcess;
 
-  async function loadRole() {
+  const loadRole = useCallback(async () => {
     if (!me?.user_id) return;
     try {
       const users = await api.listUsers();
@@ -108,9 +108,9 @@ export function AllApprovalsPage() {
     } catch {
       setMyRole("");
     }
-  }
+  }, [me?.user_id]);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     setSuccess("");
@@ -188,16 +188,15 @@ export function AllApprovalsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [canApproveOrProcess, canExecute]);
 
   useEffect(() => {
     void loadRole();
-  }, [me?.user_id]);
+  }, [loadRole]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myRole]);
+  }, [load]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();

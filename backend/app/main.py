@@ -77,15 +77,43 @@ async def _run_alert_scan_all_tenants() -> None:
         await asyncio.sleep(60 * 14)  # 15 min total between runs
 
 
+async def _run_trade_alert_scan_daily() -> None:
+    """Background: run trade-only alert rules for all tenants once per day."""
+    from app.database import AsyncSessionLocal
+    from app.modules.merch.alert_engine import run_scan_trade_rules_only, get_tenant_ids
+    while True:
+        await asyncio.sleep(60 * 5)  # wait 5 min after startup, then first run
+        try:
+            async with AsyncSessionLocal() as db:
+                tenant_ids = await get_tenant_ids(db)
+                for tid in tenant_ids:
+                    try:
+                        await run_scan_trade_rules_only(db, tid, trigger="scheduled_daily")
+                        await db.commit()
+                    except Exception:
+                        await db.rollback()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception("Scheduled trade alert scan failed")
+        await asyncio.sleep(86400)  # next run in 24h
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     scan_task = asyncio.create_task(_run_alert_scan_all_tenants())
+    trade_scan_task = asyncio.create_task(_run_trade_alert_scan_daily())
     try:
         yield
     finally:
         scan_task.cancel()
+        trade_scan_task.cancel()
         try:
             await scan_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await trade_scan_task
         except asyncio.CancelledError:
             pass
 

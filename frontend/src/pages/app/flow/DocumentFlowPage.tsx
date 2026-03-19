@@ -7,6 +7,7 @@ import {
   type InquiryResponse,
   type ProformaInvoiceRow,
   type CustomerResponse,
+  type TradeCaseRow,
 } from "@/api/client";
 import {
   FileText,
@@ -50,6 +51,7 @@ export function DocumentFlowPage() {
   const [inquiries, setInquiries] = useState<InquiryResponse[]>([]);
   const [proformas, setProformas] = useState<ProformaInvoiceRow[]>([]);
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
+  const [tradeCases, setTradeCases] = useState<TradeCaseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -62,18 +64,20 @@ export function DocumentFlowPage() {
     setLoading(true);
     setError("");
     try {
-      const [orderList, quotationList, inquiryList, proformaList, customerList] = await Promise.all([
+      const [orderList, quotationList, inquiryList, proformaList, customerList, tradeCaseList] = await Promise.all([
         api.listOrders({ limit: 500, offset: 0 }),
         api.listQuotations({ limit: 500, offset: 0 }),
         api.listInquiries({ limit: 500, offset: 0 }),
         api.listProformaInvoices(),
         api.listCustomers(),
+        api.listTradeCases({ limit: 500 }),
       ]);
       setOrders(Array.isArray(orderList) ? orderList : []);
       setQuotations(Array.isArray(quotationList) ? quotationList : []);
       setInquiries(Array.isArray(inquiryList) ? inquiryList : []);
       setProformas(Array.isArray(proformaList) ? proformaList : []);
       setCustomers(Array.isArray(customerList) ? customerList : []);
+      setTradeCases(Array.isArray(tradeCaseList) ? tradeCaseList : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load document flow");
       setOrders([]);
@@ -81,6 +85,7 @@ export function DocumentFlowPage() {
       setInquiries([]);
       setProformas([]);
       setCustomers([]);
+      setTradeCases([]);
     } finally {
       setLoading(false);
     }
@@ -120,6 +125,14 @@ export function DocumentFlowPage() {
     });
     return m;
   }, [proformas]);
+
+  const tradeCaseByOrderId = useMemo(() => {
+    const m = new Map<number, TradeCaseRow>();
+    tradeCases.forEach((tc) => {
+      if (tc.order_id != null) m.set(tc.order_id, tc);
+    });
+    return m;
+  }, [tradeCases]);
 
   const flowRows = useMemo((): FlowRow[] => {
     return orders.map((order) => {
@@ -422,6 +435,7 @@ export function DocumentFlowPage() {
                   <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Status</th>
                   <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Delivery</th>
                   <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Proforma</th>
+                  <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Trade Case</th>
                   <th className="px-4 py-3 text-right font-semibold text-text-secondary uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -524,6 +538,26 @@ export function DocumentFlowPage() {
                             <span className="text-xs text-text-muted">+{row.proformas.length - 3}</span>
                           )}
                         </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {tradeCaseByOrderId.get(row.order.id) ? (
+                        <div className="flex flex-wrap gap-1">
+                          <Link
+                            to={`${PREFIX}/trade/cases/${tradeCaseByOrderId.get(row.order.id)!.id}`}
+                            className="inline-flex rounded border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-xs font-medium text-brand-primary hover:bg-brand-primary/15"
+                          >
+                            {tradeCaseByOrderId.get(row.order.id)!.reference}
+                          </Link>
+                          <Link
+                            to={`${PREFIX}/logistics?trade_case_id=${tradeCaseByOrderId.get(row.order.id)!.id}`}
+                            className="text-xs text-text-muted hover:underline"
+                          >
+                            Logistics
+                          </Link>
+                        </div>
+                      ) : (
+                        "—"
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">

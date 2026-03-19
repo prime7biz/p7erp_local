@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api,
   type InventoryItemResponse,
@@ -30,7 +30,7 @@ export function PurchaseOrdersPage() {
 
   const itemName = useMemo(() => new Map(items.map((i) => [i.id, i.name])), [items]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [po, itm, wh, vnd] = await Promise.all([
         api.listPurchaseOrders(),
@@ -44,19 +44,23 @@ export function PurchaseOrdersPage() {
       setVendors(vnd);
       const firstItem = itm[0];
       const firstWarehouse = wh[0];
-      if (!line.item_id && firstItem) setLine((p) => ({ ...p, item_id: firstItem.id }));
-      if (!line.warehouse_id && firstWarehouse) setLine((p) => ({ ...p, warehouse_id: firstWarehouse.id }));
+      setLine((p) => {
+        let next = { ...p };
+        if (!p.item_id && firstItem) next = { ...next, item_id: firstItem.id };
+        if (!p.warehouse_id && firstWarehouse) next = { ...next, warehouse_id: firstWarehouse.id };
+        return next;
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load purchase orders");
     }
-  };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const status = (params.get("status") || "").toUpperCase();
     if (status) setStatusFilter(status);
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const filteredOrders = statusFilter ? orders.filter((o) => (o.status || "").toUpperCase() === statusFilter) : orders;
   const selectedVendor = useMemo(

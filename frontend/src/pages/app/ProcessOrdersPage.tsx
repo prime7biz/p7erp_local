@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type InventoryItemResponse, type ProcessOrderCreate, type WarehouseResponse } from "@/api/client";
 
 const PROCESS_TYPES = ["KNITTING", "DYEING", "FINISHING", "CUTTING", "WASHING", "PRINTING"];
@@ -52,7 +52,7 @@ export function ProcessOrdersPage() {
     remarks: "",
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError(null);
     try {
       const [poRows, itms, whs] = await Promise.all([
@@ -84,17 +84,17 @@ export function ProcessOrdersPage() {
       }
       setKpi(nextKpi);
       localStorage.setItem("p7_inventory_kpi_snapshot", JSON.stringify(nextKpi));
-      if (form.input_item_id === 0 && itms.length > 0) {
-        setForm(defaultForm(itms, whs));
+      if (itms.length > 0) {
+        setForm((prev) => (prev.input_item_id === 0 ? defaultForm(itms, whs) : prev));
       }
     } catch (e) {
       setError((e as Error).message);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   const itemName = useMemo(() => new Map(items.map((i) => [i.id, i.name])), [items]);
   const trend = (key: keyof typeof kpi) => {
@@ -217,7 +217,11 @@ export function ProcessOrdersPage() {
             value={form.remarks ?? ""}
             onChange={(e) => setForm((prev) => ({ ...prev, remarks: e.target.value }))}
           />
-          <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-brand-primary-foreground disabled:opacity-60" disabled={saving} type="submit">
+          <button
+            type="submit"
+            className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 disabled:opacity-60"
+            disabled={saving}
+          >
             {saving ? "Saving..." : "Create"}
           </button>
         </form>

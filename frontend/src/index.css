@@ -12,6 +12,20 @@ body {
   color: #0f172a;
 }
 
+/*
+ Global app table responsiveness:
+ - If a section/card directly contains a table and has no explicit horizontal scrolling,
+   enable horizontal scroll automatically so all columns remain reachable.
+ - Existing explicit wrappers (overflow-x-auto) are untouched.
+*/
+.erp-main-content :is(section, div):has(> table):not(.overflow-x-auto):not(.overflow-x-scroll) {
+  overflow-x: auto;
+}
+
+.erp-main-content table {
+  min-width: max-content;
+}
+
 .print-only {
   display: none;
 }

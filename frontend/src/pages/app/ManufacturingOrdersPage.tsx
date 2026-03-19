@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type InventoryItemResponse, type ManufacturingOrderCreate, type ManufacturingStageResponse } from "@/api/client";
 
 function statusBadgeClass(status: string) {
@@ -30,7 +30,7 @@ export function ManufacturingOrdersPage() {
   const [prevKpi, setPrevKpi] = useState<{ openPo: number; openGrn: number; pendingCr: number; lowStock: number } | null>(null);
   const [form, setForm] = useState<ManufacturingOrderCreate>({ finished_item_id: 0, planned_quantity: "0", notes: "" });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [rows, itm] = await Promise.all([api.listManufacturingOrders(), api.listInventoryItems()]);
       const [overview, pendingCrRows, stockRows] = await Promise.all([
@@ -56,22 +56,20 @@ export function ManufacturingOrdersPage() {
       }
       setKpi(nextKpi);
       localStorage.setItem("p7_inventory_kpi_snapshot", JSON.stringify(nextKpi));
-      if (!form.finished_item_id && itm[0]) {
-        const firstItem = itm[0];
-        if (firstItem) {
-          setForm((prev) => ({ ...prev, finished_item_id: firstItem.id }));
-        }
+      const firstItem = itm[0];
+      if (firstItem) {
+        setForm((prev) => (!prev.finished_item_id ? { ...prev, finished_item_id: firstItem.id } : prev));
       }
       const stagePairs = await Promise.all(rows.slice(0, 20).map(async (row) => [row.id, await api.getManufacturingStages(row.id)] as const));
       setStagesByOrder(Object.fromEntries(stagePairs));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load manufacturing data");
     }
-  };
+  }, []);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   const itemName = useMemo(() => new Map(items.map((i) => [i.id, i.name])), [items]);
   const trend = (key: keyof typeof kpi) => {
@@ -158,7 +156,10 @@ export function ManufacturingOrdersPage() {
             value={form.notes ?? ""}
             onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
           />
-          <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-brand-primary-foreground" type="submit">
+          <button
+            type="submit"
+            className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+          >
             Create
           </button>
         </form>

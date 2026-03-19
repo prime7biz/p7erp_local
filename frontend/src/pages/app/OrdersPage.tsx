@@ -57,7 +57,8 @@ export function OrdersPage() {
   const filteredItems = useMemo(() => {
     if (quickFilter === "linked_quotation") return items.filter((row) => row.quotation_id != null);
     if (quickFilter === "draft") return items.filter((row) => row.status === "DRAFT");
-    if (quickFilter === "active") return items.filter((row) => ["NEW", "IN_PROGRESS"].includes(row.status));
+    if (quickFilter === "active")
+      return items.filter((row) => ["NEW", "CONFIRMED", "IN_PROGRESS"].includes(row.status));
     return items;
   }, [items, quickFilter]);
 
@@ -97,6 +98,7 @@ export function OrdersPage() {
     const value = statusValue.toUpperCase();
     if (value === "COMPLETED") return "bg-status-success-subtle text-status-success-foreground";
     if (value === "IN_PROGRESS") return "bg-status-info-subtle text-status-info-foreground";
+    if (value === "CONFIRMED") return "bg-status-success-subtle/80 text-status-success-foreground";
     if (value === "NEW") return "bg-brand-primary/10 text-brand-primary";
     return "bg-status-neutral-subtle text-status-neutral-foreground";
   };
@@ -125,7 +127,9 @@ export function OrdersPage() {
   };
 
   const draftCount = filteredItems.filter((row) => row.status === "DRAFT").length;
-  const activeCount = filteredItems.filter((row) => ["NEW", "IN_PROGRESS"].includes(row.status)).length;
+  const activeCount = filteredItems.filter((row) =>
+    ["NEW", "CONFIRMED", "IN_PROGRESS"].includes(row.status),
+  ).length;
   const completedCount = filteredItems.filter((row) => row.status === "COMPLETED").length;
 
   return (
@@ -159,8 +163,10 @@ export function OrdersPage() {
             <option value="">All statuses</option>
             <option value="DRAFT">Draft</option>
             <option value="NEW">New</option>
+            <option value="CONFIRMED">Confirmed</option>
             <option value="IN_PROGRESS">In Progress</option>
             <option value="COMPLETED">Completed</option>
+            <option value="CANCELLED">Cancelled</option>
           </select>
           <button
             type="button"

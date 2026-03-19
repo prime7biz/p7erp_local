@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
   type MerchAlertItem,
@@ -39,6 +39,11 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function MerchCriticalAlertsPage() {
+  const [searchParams] = useSearchParams();
+  const entityTypeFromUrl = searchParams.get("entity_type") ?? "";
+  const entityIdFromUrlRaw = searchParams.get("entity_id");
+  const entityIdFromUrl = entityIdFromUrlRaw ? Number(entityIdFromUrlRaw) : undefined;
+  const entityIdFilter = Number.isFinite(entityIdFromUrl) ? entityIdFromUrl : undefined;
   const [items, setItems] = useState<MerchAlertItem[]>([]);
   const [summary, setSummary] = useState<MerchAlertsSummaryResponse | null>(null);
   const [total, setTotal] = useState(0);
@@ -75,11 +80,15 @@ export function MerchCriticalAlertsPage() {
           page_size: pageSize,
           severity: severityFilter || undefined,
           status: statusFilter || undefined,
+          entity_type: entityTypeFromUrl || undefined,
+          entity_id: entityIdFilter,
           sort: "-created_at",
         }),
         api.getMerchAlertsSummary({
           severity: severityFilter || undefined,
           status: statusFilter || undefined,
+          entity_type: entityTypeFromUrl || undefined,
+          entity_id: entityIdFilter,
         }),
       ]);
       setItems(listRes.items);
@@ -90,7 +99,7 @@ export function MerchCriticalAlertsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, severityFilter, statusFilter]);
+  }, [page, pageSize, severityFilter, statusFilter, entityTypeFromUrl, entityIdFilter]);
 
   useEffect(() => {
     fetchList();
@@ -279,6 +288,11 @@ export function MerchCriticalAlertsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
+        {(entityTypeFromUrl || entityIdFilter != null) && (
+          <div className="rounded-md border border-brand-primary/30 bg-brand-primary/10 px-2.5 py-1 text-xs text-brand-primary">
+            Scoped: {entityTypeFromUrl || "entity"} {entityIdFilter != null ? `#${entityIdFilter}` : ""}
+          </div>
+        )}
         <label className="text-sm text-text-secondary">
           Severity
           <select

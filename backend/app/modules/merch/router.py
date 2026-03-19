@@ -3820,6 +3820,8 @@ async def list_alerts(
     severity: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     alert_type: str | None = Query(default=None, alias="alert_type"),
+    entity_type: str | None = Query(default=None, alias="entity_type"),
+    entity_id: int | None = Query(default=None, alias="entity_id"),
     order_id: int | None = Query(default=None),
     assigned_to_id: int | None = Query(default=None),
     min_priority_score: int | None = Query(default=None, ge=0),
@@ -3834,6 +3836,19 @@ async def list_alerts(
     """List persisted alerts with filters and pagination."""
     _ensure_tenant(user, tenant)
     stmt = select(AlertInstance).where(AlertInstance.tenant_id == tenant.id)
+    if entity_type:
+        stmt = stmt.join(AlertDefinition, AlertInstance.definition_id == AlertDefinition.id).where(
+            AlertDefinition.tenant_id == tenant.id,
+            AlertDefinition.entity_type == entity_type.strip().lower(),
+        )
+    if entity_id is not None:
+        rel_sub = select(AlertRelatedEntity.alert_id).where(
+            AlertRelatedEntity.tenant_id == tenant.id,
+            AlertRelatedEntity.entity_id == entity_id,
+        )
+        if entity_type:
+            rel_sub = rel_sub.where(AlertRelatedEntity.entity_type == entity_type.strip().lower())
+        stmt = stmt.where(AlertInstance.id.in_(rel_sub))
     if severity:
         stmt = stmt.where(AlertInstance.severity == severity.lower())
     if status_filter:
@@ -3849,9 +3864,8 @@ async def list_alerts(
             AlertRelatedEntity.entity_id == order_id,
         )
         stmt = stmt.where(AlertInstance.id.in_(sub))
-    # Exclude snoozed that are still in future
-    from datetime import datetime as dt
-    now = dt.utcnow()
+    # Exclude snoozed that are still in future (use timezone-aware now to match TIMESTAMPTZ created_at)
+    now = datetime.now(timezone.utc)
     stmt = stmt.where(
         or_(
             AlertInstance.snoozed_until.is_(None),
@@ -3884,18 +3898,20 @@ async def list_alerts(
     items = []
     normalized_sla_bucket = (sla_bucket or "").strip().lower() or None
     for r in rows:
-        rel_result = await db.execute(
+        primary_rel_result = await db.execute(
             select(AlertRelatedEntity).where(
                 AlertRelatedEntity.alert_id == r.id,
-                AlertRelatedEntity.entity_type == "order",
+                AlertRelatedEntity.role == "primary",
             ).limit(1)
         )
-        rel = rel_result.scalar_one_or_none()
+        primary_rel = primary_rel_result.scalar_one_or_none()
         order_code = None
         link_order_id = None
-        if rel:
-            link_order_id = rel.entity_id
-            order_row = await db.get(Order, rel.entity_id)
+        link_entity_type = primary_rel.entity_type if primary_rel else None
+        link_entity_id = primary_rel.entity_id if primary_rel else None
+        if primary_rel and primary_rel.entity_type == "order":
+            link_order_id = primary_rel.entity_id
+            order_row = await db.get(Order, primary_rel.entity_id)
             if order_row and order_row.tenant_id == tenant.id:
                 order_code = order_row.order_code
         priority_score = _alert_priority_score(r, now)
@@ -3909,6 +3925,8 @@ async def list_alerts(
             "status": r.status,
             "alert_type": r.alert_type,
             "assigned_to_id": r.assigned_to_id,
+            "entity_type": link_entity_type,
+            "entity_id": link_entity_id,
             "order_id": link_order_id,
             "order_code": order_code,
             "reason_text": r.reason_text,
@@ -3938,6 +3956,8 @@ async def list_alerts(
 async def get_alerts_summary(
     severity: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
+    entity_type: str | None = Query(default=None, alias="entity_type"),
+    entity_id: int | None = Query(default=None, alias="entity_id"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -3957,6 +3977,19 @@ async def get_alerts_summary(
         stmt = stmt.where(AlertInstance.severity == severity)
     if status_filter:
         stmt = stmt.where(AlertInstance.status == status_filter)
+    if entity_type:
+        stmt = stmt.join(AlertDefinition, AlertInstance.definition_id == AlertDefinition.id).where(
+            AlertDefinition.tenant_id == tenant.id,
+            AlertDefinition.entity_type == entity_type.strip().lower(),
+        )
+    if entity_id is not None:
+        rel_sub = select(AlertRelatedEntity.alert_id).where(
+            AlertRelatedEntity.tenant_id == tenant.id,
+            AlertRelatedEntity.entity_id == entity_id,
+        )
+        if entity_type:
+            rel_sub = rel_sub.where(AlertRelatedEntity.entity_type == entity_type.strip().lower())
+        stmt = stmt.where(AlertInstance.id.in_(rel_sub))
     stmt = stmt.group_by(AlertInstance.severity)
     by_sev = await db.execute(stmt)
     counts = {row[0]: row[1] for row in by_sev.all()}

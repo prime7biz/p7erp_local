@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 
 import {
   api,
@@ -28,7 +28,7 @@ export function TradeCaseDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [newDocType, setNewDocType] = useState("PI");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError("");
@@ -55,11 +55,11 @@ export function TradeCaseDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     void load();
-  }, [id]);
+  }, [load]);
 
   const missingForNext = useMemo(() => {
     if (!nextStage) return [];
@@ -75,6 +75,12 @@ export function TradeCaseDetailPage() {
   return (
     <div className="space-y-6">
       <header>
+        <Link
+          to="/app/trade/cases"
+          className="mb-2 inline-block text-sm text-text-secondary hover:text-text-primary"
+        >
+          ← Back to Trade Cases
+        </Link>
         <h1 className="text-2xl font-bold text-text-primary">Trade Case {item.reference}</h1>
         <p className="mt-0.5 text-sm text-text-muted">
           {item.direction} · Status {item.status} · Current stage {item.current_stage}
@@ -88,9 +94,25 @@ export function TradeCaseDetailPage() {
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
           <p className="text-xs uppercase tracking-wide text-text-muted">Order</p>
-          <p className="mt-1 text-sm text-text-primary">{item.order_id ? `#${item.order_id}` : "—"}</p>
+          <p className="mt-1 text-sm text-text-primary">
+            {item.order_id ? (
+              <Link to={`/app/orders/${item.order_id}`} className="text-brand-primary hover:underline">
+                #{item.order_id}
+              </Link>
+            ) : (
+              "—"
+            )}
+          </p>
           <p className="mt-3 text-xs uppercase tracking-wide text-text-muted">Proforma Invoice</p>
-          <p className="mt-1 text-sm text-text-primary">{item.proforma_invoice_id ? `#${item.proforma_invoice_id}` : "—"}</p>
+          <p className="mt-1 text-sm text-text-primary">
+            {item.proforma_invoice_id ? (
+              <Link to={`/app/commercial/proforma-invoices/${item.proforma_invoice_id}/edit`} className="text-brand-primary hover:underline">
+                #{item.proforma_invoice_id}
+              </Link>
+            ) : (
+              "—"
+            )}
+          </p>
           <p className="mt-3 text-xs uppercase tracking-wide text-text-muted">BTB LC</p>
           <p className="mt-1 text-sm text-text-primary">{item.btb_lc_id ? `#${item.btb_lc_id}` : "—"}</p>
         </div>
@@ -187,8 +209,14 @@ export function TradeCaseDetailPage() {
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-border bg-surface-raised shadow-sm">
-          <div className="border-b border-border bg-surface-subtle px-4 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-subtle px-4 py-2">
             <h2 className="text-sm font-semibold text-text-primary">Shipments</h2>
+            <Link
+              to={`/app/logistics?trade_case_id=${id}`}
+              className="rounded border border-border-strong px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
+            >
+              View in Logistics
+            </Link>
           </div>
           {shipments.length === 0 ? (
             <div className="p-4 text-sm text-text-muted">No shipments yet.</div>

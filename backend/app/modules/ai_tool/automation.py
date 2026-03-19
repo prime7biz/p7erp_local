@@ -66,6 +66,13 @@ RULES: dict[str, AutomationRuleTemplate] = {
         permission_key="ai.tools.automation.draft",
         policy_json={"write_scope": "ai_only"},
     ),
+    "DRAFT_REMINDER_TRADE_DOC": AutomationRuleTemplate(
+        rule_code="DRAFT_REMINDER_TRADE_DOC",
+        action_key="draft_reminder_trade_doc",
+        label="Trade case document due reminder",
+        permission_key="ai.tools.automation.draft",
+        policy_json={"write_scope": "ai_only"},
+    ),
 }
 
 
@@ -109,6 +116,16 @@ def _detect_action(prompt: str) -> ActionProposal:
             requires_confirmation=True,
             input_json={},
             blocked_reason="Sensitive workflow action is not allowed in AI automation phase.",
+        )
+    if any(k in text for k in {"trade case document due", "document due reminder", "trade doc reminder", "trade document due"}):
+        return ActionProposal(
+            action_key="draft_reminder_trade_doc",
+            rule_code="DRAFT_REMINDER_TRADE_DOC",
+            label="Trade case document due reminder",
+            preview_text="Will summarize trade cases with documents due or missing before ETD. No record will be created; use Control Tower for full list.",
+            risk_level="LOW",
+            requires_confirmation=True,
+            input_json={"prompt": prompt, "mode": "summary_only"},
         )
     if any(k in text for k in {"follow up", "follow-up", "reminder", "remind"}):
         order_id = _extract_order_id(prompt)
@@ -266,6 +283,15 @@ async def confirm_and_execute_action(
             output = {"draft_message": f"Draft message:\n{run.prompt_text}", "mode": "draft_text_only"}
         elif run.action_key == "prepare_business_summary_draft":
             output = {"draft_summary": f"Draft business summary:\n{run.prompt_text}", "mode": "draft_text_only"}
+        elif run.action_key == "draft_reminder_trade_doc":
+            from app.modules.merch.alert_rules import rule_trade_docs_missing_before_etd
+            raw_list = await rule_trade_docs_missing_before_etd(db, tenant_id, config=None)
+            summary_lines = [f"Trade cases with documents missing before ETD: {len(raw_list)} case(s)."]
+            for p in raw_list[:10]:
+                summary_lines.append(f"  - {p.get('title', '')} (case id in alert)")
+            if len(raw_list) > 10:
+                summary_lines.append(f"  ... and {len(raw_list) - 10} more. Use Trade Control Tower for full list.")
+            output = {"draft_summary": "\n".join(summary_lines), "mode": "draft_text_only", "count": len(raw_list)}
         else:
             output = {"draft_note": f"Draft note/task:\n{run.prompt_text}", "mode": "draft_text_only"}
         await repository.complete_action_run(db, row=run, status="EXECUTED", output_json=output)

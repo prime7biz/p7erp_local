@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { api, type OrderResponse } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 
@@ -39,14 +39,14 @@ export function ConsumptionControlPage() {
     return "→";
   };
 
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
     try {
       const rows = await api.listOrders({ limit: 100 });
       setOrders(rows);
-      if (!selectedOrderId && rows[0]) setSelectedOrderId(rows[0].id);
+      setSelectedOrderId((prev) => (!prev && rows[0] ? rows[0].id : prev));
       const whRows = await api.listWarehouses();
       setWarehouses(whRows);
-      if (!issueWarehouseId && whRows[0]) setIssueWarehouseId(whRows[0].id);
+      setIssueWarehouseId((prev) => (!prev && whRows[0] ? whRows[0].id : prev));
       const [overview, pendingCrRows, stockRows] = await Promise.all([
         api.getInventoryReconciliationOverview(),
         api.listConsumptionChangeRequests({ status_filter: "PENDING" }),
@@ -71,9 +71,9 @@ export function ConsumptionControlPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load orders");
     }
-  };
+  }, []);
 
-  const loadSnapshot = async (orderId: number) => {
+  const loadSnapshot = useCallback(async (orderId: number) => {
     if (!orderId) return;
     try {
       const [snap, resv] = await Promise.all([api.getConsumptionSnapshot(orderId), api.getConsumptionReservations(orderId)]);
@@ -97,11 +97,11 @@ export function ConsumptionControlPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load snapshot");
     }
-  };
+  }, [crFilter]);
 
   useEffect(() => {
     void loadOrders();
-  }, []);
+  }, [loadOrders]);
 
   useEffect(() => {
     const loadPermission = async () => {
@@ -122,7 +122,7 @@ export function ConsumptionControlPage() {
     if (selectedOrderId) {
       void loadSnapshot(selectedOrderId);
     }
-  }, [selectedOrderId]);
+  }, [selectedOrderId, loadSnapshot]);
 
   const finalize = async () => {
     if (!selectedOrderId) return;
@@ -250,7 +250,11 @@ export function ConsumptionControlPage() {
               </option>
             ))}
           </select>
-          <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-text-inverse" onClick={() => void finalize()}>
+          <button
+            type="button"
+            className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+            onClick={() => void finalize()}
+          >
             Finalize Order Snapshot
           </button>
         </div>
@@ -297,7 +301,11 @@ export function ConsumptionControlPage() {
             onChange={(e) => setIssueRemarks(e.target.value)}
             placeholder="Remarks"
           />
-          <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-text-inverse" onClick={() => void issueMaterial()}>
+          <button
+            type="button"
+            className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+            onClick={() => void issueMaterial()}
+          >
             Issue
           </button>
         </div>
@@ -412,7 +420,11 @@ export function ConsumptionControlPage() {
         </div>
 
         <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-text-inverse" onClick={() => void createChangeRequest()}>
+          <button
+            type="button"
+            className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+            onClick={() => void createChangeRequest()}
+          >
             Submit CR
           </button>
           <div />

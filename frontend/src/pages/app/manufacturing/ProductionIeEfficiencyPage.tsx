@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api, MfgMasterOperationCreate } from "@/api/client";
 
@@ -19,7 +19,7 @@ export function ProductionIeEfficiencyPage() {
     is_active: true,
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError("");
     try {
       const data = await api.listMfgMasterOperations({ active_only: activeOnly });
@@ -30,11 +30,11 @@ export function ProductionIeEfficiencyPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load operation masters");
     }
-  };
+  }, [activeOnly]);
 
   useEffect(() => {
     void load();
-  }, [activeOnly]);
+  }, [load]);
 
   const areaSummary = useMemo(() => {
     const base: Record<ProcessArea, number> = {

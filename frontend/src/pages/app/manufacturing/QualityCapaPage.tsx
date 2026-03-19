@@ -127,7 +127,12 @@ export function QualityCapaPage() {
               <option value="critical">Critical</option>
             </select>
             <input className="rounded border px-3 py-2 text-sm" placeholder="Description" value={ncrForm.description} onChange={(e) => setNcrForm((prev) => ({ ...prev, description: e.target.value }))} />
-            <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-brand-primary-foreground" type="submit">Create NCR</button>
+            <button
+              type="submit"
+              className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+            >
+              Create NCR
+            </button>
           </form>
         </div>
 
@@ -138,7 +143,12 @@ export function QualityCapaPage() {
             <input className="rounded border px-3 py-2 text-sm" placeholder="Corrective Action" value={capaForm.corrective_action} onChange={(e) => setCapaForm((prev) => ({ ...prev, corrective_action: e.target.value }))} />
             <input className="rounded border px-3 py-2 text-sm" placeholder="Preventive Action" value={capaForm.preventive_action} onChange={(e) => setCapaForm((prev) => ({ ...prev, preventive_action: e.target.value }))} />
             <input className="rounded border px-3 py-2 text-sm" type="date" value={capaForm.due_date} onChange={(e) => setCapaForm((prev) => ({ ...prev, due_date: e.target.value }))} />
-            <button className="rounded bg-surface-inverse px-4 py-2 text-sm text-brand-primary-foreground" type="submit">Create CAPA</button>
+            <button
+              type="submit"
+              className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+            >
+              Create CAPA
+            </button>
           </form>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   api,
@@ -25,7 +25,7 @@ export function StyleDetailPage() {
   const [scaleName, setScaleName] = useState("");
   const [sizesCsv, setSizesCsv] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!styleId) return;
     setLoading(true);
     setError("");
@@ -45,11 +45,11 @@ export function StyleDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [styleId]);
 
   useEffect(() => {
-    load();
-  }, [styleId]);
+    void load();
+  }, [load]);
 
   const handleStyleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

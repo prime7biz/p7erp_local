@@ -100,7 +100,11 @@ export function LedgerActivityPage() {
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <div className={`print-card rounded border border-border bg-surface-raised ${compactView ? "p-1 text-xs" : "p-2 text-sm"}`}>Opening: <b>{data.opening_balance.toLocaleString()}</b></div>
           <div className={`print-card rounded border border-border bg-surface-raised ${compactView ? "p-1 text-xs" : "p-2 text-sm"}`}>Closing: <b>{data.closing_balance.toLocaleString()}</b></div>
-          <button className={`no-print rounded border border-border-strong bg-surface-raised px-3 py-2 text-sm ${compactView ? "bg-surface-inverse text-text-inverse" : ""}`} onClick={() => setCompactView((v) => !v)}>
+          <button
+            type="button"
+            className={`no-print rounded border px-3 py-2 text-sm ${compactView ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "border-border-strong bg-surface-raised text-text-secondary"}`}
+            onClick={() => setCompactView((v) => !v)}
+          >
             {compactView ? "Comfort View" : "Compact View"}
           </button>
           <button className="no-print rounded border border-border-strong bg-surface-raised px-3 py-2 text-sm" onClick={() => handlePrint()}>Print</button>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type InventoryItemResponse, type StockLedgerRow, type WarehouseResponse } from "@/api/client";
 
 export function StockLedgerPage() {
@@ -9,7 +9,7 @@ export function StockLedgerPage() {
   const [warehouseId, setWarehouseId] = useState<number | "">("");
   const [error, setError] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [ledger, itm, wh] = await Promise.all([
         api.getStockLedger({
@@ -25,11 +25,11 @@ export function StockLedgerPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load stock ledger");
     }
-  };
+  }, [itemId, warehouseId]);
 
   useEffect(() => {
-    load();
-  }, [itemId, warehouseId]);
+    void load();
+  }, [load]);
 
   return (
     <div className="space-y-6">

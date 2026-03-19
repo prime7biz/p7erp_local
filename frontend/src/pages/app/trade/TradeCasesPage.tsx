@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 
 import { api, type TradeCaseCreate, type TradeCaseRow } from "@/api/client";
 
@@ -25,11 +25,13 @@ export function TradeCasesPage() {
   const [directionFilter, setDirectionFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [form, setForm] = useState<TradeCaseCreate>(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -37,6 +39,9 @@ export function TradeCasesPage() {
         direction: directionFilter || undefined,
         status: statusFilter || undefined,
         search: search || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        limit: 500,
       });
       setItems(rows);
     } catch (e) {
@@ -45,11 +50,40 @@ export function TradeCasesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [directionFilter, statusFilter, search, dateFrom, dateTo]);
 
   useEffect(() => {
     void load();
-  }, [directionFilter, statusFilter]);
+  }, [load]);
+
+  const exportCsv = () => {
+    const headers = ["Reference", "Direction", "Status", "Stage", "Order", "PI", "ETD", "ETA", "Created"];
+    const escape = (s: string | number | null | undefined) => {
+      const t = String(s ?? "");
+      return t.includes(",") || t.includes('"') || t.includes("\n") ? `"${t.replace(/"/g, '""')}"` : t;
+    };
+    const rows = items.map((r) =>
+      [
+        r.reference,
+        r.direction,
+        r.status,
+        r.current_stage ?? "",
+        r.order_id ?? "",
+        r.proforma_invoice_id ?? "",
+        r.etd ? new Date(r.etd).toLocaleDateString() : "",
+        r.eta ? new Date(r.eta).toLocaleDateString() : "",
+        r.created_at ? new Date(r.created_at).toLocaleDateString() : "",
+      ].map(escape).join(",")
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `trade-cases-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const counts = useMemo(() => {
     const total = items.length;
@@ -216,6 +250,30 @@ export function TradeCasesPage() {
             <option value="SHIPPED">SHIPPED</option>
             <option value="SETTLED">SETTLED</option>
           </select>
+          <input
+            type="date"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            title="Created from"
+          />
+          <span className="text-text-muted">–</span>
+          <input
+            type="date"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            title="Created to"
+          />
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={items.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </button>
         </div>
         {loading ? (
           <div className="p-12 text-center text-sm text-text-muted">Loading trade cases...</div>
@@ -266,6 +324,13 @@ export function TradeCasesPage() {
                             className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                           >
                             View
+                          </Link>
+                          <Link
+                            to={`/app/logistics?trade_case_id=${row.id}`}
+                            onClick={() => setOpenActionsId(null)}
+                            className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                          >
+                            Open Logistics
                           </Link>
                           <button
                             type="button"

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/api/client";
 
 type TabKey = "po" | "grn" | "challan" | "gatepass" | "stock";
@@ -36,7 +36,7 @@ export function InventoryReconciliationPage() {
   } | null>(null);
   const [search, setSearch] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError("");
     try {
       const filter = {
@@ -96,11 +96,11 @@ export function InventoryReconciliationPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load inventory reports");
     }
-  };
+  }, [statusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   const toCsv = (rows: Array<Record<string, unknown>>) => {
     if (!rows.length) return "";
@@ -188,11 +188,11 @@ export function InventoryReconciliationPage() {
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <button className={`rounded border px-3 py-1 text-sm ${tab === "po" ? "bg-surface-inverse text-brand-primary-foreground" : ""}`} onClick={() => setTab("po")}>PO</button>
-        <button className={`rounded border px-3 py-1 text-sm ${tab === "grn" ? "bg-surface-inverse text-brand-primary-foreground" : ""}`} onClick={() => setTab("grn")}>GRN</button>
-        <button className={`rounded border px-3 py-1 text-sm ${tab === "challan" ? "bg-surface-inverse text-brand-primary-foreground" : ""}`} onClick={() => setTab("challan")}>Challan</button>
-        <button className={`rounded border px-3 py-1 text-sm ${tab === "gatepass" ? "bg-surface-inverse text-brand-primary-foreground" : ""}`} onClick={() => setTab("gatepass")}>Gate Pass</button>
-        <button className={`rounded border px-3 py-1 text-sm ${tab === "stock" ? "bg-surface-inverse text-brand-primary-foreground" : ""}`} onClick={() => setTab("stock")}>Stock</button>
+        <button type="button" className={`rounded border px-3 py-1 text-sm ${tab === "po" ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "border-border text-text-secondary"}`} onClick={() => setTab("po")}>PO</button>
+        <button type="button" className={`rounded border px-3 py-1 text-sm ${tab === "grn" ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "border-border text-text-secondary"}`} onClick={() => setTab("grn")}>GRN</button>
+        <button type="button" className={`rounded border px-3 py-1 text-sm ${tab === "challan" ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "border-border text-text-secondary"}`} onClick={() => setTab("challan")}>Challan</button>
+        <button type="button" className={`rounded border px-3 py-1 text-sm ${tab === "gatepass" ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "border-border text-text-secondary"}`} onClick={() => setTab("gatepass")}>Gate Pass</button>
+        <button type="button" className={`rounded border px-3 py-1 text-sm ${tab === "stock" ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "border-border text-text-secondary"}`} onClick={() => setTab("stock")}>Stock</button>
         <input
           className="w-full rounded border px-3 py-1 text-sm sm:w-auto"
           placeholder="Status (e.g. DRAFT)"

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Download } from "lucide-react";
 
 import { api, type ShipmentCreate, type ShipmentRow, type TradeCaseRow } from "@/api/client";
 
@@ -31,12 +32,15 @@ export function LogisticsPage() {
     preselectedTradeCaseId || undefined
   );
   const [filterStatus, setFilterStatus] = useState("");
+  const [etdFrom, setEtdFrom] = useState("");
+  const [etdTo, setEtdTo] = useState("");
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -55,11 +59,52 @@ export function LogisticsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterTradeCaseId, filterStatus]);
 
   useEffect(() => {
     void load();
-  }, [filterTradeCaseId, filterStatus]);
+  }, [load]);
+
+  const filteredItems = useMemo(() => {
+    if (!etdFrom && !etdTo) return items;
+    return items.filter((s) => {
+      const etd = s.etd ? new Date(s.etd).getTime() : null;
+      if (!etd) return !etdFrom && !etdTo;
+      const from = etdFrom ? new Date(etdFrom).setHours(0, 0, 0, 0) : null;
+      const to = etdTo ? new Date(etdTo).setHours(23, 59, 59, 999) : null;
+      if (from != null && etd < from) return false;
+      if (to != null && etd > to) return false;
+      return true;
+    });
+  }, [items, etdFrom, etdTo]);
+
+  const exportCsv = useCallback(() => {
+    const headers = ["Reference", "Trade Case", "Status", "Carrier", "Booking Ref", "BL/AWB", "ETD", "ETA"];
+    const escape = (s: string | number | null | undefined) => {
+      const t = String(s ?? "");
+      return t.includes(",") || t.includes('"') || t.includes("\n") ? `"${t.replace(/"/g, '""')}"` : t;
+    };
+    const rows = filteredItems.map((r) =>
+      [
+        r.reference,
+        r.trade_case_id,
+        r.status,
+        r.carrier ?? "",
+        r.booking_ref ?? "",
+        r.bl_awb ?? "",
+        r.etd ? new Date(r.etd).toLocaleDateString() : "",
+        r.eta ? new Date(r.eta).toLocaleDateString() : "",
+      ].map(escape).join(",")
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `shipments-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filteredItems]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,11 +149,19 @@ export function LogisticsPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold text-text-primary">Logistics</h1>
-        <p className="text-sm text-text-muted">
-          Shipment booking, BL/AWB tracking, and ETA monitoring linked with trade cases.
-        </p>
+      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-text-primary">Logistics</h1>
+          <p className="text-sm text-text-muted">
+            Shipment booking, BL/AWB tracking, and ETA monitoring linked with trade cases.
+          </p>
+        </div>
+        <Link
+          to="/app/trade/cases"
+          className="inline-flex items-center rounded-xl border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
+        >
+          Trade Cases
+        </Link>
       </header>
 
       {error && (
@@ -282,10 +335,34 @@ export function LogisticsPage() {
             <option value="DELIVERED">DELIVERED</option>
             <option value="CLOSED">CLOSED</option>
           </select>
+          <input
+            type="date"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"
+            value={etdFrom}
+            onChange={(e) => setEtdFrom(e.target.value)}
+            title="ETD from"
+          />
+          <span className="text-text-muted">–</span>
+          <input
+            type="date"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"
+            value={etdTo}
+            onChange={(e) => setEtdTo(e.target.value)}
+            title="ETD to"
+          />
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={filteredItems.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </button>
         </div>
         {loading ? (
           <div className="p-12 text-center text-sm text-text-muted">Loading shipments...</div>
-        ) : items.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <div className="p-12 text-center text-sm text-text-muted">No shipments found.</div>
         ) : (
           <div className="overflow-x-auto">
@@ -304,40 +381,63 @@ export function LogisticsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
-                {items.map((row) => (
+                {filteredItems.map((row) => (
                   <tr key={row.id}>
                     <td className="px-4 py-2.5 font-medium text-text-primary">{row.reference}</td>
-                    <td className="px-4 py-2.5">#{row.trade_case_id}</td>
+                    <td className="px-4 py-2.5">
+                      <Link to={`/app/trade/cases/${row.trade_case_id}`} className="text-brand-primary hover:underline">
+                        #{row.trade_case_id}
+                      </Link>
+                    </td>
                     <td className="px-4 py-2.5">{row.status}</td>
                     <td className="px-4 py-2.5">{row.carrier || "—"}</td>
                     <td className="px-4 py-2.5">{row.booking_ref || "—"}</td>
                     <td className="px-4 py-2.5">{row.bl_awb || "—"}</td>
                     <td className="px-4 py-2.5">{row.etd ? new Date(row.etd).toLocaleDateString() : "—"}</td>
                     <td className="px-4 py-2.5">{row.eta ? new Date(row.eta).toLocaleDateString() : "—"}</td>
-                    <td className="px-4 py-2.5 text-right">
+                    <td className="relative px-4 py-2.5 text-right">
                       <button
                         type="button"
-                        onClick={() => {
-                          setEditingId(row.id);
-                          setForm({
-                            trade_case_id: row.trade_case_id,
-                            reference: row.reference,
-                            status: row.status,
-                            carrier: row.carrier || "",
-                            booking_ref: row.booking_ref || "",
-                            bl_awb: row.bl_awb || "",
-                            etd: row.etd || "",
-                            eta: row.eta || "",
-                            origin_port: row.origin_port || "",
-                            dest_port: row.dest_port || "",
-                            notes: row.notes || "",
-                          });
-                          window.scrollTo({ top: 0, behavior: "smooth" });
-                        }}
-                        className="rounded border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
+                        onClick={() => setOpenActionsId((prev) => (prev === row.id ? null : row.id))}
+                        className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                       >
-                        Edit
+                        Actions
                       </button>
+                      {openActionsId === row.id && (
+                        <div className="absolute right-4 z-10 mt-1 w-40 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
+                          <Link
+                            to={`/app/trade/cases/${row.trade_case_id}`}
+                            onClick={() => setOpenActionsId(null)}
+                            className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                          >
+                            View trade case
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionsId(null);
+                              setEditingId(row.id);
+                              setForm({
+                                trade_case_id: row.trade_case_id,
+                                reference: row.reference,
+                                status: row.status,
+                                carrier: row.carrier || "",
+                                booking_ref: row.booking_ref || "",
+                                bl_awb: row.bl_awb || "",
+                                etd: row.etd || "",
+                                eta: row.eta || "",
+                                origin_port: row.origin_port || "",
+                                dest_port: row.dest_port || "",
+                                notes: row.notes || "",
+                              });
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                          >
+                            Edit shipment
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

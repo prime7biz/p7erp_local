@@ -17,6 +17,7 @@ const defaultForm: ChartOfAccountCreate = {
   statistical_unit: "",
   parent_account_id: null,
   last_reviewed_at: "",
+  enable_bill_wise: false,
 };
 
 export function ChartOfAccountsPage() {
@@ -104,6 +105,7 @@ export function ChartOfAccountsPage() {
       description: row.description,
       is_active: row.is_active,
       is_bank_account: row.is_bank_account,
+      enable_bill_wise: row.enable_bill_wise ?? false,
     });
   }
 
@@ -224,7 +226,7 @@ export function ChartOfAccountsPage() {
             <button
               type="button"
               onClick={() => void handleImport()}
-              className="rounded bg-surface-inverse px-3 py-1.5 text-sm text-brand-primary-foreground hover:bg-surface-inverse/90"
+              className="rounded-xl bg-brand-primary px-3 py-1.5 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
             >
               Import
             </button>
@@ -326,7 +328,7 @@ export function ChartOfAccountsPage() {
           <button
             type="button"
             onClick={() => void saveCoaConfig()}
-            className="mt-3 rounded bg-surface-inverse px-3 py-1.5 text-sm text-brand-primary-foreground hover:bg-surface-inverse/90"
+            className="mt-3 rounded-xl bg-brand-primary px-3 py-1.5 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
           >
             Save CoA settings
           </button>
@@ -388,6 +390,14 @@ export function ChartOfAccountsPage() {
               onChange={(e) => setForm((p) => ({ ...p, is_bank_account: e.target.checked }))}
             />
             Bank Account
+          </label>
+          <label className="flex items-center gap-2 text-sm" title="Enable Tally-style bill-wise tracking for Sundry Creditors / Debtors">
+            <input
+              type="checkbox"
+              checked={!!form.enable_bill_wise}
+              onChange={(e) => setForm((p) => ({ ...p, enable_bill_wise: e.target.checked }))}
+            />
+            Bill-Wise Tracking
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={!!form.is_active} onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))} />
@@ -462,7 +472,12 @@ export function ChartOfAccountsPage() {
               Cancel
             </button>
           ) : null}
-          <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">{editingId ? "Update" : "Create"}</button>
+          <button
+            type="submit"
+            className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+          >
+            {editingId ? "Update" : "Create"}
+          </button>
         </div>
       </form>
 
@@ -479,6 +494,7 @@ export function ChartOfAccountsPage() {
               <th className="px-4 py-3">Normal</th>
               <th className="px-4 py-3">Opening</th>
               <th className="px-4 py-3">Balance</th>
+              <th className="px-4 py-3">Bill-Wise</th>
               <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
@@ -505,6 +521,7 @@ export function ChartOfAccountsPage() {
                   <td className="px-4 py-3 uppercase">{r.normal_balance}</td>
                   <td className="px-4 py-3">{Number(r.opening_balance || 0).toLocaleString()}</td>
                   <td className="px-4 py-3">{Number(r.balance || 0).toLocaleString()}</td>
+                  <td className="px-4 py-3">{r.enable_bill_wise ? <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">Yes</span> : "—"}</td>
                   <td className="px-4 py-3">
                     <div className="relative">
                       <button

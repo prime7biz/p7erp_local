@@ -68,6 +68,8 @@ class TradeCaseResponse(BaseModel):
     cost_amount: float | None = None
     margin_amount: float | None = None
     margin_pct: float | None = None
+    base_currency: str | None = None
+    base_currency_margin: float | None = None
     closed_at: str | None = None
     created_at: str
     updated_at: str
@@ -119,6 +121,8 @@ class TradeCaseMarginResponse(BaseModel):
     margin_amount: float | None = None
     margin_pct: float | None = None
     currency: str | None = None
+    base_currency: str | None = None
+    base_currency_margin: float | None = None
 
 
 class TradeCaseDashboardResponse(BaseModel):

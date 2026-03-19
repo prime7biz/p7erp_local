@@ -1,0 +1,345 @@
+.vp-root {
+  --vp-paper-width: 210mm;
+}
+
+/* ─── Sheet ─── */
+.vp-sheet {
+  width: 100%;
+  max-width: var(--vp-paper-width);
+  margin: 0 auto;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 12px;
+  background: #fff;
+  padding: 28px 32px;
+  position: relative;
+  color: #1e293b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ─── Copy badge ─── */
+.vp-copy-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 2px 10px;
+  border: 1px solid #94a3b8;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+}
+
+/* ─── Company header ─── */
+.vp-company-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #1e293b;
+}
+
+.vp-company-info {
+  flex: 1;
+}
+
+.vp-company-name {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.vp-company-address {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.vp-qr-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.vp-qr-label {
+  font-size: 9px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ─── Voucher title bar ─── */
+.vp-voucher-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 0;
+  padding: 8px 14px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.vp-voucher-type {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vp-voucher-number {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+/* ─── Meta grid ─── */
+.vp-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 16px;
+  margin-bottom: 14px;
+  font-size: 12px;
+}
+
+.vp-meta-item {
+  display: flex;
+  gap: 6px;
+}
+
+.vp-meta-wide {
+  grid-column: span 2;
+}
+
+.vp-meta-label {
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.vp-meta-label::after {
+  content: ":";
+}
+
+.vp-meta-value {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+/* ─── Table ─── */
+.vp-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.vp-th {
+  padding: 7px 10px;
+  background: #1e293b;
+  color: #fff;
+  font-weight: 600;
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.vp-th-sl {
+  width: 32px;
+  text-align: center;
+}
+
+.vp-th-right {
+  text-align: right;
+}
+
+.vp-td {
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.vp-td-center {
+  text-align: center;
+}
+
+.vp-td-right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.vp-totals-row td {
+  background: #f8fafc;
+  border-top: 2px solid #1e293b;
+}
+
+/* ─── Amount in words ─── */
+.vp-amount-words {
+  margin: 8px 0;
+  padding: 6px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #fafbfc;
+}
+
+.vp-amount-words-label {
+  font-weight: 600;
+  color: #334155;
+}
+
+/* ─── Balance badge ─── */
+.vp-balance-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 18px;
+}
+
+.vp-balanced {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.vp-unbalanced {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+/* ─── Signatures ─── */
+.vp-signatures {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 36px;
+  margin-bottom: 20px;
+}
+
+.vp-sig-block {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  color: #475569;
+}
+
+.vp-sig-line {
+  margin: 0 auto 4px;
+  width: 90%;
+  border-bottom: 1px solid #94a3b8;
+  height: 40px;
+}
+
+/* ─── Footer ─── */
+.vp-footer {
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.vp-verification-info {
+  margin: 0 0 4px;
+}
+
+.vp-disclaimer {
+  margin: 0 0 4px;
+  font-style: italic;
+}
+
+.vp-print-time {
+  margin: 0;
+  text-align: right;
+}
+
+/* ─── Template: compact ─── */
+.vp-template-compact .vp-table { font-size: 11px; }
+.vp-template-compact .vp-th { padding: 5px 8px; font-size: 10px; }
+.vp-template-compact .vp-td { padding: 4px 8px; }
+.vp-template-compact .vp-signatures { margin-top: 24px; }
+.vp-template-compact .vp-sig-line { height: 28px; }
+
+/* ─── Template: audit ─── */
+.vp-template-audit {
+  border: 2px solid #475569;
+}
+
+.vp-template-audit .vp-footer {
+  font-size: 11px;
+  color: #475569;
+}
+
+/* ─── Print styles ─── */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .vp-root {
+    background: white;
+    padding: 0;
+    margin: 0;
+  }
+
+  .vp-sheet {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    page-break-after: always;
+    max-width: none;
+    width: auto;
+    margin: 0;
+    padding: 16mm 12mm;
+  }
+
+  .vp-sheet:last-child {
+    page-break-after: auto;
+  }
+
+  .vp-company-header {
+    border-bottom-color: #000;
+  }
+
+  .vp-th {
+    background: #1e293b !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .vp-totals-row td {
+    background: #f8fafc !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .vp-copy-badge {
+    background: #f1f5f9 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .vp-voucher-title-bar {
+    background: #f1f5f9 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api, type InventoryItemResponse, type MfgProductionPlanCreate } from "@/api/client";
 
@@ -18,26 +18,24 @@ export function ProductionPlanningPage() {
   });
   const [line, setLine] = useState({ item_id: 0, planned_qty: 0, due_date: todayIso(), priority: 5 });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError("");
     try {
       const [itemRows, planRows] = await Promise.all([api.listInventoryItems(), api.listMfgProductionPlans()]);
       setItems(itemRows);
       setPlans(planRows);
-      if (!line.item_id && itemRows[0]) {
+      if (itemRows[0]) {
         const firstItem = itemRows[0];
-        if (firstItem) {
-          setLine((prev) => ({ ...prev, item_id: firstItem.id }));
-        }
+        setLine((prev) => (!prev.item_id && firstItem ? { ...prev, item_id: firstItem.id } : prev));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load planning data");
     }
-  };
+  }, []);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   const itemName = useMemo(() => new Map(items.map((i) => [i.id, i.name])), [items]);
 

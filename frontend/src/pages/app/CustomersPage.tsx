@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, type CustomerResponse } from "@/api/client";
 import { ArrowUpRight, ExternalLink, Filter, Plus, Search, Users } from "lucide-react";
@@ -60,25 +60,31 @@ export function CustomersPage() {
     return pages;
   }, [page, totalPages]);
 
-  const setFilterParam = (key: string, value: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (!value || value === FILTER_ALL) {
-      next.delete(key);
-    } else {
-      next.set(key, value);
-    }
-    next.delete("page");
-    setSearchParams(next);
-  };
+  const setFilterParam = useCallback(
+    (key: string, value: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (!value || value === FILTER_ALL) {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
+      next.delete("page");
+      setSearchParams(next);
+    },
+    [searchParams, setSearchParams],
+  );
 
-  const setPageParam = (targetPage: number) => {
-    const next = new URLSearchParams(searchParams);
-    if (targetPage <= 1) next.delete("page");
-    else next.set("page", String(targetPage));
-    setSearchParams(next);
-  };
+  const setPageParam = useCallback(
+    (targetPage: number) => {
+      const next = new URLSearchParams(searchParams);
+      if (targetPage <= 1) next.delete("page");
+      else next.set("page", String(targetPage));
+      setSearchParams(next);
+    },
+    [searchParams, setSearchParams],
+  );
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -104,11 +110,11 @@ export function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [q, statusFilter, countryFilter, typeFilter, page, setPageParam]);
 
   useEffect(() => {
     void load();
-  }, [q, statusFilter, countryFilter, typeFilter, page]);
+  }, [load]);
 
   useEffect(() => {
     setSearchInput(q);
@@ -120,7 +126,7 @@ export function CustomersPage() {
       setFilterParam("q", searchInput);
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [searchInput, q]);
+  }, [searchInput, q, setFilterParam]);
 
   const resetFilters = () => {
     setSearchParams(new URLSearchParams());

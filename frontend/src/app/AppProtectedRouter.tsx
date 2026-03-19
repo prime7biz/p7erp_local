@@ -56,6 +56,7 @@ import { CostCentersPage } from "@/pages/app/CostCentersPage";
 import { BudgetsPage } from "@/pages/app/BudgetsPage";
 import { BankAccountsPage } from "@/pages/app/BankAccountsPage";
 import { VoucherPrintPage } from "@/pages/app/VoucherPrintPage";
+import { VoucherDetailPage } from "@/pages/app/VoucherDetailPage";
 import { AccountingPeriodsPage } from "@/pages/app/AccountingPeriodsPage";
 import { PaymentAdvicePage } from "@/pages/app/PaymentAdvicePage";
 import { AllApprovalsPage } from "@/pages/app/AllApprovalsPage";
@@ -441,6 +442,7 @@ export function AppProtectedRouter() {
         <Route path="accounts" element={<ChartOfAccountsPage />} />
         <Route path="accounts/vouchers" element={<VouchersPage />} />
         <Route path="accounts/vouchers/print" element={<VoucherPrintPage />} />
+        <Route path="accounts/vouchers/:voucherId" element={<VoucherDetailPage />} />
         <Route path="accounts/vouchers/approval-queue" element={<VoucherApprovalsPage />} />
         <Route path="accounts/currency" element={<AccountsCurrencyPage />} />
         <Route path="accounts/outstanding-bills" element={<OutstandingBillsPage />} />

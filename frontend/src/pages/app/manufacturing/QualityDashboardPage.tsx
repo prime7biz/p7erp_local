@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -33,7 +33,7 @@ export function QualityDashboardPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError("");
     setLoading(true);
     try {
@@ -47,11 +47,11 @@ export function QualityDashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateFrom, dateTo]);
 
   useEffect(() => {
     void load();
-  }, [dateFrom, dateTo]);
+  }, [load]);
 
   const passRatePct = useMemo(() => {
     if (!dashboard) return 0;

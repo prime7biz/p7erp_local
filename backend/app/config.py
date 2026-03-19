@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     ai_circuit_breaker_failure_threshold: int = 5
     ai_circuit_breaker_cooldown_seconds: int = 45
 
+    # Trade document storage: currently backend uses local media/trade_docs; future: trade_docs_backend=local|s3, bucket, etc.
+    # trade_docs_backend: str = "local"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

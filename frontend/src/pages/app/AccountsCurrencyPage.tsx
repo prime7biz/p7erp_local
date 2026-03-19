@@ -56,7 +56,12 @@ export function AccountsCurrencyPage() {
         <input className="rounded border px-3 py-2 text-sm" value={form.to_currency} onChange={(e) => setForm((p) => ({ ...p, to_currency: e.target.value.toUpperCase() }))} />
         <input className="rounded border px-3 py-2 text-sm" value={form.exchange_rate} onChange={(e) => setForm((p) => ({ ...p, exchange_rate: e.target.value }))} />
         <input type="date" className="rounded border px-3 py-2 text-sm" value={form.effective_date} onChange={(e) => setForm((p) => ({ ...p, effective_date: e.target.value }))} />
-        <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">Add Rate</button>
+        <button
+          type="submit"
+          className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+        >
+          Add Rate
+        </button>
       </form>
 
       <div className="rounded-xl border border-border bg-surface-raised p-4">

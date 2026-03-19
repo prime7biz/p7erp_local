@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -25,7 +25,6 @@ import {
   ClipboardList,
   Clock3,
   CheckSquare,
-  Globe,
   Package,
   PlusCircle,
   RefreshCw,
@@ -35,6 +34,7 @@ import {
   Users,
   Settings,
 } from "lucide-react";
+import { GlobalCustomerMapCard } from "@/components/dashboard/GlobalCustomerMapCard";
 
 const bdt = new Intl.NumberFormat("en-BD");
 const PIE_COLORS = ["#3B82F6", "#F97316", "#10B981", "#8B5CF6", "#F59E0B", "#EF4444", "#06B6D4"];
@@ -161,7 +161,7 @@ export function Dashboard() {
   const [promiseLastUpdated, setPromiseLastUpdated] = useState<Date | null>(null);
   const [promiseCopyStatus, setPromiseCopyStatus] = useState<"" | "copied" | "failed">("");
 
-  const fetchPromiseSummary = () => {
+  const fetchPromiseSummary = useCallback(() => {
     setPromiseRefreshing(true);
     api
       .getOrderPromiseSummary({ statuses: promiseStatusesFilter, limit: 25 })
@@ -170,7 +170,7 @@ export function Dashboard() {
         setPromiseLastUpdated(new Date());
       })
       .finally(() => setPromiseRefreshing(false));
-  };
+  }, [promiseStatusesFilter]);
 
   const fetchDashboardData = () => {
     Promise.allSettled([
@@ -215,15 +215,8 @@ export function Dashboard() {
 
   useEffect(() => {
     fetchPromiseSummary();
-  }, [promiseStatusesFilter]);
+  }, [fetchPromiseSummary]);
 
-  if (!me) return null;
-
-  const firstName = me.first_name || me.username || "User";
-  const greeting = getTimeBasedGreeting(currentTime.getHours());
-
-  const kpiById = (id: string) => kpis.find((k) => k.id === id)?.value ?? 0;
-  const customerCount = kpiById("total-customers");
   const maxTrendOutput = useMemo(
     () => Math.max(...productionTrends.map((row) => row.output), 1),
     [productionTrends],
@@ -253,6 +246,34 @@ export function Dashboard() {
       color: PIE_COLORS[i % PIE_COLORS.length] ?? "#3B82F6",
     }));
   }, [employeeSummary]);
+
+  const riskyPromiseOrders = useMemo(() => {
+    const blocked = promiseSummary.items.filter((item) => !(item.atp_ok && item.ctp_ok));
+    const byType =
+      promiseRiskTypeFilter === "ATP"
+        ? blocked.filter((item) => !item.atp_ok)
+        : promiseRiskTypeFilter === "CTP"
+          ? blocked.filter((item) => !item.ctp_ok)
+          : blocked;
+    return byType.slice(0, 5);
+  }, [promiseSummary, promiseRiskTypeFilter]);
+
+  const promiseMinutesAgo = useMemo(() => {
+    if (!promiseLastUpdated) return "not loaded";
+    const diffMs = currentTime.getTime() - promiseLastUpdated.getTime();
+    const diffMins = Math.max(0, Math.floor(diffMs / 60_000));
+    if (diffMins < 1) return "just now";
+    if (diffMins === 1) return "1 min ago";
+    return `${diffMins} mins ago`;
+  }, [currentTime, promiseLastUpdated]);
+
+  if (!me) return null;
+
+  const firstName = me.first_name || me.username || "User";
+  const greeting = getTimeBasedGreeting(currentTime.getHours());
+
+  const kpiById = (id: string) => kpis.find((k) => k.id === id)?.value ?? 0;
+  const customerCount = kpiById("total-customers");
 
   const kpiCards = [
     {
@@ -345,16 +366,6 @@ export function Dashboard() {
       bg: promiseSummary.blocked_count > 0 ? "bg-status-danger-subtle border-status-danger/20" : "bg-surface-subtle border-border",
     },
   ];
-  const riskyPromiseOrders = useMemo(() => {
-    const blocked = promiseSummary.items.filter((item) => !(item.atp_ok && item.ctp_ok));
-    const byType =
-      promiseRiskTypeFilter === "ATP"
-        ? blocked.filter((item) => !item.atp_ok)
-        : promiseRiskTypeFilter === "CTP"
-          ? blocked.filter((item) => !item.ctp_ok)
-          : blocked;
-    return byType.slice(0, 5);
-  }, [promiseSummary, promiseRiskTypeFilter]);
 
   const copyPromiseSummary = async () => {
     const lines = [
@@ -384,14 +395,6 @@ export function Dashboard() {
       window.setTimeout(() => setPromiseCopyStatus(""), 2500);
     }
   };
-  const promiseMinutesAgo = useMemo(() => {
-    if (!promiseLastUpdated) return "not loaded";
-    const diffMs = currentTime.getTime() - promiseLastUpdated.getTime();
-    const diffMins = Math.max(0, Math.floor(diffMs / 60_000));
-    if (diffMins < 1) return "just now";
-    if (diffMins === 1) return "1 min ago";
-    return `${diffMins} mins ago`;
-  }, [currentTime, promiseLastUpdated]);
 
   const quickActions = [
     { label: "Customers", href: "/app/customers", icon: Users },
@@ -879,31 +882,7 @@ export function Dashboard() {
           </section>
 
           <section>
-            <div className="rounded-xl border border-border bg-surface-raised shadow-sm p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-status-success-foreground" />
-                  <h3 className="text-sm font-semibold text-text-primary">Global Customer Destinations</h3>
-                </div>
-                <span className="text-xs text-text-secondary">{customerMap.length} countries</span>
-              </div>
-              {customerMap.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {customerMap
-                    .slice()
-                    .sort((a, b) => b.count - a.count)
-                    .slice(0, 8)
-                    .map((point) => (
-                      <div key={point.country} className="rounded-md border border-border bg-surface-subtle px-3 py-2">
-                        <p className="text-sm text-text-primary font-medium">{point.country}</p>
-                        <p className="text-xs text-text-secondary">{point.count} customer(s)</p>
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                <p className="text-xs text-text-muted">No customer location data yet.</p>
-              )}
-            </div>
+            <GlobalCustomerMapCard points={customerMap} />
           </section>
 
           {/* Quick Actions – horizontal scroll */}

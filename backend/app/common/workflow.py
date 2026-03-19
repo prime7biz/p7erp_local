@@ -21,11 +21,17 @@ QUOTATION_TRANSITIONS: dict[str, set[str]] = {
 }
 
 ORDER_TRANSITIONS: dict[str, set[str]] = {
-  "DRAFT": {"NEW", "CANCELLED"},
-  "NEW": {"IN_PROGRESS", "CANCELLED"},
-  "IN_PROGRESS": {"COMPLETED", "CANCELLED"},
-  "COMPLETED": set(),
-  "CANCELLED": set(),
+  # Synthetic "DRAFT" on create must match UI/imports: allow common starting statuses (promise check runs for IN_PROGRESS).
+  "DRAFT": {"NEW", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED"},
+  # Allow closing from pre-production without forcing IN_PROGRESS (admin / trading / import parity).
+  "NEW": {"DRAFT", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED"},
+  "CONFIRMED": {"NEW", "IN_PROGRESS", "COMPLETED", "CANCELLED"},
+  # Step back to CONFIRMED/NEW or finish/void as needed.
+  "IN_PROGRESS": {"CONFIRMED", "COMPLETED", "CANCELLED", "NEW"},
+  # Reopen, void, or reset to NEW for admin/data fixes.
+  "COMPLETED": {"IN_PROGRESS", "CANCELLED", "NEW"},
+  # Restore cancelled orders back to pipeline entry (mistake / buyer change of mind).
+  "CANCELLED": {"NEW"},
 }
 
 BOM_TRANSITIONS: dict[str, set[str]] = {

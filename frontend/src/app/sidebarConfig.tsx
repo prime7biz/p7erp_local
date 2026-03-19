@@ -119,9 +119,9 @@ export const menuSections: MenuSection[] = [
       { icon: BookOpen, label: "Master Contracts", href: `${PREFIX}/commercial/master-contracts` },
       { icon: FileText, label: "Proforma Invoices", href: `${PREFIX}/commercial/proforma-invoices` },
       { icon: ArrowRightLeft, label: "BTB LCs", href: `${PREFIX}/commercial/btb-lcs` },
-      { icon: FolderTree, label: "Trade Cases", href: `${PREFIX}/trade/cases` },
-      { icon: BarChart3, label: "Trade Control Tower", href: `${PREFIX}/trade/dashboard` },
-      { icon: Truck, label: "Logistics", href: `${PREFIX}/logistics` },
+      { icon: FolderTree, label: "Trade Cases", href: `${PREFIX}/trade/cases`, visibleFor: ["buying_house", "both"] },
+      { icon: BarChart3, label: "Trade Control Tower", href: `${PREFIX}/trade/dashboard`, visibleFor: ["buying_house", "both"] },
+      { icon: Truck, label: "Logistics", href: `${PREFIX}/logistics`, visibleFor: ["buying_house", "both"] },
     ],
   },
   {

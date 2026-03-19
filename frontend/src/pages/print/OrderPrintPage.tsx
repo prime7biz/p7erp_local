@@ -146,8 +146,17 @@ export function OrderPrintPage() {
   const commissionMode = order.commission_mode ?? quotation?.commission_mode ?? "-";
   const commissionType = order.commission_type ?? quotation?.commission_type ?? "-";
   const commissionValue = order.commission_value ?? quotation?.commission_value ?? "-";
-  const watermarkText = order.status === "COMPLETED" ? "Final" : "Draft";
-  const watermarkClass = watermarkText === "Final" ? "qp-watermark-final" : "qp-watermark-draft";
+  const statusUpper = (order.status || "").toUpperCase();
+  const watermark =
+    statusUpper === "COMPLETED"
+      ? { text: "Final", cls: "qp-watermark-final" }
+      : statusUpper === "CANCELLED"
+        ? { text: "Cancelled", cls: "qp-watermark-cancelled" }
+        : statusUpper === "DRAFT"
+          ? { text: "Draft", cls: "qp-watermark-draft" }
+          : { text: "Open", cls: "qp-watermark-open" };
+  const watermarkText = watermark.text;
+  const watermarkClass = watermark.cls;
 
   return (
     <div className="qp-root">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export interface HrColumn<TItem> {
   header: string;
@@ -45,7 +45,7 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
   const [success, setSuccess] = useState<string>("");
   const [form, setForm] = useState<TCreate | null>(initialForm ?? null);
 
-  const refresh = async (): Promise<void> => {
+  const refresh = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError("");
     try {
@@ -56,11 +56,11 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadItems]);
 
   useEffect(() => {
     void refresh();
-  }, []);
+  }, [refresh]);
 
   const setField = (fieldKey: keyof TCreate, rawValue: string): void => {
     if (!form) return;

@@ -99,7 +99,10 @@ export function PurchaseWorkflowPage() {
         <Link to="/app/accounts/outstanding-bills" className="rounded border px-3 py-2 text-sm">
           Open Outstanding Bills
         </Link>
-        <Link to="/app/banking/payment-runs" className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">
+        <Link
+          to="/app/banking/payment-runs"
+          className="inline-flex items-center justify-center rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+        >
           Create Payment Run
         </Link>
       </div>

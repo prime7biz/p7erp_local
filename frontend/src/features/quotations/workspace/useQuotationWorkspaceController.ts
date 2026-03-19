@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   api,
+  type CurrencyMasterResponse,
   type CostingItemResponse,
   type CustomerIntermediaryLinkResponse,
   type CustomerResponse,
@@ -17,7 +18,13 @@ import {
 } from "@/api/client";
 import { buildQuotationFullUpdatePayload } from "./mappers/buildQuotationFullUpdatePayload";
 import { calculateQuotationTotals } from "./mappers/calculateQuotationTotals";
-import { computeMaterialLineAmounts, toSafeNumber } from "./mappers/quotationNumeric";
+import {
+  applyOtherCostCalculation,
+  computeMaterialLineAmounts,
+  toSafeNumber,
+} from "./mappers/quotationNumeric";
+
+const MANUFACTURING_HOURS_PER_DAY = 8;
 
 export function useQuotationWorkspaceController(id?: string) {
   const navigate = useNavigate();
@@ -31,6 +38,10 @@ export function useQuotationWorkspaceController(id?: string) {
   const [inquiries, setInquiries] = useState<InquiryResponse[]>([]);
   const [styles, setStyles] = useState<StyleResponse[]>([]);
   const [allLinks, setAllLinks] = useState<CustomerIntermediaryLinkResponse[]>([]);
+  const [currencies, setCurrencies] = useState<CurrencyMasterResponse[]>([]);
+  const [liveRates, setLiveRates] = useState<Record<string, number>>({});
+  const [fetchingRates, setFetchingRates] = useState(false);
+  const [rateSource, setRateSource] = useState<"" | "live" | "fallback">("");
   const [tenantDefaultCommissionMode, setTenantDefaultCommissionMode] = useState("");
   const [showQuickStyleCreate, setShowQuickStyleCreate] = useState(false);
   const [quickStyleName, setQuickStyleName] = useState("");
@@ -49,6 +60,9 @@ export function useQuotationWorkspaceController(id?: string) {
   const [success, setSuccess] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [duplicatingVersion, setDuplicatingVersion] = useState(false);
+  const [runningWorkflowAction, setRunningWorkflowAction] = useState<"" | "submit" | "approve" | "send">("");
+  const [useManualQuotedPrice, setUseManualQuotedPrice] = useState(false);
+  const [manualQuotedPrice, setManualQuotedPrice] = useState("");
   const [previousVersionQuote, setPreviousVersionQuote] = useState<QuotationResponse | null>(null);
 
   useEffect(() => {
@@ -57,7 +71,7 @@ export function useQuotationWorkspaceController(id?: string) {
       setError("");
       setSuccess("");
       try {
-        const [cats, itemsRes, customersRes, inquiriesRes, linksRes, settings, stylesRes] = await Promise.all([
+        const [cats, itemsRes, customersRes, inquiriesRes, linksRes, settings, stylesRes, currenciesRes] = await Promise.all([
           api.listItemCategories(),
           api.listCostingItems(),
           isNew ? api.listCustomers() : Promise.resolve([] as CustomerResponse[]),
@@ -65,11 +79,13 @@ export function useQuotationWorkspaceController(id?: string) {
           isNew ? api.listCustomerIntermediaryLinks() : Promise.resolve([] as CustomerIntermediaryLinkResponse[]),
           api.getSettingsConfig(),
           api.listStyles({ status: "ACTIVE" }),
+          api.listCurrencies(),
         ]);
         setCategories(cats);
         setItems(itemsRes);
         setTenantDefaultCommissionMode(settings.default_commission_mode ?? "");
         setStyles(stylesRes);
+        setCurrencies(currenciesRes.filter((currency) => currency.is_active));
         if (isNew) {
           setCustomers(customersRes);
           setInquiries(inquiriesRes);
@@ -140,6 +156,9 @@ export function useQuotationWorkspaceController(id?: string) {
           ]);
           setCustomer(cust);
           setInquiry(inq);
+          if (toSafeNumber(q.quoted_price) > 0) {
+            setManualQuotedPrice(String(q.quoted_price));
+          }
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load quotation");
@@ -176,7 +195,7 @@ export function useQuotationWorkspaceController(id?: string) {
       }
     };
     loadPreviousVersion();
-  }, [isNew, quotation?.quotation_code, quotation?.version_no, quotation?.customer_id, quotation?.id]);
+  }, [isNew, quotation]);
 
   const totals = useMemo(
     () => calculateQuotationTotals(materials, manufacturing, otherCosts),
@@ -196,7 +215,7 @@ export function useQuotationWorkspaceController(id?: string) {
     setMaterials((rows) => {
       const next = [...rows];
       const row = { ...next[index], ...patch } as QuotationMaterialLine;
-      const calculated = computeMaterialLineAmounts(row);
+      const calculated = computeMaterialLineAmounts(row, toSafeNumber(quotation?.projected_quantity));
       row.amount_per_dozen = calculated.amount_per_dozen;
       row.total_amount = calculated.total_amount;
       next[index] = row;
@@ -207,7 +226,13 @@ export function useQuotationWorkspaceController(id?: string) {
   const onManufacturingChange = (index: number, patch: Partial<QuotationManufacturingLine>) => {
     setManufacturing((rows) => {
       const next = [...rows];
-      next[index] = { ...next[index], ...patch } as QuotationManufacturingLine;
+      const row = { ...next[index], ...patch } as QuotationManufacturingLine;
+      if ("production_per_hour" in patch || "machines_required" in patch) {
+        const pph = toSafeNumber(row.production_per_hour);
+        const mach = Math.max(0, row.machines_required);
+        row.production_per_day = String(Math.round(pph * mach * MANUFACTURING_HOURS_PER_DAY));
+      }
+      next[index] = row;
       return next;
     });
   };
@@ -215,10 +240,29 @@ export function useQuotationWorkspaceController(id?: string) {
   const onOtherCostChange = (index: number, patch: Partial<QuotationOtherCostLine>) => {
     setOtherCosts((rows) => {
       const next = [...rows];
-      next[index] = { ...next[index], ...patch } as QuotationOtherCostLine;
+      let row = { ...next[index], ...patch } as QuotationOtherCostLine;
+      const { matTotal, mfgTotal } = calculateQuotationTotals(materials, manufacturing, []);
+      row = applyOtherCostCalculation(row, matTotal + mfgTotal);
+      next[index] = row;
       return next;
     });
   };
+
+  useEffect(() => {
+    const base = totals.matTotal + totals.mfgTotal;
+    setOtherCosts((rows) => {
+      const mapped = rows.map((row) => applyOtherCostCalculation(row, base));
+      const same = mapped.every((r, i) => {
+        const prev = rows[i];
+        return (
+          prev != null &&
+          r.calculated_amount === prev.calculated_amount &&
+          r.total_amount === prev.total_amount
+        );
+      });
+      return same ? rows : mapped;
+    });
+  }, [totals.matTotal, totals.mfgTotal]);
 
   const onSizeRatioChange = (index: number, patch: Partial<QuotationSizeRatioLine>) => {
     setSizeRatios((rows) => {
@@ -250,6 +294,10 @@ export function useQuotationWorkspaceController(id?: string) {
               department: inq.department ?? prev.department,
               projected_quantity: inq.quantity ?? prev.projected_quantity,
               target_price: inq.target_price ?? prev.target_price,
+              target_price_currency: inq.target_price_currency ?? prev.target_price_currency,
+              currency: inq.currency ?? inq.target_price_currency ?? prev.currency,
+              exchange_rate: inq.exchange_rate ?? prev.exchange_rate,
+              projected_delivery_date: inq.expected_delivery_date ?? prev.projected_delivery_date,
               customer_intermediary_id: inq.customer_intermediary_id ?? prev.customer_intermediary_id,
               shipping_term: inq.shipping_term ?? prev.shipping_term,
               commission_mode: inq.commission_mode ?? prev.commission_mode,
@@ -408,6 +456,97 @@ export function useQuotationWorkspaceController(id?: string) {
     }
   };
 
+  useEffect(() => {
+    if (!quotation) return;
+    const projectedQty = toSafeNumber(quotation.projected_quantity);
+    const profitPct = toSafeNumber(quotation.profit_percentage);
+    const totalCost = totals.total;
+    const quotedAuto = totalCost + (totalCost * profitPct) / 100;
+    const quotedFinal =
+      useManualQuotedPrice && manualQuotedPrice.trim() !== "" ? toSafeNumber(manualQuotedPrice) : quotedAuto;
+    const costPerPiece = projectedQty > 0 ? quotedFinal / projectedQty : 0;
+
+    const patch: Partial<QuotationDetailResponse> = {};
+    const totalCostStr = totalCost.toFixed(2);
+    const quotedStr = quotedFinal.toFixed(2);
+    const costPerPieceStr = costPerPiece.toFixed(4);
+    if (quotation.material_cost !== totals.matTotal.toFixed(2)) patch.material_cost = totals.matTotal.toFixed(2);
+    if (quotation.manufacturing_cost !== totals.mfgTotal.toFixed(2)) patch.manufacturing_cost = totals.mfgTotal.toFixed(2);
+    if (quotation.other_cost !== totals.otherTotal.toFixed(2)) patch.other_cost = totals.otherTotal.toFixed(2);
+    if (quotation.total_cost !== totalCostStr) patch.total_cost = totalCostStr;
+    if (quotation.total_amount !== quotedStr) patch.total_amount = quotedStr;
+    if (quotation.quoted_price !== quotedStr) patch.quoted_price = quotedStr;
+    if (quotation.cost_per_piece !== costPerPieceStr) patch.cost_per_piece = costPerPieceStr;
+    if (Object.keys(patch).length > 0) {
+      setQuotation((prev) => (prev ? { ...prev, ...patch } : prev));
+    }
+  }, [manualQuotedPrice, quotation, totals, useManualQuotedPrice]);
+
+  const refreshExchangeRates = async () => {
+    if (!quotation) return;
+    setFetchingRates(true);
+    setError("");
+    try {
+      const base = "USD";
+      const live = await api.getLiveRates(base);
+      setLiveRates(live.rates ?? {});
+      setRateSource(live.live ? "live" : "fallback");
+      const targetCode = (quotation.target_price_currency ?? "USD").toUpperCase();
+      const bdtRate = live.rates?.BDT;
+      const targetRate = live.rates?.[targetCode];
+      if (bdtRate && targetRate) {
+        updateQuotationHeader({ exchange_rate: (bdtRate / targetRate).toFixed(4) });
+      }
+      setMaterials((rows) =>
+        rows.map((row) => {
+          const rowCurrency = (row.currency ?? "USD").toUpperCase();
+          if (rowCurrency === "BDT") {
+            const calculated = computeMaterialLineAmounts({ ...row, exchange_rate: "1", currency: rowCurrency }, toSafeNumber(quotation.projected_quantity));
+            return { ...row, exchange_rate: "1", amount_per_dozen: calculated.amount_per_dozen, total_amount: calculated.total_amount };
+          }
+          const rowTargetRate = live.rates?.[rowCurrency];
+          const exchange = rowTargetRate && bdtRate ? (bdtRate / rowTargetRate).toFixed(4) : row.exchange_rate;
+          const calculated = computeMaterialLineAmounts({ ...row, exchange_rate: exchange, currency: rowCurrency }, toSafeNumber(quotation.projected_quantity));
+          return { ...row, exchange_rate: exchange, amount_per_dozen: calculated.amount_per_dozen, total_amount: calculated.total_amount };
+        })
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to refresh exchange rates");
+    } finally {
+      setFetchingRates(false);
+    }
+  };
+
+  const submitForReview = async () => {
+    if (!quotation || isNew) return;
+    setRunningWorkflowAction("submit");
+    setError("");
+    try {
+      const updated = await api.submitQuotation(quotation.id);
+      setQuotation((prev) => (prev ? { ...prev, status: updated.status } : prev));
+      setSuccess("Quotation submitted for review.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to submit quotation");
+    } finally {
+      setRunningWorkflowAction("");
+    }
+  };
+
+  const approveQuotation = async () => {
+    if (!quotation || isNew) return;
+    setRunningWorkflowAction("approve");
+    setError("");
+    try {
+      const updated = await api.approveQuotation(quotation.id);
+      setQuotation((prev) => (prev ? { ...prev, status: updated.status } : prev));
+      setSuccess("Quotation approved.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to approve quotation");
+    } finally {
+      setRunningWorkflowAction("");
+    }
+  };
+
   const duplicateAsNewVersion = async () => {
     if (!quotation || isNew) return;
     setDuplicatingVersion(true);
@@ -423,6 +562,10 @@ export function useQuotationWorkspaceController(id?: string) {
   };
 
   return {
+    currencies,
+    liveRates,
+    fetchingRates,
+    rateSource,
     id,
     isNew,
     quotation,
@@ -461,6 +604,11 @@ export function useQuotationWorkspaceController(id?: string) {
     isEditing,
     setIsEditing,
     duplicatingVersion,
+    runningWorkflowAction,
+    useManualQuotedPrice,
+    setUseManualQuotedPrice,
+    manualQuotedPrice,
+    setManualQuotedPrice,
     previousVersionQuote,
     selectedStyle,
     totals,
@@ -475,6 +623,9 @@ export function useQuotationWorkspaceController(id?: string) {
     onQuickStyleImageChange,
     createStyleInline,
     handleSave,
+    refreshExchangeRates,
+    submitForReview,
+    approveQuotation,
     duplicateAsNewVersion,
     navigate,
   };

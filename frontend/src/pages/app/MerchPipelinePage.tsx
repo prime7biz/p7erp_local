@@ -256,7 +256,6 @@ export function MerchPipelinePage() {
                         <PipelineCard
                           key={`${item.document_type}-${item.id}`}
                           item={item}
-                          stage={stage}
                           docTypeBadge={docTypeBadge}
                           moveMenuId={moveMenuId}
                           setMoveMenuId={setMoveMenuId}
@@ -377,7 +376,6 @@ export function MerchPipelinePage() {
 
 function PipelineCard({
   item,
-  stage: _stage,
   docTypeBadge,
   moveMenuId,
   setMoveMenuId,
@@ -385,7 +383,6 @@ function PipelineCard({
   moving,
 }: {
   item: PipelineItemOut;
-  stage: PipelineStageOut;
   docTypeBadge: (doc: string) => React.ReactNode;
   moveMenuId: string | null;
   setMoveMenuId: (id: string | null) => void;

@@ -125,7 +125,12 @@ export function OutstandingBillsPage() {
         <input className="rounded border px-3 py-2 text-sm" placeholder="Amount" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Paid Amount" value={form.paid_amount} onChange={(e) => setForm((p) => ({ ...p, paid_amount: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Currency" value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value.toUpperCase() }))} />
-        <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">Create Bill</button>
+        <button
+          type="submit"
+          className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+        >
+          Create Bill
+        </button>
       </form>
 
       {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}

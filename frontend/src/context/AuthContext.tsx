@@ -53,6 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Hook is intentionally colocated with AuthProvider for a single import surface.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");

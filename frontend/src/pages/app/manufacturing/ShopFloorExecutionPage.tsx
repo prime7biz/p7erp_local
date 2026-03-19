@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 import { api } from "@/api/client";
@@ -48,7 +48,7 @@ export function ShopFloorExecutionPage() {
   const canManageDowntime = canAssign;
   const canRunOperationActions = myRole !== "quality";
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError("");
     try {
       const [queueRows, dash, userRows, downtimeRows, reasonRows, trendRows] = await Promise.all([
@@ -78,11 +78,11 @@ export function ShopFloorExecutionPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load shop floor queue");
     }
-  };
+  }, [statusFilter, areaKey, analyticsStartDate, analyticsEndDate]);
 
   useEffect(() => {
     void load();
-  }, [statusFilter, areaKey, analyticsStartDate, analyticsEndDate]);
+  }, [load]);
 
   const runAction = async (action: "start" | "hold" | "resume" | "complete", opId: number) => {
     setError("");

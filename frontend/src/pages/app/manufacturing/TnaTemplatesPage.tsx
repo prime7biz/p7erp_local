@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api, type MfgTnaTemplateCreate, type MfgTnaTemplateTaskCreate } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
@@ -19,31 +19,35 @@ export function TnaTemplatesPage() {
     is_milestone: false,
   });
 
-  const loadTemplates = async () => {
-    const rows = await api.listMfgTnaTemplates();
-    setTemplates(rows);
-    if (!selectedTemplateId && rows[0]) setSelectedTemplateId(rows[0].id);
-  };
+  const selectedTemplateIdRef = useRef<number | null>(null);
+  selectedTemplateIdRef.current = selectedTemplateId;
 
-  const loadTasks = async (templateId: number) => {
+  const loadTasks = useCallback(async (templateId: number) => {
     const rows = await api.listMfgTnaTemplateTasks(templateId);
     setTasks(rows);
-  };
+  }, []);
 
-  const refresh = async () => {
+  const loadTemplates = useCallback(async () => {
+    const rows = await api.listMfgTnaTemplates();
+    setTemplates(rows);
+    setSelectedTemplateId((prev) => (!prev && rows[0] ? rows[0].id : prev));
+  }, []);
+
+  const refresh = useCallback(async () => {
     setError("");
     try {
-      const [_, userRows] = await Promise.all([loadTemplates(), api.listUsers()]);
+      const [, userRows] = await Promise.all([loadTemplates(), api.listUsers()]);
       setUsers(userRows.filter((row) => row.is_active));
-      if (selectedTemplateId) await loadTasks(selectedTemplateId);
+      const tid = selectedTemplateIdRef.current;
+      if (tid) await loadTasks(tid);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load TNA templates");
     }
-  };
+  }, [loadTemplates, loadTasks]);
 
   useEffect(() => {
     void refresh();
-  }, []);
+  }, [refresh]);
 
   useEffect(() => {
     if (selectedTemplateId) {
@@ -51,7 +55,7 @@ export function TnaTemplatesPage() {
     } else {
       setTasks([]);
     }
-  }, [selectedTemplateId]);
+  }, [selectedTemplateId, loadTasks]);
 
   const createTemplate = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -110,7 +114,13 @@ export function TnaTemplatesPage() {
             <option value="sample">Sample</option>
             <option value="style">Style</option>
           </select>
-          <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-text-inverse disabled:opacity-60" type="submit" disabled={!canManage}>Create</button>
+          <button
+            type="submit"
+            className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 disabled:opacity-60"
+            disabled={!canManage}
+          >
+            Create
+          </button>
         </form>
       </div>
 

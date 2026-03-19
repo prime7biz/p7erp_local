@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type AuditLogResponse } from "@/api/client";
 
 export function AuditPage() {
@@ -11,7 +11,7 @@ export function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -28,11 +28,11 @@ export function AuditPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [limit, offset, action, search]);
 
   useEffect(() => {
-    load();
-  }, [offset]);
+    void load();
+  }, [load]);
 
   const applyFilters = async (e: React.FormEvent) => {
     e.preventDefault();

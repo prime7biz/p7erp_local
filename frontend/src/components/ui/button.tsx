@@ -38,4 +38,6 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 );
 Button.displayName = "Button";
 
+// CVA variant helper is intentionally exported for composition.
+// eslint-disable-next-line react-refresh/only-export-components
 export { Button, buttonVariants };

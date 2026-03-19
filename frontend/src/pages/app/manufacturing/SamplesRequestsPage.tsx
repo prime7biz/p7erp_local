@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api, type MfgSampleRequestCreate } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
@@ -27,7 +27,7 @@ export function SamplesRequestsPage() {
     item_id: null,
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError("");
     try {
       const [sampleRows, orderRows, itemRows, userRows] = await Promise.all([
@@ -51,11 +51,11 @@ export function SamplesRequestsPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load samples");
     }
-  };
+  }, [statusFilter]);
 
   useEffect(() => {
     void load();
-  }, [statusFilter]);
+  }, [load]);
 
   const orderMap = useMemo(() => new Map(orders.map((row) => [row.id, row.order_code])), [orders]);
   const itemMap = useMemo(() => new Map(items.map((row) => [row.id, row.name])), [items]);

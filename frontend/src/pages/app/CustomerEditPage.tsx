@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Building2, CheckCircle2, Mail, MapPin, Save, Upload } from "lucide-react";
 import { api, type CustomerUpdate } from "@/api/client";
+import { FormCitySelect, FormCountrySelect } from "@/components/customers/CustomerLocationFields";
+import { citiesForCountry } from "@/data/formLocations";
 
 type CustomerFormState = {
   legalEntityName: string;
@@ -475,11 +477,10 @@ export function CustomerEditPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-text-secondary">City **</label>
-                  <input
-                    type="text"
+                  <FormCitySelect
+                    country={form.billingCountry}
                     value={form.billingCity}
-                    onChange={(e) => setForm((prev) => (prev ? { ...prev, billingCity: e.target.value } : prev))}
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                    onChange={(next) => setForm((prev) => (prev ? { ...prev, billingCity: next } : prev))}
                     required
                   />
                 </div>
@@ -495,11 +496,16 @@ export function CustomerEditPage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-text-secondary">Country **</label>
-                <input
-                  type="text"
+                <FormCountrySelect
                   value={form.billingCountry}
-                  onChange={(e) => setForm((prev) => (prev ? { ...prev, billingCountry: e.target.value } : prev))}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                  onChange={(next) =>
+                    setForm((prev) => {
+                      if (!prev) return prev;
+                      const cities = citiesForCountry(next);
+                      const keep = cities.includes(prev.billingCity);
+                      return { ...prev, billingCountry: next, billingCity: keep ? prev.billingCity : "" };
+                    })
+                  }
                   required
                 />
               </div>
@@ -531,12 +537,12 @@ export function CustomerEditPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-text-secondary">City **</label>
-                  <input
-                    type="text"
+                  <FormCitySelect
+                    country={shippingValues.shippingCountry}
                     value={shippingValues.shippingCity}
-                    onChange={(e) => setForm((prev) => (prev ? { ...prev, shippingCity: e.target.value } : prev))}
+                    onChange={(next) => setForm((prev) => (prev ? { ...prev, shippingCity: next } : prev))}
                     disabled={form.sameAsBilling}
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                    required={!form.sameAsBilling}
                   />
                 </div>
                 <div>
@@ -552,12 +558,18 @@ export function CustomerEditPage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-text-secondary">Country **</label>
-                <input
-                  type="text"
+                <FormCountrySelect
                   value={shippingValues.shippingCountry}
-                  onChange={(e) => setForm((prev) => (prev ? { ...prev, shippingCountry: e.target.value } : prev))}
+                  onChange={(next) =>
+                    setForm((prev) => {
+                      if (!prev || prev.sameAsBilling) return prev;
+                      const cities = citiesForCountry(next);
+                      const keep = cities.includes(prev.shippingCity);
+                      return { ...prev, shippingCountry: next, shippingCity: keep ? prev.shippingCity : "" };
+                    })
+                  }
                   disabled={form.sameAsBilling}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                  required={!form.sameAsBilling}
                 />
               </div>
             </div>

@@ -64,7 +64,12 @@ export function CostCentersPage() {
         <input className="rounded border px-3 py-2 text-sm" placeholder="Center Code" value={form.center_code} onChange={(e) => setForm((p) => ({ ...p, center_code: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Name" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Department" value={form.department ?? ""} onChange={(e) => setForm((p) => ({ ...p, department: e.target.value }))} />
-        <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-text-inverse">{editingId ? "Update" : "Create"}</button>
+        <button
+          type="submit"
+          className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+        >
+          {editingId ? "Update" : "Create"}
+        </button>
       </form>
 
       <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">

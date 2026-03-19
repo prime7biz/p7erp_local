@@ -100,6 +100,8 @@ from app.models.finance import (
     PaymentRun,
     PaymentRunItem,
     SettlementAuditPreset,
+    BillReference,
+    BillAllocation,
     AccountingPeriod,
 )
 from app.models.hr import (
@@ -149,6 +151,7 @@ from app.models.hr_payroll import (
 )
 from app.models.commercial import (
     BtbLc,
+    BtbLcAccounting,
     ExportCase,
     MasterContract,
     ProformaInvoice,
@@ -291,6 +294,8 @@ __all__ = [
     "PaymentRun",
     "PaymentRunItem",
     "SettlementAuditPreset",
+    "BillReference",
+    "BillAllocation",
     "AccountingPeriod",
     "Department",
     "Designation",
@@ -328,6 +333,7 @@ __all__ = [
     "ProformaInvoice",
     "ProformaInvoiceOrder",
     "BtbLc",
+    "BtbLcAccounting",
     "Intermediary",
     "CustomerIntermediary",
     "AiSession",

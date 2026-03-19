@@ -1,5 +1,6 @@
 """Commercial API: export cases, proforma invoices, BTB LCs."""
 
+from datetime import date
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -8,22 +9,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.common.auth import get_current_user
+from app.common.codegen import next_tenant_code
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import Tenant, User
 from app.models.commercial import (
     BtbLc,
+    BtbLcAccounting,
     ExportCase,
     MasterContract,
     ProformaInvoice,
     ProformaInvoiceOrder,
 )
-from app.models.finance import BankAccount
+from app.models.finance import (
+    AccountGroup,
+    BankAccount,
+    ChartOfAccount,
+    CostCenter,
+    Voucher,
+    VoucherLine,
+    VoucherType,
+)
 from app.models.inventory import PurchaseOrder, Vendor
 from app.models.merch import Order
 from app.models.customer import Customer
 from app.modules.commercial.schemas import (
+    BtbLcAccountingResponse,
     BtbLcCreate,
+    BtbLcRecordDocumentsAcceptanceBody,
+    BtbLcRecordOpeningBody,
+    BtbLcRecordRealizationBody,
     BtbLcUpdate,
     BtbLcResponse,
     CustomerForPrint,
@@ -43,8 +58,33 @@ from app.modules.commercial.schemas import (
 
 router = APIRouter(prefix="/commercial", tags=["commercial"])
 
+BTB_LC_MAX_UTILIZATION_PERCENT = 70.0
+
+
+def _compute_btb_warning_band(percent: float | None) -> str | None:
+    if percent is None:
+        return None
+    if percent < 50:
+        return "VERY_GOOD"
+    if percent < 60:
+        return "GOOD"
+    if percent < 65:
+        return "SATISFACTORY"
+    if percent <= 70:
+        return "NO_CREDIT"
+    return "RED_FLAG"
+
+
+def _utilization_percent(used: float | None, total: float | None) -> float | None:
+    if total is None or total <= 0:
+        return None
+    return round((used or 0) / total * 100, 2)
+
 
 def _master_contract_to_response(r: MasterContract) -> MasterContractResponse:
+    amount = float(r.amount) if r.amount is not None else None
+    utilized_amount = float(r.btb_utilized_amount) if r.btb_utilized_amount is not None else None
+    utilization_pct = _utilization_percent(utilized_amount, amount)
     return MasterContractResponse(
         id=r.id,
         tenant_id=r.tenant_id,
@@ -52,12 +92,15 @@ def _master_contract_to_response(r: MasterContract) -> MasterContractResponse:
         reference=r.reference,
         status=r.status,
         contract_date=r.contract_date.isoformat() if r.contract_date else None,
-        amount=float(r.amount) if r.amount is not None else None,
-        btb_utilized_amount=float(r.btb_utilized_amount) if r.btb_utilized_amount is not None else None,
+        amount=amount,
+        btb_utilized_amount=utilized_amount,
         currency=r.currency,
         buyer_name=r.buyer_name,
         bank_name=r.bank_name,
         expiry_date=r.expiry_date.isoformat() if r.expiry_date else None,
+        cost_center_id=r.cost_center_id,
+        btb_utilization_pct=utilization_pct,
+        btb_warning_band=_compute_btb_warning_band(utilization_pct),
         created_at=r.created_at.isoformat(),
         updated_at=r.updated_at.isoformat(),
     )
@@ -126,7 +169,11 @@ def _proforma_invoice_to_response(pi: ProformaInvoice) -> ProformaInvoiceRespons
     )
 
 
-def _btb_lc_to_response(r: BtbLc) -> BtbLcResponse:
+def _btb_lc_to_response(
+    r: BtbLc,
+    master_cost_center_id: int | None = None,
+    accounting: BtbLcAccounting | None = None,
+) -> BtbLcResponse:
     return BtbLcResponse(
         id=r.id,
         tenant_id=r.tenant_id,
@@ -151,6 +198,11 @@ def _btb_lc_to_response(r: BtbLc) -> BtbLcResponse:
         expiry_date=r.expiry_date.isoformat() if r.expiry_date else None,
         maturity_date=r.maturity_date.isoformat() if r.maturity_date else None,
         maturity_amount=float(r.maturity_amount) if r.maturity_amount is not None else None,
+        master_cost_center_id=master_cost_center_id,
+        accounting_status=accounting.status if accounting else None,
+        lc_open_voucher_id=accounting.lc_open_voucher_id if accounting else None,
+        import_bill_voucher_id=accounting.import_bill_voucher_id if accounting else None,
+        realization_voucher_id=accounting.realization_voucher_id if accounting else None,
         created_at=r.created_at.isoformat(),
         updated_at=r.updated_at.isoformat(),
     )
@@ -167,6 +219,154 @@ async def _recompute_master_contract_utilization(db: AsyncSession, master_contra
         )
     )
     contract.btb_utilized_amount = result.scalar() or 0
+
+
+async def _enforce_btb_lc_utilization_cap(
+    db: AsyncSession,
+    tenant_id: int,
+    master_contract_id: int,
+    candidate_amount: float,
+    excluding_btb_lc_id: int | None = None,
+) -> None:
+    contract = await db.get(MasterContract, master_contract_id)
+    if not contract or contract.tenant_id != tenant_id:
+        raise HTTPException(status_code=400, detail="Master contract not found")
+    if contract.amount is None or float(contract.amount) <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Master contract amount must be set before opening BTB LC.",
+        )
+    total_stmt = select(func.coalesce(func.sum(BtbLc.amount), 0)).where(
+        BtbLc.master_contract_id == master_contract_id,
+        BtbLc.tenant_id == tenant_id,
+    )
+    if excluding_btb_lc_id is not None:
+        total_stmt = total_stmt.where(BtbLc.id != excluding_btb_lc_id)
+    result = await db.execute(total_stmt)
+    current_total = float(result.scalar() or 0)
+    contract_total = float(contract.amount)
+    next_total = current_total + float(candidate_amount)
+    max_allowed = contract_total * (BTB_LC_MAX_UTILIZATION_PERCENT / 100)
+    if next_total > max_allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"BTB LC opening limit exceeded: max {BTB_LC_MAX_UTILIZATION_PERCENT:.0f}% "
+                f"({max_allowed:.2f}) of master contract amount."
+            ),
+        )
+
+
+def _btb_lc_accounting_to_response(row: BtbLcAccounting) -> BtbLcAccountingResponse:
+    return BtbLcAccountingResponse(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        btb_lc_id=row.btb_lc_id,
+        lc_open_voucher_id=row.lc_open_voucher_id,
+        import_bill_voucher_id=row.import_bill_voucher_id,
+        maturity_date=row.maturity_date.isoformat() if row.maturity_date else None,
+        realization_voucher_id=row.realization_voucher_id,
+        status=row.status,
+        created_at=row.created_at.isoformat(),
+        updated_at=row.updated_at.isoformat(),
+    )
+
+
+async def _validate_posting_account(
+    db: AsyncSession,
+    tenant_id: int,
+    account_id: int,
+) -> ChartOfAccount:
+    account = await db.get(ChartOfAccount, account_id)
+    if not account or account.tenant_id != tenant_id:
+        raise HTTPException(status_code=400, detail=f"Account not found: {account_id}")
+    if (account.account_type or "posting").lower() == "header":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Posting not allowed to header account: {account.account_number}",
+        )
+    group = await db.get(AccountGroup, account.group_id)
+    if group and not bool(group.allow_posting):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Posting not allowed to accounts in group '{group.name}'.",
+        )
+    return account
+
+
+async def _create_lcj_voucher(
+    *,
+    db: AsyncSession,
+    tenant_id: int,
+    user_id: int | None,
+    voucher_date: date,
+    description: str | None,
+    reference: str | None,
+    debit_account_id: int,
+    credit_account_id: int,
+    amount: float,
+    cost_center_id: int | None,
+    btb_lc_id: int | None = None,
+) -> Voucher:
+    lcj_type = await db.execute(
+        select(VoucherType).where(
+            VoucherType.tenant_id == tenant_id,
+            VoucherType.code == "LCJ",
+            VoucherType.is_active.is_(True),
+        )
+    )
+    if lcj_type.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Voucher type LCJ is inactive or not configured.",
+        )
+    await _validate_posting_account(db, tenant_id, debit_account_id)
+    await _validate_posting_account(db, tenant_id, credit_account_id)
+    voucher_number = await next_tenant_code(
+        db,
+        model=Voucher,
+        tenant_id=tenant_id,
+        prefix="VCH-",
+        width=4,
+    )
+    voucher = Voucher(
+        tenant_id=tenant_id,
+        voucher_number=voucher_number,
+        voucher_type="LCJ",
+        voucher_date=voucher_date,
+        status="DRAFT",
+        description=description,
+        reference=reference,
+        btb_lc_id=btb_lc_id,
+        created_by=user_id,
+    )
+    db.add(voucher)
+    await db.flush()
+    amount_str = f"{float(amount):.2f}"
+    db.add(
+        VoucherLine(
+            tenant_id=tenant_id,
+            voucher_id=voucher.id,
+            account_id=debit_account_id,
+            cost_center_id=cost_center_id,
+            entry_type="DEBIT",
+            amount=amount_str,
+            notes="BTB LC lifecycle auto entry",
+        )
+    )
+    db.add(
+        VoucherLine(
+            tenant_id=tenant_id,
+            voucher_id=voucher.id,
+            account_id=credit_account_id,
+            cost_center_id=cost_center_id,
+            entry_type="CREDIT",
+            amount=amount_str,
+            notes="BTB LC lifecycle auto entry",
+        )
+    )
+    await db.flush()
+    return voucher
 
 
 # ---------- Export cases ----------
@@ -279,6 +479,36 @@ async def get_master_contract(
     return _master_contract_to_response(row)
 
 
+async def _ensure_master_contract_cost_center(
+    db: AsyncSession, contract: MasterContract
+) -> None:
+    """If contract is open/active and has no cost center, create one and link it."""
+    if contract.cost_center_id is not None:
+        return
+    status_upper = (contract.status or "").strip().upper()
+    if status_upper not in ("OPEN", "ACTIVE", "CONFIRMED"):
+        return
+    code = await next_tenant_code(
+        db,
+        model=CostCenter,
+        tenant_id=contract.tenant_id,
+        prefix="MC-",
+        width=4,
+    )
+    name = f"Master {contract.reference}"
+    if contract.buyer_name:
+        name = f"{name} – {contract.buyer_name}"
+    cc = CostCenter(
+        tenant_id=contract.tenant_id,
+        center_code=code,
+        name=name[:255],
+        department="Trade",
+    )
+    db.add(cc)
+    await db.flush()
+    contract.cost_center_id = cc.id
+
+
 @router.post(
     "/master-contracts",
     response_model=MasterContractResponse,
@@ -295,6 +525,7 @@ async def create_master_contract(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
     row = MasterContract(
         tenant_id=tenant.id,
+        cost_center_id=body.cost_center_id,
         contract_type=(body.contract_type or "EXPORT_LC").strip().upper(),
         reference=body.reference,
         status=body.status or "DRAFT",
@@ -306,6 +537,8 @@ async def create_master_contract(
         expiry_date=body.expiry_date,
     )
     db.add(row)
+    await db.flush()
+    await _ensure_master_contract_cost_center(db, row)
     await db.flush()
     await db.refresh(row)
     return _master_contract_to_response(row)
@@ -335,6 +568,7 @@ async def update_master_contract(
         updates["status"] = str(updates["status"]).strip().upper()
     for key, value in updates.items():
         setattr(row, key, value)
+    await _ensure_master_contract_cost_center(db, row)
     await _recompute_master_contract_utilization(db, row.id)
     await db.flush()
     await db.refresh(row)
@@ -822,7 +1056,35 @@ async def list_btb_lcs(
     stmt = stmt.order_by(BtbLc.created_at.desc()).limit(limit).offset(offset)
     result = await db.execute(stmt)
     rows = result.scalars().all()
-    return [_btb_lc_to_response(r) for r in rows]
+    master_ids = {int(r.master_contract_id) for r in rows if r.master_contract_id is not None}
+    btb_ids = [int(r.id) for r in rows]
+    cost_center_map: dict[int, int | None] = {}
+    accounting_map: dict[int, BtbLcAccounting] = {}
+    if master_ids:
+        contracts_result = await db.execute(
+            select(MasterContract.id, MasterContract.cost_center_id).where(
+                MasterContract.tenant_id == tenant.id,
+                MasterContract.id.in_(master_ids),
+            )
+        )
+        cost_center_map = {int(cid): ccid for cid, ccid in contracts_result.all()}
+    if btb_ids:
+        accounting_result = await db.execute(
+            select(BtbLcAccounting).where(
+                BtbLcAccounting.tenant_id == tenant.id,
+                BtbLcAccounting.btb_lc_id.in_(btb_ids),
+            )
+        )
+        accounting_rows = accounting_result.scalars().all()
+        accounting_map = {int(a.btb_lc_id): a for a in accounting_rows}
+    return [
+        _btb_lc_to_response(
+            r,
+            master_cost_center_id=cost_center_map.get(int(r.master_contract_id or 0)),
+            accounting=accounting_map.get(int(r.id)),
+        )
+        for r in rows
+    ]
 
 
 @router.get("/btb-lcs/{lc_id}", response_model=BtbLcResponse, tags=["btb-lcs"])
@@ -837,7 +1099,24 @@ async def get_btb_lc(
     row = await db.get(BtbLc, lc_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BTB LC not found")
-    return _btb_lc_to_response(row)
+    master_cost_center_id: int | None = None
+    accounting: BtbLcAccounting | None = None
+    if row.master_contract_id is not None:
+        contract = await db.get(MasterContract, row.master_contract_id)
+        if contract and contract.tenant_id == tenant.id:
+            master_cost_center_id = contract.cost_center_id
+    acc_result = await db.execute(
+        select(BtbLcAccounting).where(
+            BtbLcAccounting.tenant_id == tenant.id,
+            BtbLcAccounting.btb_lc_id == row.id,
+        )
+    )
+    accounting = acc_result.scalar_one_or_none()
+    return _btb_lc_to_response(
+        row,
+        master_cost_center_id=master_cost_center_id,
+        accounting=accounting,
+    )
 
 
 @router.post(
@@ -881,15 +1160,13 @@ async def create_btb_lc(
         po = await db.get(PurchaseOrder, body.purchase_order_id)
         if not po or po.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail="Purchase order not found")
-    if contract and body.amount is not None and contract.amount is not None:
-        current_total_result = await db.execute(
-            select(func.coalesce(func.sum(BtbLc.amount), 0)).where(
-                BtbLc.master_contract_id == contract.id, BtbLc.tenant_id == tenant.id
-            )
+    if contract and body.amount is not None:
+        await _enforce_btb_lc_utilization_cap(
+            db=db,
+            tenant_id=tenant.id,
+            master_contract_id=contract.id,
+            candidate_amount=float(body.amount),
         )
-        current_total = float(current_total_result.scalar() or 0)
-        if current_total + float(body.amount) > float(contract.amount):
-            raise HTTPException(status_code=400, detail="BTB LC amount exceeds master contract remaining amount")
     row = BtbLc(
         tenant_id=tenant.id,
         reference=body.reference,
@@ -912,10 +1189,31 @@ async def create_btb_lc(
     )
     db.add(row)
     await db.flush()
+    # One accounting lifecycle record per BTB LC (LC open → import bill → realization)
+    acc = BtbLcAccounting(
+        tenant_id=tenant.id,
+        btb_lc_id=row.id,
+        maturity_date=body.maturity_date,
+        status="OPEN",
+    )
+    db.add(acc)
+    await db.flush()
     if row.master_contract_id is not None:
         await _recompute_master_contract_utilization(db, row.master_contract_id)
     await db.refresh(row)
-    return _btb_lc_to_response(row)
+    master_cost_center_id = contract.cost_center_id if contract else None
+    acc_result = await db.execute(
+        select(BtbLcAccounting).where(
+            BtbLcAccounting.tenant_id == tenant.id,
+            BtbLcAccounting.btb_lc_id == row.id,
+        )
+    )
+    accounting = acc_result.scalar_one_or_none()
+    return _btb_lc_to_response(
+        row,
+        master_cost_center_id=master_cost_center_id,
+        accounting=accounting,
+    )
 
 
 @router.patch(
@@ -940,23 +1238,19 @@ async def update_btb_lc(
         updates["status"] = str(updates["status"]).strip().upper()
     target_master_id = updates.get("master_contract_id", row.master_contract_id)
     target_amount = updates.get("amount", row.amount)
+    contract: MasterContract | None = None
     if target_master_id is not None:
         contract = await db.get(MasterContract, int(target_master_id))
         if not contract or contract.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail="Master contract not found")
-        if target_amount is not None and contract.amount is not None:
-            current_total_result = await db.execute(
-                select(func.coalesce(func.sum(BtbLc.amount), 0)).where(
-                    BtbLc.master_contract_id == contract.id,
-                    BtbLc.tenant_id == tenant.id,
-                    BtbLc.id != row.id,
-                )
+        if target_amount is not None:
+            await _enforce_btb_lc_utilization_cap(
+                db=db,
+                tenant_id=tenant.id,
+                master_contract_id=contract.id,
+                candidate_amount=float(target_amount),
+                excluding_btb_lc_id=row.id,
             )
-            current_total = float(current_total_result.scalar() or 0)
-            if current_total + float(target_amount) > float(contract.amount):
-                raise HTTPException(
-                    status_code=400, detail="BTB LC amount exceeds master contract remaining amount"
-                )
     if "vendor_id" in updates and updates["vendor_id"] is not None:
         vendor = await db.get(Vendor, int(updates["vendor_id"]))
         if not vendor or vendor.tenant_id != tenant.id:
@@ -980,6 +1274,16 @@ async def update_btb_lc(
     previous_master_id = row.master_contract_id
     for key, value in updates.items():
         setattr(row, key, value)
+    if "maturity_date" in updates:
+        acc_result = await db.execute(
+            select(BtbLcAccounting).where(
+                BtbLcAccounting.tenant_id == tenant.id,
+                BtbLcAccounting.btb_lc_id == row.id,
+            )
+        )
+        acc_row = acc_result.scalar_one_or_none()
+        if acc_row:
+            acc_row.maturity_date = row.maturity_date
     await db.flush()
     if previous_master_id is not None:
         await _recompute_master_contract_utilization(db, previous_master_id)
@@ -987,4 +1291,232 @@ async def update_btb_lc(
         await _recompute_master_contract_utilization(db, row.master_contract_id)
     await db.flush()
     await db.refresh(row)
-    return _btb_lc_to_response(row)
+    master_cost_center_id = contract.cost_center_id if target_master_id is not None and contract else None
+    if master_cost_center_id is None and row.master_contract_id is not None:
+        current_contract = await db.get(MasterContract, row.master_contract_id)
+        if current_contract and current_contract.tenant_id == tenant.id:
+            master_cost_center_id = current_contract.cost_center_id
+    acc_result = await db.execute(
+        select(BtbLcAccounting).where(
+            BtbLcAccounting.tenant_id == tenant.id,
+            BtbLcAccounting.btb_lc_id == row.id,
+        )
+    )
+    accounting = acc_result.scalar_one_or_none()
+    return _btb_lc_to_response(
+        row,
+        master_cost_center_id=master_cost_center_id,
+        accounting=accounting,
+    )
+
+
+@router.get(
+    "/btb-lcs/{lc_id}/accounting",
+    response_model=BtbLcAccountingResponse,
+    tags=["btb-lcs"],
+)
+async def get_btb_lc_accounting(
+    lc_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    lc = await db.get(BtbLc, lc_id)
+    if not lc or lc.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="BTB LC not found")
+    row_result = await db.execute(
+        select(BtbLcAccounting).where(
+            BtbLcAccounting.tenant_id == tenant.id,
+            BtbLcAccounting.btb_lc_id == lc_id,
+        )
+    )
+    row = row_result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="BTB LC accounting record not found")
+    return _btb_lc_accounting_to_response(row)
+
+
+@router.post(
+    "/btb-lcs/{lc_id}/record-opening",
+    response_model=BtbLcAccountingResponse,
+    tags=["btb-lcs"],
+)
+async def record_btb_lc_opening(
+    lc_id: int,
+    body: BtbLcRecordOpeningBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    lc = await db.get(BtbLc, lc_id)
+    if not lc or lc.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="BTB LC not found")
+    if lc.master_contract_id is None:
+        raise HTTPException(status_code=400, detail="BTB LC is not linked to a master contract")
+    contract = await db.get(MasterContract, lc.master_contract_id)
+    if not contract or contract.tenant_id != tenant.id:
+        raise HTTPException(status_code=400, detail="Master contract not found")
+    await _ensure_master_contract_cost_center(db, contract)
+    await db.flush()
+    row_result = await db.execute(
+        select(BtbLcAccounting).where(
+            BtbLcAccounting.tenant_id == tenant.id,
+            BtbLcAccounting.btb_lc_id == lc_id,
+        )
+    )
+    acc = row_result.scalar_one_or_none()
+    if not acc:
+        acc = BtbLcAccounting(tenant_id=tenant.id, btb_lc_id=lc_id, status="OPEN")
+        db.add(acc)
+        await db.flush()
+    if acc.lc_open_voucher_id is not None:
+        raise HTTPException(status_code=400, detail="LC opening is already recorded")
+    raw_amount = body.amount if body.amount is not None else lc.amount
+    amount = float(raw_amount or 0)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="BTB LC amount must be greater than zero")
+    voucher = await _create_lcj_voucher(
+        db=db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher_date=body.voucher_date or lc.open_date or lc.lc_date or date.today(),
+        description=body.description or f"BTB LC opening liability for {lc.reference}",
+        reference=body.reference or f"{lc.reference}-OPEN",
+        debit_account_id=body.upcoming_lc_liability_account_id,
+        credit_account_id=body.blocked_credit_facility_account_id,
+        amount=amount,
+        cost_center_id=contract.cost_center_id,
+        btb_lc_id=lc.id,
+    )
+    acc.lc_open_voucher_id = voucher.id
+    acc.status = "OPEN"
+    await db.flush()
+    return _btb_lc_accounting_to_response(acc)
+
+
+@router.post(
+    "/btb-lcs/{lc_id}/record-documents-acceptance",
+    response_model=BtbLcAccountingResponse,
+    tags=["btb-lcs"],
+)
+async def record_btb_lc_documents_acceptance(
+    lc_id: int,
+    body: BtbLcRecordDocumentsAcceptanceBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    lc = await db.get(BtbLc, lc_id)
+    if not lc or lc.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="BTB LC not found")
+    if lc.master_contract_id is None:
+        raise HTTPException(status_code=400, detail="BTB LC is not linked to a master contract")
+    contract = await db.get(MasterContract, lc.master_contract_id)
+    if not contract or contract.tenant_id != tenant.id:
+        raise HTTPException(status_code=400, detail="Master contract not found")
+    await _ensure_master_contract_cost_center(db, contract)
+    await db.flush()
+    row_result = await db.execute(
+        select(BtbLcAccounting).where(
+            BtbLcAccounting.tenant_id == tenant.id,
+            BtbLcAccounting.btb_lc_id == lc_id,
+        )
+    )
+    acc = row_result.scalar_one_or_none()
+    if not acc:
+        raise HTTPException(status_code=400, detail="Record opening first before documents acceptance")
+    if acc.lc_open_voucher_id is None:
+        raise HTTPException(status_code=400, detail="Record opening first before documents acceptance")
+    if acc.import_bill_voucher_id is not None:
+        raise HTTPException(status_code=400, detail="Documents acceptance is already recorded")
+    raw_amount = body.amount if body.amount is not None else lc.maturity_amount or lc.amount
+    amount = float(raw_amount or 0)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Import bill amount must be greater than zero")
+    voucher = await _create_lcj_voucher(
+        db=db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher_date=body.voucher_date or date.today(),
+        description=body.description or f"BTB LC documents acceptance for {lc.reference}",
+        reference=body.reference or f"{lc.reference}-DOCS",
+        debit_account_id=body.lc_liability_account_id,
+        credit_account_id=body.import_bill_liability_account_id,
+        amount=amount,
+        cost_center_id=contract.cost_center_id,
+        btb_lc_id=lc.id,
+    )
+    if body.maturity_date is not None:
+        lc.maturity_date = body.maturity_date
+        acc.maturity_date = body.maturity_date
+    elif lc.maturity_date is not None:
+        acc.maturity_date = lc.maturity_date
+    acc.import_bill_voucher_id = voucher.id
+    acc.status = "DOCUMENTS_ACCEPTED"
+    await db.flush()
+    return _btb_lc_accounting_to_response(acc)
+
+
+@router.post(
+    "/btb-lcs/{lc_id}/record-realization",
+    response_model=BtbLcAccountingResponse,
+    tags=["btb-lcs"],
+)
+async def record_btb_lc_realization(
+    lc_id: int,
+    body: BtbLcRecordRealizationBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    lc = await db.get(BtbLc, lc_id)
+    if not lc or lc.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="BTB LC not found")
+    if lc.master_contract_id is None:
+        raise HTTPException(status_code=400, detail="BTB LC is not linked to a master contract")
+    contract = await db.get(MasterContract, lc.master_contract_id)
+    if not contract or contract.tenant_id != tenant.id:
+        raise HTTPException(status_code=400, detail="Master contract not found")
+    await _ensure_master_contract_cost_center(db, contract)
+    await db.flush()
+    row_result = await db.execute(
+        select(BtbLcAccounting).where(
+            BtbLcAccounting.tenant_id == tenant.id,
+            BtbLcAccounting.btb_lc_id == lc_id,
+        )
+    )
+    acc = row_result.scalar_one_or_none()
+    if not acc or acc.import_bill_voucher_id is None:
+        raise HTTPException(status_code=400, detail="Record documents acceptance before realization")
+    if acc.realization_voucher_id is not None:
+        raise HTTPException(status_code=400, detail="Realization is already recorded")
+    raw_amount = body.amount if body.amount is not None else lc.maturity_amount or lc.amount
+    amount = float(raw_amount or 0)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Realization amount must be greater than zero")
+    voucher = await _create_lcj_voucher(
+        db=db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher_date=body.voucher_date or acc.maturity_date or lc.maturity_date or date.today(),
+        description=body.description or f"BTB LC realization for {lc.reference}",
+        reference=body.reference or f"{lc.reference}-REALIZED",
+        debit_account_id=body.import_bill_liability_account_id,
+        credit_account_id=body.payment_account_id,
+        amount=amount,
+        cost_center_id=contract.cost_center_id,
+        btb_lc_id=lc.id,
+    )
+    acc.realization_voucher_id = voucher.id
+    acc.status = "REALIZED"
+    lc.status = "CLOSED"
+    await db.flush()
+    return _btb_lc_accounting_to_response(acc)

@@ -18,7 +18,7 @@ Use this file and `.cursor/rules/` when working on this repo (e.g. on another ma
 ## Where to look
 
 - **Plans and parity:** `docs/REFERENCE_PARITY.md`, `docs/PROJECT_PLAN.md`, `docs/IMPLEMENTATION_ROADMAP.md`, `docs/session_plan_legacy.md`.
-- **Build:** `docs/BUILD_VERIFICATION.md` – B1–B3 checklist (backend deps, env, frontend build).
+- **Build:** `docs/BUILD_VERIFICATION.md` – B1–B3 checklist (backend deps, env, frontend build). Frontend: `npm run lint` (ESLint) and `npm run lint:fix` in `frontend/`.
 - **Cursor rules:** `.cursor/rules/project.mdc` (project context, always apply).
 - **Run / structure:** `README.md`, `.env.example`, `docker-compose.yml`.
 - **Finance UAT and go-live:**

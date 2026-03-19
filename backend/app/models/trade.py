@@ -57,6 +57,8 @@ class TradeCase(Base):
     cost_amount: Mapped[float | None] = mapped_column(nullable=True)
     margin_amount: Mapped[float | None] = mapped_column(nullable=True)
     margin_pct: Mapped[float | None] = mapped_column(nullable=True)
+    base_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    base_currency_margin: Mapped[float | None] = mapped_column(nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

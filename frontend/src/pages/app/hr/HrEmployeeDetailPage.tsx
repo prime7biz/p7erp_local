@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   api,
@@ -27,7 +27,7 @@ export function HrEmployeeDetailPage() {
     return designations.filter((d) => !d.department_id || d.department_id === form.department_id);
   }, [designations, form.department_id]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!Number.isFinite(employeeIdNum) || employeeIdNum <= 0) {
       setError("Invalid employee id.");
       setLoading(false);
@@ -72,11 +72,11 @@ export function HrEmployeeDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [employeeIdNum]);
 
   useEffect(() => {
-    load();
-  }, [employeeId]);
+    void load();
+  }, [load]);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api,
   type InventoryItemCreate,
@@ -64,7 +64,7 @@ export function InventoryItemsPage() {
   const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
   const unitMap = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -82,25 +82,23 @@ export function InventoryItemsPage() {
       setItems(itm);
       const firstCategory = cat[0];
       const firstUnit = uni[0];
-      if (!subcategoryForm.category_id && firstCategory) {
-        setSubcategoryForm((prev) => ({ ...prev, category_id: firstCategory.id }));
+      if (firstCategory) {
+        setSubcategoryForm((prev) => (!prev.category_id ? { ...prev, category_id: firstCategory.id } : prev));
+        setItemForm((prev) => (!prev.category_id ? { ...prev, category_id: firstCategory.id } : prev));
       }
-      if (!itemForm.category_id && firstCategory) {
-        setItemForm((prev) => ({ ...prev, category_id: firstCategory.id }));
-      }
-      if (!itemForm.unit_id && firstUnit) {
-        setItemForm((prev) => ({ ...prev, unit_id: firstUnit.id }));
+      if (firstUnit) {
+        setItemForm((prev) => (!prev.unit_id ? { ...prev, unit_id: firstUnit.id } : prev));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load inventory masters");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   useEffect(() => {
     const closeActions = () => {

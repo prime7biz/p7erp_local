@@ -104,7 +104,12 @@ export function BankAccountsPage() {
         <input className="rounded border px-3 py-2 text-sm" placeholder="Currency (e.g. BDT)" value={form.currency ?? "BDT"} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Opening Balance" value={form.opening_balance ?? "0"} onChange={(e) => setForm((p) => ({ ...p, opening_balance: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Current Balance" value={form.current_balance ?? "0"} onChange={(e) => setForm((p) => ({ ...p, current_balance: e.target.value }))} />
-        <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">{editingId ? "Update" : "Create"}</button>
+        <button
+          type="submit"
+          className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+        >
+          {editingId ? "Update" : "Create"}
+        </button>
       </form>
 
       <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">

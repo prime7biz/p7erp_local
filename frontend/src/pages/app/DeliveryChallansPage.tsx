@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api,
   type DeliveryChallanCreate,
@@ -23,7 +23,7 @@ export function DeliveryChallansPage() {
 
   const itemMap = useMemo(() => new Map(items.map((i) => [i.id, `${i.item_code} - ${i.name}`])), [items]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [dc, itm, wh] = await Promise.all([
         api.listDeliveryChallans(),
@@ -33,19 +33,23 @@ export function DeliveryChallansPage() {
       setRows(dc);
       setItems(itm);
       setWarehouses(wh);
-      if (!line.item_id && itm[0]) setLine((p) => ({ ...p, item_id: itm[0]!.id }));
-      if (!line.warehouse_id && wh[0]) setLine((p) => ({ ...p, warehouse_id: wh[0]!.id }));
+      setLine((p) => {
+        let next = { ...p };
+        if (!p.item_id && itm[0]) next = { ...next, item_id: itm[0]!.id };
+        if (!p.warehouse_id && wh[0]) next = { ...next, warehouse_id: wh[0]!.id };
+        return next;
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load delivery challans");
     }
-  };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const status = (params.get("status") || "").toUpperCase();
     if (status) setStatusFilter(status);
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const statuses = ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED"];
   const filteredRows = statusFilter ? rows.filter((r) => (r.status || "").toUpperCase() === statusFilter) : rows;

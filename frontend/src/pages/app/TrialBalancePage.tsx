@@ -91,7 +91,11 @@ export function TrialBalancePage() {
             </option>
           ))}
         </select>
-        <button className={`rounded border px-3 py-2 text-sm ${compactView ? "bg-surface-inverse text-text-inverse" : ""}`} onClick={() => setCompactView((v) => !v)}>
+        <button
+          type="button"
+          className={`rounded border px-3 py-2 text-sm ${compactView ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "border-border text-text-secondary"}`}
+          onClick={() => setCompactView((v) => !v)}
+        >
           {compactView ? "Comfort View" : "Compact View"}
         </button>
         <button className="rounded border px-3 py-2 text-sm" onClick={() => handlePrint()}>Print</button>

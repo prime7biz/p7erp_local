@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type MfgMaterialReturnResponse } from "@/api/client";
 
 export function QualityReturnsPage() {
@@ -6,7 +6,7 @@ export function QualityReturnsPage() {
   const [error, setError] = useState("");
   const [workOrderFilter, setWorkOrderFilter] = useState<string>("");
 
-  const load = async (opts?: { work_order_id?: number }) => {
+  const load = useCallback(async (opts?: { work_order_id?: number }) => {
     setError("");
     try {
       const rows = await api.listMfgMaterialReturns(opts);
@@ -14,13 +14,11 @@ export function QualityReturnsPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load material returns");
     }
-  };
+  }, []);
 
   useEffect(() => {
-    const workOrderId = workOrderFilter.trim() ? Number(workOrderFilter) : undefined;
-    const valid = workOrderId != null && !Number.isNaN(workOrderId);
-    void load(valid ? { work_order_id: workOrderId } : undefined);
-  }, []);
+    void load(undefined);
+  }, [load]);
 
   const onFilter = (e: React.FormEvent) => {
     e.preventDefault();

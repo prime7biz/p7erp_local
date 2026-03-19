@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   api,
   type BankAccountResponse,
@@ -46,7 +46,18 @@ export function BankReconciliationPage() {
   });
   const selectedReconciliation = rows.find((r) => r.id === selectedReconId) ?? null;
 
-  async function load() {
+  const loadReconDetails = useCallback(async (reconId: number) => {
+    const [lines, s, logs] = await Promise.all([
+      api.listBankStatementLines(reconId),
+      api.getBankReconciliationSummary(reconId),
+      api.listBankStatementMatchLogs(reconId),
+    ]);
+    setStatementLines(lines);
+    setSummary(s);
+    setMatchLogs(logs);
+  }, []);
+
+  const load = useCallback(async () => {
     try {
       setSuccess("");
       setError("");
@@ -82,11 +93,11 @@ export function BankReconciliationPage() {
     } catch (e) {
       setError((e as Error).message);
     }
-  }
+  }, [form.bank_account_id, loadReconDetails]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   useEffect(() => {
     const loadPermission = async () => {
@@ -130,17 +141,6 @@ export function BankReconciliationPage() {
     if (label === "FINALIZED") return "bg-surface-subtle text-text-secondary border-border-strong";
     if (label === "MATCHED") return "bg-status-success-subtle text-status-success-foreground border-status-success/30";
     return "bg-status-warning-subtle text-status-warning-foreground border-status-warning/30";
-  }
-
-  async function loadReconDetails(reconId: number) {
-    const [lines, s, logs] = await Promise.all([
-      api.listBankStatementLines(reconId),
-      api.getBankReconciliationSummary(reconId),
-      api.listBankStatementMatchLogs(reconId),
-    ]);
-    setStatementLines(lines);
-    setSummary(s);
-    setMatchLogs(logs);
   }
 
   async function submit(e: FormEvent) {
@@ -338,7 +338,12 @@ export function BankReconciliationPage() {
         </select>
         <input type="date" className="rounded border px-3 py-2 text-sm" value={form.statement_date} onChange={(e) => setForm((p) => ({ ...p, statement_date: e.target.value }))} />
         <input className="rounded border px-3 py-2 text-sm" placeholder="Statement balance" value={form.statement_balance} onChange={(e) => setForm((p) => ({ ...p, statement_balance: e.target.value }))} />
-        <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground">Add Statement</button>
+        <button
+          type="submit"
+          className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+        >
+          Add Statement
+        </button>
       </form>
 
       <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
@@ -450,7 +455,13 @@ export function BankReconciliationPage() {
           <input className="rounded border px-3 py-2 text-sm" placeholder="Reference" value={lineForm.reference ?? ""} onChange={(e) => setLineForm((p) => ({ ...p, reference: e.target.value }))} />
           <input className="rounded border px-3 py-2 text-sm" placeholder="Debit" value={lineForm.debit_amount ?? "0"} onChange={(e) => setLineForm((p) => ({ ...p, debit_amount: e.target.value }))} />
           <input className="rounded border px-3 py-2 text-sm" placeholder="Credit" value={lineForm.credit_amount ?? "0"} onChange={(e) => setLineForm((p) => ({ ...p, credit_amount: e.target.value }))} />
-          <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-brand-primary-foreground" disabled={selectedReconciliation?.is_finalized}>Add Line</button>
+          <button
+            type="submit"
+            className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 disabled:opacity-50"
+            disabled={selectedReconciliation?.is_finalized}
+          >
+            Add Line
+          </button>
         </form>
 
         <div className="space-y-2">

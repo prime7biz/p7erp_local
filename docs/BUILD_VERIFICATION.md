@@ -31,7 +31,14 @@ npm install
 npm run build
 ```
 
-**Success:** No TypeScript or Vite errors; `frontend/dist/` is produced.
+Optional quality check (ESLint):
+
+```powershell
+cd frontend
+npm run lint
+```
+
+**Success:** No TypeScript or Vite errors; `frontend/dist/` is produced. (`npm run lint` may still report existing warnings/errors until the codebase is cleaned up.)
 
 ## Quick reference
 
@@ -42,6 +49,7 @@ npm run build
 | Backend run | `cd backend` then `uvicorn app.main:app --reload` |
 | Frontend build | `cd frontend` then `npm install` then `npm run build` |
 | Frontend dev | `cd frontend` then `npm run dev` |
+| Frontend lint | `cd frontend` then `npm run lint` |
 
 ## Sign-off
 

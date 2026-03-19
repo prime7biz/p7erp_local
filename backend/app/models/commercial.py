@@ -15,13 +15,19 @@ if TYPE_CHECKING:
 
 
 class MasterContract(Base):
-    """Master export contract/LC – links proforma invoices and BTB LCs."""
+    """Master export contract/LC – links proforma invoices and BTB LCs.
+    When opened, a cost center should be linked so all related payments (BTB LC,
+    bank, cash) and COGS expenses use this cost center.
+    """
 
     __tablename__ = "master_contracts"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    cost_center_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cost_centers.id", ondelete="SET NULL"), nullable=True, index=True
     )
     contract_type: Mapped[str] = mapped_column(
         String(24), nullable=False, default="EXPORT_LC", index=True
@@ -186,6 +192,45 @@ class BtbLc(Base):
     maturity_amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
     exchange_rate_to_base: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
     base_currency_amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+
+class BtbLcAccounting(Base):
+    """Tracks accounting lifecycle for a BTB LC: LC open (liability + blocked facility),
+    documents accepted (import bill liability), and realization on maturity.
+    One row per BTB LC. Vouchers are linked here; voucher lines use master contract cost center.
+    """
+
+    __tablename__ = "btb_lc_accounting"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    btb_lc_id: Mapped[int] = mapped_column(
+        ForeignKey("btb_lcs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # When BTB LC opened: LC liability + blocked credit facility posting
+    lc_open_voucher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # When documents accepted (per LC terms 90/120 etc.): import bill liability
+    import_bill_voucher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    maturity_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # When import bill is paid at maturity
+    realization_voucher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="OPEN", index=True
+    )  # OPEN | DOCUMENTS_ACCEPTED | REALIZED
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import csv
 import calendar
+import hashlib
+import json
+import secrets
 from collections import defaultdict
 from io import StringIO
 from datetime import date, datetime, timedelta
 from typing import Literal
+from urllib.error import URLError
+from urllib.request import urlopen
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
@@ -25,8 +30,11 @@ from app.models import (
     BankReconciliation,
     BankStatementMatchLog,
     BankStatementLine,
+    BillReference,
+    BillAllocation,
     Budget,
     BudgetLine,
+    BtbLc,
     ChartOfAccount,
     CashForecastLine,
     CashForecastScenario,
@@ -86,6 +94,86 @@ def _to_float(value: str | None) -> float:
         return float(value or "0")
     except (TypeError, ValueError):
         return 0.0
+
+
+def _normalize_currency(code: str | None, *, default: str = "BDT") -> str:
+    normalized = (code or default).strip().upper()
+    return normalized or default
+
+
+async def _lookup_exchange_rate(
+    db: AsyncSession,
+    tenant_id: int,
+    from_currency: str,
+    to_currency: str,
+) -> tuple[float, str, datetime | None]:
+    from_code = _normalize_currency(from_currency)
+    to_code = _normalize_currency(to_currency)
+    if from_code == to_code:
+        return 1.0, "same-currency", datetime.utcnow()
+
+    latest = (
+        await db.execute(
+            select(CurrencyExchangeRate)
+            .where(
+                CurrencyExchangeRate.tenant_id == tenant_id,
+                CurrencyExchangeRate.from_currency == from_code,
+                CurrencyExchangeRate.to_currency == to_code,
+                CurrencyExchangeRate.is_active.is_(True),
+            )
+            .order_by(CurrencyExchangeRate.effective_date.desc())
+        )
+    ).scalars().first()
+    if latest:
+        return max(_to_float(latest.rate), 0.000001), "manual-rate-table", datetime.utcnow()
+
+    try:
+        with urlopen(f"https://open.er-api.com/v6/latest/{from_code}", timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        rates = payload.get("rates") if isinstance(payload, dict) else {}
+        raw_rate = rates.get(to_code) if isinstance(rates, dict) else None
+        live_rate = float(raw_rate)
+        if live_rate > 0:
+            return live_rate, "open.er-api.com", datetime.utcnow()
+    except (URLError, TimeoutError, ValueError, TypeError, KeyError, OSError):
+        pass
+
+    return 1.0, "fallback-1.0", datetime.utcnow()
+
+
+def _voucher_signature_payload(voucher: Voucher, lines: list[VoucherLine]) -> dict:
+    serialized_lines = [
+        {
+            "account_id": line.account_id,
+            "cost_center_id": line.cost_center_id,
+            "entry_type": line.entry_type,
+            "amount": line.amount,
+            "base_amount": line.base_amount,
+            "currency": line.currency,
+            "exchange_rate": line.exchange_rate,
+            "notes": line.notes,
+        }
+        for line in lines
+    ]
+    return {
+        "voucher_id": voucher.id,
+        "voucher_number": voucher.voucher_number,
+        "voucher_type": voucher.voucher_type,
+        "voucher_date": voucher.voucher_date.isoformat(),
+        "status": voucher.status,
+        "currency": voucher.currency,
+        "base_currency": voucher.base_currency,
+        "exchange_rate": voucher.exchange_rate,
+        "lines": serialized_lines,
+    }
+
+
+def _apply_internal_signature(voucher: Voucher, lines: list[VoucherLine]) -> None:
+    canonical_payload = json.dumps(_voucher_signature_payload(voucher, lines), sort_keys=True, separators=(",", ":"))
+    voucher.signature_hash = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
+    voucher.verification_id = voucher.verification_id or f"VFY-{secrets.token_hex(8).upper()}"
+    voucher.signed_at = datetime.utcnow()
+    voucher.signed_by_system = True
 
 
 def _add_months(base_date: date, months: int) -> date:
@@ -244,12 +332,14 @@ class ChartAccountBody(BaseModel):
     statistical_formula: str | None = None
     parent_account_id: int | None = None
     last_reviewed_at: date | None = None
+    enable_bill_wise: bool = False
 
 
 class ChartAccountOut(ChartAccountBody):
     id: int
     tenant_id: int
     balance: str
+    enable_bill_wise: bool
 
     class Config:
         from_attributes = True
@@ -276,6 +366,11 @@ class VoucherTypeOut(BaseModel):
 class VoucherLineBody(BaseModel):
     account_id: int
     cost_center_id: int | None = None
+    currency: str | None = None
+    exchange_rate: str | None = None
+    base_amount: str | None = None
+    is_rate_overridden: bool = False
+    rate_source: str | None = None
     entry_type: Literal["DEBIT", "CREDIT"]
     amount: str
     notes: str | None = None
@@ -287,6 +382,24 @@ class VoucherBody(BaseModel):
     voucher_date: date
     description: str | None = None
     reference: str | None = None
+    currency: str = "BDT"
+    base_currency: str = "BDT"
+    exchange_rate: str | None = None
+    exchange_rate_source: str | None = None
+    exchange_rate_fetched_at: datetime | None = None
+    trade_case_id: int | None = None
+    btb_lc_id: int | None = None
+    lines: list[VoucherLineBody]
+
+
+class VoucherUpdateBody(BaseModel):
+    voucher_type: str
+    voucher_date: date
+    description: str | None = None
+    reference: str | None = None
+    currency: str = "BDT"
+    base_currency: str = "BDT"
+    exchange_rate: str | None = None
     lines: list[VoucherLineBody]
 
 
@@ -308,7 +421,20 @@ class VoucherOut(BaseModel):
     status: str
     description: str | None
     reference: str | None
+    currency: str
+    base_currency: str
+    exchange_rate: str
+    exchange_rate_source: str
+    exchange_rate_fetched_at: datetime | None
+    verification_id: str | None
+    signature_hash: str | None
+    signed_at: datetime | None
+    signed_by_system: bool
+    trade_case_id: int | None
+    btb_lc_id: int | None
     created_by: int | None
+    created_at: datetime
+    updated_at: datetime
     lines: list[VoucherLineOut]
 
 
@@ -527,6 +653,7 @@ class PaymentRunBody(BaseModel):
     bank_account_id: int | None = None
     base_currency: str | None = "BDT"
     remarks: str | None = None
+    trade_case_id: int | None = None
     items: list[PaymentRunItemBody]
 
 
@@ -550,6 +677,7 @@ class PaymentRunOut(BaseModel):
     status: str
     total_amount: str
     executed_voucher_id: int | None
+    trade_case_id: int | None
     remarks: str | None
     created_by: int | None
     items: list[PaymentRunItemOut]
@@ -684,7 +812,20 @@ async def _voucher_out(db: AsyncSession, voucher: Voucher) -> VoucherOut:
         status=voucher.status,
         description=voucher.description,
         reference=voucher.reference,
+        currency=voucher.currency,
+        base_currency=voucher.base_currency,
+        exchange_rate=voucher.exchange_rate,
+        exchange_rate_source=voucher.exchange_rate_source,
+        exchange_rate_fetched_at=voucher.exchange_rate_fetched_at,
+        verification_id=voucher.verification_id,
+        signature_hash=voucher.signature_hash,
+        signed_at=voucher.signed_at,
+        signed_by_system=voucher.signed_by_system,
+        trade_case_id=voucher.trade_case_id,
+        btb_lc_id=voucher.btb_lc_id,
         created_by=voucher.created_by,
+        created_at=voucher.created_at,
+        updated_at=voucher.updated_at,
         lines=lines,
     )
 
@@ -714,6 +855,7 @@ async def _payment_run_out(db: AsyncSession, run: PaymentRun) -> PaymentRunOut:
         status=run.status,
         total_amount=run.total_amount,
         executed_voucher_id=run.executed_voucher_id,
+        trade_case_id=run.trade_case_id,
         remarks=run.remarks,
         created_by=run.created_by,
         items=items,
@@ -1633,6 +1775,20 @@ async def list_vouchers(
     return [await _voucher_out(db, row) for row in rows]
 
 
+@router.get("/vouchers/{voucher_id}", response_model=VoucherOut)
+async def get_voucher(
+    voucher_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(Voucher, voucher_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    return await _voucher_out(db, row)
+
+
 @router.post("/vouchers", response_model=VoucherOut)
 async def create_voucher(
     body: VoucherBody,
@@ -1641,6 +1797,8 @@ async def create_voucher(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    if not (body.description or "").strip():
+        raise HTTPException(status_code=400, detail="Narration / description is required for audit purposes")
     voucher_type_code = body.voucher_type.strip().upper()
     if voucher_type_code not in await _active_voucher_type_codes(db, tenant.id):
         raise HTTPException(status_code=400, detail="Voucher type is inactive or not configured")
@@ -1650,6 +1808,25 @@ async def create_voucher(
     credit_total = sum(_to_float(line.amount) for line in body.lines if line.entry_type == "CREDIT")
     if round(debit_total, 4) != round(credit_total, 4):
         raise HTTPException(status_code=400, detail="Voucher is not balanced")
+    if body.btb_lc_id is not None:
+        btb_lc = await db.get(BtbLc, body.btb_lc_id)
+        if not btb_lc or btb_lc.tenant_id != tenant.id:
+            raise HTTPException(status_code=400, detail="BTB LC not found")
+    txn_currency = _normalize_currency(body.currency, default="BDT")
+    base_currency = _normalize_currency(body.base_currency, default="BDT")
+    rate_source = (body.exchange_rate_source or "system").strip() or "system"
+    fetched_at = body.exchange_rate_fetched_at
+    exchange_rate_value: float | None = None
+    if body.exchange_rate is not None:
+        exchange_rate_value = _to_float(body.exchange_rate)
+        if exchange_rate_value <= 0:
+            raise HTTPException(status_code=400, detail="Exchange rate must be greater than zero")
+        rate_source = "manual" if rate_source == "system" else rate_source
+        fetched_at = fetched_at or datetime.utcnow()
+    else:
+        exchange_rate_value, rate_source, fetched_at = await _lookup_exchange_rate(
+            db, tenant.id, txn_currency, base_currency
+        )
     voucher_number = await next_tenant_code(
         db,
         model=Voucher,
@@ -1665,14 +1842,26 @@ async def create_voucher(
         status="DRAFT",
         description=body.description,
         reference=body.reference,
+        currency=txn_currency,
+        base_currency=base_currency,
+        exchange_rate=str(round(exchange_rate_value or 1.0, 8)),
+        exchange_rate_source=rate_source,
+        exchange_rate_fetched_at=fetched_at,
+        trade_case_id=body.trade_case_id,
+        btb_lc_id=body.btb_lc_id,
         created_by=user.id,
     )
     db.add(row)
     await db.flush()
+    created_lines: list[VoucherLine] = []
     for line in body.lines:
         acct = await db.get(ChartOfAccount, line.account_id)
         if not acct or acct.tenant_id != tenant.id:
             raise HTTPException(status_code=404, detail=f"Account not found: {line.account_id}")
+        if line.cost_center_id is not None:
+            center = await db.get(CostCenter, line.cost_center_id)
+            if not center or center.tenant_id != tenant.id:
+                raise HTTPException(status_code=404, detail=f"Cost center not found: {line.cost_center_id}")
         if getattr(acct, "account_type", "posting") == "header":
             raise HTTPException(
                 status_code=400,
@@ -1684,20 +1873,147 @@ async def create_voucher(
                 status_code=400,
                 detail=f"Posting not allowed to accounts in group '{grp.name}' (summary/post-disabled).",
             )
-        db.add(
-            VoucherLine(
-                tenant_id=tenant.id,
-                voucher_id=row.id,
-                account_id=line.account_id,
-                cost_center_id=line.cost_center_id,
-                entry_type=line.entry_type,
-                amount=line.amount,
-                notes=line.notes,
-            )
+        line_currency = _normalize_currency(line.currency, default=txn_currency)
+        line_rate = _to_float(line.exchange_rate) if line.exchange_rate is not None else (exchange_rate_value or 1.0)
+        if line_rate <= 0:
+            raise HTTPException(status_code=400, detail=f"Invalid exchange rate for account {line.account_id}")
+        amount_value = _to_float(line.amount)
+        base_amount_value = _to_float(line.base_amount) if line.base_amount is not None else amount_value * line_rate
+        voucher_line = VoucherLine(
+            tenant_id=tenant.id,
+            voucher_id=row.id,
+            account_id=line.account_id,
+            cost_center_id=line.cost_center_id,
+            currency=line_currency,
+            exchange_rate=str(round(line_rate, 8)),
+            base_amount=str(round(base_amount_value, 4)),
+            is_rate_overridden=bool(line.is_rate_overridden or line.exchange_rate is not None),
+            rate_source=(line.rate_source or ("manual" if line.exchange_rate is not None else rate_source)).strip() or "system",
+            entry_type=line.entry_type,
+            amount=line.amount,
+            notes=line.notes,
         )
+        db.add(
+            voucher_line
+        )
+        created_lines.append(voucher_line)
+    _apply_internal_signature(row, created_lines)
     await db.commit()
     await db.refresh(row)
     return await _voucher_out(db, row)
+
+
+@router.patch("/vouchers/{voucher_id}", response_model=VoucherOut)
+async def update_voucher(
+    voucher_id: int,
+    body: VoucherUpdateBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    if not (body.description or "").strip():
+        raise HTTPException(status_code=400, detail="Narration / description is required for audit purposes")
+    row = await db.get(Voucher, voucher_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    if row.status not in {"DRAFT", "REJECTED"}:
+        raise HTTPException(status_code=400, detail="Only DRAFT or REJECTED vouchers can be edited")
+    if not body.lines:
+        raise HTTPException(status_code=400, detail="Voucher must have at least one line")
+    voucher_type_code = body.voucher_type.strip().upper()
+    if voucher_type_code not in await _active_voucher_type_codes(db, tenant.id):
+        raise HTTPException(status_code=400, detail="Voucher type is inactive or not configured")
+    debit_total = sum(_to_float(line.amount) for line in body.lines if line.entry_type == "DEBIT")
+    credit_total = sum(_to_float(line.amount) for line in body.lines if line.entry_type == "CREDIT")
+    if round(debit_total, 4) != round(credit_total, 4):
+        raise HTTPException(status_code=400, detail="Voucher is not balanced")
+
+    txn_currency = _normalize_currency(body.currency, default=row.currency)
+    base_currency = _normalize_currency(body.base_currency, default=row.base_currency)
+    if body.exchange_rate is not None:
+        exchange_rate_value = _to_float(body.exchange_rate)
+        if exchange_rate_value <= 0:
+            raise HTTPException(status_code=400, detail="Exchange rate must be greater than zero")
+        rate_source = "manual"
+        fetched_at = datetime.utcnow()
+    else:
+        exchange_rate_value, rate_source, fetched_at = await _lookup_exchange_rate(
+            db, tenant.id, txn_currency, base_currency
+        )
+
+    row.voucher_type = voucher_type_code
+    row.voucher_date = body.voucher_date
+    row.description = body.description
+    row.reference = body.reference
+    row.currency = txn_currency
+    row.base_currency = base_currency
+    row.exchange_rate = str(round(exchange_rate_value, 8))
+    row.exchange_rate_source = rate_source
+    row.exchange_rate_fetched_at = fetched_at
+
+    existing_lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all())
+    for old_line in existing_lines:
+        await db.delete(old_line)
+    await db.flush()
+
+    updated_lines: list[VoucherLine] = []
+    for line in body.lines:
+        acct = await db.get(ChartOfAccount, line.account_id)
+        if not acct or acct.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail=f"Account not found: {line.account_id}")
+        if line.cost_center_id is not None:
+            center = await db.get(CostCenter, line.cost_center_id)
+            if not center or center.tenant_id != tenant.id:
+                raise HTTPException(status_code=404, detail=f"Cost center not found: {line.cost_center_id}")
+        line_currency = _normalize_currency(line.currency, default=txn_currency)
+        line_rate = _to_float(line.exchange_rate) if line.exchange_rate is not None else exchange_rate_value
+        if line_rate <= 0:
+            raise HTTPException(status_code=400, detail=f"Invalid exchange rate for account {line.account_id}")
+        amount_value = _to_float(line.amount)
+        base_amount_value = _to_float(line.base_amount) if line.base_amount is not None else amount_value * line_rate
+        voucher_line = VoucherLine(
+            tenant_id=tenant.id,
+            voucher_id=row.id,
+            account_id=line.account_id,
+            cost_center_id=line.cost_center_id,
+            currency=line_currency,
+            exchange_rate=str(round(line_rate, 8)),
+            base_amount=str(round(base_amount_value, 4)),
+            is_rate_overridden=bool(line.is_rate_overridden or line.exchange_rate is not None),
+            rate_source=(line.rate_source or ("manual" if line.exchange_rate is not None else rate_source)).strip() or "system",
+            entry_type=line.entry_type,
+            amount=line.amount,
+            notes=line.notes,
+        )
+        db.add(voucher_line)
+        updated_lines.append(voucher_line)
+
+    _apply_internal_signature(row, updated_lines)
+    await db.commit()
+    await db.refresh(row)
+    return await _voucher_out(db, row)
+
+
+@router.delete("/vouchers/{voucher_id}")
+async def delete_voucher(
+    voucher_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(Voucher, voucher_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    if row.status in {"POSTED", "REVERSED"}:
+        raise HTTPException(status_code=400, detail="Posted/reversed vouchers cannot be deleted")
+    lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all())
+    for line in lines:
+        await db.delete(line)
+    await db.delete(row)
+    await db.commit()
+    return {"ok": True, "message": "Voucher deleted"}
 
 
 @router.post("/vouchers/{voucher_id}/status", response_model=VoucherOut)
@@ -1747,6 +2063,8 @@ async def update_voucher_status(
                 current_balance += amount if line.entry_type == "CREDIT" else -amount
             account.balance = str(round(current_balance, 4))
     row.status = next_status
+    lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all())
+    _apply_internal_signature(row, lines)
     await db.commit()
     await db.refresh(row)
     return await _voucher_out(db, row)
@@ -3531,6 +3849,7 @@ async def create_payment_run(
         status="DRAFT",
         total_amount="0",
         remarks=body.remarks,
+        trade_case_id=body.trade_case_id,
         created_by=user.id,
     )
     db.add(run)
@@ -4177,12 +4496,28 @@ async def voucher_print(
     if not voucher or voucher.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher not found")
     lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all())
+
+    created_by_name = ""
+    if voucher.created_by:
+        creator = await db.get(User, voucher.created_by)
+        if creator:
+            parts = [creator.first_name or "", creator.last_name or ""]
+            created_by_name = " ".join(p for p in parts if p).strip() or creator.username
+
     output_lines = []
     total_debit = 0.0
     total_credit = 0.0
     for line in lines:
         account = await db.get(ChartOfAccount, line.account_id)
         account_name = account.name if account and account.tenant_id == tenant.id else f"Account#{line.account_id}"
+        account_code = account.account_number if account and account.tenant_id == tenant.id else ""
+
+        cost_center_name = ""
+        if line.cost_center_id:
+            cc = await db.get(CostCenter, line.cost_center_id)
+            if cc and cc.tenant_id == tenant.id:
+                cost_center_name = cc.name
+
         amount = _to_float(line.amount)
         if line.entry_type == "DEBIT":
             total_debit += amount
@@ -4192,12 +4527,21 @@ async def voucher_print(
             {
                 "line_id": line.id,
                 "account_id": line.account_id,
+                "account_code": account_code,
                 "account_name": account_name,
+                "cost_center_id": line.cost_center_id,
+                "cost_center_name": cost_center_name,
                 "entry_type": line.entry_type,
+                "currency": line.currency,
+                "exchange_rate": line.exchange_rate,
                 "amount": round(amount, 2),
+                "base_amount": round(_to_float(line.base_amount), 2),
                 "notes": line.notes,
             }
         )
+    verification_url = (
+        f"/api/v1/finance/vouchers/verify/{voucher.verification_id}" if voucher.verification_id else None
+    )
     return {
         "voucher": {
             "id": voucher.id,
@@ -4207,6 +4551,20 @@ async def voucher_print(
             "status": voucher.status,
             "description": voucher.description,
             "reference": voucher.reference,
+            "currency": voucher.currency,
+            "base_currency": voucher.base_currency,
+            "exchange_rate": voucher.exchange_rate,
+            "verification_id": voucher.verification_id,
+            "signature_hash": voucher.signature_hash,
+            "signed_at": voucher.signed_at,
+            "created_by": voucher.created_by,
+            "created_by_name": created_by_name,
+            "created_at": voucher.created_at.isoformat() if voucher.created_at else None,
+        },
+        "tenant": {
+            "name": tenant.name,
+            "company_code": tenant.company_code,
+            "domain": tenant.domain,
         },
         "lines": output_lines,
         "totals": {
@@ -4214,7 +4572,75 @@ async def voucher_print(
             "credit_total": round(total_credit, 2),
             "is_balanced": round(total_debit, 2) == round(total_credit, 2),
         },
+        "print_meta": {
+            "copy_labels": ["Original", "Duplicate", "Triplicate"],
+            "verification_url": verification_url,
+            "generated_at": datetime.utcnow().isoformat(),
+        },
     }
+
+
+@router.get("/vouchers/verify/{verification_id}")
+async def verify_voucher_signature(
+    verification_id: str,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    voucher = (
+        await db.execute(
+            select(Voucher).where(
+                Voucher.tenant_id == tenant.id,
+                Voucher.verification_id == verification_id,
+            )
+        )
+    ).scalars().first()
+    if not voucher:
+        raise HTTPException(status_code=404, detail="Verification record not found")
+    lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all())
+    payload = json.dumps(_voucher_signature_payload(voucher, lines), sort_keys=True, separators=(",", ":"))
+    recalculated = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    is_valid = bool(voucher.signature_hash and voucher.signature_hash == recalculated)
+    return {
+        "voucher_id": voucher.id,
+        "voucher_number": voucher.voucher_number,
+        "verification_id": voucher.verification_id,
+        "status": voucher.status,
+        "signed_at": voucher.signed_at,
+        "is_valid": is_valid,
+        "signature_hash": voucher.signature_hash,
+        "recalculated_hash": recalculated,
+    }
+
+
+@router.post("/vouchers/backfill-signatures")
+async def backfill_voucher_signatures(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user)
+    unsigned = list(
+        (
+            await db.execute(
+                select(Voucher).where(
+                    Voucher.tenant_id == tenant.id,
+                    Voucher.verification_id.is_(None),
+                )
+            )
+        ).scalars().all()
+    )
+    signed_count = 0
+    for v in unsigned:
+        lines = list(
+            (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == v.id))).scalars().all()
+        )
+        _apply_internal_signature(v, lines)
+        signed_count += 1
+    await db.commit()
+    return {"signed_count": signed_count, "message": f"Backfilled signatures for {signed_count} voucher(s)."}
 
 
 @router.get("/accounting-periods", response_model=list[AccountingPeriodOut])
@@ -4475,6 +4901,11 @@ async def reverse_voucher(
         if account and account.tenant_id == tenant.id:
             _apply_voucher_impact(account, flipped, _to_float(line.amount))
     src.status = "REVERSED"
+    await db.flush()
+    rev_lines = list(
+        (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == rev.id))).scalars().all()
+    )
+    _apply_internal_signature(rev, rev_lines)
     await db.commit()
     await db.refresh(rev)
     return await _voucher_out(db, rev)
@@ -4847,4 +5278,404 @@ async def voucher_report_top_preparers(
             }
             for uid, cnt in ranking
         ]
+    }
+
+
+# ─────────────────────────────────────────────
+# Bill-Wise Tracking (Tally-style)
+# ─────────────────────────────────────────────
+
+class BillRefCreateBody(BaseModel):
+    bill_number: str | None = None
+    bill_date: date
+    due_date: date | None = None
+    bill_type: Literal["PAYABLE", "RECEIVABLE"]
+    party_name: str
+    account_id: int
+    original_amount: str
+    credit_period_days: int | None = None
+    source_voucher_id: int | None = None
+    source_doc_type: str | None = None
+    source_doc_number: str | None = None
+    notes: str | None = None
+
+
+class BillRefOut(BaseModel):
+    id: int
+    tenant_id: int
+    bill_number: str
+    bill_date: date
+    due_date: date | None
+    bill_type: str
+    party_name: str
+    account_id: int
+    account_name: str | None = None
+    original_amount: str
+    pending_amount: str
+    source_voucher_id: int | None
+    source_doc_type: str | None
+    source_doc_number: str | None
+    status: str
+    credit_period_days: int | None
+    is_overdue: bool
+    notes: str | None
+    created_at: datetime | None
+
+
+class BillAllocBody(BaseModel):
+    allocation_type: Literal["AGAINST_REF", "NEW_REF", "ADVANCE", "ON_ACCOUNT"]
+    bill_reference_id: int | None = None
+    voucher_id: int
+    voucher_line_id: int | None = None
+    account_id: int
+    amount: str
+    notes: str | None = None
+
+
+@router.get("/bill-references", response_model=list[BillRefOut])
+async def list_bill_references(
+    bill_type: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None),
+    account_id: int | None = Query(default=None),
+    search: str | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    stmt = select(BillReference).where(BillReference.tenant_id == tenant.id).order_by(BillReference.bill_date.desc())
+    if bill_type:
+        stmt = stmt.where(BillReference.bill_type == bill_type.strip().upper())
+    if status_filter:
+        stmt = stmt.where(BillReference.status == status_filter.strip().upper())
+    if account_id:
+        stmt = stmt.where(BillReference.account_id == account_id)
+    if search:
+        q = f"%{search.strip().lower()}%"
+        stmt = stmt.where(
+            func.lower(BillReference.bill_number).like(q)
+            | func.lower(BillReference.party_name).like(q)
+        )
+    rows = list((await db.execute(stmt)).scalars().all())
+    out = []
+    for r in rows:
+        acct = await db.get(ChartOfAccount, r.account_id)
+        out.append(BillRefOut(
+            id=r.id, tenant_id=r.tenant_id, bill_number=r.bill_number,
+            bill_date=r.bill_date, due_date=r.due_date, bill_type=r.bill_type,
+            party_name=r.party_name, account_id=r.account_id,
+            account_name=acct.name if acct else None,
+            original_amount=r.original_amount, pending_amount=r.pending_amount,
+            source_voucher_id=r.source_voucher_id,
+            source_doc_type=r.source_doc_type, source_doc_number=r.source_doc_number,
+            status=r.status, credit_period_days=r.credit_period_days,
+            is_overdue=r.is_overdue, notes=r.notes, created_at=r.created_at,
+        ))
+    return out
+
+
+@router.post("/bill-references", response_model=BillRefOut)
+async def create_bill_reference(
+    body: BillRefCreateBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    acct = await db.get(ChartOfAccount, body.account_id)
+    if not acct or acct.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Account not found")
+    bill_number = body.bill_number
+    if not bill_number:
+        prefix = "PAY-" if body.bill_type == "PAYABLE" else "RCV-"
+        bill_number = await next_tenant_code(db, model=BillReference, tenant_id=tenant.id, prefix=prefix, width=4)
+    amount = _to_float(body.original_amount)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    ref = BillReference(
+        tenant_id=tenant.id,
+        bill_number=bill_number,
+        bill_date=body.bill_date,
+        due_date=body.due_date,
+        bill_type=body.bill_type,
+        party_name=body.party_name.strip(),
+        account_id=body.account_id,
+        original_amount=str(round(amount, 2)),
+        pending_amount=str(round(amount, 2)),
+        source_voucher_id=body.source_voucher_id,
+        source_doc_type=body.source_doc_type,
+        source_doc_number=body.source_doc_number,
+        status="OPEN",
+        credit_period_days=body.credit_period_days,
+        is_overdue=body.due_date < date.today() if body.due_date else False,
+        notes=body.notes,
+        created_by=user.id,
+    )
+    db.add(ref)
+    await db.commit()
+    await db.refresh(ref)
+    return BillRefOut(
+        id=ref.id, tenant_id=ref.tenant_id, bill_number=ref.bill_number,
+        bill_date=ref.bill_date, due_date=ref.due_date, bill_type=ref.bill_type,
+        party_name=ref.party_name, account_id=ref.account_id,
+        account_name=acct.name,
+        original_amount=ref.original_amount, pending_amount=ref.pending_amount,
+        source_voucher_id=ref.source_voucher_id,
+        source_doc_type=ref.source_doc_type, source_doc_number=ref.source_doc_number,
+        status=ref.status, credit_period_days=ref.credit_period_days,
+        is_overdue=ref.is_overdue, notes=ref.notes, created_at=ref.created_at,
+    )
+
+
+@router.get("/bill-references/{bill_ref_id}")
+async def get_bill_reference_detail(
+    bill_ref_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    ref = await db.get(BillReference, bill_ref_id)
+    if not ref or ref.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Bill reference not found")
+    acct = await db.get(ChartOfAccount, ref.account_id)
+    allocs = list(
+        (await db.execute(
+            select(BillAllocation).where(
+                BillAllocation.bill_reference_id == ref.id,
+                BillAllocation.tenant_id == tenant.id,
+            ).order_by(BillAllocation.created_at.desc())
+        )).scalars().all()
+    )
+    alloc_out = []
+    for a in allocs:
+        v = await db.get(Voucher, a.voucher_id) if a.voucher_id else None
+        alloc_out.append({
+            "id": a.id,
+            "allocation_type": a.allocation_type,
+            "amount": a.amount,
+            "allocation_date": a.allocation_date,
+            "voucher_id": a.voucher_id,
+            "voucher_number": v.voucher_number if v else None,
+            "notes": a.notes,
+            "created_at": a.created_at,
+        })
+    return {
+        "bill": {
+            "id": ref.id, "bill_number": ref.bill_number,
+            "bill_date": ref.bill_date, "due_date": ref.due_date,
+            "bill_type": ref.bill_type, "party_name": ref.party_name,
+            "account_id": ref.account_id, "account_name": acct.name if acct else None,
+            "original_amount": ref.original_amount, "pending_amount": ref.pending_amount,
+            "status": ref.status, "credit_period_days": ref.credit_period_days,
+            "is_overdue": ref.is_overdue, "notes": ref.notes,
+            "source_voucher_id": ref.source_voucher_id,
+            "source_doc_type": ref.source_doc_type, "source_doc_number": ref.source_doc_number,
+        },
+        "allocations": alloc_out,
+    }
+
+
+@router.post("/bill-references/allocate")
+async def allocate_bill_wise(
+    body: BillAllocBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    amount = _to_float(body.amount)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+    voucher = await db.get(Voucher, body.voucher_id)
+    if not voucher or voucher.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    acct = await db.get(ChartOfAccount, body.account_id)
+    if not acct or acct.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Account not found")
+    today = date.today()
+
+    if body.allocation_type == "AGAINST_REF":
+        if not body.bill_reference_id:
+            raise HTTPException(status_code=400, detail="bill_reference_id is required for AGAINST_REF")
+        ref = await db.get(BillReference, body.bill_reference_id)
+        if not ref or ref.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Bill reference not found")
+        pending = _to_float(ref.pending_amount)
+        if amount > pending + 0.01:
+            raise HTTPException(status_code=400, detail=f"Amount exceeds pending {pending:.2f}")
+        new_pending = max(0, round(pending - amount, 2))
+        ref.pending_amount = str(new_pending)
+        ref.status = "SETTLED" if new_pending <= 0.01 else "PARTIALLY_SETTLED"
+        ref.updated_at = datetime.utcnow()
+    elif body.allocation_type == "NEW_REF":
+        new_bill_no = await next_tenant_code(db, model=BillReference, tenant_id=tenant.id, prefix="NEW-", width=4)
+        ref = BillReference(
+            tenant_id=tenant.id, bill_number=new_bill_no, bill_date=today,
+            bill_type="PAYABLE", party_name=acct.name or "", account_id=body.account_id,
+            original_amount=str(round(amount, 2)), pending_amount=str(round(amount, 2)),
+            source_voucher_id=body.voucher_id, source_doc_type="NEW_REF", status="OPEN",
+            created_by=user.id,
+        )
+        db.add(ref)
+        await db.flush()
+        body.bill_reference_id = ref.id
+    elif body.allocation_type == "ADVANCE":
+        adv_no = await next_tenant_code(db, model=BillReference, tenant_id=tenant.id, prefix="ADV-", width=4)
+        ref = BillReference(
+            tenant_id=tenant.id, bill_number=adv_no, bill_date=today,
+            bill_type="RECEIVABLE", party_name=acct.name or "", account_id=body.account_id,
+            original_amount=str(-round(amount, 2)), pending_amount=str(-round(amount, 2)),
+            source_voucher_id=body.voucher_id, source_doc_type="ADVANCE", status="OPEN",
+            notes=body.notes or "Advance payment", created_by=user.id,
+        )
+        db.add(ref)
+        await db.flush()
+        body.bill_reference_id = ref.id
+
+    alloc = BillAllocation(
+        tenant_id=tenant.id,
+        bill_reference_id=body.bill_reference_id,
+        voucher_id=body.voucher_id,
+        voucher_line_id=body.voucher_line_id,
+        allocation_type=body.allocation_type,
+        amount=str(round(amount, 2)),
+        account_id=body.account_id,
+        allocation_date=today,
+        notes=body.notes,
+        created_by=user.id,
+    )
+    db.add(alloc)
+    await db.commit()
+    await db.refresh(alloc)
+    return {"ok": True, "allocation_id": alloc.id, "message": f"Allocation of {amount:.2f} recorded."}
+
+
+@router.post("/bill-references/auto-create/{voucher_id}")
+async def auto_create_bill_refs_from_voucher(
+    voucher_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Auto-create bill references for all lines hitting bill-wise enabled accounts."""
+    _ensure_tenant(user, tenant)
+    voucher = await db.get(Voucher, voucher_id)
+    if not voucher or voucher.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    lines = list(
+        (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all()
+    )
+    created = []
+    for line in lines:
+        acct = await db.get(ChartOfAccount, line.account_id)
+        if not acct or not acct.enable_bill_wise:
+            continue
+        group = await db.get(AccountGroup, acct.group_id) if acct.group_id else None
+        is_creditor = False
+        if group:
+            gn = (group.name or "").lower()
+            is_creditor = "creditor" in gn or "payable" in gn
+        bill_type = "PAYABLE" if is_creditor else "RECEIVABLE"
+        prefix = "PAY-" if bill_type == "PAYABLE" else "RCV-"
+        bill_no = await next_tenant_code(db, model=BillReference, tenant_id=tenant.id, prefix=prefix, width=4)
+        amount = _to_float(line.amount)
+        ref = BillReference(
+            tenant_id=tenant.id, bill_number=bill_no, bill_date=voucher.voucher_date,
+            bill_type=bill_type, party_name=acct.name, account_id=acct.id,
+            original_amount=str(round(amount, 2)), pending_amount=str(round(amount, 2)),
+            source_voucher_id=voucher.id, source_doc_type="VOUCHER",
+            source_doc_number=voucher.voucher_number, status="OPEN",
+            created_by=user.id,
+        )
+        db.add(ref)
+        created.append(bill_no)
+    await db.commit()
+    return {"ok": True, "bills_created": len(created), "bill_numbers": created}
+
+
+@router.get("/bill-references/report/outstanding")
+async def bill_wise_outstanding_report(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    rows = list(
+        (await db.execute(
+            select(BillReference).where(
+                BillReference.tenant_id == tenant.id,
+                BillReference.status.in_(["OPEN", "PARTIALLY_SETTLED"]),
+            )
+        )).scalars().all()
+    )
+    receivable_total = 0.0
+    payable_total = 0.0
+    receivable_count = 0
+    payable_count = 0
+    overdue_total = 0.0
+    for r in rows:
+        pending = _to_float(r.pending_amount)
+        if r.bill_type == "RECEIVABLE":
+            receivable_total += pending
+            receivable_count += 1
+        else:
+            payable_total += pending
+            payable_count += 1
+        if r.is_overdue or (r.due_date and r.due_date < date.today()):
+            overdue_total += pending
+    return {
+        "receivable": {"total": round(receivable_total, 2), "count": receivable_count},
+        "payable": {"total": round(payable_total, 2), "count": payable_count},
+        "overdue_total": round(overdue_total, 2),
+    }
+
+
+@router.get("/bill-references/report/aging")
+async def bill_wise_aging_report(
+    bill_type: str = Query(default="PAYABLE"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    rows = list(
+        (await db.execute(
+            select(BillReference).where(
+                BillReference.tenant_id == tenant.id,
+                BillReference.bill_type == bill_type.strip().upper(),
+                BillReference.status.in_(["OPEN", "PARTIALLY_SETTLED"]),
+            ).order_by(BillReference.bill_date.asc())
+        )).scalars().all()
+    )
+    today = date.today()
+    buckets: dict[str, float] = {"0_30": 0, "31_60": 0, "61_90": 0, "91_120": 0, "120_plus": 0}
+    party_rows: list[dict] = []
+    for r in rows:
+        pending = _to_float(r.pending_amount)
+        if pending <= 0:
+            continue
+        days = (today - r.bill_date).days
+        if days <= 30:
+            buckets["0_30"] += pending
+        elif days <= 60:
+            buckets["31_60"] += pending
+        elif days <= 90:
+            buckets["61_90"] += pending
+        elif days <= 120:
+            buckets["91_120"] += pending
+        else:
+            buckets["120_plus"] += pending
+        party_rows.append({
+            "bill_number": r.bill_number,
+            "party_name": r.party_name,
+            "bill_date": r.bill_date,
+            "due_date": r.due_date,
+            "days_outstanding": days,
+            "pending_amount": round(pending, 2),
+        })
+    return {
+        "bill_type": bill_type.upper(),
+        "buckets": {k: round(v, 2) for k, v in buckets.items()},
+        "rows": party_rows,
     }

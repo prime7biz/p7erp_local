@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api, type MfgTnaPlanCreate } from "@/api/client";
@@ -25,7 +25,7 @@ export function TnaPlansPage() {
     status: "active",
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError("");
     try {
       const [templateRows, planRows, userRows] = await Promise.all([
@@ -36,22 +36,22 @@ export function TnaPlansPage() {
       setTemplates(templateRows);
       setPlans(planRows);
       setUsers(userRows.filter((row) => row.is_active));
-      if (!form.template_id && templateRows[0]) {
+      if (templateRows[0]) {
         const firstTemplate = templateRows[0];
-        if (firstTemplate) setForm((prev) => ({ ...prev, template_id: firstTemplate.id }));
+        setForm((prev) => (!prev.template_id && firstTemplate ? { ...prev, template_id: firstTemplate.id } : prev));
       }
-      if (!selectedPlanId && planRows[0]) {
+      if (planRows[0]) {
         const firstPlan = planRows[0];
-        if (firstPlan) setSelectedPlanId(firstPlan.id);
+        setSelectedPlanId((prev) => (!prev && firstPlan ? firstPlan.id : prev));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load TNA plans");
     }
-  };
+  }, [statusFilter]);
 
   useEffect(() => {
     void load();
-  }, [statusFilter]);
+  }, [load]);
 
   useEffect(() => {
     if (!selectedPlanId) {
@@ -150,7 +150,13 @@ export function TnaPlansPage() {
             <option value="on_hold">On Hold</option>
             <option value="completed">Completed</option>
           </select>
-          <button className="rounded bg-surface-inverse px-3 py-2 text-sm text-text-inverse disabled:opacity-60" type="submit" disabled={!canManage}>Create Plan</button>
+          <button
+            type="submit"
+            className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 disabled:opacity-60"
+            disabled={!canManage}
+          >
+            Create Plan
+          </button>
         </form>
       </div>
 

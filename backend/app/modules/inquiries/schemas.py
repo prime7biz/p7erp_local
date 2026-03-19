@@ -28,6 +28,10 @@ class InquiryCreate(BaseModel):
   department: str | None = Field(None, max_length=64)
   quantity: int | None = Field(None, ge=0)
   target_price: str | None = Field(None, max_length=32)
+  target_price_currency: str | None = Field(None, max_length=10)
+  currency: str | None = Field(None, max_length=8)
+  exchange_rate: str | None = Field(None, max_length=32)
+  expected_delivery_date: date | None = None
   shipping_term: str | None = Field(None, max_length=64)
   commission_mode: Literal["INCLUDE", "EXCLUDE"] | None = None
   commission_type: Literal["PERCENTAGE", "FIXED"] | None = None
@@ -44,6 +48,10 @@ class InquiryUpdate(BaseModel):
   department: str | None = Field(None, max_length=64)
   quantity: int | None = Field(None, ge=0)
   target_price: str | None = Field(None, max_length=32)
+  target_price_currency: str | None = Field(None, max_length=10)
+  currency: str | None = Field(None, max_length=8)
+  exchange_rate: str | None = Field(None, max_length=32)
+  expected_delivery_date: date | None = None
   shipping_term: str | None = Field(None, max_length=64)
   commission_mode: Literal["INCLUDE", "EXCLUDE"] | None = None
   commission_type: Literal["PERCENTAGE", "FIXED"] | None = None
@@ -67,6 +75,10 @@ class InquiryResponse(BaseModel):
   department: str | None
   quantity: int | None
   target_price: str | None
+  target_price_currency: str | None
+  currency: str | None
+  exchange_rate: str | None
+  expected_delivery_date: str | None
   shipping_term: str | None
   commission_mode: str | None
   commission_type: str | None

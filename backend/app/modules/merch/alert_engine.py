@@ -15,7 +15,7 @@ from app.models import (
     AlertScanLog,
     Tenant,
 )
-from app.modules.merch.alert_rules import DEFAULT_DEFINITIONS, RULE_REGISTRY
+from app.modules.merch.alert_rules import DEFAULT_DEFINITIONS, RULE_REGISTRY, TRADE_RULE_KEYS
 
 
 ACTIVE_STATUSES = ("new", "acknowledged", "in_progress", "waiting_on_buyer", "waiting_on_supplier", "snoozed", "escalated")
@@ -161,6 +161,56 @@ async def run_scan(
         select(AlertDefinition).where(
             AlertDefinition.tenant_id == tenant_id,
             AlertDefinition.is_enabled == True,
+        )
+    )
+    definitions = list(defs_result.scalars().all())
+    total_created = total_updated = 0
+    for defn in definitions:
+        if defn.rule_key not in RULE_REGISTRY:
+            continue
+        log_row = AlertScanLog(
+            tenant_id=tenant_id,
+            rule_key=defn.rule_key,
+            trigger=trigger,
+            status="running",
+        )
+        db.add(log_row)
+        await db.flush()
+        try:
+            config = defn.config_json if isinstance(defn.config_json, dict) else None
+            created, updated = await run_rule(db, tenant_id, defn.rule_key, defn.id, config)
+            total_created += created
+            total_updated += updated
+            log_row.status = "completed"
+            log_row.finished_at = datetime.now(timezone.utc)
+            log_row.instances_created = created
+            log_row.instances_updated = updated
+        except Exception as e:
+            log_row.status = "failed"
+            log_row.finished_at = datetime.now(timezone.utc)
+            log_row.error_message = str(e)[:2000]
+            await db.flush()
+            raise
+        await db.flush()
+    return {
+        "instances_created": total_created,
+        "instances_updated": total_updated,
+        "rules_run": len(definitions),
+    }
+
+
+async def run_scan_trade_rules_only(
+    db: AsyncSession,
+    tenant_id: int,
+    trigger: str = "scheduled_daily",
+) -> dict[str, Any]:
+    """Run only trade alert rules (for optional daily trade-only scan). Returns summary."""
+    await ensure_definitions_for_tenant(db, tenant_id)
+    defs_result = await db.execute(
+        select(AlertDefinition).where(
+            AlertDefinition.tenant_id == tenant_id,
+            AlertDefinition.is_enabled == True,
+            AlertDefinition.rule_key.in_(TRADE_RULE_KEYS),
         )
     )
     definitions = list(defs_result.scalars().all())

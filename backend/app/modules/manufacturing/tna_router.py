@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -17,7 +18,6 @@ from app.models import (
     ManufacturingTnaTemplate,
     ManufacturingTnaTemplateTask,
     Order,
-    Role,
     Tenant,
     User,
 )
@@ -45,13 +45,13 @@ def _next_code(prefix: str, last_id: int | None) -> str:
     return f"{prefix}{(last_id or 0) + 1:04d}"
 
 
-async def _role_name(db: AsyncSession, user: User) -> str:
-    role = await db.get(Role, user.role_id)
+async def _role_name(db: AsyncSession, user: User, tenant_id: int) -> str:
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     return (role.name if role else "").strip().lower()
 
 
-async def _require_manage_role(db: AsyncSession, user: User) -> None:
-    role_name = await _role_name(db, user)
+async def _require_manage_role(db: AsyncSession, user: User, tenant_id: int) -> None:
+    role_name = await _role_name(db, user, tenant_id)
     allowed = {"supervisor", "manager", "admin", "owner", "super_admin", "superadmin"}
     if role_name not in allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only supervisor/manager/admin can manage TNA")
@@ -138,6 +138,8 @@ def _to_plan_task_response(
 @router.get("/templates", response_model=list[TnaTemplateResponse])
 async def list_templates(
     active_only: bool = Query(default=False),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -146,7 +148,7 @@ async def list_templates(
     stmt = select(ManufacturingTnaTemplate).where(ManufacturingTnaTemplate.tenant_id == tenant.id)
     if active_only:
         stmt = stmt.where(ManufacturingTnaTemplate.is_active.is_(True))
-    rows = (await db.execute(stmt.order_by(ManufacturingTnaTemplate.id.desc()))).scalars().all()
+    rows = (await db.execute(stmt.order_by(ManufacturingTnaTemplate.id.desc()).offset(offset).limit(limit))).scalars().all()
     return [_to_template_response(row) for row in rows]
 
 
@@ -158,7 +160,7 @@ async def create_template(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manage_role(db, user)
+    await _require_manage_role(db, user, tenant.id)
     if body.template_code and body.template_code.strip():
         template_code = body.template_code.strip()
     else:
@@ -218,7 +220,7 @@ async def add_template_task(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manage_role(db, user)
+    await _require_manage_role(db, user, tenant.id)
     template = await db.get(ManufacturingTnaTemplate, template_id)
     if not template or template.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -248,6 +250,8 @@ async def add_template_task(
 @router.get("/plans", response_model=list[TnaPlanResponse])
 async def list_plans(
     status_filter: str | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -256,7 +260,7 @@ async def list_plans(
     stmt = select(ManufacturingTnaPlan).where(ManufacturingTnaPlan.tenant_id == tenant.id)
     if status_filter and status_filter.strip():
         stmt = stmt.where(ManufacturingTnaPlan.status == status_filter.strip().lower())
-    rows = (await db.execute(stmt.order_by(ManufacturingTnaPlan.id.desc()))).scalars().all()
+    rows = (await db.execute(stmt.order_by(ManufacturingTnaPlan.id.desc()).offset(offset).limit(limit))).scalars().all()
     return [_to_plan_response(row) for row in rows]
 
 
@@ -282,7 +286,7 @@ async def create_plan(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manage_role(db, user)
+    await _require_manage_role(db, user, tenant.id)
     template = await db.get(ManufacturingTnaTemplate, body.template_id)
     if not template or template.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -360,6 +364,8 @@ async def create_plan(
 @router.get("/plans/{plan_id}/tasks", response_model=list[TnaPlanTaskResponse])
 async def list_plan_tasks(
     plan_id: int,
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -376,6 +382,8 @@ async def list_plan_tasks(
                 ManufacturingTnaPlanTask.plan_id == plan_id,
             )
             .order_by(ManufacturingTnaPlanTask.seq_no)
+            .offset(offset)
+            .limit(limit)
         )
     ).scalars().all()
     template_task_ids = [row.template_task_id for row in rows if row.template_task_id is not None]
@@ -411,7 +419,7 @@ async def update_plan_task(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manage_role(db, user)
+    await _require_manage_role(db, user, tenant.id)
     row = await db.get(ManufacturingTnaPlanTask, task_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Plan task not found")
@@ -421,6 +429,8 @@ async def update_plan_task(
             raise HTTPException(status_code=404, detail="Owner user not found")
 
     template_task = await db.get(ManufacturingTnaTemplateTask, row.template_task_id) if row.template_task_id is not None else None
+    if template_task and template_task.tenant_id != tenant.id:
+        template_task = None
     depends_on_seq = template_task.depends_on_seq if template_task else None
     predecessor = None
     dependency_status = None

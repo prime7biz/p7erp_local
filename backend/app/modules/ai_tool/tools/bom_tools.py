@@ -114,10 +114,15 @@ async def suggest_items_for_bom_line(
     result = await db.execute(stmt)
     items = list(result.scalars().all())
     unit_map: dict[int | None, str] = {}
-    for item in items:
-        if item.unit_id and item.unit_id not in unit_map:
-            unit = await db.get(ItemUnit, item.unit_id)
-            unit_map[item.unit_id] = unit.unit_code if unit else ""
+    unit_ids = {i.unit_id for i in items if i.unit_id}
+    if unit_ids:
+        urows = (
+            await db.execute(
+                select(ItemUnit).where(ItemUnit.tenant_id == tenant_id, ItemUnit.id.in_(unit_ids))
+            )
+        ).scalars().all()
+        for u in urows:
+            unit_map[u.id] = u.unit_code
     out_items = [
         {
             "item_id": i.id,

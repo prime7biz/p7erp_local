@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -18,6 +18,7 @@ def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
 
 @router.get("", response_model=list[UserWithRoleResponse])
 async def list_users(
+    limit: int = Query(500, ge=1, le=2000, description="Max users (safety cap)"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -25,7 +26,11 @@ async def list_users(
     """List users for the current tenant."""
     _ensure_user_tenant(user, tenant)
     result = await db.execute(
-        select(User, Role).join(Role, User.role_id == Role.id).where(User.tenant_id == tenant.id)
+        select(User, Role)
+        .join(Role, User.role_id == Role.id)
+        .where(User.tenant_id == tenant.id)
+        .order_by(User.id.asc())
+        .limit(limit)
     )
     rows = result.all()
     return [
@@ -52,7 +57,12 @@ async def get_me(
 ):
     """Get current user with role. X-Tenant-Id must match user's tenant."""
     _ensure_user_tenant(current_user, tenant)
-    role_result = await db.execute(select(Role).where(Role.id == current_user.role_id))
+    role_result = await db.execute(
+        select(Role).where(
+            Role.id == current_user.role_id,
+            or_(Role.tenant_id == tenant.id, Role.tenant_id.is_(None)),
+        )
+    )
     role = role_result.scalar_one_or_none()
     if role is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Current user role not found")

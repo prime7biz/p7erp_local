@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { logApiError } from "@/utils/logApiError";
 import {
   api,
   type DashboardEmployeeSummary,
@@ -169,6 +170,7 @@ export function Dashboard() {
         setPromiseSummary(value);
         setPromiseLastUpdated(new Date());
       })
+      .catch((err) => logApiError("Dashboard.promiseSummary", err))
       .finally(() => setPromiseRefreshing(false));
   }, [promiseStatusesFilter]);
 

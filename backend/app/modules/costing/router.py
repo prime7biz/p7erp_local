@@ -82,6 +82,8 @@ class CurrencyResponse(BaseModel):
 # ----- Item categories -----
 @router.get("/item-categories", response_model=list[ItemCategoryResponse])
 async def list_item_categories(
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -92,6 +94,8 @@ async def list_item_categories(
         select(ItemCategory)
         .where(ItemCategory.tenant_id == tenant.id, ItemCategory.is_active.is_(True))
         .order_by(ItemCategory.category_code)
+        .offset(offset)
+        .limit(limit)
     )
     rows = result.scalars().all()
     return [
@@ -110,6 +114,8 @@ async def list_item_categories(
 # ----- Item units -----
 @router.get("/item-units", response_model=list[ItemUnitResponse])
 async def list_item_units(
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -120,6 +126,8 @@ async def list_item_units(
         select(ItemUnit)
         .where(ItemUnit.tenant_id == tenant.id, ItemUnit.is_active.is_(True))
         .order_by(ItemUnit.unit_code)
+        .offset(offset)
+        .limit(limit)
     )
     rows = result.scalars().all()
     return [
@@ -139,6 +147,8 @@ async def list_item_units(
 @router.get("/items", response_model=list[ItemResponse])
 async def list_items(
     category_id: int | None = Query(default=None, description="Filter by category"),
+    limit: int = Query(default=5000, ge=1, le=20000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -152,7 +162,7 @@ async def list_items(
     )
     if category_id is not None:
         stmt = stmt.where(Item.category_id == category_id)
-    result = await db.execute(stmt)
+    result = await db.execute(stmt.offset(offset).limit(limit))
     rows = result.scalars().all()
     return [
         ItemResponse(

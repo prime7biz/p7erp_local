@@ -12,6 +12,7 @@ import {
   type PurchaseOrderResponse,
   type VendorResponse,
 } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 
 const STATUS_OPTIONS = ["DRAFT", "OPEN", "AMENDED", "CLOSED"] as const;
 
@@ -141,7 +142,10 @@ export function BtbLcsPage() {
           page: 1,
           page_size: 100,
           sort: "-created_at",
-        }).catch(() => ({ items: [] as MerchAlertItem[] })),
+        }).catch((e) => {
+          logApiError("BtbLcsPage.getMerchAlerts", e);
+          return { items: [] as MerchAlertItem[] };
+        }),
       ]);
       setItems(Array.isArray(lcRows) ? lcRows : []);
       setAllLcs(Array.isArray(allLcRows) ? allLcRows : []);

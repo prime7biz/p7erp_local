@@ -60,6 +60,8 @@ async def list_exchange_rates(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     active_only: bool = Query(True, description="Only active rates"),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
 ):
     """List all exchange rates for the current tenant (newest first per pair)."""
     _ensure_tenant(user, tenant)
@@ -70,7 +72,7 @@ async def list_exchange_rates(
     )
     if active_only:
         stmt = stmt.where(CurrencyExchangeRate.is_active.is_(True))
-    result = await db.execute(stmt)
+    result = await db.execute(stmt.offset(offset).limit(limit))
     rows = result.scalars().all()
     return [
         ExchangeRateResponse(

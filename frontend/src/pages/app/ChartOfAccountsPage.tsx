@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api, type ChartOfAccountCreate, type ChartOfAccountResponse, type AccountGroupResponse, type CoAConfigResponse } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 import { downloadCsv } from "@/lib/reportExport";
 
 const defaultForm: ChartOfAccountCreate = {
@@ -63,7 +64,13 @@ export function ChartOfAccountsPage() {
 
   useEffect(() => {
     if (showCoaConfig) {
-      api.getCoaConfig().then(setCoaConfig).catch(() => setCoaConfig(null));
+      api
+        .getCoaConfig()
+        .then(setCoaConfig)
+        .catch((e) => {
+          logApiError("ChartOfAccountsPage.getCoaConfig", e);
+          setCoaConfig(null);
+        });
     }
   }, [showCoaConfig]);
 

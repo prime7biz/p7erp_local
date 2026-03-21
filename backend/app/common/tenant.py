@@ -1,10 +1,12 @@
 from typing import Annotated
+
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.auth import get_current_user
 from app.database import get_db
-from app.models import Tenant, TenantType
+from app.models import Tenant, TenantType, User
 
 
 async def get_tenant_id_from_header(x_tenant_id: Annotated[str | None, Header()] = None) -> int | None:
@@ -35,12 +37,22 @@ async def get_tenant(
 async def require_tenant(
     tenant_id: Annotated[int | None, Depends(get_tenant_id_from_header)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> Tenant:
-    """Dependency: resolve and return the current tenant from X-Tenant-Id header."""
+    """Resolve tenant from X-Tenant-Id and enforce it matches the authenticated user.
+
+    Requires a valid Bearer token (same as get_current_user). Prevents using one user's
+    credentials with another tenant's X-Tenant-Id header.
+    """
     if tenant_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="X-Tenant-Id header is required",
+        )
+    if user.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="X-Tenant-Id does not match your account tenant",
         )
     tenant = await get_tenant(db, tenant_id)
     if tenant is None:

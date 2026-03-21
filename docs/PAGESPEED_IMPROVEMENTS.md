@@ -23,7 +23,7 @@ This document summarizes changes made to align with Google PageSpeed Insights an
 ### SEO
 - **Meta description:** `index.html` has a default meta description (Prime7 ERP). The `Seo` component sets per-route meta description via `getSeoForPath` (including `/resources/:slug`). No route is left without a description.
 - **robots.txt:** `frontend/public/robots.txt` allows all user-agents and documents the Sitemap URL for production.
-- **Sitemap:** See `docs/SITEMAP_NOTE.md` for adding a static or build-time sitemap.
+- **Sitemap:** Generated at build time (`npm run prebuild` → `frontend/public/sitemap.xml`). See `docs/SITEMAP_NOTE.md`.
 
 ### Landing / visuals
 - **Dashboard section:** Uses your Prime7 ERP Dashboard image with scroll-triggered animation (fade + scale). Image path: `/images/prime7-dashboard.png`.
@@ -38,5 +38,5 @@ This document summarizes changes made to align with Google PageSpeed Insights an
 ## Optional next steps
 
 - Lazy-load public routes (Features, Pricing, About, etc.) in `app/router.tsx` to reduce initial JS further.
-- Add a sitemap (see `SITEMAP_NOTE.md`) and set `Sitemap:` in `robots.txt` for production.
+- Submit the sitemap in Google Search Console after deploy (`docs/SEO_SEARCH_CONSOLE.md`).
 - Ensure images used on the site have appropriate `width`/`height` or `aspect-ratio` to avoid layout shift (CLS).

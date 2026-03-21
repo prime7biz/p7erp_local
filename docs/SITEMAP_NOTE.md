@@ -1,17 +1,30 @@
 # Sitemap for production
 
-The frontend does **not** currently include a `sitemap.xml` or build-time sitemap generation.
+The frontend generates **`frontend/public/sitemap.xml`** at build time.
 
-**Recommendation:**
+## How it works
 
-- **Option A – Static sitemap:** Add a `frontend/public/sitemap.xml` that lists the main public URLs (e.g. `/`, `/features`, `/pricing`, `/about`, `/contact`, `/garments-erp`, `/buying-house-erp`, `/privacy`, `/terms`, `/how-it-works`, `/security`, `/erp-bangladesh`, `/erp-comparison`, `/resources`, `/support`, `/login`, `/signup`). Update it when you add or remove public pages.
+- **Script:** [`frontend/scripts/generate-sitemap.mjs`](../frontend/scripts/generate-sitemap.mjs) lists public routes (aligned with [`frontend/src/app/router.tsx`](../frontend/src/app/router.tsx)) and every `/resources/{slug}` from [`frontend/src/data/resourcesArticles.ts`](../frontend/src/data/resourcesArticles.ts).
+- **When:** `npm run build` runs `prebuild`, which executes the generator before `vite build`.
+- **Override base URL:** set `SITEMAP_SITE_URL` (default `https://prime7erp.com`) if you need a different absolute host for staging builds.
 
-- **Option B – Build-time generation:** Use a Vite plugin (e.g. `vite-plugin-sitemap`) or a small Node script run at build time that reads public routes (e.g. from `src/app/router.tsx` or a routes config) and outputs `public/sitemap.xml`. This keeps the sitemap in sync with the app.
+## robots.txt
 
-After adding a sitemap, set your production URL in `frontend/public/robots.txt`:
+[`frontend/public/robots.txt`](../frontend/public/robots.txt) includes:
 
 ```text
 Sitemap: https://prime7erp.com/sitemap.xml
 ```
 
-(Uncomment the existing line there when the sitemap is in place.)
+## Validation
+
+After generating or changing the sitemap:
+
+```bash
+cd frontend
+node scripts/validate-sitemap.mjs
+```
+
+Optional: `node scripts/validate-sitemap.mjs --fetch` sends HEAD requests to a sample of URLs (requires network).
+
+See also: [`docs/SEO_SEARCH_CONSOLE.md`](./SEO_SEARCH_CONSOLE.md) for Google Search Console submission.

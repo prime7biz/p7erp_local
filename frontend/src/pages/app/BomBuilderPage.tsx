@@ -1,32 +1,72 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   api,
   type BomResponse,
   type BomDetailResponse,
   type StyleResponse,
   type InventoryItemResponse,
+  type VendorResponse,
+  type ConsumptionPlanResponse,
+  type OrderResponse,
+  type WastageReportRowResponse,
+  type WastageSummaryResponse,
 } from "@/api/client";
 
 type WorkflowAction = "submit" | "approve" | "freeze";
+type BomCommandTab = "bom_lines" | "procurement" | "consumption" | "wastage";
+
+interface ConsumptionOrderSummaryRow {
+  order: OrderResponse;
+  hasPlan: boolean;
+  plannedQty: number;
+  issuedQty: number;
+  remainingQty: number;
+  snapshotLocked: boolean;
+}
+
+interface RecentGeneratedPO {
+  id: number;
+  po_code: string;
+  created_at: string;
+}
 
 export function BomBuilderPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [styles, setStyles] = useState<StyleResponse[]>([]);
   const [boms, setBoms] = useState<BomResponse[]>([]);
   const [selectedBom, setSelectedBom] = useState<BomDetailResponse | null>(null);
   const [styleId, setStyleId] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState<BomCommandTab>("bom_lines");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [inventoryItems, setInventoryItems] = useState<InventoryItemResponse[]>([]);
+  const [vendors, setVendors] = useState<VendorResponse[]>([]);
+  const [orders, setOrders] = useState<OrderResponse[]>([]);
+  const [consumptionPlans, setConsumptionPlans] = useState<ConsumptionPlanResponse[]>([]);
+  const [consumptionRows, setConsumptionRows] = useState<ConsumptionOrderSummaryRow[]>([]);
+  const [pendingChangeRequests, setPendingChangeRequests] = useState(0);
+  const [wastageRows, setWastageRows] = useState<WastageReportRowResponse[]>([]);
+  const [wastageSummary, setWastageSummary] = useState<WastageSummaryResponse | null>(null);
+  const [loadingConsumption, setLoadingConsumption] = useState(false);
+  const [loadingWastage, setLoadingWastage] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | "">("");
   const [itemDesc, setItemDesc] = useState("");
   const [baseConsumption, setBaseConsumption] = useState("0");
   const [wastagePct, setWastagePct] = useState("");
-  const [generatePOModalOpen, setGeneratePOModalOpen] = useState(false);
+  const [batchQty, setBatchQty] = useState("100");
   const [poQuantity, setPoQuantity] = useState("100");
   const [poSupplierName, setPoSupplierName] = useState("");
+  const [poVendorId, setPoVendorId] = useState<number | "">("");
   const [generatingPO, setGeneratingPO] = useState(false);
+  const [recentGeneratedPOs, setRecentGeneratedPOs] = useState<RecentGeneratedPO[]>([]);
+  const [recentBOMDraftPOs, setRecentBOMDraftPOs] = useState<Array<{ id: number; po_code: string; status: string }>>([]);
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [editSelectedItemId, setEditSelectedItemId] = useState<number | "">("");
+  const [editItemDesc, setEditItemDesc] = useState("");
+  const [editBaseConsumption, setEditBaseConsumption] = useState("0");
+  const [editWastagePct, setEditWastagePct] = useState("");
   const [processingWorkflow, setProcessingWorkflow] = useState(false);
   const [workflowConfirmAction, setWorkflowConfirmAction] = useState<WorkflowAction | null>(null);
   const [activeWorkflowAction, setActiveWorkflowAction] = useState<WorkflowAction | null>(null);
@@ -34,6 +74,15 @@ export function BomBuilderPage() {
   const actionsRef = useRef<HTMLDivElement | null>(null);
   const workflowModalRef = useRef<HTMLDivElement | null>(null);
   const workflowCancelBtnRef = useRef<HTMLButtonElement | null>(null);
+  const initialStyleIdRef = useRef<number | null>(null);
+  const initialBomIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const styleFromQuery = Number(searchParams.get("styleId") || 0);
+    const bomFromQuery = Number(searchParams.get("bomId") || 0);
+    initialStyleIdRef.current = Number.isFinite(styleFromQuery) && styleFromQuery > 0 ? styleFromQuery : null;
+    initialBomIdRef.current = Number.isFinite(bomFromQuery) && bomFromQuery > 0 ? bomFromQuery : null;
+  }, [searchParams]);
 
   const bomStatus = (selectedBom?.bom.status || "").toUpperCase();
   const isGovernedBom = bomStatus === "APPROVED" || bomStatus === "FROZEN";
@@ -100,36 +149,197 @@ export function BomBuilderPage() {
     return "bg-status-neutral-subtle text-status-neutral-foreground border-border";
   };
 
-  const load = async () => {
+  const parseNumber = (value: string | null | undefined) => {
+    const parsed = Number(value ?? "");
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const formatNumber = (value: number, fractionDigits = 2) => {
+    if (!Number.isFinite(value)) return "0";
+    return new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: fractionDigits,
+    }).format(value);
+  };
+
+  const itemMap = useMemo(() => {
+    const map = new Map<number, InventoryItemResponse>();
+    for (const item of inventoryItems) map.set(item.id, item);
+    return map;
+  }, [inventoryItems]);
+
+  const selectedStyle = useMemo(() => {
+    const selectedStyleId = selectedBom?.bom.style_id ?? styleId;
+    return styles.find((row) => row.id === selectedStyleId) ?? null;
+  }, [selectedBom, styleId, styles]);
+
+  const linkedLineCount = useMemo(() => {
+    if (!selectedBom) return 0;
+    return selectedBom.items.filter((item) => item.item_id != null).length;
+  }, [selectedBom]);
+
+  const computeRequiredQty = useCallback(
+    (line: { base_consumption: string; wastage_pct: string | null }) => {
+      const qty = parseNumber(batchQty);
+      const base = parseNumber(line.base_consumption);
+      const wastage = parseNumber(line.wastage_pct) / 100;
+      return qty * base * (1 + wastage);
+    },
+    [batchQty],
+  );
+
+  const loadStylesAndMasters = useCallback(async () => {
     try {
-      const [styleRows, bomRows] = await Promise.all([api.listStyles(), api.listBoms()]);
+      const [styleRows, itemRows, vendorRows] = await Promise.all([
+        api.listStyles(),
+        api.listInventoryItems(),
+        api.listVendors(),
+      ]);
       setStyles(styleRows);
-      setBoms(bomRows);
+      setInventoryItems(itemRows);
+      setVendors(vendorRows);
+
+      if (initialStyleIdRef.current && styleRows.some((s) => s.id === initialStyleIdRef.current)) {
+        setStyleId(initialStyleIdRef.current);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load BOM master data");
+    }
+  }, []);
+
+  const openBom = useCallback(async (id: number) => {
+    const detail = await api.getBom(id);
+    setSelectedBom(detail);
+  }, []);
+
+  const loadBoms = useCallback(async () => {
+    try {
+      const rows = await api.listBoms(styleId ? { style_id: styleId } : undefined);
+      setBoms(rows);
+      if (rows.length === 0) {
+        setSelectedBom(null);
+        return;
+      }
+
+      const preferredBomId = initialBomIdRef.current;
+      if (preferredBomId && rows.some((r) => r.id === preferredBomId)) {
+        await openBom(preferredBomId);
+        initialBomIdRef.current = null;
+        return;
+      }
+
+      if (!selectedBom || !rows.some((r) => r.id === selectedBom.bom.id)) {
+        const first = rows[0];
+        if (first) await openBom(first.id);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load BOM data");
     }
-  };
+  }, [openBom, selectedBom, styleId]);
+
+  const loadProcurementSnapshot = useCallback(async () => {
+    if (!selectedBom) return;
+    try {
+      const linkedPOs = await api.listPurchaseOrders({ source_bom_id: selectedBom.bom.id });
+      const matched = linkedPOs.slice(0, 8).map((po) => ({ id: po.id, po_code: po.po_code, status: po.status }));
+      setRecentBOMDraftPOs(matched);
+    } catch {
+      setRecentBOMDraftPOs([]);
+    }
+  }, [selectedBom]);
+
+  const loadConsumptionSnapshot = useCallback(async () => {
+    if (!selectedBom) return;
+    setLoadingConsumption(true);
+    try {
+      const [allOrders, allPlans, pendingCR] = await Promise.all([
+        api.listOrders({ limit: 200 }),
+        api.listConsumptionPlans(),
+        api.listConsumptionChangeRequests({ status_filter: "PENDING" }),
+      ]);
+      const styleOrders = allOrders.filter((order) => order.style_id === selectedBom.bom.style_id);
+      const planOrderIds = new Set(allPlans.map((plan) => plan.order_id));
+
+      const rows = await Promise.all(
+        styleOrders.slice(0, 12).map(async (order) => {
+          try {
+            const [reservations, snapshot] = await Promise.all([
+              api.getConsumptionReservations(order.id),
+              api.getConsumptionSnapshot(order.id),
+            ]);
+            const plannedQty = reservations.reduce((sum, row) => sum + row.reserved_qty, 0);
+            const issuedQty = reservations.reduce((sum, row) => sum + row.issued_qty, 0);
+            const remainingQty = reservations.reduce((sum, row) => sum + row.remaining_qty, 0);
+            return {
+              order,
+              hasPlan: planOrderIds.has(order.id),
+              plannedQty,
+              issuedQty,
+              remainingQty,
+              snapshotLocked: Boolean(snapshot.snapshot_locked),
+            } satisfies ConsumptionOrderSummaryRow;
+          } catch {
+            return {
+              order,
+              hasPlan: planOrderIds.has(order.id),
+              plannedQty: 0,
+              issuedQty: 0,
+              remainingQty: 0,
+              snapshotLocked: false,
+            } satisfies ConsumptionOrderSummaryRow;
+          }
+        }),
+      );
+
+      const styleOrderIds = new Set(styleOrders.map((order) => order.id));
+      const stylePendingCRCount = pendingCR.filter((row) => styleOrderIds.has(row.order_id)).length;
+
+      setOrders(styleOrders);
+      setConsumptionPlans(allPlans);
+      setConsumptionRows(rows);
+      setPendingChangeRequests(stylePendingCRCount);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load consumption snapshot");
+      setConsumptionRows([]);
+      setPendingChangeRequests(0);
+    } finally {
+      setLoadingConsumption(false);
+    }
+  }, [selectedBom]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void loadStylesAndMasters();
+  }, [loadStylesAndMasters]);
 
   useEffect(() => {
-    const loadItems = async () => {
-      try {
-        const items = await api.listInventoryItems();
-        setInventoryItems(items);
-      } catch {
-        setInventoryItems([]);
-      }
-    };
-    loadItems();
-  }, []);
+    void loadBoms();
+  }, [loadBoms]);
 
-  const openBom = async (id: number) => {
-    const detail = await api.getBom(id);
-    setSelectedBom(detail);
-  };
+  const loadWastageSnapshot = useCallback(async () => {
+    if (!selectedBom) return;
+    setLoadingWastage(true);
+    try {
+      const [reportRows, summary] = await Promise.all([
+        api.getWastageReport({ style_id: selectedBom.bom.style_id }),
+        api.getWastageSummary({ style_id: selectedBom.bom.style_id }),
+      ]);
+      setWastageRows(reportRows.slice(0, 12));
+      setWastageSummary(summary);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load wastage summary");
+      setWastageRows([]);
+      setWastageSummary(null);
+    } finally {
+      setLoadingWastage(false);
+    }
+  }, [selectedBom]);
+
+  useEffect(() => {
+    if (!selectedBom) return;
+    if (activeTab === "procurement") void loadProcurementSnapshot();
+    if (activeTab === "consumption") void loadConsumptionSnapshot();
+    if (activeTab === "wastage") void loadWastageSnapshot();
+  }, [activeTab, selectedBom, loadConsumptionSnapshot, loadProcurementSnapshot, loadWastageSnapshot]);
 
   const runWorkflowAction = async (action: WorkflowAction) => {
     if (!selectedBom) return;
@@ -140,7 +350,7 @@ export function BomBuilderPage() {
       if (action === "submit") await api.submitBom(selectedBom.bom.id);
       if (action === "approve") await api.approveBom(selectedBom.bom.id);
       if (action === "freeze") await api.freezeBom(selectedBom.bom.id);
-      await load();
+      await loadBoms();
       await openBom(selectedBom.bom.id);
       if (action === "submit") setSuccess("BOM submitted successfully.");
       if (action === "approve") setSuccess("BOM approved successfully.");
@@ -156,333 +366,771 @@ export function BomBuilderPage() {
     }
   };
 
+  const startEditingLine = (lineId: number) => {
+    if (!selectedBom) return;
+    const row = selectedBom.items.find((item) => item.id === lineId);
+    if (!row) return;
+    setEditingItemId(row.id);
+    setEditSelectedItemId(row.item_id ?? "");
+    setEditItemDesc(row.description ?? "");
+    setEditBaseConsumption(row.base_consumption || "0");
+    setEditWastagePct(row.wastage_pct ?? "");
+    setOpenActionsItemId(null);
+  };
+
+  const resetEditForm = () => {
+    setEditingItemId(null);
+    setEditSelectedItemId("");
+    setEditItemDesc("");
+    setEditBaseConsumption("0");
+    setEditWastagePct("");
+  };
+
+  const expectedValue = useMemo(() => wastageRows.reduce((sum, row) => sum + row.expected_qty, 0), [wastageRows]);
+  const actualValue = useMemo(() => wastageRows.reduce((sum, row) => sum + row.actual_qty, 0), [wastageRows]);
+  const efficiencyPct = expectedValue > 0 ? (actualValue / expectedValue) * 100 : 0;
+  const bomItemsWithInventory = useMemo(
+    () => (selectedBom?.items ?? []).filter((line) => line.item_id != null),
+    [selectedBom],
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">BOM Governance</h1>
-          <p className="text-sm text-text-muted mt-0.5">Create BOM versions, manage items, and move through governance workflow.</p>
-        </div>
-        <div className="flex gap-2">
-          <select value={styleId || ""} onChange={(e) => setStyleId(Number(e.target.value) || 0)} className="rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary">
-            <option value="">Select style…</option>
-            {styles.map((s) => <option key={s.id} value={s.id}>{s.style_code} · {s.name}</option>)}
-          </select>
-          <button
-            onClick={async () => {
-              if (!styleId) return;
-              setError("");
-              try {
-                await api.createBom({ style_id: styleId, status: "DRAFT", version_no: 1 });
-                await load();
-                setSuccess("New BOM created in DRAFT status.");
-              } catch (e) {
-                setError(e instanceof Error ? e.message : "Failed to create BOM");
-              }
-            }}
-            className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground"
-          >
-            New BOM
-          </button>
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-text-primary">BOM Command Center</h1>
+            <p className="mt-0.5 text-sm text-text-muted">
+              Design materials, prepare procurement, and control usage and wastage from one place.
+            </p>
+            <div className="mt-2 text-xs text-text-muted">
+              {selectedStyle ? `${selectedStyle.style_code} · ${selectedStyle.name}` : "Select a style to begin"}{" "}
+              {selectedBom ? (
+                <>
+                  · BOM #{selectedBom.bom.id} · V{selectedBom.bom.version_no}
+                </>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="mb-0.5 block text-xs font-medium text-text-muted">Style</label>
+              <select
+                value={styleId || ""}
+                onChange={(e) => {
+                  setStyleId(Number(e.target.value) || 0);
+                  setSelectedBom(null);
+                  setEditingItemId(null);
+                }}
+                className="min-w-64 rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary"
+              >
+                <option value="">Select style…</option>
+                {styles.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.style_code} · {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={async () => {
+                if (!styleId) return;
+                setError("");
+                try {
+                  const styleBoms = boms.filter((row) => row.style_id === styleId);
+                  const nextVersion = styleBoms.reduce((maxVersion, row) => Math.max(maxVersion, row.version_no), 0) + 1;
+                  await api.createBom({ style_id: styleId, status: "DRAFT", version_no: nextVersion });
+                  await loadBoms();
+                  setSuccess("New BOM created in DRAFT status.");
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Failed to create BOM");
+                }
+              }}
+              className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground"
+            >
+              New BOM
+            </button>
+          </div>
         </div>
       </div>
+
       {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">{error}</div>}
       {success && <div className="rounded-lg border border-status-success/20 bg-status-success-subtle px-4 py-3 text-sm text-status-success-foreground">{success}</div>}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="rounded-xl border border-border bg-surface-raised p-2">
+        <div className="flex flex-wrap gap-2">
+          {([
+            ["bom_lines", "BOM Lines"],
+            ["procurement", "Procurement"],
+            ["consumption", "Consumption"],
+            ["wastage", "Wastage"],
+          ] as Array<[BomCommandTab, string]>).map(([tab, label]) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`rounded-lg px-3 py-1.5 text-sm ${activeTab === tab ? "bg-brand-primary text-brand-primary-foreground" : "border border-border-strong text-text-secondary"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[280px_1fr]">
         <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
-          <div className="px-4 py-3 border-b border-border text-sm font-semibold text-text-primary">BOMs</div>
-          <div className="divide-y divide-border-subtle">
+          <div className="px-4 py-3 border-b border-border text-sm font-semibold text-text-primary">BOM versions</div>
+          <div className="max-h-[640px] overflow-y-auto divide-y divide-border-subtle">
             {boms.map((b) => (
-              <button key={b.id} onClick={() => openBom(b.id)} className="w-full text-left px-4 py-2 text-sm hover:bg-surface-subtle">
+              <button
+                key={b.id}
+                onClick={() => void openBom(b.id)}
+                className={`w-full px-4 py-2 text-left text-sm hover:bg-surface-subtle ${selectedBom?.bom.id === b.id ? "bg-brand-primary/5" : ""}`}
+              >
                 <span className="font-medium text-text-primary">BOM #{b.id}</span>
-                <span className="text-text-muted"> · Style {b.style_id} · V{b.version_no}</span>
+                <span className="text-text-muted"> · V{b.version_no}</span>
                 <span className={`ml-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${bomStatusBadgeClass(b.status)}`}>
                   {(b.status || "DRAFT").toUpperCase()}
                 </span>
               </button>
             ))}
-            {boms.length === 0 && <div className="px-4 py-6 text-sm text-text-muted">No BOM yet.</div>}
+            {boms.length === 0 && <div className="px-4 py-6 text-sm text-text-muted">No BOM found for this selection.</div>}
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3 overflow-x-auto">
-          <h2 className="text-sm font-semibold text-text-primary">BOM Items</h2>
+        <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4 overflow-x-auto">
           {!selectedBom ? (
-            <div className="text-sm text-text-muted">Select a BOM from the left.</div>
+            <div className="text-sm text-text-muted">Select a BOM from the left panel.</div>
           ) : (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-xs text-text-muted">
-                  BOM #{selectedBom.bom.id} · Style {selectedBom.bom.style_id} · Status{" "}
-                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${bomStatusBadgeClass(bomStatus)}`}>
-                    {bomStatus || "DRAFT"}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {canSubmitBom && (
+              <div className="rounded-xl border border-border bg-surface-subtle/40 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-xs text-text-muted">
+                    BOM #{selectedBom.bom.id} · Style {selectedBom.bom.style_id} · Status{" "}
+                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${bomStatusBadgeClass(bomStatus)}`}>
+                      {bomStatus || "DRAFT"}
+                    </span>
+                    <span className="ml-2">Linked lines: {linkedLineCount}/{selectedBom.items.length}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canSubmitBom && (
+                      <button
+                        type="button"
+                        disabled={processingWorkflow || workflowConfirmAction !== null}
+                        onClick={() => setWorkflowConfirmAction("submit")}
+                        className="rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
+                      >
+                        {activeWorkflowAction === "submit" && processingWorkflow ? "Submitting..." : "Submit"}
+                      </button>
+                    )}
+                    {canApproveBom && (
+                      <button
+                        type="button"
+                        disabled={processingWorkflow || workflowConfirmAction !== null}
+                        onClick={() => setWorkflowConfirmAction("approve")}
+                        className="rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
+                      >
+                        {activeWorkflowAction === "approve" && processingWorkflow ? "Approving..." : "Approve"}
+                      </button>
+                    )}
+                    {canFreezeBom && (
+                      <button
+                        type="button"
+                        disabled={processingWorkflow || workflowConfirmAction !== null}
+                        onClick={() => setWorkflowConfirmAction("freeze")}
+                        className="rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
+                      >
+                        {activeWorkflowAction === "freeze" && processingWorkflow ? "Freezing..." : "Freeze"}
+                      </button>
+                    )}
                     <button
                       type="button"
-                      disabled={processingWorkflow || workflowConfirmAction !== null}
-                      onClick={() => setWorkflowConfirmAction("submit")}
-                      className="rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
+                      disabled={!isGovernedBom}
+                      onClick={() => setActiveTab("procurement")}
+                      className="rounded-lg border border-brand-primary bg-surface-raised px-3 py-1.5 text-sm font-medium text-brand-primary hover:bg-brand-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+                      title={!isGovernedBom ? "Only APPROVED/FROZEN BOM can generate purchase order." : undefined}
                     >
-                      {activeWorkflowAction === "submit" && processingWorkflow ? "Submitting..." : "Submit"}
+                      Generate purchase order
                     </button>
-                  )}
-                  {canApproveBom && (
-                    <button
-                      type="button"
-                      disabled={processingWorkflow || workflowConfirmAction !== null}
-                      onClick={() => setWorkflowConfirmAction("approve")}
-                      className="rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
-                    >
-                      {activeWorkflowAction === "approve" && processingWorkflow ? "Approving..." : "Approve"}
-                    </button>
-                  )}
-                  {canFreezeBom && (
-                    <button
-                      type="button"
-                      disabled={processingWorkflow || workflowConfirmAction !== null}
-                      onClick={() => setWorkflowConfirmAction("freeze")}
-                      className="rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
-                    >
-                      {activeWorkflowAction === "freeze" && processingWorkflow ? "Freezing..." : "Freeze"}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    disabled={!isGovernedBom}
-                    onClick={() => setGeneratePOModalOpen(true)}
-                    className="rounded-lg border border-brand-primary bg-surface-raised px-3 py-1.5 text-sm font-medium text-brand-primary hover:bg-brand-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
-                    title={!isGovernedBom ? "Only APPROVED/FROZEN BOM can generate purchase order." : undefined}
-                  >
-                    Generate purchase order
-                  </button>
+                  </div>
                 </div>
               </div>
+
               {!isGovernedBom && (
                 <div className="rounded-md border border-status-warning/20 bg-status-warning-subtle px-3 py-2 text-xs text-status-warning-foreground">
                   This BOM is not governed yet. Submit/Approve/Freeze it first to lock content and enable downstream execution.
                 </div>
               )}
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5 items-end">
-                <div className="min-w-0">
-                  <label className="block text-xs font-medium text-text-muted mb-0.5">Item (from inventory)</label>
-                  <select
-                    value={selectedItemId}
-                    onChange={(e) => setSelectedItemId(e.target.value === "" ? "" : Number(e.target.value))}
-                    className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
-                  >
-                    <option value="">— Free text —</option>
-                    {inventoryItems.map((it) => (
-                      <option key={it.id} value={it.id}>{it.item_code} · {it.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="min-w-0">
-                  <label className="block text-xs font-medium text-text-muted mb-0.5">Description (or override)</label>
-                  <input
-                    value={itemDesc}
-                    onChange={(e) => setItemDesc(e.target.value)}
-                    placeholder={selectedItemId ? "Optional override" : "Required if no item selected"}
-                    className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm min-w-0"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label className="block text-xs font-medium text-text-muted mb-0.5">Base consumption</label>
-                  <input
-                    type="text"
-                    value={baseConsumption}
-                    onChange={(e) => setBaseConsumption(e.target.value)}
-                    placeholder="0"
-                    className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label className="block text-xs font-medium text-text-muted mb-0.5">Wastage %</label>
-                  <input
-                    type="text"
-                    value={wastagePct}
-                    onChange={(e) => setWastagePct(e.target.value)}
-                    placeholder="0"
-                    className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
-                  />
-                </div>
-                <button
-                  disabled={isGovernedBom}
-                  onClick={async () => {
-                    const hasItem = selectedItemId !== "";
-                    const hasDesc = itemDesc.trim() !== "";
-                    if (!hasItem && !hasDesc) return;
-                    setError("");
-                    try {
-                      await api.createBomItem(selectedBom.bom.id, {
-                        item_id: hasItem ? Number(selectedItemId) : undefined,
-                        category: "MATERIAL",
-                        description: hasDesc ? itemDesc.trim() : undefined,
-                        base_consumption: baseConsumption.trim() || "0",
-                        wastage_pct: wastagePct.trim() || undefined,
-                      });
-                      setSelectedItemId("");
-                      setItemDesc("");
-                      setBaseConsumption("0");
-                      setWastagePct("");
-                      await openBom(selectedBom.bom.id);
-                      setSuccess("BOM line added successfully.");
-                    } catch (e) {
-                      setError(e instanceof Error ? e.message : "Failed to add BOM item");
-                    }
-                  }}
-                  className="rounded border border-border-strong px-3 py-1.5 text-sm font-medium text-text-secondary bg-surface-subtle hover:bg-surface-base shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Add line
-                </button>
-              </div>
-              {selectedBom.items.length === 0 ? (
-                <div className="text-xs text-text-muted">No items yet.</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-[560px] w-full text-sm">
-                    <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
-                      <tr>
-                        <th className="py-2 px-3">Item / Description</th>
-                        <th className="py-2 px-3">Category</th>
-                        <th className="py-2 px-3">UOM</th>
-                        <th className="py-2 px-3">Consumption</th>
-                        <th className="py-2 px-3">Wastage %</th>
-                        <th className="py-2 px-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedBom.items.map((i) => (
-                        <tr key={i.id} className="border-b border-border-subtle last:border-0">
-                          <td className="py-2 px-3 text-text-primary">
-                            {i.item_id != null ? (
-                              <span title={`Item #${i.item_id}`}>{i.item_code ?? i.description ?? "—"}</span>
-                            ) : (
-                              i.description || i.item_code || "—"
-                            )}
-                          </td>
-                          <td className="py-2 px-3 text-text-secondary">{i.category ?? "—"}</td>
-                          <td className="py-2 px-3 text-text-secondary">{i.uom ?? "—"}</td>
-                          <td className="py-2 px-3 text-text-secondary">{i.base_consumption}</td>
-                          <td className="py-2 px-3 text-text-secondary">{i.wastage_pct ?? "—"}</td>
-                          <td className="py-2 px-3 text-right">
-                            <div className="relative inline-block text-left" ref={openActionsItemId === i.id ? actionsRef : undefined}>
-                              <button
-                                type="button"
-                                disabled={isGovernedBom}
-                                onClick={() => setOpenActionsItemId((prev) => (prev === i.id ? null : i.id))}
-                                className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                Actions
-                              </button>
-                              {openActionsItemId === i.id && !isGovernedBom && (
-                                <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      try {
-                                        setError("");
-                                        await api.deleteBomItem(selectedBom.bom.id, i.id);
-                                        await openBom(selectedBom.bom.id);
-                                        setSuccess("BOM line deleted successfully.");
-                                      } finally {
-                                        setOpenActionsItemId(null);
-                                      }
-                                    }}
-                                    className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
-                              )}
+
+              {activeTab === "bom_lines" && (
+                <>
+                  <div className="rounded-xl border border-border bg-surface-raised p-3">
+                    <div className="mb-2 text-xs font-semibold text-text-secondary">Add BOM line</div>
+                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
+                      <div className="xl:col-span-2">
+                        <label className="mb-0.5 block text-xs font-medium text-text-muted">Item (inventory)</label>
+                        <select
+                          value={selectedItemId}
+                          onChange={(e) => setSelectedItemId(e.target.value === "" ? "" : Number(e.target.value))}
+                          className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
+                        >
+                          <option value="">Select inventory item…</option>
+                          {inventoryItems.map((it) => (
+                            <option key={it.id} value={it.id}>
+                              {it.item_code} · {it.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="xl:col-span-2">
+                        <label className="mb-0.5 block text-xs font-medium text-text-muted">Description (optional override)</label>
+                        <input
+                          value={itemDesc}
+                          onChange={(e) => setItemDesc(e.target.value)}
+                          placeholder={selectedItemId ? "Optional override" : "Required if no item selected"}
+                          className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-0.5 block text-xs font-medium text-text-muted">Base consumption</label>
+                        <input
+                          type="text"
+                          value={baseConsumption}
+                          onChange={(e) => setBaseConsumption(e.target.value)}
+                          placeholder="0"
+                          className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-0.5 block text-xs font-medium text-text-muted">Wastage %</label>
+                        <input
+                          type="text"
+                          value={wastagePct}
+                          onChange={(e) => setWastagePct(e.target.value)}
+                          placeholder="0"
+                          className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        disabled={isGovernedBom}
+                        onClick={async () => {
+                          const hasItem = selectedItemId !== "";
+                          const hasDesc = itemDesc.trim() !== "";
+                          if (!hasItem && !hasDesc) return;
+                          setError("");
+                          try {
+                            await api.createBomItem(selectedBom.bom.id, {
+                              item_id: hasItem ? Number(selectedItemId) : undefined,
+                              category: "MATERIAL",
+                              description: hasDesc ? itemDesc.trim() : undefined,
+                              base_consumption: baseConsumption.trim() || "0",
+                              wastage_pct: wastagePct.trim() || undefined,
+                            });
+                            setSelectedItemId("");
+                            setItemDesc("");
+                            setBaseConsumption("0");
+                            setWastagePct("");
+                            await openBom(selectedBom.bom.id);
+                            setSuccess("BOM line added successfully.");
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : "Failed to add BOM item");
+                          }
+                        }}
+                        className="rounded border border-border-strong bg-surface-subtle px-3 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-base disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Add line
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="text-sm font-semibold text-text-primary">BOM line grid</h2>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-text-muted">Batch qty preview</label>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={batchQty}
+                        onChange={(e) => setBatchQty(e.target.value)}
+                        className="w-28 rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {editingItemId != null && (
+                    <div className="rounded-xl border border-border bg-surface-subtle/40 p-3">
+                      <div className="mb-2 text-xs font-semibold text-text-secondary">Edit BOM line</div>
+                      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
+                        <div className="xl:col-span-2">
+                          <label className="mb-0.5 block text-xs font-medium text-text-muted">Item (inventory)</label>
+                          <select
+                            value={editSelectedItemId}
+                            onChange={(e) => setEditSelectedItemId(e.target.value === "" ? "" : Number(e.target.value))}
+                            className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
+                          >
+                            <option value="">Free text only</option>
+                            {inventoryItems.map((it) => (
+                              <option key={it.id} value={it.id}>
+                                {it.item_code} · {it.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="xl:col-span-2">
+                          <label className="mb-0.5 block text-xs font-medium text-text-muted">Description</label>
+                          <input
+                            value={editItemDesc}
+                            onChange={(e) => setEditItemDesc(e.target.value)}
+                            className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-0.5 block text-xs font-medium text-text-muted">Base consumption</label>
+                          <input
+                            value={editBaseConsumption}
+                            onChange={(e) => setEditBaseConsumption(e.target.value)}
+                            className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-0.5 block text-xs font-medium text-text-muted">Wastage %</label>
+                          <input
+                            value={editWastagePct}
+                            onChange={(e) => setEditWastagePct(e.target.value)}
+                            className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-2 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={resetEditForm}
+                          className="rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isGovernedBom}
+                          onClick={async () => {
+                            if (editingItemId == null) return;
+                            const hasItem = editSelectedItemId !== "";
+                            const hasDesc = editItemDesc.trim() !== "";
+                            if (!hasItem && !hasDesc) return;
+                            setError("");
+                            try {
+                              await api.updateBomItem(selectedBom.bom.id, editingItemId, {
+                                item_id: hasItem ? Number(editSelectedItemId) : undefined,
+                                category: "MATERIAL",
+                                description: hasDesc ? editItemDesc.trim() : undefined,
+                                base_consumption: editBaseConsumption.trim() || "0",
+                                wastage_pct: editWastagePct.trim() || undefined,
+                              });
+                              await openBom(selectedBom.bom.id);
+                              resetEditForm();
+                              setSuccess("BOM line updated successfully.");
+                            } catch (e) {
+                              setError(e instanceof Error ? e.message : "Failed to update BOM item");
+                            }
+                          }}
+                          className="rounded bg-brand-primary px-3 py-1.5 text-sm font-medium text-brand-primary-foreground disabled:opacity-50"
+                        >
+                          Save changes
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedBom.items.length === 0 ? (
+                    <div className="text-xs text-text-muted">No items yet.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-[900px] w-full text-sm">
+                        <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
+                          <tr>
+                            <th className="px-3 py-2">Item / Description</th>
+                            <th className="px-3 py-2">Category</th>
+                            <th className="px-3 py-2">UOM</th>
+                            <th className="px-3 py-2">Base Cons.</th>
+                            <th className="px-3 py-2">Wastage %</th>
+                            <th className="px-3 py-2">Required Qty</th>
+                            <th className="px-3 py-2">Est. Cost</th>
+                            <th className="px-3 py-2 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedBom.items.map((line) => {
+                            const requiredQty = computeRequiredQty(line);
+                            const linkedItem = line.item_id != null ? itemMap.get(line.item_id) : undefined;
+                            const unitCost = parseNumber(linkedItem?.default_cost || "0");
+                            const estCost = requiredQty * unitCost;
+                            return (
+                              <tr key={line.id} className="border-b border-border-subtle last:border-0">
+                                <td className="px-3 py-2 text-text-primary">
+                                  {line.item_id != null ? (
+                                    <span title={`Item #${line.item_id}`}>{line.item_code ?? line.description ?? "—"}</span>
+                                  ) : (
+                                    line.description || line.item_code || "—"
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-text-secondary">{line.category ?? "—"}</td>
+                                <td className="px-3 py-2 text-text-secondary">{line.uom ?? "—"}</td>
+                                <td className="px-3 py-2 text-text-secondary">{line.base_consumption}</td>
+                                <td className="px-3 py-2 text-text-secondary">{line.wastage_pct ?? "—"}</td>
+                                <td className="px-3 py-2 text-text-secondary">{formatNumber(requiredQty, 4)}</td>
+                                <td className="px-3 py-2 text-text-secondary">{line.item_id != null ? formatNumber(estCost, 2) : "—"}</td>
+                                <td className="px-3 py-2 text-right">
+                                  <div className="relative inline-block text-left" ref={openActionsItemId === line.id ? actionsRef : undefined}>
+                                    <button
+                                      type="button"
+                                      disabled={isGovernedBom}
+                                      onClick={() => setOpenActionsItemId((prev) => (prev === line.id ? null : line.id))}
+                                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      Actions
+                                    </button>
+                                    {openActionsItemId === line.id && !isGovernedBom && (
+                                      <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                                        <button
+                                          type="button"
+                                          onClick={() => startEditingLine(line.id)}
+                                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                        >
+                                          Edit
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            try {
+                                              setError("");
+                                              await api.deleteBomItem(selectedBom.bom.id, line.id);
+                                              await openBom(selectedBom.bom.id);
+                                              setSuccess("BOM line deleted successfully.");
+                                            } finally {
+                                              setOpenActionsItemId(null);
+                                            }
+                                          }}
+                                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                                        >
+                                          Delete
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {activeTab === "procurement" && (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-border bg-surface-raised p-3">
+                    <h2 className="text-sm font-semibold text-text-primary">Generate draft purchase order</h2>
+                    <p className="mt-1 text-xs text-text-muted">
+                      Quantities use BOM formula: quantity × base consumption × (1 + wastage %).
+                    </p>
+                    <div className="mt-3 grid gap-2 md:grid-cols-3">
+                      <div>
+                        <label className="mb-0.5 block text-xs font-medium text-text-muted">Quantity</label>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={poQuantity}
+                          onChange={(e) => setPoQuantity(e.target.value)}
+                          className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-0.5 block text-xs font-medium text-text-muted">Vendor (optional)</label>
+                        <select
+                          value={poVendorId}
+                          onChange={(e) => setPoVendorId(e.target.value === "" ? "" : Number(e.target.value))}
+                          className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
+                        >
+                          <option value="">No vendor selected</option>
+                          {vendors.map((vendor) => (
+                            <option key={vendor.id} value={vendor.id}>
+                              {vendor.vendor_code} · {vendor.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-0.5 block text-xs font-medium text-text-muted">Supplier name fallback</label>
+                        <input
+                          type="text"
+                          value={poSupplierName}
+                          onChange={(e) => setPoSupplierName(e.target.value)}
+                          placeholder="From BOM"
+                          className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3 flex justify-end gap-2">
+                      <Link
+                        to="/app/inventory/purchase-orders"
+                        className="rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
+                      >
+                        View all purchase orders
+                      </Link>
+                      <button
+                        type="button"
+                        disabled={generatingPO || !isGovernedBom || Number(poQuantity) <= 0}
+                        onClick={async () => {
+                          const qty = Number(poQuantity);
+                          if (!Number.isFinite(qty) || qty <= 0) return;
+                          setGeneratingPO(true);
+                          setError("");
+                          try {
+                            const res = await api.generatePurchaseOrderFromBom(selectedBom.bom.id, {
+                              quantity: qty,
+                              supplier_name: poSupplierName.trim() || undefined,
+                              vendor_id: poVendorId === "" ? undefined : Number(poVendorId),
+                            });
+                            setRecentGeneratedPOs((prev) => [{ ...res, created_at: new Date().toISOString() }, ...prev].slice(0, 8));
+                            await loadProcurementSnapshot();
+                            setSuccess(`Draft PO ${res.po_code} generated successfully.`);
+                            navigate("/app/inventory/purchase-orders", { state: { createdPO: res } });
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : "Failed to generate PO");
+                          } finally {
+                            setGeneratingPO(false);
+                          }
+                        }}
+                        className="rounded bg-brand-primary px-3 py-1.5 text-sm font-medium text-brand-primary-foreground disabled:opacity-50"
+                      >
+                        {generatingPO ? "Generating..." : "Generate draft PO"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-surface-raised p-3">
+                    <h3 className="text-sm font-semibold text-text-primary">PO preview from BOM</h3>
+                    {bomItemsWithInventory.length === 0 ? (
+                      <div className="mt-2 text-xs text-text-muted">No BOM lines linked to inventory items.</div>
+                    ) : (
+                      <div className="mt-2 overflow-x-auto">
+                        <table className="min-w-[680px] w-full text-sm">
+                          <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
+                            <tr>
+                              <th className="px-3 py-2">Item</th>
+                              <th className="px-3 py-2">UOM</th>
+                              <th className="px-3 py-2">Preview qty</th>
+                              <th className="px-3 py-2">Unit cost</th>
+                              <th className="px-3 py-2">Line value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bomItemsWithInventory.map((line) => {
+                              const requiredQty = computeRequiredQty(line);
+                              const linkedItem = line.item_id != null ? itemMap.get(line.item_id) : undefined;
+                              const unitCost = parseNumber(linkedItem?.default_cost || "0");
+                              return (
+                                <tr key={line.id} className="border-b border-border-subtle last:border-0">
+                                  <td className="px-3 py-2">{line.item_code ?? line.description ?? `Item #${line.item_id}`}</td>
+                                  <td className="px-3 py-2">{line.uom ?? "—"}</td>
+                                  <td className="px-3 py-2">{formatNumber(requiredQty, 4)}</td>
+                                  <td className="px-3 py-2">{formatNumber(unitCost, 2)}</td>
+                                  <td className="px-3 py-2">{formatNumber(unitCost * requiredQty, 2)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-xl border border-border bg-surface-raised p-3">
+                      <h3 className="text-sm font-semibold text-text-primary">Recent generated POs (this session)</h3>
+                      {recentGeneratedPOs.length === 0 ? (
+                        <p className="mt-2 text-xs text-text-muted">No PO generated yet in this session.</p>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {recentGeneratedPOs.map((po) => (
+                            <div key={po.id} className="flex items-center justify-between rounded border border-border-subtle px-3 py-2">
+                              <span className="text-sm text-text-primary">{po.po_code}</span>
+                              <Link className="text-xs text-brand-primary hover:underline" to="/app/inventory/purchase-orders">
+                                View
+                              </Link>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="rounded-xl border border-border bg-surface-raised p-3">
+                      <h3 className="text-sm font-semibold text-text-primary">Existing POs for this BOM</h3>
+                      {recentBOMDraftPOs.length === 0 ? (
+                        <p className="mt-2 text-xs text-text-muted">No linked PO found by BOM note signature.</p>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {recentBOMDraftPOs.map((po) => (
+                            <div key={po.id} className="flex items-center justify-between rounded border border-border-subtle px-3 py-2">
+                              <span className="text-sm text-text-primary">{po.po_code}</span>
+                              <span className="text-xs text-text-muted">{po.status}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "consumption" && (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-border bg-surface-raised p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h2 className="text-sm font-semibold text-text-primary">Consumption control snapshot</h2>
+                      <Link to="/app/inventory/consumption-control" className="text-xs text-brand-primary hover:underline">
+                        Open full consumption control
+                      </Link>
+                    </div>
+                    <p className="mt-1 text-xs text-text-muted">
+                      Orders linked to this style: {orders.length} · Plans found: {consumptionPlans.filter((row) => orders.some((o) => o.id === row.order_id)).length} · Pending change requests: {pendingChangeRequests}
+                    </p>
+                  </div>
+
+                  {loadingConsumption ? (
+                    <div className="text-sm text-text-muted">Loading consumption data...</div>
+                  ) : consumptionRows.length === 0 ? (
+                    <div className="text-sm text-text-muted">No order consumption data available for this style.</div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+                      <table className="min-w-[780px] w-full text-sm">
+                        <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
+                          <tr>
+                            <th className="px-3 py-2">Order</th>
+                            <th className="px-3 py-2">Plan</th>
+                            <th className="px-3 py-2">Snapshot</th>
+                            <th className="px-3 py-2">Planned qty</th>
+                            <th className="px-3 py-2">Issued qty</th>
+                            <th className="px-3 py-2">Remaining qty</th>
+                            <th className="px-3 py-2 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {consumptionRows.map((row) => (
+                            <tr key={row.order.id} className="border-b border-border-subtle last:border-0">
+                              <td className="px-3 py-2">{row.order.order_code}</td>
+                              <td className="px-3 py-2">{row.hasPlan ? "Yes" : "No"}</td>
+                              <td className="px-3 py-2">{row.snapshotLocked ? "Locked" : "Open"}</td>
+                              <td className="px-3 py-2">{formatNumber(row.plannedQty, 3)}</td>
+                              <td className="px-3 py-2">{formatNumber(row.issuedQty, 3)}</td>
+                              <td className="px-3 py-2">{formatNumber(row.remainingQty, 3)}</td>
+                              <td className="px-3 py-2 text-right">
+                                <Link to="/app/inventory/consumption-control" className="text-xs text-brand-primary hover:underline">
+                                  Open
+                                </Link>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "wastage" && (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-border bg-surface-raised p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h2 className="text-sm font-semibold text-text-primary">Wastage & efficiency</h2>
+                      <Link
+                        to={`/app/merchandising/wastage-report?style_id=${selectedBom.bom.style_id}`}
+                        className="text-xs text-brand-primary hover:underline"
+                      >
+                        Open full wastage report
+                      </Link>
+                    </div>
+                    <div className="mt-2 grid gap-3 md:grid-cols-3">
+                      <div className="rounded border border-border p-3">
+                        <div className="text-xs text-text-muted">Total wastage value</div>
+                        <div className="mt-1 text-lg font-semibold text-text-primary">{formatNumber(wastageSummary?.total_wastage_value ?? 0, 2)}</div>
+                      </div>
+                      <div className="rounded border border-border p-3">
+                        <div className="text-xs text-text-muted">Avg fabric wastage %</div>
+                        <div className="mt-1 text-lg font-semibold text-text-primary">{formatNumber(wastageSummary?.fabric_wastage_pct_avg ?? 0, 2)}%</div>
+                      </div>
+                      <div className="rounded border border-border p-3">
+                        <div className="text-xs text-text-muted">Orders above threshold</div>
+                        <div className="mt-1 text-lg font-semibold text-text-primary">{wastageSummary?.above_threshold_orders_count ?? 0}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <div className="mb-1 flex items-center justify-between text-xs text-text-muted">
+                        <span>Procurement efficiency (actual / planned)</span>
+                        <span>{formatNumber(efficiencyPct, 2)}%</span>
+                      </div>
+                      <div className="h-2 rounded bg-surface-subtle">
+                        <div
+                          className={`h-2 rounded ${efficiencyPct <= 100 ? "bg-status-success" : "bg-status-warning"}`}
+                          style={{ width: `${Math.min(100, Math.max(0, efficiencyPct))}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {loadingWastage ? (
+                    <div className="text-sm text-text-muted">Loading wastage data...</div>
+                  ) : wastageRows.length === 0 ? (
+                    <div className="text-sm text-text-muted">No wastage records available for this style.</div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+                      <table className="min-w-[980px] w-full text-sm">
+                        <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
+                          <tr>
+                            <th className="px-3 py-2">Order</th>
+                            <th className="px-3 py-2">Item</th>
+                            <th className="px-3 py-2">Category</th>
+                            <th className="px-3 py-2">Expected</th>
+                            <th className="px-3 py-2">Actual</th>
+                            <th className="px-3 py-2">Wastage %</th>
+                            <th className="px-3 py-2">Wastage value</th>
+                            <th className="px-3 py-2">Threshold</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {wastageRows.map((row) => (
+                            <tr key={`${row.order_id}-${row.item_id}`} className="border-b border-border-subtle last:border-0">
+                              <td className="px-3 py-2">{row.order_code}</td>
+                              <td className="px-3 py-2">{row.item_code} · {row.item_name}</td>
+                              <td className="px-3 py-2">{row.category}</td>
+                              <td className="px-3 py-2">{formatNumber(row.expected_qty, 3)}</td>
+                              <td className="px-3 py-2">{formatNumber(row.actual_qty, 3)}</td>
+                              <td className="px-3 py-2">{formatNumber(row.wastage_pct_vs_bom, 2)}%</td>
+                              <td className="px-3 py-2">{formatNumber(row.wastage_value, 2)}</td>
+                              <td className="px-3 py-2">
+                                {row.threshold_breach ? (
+                                  <span className="rounded bg-status-warning-subtle px-2 py-0.5 text-xs text-status-warning-foreground">Above</span>
+                                ) : (
+                                  <span className="rounded bg-status-success-subtle px-2 py-0.5 text-xs text-status-success-foreground">Within</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </>
           )}
         </div>
       </div>
-
-      {generatePOModalOpen && selectedBom && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !generatingPO && setGeneratePOModalOpen(false)}>
-          <div
-            className="rounded-xl border border-border bg-surface-raised p-5 shadow-lg w-full max-w-md"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-text-primary mb-3">Generate purchase order from BOM</h3>
-            <p className="text-sm text-text-muted mb-4">
-              Creates a draft PO with lines for each BOM item linked to inventory. Quantity × consumption × (1 + wastage %) per line.
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">Quantity (e.g. order qty)</label>
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={poQuantity}
-                  onChange={(e) => setPoQuantity(e.target.value)}
-                  className="w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-text-secondary mb-1">Supplier name (optional)</label>
-                <input
-                  type="text"
-                  value={poSupplierName}
-                  onChange={(e) => setPoSupplierName(e.target.value)}
-                  placeholder="From BOM"
-                  className="w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => !generatingPO && setGeneratePOModalOpen(false)}
-                className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={generatingPO || !poQuantity || Number(poQuantity) <= 0}
-                onClick={async () => {
-                  const qty = Number(poQuantity);
-                  if (!Number.isFinite(qty) || qty <= 0) return;
-                  setGeneratingPO(true);
-                  setError("");
-                  try {
-                    const res = await api.generatePurchaseOrderFromBom(selectedBom.bom.id, {
-                      quantity: qty,
-                      supplier_name: poSupplierName.trim() || undefined,
-                    });
-                    setGeneratePOModalOpen(false);
-                    navigate("/app/inventory/purchase-orders", { state: { createdPO: res } });
-                    setPoQuantity("100");
-                    setPoSupplierName("");
-                    setGeneratingPO(false);
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : "Failed to generate PO");
-                    setGeneratingPO(false);
-                  }
-                }}
-                className="rounded-lg bg-brand-primary px-3 py-1.5 text-sm font-medium text-brand-primary-foreground hover:bg-brand-primary/90 disabled:opacity-50"
-              >
-                {generatingPO ? "Generating…" : "Generate PO"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {workflowConfirmAction && selectedBom && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"

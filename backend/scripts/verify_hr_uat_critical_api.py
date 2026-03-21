@@ -242,6 +242,7 @@ async def _ensure_accounts_for_tenant(tenant_id: int) -> tuple[int, int]:
                 description="Auto-created for payroll posting UAT",
                 is_active=True,
                 is_bank_account=False,
+                version=1,
             )
             db.add(acc)
             await db.flush()

@@ -1,8 +1,27 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, type FormEvent } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { api, setAuth } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
-import { User, Lock, AlertCircle, ArrowLeft, Building2, ShoppingBag, Factory, DollarSign, Brain } from "lucide-react";
+import {
+  User,
+  Lock,
+  AlertCircle,
+  ArrowLeft,
+  Building2,
+  ShoppingBag,
+  Factory,
+  DollarSign,
+  Brain,
+  Info,
+} from "lucide-react";
+
+/** Only allow same-origin relative paths for post-login redirect (open redirect guard). */
+function safeInternalPath(raw: string | null): string | null {
+  if (raw == null || typeof raw !== "string") return null;
+  const t = raw.trim();
+  if (!t.startsWith("/") || t.startsWith("//")) return null;
+  return t;
+}
 
 const features = [
   { icon: ShoppingBag, label: "Merchandising" },
@@ -18,6 +37,8 @@ const stats = [
 ];
 
 export function Login() {
+  const [searchParams] = useSearchParams();
+  const sessionReason = searchParams.get("reason");
   const [companyCode, setCompanyCode] = useState(() => (localStorage.getItem("lastCompanyCode") || "").toUpperCase());
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -26,7 +47,7 @@ export function Login() {
   const navigate = useNavigate();
   const { refetch } = useAuth();
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
     const code = companyCode.trim().toUpperCase();
@@ -45,7 +66,8 @@ export function Login() {
       const tid = res.tenant_id ?? (Number.isFinite(Number(code)) ? Number(code) : 0);
       setAuth(res.access_token, tid);
       await refetch();
-      navigate("/app", { replace: true });
+      const next = safeInternalPath(searchParams.get("next"));
+      navigate(next && next.startsWith("/app") ? next : "/app", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid credentials");
     } finally {
@@ -107,6 +129,13 @@ export function Login() {
               <p className="text-sm text-text-secondary mt-1">Sign in to your company account</p>
               <p className="text-xs text-text-muted mt-1">Fields marked with ** are mandatory.</p>
             </div>
+
+            {sessionReason === "session_expired" && (
+              <div className="flex items-start gap-2 rounded-lg border border-brand-primary/25 bg-brand-primary/5 px-4 py-3 text-sm text-text-primary">
+                <Info className="h-4 w-4 shrink-0 mt-0.5 text-brand-primary" />
+                <span>Your session expired. Please sign in again to continue.</span>
+              </div>
+            )}
 
             {error && (
               <div className="flex items-start gap-2 rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">

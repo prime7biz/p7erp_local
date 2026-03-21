@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -341,10 +343,13 @@ async def revenue_trend(
 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
+    # Cap work for large tenants: last ~24 months, max rows (Finding #3).
+    since = datetime.utcnow() - timedelta(days=730)
     result = await db.execute(
         select(Quotation.created_at, Quotation.quoted_price, Quotation.total_amount)
-        .where(Quotation.tenant_id == tenant.id)
+        .where(Quotation.tenant_id == tenant.id, Quotation.created_at >= since)
         .order_by(Quotation.created_at.asc())
+        .limit(8000)
     )
     bucket: dict[str, float] = {}
     for created_at, quoted_price, total_amount in result.all():

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
+from app.common.db_errors import flush_handling_duplicate_document_code
 from app.common.tenant import require_tenant
 from app.common.workflow import (
   ORDER_TRANSITIONS,
@@ -263,25 +265,41 @@ async def _run_promise_check(
     reasons.append("BOM has no inventory-linked items")
     return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
 
+  item_ids = [line.item_id for line in bom_lines if line.item_id is not None]
+  items_result = (
+    await db.execute(select(Item).where(Item.tenant_id == tenant_id, Item.id.in_(item_ids)))
+  ).scalars().all()
+  items_by_id = {i.id: i for i in items_result}
+
+  mov_result = (
+    await db.execute(
+      select(StockMovement).where(
+        StockMovement.tenant_id == tenant_id,
+        StockMovement.item_id.in_(item_ids),
+      )
+    )
+  ).scalars().all()
+  in_qty_by_item: dict[int, float] = defaultdict(float)
+  out_qty_by_item: dict[int, float] = defaultdict(float)
+  for m in mov_result:
+    q = _safe_float(m.quantity)
+    mt = (m.movement_type or "").upper()
+    if mt == "IN":
+      in_qty_by_item[m.item_id] += q
+    elif mt == "OUT":
+      out_qty_by_item[m.item_id] += q
+
   for line in bom_lines:
     if line.item_id is None:
       continue
-    item = await db.get(Item, line.item_id)
-    if not item or item.tenant_id != tenant_id:
+    item = items_by_id.get(line.item_id)
+    if not item:
       continue
     base = _safe_float(line.base_consumption)
     wastage = _safe_float(line.wastage_pct) / 100.0
     required_qty = order_qty * base * (1.0 + wastage)
-    movements = (
-      await db.execute(
-        select(StockMovement).where(
-          StockMovement.tenant_id == tenant_id,
-          StockMovement.item_id == line.item_id,
-        )
-      )
-    ).scalars().all()
-    in_qty = sum(_safe_float(m.quantity) for m in movements if (m.movement_type or "").upper() == "IN")
-    out_qty = sum(_safe_float(m.quantity) for m in movements if (m.movement_type or "").upper() == "OUT")
+    in_qty = in_qty_by_item.get(line.item_id, 0.0)
+    out_qty = out_qty_by_item.get(line.item_id, 0.0)
     available_qty = round(in_qty - out_qty, 4)
     shortage_qty = round(max(0.0, required_qty - available_qty), 4)
     if shortage_qty > 0:
@@ -420,7 +438,7 @@ async def create_order(
       fallback="DRAFT",
       entity_label="quotation",
     )
-  await db.flush()
+  await flush_handling_duplicate_document_code(db)
   await _auto_generate_followup_actions_if_missing(
     db,
     tenant_id=tenant.id,
@@ -660,7 +678,7 @@ async def create_order_from_quotation(
     fallback="DRAFT",
     entity_label="quotation",
   )
-  await db.flush()
+  await flush_handling_duplicate_document_code(db)
   await _auto_generate_followup_actions_if_missing(
     db,
     tenant_id=tenant.id,

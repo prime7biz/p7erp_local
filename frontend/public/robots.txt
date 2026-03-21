@@ -2,5 +2,4 @@
 User-agent: *
 Allow: /
 
-# Sitemap (uncomment and set your production URL when deployed)
-# Sitemap: https://prime7erp.com/sitemap.xml
+Sitemap: https://prime7erp.com/sitemap.xml

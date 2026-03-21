@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     ai_confirmation_token_pepper: str = "change-me-ai-token-pepper"
     allow_public_registration: bool = False
+    # If set (non-empty), first-user POST /auth/register must send the same value in X-Bootstrap-Key header
+    # or bootstrap_key in RegisterRequest (Finding #4). Per-tenant alternative: tenants.bootstrap_token_hash.
+    # In non-dev environments, bootstrap requires that key or tenant hash unless you rely on dev-only bypass below.
+    bootstrap_registration_key: str = ""
     ai_rate_limit_window_seconds: int = 60
     ai_rate_limit_chat_per_window: int = 30
     ai_rate_limit_read_per_window: int = 50

@@ -10,6 +10,7 @@ import {
   type OrderPromiseCheckResponse,
 } from "@/api/client";
 import { getOrderStatusChoices } from "@/features/merch/workflow";
+import { logApiError } from "@/utils/logApiError";
 
 export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -40,7 +41,10 @@ export function OrderDetailPage() {
         const [cust, quote, promise] = await Promise.all([
           api.getCustomer(order.customer_id),
           order.quotation_id ? api.getQuotation(order.quotation_id) : Promise.resolve(null),
-          api.getOrderPromiseCheck(order.id).catch(() => null),
+          api.getOrderPromiseCheck(order.id).catch((e) => {
+            logApiError("OrderDetailPage.getOrderPromiseCheck", e);
+            return null;
+          }),
         ]);
         setCustomer(cust);
         setQuotation(quote);
@@ -249,7 +253,10 @@ export function OrderDetailPage() {
                     const updated = await api.updateOrderStatus(item.id, newStatus);
                     setItem(updated);
                     setNewStatus(updated.status);
-                    const latestPromise = await api.getOrderPromiseCheck(item.id).catch(() => null);
+                    const latestPromise = await api.getOrderPromiseCheck(item.id).catch((e) => {
+                      logApiError("OrderDetailPage.getOrderPromiseCheck(refresh)", e);
+                      return null;
+                    });
                     if (latestPromise) {
                       setPromiseCheck(latestPromise);
                     }

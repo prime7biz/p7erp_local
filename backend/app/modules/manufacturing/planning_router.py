@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.db_errors import commit_handling_duplicate_document_code, flush_handling_duplicate_document_code
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -239,7 +240,7 @@ async def generate_work_orders(
             status="planned",
         )
         db.add(wo)
-        await db.flush()
+        await flush_handling_duplicate_document_code(db)
         if line.routing_id is not None:
             steps_result = await db.execute(
                 select(ManufacturingRoutingStep).where(
@@ -261,7 +262,7 @@ async def generate_work_orders(
         created_orders.append(wo)
 
     plan.status = "planned"
-    await db.commit()
+    await commit_handling_duplicate_document_code(db)
     for row in created_orders:
         await db.refresh(row)
     return [_to_work_order_response(row) for row in created_orders]

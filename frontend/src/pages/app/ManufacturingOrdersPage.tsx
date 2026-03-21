@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type InventoryItemResponse, type ManufacturingOrderCreate, type ManufacturingStageResponse } from "@/api/client";
+import {
+  InventoryCardListSkeleton,
+  InventoryEmptyState,
+  InventoryErrorPanel,
+  InventoryKpiStripSkeleton,
+} from "@/components/inventory/InventoryListStates";
 
 function statusBadgeClass(status: string) {
   switch (status) {
@@ -22,6 +28,7 @@ function statusBadgeClass(status: string) {
 }
 
 export function ManufacturingOrdersPage() {
+  // inventory phase rollout marker
   const [orders, setOrders] = useState<Awaited<ReturnType<typeof api.listManufacturingOrders>>>([]);
   const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [stagesByOrder, setStagesByOrder] = useState<Record<number, ManufacturingStageResponse[]>>({});
@@ -29,8 +36,12 @@ export function ManufacturingOrdersPage() {
   const [kpi, setKpi] = useState({ openPo: 0, openGrn: 0, pendingCr: 0, lowStock: 0 });
   const [prevKpi, setPrevKpi] = useState<{ openPo: number; openGrn: number; pendingCr: number; lowStock: number } | null>(null);
   const [form, setForm] = useState<ManufacturingOrderCreate>({ finished_item_id: 0, planned_quantity: "0", notes: "" });
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    setError("");
+    setLoading(true);
     try {
       const [rows, itm] = await Promise.all([api.listManufacturingOrders(), api.listInventoryItems()]);
       const [overview, pendingCrRows, stockRows] = await Promise.all([
@@ -64,12 +75,20 @@ export function ManufacturingOrdersPage() {
       setStagesByOrder(Object.fromEntries(stagePairs));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load manufacturing data");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const close = () => setOpenActionsId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, []);
 
   const itemName = useMemo(() => new Map(items.map((i) => [i.id, i.name])), [items]);
   const trend = (key: keyof typeof kpi) => {
@@ -121,15 +140,43 @@ export function ManufacturingOrdersPage() {
         <p className="text-sm text-text-muted">Manage stage-by-stage production progress with safe controls.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Open PO</div><div className="text-xl font-semibold">{kpi.openPo} <span className="text-xs text-text-muted">{trend("openPo")}</span></div></div>
-        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Open GRN</div><div className="text-xl font-semibold">{kpi.openGrn} <span className="text-xs text-text-muted">{trend("openGrn")}</span></div></div>
-        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Pending CR</div><div className="text-xl font-semibold">{kpi.pendingCr} <span className="text-xs text-text-muted">{trend("pendingCr")}</span></div></div>
-        <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm"><div className="text-text-muted">Low Stock Items</div><div className="text-xl font-semibold">{kpi.lowStock} <span className="text-xs text-text-muted">{trend("lowStock")}</span></div></div>
-      </div>
+      {error ? <InventoryErrorPanel message={error} onRetry={() => void load()} /> : null}
 
-      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
+      {loading ? (
+        <>
+          <InventoryKpiStripSkeleton cards={4} />
+          <InventoryCardListSkeleton count={3} />
+        </>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Open PO</div>
+            <div className="text-xl font-semibold">
+              {kpi.openPo} <span className="text-xs text-text-muted">{trend("openPo")}</span>
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Open GRN</div>
+            <div className="text-xl font-semibold">
+              {kpi.openGrn} <span className="text-xs text-text-muted">{trend("openGrn")}</span>
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Pending CR</div>
+            <div className="text-xl font-semibold">
+              {kpi.pendingCr} <span className="text-xs text-text-muted">{trend("pendingCr")}</span>
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Low Stock Items</div>
+            <div className="text-xl font-semibold">
+              {kpi.lowStock} <span className="text-xs text-text-muted">{trend("lowStock")}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
+      {!loading && (
       <div className="rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="mb-3 text-sm font-semibold text-text-secondary">Create Manufacturing Order</h2>
         <form className="grid grid-cols-1 gap-3 md:grid-cols-4" onSubmit={create}>
@@ -164,11 +211,17 @@ export function ManufacturingOrdersPage() {
           </button>
         </form>
       </div>
+      )}
 
-      {orders.map((order) => {
+      {!loading && orders.length === 0 ? (
+        <InventoryEmptyState title="No manufacturing orders yet" description="Create a manufacturing order above to start production." />
+      ) : null}
+
+      {!loading &&
+      orders.map((order) => {
         const stages = stagesByOrder[order.id] ?? [];
         return (
-          <div key={order.id} className="rounded-xl border border-border bg-surface-raised p-4">
+          <div key={order.id} id={`mo-${order.id}`} className="scroll-mt-4 rounded-xl border border-border bg-surface-raised p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="font-semibold text-text-primary">{order.mo_number}</h3>
@@ -179,27 +232,84 @@ export function ManufacturingOrdersPage() {
                   <span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(order.status)}`}>{order.status}</span>
                 </div>
               </div>
-              <div className="flex gap-2">
-                {order.status === "draft" || order.status === "planned" ? (
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => void action(order.id, "start")}>
-                    Start
-                  </button>
-                ) : null}
-                {order.status === "in_progress" ? (
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => void action(order.id, "hold")}>
-                    Hold
-                  </button>
-                ) : null}
-                {order.status === "on_hold" ? (
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => void action(order.id, "resume")}>
-                    Resume
-                  </button>
-                ) : null}
-                {order.status !== "completed" ? (
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => void action(order.id, "complete")}>
-                    Complete
-                  </button>
-                ) : null}
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenActionsId((id) => (id === order.id ? null : order.id));
+                  }}
+                >
+                  Actions
+                </button>
+                {openActionsId === order.id && (
+                  <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                    <button
+                      type="button"
+                      className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenActionsId(null);
+                        document.getElementById(`mo-${order.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}
+                    >
+                      View
+                    </button>
+                    {order.status === "draft" || order.status === "planned" ? (
+                      <button
+                        type="button"
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenActionsId(null);
+                          void action(order.id, "start");
+                        }}
+                      >
+                        Start
+                      </button>
+                    ) : null}
+                    {order.status === "in_progress" ? (
+                      <button
+                        type="button"
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenActionsId(null);
+                          void action(order.id, "hold");
+                        }}
+                      >
+                        Hold
+                      </button>
+                    ) : null}
+                    {order.status === "on_hold" ? (
+                      <button
+                        type="button"
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenActionsId(null);
+                          void action(order.id, "resume");
+                        }}
+                      >
+                        Resume
+                      </button>
+                    ) : null}
+                    {order.status !== "completed" ? (
+                      <button
+                        type="button"
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenActionsId(null);
+                          void action(order.id, "complete");
+                        }}
+                      >
+                        Complete
+                      </button>
+                    ) : null}
+                  </div>
+                )}
               </div>
             </div>
 

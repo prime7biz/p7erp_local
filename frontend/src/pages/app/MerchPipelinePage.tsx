@@ -7,6 +7,7 @@ import {
   type PipelineStageOut,
 } from "@/api/client";
 import { LayoutGrid, List, RefreshCw, ChevronDown, BarChart3 } from "lucide-react";
+import { logApiError } from "@/utils/logApiError";
 
 type ViewMode = "kanban" | "list";
 
@@ -34,6 +35,7 @@ export function MerchPipelinePage() {
   const [customerId, setCustomerId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [customers, setCustomers] = useState<{ id: number; name: string }[]>([]);
+  const [customersLoadError, setCustomersLoadError] = useState("");
   const [moveMenuId, setMoveMenuId] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
 
@@ -59,7 +61,17 @@ export function MerchPipelinePage() {
   }, [loadPipeline]);
 
   useEffect(() => {
-    api.listCustomers().then((list) => setCustomers(list)).catch(() => {});
+    api
+      .listCustomers()
+      .then((list) => {
+        setCustomers(list);
+        setCustomersLoadError("");
+      })
+      .catch((e) => {
+        logApiError("MerchPipelinePage.listCustomers", e);
+        setCustomers([]);
+        setCustomersLoadError("Could not load customer list for this filter.");
+      });
   }, []);
 
   const handleMoveTo = async (item: PipelineItemOut, newStatus: string) => {
@@ -148,6 +160,7 @@ export function MerchPipelinePage() {
       </header>
 
       {/* Summary + filters */}
+      <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-3">
         {data && (
           <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-surface-raised px-3 py-2">
@@ -220,6 +233,10 @@ export function MerchPipelinePage() {
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           Refresh
         </button>
+      </div>
+      {customersLoadError && (
+        <p className="text-xs text-status-warning-foreground">{customersLoadError}</p>
+      )}
       </div>
 
       {error && (

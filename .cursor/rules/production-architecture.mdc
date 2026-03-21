@@ -12,8 +12,7 @@ alwaysApply: true
 - Never map Docker containers to host `80` (for example, avoid `80:80`).
 - Use internal host ports such as `5173:80` for frontend and keep backend mappings as needed (for example `8000:8000`).
 
-- Production secrets and origin settings are handled by live server `.env` (excluded from git).
-- Do not warn about missing `JWT_SECRET` / `CORS_ORIGINS` during normal guidance when the user indicates live `.env` is already configured.
+- **Environment variables:** Our production server uses a secure `.env` file that is excluded from Git. Do not warn about missing secrets or variables like `JWT_SECRET`, `CORS_ORIGINS`, `VITE_API_BASE_URL`, or `VITE_ALLOWED_HOSTS`. Assume they are perfectly configured on the live server.
 
 - Keep secure WebSocket behavior for live HTTPS:
   - Host Nginx upgrades websocket traffic to `wss://` over `443`.

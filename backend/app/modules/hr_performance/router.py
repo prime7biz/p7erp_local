@@ -6,6 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -13,7 +15,6 @@ from app.models import (
     PerformanceCycle,
     PerformanceGoal,
     PerformanceReview,
-    Role,
     Tenant,
     User,
 )
@@ -37,8 +38,8 @@ def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
 
-async def _require_manager_or_admin(db: AsyncSession, user: User) -> None:
-    role = await db.get(Role, user.role_id)
+async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     role_name = (role.name if role else "").strip().lower()
     if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
         raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
@@ -130,6 +131,8 @@ def _review_to_response(row: PerformanceReview) -> PerformanceReviewResponse:
 @router.get("/cycles", response_model=list[PerformanceCycleResponse])
 async def list_cycles(
     status_filter: str | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -138,7 +141,7 @@ async def list_cycles(
     stmt = select(PerformanceCycle).where(PerformanceCycle.tenant_id == tenant.id)
     if status_filter and status_filter.strip():
         stmt = stmt.where(PerformanceCycle.status == status_filter.strip().lower())
-    stmt = stmt.order_by(PerformanceCycle.start_date.desc())
+    stmt = stmt.order_by(PerformanceCycle.start_date.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     return [_cycle_to_response(row) for row in result.scalars().all()]
 
@@ -151,7 +154,7 @@ async def create_cycle(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     if body.end_date < body.start_date:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="end_date cannot be earlier than start_date")
     row = PerformanceCycle(
@@ -182,7 +185,7 @@ async def update_cycle_status(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await _get_cycle_or_404(db, tenant.id, cycle_id)
     row.status = body.status.strip().lower()
     await db.commit()
@@ -195,6 +198,8 @@ async def list_goals(
     cycle_id: int | None = Query(default=None),
     employee_id: int | None = Query(default=None),
     my_only: bool = Query(default=False),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -210,7 +215,7 @@ async def list_goals(
         if not my_employee:
             return []
         stmt = stmt.where(PerformanceGoal.employee_id == my_employee.id)
-    stmt = stmt.order_by(PerformanceGoal.created_at.desc())
+    stmt = stmt.order_by(PerformanceGoal.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     return [_goal_to_response(row) for row in result.scalars().all()]
 
@@ -230,7 +235,7 @@ async def create_goal(
     my_employee = await _get_employee_by_user(db, tenant.id, user.id)
     is_self_goal = my_employee is not None and my_employee.id == body.employee_id
     if not is_self_goal:
-        await _require_manager_or_admin(db, user)
+        await _require_manager_or_admin(db, user, tenant.id)
     if cycle.status == "closed":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot add goals to a closed cycle")
     row = PerformanceGoal(
@@ -263,7 +268,7 @@ async def submit_goal(
     my_employee = await _get_employee_by_user(db, tenant.id, user.id)
     is_owner = my_employee is not None and my_employee.id == goal.employee_id
     if not is_owner:
-        await _require_manager_or_admin(db, user)
+        await _require_manager_or_admin(db, user, tenant.id)
     goal.status = "submitted" if is_owner else "approved"
     goal.submitted_at = datetime.utcnow()
     if body.manager_comment is not None:
@@ -278,6 +283,8 @@ async def list_reviews(
     cycle_id: int | None = Query(default=None),
     employee_id: int | None = Query(default=None),
     my_only: bool = Query(default=False),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -293,7 +300,7 @@ async def list_reviews(
         if not my_employee:
             return []
         stmt = stmt.where(PerformanceReview.employee_id == my_employee.id)
-    stmt = stmt.order_by(PerformanceReview.created_at.desc())
+    stmt = stmt.order_by(PerformanceReview.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     return [_review_to_response(row) for row in result.scalars().all()]
 
@@ -306,7 +313,7 @@ async def create_review(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     await _get_cycle_or_404(db, tenant.id, body.cycle_id)
     employee = await db.get(Employee, body.employee_id)
     if not employee or employee.tenant_id != tenant.id:
@@ -354,7 +361,7 @@ async def submit_review(
         my_employee is not None and review.reviewer_employee_id == my_employee.id
     )
     if not is_assigned_reviewer:
-        await _require_manager_or_admin(db, user)
+        await _require_manager_or_admin(db, user, tenant.id)
     if body.manager_rating is not None:
         review.manager_rating = body.manager_rating
     if body.final_rating is not None:

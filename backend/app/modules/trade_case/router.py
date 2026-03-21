@@ -311,6 +311,8 @@ async def create_trade_case_stage(
 @router.get("/{trade_case_id}/stage-log", response_model=list[TradeCaseStageLogResponse])
 async def list_trade_case_stage_log(
     trade_case_id: int,
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -323,6 +325,8 @@ async def list_trade_case_stage_log(
             TradeCaseStageLog.trade_case_id == trade_case_id,
         )
         .order_by(TradeCaseStageLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
     return result.scalars().all()
 
@@ -502,6 +506,8 @@ async def upload_trade_document(
 @router.get("/{trade_case_id}/documents")
 async def list_trade_documents(
     trade_case_id: int,
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -514,6 +520,8 @@ async def list_trade_documents(
             TradeDocument.trade_case_id == trade_case_id,
         )
         .order_by(TradeDocument.created_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
     rows = result.scalars().all()
     return [

@@ -9,6 +9,7 @@ import {
   type MasterContractUpdate,
 } from "@/api/client";
 import { X } from "lucide-react";
+import { logApiError } from "@/utils/logApiError";
 
 const CONTRACT_TYPES = [
   { value: "EXPORT_LC", label: "Master Export LC" },
@@ -131,7 +132,10 @@ export function MasterContractsPage() {
           page: 1,
           page_size: 100,
           sort: "-created_at",
-        }).catch(() => ({ items: [] as MerchAlertItem[] })),
+        }).catch((e) => {
+          logApiError("MasterContractsPage.getMerchAlerts", e);
+          return { items: [] as MerchAlertItem[] };
+        }),
       ]);
       setItems(rows);
       const grouped: Record<number, MerchAlertItem[]> = {};

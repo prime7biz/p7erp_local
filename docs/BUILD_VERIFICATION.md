@@ -4,6 +4,30 @@ Checklist for B1–B3. Run from repo root: `p7erp_local`.
 
 **PowerShell:** Use `;` to chain commands (e.g. `cd frontend; npm run build`). Do not use `&&`.
 
+## Docker (`docker compose`)
+
+Use this when you run the stack with **`docker compose`** (see repo root `docker-compose.yml`). The backend image is **Python 3.12** with dependencies from `requirements.txt` — do **not** rely on Windows “python” on the host for migrations.
+
+1. **Start services** (from repo root):
+
+   ```powershell
+   docker compose up -d
+   ```
+
+2. **Run DB migrations** inside the backend container (after `postgres` is healthy):
+
+   ```powershell
+   docker compose exec backend alembic upgrade head
+   ```
+
+   If the service name differs, use: `docker compose ps` and replace `backend` with your API service name.
+
+3. **API URL:** Backend is exposed at **`http://localhost:8000`** by default. The frontend container typically maps **`http://localhost:5173`** → nginx port 80 (see `docker-compose.yml`).
+
+4. **When to re-run migrations:** After pulling code that adds Alembic revisions (e.g. new files under `backend/alembic/versions/`). The compose file notes that migrations are **manual** in dev.
+
+**Why Docker fixes the earlier migration errors:** Host Python 3.14 may fail to build some wheels; the Dockerfile uses **3.12-slim**, which matches a supported stack for FastAPI / pydantic.
+
 ## B1 – Backend build
 
 ```powershell
@@ -45,7 +69,8 @@ npm run lint
 | Step | Command |
 |------|---------|
 | Backend deps | `cd backend` then `python -m pip install -r requirements.txt` |
-| Migrations | `cd backend` then `alembic upgrade head` |
+| Migrations (local Python) | `cd backend` then `python -m pip install -r requirements.txt` then `python -m alembic upgrade head` |
+| Migrations (Docker) | From repo root: `docker compose exec backend alembic upgrade head` |
 | Backend run | `cd backend` then `uvicorn app.main:app --reload` |
 | Frontend build | `cd frontend` then `npm install` then `npm run build` |
 | Frontend dev | `cd frontend` then `npm run dev` |

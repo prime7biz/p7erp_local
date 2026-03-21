@@ -9,6 +9,7 @@ import {
   type SettingsConfigResponse,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { logApiError } from "@/utils/logApiError";
 import "@/styles/quotation-print.css";
 
 function resolveAssetUrl(pathOrUrl: string | null | undefined): string {
@@ -53,7 +54,10 @@ export function StylePrintPage() {
           api.listStyleComponents(styleId),
           api.listStyleColorways(styleId),
           api.listStyleSizeScales(styleId),
-          api.getSettingsConfig().catch(() => null),
+          api.getSettingsConfig().catch((e) => {
+            logApiError("StylePrintPage.getSettingsConfig", e);
+            return null;
+          }),
         ]);
         setStyle(s);
         setComponents(comps);

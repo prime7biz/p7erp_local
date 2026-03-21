@@ -5,6 +5,7 @@ import {
   type AccountGroupResponse,
   type AccountGroupHierarchyNode,
 } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 
 const NATURES = ["Asset", "Liability", "Income", "Expense", "Equity"] as const;
 const NORMAL_BALANCE = ["debit", "credit"] as const;
@@ -564,13 +565,29 @@ export function AccountGroupsPage() {
 
 function ReportingImpactPanel({ groupId, onClose }: { groupId: number; onClose: () => void }) {
   const [impact, setImpact] = useState<{ reports: { id: string; label: string }[] } | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
-    api.getAccountGroupReportingImpact(groupId).then((data) => {
-      if (!cancelled) setImpact(data);
-    }).catch(() => { if (!cancelled) setImpact({ reports: [] }); }).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    setLoadError(false);
+    api
+      .getAccountGroupReportingImpact(groupId)
+      .then((data) => {
+        if (!cancelled) setImpact(data);
+      })
+      .catch((e) => {
+        logApiError("ReportingImpactPanel.getAccountGroupReportingImpact", e);
+        if (!cancelled) {
+          setImpact({ reports: [] });
+          setLoadError(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [groupId]);
   return (
     <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
@@ -580,6 +597,8 @@ function ReportingImpactPanel({ groupId, onClose }: { groupId: number; onClose: 
       </div>
       {loading ? (
         <p className="mt-2 text-sm text-text-muted">Loading…</p>
+      ) : loadError ? (
+        <p className="mt-2 text-sm text-status-warning-foreground">Could not load reporting impact for this group.</p>
       ) : impact?.reports?.length ? (
         <ul className="mt-2 list-inside list-disc text-sm text-text-secondary">
           {impact.reports.map((r) => (

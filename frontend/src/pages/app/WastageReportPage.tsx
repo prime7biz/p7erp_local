@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { logApiError } from "@/utils/logApiError";
 import {
   api,
   type WastageReportRowResponse,
@@ -54,6 +55,7 @@ export function WastageReportPage() {
   const [managementSummary, setManagementSummary] = useState<WastageManagementSummaryResponse | null>(null);
   const [savedViews, setSavedViews] = useState<WastageSavedViewResponse[]>([]);
   const [thresholds, setThresholds] = useState<WastageThresholdRuleResponse[]>([]);
+  const [buyerListLoadError, setBuyerListLoadError] = useState("");
   const [saveViewName, setSaveViewName] = useState("");
   const [saveViewModalOpen, setSaveViewModalOpen] = useState(false);
   const [refreshingSummary, setRefreshingSummary] = useState(false);
@@ -116,12 +118,34 @@ export function WastageReportPage() {
   }, [load]);
 
   useEffect(() => {
-    api.listCustomers().then(setCustomers).catch(() => setCustomers([]));
+    api
+      .listCustomers()
+      .then((c) => {
+        setCustomers(c);
+        setBuyerListLoadError("");
+      })
+      .catch((e) => {
+        logApiError("WastageReportPage.listCustomers", e);
+        setCustomers([]);
+        setBuyerListLoadError("Could not load buyers for the filter.");
+      });
   }, []);
 
   useEffect(() => {
-    api.getWastageViews().then(setSavedViews).catch(() => setSavedViews([]));
-    api.getWastageThresholds().then(setThresholds).catch(() => setThresholds([]));
+    api
+      .getWastageViews()
+      .then(setSavedViews)
+      .catch((e) => {
+        logApiError("WastageReportPage.getWastageViews", e);
+        setSavedViews([]);
+      });
+    api
+      .getWastageThresholds()
+      .then(setThresholds)
+      .catch((e) => {
+        logApiError("WastageReportPage.getWastageThresholds", e);
+        setThresholds([]);
+      });
   }, []);
 
   const openDrawer = useCallback(async (orderIdParam: number) => {
@@ -454,6 +478,9 @@ export function WastageReportPage() {
 
       <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
         <h2 className="text-sm font-semibold text-text-primary">Filters</h2>
+        {buyerListLoadError && (
+          <p className="text-xs text-status-warning-foreground">{buyerListLoadError}</p>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           {savedViews.length > 0 && (
             <div className="flex items-center gap-2">

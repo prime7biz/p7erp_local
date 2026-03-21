@@ -9,6 +9,7 @@ import {
   type MerchAlertSavedView,
 } from "@/api/client";
 import { RefreshCw, Play, X, LayoutGrid, List, Bookmark } from "lucide-react";
+import { logApiError } from "@/utils/logApiError";
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   critical: { bg: "bg-status-danger-subtle", text: "text-status-danger-foreground", label: "Critical" },
@@ -61,6 +62,7 @@ export function MerchCriticalAlertsPage() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [savedViews, setSavedViews] = useState<MerchAlertSavedView[]>([]);
+  const [savedViewsError, setSavedViewsError] = useState("");
   const [saveViewModalOpen, setSaveViewModalOpen] = useState(false);
   const [saveViewName, setSaveViewName] = useState("");
   const [drawerTab, setDrawerTab] = useState<"summary" | "timeline" | "comments" | "escalation">("summary");
@@ -106,7 +108,17 @@ export function MerchCriticalAlertsPage() {
   }, [fetchList]);
 
   useEffect(() => {
-    api.getMerchAlertViews().then(setSavedViews).catch(() => {});
+    api
+      .getMerchAlertViews()
+      .then((v) => {
+        setSavedViews(v);
+        setSavedViewsError("");
+      })
+      .catch((e) => {
+        logApiError("MerchCriticalAlertsPage.getMerchAlertViews", e);
+        setSavedViews([]);
+        setSavedViewsError("Could not load saved views.");
+      });
   }, []);
 
   const applyView = useCallback((view: MerchAlertSavedView) => {
@@ -125,6 +137,7 @@ export function MerchCriticalAlertsPage() {
         is_default: false,
       });
       setSavedViews(await api.getMerchAlertViews());
+      setSavedViewsError("");
       setSaveViewModalOpen(false);
       setSaveViewName("");
     } catch (e) {
@@ -176,27 +189,39 @@ export function MerchCriticalAlertsPage() {
       return;
     }
     setDrawerLoading(true);
-    api.getMerchAlertDetail(drawerAlertId)
+    api
+      .getMerchAlertDetail(drawerAlertId)
       .then((r) => setDrawerAlert(r as MerchAlertItem))
-      .catch(() => setDrawerAlert(null))
+      .catch((e) => {
+        logApiError("MerchCriticalAlertsPage.getMerchAlertDetail", e);
+        setDrawerAlert(null);
+      })
       .finally(() => setDrawerLoading(false));
   }, [drawerAlertId]);
 
   useEffect(() => {
     if (drawerAlertId == null || drawerTab !== "comments") return;
     setLoadingComments(true);
-    api.getMerchAlertComments(drawerAlertId)
+    api
+      .getMerchAlertComments(drawerAlertId)
       .then(setDrawerComments)
-      .catch(() => setDrawerComments([]))
+      .catch((e) => {
+        logApiError("MerchCriticalAlertsPage.getMerchAlertComments", e);
+        setDrawerComments([]);
+      })
       .finally(() => setLoadingComments(false));
   }, [drawerAlertId, drawerTab]);
 
   useEffect(() => {
     if (drawerAlertId == null || drawerTab !== "timeline") return;
     setLoadingHistory(true);
-    api.getMerchAlertHistory(drawerAlertId)
+    api
+      .getMerchAlertHistory(drawerAlertId)
       .then(setDrawerHistory)
-      .catch(() => setDrawerHistory([]))
+      .catch((e) => {
+        logApiError("MerchCriticalAlertsPage.getMerchAlertHistory", e);
+        setDrawerHistory([]);
+      })
       .finally(() => setLoadingHistory(false));
   }, [drawerAlertId, drawerTab]);
 
@@ -287,6 +312,7 @@ export function MerchCriticalAlertsPage() {
       </div>
 
       {/* Filters */}
+      <>
       <div className="flex flex-wrap items-center gap-3">
         {(entityTypeFromUrl || entityIdFilter != null) && (
           <div className="rounded-md border border-brand-primary/30 bg-brand-primary/10 px-2.5 py-1 text-xs text-brand-primary">
@@ -377,6 +403,10 @@ export function MerchCriticalAlertsPage() {
           </button>
         </div>
       </div>
+      {savedViewsError && (
+        <p className="text-xs text-status-warning-foreground mt-1">{savedViewsError}</p>
+      )}
+      </>
 
       {/* Bulk toolbar */}
       {selectedIds.length > 0 && (

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -135,6 +136,8 @@ async def update_preferences(
 @router.get("/my-leave-requests", response_model=list[LeaveRequestResponse])
 async def my_leave_requests(
     status_filter: str | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -147,7 +150,7 @@ async def my_leave_requests(
     )
     if status_filter and status_filter.strip():
         stmt = stmt.where(LeaveRequest.status == status_filter.strip().upper())
-    stmt = stmt.order_by(LeaveRequest.created_at.desc())
+    stmt = stmt.order_by(LeaveRequest.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     rows = result.scalars().all()
     return [
@@ -260,6 +263,8 @@ async def my_attendance_summary(
 @router.get("/my-payslips", response_model=list[PayslipResponse])
 async def my_payslips(
     year: int | None = Query(default=None, ge=2000, le=2200),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -274,12 +279,12 @@ async def my_payslips(
             PayrollRunLine.tenant_id == tenant.id,
             PayrollRunLine.employee_id == employee.id,
         )
-        .order_by(PayrollPayslip.generated_at.desc())
     )
     if year is not None:
         start = datetime(year=year, month=1, day=1)
         end = datetime(year=year + 1, month=1, day=1)
         stmt = stmt.where(PayrollPayslip.generated_at >= start, PayrollPayslip.generated_at < end)
+    stmt = stmt.order_by(PayrollPayslip.generated_at.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     rows = result.all()
     return [

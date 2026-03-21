@@ -3,7 +3,8 @@ from __future__ import annotations
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Role, Tenant, User
+from app.common.authz import get_user_role_scoped_to_tenant
+from app.models import Tenant, User
 
 
 _AI_ALLOWED_ROLES = {"admin", "manager", "owner", "super_admin", "superadmin", "analyst", "operator", "supervisor"}
@@ -30,12 +31,12 @@ def _permission_truthy(value: object) -> bool:
 
 
 async def get_role_name(db: AsyncSession, user: User) -> str:
-    role = await db.get(Role, user.role_id)
+    role = await get_user_role_scoped_to_tenant(db, user, user.tenant_id)
     return (role.name if role else "").strip().lower()
 
 
 async def can_use_ai_module(db: AsyncSession, user: User) -> bool:
-    role = await db.get(Role, user.role_id)
+    role = await get_user_role_scoped_to_tenant(db, user, user.tenant_id)
     if not role:
         return False
     role_name = (role.name or "").strip().lower()
@@ -46,7 +47,7 @@ async def can_use_ai_module(db: AsyncSession, user: User) -> bool:
 
 
 async def has_tool_permission(db: AsyncSession, user: User, permission_key: str) -> bool:
-    role = await db.get(Role, user.role_id)
+    role = await get_user_role_scoped_to_tenant(db, user, user.tenant_id)
     if not role:
         return False
     role_name = (role.name or "").strip().lower()

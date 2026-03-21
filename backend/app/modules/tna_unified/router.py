@@ -3,7 +3,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -20,6 +20,10 @@ from app.models import (
 )
 
 router = APIRouter(prefix="/tna-unified", tags=["tna-unified"])
+
+# Finding #3: cap in-memory fan-out before Python filters (merch join can be huge).
+TNA_MERCH_FETCH_CAP = 8000
+TNA_MFG_TASK_FETCH_CAP = 8000
 
 
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
@@ -102,7 +106,11 @@ async def list_unified_actions(
         )
         if order_id is not None:
             merch_stmt = merch_stmt.where(OrderFollowupAction.order_id == order_id)
-        merch_result = await db.execute(merch_stmt.order_by(OrderFollowupAction.planned_date.asc().nullslast(), OrderFollowupAction.id.asc()))
+        merch_result = await db.execute(
+            merch_stmt.order_by(
+                OrderFollowupAction.planned_date.asc().nullslast(), OrderFollowupAction.id.asc()
+            ).limit(TNA_MERCH_FETCH_CAP)
+        )
         for action, order_code in merch_result.all():
             action_status = (action.status or "").strip().lower()
             is_open = _is_open_merch_status(action_status)
@@ -140,10 +148,12 @@ async def list_unified_actions(
             plan_by_id = {plan.id: plan for plan in plans}
             tasks = (
                 await db.execute(
-                    select(ManufacturingTnaPlanTask).where(
+                    select(ManufacturingTnaPlanTask)
+                    .where(
                         ManufacturingTnaPlanTask.tenant_id == tenant.id,
                         ManufacturingTnaPlanTask.plan_id.in_(plan_ids),
                     )
+                    .limit(TNA_MFG_TASK_FETCH_CAP)
                 )
             ).scalars().all()
             template_task_ids = [t.template_task_id for t in tasks if t.template_task_id is not None]
@@ -240,56 +250,108 @@ async def get_unified_summary(
 ):
     _ensure_tenant(user, tenant)
     today = date.today()
-    open_count = 0
-    overdue_count = 0
-    completed_count = 0
-    merch_count = 0
-    manufacturing_count = 0
-    merch_stmt = select(OrderFollowupAction).where(OrderFollowupAction.tenant_id == tenant.id)
-    if order_id is not None:
-        merch_stmt = merch_stmt.where(OrderFollowupAction.order_id == order_id)
-    merch_rows = (await db.execute(merch_stmt)).scalars().all()
-    for row in merch_rows:
-        merch_count += 1
-        status_value = (row.status or "").strip().lower()
-        is_open = _is_open_merch_status(status_value)
-        is_completed = status_value in {"completed", "approved", "cancelled"}
-        if is_open:
-            open_count += 1
-            if row.planned_date is not None and row.planned_date < today:
-                overdue_count += 1
-        if is_completed:
-            completed_count += 1
 
-    plan_stmt = select(ManufacturingTnaPlan.id).where(ManufacturingTnaPlan.tenant_id == tenant.id)
+    merch_base = OrderFollowupAction.tenant_id == tenant.id
     if order_id is not None:
-        plan_stmt = plan_stmt.where(ManufacturingTnaPlan.order_id == order_id)
-    plan_ids = (await db.execute(plan_stmt)).scalars().all()
+        merch_base = and_(merch_base, OrderFollowupAction.order_id == order_id)
+
+    merch_lv = func.lower(func.coalesce(OrderFollowupAction.status, ""))
+    merch_open_statuses = (
+        "pending",
+        "in_progress",
+        "submitted",
+        "rejected",
+        "resubmitted",
+        "on_hold",
+    )
+    merch_completed_statuses = ("completed", "approved", "cancelled")
+
+    merch_count = int(
+        await db.scalar(select(func.count()).select_from(OrderFollowupAction).where(merch_base)) or 0
+    )
+    merch_open = int(
+        await db.scalar(
+            select(func.count()).select_from(OrderFollowupAction).where(
+                merch_base,
+                merch_lv.in_(merch_open_statuses),
+            )
+        )
+        or 0
+    )
+    merch_overdue = int(
+        await db.scalar(
+            select(func.count()).select_from(OrderFollowupAction).where(
+                merch_base,
+                merch_lv.in_(merch_open_statuses),
+                OrderFollowupAction.planned_date.isnot(None),
+                OrderFollowupAction.planned_date < today,
+            )
+        )
+        or 0
+    )
+    merch_completed = int(
+        await db.scalar(
+            select(func.count()).select_from(OrderFollowupAction).where(
+                merch_base,
+                merch_lv.in_(merch_completed_statuses),
+            )
+        )
+        or 0
+    )
+
+    plan_base = ManufacturingTnaPlan.tenant_id == tenant.id
+    if order_id is not None:
+        plan_base = and_(plan_base, ManufacturingTnaPlan.order_id == order_id)
+    plan_ids = list((await db.execute(select(ManufacturingTnaPlan.id).where(plan_base))).scalars().all())
+
+    manufacturing_count = 0
+    mfg_open = 0
+    mfg_overdue = 0
+    mfg_completed = 0
     if plan_ids:
-        mfg_rows = (
-            await db.execute(
-                select(ManufacturingTnaPlanTask).where(
-                    ManufacturingTnaPlanTask.tenant_id == tenant.id,
-                    ManufacturingTnaPlanTask.plan_id.in_(plan_ids),
+        mfg_where = and_(
+            ManufacturingTnaPlanTask.tenant_id == tenant.id,
+            ManufacturingTnaPlanTask.plan_id.in_(plan_ids),
+        )
+        mv = func.lower(func.coalesce(ManufacturingTnaPlanTask.status, ""))
+        manufacturing_count = int(
+            await db.scalar(select(func.count()).select_from(ManufacturingTnaPlanTask).where(mfg_where)) or 0
+        )
+        mfg_open = int(
+            await db.scalar(
+                select(func.count()).select_from(ManufacturingTnaPlanTask).where(
+                    mfg_where,
+                    ~mv.in_(("done", "cancelled")),
                 )
             )
-        ).scalars().all()
-        for row in mfg_rows:
-            manufacturing_count += 1
-            status_value = (row.status or "").strip().lower()
-            is_open = _is_open_mfg_status(status_value)
-            is_completed = status_value in {"done", "cancelled"}
-            if is_open:
-                open_count += 1
-                if row.planned_date is not None and row.planned_date < today:
-                    overdue_count += 1
-            if is_completed:
-                completed_count += 1
+            or 0
+        )
+        mfg_overdue = int(
+            await db.scalar(
+                select(func.count()).select_from(ManufacturingTnaPlanTask).where(
+                    mfg_where,
+                    ~mv.in_(("done", "cancelled")),
+                    ManufacturingTnaPlanTask.planned_date.isnot(None),
+                    ManufacturingTnaPlanTask.planned_date < today,
+                )
+            )
+            or 0
+        )
+        mfg_completed = int(
+            await db.scalar(
+                select(func.count()).select_from(ManufacturingTnaPlanTask).where(
+                    mfg_where,
+                    mv.in_(("done", "cancelled")),
+                )
+            )
+            or 0
+        )
+
     return UnifiedTnaSummaryOut(
         total_count=merch_count + manufacturing_count,
-        open_count=open_count,
-        overdue_count=overdue_count,
-        completed_count=completed_count,
+        open_count=merch_open + mfg_open,
+        overdue_count=merch_overdue + mfg_overdue,
+        completed_count=merch_completed + mfg_completed,
         merch_count=merch_count,
         manufacturing_count=manufacturing_count,
     )

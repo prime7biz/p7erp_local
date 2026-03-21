@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { logApiError } from "@/utils/logApiError";
 import {
   api,
   type ConsumptionReconciliationResponse,
@@ -74,9 +75,20 @@ export function ConsumptionReconciliationPage() {
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
+  const [ordersLoadError, setOrdersLoadError] = useState("");
 
   useEffect(() => {
-    api.listOrders().then(setOrders).catch(() => setOrders([]));
+    api
+      .listOrders()
+      .then((list) => {
+        setOrders(list);
+        setOrdersLoadError("");
+      })
+      .catch((e) => {
+        logApiError("ConsumptionReconciliationPage.listOrders", e);
+        setOrders([]);
+        setOrdersLoadError("Could not load the order list. Try refreshing the page.");
+      });
   }, []);
 
   const load = useCallback(async () => {
@@ -142,6 +154,7 @@ export function ConsumptionReconciliationPage() {
         <div className="no-print flex flex-wrap items-center gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-text-muted">Order</label>
+            <div className="flex flex-col gap-1">
             <div className="flex gap-2">
               <input
                 type="text"
@@ -162,6 +175,10 @@ export function ConsumptionReconciliationPage() {
                   </option>
                 ))}
               </select>
+            </div>
+            {ordersLoadError && (
+              <p className="text-xs text-status-warning-foreground max-w-md">{ordersLoadError}</p>
+            )}
             </div>
           </div>
           <div className="flex flex-col gap-1">

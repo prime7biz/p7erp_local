@@ -4,10 +4,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
 from app.common.tenant import require_tenant
 from app.database import get_db
-from app.models import Department, Designation, Employee, Role, Tenant, User
+from app.models import Department, Designation, Employee, Tenant, User
 from app.modules.hr.schemas import (
     DepartmentCreate,
     DepartmentResponse,
@@ -28,8 +29,8 @@ def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
 
-async def _require_manager_or_admin(db: AsyncSession, user: User) -> None:
-    role = await db.get(Role, user.role_id)
+async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     role_name = (role.name if role else "").strip().lower()
     if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
         raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
@@ -278,7 +279,7 @@ async def delete_department(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await _get_department_or_404(db, tenant.id, department_id)
     designation_exists = (
         await db.execute(
@@ -398,7 +399,7 @@ async def delete_designation(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await _get_designation_or_404(db, tenant.id, designation_id)
     employee_exists = (
         await db.execute(
@@ -604,7 +605,7 @@ async def activate_employee(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await _get_employee_or_404(db, tenant.id, employee_id)
     row.is_active = True
     await db.commit()
@@ -620,7 +621,7 @@ async def deactivate_employee(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await _get_employee_or_404(db, tenant.id, employee_id)
     row.is_active = False
     await db.commit()

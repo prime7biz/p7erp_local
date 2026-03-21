@@ -254,6 +254,8 @@ def _append_audit_note(existing: str | None, actor_user_id: int, action: str, no
 async def list_quality_checks(
     work_order_id: int | None = Query(default=None),
     check_type: str | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -264,7 +266,7 @@ async def list_quality_checks(
         stmt = stmt.where(ManufacturingQualityCheck.work_order_id == work_order_id)
     if check_type is not None and check_type.strip():
         stmt = stmt.where(ManufacturingQualityCheck.check_type == check_type.strip().lower())
-    result = await db.execute(stmt.order_by(ManufacturingQualityCheck.id.desc()))
+    result = await db.execute(stmt.order_by(ManufacturingQualityCheck.id.desc()).offset(offset).limit(limit))
     rows = result.scalars().all()
     return [
         QualityCheckResponse(
@@ -325,6 +327,8 @@ async def create_quality_check(
 async def list_ncrs(
     status_filter: str | None = Query(default=None),
     work_order_id: int | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -335,7 +339,7 @@ async def list_ncrs(
         stmt = stmt.where(ManufacturingNcr.status == status_filter.strip().lower())
     if work_order_id is not None:
         stmt = stmt.where(ManufacturingNcr.work_order_id == work_order_id)
-    rows = (await db.execute(stmt.order_by(ManufacturingNcr.id.desc()))).scalars().all()
+    rows = (await db.execute(stmt.order_by(ManufacturingNcr.id.desc()).offset(offset).limit(limit))).scalars().all()
     return [_to_ncr_response(row) for row in rows]
 
 
@@ -401,6 +405,8 @@ async def update_ncr_status(
 async def list_capas(
     status_filter: str | None = Query(default=None),
     ncr_id: int | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -411,7 +417,7 @@ async def list_capas(
         stmt = stmt.where(ManufacturingCapa.status == status_filter.strip().lower())
     if ncr_id is not None:
         stmt = stmt.where(ManufacturingCapa.ncr_id == ncr_id)
-    rows = (await db.execute(stmt.order_by(ManufacturingCapa.id.desc()))).scalars().all()
+    rows = (await db.execute(stmt.order_by(ManufacturingCapa.id.desc()).offset(offset).limit(limit))).scalars().all()
     return [_to_capa_response(row) for row in rows]
 
 

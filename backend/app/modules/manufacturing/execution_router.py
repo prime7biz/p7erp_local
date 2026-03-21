@@ -7,6 +7,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.inventory_policy import tenant_allows_negative_stock
+from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.db_errors import commit_handling_duplicate_document_code
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -52,18 +55,19 @@ def _ensure_tenant(user: User, tenant: Tenant) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
 
-async def _role_name(db: AsyncSession, user: User) -> str:
-    role = await db.get(Role, user.role_id)
+async def _role_name(db: AsyncSession, user: User, tenant_id: int) -> str:
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     return (role.name if role else "").strip().lower()
 
 
 async def _require_any_role(
     db: AsyncSession,
     user: User,
+    tenant_id: int,
     allowed_roles: set[str],
     message: str = "Permission denied for this action",
 ) -> None:
-    role_name = await _role_name(db, user)
+    role_name = await _role_name(db, user, tenant_id)
     if role_name not in allowed_roles:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=message)
 
@@ -172,7 +176,7 @@ async def create_work_order(
         notes=body.notes.strip() if body.notes else None,
     )
     db.add(row)
-    await db.commit()
+    await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     return _to_work_order_response(row)
 
@@ -232,6 +236,7 @@ async def start_operation(
     await _require_any_role(
         db,
         user,
+        tenant.id,
         {"operator", "supervisor", "manager", "admin", "owner", "super_admin", "superadmin"},
     )
     row = await db.get(ManufacturingWorkOrderOperation, work_order_operation_id)
@@ -270,6 +275,7 @@ async def complete_operation(
     await _require_any_role(
         db,
         user,
+        tenant.id,
         {"operator", "supervisor", "manager", "admin", "owner", "super_admin", "superadmin"},
     )
     row = await db.get(ManufacturingWorkOrderOperation, work_order_operation_id)
@@ -322,7 +328,8 @@ async def create_material_issue(
             raise HTTPException(status_code=404, detail="Operation not found for work order")
 
     available = await _on_hand_qty(db, tenant.id, body.item_id, body.warehouse_id)
-    if available < body.qty_issued:
+    allow_neg = await tenant_allows_negative_stock(db, tenant.id)
+    if not allow_neg and available + 1e-9 < body.qty_issued:
         raise HTTPException(status_code=400, detail=f"Insufficient stock. Available={available}")
 
     movement = StockMovement(
@@ -334,6 +341,7 @@ async def create_material_issue(
         reference_type="MFG_ISSUE",
         reference_id=body.work_order_id,
         notes=f"Issued against {wo.mo_number}",
+        created_by_user_id=user.id,
     )
     db.add(movement)
     await db.flush()
@@ -415,6 +423,7 @@ async def create_material_return(
         reference_type="MFG_RETURN",
         reference_id=issue.work_order_id,
         notes=f"Material return against issue #{issue.id}",
+        created_by_user_id=user.id,
     )
     db.add(movement)
     await db.flush()
@@ -493,6 +502,7 @@ async def log_downtime(
     await _require_any_role(
         db,
         user,
+        tenant.id,
         {"operator", "supervisor", "manager", "admin", "owner", "super_admin", "superadmin"},
     )
     op = await db.get(ManufacturingWorkOrderOperation, body.work_order_operation_id)
@@ -587,6 +597,7 @@ async def end_downtime(
     await _require_any_role(
         db,
         user,
+        tenant.id,
         {"supervisor", "manager", "admin", "owner", "super_admin", "superadmin"},
         message="Only supervisor/manager/admin can close downtime",
     )
@@ -874,6 +885,7 @@ async def hold_operation(
     await _require_any_role(
         db,
         user,
+        tenant.id,
         {"operator", "supervisor", "manager", "admin", "owner", "super_admin", "superadmin"},
     )
     row = await db.get(ManufacturingWorkOrderOperation, work_order_operation_id)
@@ -898,6 +910,7 @@ async def resume_operation(
     await _require_any_role(
         db,
         user,
+        tenant.id,
         {"operator", "supervisor", "manager", "admin", "owner", "super_admin", "superadmin"},
     )
     row = await db.get(ManufacturingWorkOrderOperation, work_order_operation_id)

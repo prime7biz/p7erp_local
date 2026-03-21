@@ -7,6 +7,7 @@ Merchandising linked module (PrimeX parity slice):
 """
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from uuid import uuid4
 
@@ -15,11 +16,12 @@ from io import BytesIO
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, delete, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
+from app.common.pagination import MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
 from app.common.workflow import (
     BOM_TRANSITIONS,
@@ -30,6 +32,7 @@ from app.common.workflow import (
     validate_transition,
 )
 from app.database import get_db
+from app.modules.audit.service import log_action
 from app.models import (
     AlertDefinition,
     AlertInstance,
@@ -54,14 +57,19 @@ from app.models import (
     ItemCategory,
     ItemUnit,
     Order,
+    ProformaInvoice,
+    ProformaInvoiceOrder,
     PurchaseOrder,
     PurchaseOrderItem,
     Quotation,
+    FxReceipt,
+    Shipment,
     StockMovement,
     StyleColorway,
     StyleComponent,
     StyleSizeScale,
     Tenant,
+    TradeCase,
     User,
     Vendor,
     WastageReason,
@@ -81,11 +89,56 @@ ALLOWED_STYLE_PICTURE_CONTENT_TYPES = {
     "image/webp": ".webp",
 }
 STYLE_PICTURE_DIR = Path(__file__).resolve().parents[3] / "media" / "style_pictures"
+STYLE_LIFECYCLE_STAGES = {
+    "INQUIRY",
+    "DEVELOPMENT",
+    "QUOTED",
+    "ORDERED",
+    "IN_PRODUCTION",
+    "SHIPPED",
+    "PAID",
+    "CLOSED",
+}
+STYLE_PRIORITY_VALUES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+STYLE_RISK_VALUES = {"LOW", "MEDIUM", "HIGH"}
 
 
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+
+
+def _to_decimal(value: str | int | float | Decimal | None) -> Decimal:
+    if value is None:
+        return Decimal("0")
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal("0")
+
+
+def _normalize_style_stage(value: str | None) -> str:
+    normalized = (value or "INQUIRY").strip().upper()
+    if normalized not in STYLE_LIFECYCLE_STAGES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid lifecycle_stage. Allowed: {', '.join(sorted(STYLE_LIFECYCLE_STAGES))}",
+        )
+    return normalized
+
+
+def _normalize_optional_choice(value: str | None, allowed_values: set[str], field_name: str) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().upper()
+    if not normalized:
+        return None
+    if normalized not in allowed_values:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid {field_name}. Allowed: {', '.join(sorted(allowed_values))}",
+        )
+    return normalized
 
 
 class StyleCreate(BaseModel):
@@ -94,6 +147,23 @@ class StyleCreate(BaseModel):
     buyer_customer_id: int | None = None
     season: str | None = None
     department: str | None = None
+    product_type: str | None = None
+    fabric_type: str | None = None
+    gsm: str | None = None
+    fit_type: str | None = None
+    wash_type: str | None = None
+    brand: str | None = None
+    buyer_style_ref: str | None = None
+    hs_code: str | None = None
+    uom: str | None = None
+    target_fob: str | None = None
+    currency: str | None = None
+    sample_lead_days: int | None = None
+    production_lead_days: int | None = None
+    is_active_for_new_orders: bool = True
+    lifecycle_stage: str = "INQUIRY"
+    priority: str | None = None
+    risk_level: str | None = None
     style_image_url: str | None = None
     status: str = "ACTIVE"
     notes: str | None = None
@@ -105,6 +175,23 @@ class StyleUpdate(BaseModel):
     buyer_customer_id: int | None = None
     season: str | None = None
     department: str | None = None
+    product_type: str | None = None
+    fabric_type: str | None = None
+    gsm: str | None = None
+    fit_type: str | None = None
+    wash_type: str | None = None
+    brand: str | None = None
+    buyer_style_ref: str | None = None
+    hs_code: str | None = None
+    uom: str | None = None
+    target_fob: str | None = None
+    currency: str | None = None
+    sample_lead_days: int | None = None
+    production_lead_days: int | None = None
+    is_active_for_new_orders: bool | None = None
+    lifecycle_stage: str | None = None
+    priority: str | None = None
+    risk_level: str | None = None
     style_image_url: str | None = None
     status: str | None = None
     notes: str | None = None
@@ -189,18 +276,243 @@ class FollowupUpdate(BaseModel):
     notes: str | None = None
 
 
+class StyleSummaryResponse(BaseModel):
+    style_id: int
+    inquiry_count: int
+    quotation_count: int
+    order_count: int
+    open_followup_actions: int
+    overdue_followup_actions: int
+    shipment_count: int
+    shipped_order_qty: int
+    pending_order_qty: int
+    invoice_amount: str
+    received_amount: str
+    due_amount: str
+    last_event_at: datetime | None = None
+    next_due_at: date | None = None
+
+
+class StyleTimelineEvent(BaseModel):
+    event_type: str
+    reference: str
+    status: str | None = None
+    event_at: datetime
+    notes: str | None = None
+
+
+class StyleReportRow(BaseModel):
+    style_id: int
+    style_code: str
+    style_name: str
+    lifecycle_stage: str
+    priority: str | None = None
+    risk_level: str | None = None
+    open_followup_actions: int
+    overdue_followup_actions: int
+    invoice_amount: str
+    received_amount: str
+    due_amount: str
+    last_event_at: datetime | None = None
+    next_due_at: date | None = None
+
+
+async def _resolve_style_order_ids(db: AsyncSession, tenant_id: int, style: GarmentStyle) -> list[int]:
+    quotation_ids = (
+        await db.execute(
+            select(Quotation.id).where(
+                Quotation.tenant_id == tenant_id,
+                Quotation.style_id == style.id,
+            )
+        )
+    ).scalars().all()
+    style_code_lower = style.style_code.lower()
+    style_name_lower = style.name.lower()
+    order_ids = (
+        await db.execute(
+            select(Order.id)
+            .where(Order.tenant_id == tenant_id)
+            .where(
+                or_(
+                    Order.quotation_id.in_(quotation_ids) if quotation_ids else false(),
+                    func.lower(func.coalesce(Order.style_ref, "")) == style_code_lower,
+                    func.lower(func.coalesce(Order.style_ref, "")) == style_name_lower,
+                )
+            )
+        )
+    ).scalars().all()
+    return list({oid for oid in order_ids})
+
+
+async def _build_style_summary(db: AsyncSession, tenant_id: int, style: GarmentStyle) -> StyleSummaryResponse:
+    inquiry_count = (
+        await db.execute(
+            select(func.count(Inquiry.id)).where(Inquiry.tenant_id == tenant_id, Inquiry.style_id == style.id)
+        )
+    ).scalar_one()
+    quotation_count = (
+        await db.execute(
+            select(func.count(Quotation.id)).where(Quotation.tenant_id == tenant_id, Quotation.style_id == style.id)
+        )
+    ).scalar_one()
+    order_ids = await _resolve_style_order_ids(db, tenant_id, style)
+    order_count = len(order_ids)
+    open_followup_actions = 0
+    overdue_followup_actions = 0
+    shipment_count = 0
+    shipped_order_qty = 0
+    pending_order_qty = 0
+    invoice_amount = Decimal("0")
+    received_amount = Decimal("0")
+    last_event_at: datetime | None = style.updated_at
+    next_due_at: date | None = None
+
+    if order_ids:
+        actions = (
+            await db.execute(
+                select(OrderFollowupAction).where(
+                    OrderFollowupAction.tenant_id == tenant_id,
+                    OrderFollowupAction.order_id.in_(order_ids),
+                    OrderFollowupAction.is_active.is_(True),
+                )
+            )
+        ).scalars().all()
+        today = date.today()
+        for action in actions:
+            status_text = (action.status or "").strip().lower()
+            if status_text not in {"done", "completed", "closed"}:
+                open_followup_actions += 1
+            if action.planned_date and action.planned_date < today and status_text not in {"done", "completed", "closed"}:
+                overdue_followup_actions += 1
+            if action.planned_date and (next_due_at is None or action.planned_date < next_due_at):
+                next_due_at = action.planned_date
+            if action.updated_at and (last_event_at is None or action.updated_at > last_event_at):
+                last_event_at = action.updated_at
+
+        orders = (await db.execute(select(Order).where(Order.id.in_(order_ids)))).scalars().all()
+        trade_cases = (
+            await db.execute(select(TradeCase).where(TradeCase.tenant_id == tenant_id, TradeCase.order_id.in_(order_ids)))
+        ).scalars().all()
+        trade_case_by_order = {tc.order_id: tc for tc in trade_cases if tc.order_id is not None}
+        trade_case_ids = [tc.id for tc in trade_cases]
+        shipments: list[Shipment] = []
+        if trade_case_ids:
+            shipments = (
+                await db.execute(
+                    select(Shipment).where(Shipment.tenant_id == tenant_id, Shipment.trade_case_id.in_(trade_case_ids))
+                )
+            ).scalars().all()
+        shipped_trade_case_ids = {s.trade_case_id for s in shipments if (s.status or "").upper() in {"SHIPPED", "DELIVERED", "CLOSED"}}
+        shipment_count = len(shipments)
+        for order in orders:
+            qty = order.quantity or 0
+            trade_case = trade_case_by_order.get(order.id)
+            if trade_case and trade_case.id in shipped_trade_case_ids:
+                shipped_order_qty += qty
+            else:
+                pending_order_qty += qty
+            if order.updated_at and (last_event_at is None or order.updated_at > last_event_at):
+                last_event_at = order.updated_at
+
+        invoice_rows = (
+            await db.execute(
+                select(ProformaInvoice)
+                .join(ProformaInvoiceOrder, ProformaInvoiceOrder.proforma_invoice_id == ProformaInvoice.id)
+                .where(
+                    ProformaInvoice.tenant_id == tenant_id,
+                    ProformaInvoiceOrder.order_id.in_(order_ids),
+                )
+            )
+        ).scalars().all()
+        invoice_refs = {inv.reference for inv in invoice_rows if inv.reference}
+        for invoice in invoice_rows:
+            invoice_amount += _to_decimal(invoice.amount)
+            if invoice.updated_at and (last_event_at is None or invoice.updated_at > last_event_at):
+                last_event_at = invoice.updated_at
+
+        if invoice_refs:
+            receipts = (
+                await db.execute(
+                    select(FxReceipt).where(
+                        FxReceipt.tenant_id == tenant_id,
+                        FxReceipt.source_ref.in_(list(invoice_refs)),
+                    )
+                )
+            ).scalars().all()
+            for receipt in receipts:
+                received_amount += _to_decimal(receipt.base_amount)
+                if receipt.created_at and (last_event_at is None or receipt.created_at > last_event_at):
+                    last_event_at = receipt.created_at
+
+    due_amount = invoice_amount - received_amount
+    if due_amount < Decimal("0"):
+        due_amount = Decimal("0")
+    return StyleSummaryResponse(
+        style_id=style.id,
+        inquiry_count=inquiry_count,
+        quotation_count=quotation_count,
+        order_count=order_count,
+        open_followup_actions=open_followup_actions,
+        overdue_followup_actions=overdue_followup_actions,
+        shipment_count=shipment_count,
+        shipped_order_qty=shipped_order_qty,
+        pending_order_qty=pending_order_qty,
+        invoice_amount=str(invoice_amount.quantize(Decimal("0.01"))),
+        received_amount=str(received_amount.quantize(Decimal("0.01"))),
+        due_amount=str(due_amount.quantize(Decimal("0.01"))),
+        last_event_at=last_event_at,
+        next_due_at=next_due_at,
+    )
+
+
 @router.get("/styles")
 async def list_styles(
+    search: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
+    buyer_customer_id: int | None = Query(default=None),
+    season: str | None = Query(default=None),
+    department: str | None = Query(default=None),
+    lifecycle_stage: str | None = Query(default=None),
+    active_for_orders: bool | None = Query(default=None),
+    priority: str | None = Query(default=None),
+    risk_level: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
     stmt = select(GarmentStyle).where(GarmentStyle.tenant_id == tenant.id)
+    if search:
+        pattern = f"%{search.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(GarmentStyle.style_code).like(pattern),
+                func.lower(GarmentStyle.name).like(pattern),
+                func.lower(func.coalesce(GarmentStyle.buyer_style_ref, "")).like(pattern),
+                func.lower(func.coalesce(GarmentStyle.product_type, "")).like(pattern),
+            )
+        )
     if status_filter:
         stmt = stmt.where(GarmentStyle.status == status_filter)
-    result = await db.execute(stmt.order_by(GarmentStyle.created_at.desc()))
+    if buyer_customer_id is not None:
+        stmt = stmt.where(GarmentStyle.buyer_customer_id == buyer_customer_id)
+    if season:
+        stmt = stmt.where(func.lower(func.coalesce(GarmentStyle.season, "")) == season.strip().lower())
+    if department:
+        stmt = stmt.where(func.lower(func.coalesce(GarmentStyle.department, "")) == department.strip().lower())
+    if lifecycle_stage:
+        stmt = stmt.where(GarmentStyle.lifecycle_stage == _normalize_style_stage(lifecycle_stage))
+    if active_for_orders is not None:
+        stmt = stmt.where(GarmentStyle.is_active_for_new_orders == active_for_orders)
+    normalized_priority = _normalize_optional_choice(priority, STYLE_PRIORITY_VALUES, "priority")
+    if normalized_priority:
+        stmt = stmt.where(GarmentStyle.priority == normalized_priority)
+    normalized_risk = _normalize_optional_choice(risk_level, STYLE_RISK_VALUES, "risk_level")
+    if normalized_risk:
+        stmt = stmt.where(GarmentStyle.risk_level == normalized_risk)
+    result = await db.execute(stmt.order_by(GarmentStyle.updated_at.desc(), GarmentStyle.id.desc()).offset(offset).limit(limit))
     rows = result.scalars().all()
     return rows
 
@@ -222,6 +534,18 @@ async def create_style(
             prefix="STY-",
             width=4,
         )
+    existing = await db.execute(
+        select(GarmentStyle.id).where(
+            GarmentStyle.tenant_id == tenant.id,
+            GarmentStyle.style_code == style_code,
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="Style code already exists for this tenant")
+
+    lifecycle_stage = _normalize_style_stage(body.lifecycle_stage)
+    normalized_priority = _normalize_optional_choice(body.priority, STYLE_PRIORITY_VALUES, "priority")
+    normalized_risk = _normalize_optional_choice(body.risk_level, STYLE_RISK_VALUES, "risk_level")
     row = GarmentStyle(
         tenant_id=tenant.id,
         style_code=style_code,
@@ -229,14 +553,101 @@ async def create_style(
         buyer_customer_id=body.buyer_customer_id,
         season=body.season,
         department=body.department,
+        product_type=body.product_type,
+        fabric_type=body.fabric_type,
+        gsm=body.gsm,
+        fit_type=body.fit_type,
+        wash_type=body.wash_type,
+        brand=body.brand,
+        buyer_style_ref=body.buyer_style_ref,
+        hs_code=body.hs_code,
+        uom=body.uom,
+        target_fob=body.target_fob,
+        currency=body.currency,
+        sample_lead_days=body.sample_lead_days,
+        production_lead_days=body.production_lead_days,
+        is_active_for_new_orders=body.is_active_for_new_orders,
+        lifecycle_stage=lifecycle_stage,
+        priority=normalized_priority,
+        risk_level=normalized_risk,
         style_image_url=body.style_image_url,
         status=body.status,
         notes=body.notes,
     )
     db.add(row)
     await db.flush()
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="STYLE_CREATED",
+        resource="garment_style",
+        details=f"style_id={row.id}, style_code={row.style_code}",
+    )
     await db.refresh(row)
     return row
+
+
+@router.get("/styles/summary-report", response_model=list[StyleReportRow])
+async def list_style_summary_report(
+    search: str | None = Query(default=None),
+    lifecycle_stage: str | None = Query(default=None),
+    critical_only: bool = Query(default=False),
+    saved_view: str | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    stmt = select(GarmentStyle).where(GarmentStyle.tenant_id == tenant.id)
+    if search:
+        pattern = f"%{search.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(GarmentStyle.style_code).like(pattern),
+                func.lower(GarmentStyle.name).like(pattern),
+                func.lower(func.coalesce(GarmentStyle.buyer_style_ref, "")).like(pattern),
+            )
+        )
+    if lifecycle_stage:
+        stmt = stmt.where(GarmentStyle.lifecycle_stage == _normalize_style_stage(lifecycle_stage))
+    styles = (await db.execute(stmt.order_by(GarmentStyle.updated_at.desc()))).scalars().all()
+    rows: list[StyleReportRow] = []
+    normalized_saved_view = (saved_view or "").strip().lower()
+    for style in styles:
+        summary = await _build_style_summary(db, tenant.id, style)
+        is_payment_overdue = _to_decimal(summary.due_amount) > Decimal("0")
+        has_overdue_milestone = summary.overdue_followup_actions > 0
+        if critical_only and not (has_overdue_milestone or is_payment_overdue):
+            continue
+        if normalized_saved_view == "critical_styles" and not (has_overdue_milestone or is_payment_overdue):
+            continue
+        if normalized_saved_view == "shipment_due_week":
+            if summary.next_due_at is None:
+                continue
+            days_to_due = (summary.next_due_at - date.today()).days
+            if days_to_due < 0 or days_to_due > 7:
+                continue
+        if normalized_saved_view == "payment_overdue" and not is_payment_overdue:
+            continue
+        rows.append(
+            StyleReportRow(
+                style_id=style.id,
+                style_code=style.style_code,
+                style_name=style.name,
+                lifecycle_stage=style.lifecycle_stage,
+                priority=style.priority,
+                risk_level=style.risk_level,
+                open_followup_actions=summary.open_followup_actions,
+                overdue_followup_actions=summary.overdue_followup_actions,
+                invoice_amount=summary.invoice_amount,
+                received_amount=summary.received_amount,
+                due_amount=summary.due_amount,
+                last_event_at=summary.last_event_at,
+                next_due_at=summary.next_due_at,
+            )
+        )
+    return rows
 
 
 @router.get("/styles/{style_id}")
@@ -265,20 +676,82 @@ async def update_style(
     row = await db.get(GarmentStyle, style_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Style not found")
+    changes: list[str] = []
+    if body.style_code is not None:
+        new_code = body.style_code.strip().upper()
+        if not new_code:
+            raise HTTPException(status_code=422, detail="style_code cannot be empty")
+        existing = await db.execute(
+            select(GarmentStyle.id).where(
+                GarmentStyle.tenant_id == tenant.id,
+                GarmentStyle.style_code == new_code,
+                GarmentStyle.id != style_id,
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            raise HTTPException(status_code=409, detail="Style code already exists for this tenant")
+        if row.style_code != new_code:
+            row.style_code = new_code
+            changes.append("style_code")
+
+    if body.lifecycle_stage is not None:
+        new_stage = _normalize_style_stage(body.lifecycle_stage)
+        if row.lifecycle_stage != new_stage:
+            row.lifecycle_stage = new_stage
+            changes.append("lifecycle_stage")
+
+    if body.priority is not None:
+        normalized_priority = _normalize_optional_choice(body.priority, STYLE_PRIORITY_VALUES, "priority")
+        if row.priority != normalized_priority:
+            row.priority = normalized_priority
+            changes.append("priority")
+
+    if body.risk_level is not None:
+        normalized_risk = _normalize_optional_choice(body.risk_level, STYLE_RISK_VALUES, "risk_level")
+        if row.risk_level != normalized_risk:
+            row.risk_level = normalized_risk
+            changes.append("risk_level")
+
     for field in (
-        "style_code",
         "name",
         "buyer_customer_id",
         "season",
         "department",
+        "product_type",
+        "fabric_type",
+        "gsm",
+        "fit_type",
+        "wash_type",
+        "brand",
+        "buyer_style_ref",
+        "hs_code",
+        "uom",
+        "target_fob",
+        "currency",
+        "sample_lead_days",
+        "production_lead_days",
+        "is_active_for_new_orders",
         "style_image_url",
         "status",
         "notes",
     ):
         value = getattr(body, field)
         if value is not None:
+            if getattr(row, field) != value:
+                changes.append(field)
             setattr(row, field, value)
     await db.flush()
+    if changes:
+        sensitive_fields = {"status", "lifecycle_stage", "target_fob", "currency", "risk_level", "priority"}
+        touched_sensitive = sorted(set(changes).intersection(sensitive_fields))
+        await log_action(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            action="STYLE_UPDATED",
+            resource="garment_style",
+            details=f"style_id={row.id}, changed={','.join(sorted(set(changes)))}, sensitive={','.join(touched_sensitive) if touched_sensitive else 'none'}",
+        )
     await db.refresh(row)
     return row
 
@@ -341,8 +814,204 @@ async def delete_style(
     row = await db.get(GarmentStyle, style_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Style not found")
+    inquiry_link_count = (
+        await db.execute(select(func.count(Inquiry.id)).where(Inquiry.tenant_id == tenant.id, Inquiry.style_id == style_id))
+    ).scalar_one()
+    quotation_link_count = (
+        await db.execute(select(func.count(Quotation.id)).where(Quotation.tenant_id == tenant.id, Quotation.style_id == style_id))
+    ).scalar_one()
+    order_link_count = (
+        await db.execute(
+            select(func.count(Order.id))
+            .select_from(Order)
+            .join(Quotation, Quotation.id == Order.quotation_id, isouter=True)
+            .where(
+                Order.tenant_id == tenant.id,
+                or_(
+                    Quotation.style_id == style_id,
+                    func.lower(func.coalesce(Order.style_ref, "")) == func.lower(row.style_code),
+                ),
+            )
+        )
+    ).scalar_one()
+    if inquiry_link_count or quotation_link_count or order_link_count:
+        raise HTTPException(
+            status_code=409,
+            detail="Style is linked with inquiry/quotation/order records. Archive the style instead of deleting.",
+        )
     await db.delete(row)
     await db.flush()
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="STYLE_DELETED",
+        resource="garment_style",
+        details=f"style_id={style_id}, style_code={row.style_code}",
+    )
+
+
+@router.get("/styles/{style_id}/summary", response_model=StyleSummaryResponse)
+async def get_style_summary(
+    style_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(GarmentStyle, style_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Style not found")
+    return await _build_style_summary(db, tenant.id, row)
+
+
+@router.get("/styles/{style_id}/timeline", response_model=list[StyleTimelineEvent])
+async def list_style_timeline(
+    style_id: int,
+    limit: int = Query(default=100, ge=1, le=500),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    style = await db.get(GarmentStyle, style_id)
+    if not style or style.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Style not found")
+
+    events: list[StyleTimelineEvent] = []
+    inquiries = (
+        await db.execute(select(Inquiry).where(Inquiry.tenant_id == tenant.id, Inquiry.style_id == style_id))
+    ).scalars().all()
+    for inq in inquiries:
+        events.append(
+            StyleTimelineEvent(
+                event_type="INQUIRY",
+                reference=inq.inquiry_code,
+                status=inq.status,
+                event_at=inq.updated_at,
+                notes=inq.notes,
+            )
+        )
+    quotations = (
+        await db.execute(select(Quotation).where(Quotation.tenant_id == tenant.id, Quotation.style_id == style_id))
+    ).scalars().all()
+    quotation_ids = [q.id for q in quotations]
+    for q in quotations:
+        events.append(
+            StyleTimelineEvent(
+                event_type="QUOTATION",
+                reference=q.quotation_code,
+                status=q.status,
+                event_at=q.updated_at,
+                notes=q.notes,
+            )
+        )
+
+    order_stmt = select(Order).where(Order.tenant_id == tenant.id)
+    if quotation_ids:
+        order_stmt = order_stmt.where(
+            or_(
+                Order.quotation_id.in_(quotation_ids),
+                func.lower(func.coalesce(Order.style_ref, "")) == style.style_code.lower(),
+            )
+        )
+    else:
+        order_stmt = order_stmt.where(
+            func.lower(func.coalesce(Order.style_ref, "")) == style.style_code.lower(),
+        )
+    orders = (await db.execute(order_stmt)).scalars().all()
+    order_ids = [o.id for o in orders]
+    for order in orders:
+        events.append(
+            StyleTimelineEvent(
+                event_type="ORDER",
+                reference=order.order_code,
+                status=order.status,
+                event_at=order.updated_at,
+                notes=order.remarks,
+            )
+        )
+
+    if order_ids:
+        actions = (
+            await db.execute(
+                select(OrderFollowupAction).where(
+                    OrderFollowupAction.tenant_id == tenant.id,
+                    OrderFollowupAction.order_id.in_(order_ids),
+                )
+            )
+        ).scalars().all()
+        for action in actions:
+            events.append(
+                StyleTimelineEvent(
+                    event_type="FOLLOWUP",
+                    reference=action.title,
+                    status=action.status,
+                    event_at=action.updated_at,
+                    notes=action.remarks,
+                )
+            )
+
+        shipments = (
+            await db.execute(
+                select(Shipment)
+                .join(TradeCase, TradeCase.id == Shipment.trade_case_id)
+                .where(Shipment.tenant_id == tenant.id, TradeCase.order_id.in_(order_ids))
+            )
+        ).scalars().all()
+        for shipment in shipments:
+            events.append(
+                StyleTimelineEvent(
+                    event_type="SHIPMENT",
+                    reference=shipment.reference,
+                    status=shipment.status,
+                    event_at=shipment.updated_at,
+                    notes=shipment.notes,
+                )
+            )
+
+        invoices = (
+            await db.execute(
+                select(ProformaInvoice)
+                .join(ProformaInvoiceOrder, ProformaInvoiceOrder.proforma_invoice_id == ProformaInvoice.id)
+                .where(ProformaInvoice.tenant_id == tenant.id, ProformaInvoiceOrder.order_id.in_(order_ids))
+            )
+        ).scalars().all()
+        invoice_refs = []
+        for invoice in invoices:
+            if invoice.reference:
+                invoice_refs.append(invoice.reference)
+            events.append(
+                StyleTimelineEvent(
+                    event_type="INVOICE",
+                    reference=invoice.reference,
+                    status=invoice.status,
+                    event_at=invoice.updated_at,
+                    notes=invoice.terms_of_payment,
+                )
+            )
+        if invoice_refs:
+            receipts = (
+                await db.execute(
+                    select(FxReceipt).where(
+                        FxReceipt.tenant_id == tenant.id,
+                        FxReceipt.source_ref.in_(invoice_refs),
+                    )
+                )
+            ).scalars().all()
+            for receipt in receipts:
+                events.append(
+                    StyleTimelineEvent(
+                        event_type="PAYMENT_RECEIPT",
+                        reference=receipt.receipt_no,
+                        status=receipt.status,
+                        event_at=receipt.created_at,
+                        notes=receipt.source_ref,
+                    )
+                )
+
+    events.sort(key=lambda item: item.event_at, reverse=True)
+    return events[:limit]
 
 
 @router.get("/styles/{style_id}/components")
@@ -753,6 +1422,8 @@ async def create_bom_item(
             payload["description"] = item.name or item.description
         if payload.get("uom") is None:
             unit = await db.get(ItemUnit, item.unit_id) if item.unit_id else None
+            if unit and unit.tenant_id != tenant.id:
+                unit = None
             payload["uom"] = unit.unit_code if unit else None
     row = BomItem(tenant_id=tenant.id, bom_id=bom_id, **payload)
     db.add(row)
@@ -872,6 +1543,7 @@ async def generate_purchase_order_from_bom(
         vendor_id=vendor_id,
         supplier_name=supplier_name,
         status="DRAFT",
+        source_bom_id=bom_id,
         notes=f"Generated from BOM #{bom_id} (Style {bom.style_id}), quantity={quantity}",
     )
     db.add(po)
@@ -1028,6 +1700,8 @@ async def get_order_material_requirement(
         unit_name = None
         if item.unit_id:
             unit = await db.get(ItemUnit, item.unit_id)
+            if unit and unit.tenant_id != tenant.id:
+                unit = None
             if unit:
                 unit_name = unit.unit_code
         lines_out.append(
@@ -1483,6 +2157,8 @@ async def _order_context_for_action(
         q = await db.get(Quotation, order.quotation_id)
         if q and q.tenant_id == tenant_id and q.style_id:
             style = await db.get(GarmentStyle, q.style_id)
+            if style and style.tenant_id != tenant_id:
+                style = None
             style_code = style.style_code if style else None
     return order_code, delivery_date, style_code
 
@@ -3827,7 +4503,7 @@ async def list_alerts(
     min_priority_score: int | None = Query(default=None, ge=0),
     sla_bucket: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    page_size: int = Query(default=20, ge=1, le=MAX_PAGE_SIZE, description="Max rows per page (Finding #3)"),
     sort: str = Query(default="-created_at"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -4004,6 +4680,37 @@ async def get_alerts_summary(
         },
         "total": total,
     }
+
+
+# Static paths must be registered before /alerts/{alert_id} or "views" is parsed as alert_id (422).
+@router.get("/alerts/views")
+async def list_alert_views(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List saved filter views for current user."""
+    _ensure_tenant(user, tenant)
+    result = await db.execute(
+        select(AlertSavedView)
+        .where(
+            AlertSavedView.tenant_id == tenant.id,
+            AlertSavedView.user_id == user.id,
+        )
+        .order_by(AlertSavedView.name.asc())
+    )
+    rows = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "description": r.description,
+            "filter_json": r.filter_json,
+            "is_default": r.is_default,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
 
 
 @router.get("/alerts/{alert_id}")
@@ -4345,36 +5052,6 @@ async def escalate_alert(
     await db.flush()
     await db.refresh(row)
     return _alert_mutation_out(row)
-
-
-@router.get("/alerts/views")
-async def list_alert_views(
-    tenant: Tenant = Depends(require_tenant),
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """List saved filter views for current user."""
-    _ensure_tenant(user, tenant)
-    result = await db.execute(
-        select(AlertSavedView)
-        .where(
-            AlertSavedView.tenant_id == tenant.id,
-            AlertSavedView.user_id == user.id,
-        )
-        .order_by(AlertSavedView.name.asc())
-    )
-    rows = result.scalars().all()
-    return [
-        {
-            "id": r.id,
-            "name": r.name,
-            "description": r.description,
-            "filter_json": r.filter_json,
-            "is_default": r.is_default,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in rows
-    ]
 
 
 @router.post("/alerts/views", status_code=201)

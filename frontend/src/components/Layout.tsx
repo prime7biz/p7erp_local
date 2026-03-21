@@ -3,8 +3,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { getToken, getTenantId } from "@/api/client";
 import type { TenantType } from "@/api/client";
-import { menuSections } from "@/app/sidebarConfig";
-import type { TenantTypeFilter } from "@/app/sidebarConfig";
+import { isSidebarNavItemActive, menuSections, type NavItem, type TenantTypeFilter } from "@/app/sidebarConfig";
 import { prefetchSidebarRoute, prefetchTopSearchRoutes } from "@/app/prefetchRoutes";
 import { AppBottomNav } from "@/components/navigation/AppBottomNav";
 import {
@@ -92,13 +91,11 @@ function Sidebar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [userPopoverOpen]);
 
-  const navLink = (
-    to: string,
-    label: string,
-    icon: React.ComponentType<{ className?: string }>,
-    isActive: boolean,
-  ) => {
-    const Icon = icon;
+  const navLink = (item: NavItem) => {
+    const Icon = item.icon;
+    const isActive = isSidebarNavItemActive(location.pathname, item.href);
+    const to = item.href;
+    const label = item.label;
     return (
       <Link
         key={to}
@@ -108,16 +105,25 @@ function Sidebar({
         onFocus={() => prefetchSidebarRoute(to)}
         aria-current={isActive ? "page" : undefined}
         className={`group flex items-center gap-2 h-8 py-1.5 rounded-md no-underline transition ${
-          isCollapsed ? "justify-center px-2" : "px-3 pl-9"
+          isCollapsed ? "justify-center px-2" : "min-w-0 px-3 pl-9"
         } ${
           isActive
             ? "border-l-[3px] border-l-brand-primary bg-brand-primary/10 text-brand-primary font-medium rounded-l-none"
             : "text-text-secondary hover:text-text-primary hover:bg-surface-subtle"
         }`}
-        title={isCollapsed ? label : undefined}
+        title={isCollapsed ? (item.badge ? `${label} (${item.badge})` : label) : undefined}
       >
         <Icon className="h-4 w-4 shrink-0" />
-        {!isCollapsed && <span className="truncate text-[13px]">{label}</span>}
+        {!isCollapsed && (
+          <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+            <span className="truncate text-[13px]">{label}</span>
+            {item.badge ? (
+              <span className="shrink-0 rounded border border-border bg-surface-base px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                {item.badge}
+              </span>
+            ) : null}
+          </span>
+        )}
       </Link>
     );
   };
@@ -195,11 +201,7 @@ function Sidebar({
           const hasItems = mod.items.length > 0;
           const directLink = mod.directLink;
           const hasActiveItem =
-            hasItems &&
-            mod.items.some(
-              (item) =>
-                location.pathname === item.href || (item.href !== "/app" && location.pathname.startsWith(item.href)),
-            );
+            hasItems && mod.items.some((item) => isSidebarNavItemActive(location.pathname, item.href));
           const sectionWrapperClass =
             (index > 0 ? "border-t border-border/70 pt-2 mt-0.5 mb-1" : "mb-1") + (hasItems ? " relative" : "");
 
@@ -233,12 +235,7 @@ function Sidebar({
                 </button>
                 {!isCollapsed && isOpen && (
                   <div id={sectionId(mod.section)} className="pl-6 pr-1 py-1 space-y-0.5" role="region" aria-labelledby={buttonId(mod.section)}>
-                    {mod.items.map((item) => {
-                      const active =
-                        location.pathname === item.href ||
-                        (item.href !== "/app" && location.pathname.startsWith(item.href));
-                      return navLink(item.href, item.label, item.icon, active);
-                    })}
+                    {mod.items.map((item) => navLink(item))}
                   </div>
                 )}
                 {isCollapsed && hoveredSection === mod.section && (
@@ -253,9 +250,7 @@ function Sidebar({
                     </p>
                     {mod.items.map((item) => {
                       const ItemIcon = item.icon;
-                      const active =
-                        location.pathname === item.href ||
-                        (item.href !== "/app" && location.pathname.startsWith(item.href));
+                      const active = isSidebarNavItemActive(location.pathname, item.href);
                       return (
                         <Link
                           key={item.href}
@@ -267,7 +262,12 @@ function Sidebar({
                           }`}
                         >
                           <ItemIcon className="h-4 w-4 shrink-0" />
-                          {item.label}
+                          <span className="flex-1 truncate">{item.label}</span>
+                          {item.badge ? (
+                            <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] font-semibold uppercase text-text-muted">
+                              {item.badge}
+                            </span>
+                          ) : null}
                         </Link>
                       );
                     })}

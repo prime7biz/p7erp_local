@@ -8,6 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -17,7 +19,6 @@ from app.models import (
     AttendanceRoster,
     AttendanceShift,
     Employee,
-    Role,
     Tenant,
     User,
 )
@@ -48,8 +49,8 @@ def _ensure_tenant(user: User, tenant: Tenant) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
 
-async def _require_manager_or_admin(db: AsyncSession, user: User) -> None:
-    role = await db.get(Role, user.role_id)
+async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     role_name = (role.name if role else "").strip().lower()
     if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
         raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
@@ -162,6 +163,8 @@ def _regularization_out(row: AttendanceRegularizationRequest) -> RegularizationO
 @router.get("/shifts", response_model=list[ShiftOut])
 async def list_shifts(
     active_only: bool = Query(default=False),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -170,7 +173,7 @@ async def list_shifts(
     stmt = select(AttendanceShift).where(AttendanceShift.tenant_id == tenant.id)
     if active_only:
         stmt = stmt.where(AttendanceShift.is_active.is_(True))
-    rows = (await db.execute(stmt.order_by(AttendanceShift.name))).scalars().all()
+    rows = (await db.execute(stmt.order_by(AttendanceShift.name).offset(offset).limit(limit))).scalars().all()
     return [_shift_out(x) for x in rows]
 
 
@@ -219,6 +222,8 @@ async def update_shift(
 async def list_rosters(
     employee_id: int | None = Query(default=None),
     roster_date: date | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -229,7 +234,9 @@ async def list_rosters(
         stmt = stmt.where(AttendanceRoster.employee_id == employee_id)
     if roster_date:
         stmt = stmt.where(AttendanceRoster.roster_date == roster_date)
-    rows = (await db.execute(stmt.order_by(AttendanceRoster.roster_date.desc(), AttendanceRoster.id.desc()))).scalars().all()
+    rows = (
+        await db.execute(stmt.order_by(AttendanceRoster.roster_date.desc(), AttendanceRoster.id.desc()).offset(offset).limit(limit))
+    ).scalars().all()
     return [_roster_out(x) for x in rows]
 
 
@@ -279,13 +286,15 @@ async def update_roster(
 @router.get("/holidays", response_model=list[HolidayOut])
 async def list_holidays(
     year: int | None = Query(default=None, ge=2000, le=2100),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
     stmt = select(AttendanceHoliday).where(AttendanceHoliday.tenant_id == tenant.id)
-    rows = (await db.execute(stmt.order_by(AttendanceHoliday.holiday_date.desc()))).scalars().all()
+    rows = (await db.execute(stmt.order_by(AttendanceHoliday.holiday_date.desc()).offset(offset).limit(limit))).scalars().all()
     if year is not None:
         rows = [x for x in rows if x.holiday_date.year == year]
     return [_holiday_out(x) for x in rows]
@@ -299,7 +308,7 @@ async def create_holiday(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = AttendanceHoliday(tenant_id=tenant.id, **body.model_dump())
     db.add(row)
     try:
@@ -320,7 +329,7 @@ async def update_holiday(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await db.get(AttendanceHoliday, holiday_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Holiday not found")
@@ -337,6 +346,8 @@ async def list_entries(
     employee_id: int | None = Query(default=None),
     attendance_date: date | None = Query(default=None),
     status_filter: str | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -349,7 +360,9 @@ async def list_entries(
         stmt = stmt.where(AttendanceEntry.attendance_date == attendance_date)
     if status_filter:
         stmt = stmt.where(AttendanceEntry.status == status_filter.strip().upper())
-    rows = (await db.execute(stmt.order_by(AttendanceEntry.attendance_date.desc(), AttendanceEntry.id.desc()))).scalars().all()
+    rows = (
+        await db.execute(stmt.order_by(AttendanceEntry.attendance_date.desc(), AttendanceEntry.id.desc()).offset(offset).limit(limit))
+    ).scalars().all()
     return [_entry_out(x) for x in rows]
 
 
@@ -401,6 +414,8 @@ async def update_entry(
 @router.get("/regularizations", response_model=list[RegularizationOut])
 async def list_regularizations(
     status_filter: str | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -409,7 +424,7 @@ async def list_regularizations(
     stmt = select(AttendanceRegularizationRequest).where(AttendanceRegularizationRequest.tenant_id == tenant.id)
     if status_filter:
         stmt = stmt.where(AttendanceRegularizationRequest.status == status_filter.strip().upper())
-    rows = (await db.execute(stmt.order_by(AttendanceRegularizationRequest.id.desc()))).scalars().all()
+    rows = (await db.execute(stmt.order_by(AttendanceRegularizationRequest.id.desc()).offset(offset).limit(limit))).scalars().all()
     return [_regularization_out(x) for x in rows]
 
 
@@ -417,6 +432,9 @@ async def list_regularizations(
 async def attendance_summary(
     month: str | None = Query(default=None, description="YYYY-MM"),
     department_id: int | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Max employees in summary (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
+    entries_limit: int = Query(default=HR_LIST_MAX_LIMIT, ge=1, le=100000, description="Cap attendance rows loaded for aggregation"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -425,16 +443,21 @@ async def attendance_summary(
     employee_stmt = select(Employee).where(Employee.tenant_id == tenant.id)
     if department_id is not None:
         employee_stmt = employee_stmt.where(Employee.department_id == department_id)
-    employees = (await db.execute(employee_stmt.order_by(Employee.employee_code))).scalars().all()
+    employees = (
+        await db.execute(employee_stmt.order_by(Employee.employee_code).offset(offset).limit(limit))
+    ).scalars().all()
     if not employees:
         return []
 
     entries = (
         await db.execute(
-            select(AttendanceEntry).where(
+            select(AttendanceEntry)
+            .where(
                 AttendanceEntry.tenant_id == tenant.id,
                 AttendanceEntry.employee_id.in_([e.id for e in employees]),
             )
+            .order_by(AttendanceEntry.attendance_date.desc(), AttendanceEntry.id.desc())
+            .limit(entries_limit)
         )
     ).scalars().all()
 
@@ -502,7 +525,7 @@ async def approve_regularization(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     req = await db.get(AttendanceRegularizationRequest, request_id)
     if not req or req.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Regularization request not found")
@@ -531,7 +554,7 @@ async def reject_regularization(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     req = await db.get(AttendanceRegularizationRequest, request_id)
     if not req or req.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Regularization request not found")

@@ -18,9 +18,14 @@ Use this file and `.cursor/rules/` when working on this repo (e.g. on another ma
 ## Where to look
 
 - **Plans and parity:** `docs/REFERENCE_PARITY.md`, `docs/PROJECT_PLAN.md`, `docs/IMPLEMENTATION_ROADMAP.md`, `docs/session_plan_legacy.md`.
+- **Inventory roadmap:** `docs/INVENTORY_MODULE_ADVANCEMENT_PLAN.md` – navigation fixes, backend robustness, transfers/adjustments, UX polish.
+- **Inventory mobile lists:** `frontend/src/hooks/useInventoryListView.ts`, `frontend/src/components/inventory/InventoryMobileList.tsx` — narrow-only Table vs Cards, horizontal scroll for wide tables.
+- **API load logging (audit):** `frontend/src/utils/logApiError.ts` — use instead of empty `.catch` handlers; see `docs/PRE_PRODUCTION_AUDIT.md` Finding #5.
+- **List pagination / caps (audit):** `backend/app/common/pagination.py` (`MAX_PAGE_SIZE` = 500). Heavy lists use paginated endpoints or `limit`/`offset`; optional `BOOTSTRAP_REGISTRATION_KEY` gates first-user register (Finding #4).
 - **Build:** `docs/BUILD_VERIFICATION.md` – B1–B3 checklist (backend deps, env, frontend build). Frontend: `npm run lint` (ESLint) and `npm run lint:fix` in `frontend/`.
 - **Cursor rules:** `.cursor/rules/project.mdc` (project context, always apply).
 - **Run / structure:** `README.md`, `.env.example`, `docker-compose.yml`.
+- **Marketing SEO:** `docs/SITEMAP_NOTE.md`, `docs/SEO_SEARCH_CONSOLE.md`; sitemap generator `frontend/scripts/generate-sitemap.mjs`, meta in `frontend/src/components/Seo.tsx`.
 - **Finance UAT and go-live:**
   - `docs/FINANCE_UAT_CHECKLIST.md` – high-level test checklist
   - `docs/FINANCE_UAT_TEST_CASES.md` – numbered test cases (FIN-UAT-001+)

@@ -4,6 +4,7 @@ Brand and marketing assets. Used by public layout, app sidebar, landing, login, 
 
 **Brand**
 - **logo.png** – Prime7 ERP brand logo. Used in header, app sidebar, and light backgrounds.
+- **og-default.png** – Default Open Graph / Twitter social preview image (1200×630). Referenced in `src/components/Seo.tsx`.
 - **logo-white.svg** – White logo for dark backgrounds (login, register, footer).
 
 **Backgrounds & patterns**

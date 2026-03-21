@@ -6,9 +6,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.tenant import require_tenant
 from app.database import get_db
-from app.models import Item, ManufacturingSampleRequest, Order, Role, Tenant, User
+from app.models import Item, ManufacturingSampleRequest, Order, Tenant, User
 from app.modules.manufacturing.schemas import (
     SampleRequestCreate,
     SampleRequestResponse,
@@ -28,13 +29,13 @@ def _next_code(last_id: int | None) -> str:
     return f"SMP-{(last_id or 0) + 1:04d}"
 
 
-async def _role_name(db: AsyncSession, user: User) -> str:
-    role = await db.get(Role, user.role_id)
+async def _role_name(db: AsyncSession, user: User, tenant_id: int) -> str:
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     return (role.name if role else "").strip().lower()
 
 
-async def _require_manage_role(db: AsyncSession, user: User) -> None:
-    role_name = await _role_name(db, user)
+async def _require_manage_role(db: AsyncSession, user: User, tenant_id: int) -> None:
+    role_name = await _role_name(db, user, tenant_id)
     allowed = {"supervisor", "manager", "admin", "owner", "super_admin", "superadmin"}
     if role_name not in allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only supervisor/manager/admin can manage samples")
@@ -64,6 +65,8 @@ def _to_response(row: ManufacturingSampleRequest) -> SampleRequestResponse:
 async def list_sample_requests(
     status_filter: str | None = Query(default=None),
     priority: str | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -74,7 +77,7 @@ async def list_sample_requests(
         stmt = stmt.where(ManufacturingSampleRequest.status == status_filter.strip().lower())
     if priority and priority.strip():
         stmt = stmt.where(ManufacturingSampleRequest.priority == priority.strip().lower())
-    rows = (await db.execute(stmt.order_by(ManufacturingSampleRequest.id.desc()))).scalars().all()
+    rows = (await db.execute(stmt.order_by(ManufacturingSampleRequest.id.desc()).offset(offset).limit(limit))).scalars().all()
     return [_to_response(row) for row in rows]
 
 
@@ -86,7 +89,7 @@ async def create_sample_request(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manage_role(db, user)
+    await _require_manage_role(db, user, tenant.id)
     if body.order_id is not None:
         order = await db.get(Order, body.order_id)
         if not order or order.tenant_id != tenant.id:
@@ -143,7 +146,7 @@ async def update_sample_request(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manage_role(db, user)
+    await _require_manage_role(db, user, tenant.id)
     row = await db.get(ManufacturingSampleRequest, sample_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Sample request not found")
@@ -170,7 +173,7 @@ async def update_sample_status(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manage_role(db, user)
+    await _require_manage_role(db, user, tenant.id)
     row = await db.get(ManufacturingSampleRequest, sample_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Sample request not found")

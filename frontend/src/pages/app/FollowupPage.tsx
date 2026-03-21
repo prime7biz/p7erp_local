@@ -17,6 +17,7 @@ import {
   type UnifiedTnaSummaryResponse,
   type UnifiedTnaActionResponse,
 } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const TNA_PHASES = [
@@ -304,13 +305,21 @@ export function FollowupPage() {
         api.listCustomers(),
         api.listUsers(),
         api.listFollowupTemplates({ is_active: true }), // active only for Generate TNA modal
-        api.getUnifiedTnaSummary(filterOrderId != null ? { order_id: filterOrderId } : undefined).catch(() => null),
-        api.listUnifiedTnaActions({
-          order_id: filterOrderId ?? undefined,
-          source: "all",
-          limit: 8,
-          offset: 0,
-        }).catch(() => [] as UnifiedTnaActionResponse[]),
+        api.getUnifiedTnaSummary(filterOrderId != null ? { order_id: filterOrderId } : undefined).catch((e) => {
+          logApiError("FollowupPage.getUnifiedTnaSummary", e);
+          return null;
+        }),
+        api
+          .listUnifiedTnaActions({
+            order_id: filterOrderId ?? undefined,
+            source: "all",
+            limit: 8,
+            offset: 0,
+          })
+          .catch((e) => {
+            logApiError("FollowupPage.listUnifiedTnaActions", e);
+            return [] as UnifiedTnaActionResponse[];
+          }),
       ]);
       setSummary(sum);
       setActions(list);
@@ -447,7 +456,7 @@ export function FollowupPage() {
     setCommentsLoading(true);
     api.getFollowupActionComments(row.id).then((list) => {
       setActionComments(list);
-    }).finally(() => setCommentsLoading(false));
+    }).catch((err) => logApiError("FollowupPage.loadComments", err)).finally(() => setCommentsLoading(false));
   };
 
   const closeModal = () => {
@@ -1115,7 +1124,7 @@ export function FollowupPage() {
                             {!["completed", "approved"].includes(r.status) && (
                               <button
                                 type="button"
-                                onClick={async () => { await api.completeFollowupAction(r.id); await loadTna(); setOpenActionsRowId(null); }}
+                                onClick={async () => { try { await api.completeFollowupAction(r.id); await loadTna(); setOpenActionsRowId(null); } catch (err) { logApiError("FollowupPage.completeFollowupAction", err); setError("Failed to complete action. Please try again."); } }}
                                 className="block w-full px-3 py-2 text-left text-xs text-status-success-foreground hover:bg-status-success-subtle"
                               >
                                 Complete
@@ -1124,7 +1133,7 @@ export function FollowupPage() {
                             {["completed", "approved"].includes(r.status) && (
                               <button
                                 type="button"
-                                onClick={async () => { await api.reopenFollowupAction(r.id); await loadTna(); setOpenActionsRowId(null); }}
+                                onClick={async () => { try { await api.reopenFollowupAction(r.id); await loadTna(); setOpenActionsRowId(null); } catch (err) { logApiError("FollowupPage.reopenFollowupAction", err); setError("Failed to reopen action. Please try again."); } }}
                                 className="block w-full px-3 py-2 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                               >
                                 Reopen
@@ -1132,7 +1141,7 @@ export function FollowupPage() {
                             )}
                             <button
                               type="button"
-                              onClick={async () => { await api.deleteFollowupAction(r.id); await loadTna(); setOpenActionsRowId(null); }}
+                              onClick={async () => { try { await api.deleteFollowupAction(r.id); await loadTna(); setOpenActionsRowId(null); } catch (err) { logApiError("FollowupPage.deleteFollowupAction", err); setError("Failed to delete action. Please try again."); } }}
                               className="block w-full px-3 py-2 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
                             >
                               Delete
@@ -1550,7 +1559,7 @@ export function FollowupPage() {
                                   api.createFollowupActionComment(editingAction.id, { comment_text: commentText.trim() }).then((newComment) => {
                                     setActionComments((prev) => [newComment, ...prev]);
                                     setCommentText("");
-                                  });
+                                  }).catch((err) => logApiError("FollowupPage.createComment", err));
                                 }
                               }
                             }}
@@ -1562,7 +1571,7 @@ export function FollowupPage() {
                                 api.createFollowupActionComment(editingAction.id, { comment_text: commentText.trim() }).then((newComment) => {
                                   setActionComments((prev) => [newComment, ...prev]);
                                   setCommentText("");
-                                });
+                                }).catch((err) => logApiError("FollowupPage.createComment", err));
                               }
                             }}
                             disabled={!commentText.trim()}
@@ -1894,7 +1903,7 @@ export function FollowupPage() {
                         <button type="button" onClick={() => openEditTemplate(t)} className="rounded border border-border-strong px-2 py-1 text-xs mr-1">Edit</button>
                         <button
                           type="button"
-                          onClick={async () => { await api.deleteFollowupTemplate(t.id); await loadTna(); await loadManageTemplates(); }}
+                          onClick={async () => { try { await api.deleteFollowupTemplate(t.id); await loadTna(); await loadManageTemplates(); } catch (err) { logApiError("FollowupPage.deleteFollowupTemplate", err); setError("Failed to delete template. Please try again."); } }}
                           className="rounded border border-status-danger/20 px-2 py-1 text-xs text-status-danger"
                         >
                           Delete
@@ -1943,9 +1952,14 @@ export function FollowupPage() {
               <button
                 onClick={async () => {
                   if (!simpleOrderId || !simpleTitle.trim()) return;
-                  await api.createFollowup({ order_id: simpleOrderId, title: simpleTitle.trim(), status: "OPEN" });
-                  setSimpleTitle("");
-                  await loadSimple();
+                  try {
+                    await api.createFollowup({ order_id: simpleOrderId, title: simpleTitle.trim(), status: "OPEN" });
+                    setSimpleTitle("");
+                    await loadSimple();
+                  } catch (err) {
+                    logApiError("FollowupPage.createFollowup", err);
+                    setError("Failed to create follow-up. Please try again.");
+                  }
                 }}
                 className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground"
               >
@@ -1972,15 +1986,20 @@ export function FollowupPage() {
                     <td className="px-4 py-2 text-right space-x-2">
                       <button
                         onClick={async () => {
-                          await api.updateFollowup(r.id, { status: r.status === "DONE" ? "OPEN" : "DONE" });
-                          await loadSimple();
+                          try {
+                            await api.updateFollowup(r.id, { status: r.status === "DONE" ? "OPEN" : "DONE" });
+                            await loadSimple();
+                          } catch (err) {
+                            logApiError("FollowupPage.updateFollowup", err);
+                            setError("Failed to update follow-up. Please try again.");
+                          }
                         }}
                         className="rounded border border-border-strong px-2 py-1 text-xs text-text-secondary"
                       >
                         {r.status === "DONE" ? "Reopen" : "Done"}
                       </button>
                       <button
-                        onClick={async () => { await api.deleteFollowup(r.id); await loadSimple(); }}
+                        onClick={async () => { try { await api.deleteFollowup(r.id); await loadSimple(); } catch (err) { logApiError("FollowupPage.deleteFollowup", err); setError("Failed to delete follow-up. Please try again."); } }}
                         className="rounded border border-status-danger/20 px-2 py-1 text-xs text-status-danger"
                       >
                         Delete

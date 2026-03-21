@@ -35,9 +35,9 @@ export default defineConfig(async ({ mode }) => {
   build: {
     minify: "esbuild",
     cssCodeSplit: true,
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
-        chunkSizeWarningLimit: 500,
         manualChunks(id) {
           if (id.includes("node_modules")) {
             if (id.includes("react-dom") || id.includes("/react/")) return "vendor-react";

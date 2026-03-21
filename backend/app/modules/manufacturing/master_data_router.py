@@ -102,6 +102,8 @@ def _to_routing_step_response(row: ManufacturingRoutingStep) -> RoutingStepRespo
 @router.get("/work-centers", response_model=list[WorkCenterResponse])
 async def list_work_centers(
     active_only: bool = Query(default=False),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -110,7 +112,7 @@ async def list_work_centers(
     stmt = select(ManufacturingWorkCenter).where(ManufacturingWorkCenter.tenant_id == tenant.id)
     if active_only:
         stmt = stmt.where(ManufacturingWorkCenter.is_active.is_(True))
-    result = await db.execute(stmt.order_by(ManufacturingWorkCenter.code))
+    result = await db.execute(stmt.order_by(ManufacturingWorkCenter.code).offset(offset).limit(limit))
     return [_to_work_center_response(r) for r in result.scalars().all()]
 
 
@@ -162,6 +164,8 @@ async def update_work_center(
 @router.get("/operations", response_model=list[OperationResponse])
 async def list_operations(
     active_only: bool = Query(default=False),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -170,7 +174,7 @@ async def list_operations(
     stmt = select(ManufacturingOperation).where(ManufacturingOperation.tenant_id == tenant.id)
     if active_only:
         stmt = stmt.where(ManufacturingOperation.is_active.is_(True))
-    result = await db.execute(stmt.order_by(ManufacturingOperation.code))
+    result = await db.execute(stmt.order_by(ManufacturingOperation.code).offset(offset).limit(limit))
     return [_to_operation_response(r) for r in result.scalars().all()]
 
 
@@ -280,6 +284,8 @@ async def create_routing_template(
 @router.get("/routing-templates/{routing_id}/steps", response_model=list[RoutingStepResponse])
 async def list_routing_steps(
     routing_id: int,
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -295,6 +301,8 @@ async def list_routing_steps(
             ManufacturingRoutingStep.routing_id == routing_id,
         )
         .order_by(ManufacturingRoutingStep.step_no)
+        .offset(offset)
+        .limit(limit)
     )
     return [_to_routing_step_response(r) for r in result.scalars().all()]
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { logApiError } from "@/utils/logApiError";
 import { api, type ConsumptionPlanDetailResponse, type ConsumptionPlanResponse, type OrderResponse } from "@/api/client";
 
 export function ConsumptionPlansPage() {
@@ -38,8 +39,13 @@ export function ConsumptionPlansPage() {
           <button
             onClick={async () => {
               if (!orderId) return;
-              await api.createConsumptionPlan({ order_id: orderId, status: "PLANNED" });
-              await load();
+              try {
+                await api.createConsumptionPlan({ order_id: orderId, status: "PLANNED" });
+                await load();
+              } catch (err) {
+                logApiError("ConsumptionPlans.createPlan", err);
+                setError(err instanceof Error ? err.message : "Failed to create plan");
+              }
             }}
             className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white"
           >
@@ -72,9 +78,14 @@ export function ConsumptionPlansPage() {
                 <input value={requiredQty} onChange={(e) => setRequiredQty(e.target.value)} placeholder="Required qty" className="flex-1 rounded border border-border px-2 py-1 text-sm" />
                 <button
                   onClick={async () => {
-                    await api.createConsumptionPlanItem(selected.plan.id, { required_qty: requiredQty, item_code: "ITEM" });
-                    setRequiredQty("0");
-                    await open(selected.plan.id);
+                    try {
+                      await api.createConsumptionPlanItem(selected.plan.id, { required_qty: requiredQty, item_code: "ITEM" });
+                      setRequiredQty("0");
+                      await open(selected.plan.id);
+                    } catch (err) {
+                      logApiError("ConsumptionPlans.createItem", err);
+                      setError(err instanceof Error ? err.message : "Failed to add item");
+                    }
                   }}
                   className="rounded border border-border px-2 py-1 text-xs"
                 >
@@ -87,8 +98,13 @@ export function ConsumptionPlansPage() {
                     <span>{i.item_code ?? "ITEM"} · Qty {i.required_qty} {i.uom ?? ""}</span>
                     <button
                       onClick={async () => {
-                        await api.deleteConsumptionPlanItem(selected.plan.id, i.id);
-                        await open(selected.plan.id);
+                        try {
+                          await api.deleteConsumptionPlanItem(selected.plan.id, i.id);
+                          await open(selected.plan.id);
+                        } catch (err) {
+                          logApiError("ConsumptionPlans.deleteItem", err);
+                          setError(err instanceof Error ? err.message : "Failed to delete item");
+                        }
                       }}
                       className="text-xs text-status-danger-foreground"
                     >

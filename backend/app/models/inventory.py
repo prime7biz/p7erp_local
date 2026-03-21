@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, date
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -10,6 +10,7 @@ from app.database import Base
 
 class Warehouse(Base):
     __tablename__ = "warehouses"
+    __table_args__ = (UniqueConstraint("tenant_id", "warehouse_code", name="uq_warehouses_tenant_warehouse_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -25,6 +26,7 @@ class Warehouse(Base):
 
 class StockGroup(Base):
     __tablename__ = "stock_groups"
+    __table_args__ = (UniqueConstraint("tenant_id", "group_code", name="uq_stock_groups_tenant_group_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -40,6 +42,7 @@ class StockGroup(Base):
 
 class Vendor(Base):
     __tablename__ = "vendors"
+    __table_args__ = (UniqueConstraint("tenant_id", "vendor_code", name="uq_vendors_tenant_vendor_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -72,6 +75,7 @@ class Vendor(Base):
 
 class PurchaseOrder(Base):
     __tablename__ = "purchase_orders"
+    __table_args__ = (UniqueConstraint("tenant_id", "po_code", name="uq_purchase_orders_tenant_po_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -88,6 +92,9 @@ class PurchaseOrder(Base):
     base_total_amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
     btb_lc_id: Mapped[int | None] = mapped_column(
         ForeignKey("btb_lcs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_bom_id: Mapped[int | None] = mapped_column(
+        ForeignKey("boms.id", ondelete="SET NULL"), nullable=True, index=True
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -113,6 +120,7 @@ class PurchaseOrderItem(Base):
 
 class GoodsReceiving(Base):
     __tablename__ = "goods_receiving"
+    __table_args__ = (UniqueConstraint("tenant_id", "grn_code", name="uq_goods_receiving_tenant_grn_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -123,6 +131,9 @@ class GoodsReceiving(Base):
     received_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -140,6 +151,7 @@ class GoodsReceivingItem(Base):
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
     warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False, index=True)
     quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    lot_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
@@ -156,11 +168,43 @@ class StockMovement(Base):
     reference_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     movement_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lot_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class PhysicalInventorySession(Base):
+    __tablename__ = "physical_inventory_sessions"
+    __table_args__ = (UniqueConstraint("tenant_id", "session_code", name="uq_physical_inventory_sessions_tenant_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False)
+    session_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
+    count_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class PhysicalInventoryLine(Base):
+    __tablename__ = "physical_inventory_lines"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("physical_inventory_sessions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
+    expected_qty: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    counted_qty: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class DeliveryChallan(Base):
     __tablename__ = "delivery_challans"
+    __table_args__ = (UniqueConstraint("tenant_id", "challan_code", name="uq_delivery_challans_tenant_challan_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -169,6 +213,9 @@ class DeliveryChallan(Base):
     delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -191,6 +238,9 @@ class DeliveryChallanItem(Base):
 
 class EnhancedGatePass(Base):
     __tablename__ = "enhanced_gate_passes"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "gate_pass_code", name="uq_enhanced_gate_passes_tenant_gate_pass_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -212,6 +262,9 @@ class EnhancedGatePass(Base):
 
 class ProcessOrder(Base):
     __tablename__ = "process_orders"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "process_number", name="uq_process_orders_tenant_process_number"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -236,6 +289,7 @@ class ProcessOrder(Base):
 
 class ManufacturingOrder(Base):
     __tablename__ = "manufacturing_orders"
+    __table_args__ = (UniqueConstraint("tenant_id", "mo_number", name="uq_manufacturing_orders_tenant_mo_number"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -267,6 +321,65 @@ class ManufacturingStage(Base):
     output_quantity: Mapped[str | None] = mapped_column(String(32), nullable=True)
     process_loss_percentage: Mapped[str | None] = mapped_column(String(16), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class WarehouseTransfer(Base):
+    __tablename__ = "warehouse_transfers"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "transfer_code", name="uq_warehouse_transfers_tenant_transfer_code"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    transfer_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    from_warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False)
+    to_warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False)
+    transfer_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class WarehouseTransferLine(Base):
+    __tablename__ = "warehouse_transfer_lines"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    transfer_id: Mapped[int] = mapped_column(
+        ForeignKey("warehouse_transfers.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
+    quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class StockAdjustment(Base):
+    __tablename__ = "stock_adjustments"
+    __table_args__ = (UniqueConstraint("tenant_id", "adjust_code", name="uq_stock_adjustments_tenant_adjust_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    adjust_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False)
+    quantity: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason_code: Mapped[str] = mapped_column(String(32), nullable=False, default="OTHER")
+    adjustment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow

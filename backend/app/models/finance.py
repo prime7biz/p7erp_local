@@ -52,6 +52,12 @@ class CoAConfig(Base):
     max_group_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_account_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)
     validate_normal_balance: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    inventory_stock_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    inventory_clearing_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -60,6 +66,8 @@ class CoAConfig(Base):
 
 class ChartOfAccount(Base):
     __tablename__ = "chart_of_accounts"
+    # Optimistic locking: UPDATE ... WHERE version = :v; increments on successful write.
+    __mapper_args__ = {"version_id_col": "version"}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -85,6 +93,7 @@ class ChartOfAccount(Base):
     )
     last_reviewed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     enable_bill_wise: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow

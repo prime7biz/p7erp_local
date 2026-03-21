@@ -126,13 +126,15 @@ async def update_settings_config(
 
 @router.get("/roles", response_model=list[SettingsRoleResponse])
 async def list_settings_roles(
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
-    result = await db.execute(select(Role).where(Role.tenant_id == tenant.id).order_by(Role.display_name.asc()))
+    result = await db.execute(select(Role).where(Role.tenant_id == tenant.id).order_by(Role.display_name.asc()).offset(offset).limit(limit))
     rows = result.scalars().all()
     return [
         SettingsRoleResponse(
@@ -261,6 +263,8 @@ async def delete_settings_role(
 
 @router.get("/users", response_model=list[SettingsUserResponse])
 async def list_settings_users(
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -272,6 +276,8 @@ async def list_settings_users(
         .join(Role, User.role_id == Role.id)
         .where(User.tenant_id == tenant.id)
         .order_by(User.id.asc())
+        .offset(offset)
+        .limit(limit)
     )
     rows = result.all()
     return [

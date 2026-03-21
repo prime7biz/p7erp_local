@@ -8,6 +8,7 @@ import {
   type SettingsConfigResponse,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { logApiError } from "@/utils/logApiError";
 import "@/styles/quotation-print.css";
 
 function resolveAssetUrl(pathOrUrl: string | null | undefined): string {
@@ -101,9 +102,20 @@ export function OrderPrintPage() {
         setOrder(currentOrder);
 
         const [cust, quote, cfg] = await Promise.all([
-          api.getCustomer(currentOrder.customer_id).catch(() => null),
-          currentOrder.quotation_id ? api.getQuotation(currentOrder.quotation_id).catch(() => null) : Promise.resolve(null),
-          api.getSettingsConfig().catch(() => null),
+          api.getCustomer(currentOrder.customer_id).catch((e) => {
+            logApiError("OrderPrintPage.getCustomer", e);
+            return null;
+          }),
+          currentOrder.quotation_id
+            ? api.getQuotation(currentOrder.quotation_id).catch((e) => {
+                logApiError("OrderPrintPage.getQuotation", e);
+                return null;
+              })
+            : Promise.resolve(null),
+          api.getSettingsConfig().catch((e) => {
+            logApiError("OrderPrintPage.getSettingsConfig", e);
+            return null;
+          }),
         ]);
         setCustomer(cust);
         setQuotation(quote);

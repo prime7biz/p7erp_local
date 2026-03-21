@@ -34,6 +34,7 @@ class RegisterRequest(BaseModel):
     password: str
     first_name: str | None = None
     last_name: str | None = None
+    bootstrap_key: str | None = None  # optional; first user: X-Bootstrap-Key / this must match env or tenant bootstrap hash (Finding #4)
 
 
 class TokenResponse(BaseModel):

@@ -100,8 +100,20 @@ const TutorialArticlePage = lazy(() =>
 const StockSummaryPage = lazy(() =>
   import("@/pages/app/StockSummaryPage").then((m) => ({ default: m.StockSummaryPage })),
 );
+const StockDashboardPage = lazy(() =>
+  import("@/pages/app/StockDashboardPage").then((m) => ({ default: m.StockDashboardPage })),
+);
+const StockValuationPage = lazy(() =>
+  import("@/pages/app/StockValuationPage").then((m) => ({ default: m.StockValuationPage })),
+);
 const StockLedgerPage = lazy(() =>
   import("@/pages/app/StockLedgerPage").then((m) => ({ default: m.StockLedgerPage })),
+);
+const WarehouseTransfersPage = lazy(() =>
+  import("@/pages/app/WarehouseTransfersPage").then((m) => ({ default: m.WarehouseTransfersPage })),
+);
+const StockAdjustmentsPage = lazy(() =>
+  import("@/pages/app/StockAdjustmentsPage").then((m) => ({ default: m.StockAdjustmentsPage })),
 );
 const ManufacturingOrdersPage = lazy(() =>
   import("@/pages/app/ManufacturingOrdersPage").then((m) => ({ default: m.ManufacturingOrdersPage })),
@@ -148,6 +160,9 @@ const ReportPurchaseOrdersPage = lazy(() =>
 const ReportGrnPage = lazy(() => import("@/pages/app/reports/ReportGrnPage").then((m) => ({ default: m.ReportGrnPage })));
 const ReportSalesOrdersPage = lazy(() =>
   import("@/pages/app/reports/ReportSalesOrdersPage").then((m) => ({ default: m.ReportSalesOrdersPage })),
+);
+const ReportStyle360Page = lazy(() =>
+  import("@/pages/app/reports/ReportStyle360Page").then((m) => ({ default: m.ReportStyle360Page })),
 );
 const ReportComingSoonPage = lazy(() =>
   import("@/pages/app/reports/ReportComingSoonPage").then((m) => ({ default: m.ReportComingSoonPage })),
@@ -362,16 +377,17 @@ export function AppProtectedRouter() {
         <Route path="merchandising/consumption-reconciliation" element={<ConsumptionReconciliationPage />} />
         <Route path="inventory" element={<InventoryItemsPage />} />
         <Route path="inventory/items" element={<InventoryItemsPage />} />
-        <Route path="inventory/categories" element={<AppComingSoonPage title="Inventory Categories" description="Manage item categories and hierarchies." />} />
-        <Route path="inventory/subcategories" element={<AppComingSoonPage title="Inventory Subcategories" />} />
+        <Route path="inventory/categories" element={<Navigate to="/app/inventory?tab=masters" replace />} />
+        <Route path="inventory/subcategories" element={<Navigate to="/app/inventory?tab=masters" replace />} />
         <Route path="inventory/units" element={<Navigate to="/app/inventory" replace />} />
         <Route path="inventory/vendors" element={<VendorsPage />} />
         <Route path="inventory/warehouses" element={<Navigate to="/app/inventory" replace />} />
         <Route path="inventory/stock-groups" element={<StockGroupsPage />} />
-        <Route path="inventory/stock-dashboard" element={<AppComingSoonPage title="Stock Dashboard" description="Overview of stock levels and movements." />} />
-        <Route path="inventory/stock-valuation" element={<AppComingSoonPage title="Stock Valuation" />} />
-        <Route path="inventory/stock-adjustments" element={<AppComingSoonPage title="Stock Adjustments" />} />
-        <Route path="inventory/warehouse-transfers" element={<AppComingSoonPage title="Warehouse Transfers" />} />
+        <Route path="inventory/stock-dashboard" element={<StockDashboardPage />} />
+        <Route path="inventory/stock-valuation" element={<StockValuationPage />} />
+        <Route path="inventory/stock-adjustments" element={<StockAdjustmentsPage />} />
+        <Route path="inventory/stock-adjustments/new" element={<StockAdjustmentsPage />} />
+        <Route path="inventory/warehouse-transfers" element={<WarehouseTransfersPage />} />
         <Route path="inventory/lots" element={<AppComingSoonPage title="Lot Traceability" description="Track lots and batches." />} />
         <Route path="inventory/purchase-orders" element={<PurchaseOrdersPage />} />
         <Route path="inventory/goods-receiving" element={<GoodsReceivingPage />} />
@@ -426,6 +442,7 @@ export function AppProtectedRouter() {
         <Route path="reports/purchase-orders" element={<ReportPurchaseOrdersPage />} />
         <Route path="reports/grn" element={<ReportGrnPage />} />
         <Route path="reports/sales-orders" element={<ReportSalesOrdersPage />} />
+        <Route path="reports/style-360" element={<ReportStyle360Page />} />
         <Route path="reports/lc-outstanding" element={<ReportComingSoonPage title="LC Outstanding" description="View LC exposure and maturity." />} />
         <Route path="reports/btb-maturity" element={<ReportComingSoonPage title="BTB LC Maturity" />} />
         <Route path="reports/production-efficiency" element={<ReportComingSoonPage title="Production Efficiency" />} />

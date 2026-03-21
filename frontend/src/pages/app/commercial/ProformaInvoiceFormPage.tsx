@@ -10,6 +10,7 @@ import {
   type CustomerResponse,
   type BankAccountResponse,
 } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 
 const INCOTERMS_OPTIONS = ["EXW", "FCA", "FAS", "FOB", "CFR", "CIF", "CIP", "DAP", "DPU", "DDP"] as const;
 const PAYMENT_TERM_OPTIONS = [
@@ -102,9 +103,18 @@ export function ProformaInvoiceFormPage() {
         const [ordersList, customersList, banksList, vendorsList, masterContractsList] = await Promise.all([
           api.listOrders({ limit: 500, offset: 0 }),
           api.listCustomers(),
-          api.listBankAccounts().catch(() => []),
-          api.listVendors().catch(() => []),
-          api.listMasterContracts().catch(() => []),
+          api.listBankAccounts().catch((e) => {
+            logApiError("ProformaInvoiceFormPage.listBankAccounts", e);
+            return [];
+          }),
+          api.listVendors().catch((e) => {
+            logApiError("ProformaInvoiceFormPage.listVendors", e);
+            return [];
+          }),
+          api.listMasterContracts().catch((e) => {
+            logApiError("ProformaInvoiceFormPage.listMasterContracts", e);
+            return [];
+          }),
         ]);
         setOrders(ordersList);
         setCustomers(customersList);

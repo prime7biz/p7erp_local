@@ -208,9 +208,9 @@ def _btb_lc_to_response(
     )
 
 
-async def _recompute_master_contract_utilization(db: AsyncSession, master_contract_id: int) -> None:
+async def _recompute_master_contract_utilization(db: AsyncSession, master_contract_id: int, tenant_id: int) -> None:
     contract = await db.get(MasterContract, master_contract_id)
-    if not contract:
+    if not contract or contract.tenant_id != tenant_id:
         return
     result = await db.execute(
         select(func.coalesce(func.sum(BtbLc.amount), 0)).where(
@@ -286,6 +286,8 @@ async def _validate_posting_account(
             detail=f"Posting not allowed to header account: {account.account_number}",
         )
     group = await db.get(AccountGroup, account.group_id)
+    if group and group.tenant_id != tenant_id:
+        raise HTTPException(status_code=400, detail="Account group not found for this tenant")
     if group and not bool(group.allow_posting):
         raise HTTPException(
             status_code=400,
@@ -474,7 +476,7 @@ async def get_master_contract(
     row = await db.get(MasterContract, contract_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Master contract not found")
-    await _recompute_master_contract_utilization(db, row.id)
+    await _recompute_master_contract_utilization(db, row.id, tenant.id)
     await db.flush()
     return _master_contract_to_response(row)
 
@@ -569,7 +571,7 @@ async def update_master_contract(
     for key, value in updates.items():
         setattr(row, key, value)
     await _ensure_master_contract_cost_center(db, row)
-    await _recompute_master_contract_utilization(db, row.id)
+    await _recompute_master_contract_utilization(db, row.id, tenant.id)
     await db.flush()
     await db.refresh(row)
     return _master_contract_to_response(row)
@@ -1199,7 +1201,7 @@ async def create_btb_lc(
     db.add(acc)
     await db.flush()
     if row.master_contract_id is not None:
-        await _recompute_master_contract_utilization(db, row.master_contract_id)
+        await _recompute_master_contract_utilization(db, row.master_contract_id, tenant.id)
     await db.refresh(row)
     master_cost_center_id = contract.cost_center_id if contract else None
     acc_result = await db.execute(
@@ -1286,9 +1288,9 @@ async def update_btb_lc(
             acc_row.maturity_date = row.maturity_date
     await db.flush()
     if previous_master_id is not None:
-        await _recompute_master_contract_utilization(db, previous_master_id)
+        await _recompute_master_contract_utilization(db, previous_master_id, tenant.id)
     if row.master_contract_id is not None and row.master_contract_id != previous_master_id:
-        await _recompute_master_contract_utilization(db, row.master_contract_id)
+        await _recompute_master_contract_utilization(db, row.master_contract_id, tenant.id)
     await db.flush()
     await db.refresh(row)
     master_cost_center_id = contract.cost_center_id if target_master_id is not None and contract else None

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -105,6 +105,7 @@ class ManufacturingProductionPlanLine(Base):
 
 class ManufacturingWorkOrder(Base):
     __tablename__ = "mfg_work_orders"
+    __table_args__ = (UniqueConstraint("tenant_id", "mo_number", name="uq_mfg_work_orders_tenant_mo_number"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)

@@ -8,6 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -17,7 +19,6 @@ from app.models import (
     LeavePolicy,
     LeaveRequest,
     LeaveType,
-    Role,
     Tenant,
     User,
 )
@@ -44,8 +45,8 @@ def _ensure_tenant(user: User, tenant: Tenant) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
 
-async def _require_manager_or_admin(db: AsyncSession, user: User) -> None:
-    role = await db.get(Role, user.role_id)
+async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     role_name = (role.name if role else "").strip().lower()
     if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
         raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
@@ -179,6 +180,8 @@ def _leave_request_out(row: LeaveRequest) -> LeaveRequestOut:
 @router.get("/types", response_model=list[LeaveTypeOut])
 async def list_leave_types(
     active_only: bool = Query(default=False),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -187,7 +190,7 @@ async def list_leave_types(
     stmt = select(LeaveType).where(LeaveType.tenant_id == tenant.id)
     if active_only:
         stmt = stmt.where(LeaveType.is_active.is_(True))
-    rows = (await db.execute(stmt.order_by(LeaveType.name))).scalars().all()
+    rows = (await db.execute(stmt.order_by(LeaveType.name).offset(offset).limit(limit))).scalars().all()
     return [_leave_type_out(x) for x in rows]
 
 
@@ -239,6 +242,8 @@ async def update_leave_type(
 @router.get("/policies", response_model=list[LeavePolicyOut])
 async def list_leave_policies(
     leave_type_id: int | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -247,7 +252,7 @@ async def list_leave_policies(
     stmt = select(LeavePolicy).where(LeavePolicy.tenant_id == tenant.id)
     if leave_type_id is not None:
         stmt = stmt.where(LeavePolicy.leave_type_id == leave_type_id)
-    rows = (await db.execute(stmt.order_by(LeavePolicy.id.desc()))).scalars().all()
+    rows = (await db.execute(stmt.order_by(LeavePolicy.id.desc()).offset(offset).limit(limit))).scalars().all()
     return [_leave_policy_out(x) for x in rows]
 
 
@@ -259,7 +264,7 @@ async def create_leave_policy(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     await _leave_type_or_404(db, tenant.id, body.leave_type_id)
     row = LeavePolicy(tenant_id=tenant.id, **body.model_dump())
     db.add(row)
@@ -277,7 +282,7 @@ async def update_leave_policy(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await db.get(LeavePolicy, policy_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Leave policy not found")
@@ -293,6 +298,8 @@ async def update_leave_policy(
 async def list_leave_balances(
     employee_id: int | None = Query(default=None),
     balance_year: int | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -303,7 +310,9 @@ async def list_leave_balances(
         stmt = stmt.where(LeaveBalance.employee_id == employee_id)
     if balance_year is not None:
         stmt = stmt.where(LeaveBalance.balance_year == balance_year)
-    rows = (await db.execute(stmt.order_by(LeaveBalance.balance_year.desc(), LeaveBalance.id.desc()))).scalars().all()
+    rows = (
+        await db.execute(stmt.order_by(LeaveBalance.balance_year.desc(), LeaveBalance.id.desc()).offset(offset).limit(limit))
+    ).scalars().all()
     return [_leave_balance_out(x) for x in rows]
 
 
@@ -315,7 +324,7 @@ async def upsert_leave_balance(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     await _employee_or_404(db, tenant.id, body.employee_id)
     await _leave_type_or_404(db, tenant.id, body.leave_type_id)
     existing = (
@@ -347,6 +356,8 @@ async def upsert_leave_balance(
 async def list_leave_requests(
     employee_id: int | None = Query(default=None),
     status_filter: str | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -357,7 +368,7 @@ async def list_leave_requests(
         stmt = stmt.where(LeaveRequest.employee_id == employee_id)
     if status_filter:
         stmt = stmt.where(LeaveRequest.status == status_filter.strip().upper())
-    rows = (await db.execute(stmt.order_by(LeaveRequest.id.desc()))).scalars().all()
+    rows = (await db.execute(stmt.order_by(LeaveRequest.id.desc()).offset(offset).limit(limit))).scalars().all()
     return [_leave_request_out(x) for x in rows]
 
 
@@ -466,7 +477,7 @@ async def approve_leave_request(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await db.get(LeaveRequest, request_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Leave request not found")
@@ -513,7 +524,7 @@ async def reject_leave_request(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await db.get(LeaveRequest, request_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Leave request not found")

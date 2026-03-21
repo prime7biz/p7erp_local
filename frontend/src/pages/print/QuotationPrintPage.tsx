@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { api, type CustomerResponse, type InquiryResponse, type QuotationDetailResponse, type SettingsConfigResponse } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { logApiError } from "@/utils/logApiError";
 import "@/styles/quotation-print.css";
 
 function formatMoney(value: string | number | null | undefined): string {
@@ -99,9 +100,20 @@ export function QuotationPrintPage() {
         setQuotation(q);
 
         const [cfg, cust, inq] = await Promise.all([
-          api.getSettingsConfig().catch(() => null),
-          api.getCustomer(q.customer_id).catch(() => null),
-          q.inquiry_id ? api.getInquiry(q.inquiry_id).catch(() => null) : Promise.resolve(null),
+          api.getSettingsConfig().catch((e) => {
+            logApiError("QuotationPrintPage.getSettingsConfig", e);
+            return null;
+          }),
+          api.getCustomer(q.customer_id).catch((e) => {
+            logApiError("QuotationPrintPage.getCustomer", e);
+            return null;
+          }),
+          q.inquiry_id
+            ? api.getInquiry(q.inquiry_id).catch((e) => {
+                logApiError("QuotationPrintPage.getInquiry", e);
+                return null;
+              })
+            : Promise.resolve(null),
         ]);
         setSettings(cfg);
         setCustomer(cust);

@@ -188,6 +188,7 @@ async def _upsert_coa(
         maintain_fc_balance=bool(account_currency),
         is_bank_account=is_bank_account,
         is_active=True,
+        version=1,
     )
     db.add(row)
     await db.flush()

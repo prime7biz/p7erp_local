@@ -7,6 +7,17 @@ import {
   type InventoryItemResponse,
   type WarehouseResponse,
 } from "@/api/client";
+import {
+  InventoryEmptyState,
+  InventoryErrorPanel,
+  InventoryTableSkeleton,
+} from "@/components/inventory/InventoryListStates";
+import {
+  InventoryListViewToggle,
+  inventoryScrollTableClass,
+  touchFieldClass,
+} from "@/components/inventory/InventoryMobileList";
+import { useListViewPreference } from "@/hooks/useInventoryListView";
 
 export function DeliveryChallansPage() {
   const [rows, setRows] = useState<DeliveryChallanResponse[]>([]);
@@ -20,10 +31,15 @@ export function DeliveryChallansPage() {
     items: [],
   });
   const [line, setLine] = useState<DeliveryChallanItemCreate>({ item_id: 0, warehouse_id: 0, quantity: "0" });
+  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { isNarrow, view, setView, showCards } = useListViewPreference();
 
   const itemMap = useMemo(() => new Map(items.map((i) => [i.id, `${i.item_code} - ${i.name}`])), [items]);
 
   const load = useCallback(async () => {
+    setError("");
+    setLoading(true);
     try {
       const [dc, itm, wh] = await Promise.all([
         api.listDeliveryChallans(),
@@ -41,6 +57,8 @@ export function DeliveryChallansPage() {
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load delivery challans");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -51,19 +69,33 @@ export function DeliveryChallansPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const close = () => setOpenActionsId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, []);
+
   const statuses = ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED"];
   const filteredRows = statusFilter ? rows.filter((r) => (r.status || "").toUpperCase() === statusFilter) : rows;
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-brand-primary">Delivery Challans</h1>
         <p className="text-sm text-text-muted">Manage dispatch workflow and post stock-out on final posting.</p>
       </div>
-      {error && <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div>}
-      <div className="rounded-xl border border-border bg-surface-raised p-3">
-        <label className="mr-2 text-xs font-semibold text-text-secondary">Status Filter</label>
-        <input className="rounded border px-2 py-1 text-xs" value={statusFilter} placeholder="e.g. POSTED" onChange={(e) => setStatusFilter(e.target.value.toUpperCase())} />
+      {error ? <InventoryErrorPanel message={error} onRetry={() => void load()} /> : null}
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-raised p-3 sm:flex-row sm:items-center sm:justify-between">
+        {isNarrow ? <InventoryListViewToggle value={view} onChange={setView} /> : null}
+        <label className="flex flex-1 flex-wrap items-center gap-2 text-xs font-semibold text-text-secondary">
+          Status Filter
+          <input
+            className={`min-w-0 flex-1 rounded border px-2 py-1 text-xs sm:flex-none ${touchFieldClass}`}
+            value={statusFilter}
+            placeholder="e.g. POSTED"
+            onChange={(e) => setStatusFilter(e.target.value.toUpperCase())}
+          />
+        </label>
       </div>
 
       <form
@@ -106,41 +138,124 @@ export function DeliveryChallansPage() {
         <button className="rounded bg-brand-primary px-3 py-2 text-sm font-medium text-brand-primary-foreground">Create Challan</button>
       </form>
 
-      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
-        <table className="min-w-full">
-          <thead className="bg-surface-subtle">
-            <tr>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Code</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Customer</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Status</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Lines</th>
-              <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredRows.map((row) => (
-              <tr key={row.id}>
-                <td className="px-3 py-2 text-sm font-medium">{row.challan_code}</td>
-                <td className="px-3 py-2 text-sm">{row.customer_name}</td>
-                <td className="px-3 py-2 text-sm">{row.status}</td>
-                <td className="px-3 py-2 text-xs text-text-secondary">{row.items.length}</td>
-                <td className="px-3 py-2 text-right">
-                  <select
-                    className="rounded border px-2 py-1 text-xs"
-                    value={row.status}
-                    onChange={async (e) => {
-                      await api.updateDeliveryChallanStatus(row.id, e.target.value);
-                      await load();
+      {loading ? (
+        <InventoryTableSkeleton rows={8} cols={5} />
+      ) : !filteredRows.length ? (
+        <InventoryEmptyState
+          title={rows.length ? "No challans match this status" : "No delivery challans yet"}
+          description={rows.length ? "Clear the status filter to see all challans." : "Create a challan using the form above."}
+        />
+      ) : showCards ? (
+        <div className="space-y-3">
+          {filteredRows.map((row) => (
+            <div key={row.id} className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <div className="font-semibold text-text-primary">{row.challan_code}</div>
+                  <div className="text-sm text-text-secondary">{row.customer_name}</div>
+                  <div className="mt-1 text-xs text-text-muted">
+                    {row.status} · {row.items.length} line{row.items.length === 1 ? "" : "s"}
+                  </div>
+                </div>
+                <div className="relative inline-block shrink-0 text-left">
+                  <button
+                    type="button"
+                    className="min-h-[44px] min-w-[88px] touch-manipulation rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:min-w-0 sm:px-2.5 sm:py-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenActionsId((id) => (id === row.id ? null : row.id));
                     }}
                   >
-                    {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </td>
+                    Actions
+                  </button>
+                  {openActionsId === row.id && (
+                    <div className="absolute right-0 z-10 mt-1 max-h-64 w-44 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                      <p className="px-2 py-1 text-[10px] font-semibold uppercase text-gray-500">Set status</p>
+                      {statuses.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          className={`block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs ${
+                            (row.status || "").toUpperCase() === s ? "font-medium text-gray-900" : "text-gray-700"
+                          }`}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setOpenActionsId(null);
+                            await api.updateDeliveryChallanStatus(row.id, s);
+                            await load();
+                          }}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className={`rounded-xl border border-border bg-surface-raised ${inventoryScrollTableClass}`}>
+          <table className="min-w-[640px] w-full">
+            <thead className="bg-surface-subtle">
+              <tr>
+                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Code</th>
+                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Customer</th>
+                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Status</th>
+                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Lines</th>
+                <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">Action</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredRows.map((row) => (
+                <tr key={row.id}>
+                  <td className="px-3 py-2 text-sm font-medium">{row.challan_code}</td>
+                  <td className="px-3 py-2 text-sm">{row.customer_name}</td>
+                  <td className="px-3 py-2 text-sm">{row.status}</td>
+                  <td className="px-3 py-2 text-xs text-text-secondary">{row.items.length}</td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="relative inline-block text-left">
+                      <button
+                        type="button"
+                        className="min-h-[44px] min-w-[88px] touch-manipulation rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:min-w-0 sm:px-2.5 sm:py-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenActionsId((id) => (id === row.id ? null : row.id));
+                        }}
+                      >
+                        Actions
+                      </button>
+                      {openActionsId === row.id && (
+                        <div className="absolute right-0 z-10 mt-1 max-h-64 w-44 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                          <p className="px-2 py-1 text-[10px] font-semibold uppercase text-gray-500">Set status</p>
+                          {statuses.map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              className={`block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs ${
+                                (row.status || "").toUpperCase() === s ? "font-medium text-gray-900" : "text-gray-700"
+                              }`}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setOpenActionsId(null);
+                                await api.updateDeliveryChallanStatus(row.id, s);
+                                await load();
+                              }}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

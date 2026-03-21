@@ -8,6 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -23,7 +25,6 @@ from app.models import (
     PayrollRunLine,
     PayrollStructure,
     PayrollStructureLine,
-    Role,
     Tenant,
     User,
     Voucher,
@@ -56,8 +57,8 @@ def _ensure_tenant(user: User, tenant: Tenant) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
 
-async def _require_manager_or_admin(db: AsyncSession, user: User) -> None:
-    role = await db.get(Role, user.role_id)
+async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     role_name = (role.name if role else "").strip().lower()
     if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
         raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
@@ -215,6 +216,8 @@ def _posting_out(row: PayrollPosting) -> PayrollPostingOut:
 @router.get("/components", response_model=list[PayrollComponentOut])
 async def list_components(
     active_only: bool = Query(default=False),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -223,7 +226,7 @@ async def list_components(
     stmt = select(PayrollComponent).where(PayrollComponent.tenant_id == tenant.id)
     if active_only:
         stmt = stmt.where(PayrollComponent.is_active.is_(True))
-    rows = (await db.execute(stmt.order_by(PayrollComponent.name))).scalars().all()
+    rows = (await db.execute(stmt.order_by(PayrollComponent.name).offset(offset).limit(limit))).scalars().all()
     return [_component_out(x) for x in rows]
 
 
@@ -295,13 +298,21 @@ async def update_component(
 
 @router.get("/structures", response_model=list[PayrollStructureOut])
 async def list_structures(
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
     rows = (
-        await db.execute(select(PayrollStructure).where(PayrollStructure.tenant_id == tenant.id).order_by(PayrollStructure.name))
+        await db.execute(
+            select(PayrollStructure)
+            .where(PayrollStructure.tenant_id == tenant.id)
+            .order_by(PayrollStructure.name)
+            .offset(offset)
+            .limit(limit)
+        )
     ).scalars().all()
     return [_structure_out(x) for x in rows]
 
@@ -334,6 +345,8 @@ async def create_structure(
 @router.get("/structures/{structure_id}/lines", response_model=list[PayrollStructureLineOut])
 async def list_structure_lines(
     structure_id: int,
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -348,6 +361,8 @@ async def list_structure_lines(
                 PayrollStructureLine.structure_id == structure_id,
             )
             .order_by(PayrollStructureLine.sort_order, PayrollStructureLine.id)
+            .offset(offset)
+            .limit(limit)
         )
     ).scalars().all()
     return [_structure_line_out(x) for x in rows]
@@ -373,13 +388,21 @@ async def create_structure_line(
 
 @router.get("/periods", response_model=list[PayrollPeriodOut])
 async def list_periods(
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
     rows = (
-        await db.execute(select(PayrollPeriod).where(PayrollPeriod.tenant_id == tenant.id).order_by(PayrollPeriod.start_date.desc()))
+        await db.execute(
+            select(PayrollPeriod)
+            .where(PayrollPeriod.tenant_id == tenant.id)
+            .order_by(PayrollPeriod.start_date.desc())
+            .offset(offset)
+            .limit(limit)
+        )
     ).scalars().all()
     return [_period_out(x) for x in rows]
 
@@ -430,6 +453,8 @@ async def finalize_period(
 async def list_runs(
     period_id: int | None = Query(default=None),
     status_filter: str | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -440,7 +465,7 @@ async def list_runs(
         stmt = stmt.where(PayrollRun.period_id == period_id)
     if status_filter:
         stmt = stmt.where(PayrollRun.status == status_filter.strip().upper())
-    rows = (await db.execute(stmt.order_by(PayrollRun.id.desc()))).scalars().all()
+    rows = (await db.execute(stmt.order_by(PayrollRun.id.desc()).offset(offset).limit(limit))).scalars().all()
     return [_run_out(x) for x in rows]
 
 
@@ -483,6 +508,8 @@ async def create_run(
 @router.get("/runs/{run_id}/lines", response_model=list[PayrollRunLineOut])
 async def list_run_lines(
     run_id: int,
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -494,6 +521,8 @@ async def list_run_lines(
             select(PayrollRunLine)
             .where(PayrollRunLine.tenant_id == tenant.id, PayrollRunLine.run_id == run_id)
             .order_by(PayrollRunLine.id.desc())
+            .offset(offset)
+            .limit(limit)
         )
     ).scalars().all()
     return [_run_line_out(x) for x in rows]
@@ -785,13 +814,15 @@ async def generate_payslips(
 @router.get("/approvals")
 async def list_approvals(
     status: str | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
     stmt = select(PayrollApproval).where(PayrollApproval.tenant_id == tenant.id).order_by(PayrollApproval.id.desc())
-    rows = (await db.execute(stmt)).scalars().all()
+    rows = (await db.execute(stmt.offset(offset).limit(limit))).scalars().all()
     if status and status.strip():
         rows = [x for x in rows if x.action.upper() == status.strip().upper()]
     return [
@@ -845,6 +876,8 @@ async def decide_approval(
 async def list_payslips(
     run_id: int | None = Query(default=None),
     employee_id: int | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -855,6 +888,8 @@ async def list_payslips(
         .join(PayrollRunLine, PayrollRunLine.id == PayrollPayslip.payroll_run_line_id)
         .where(PayrollPayslip.tenant_id == tenant.id, PayrollRunLine.tenant_id == tenant.id)
         .order_by(PayrollPayslip.generated_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
     rows = (await db.execute(stmt)).all()
     if run_id is not None:

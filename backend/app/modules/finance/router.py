@@ -8,7 +8,7 @@ import secrets
 from collections import defaultdict
 from io import StringIO
 from datetime import date, datetime, timedelta
-from typing import Literal
+from typing import Iterable, Literal
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
 from app.common.tenant import require_tenant
 from app.database import get_db
@@ -51,7 +52,6 @@ from app.models import (
     PurchaseOrder,
     PurchaseOrderItem,
     Quotation,
-    Role,
     Tenant,
     User,
     Voucher,
@@ -184,8 +184,8 @@ def _add_months(base_date: date, months: int) -> date:
     return date(year, month, day)
 
 
-async def _require_manager_or_admin(db: AsyncSession, user: User) -> None:
-    role = await db.get(Role, user.role_id)
+async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     role_name = (role.name if role else "").strip().lower()
     if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
         raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
@@ -340,6 +340,7 @@ class ChartAccountOut(ChartAccountBody):
     tenant_id: int
     balance: str
     enable_bill_wise: bool
+    version: int
 
     class Config:
         from_attributes = True
@@ -909,6 +910,7 @@ async def _find_or_create_ap_clearing_account(db: AsyncSession, tenant_id: int) 
         is_bank_account=False,
         account_currency="BDT",
         maintain_fc_balance=False,
+        version=1,
     )
     db.add(account)
     await db.flush()
@@ -969,6 +971,7 @@ async def _find_or_create_supplier_ap_account(db: AsyncSession, tenant_id: int, 
         is_bank_account=False,
         account_currency="BDT",
         maintain_fc_balance=False,
+        version=1,
     )
     db.add(account)
     await db.flush()
@@ -982,6 +985,32 @@ def _apply_voucher_impact(account: ChartOfAccount, entry_type: str, amount: floa
     else:
         current_balance += amount if entry_type == "CREDIT" else -amount
     account.balance = str(round(current_balance, 4))
+
+
+async def _lock_chart_accounts_for_subset(
+    db: AsyncSession,
+    tenant_id: int,
+    account_ids: Iterable[int],
+) -> dict[int, ChartOfAccount]:
+    """
+    Load ChartOfAccount rows with SELECT ... FOR UPDATE, ordered by id.
+
+    Ordering prevents deadlocks when two transactions post vouchers that share
+    accounts but would otherwise lock rows in different orders.
+    """
+    ids = sorted(set(account_ids))
+    if not ids:
+        return {}
+    result = await db.execute(
+        select(ChartOfAccount)
+        .where(
+            ChartOfAccount.tenant_id == tenant_id,
+            ChartOfAccount.id.in_(ids),
+        )
+        .order_by(ChartOfAccount.id)
+        .with_for_update()
+    )
+    return {a.id: a for a in result.scalars().all()}
 
 
 async def _active_voucher_type_codes(db: AsyncSession, tenant_id: int) -> set[str]:
@@ -1012,6 +1041,8 @@ def _assert_voucher_transition(current_status: str, next_status: str) -> None:
 
 @router.get("/account-groups", response_model=list[AccountGroupOut])
 async def list_account_groups(
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1021,12 +1052,15 @@ async def list_account_groups(
         select(AccountGroup)
         .where(AccountGroup.tenant_id == tenant.id)
         .order_by(AccountGroup.sort_order, AccountGroup.name)
+        .offset(offset).limit(limit)
     )
     return list(result.scalars().all())
 
 
 @router.get("/account-groups/hierarchy", response_model=list[AccountGroupHierarchyNode])
 async def list_account_groups_hierarchy(
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1037,6 +1071,7 @@ async def list_account_groups_hierarchy(
         select(AccountGroup)
         .where(AccountGroup.tenant_id == tenant.id)
         .order_by(AccountGroup.sort_order, AccountGroup.name)
+        .offset(offset).limit(limit)
     )
     groups = list(result.scalars().all())
     # Account count per group_id
@@ -1224,6 +1259,8 @@ async def seed_account_groups(
 @router.get("/chart-of-accounts", response_model=list[ChartAccountOut])
 async def list_chart_of_accounts(
     active_only: bool = Query(default=True),
+    limit: int = Query(default=5000, ge=1, le=20000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1236,7 +1273,7 @@ async def list_chart_of_accounts(
     )
     if active_only:
         stmt = stmt.where(ChartOfAccount.is_active.is_(True))
-    result = await db.execute(stmt)
+    result = await db.execute(stmt.offset(offset).limit(limit))
     return list(result.scalars().all())
 
 
@@ -1399,7 +1436,7 @@ async def put_coa_config(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     r = await db.execute(select(CoAConfig).where(CoAConfig.tenant_id == tenant.id))
     cfg = r.scalars().first()
     payload = body.model_dump()
@@ -1488,7 +1525,7 @@ async def coa_import(
 ):
     """Import Chart of Accounts from CSV. conflict: skip existing, update existing, or abort on first conflict."""
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     if conflict not in ("skip", "update", "abort"):
         raise HTTPException(status_code=400, detail="conflict must be skip, update, or abort")
     content = await file.read()
@@ -1663,6 +1700,7 @@ async def coa_import(
                 display_order=display_order,
                 statistical_unit=statistical_unit,
                 parent_account_id=parent_account_id,
+                version=1,
             )
             db.add(new_acct)
             await db.flush()
@@ -1678,6 +1716,8 @@ async def coa_import(
 @router.get("/vouchers/types", response_model=list[VoucherTypeOut])
 async def list_voucher_types(
     active_only: bool = Query(default=False),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1689,6 +1729,7 @@ async def list_voucher_types(
                 select(VoucherType)
                 .where(VoucherType.tenant_id == tenant.id)
                 .order_by(VoucherType.code.asc())
+                .offset(offset).limit(limit)
             )
         ).scalars().all()
     )
@@ -1718,7 +1759,7 @@ async def upsert_voucher_type(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     code = body.code.strip().upper()
     if not code:
         raise HTTPException(status_code=400, detail="Voucher type code is required")
@@ -1758,6 +1799,8 @@ async def list_vouchers(
     status_filter: str | None = Query(default=None),
     from_date: date | None = Query(default=None),
     to_date: date | None = Query(default=None),
+    limit: int = Query(default=5000, ge=1, le=20000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1770,7 +1813,7 @@ async def list_vouchers(
         stmt = stmt.where(Voucher.voucher_date >= from_date)
     if to_date:
         stmt = stmt.where(Voucher.voucher_date <= to_date)
-    result = await db.execute(stmt)
+    result = await db.execute(stmt.offset(offset).limit(limit))
     rows = list(result.scalars().all())
     return [await _voucher_out(db, row) for row in rows]
 
@@ -1868,6 +1911,8 @@ async def create_voucher(
                 detail=f"Posting not allowed to header account: {acct.account_number}",
             )
         grp = await db.get(AccountGroup, acct.group_id)
+        if grp and grp.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Account group not found")
         if grp and not getattr(grp, "allow_posting", True):
             raise HTTPException(
                 status_code=400,
@@ -1966,6 +2011,19 @@ async def update_voucher(
             center = await db.get(CostCenter, line.cost_center_id)
             if not center or center.tenant_id != tenant.id:
                 raise HTTPException(status_code=404, detail=f"Cost center not found: {line.cost_center_id}")
+        if getattr(acct, "account_type", "posting") == "header":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Posting not allowed to header account: {acct.account_number}",
+            )
+        grp = await db.get(AccountGroup, acct.group_id)
+        if grp and grp.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Account group not found")
+        if grp and not getattr(grp, "allow_posting", True):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Posting not allowed to accounts in group '{grp.name}' (summary/post-disabled).",
+            )
         line_currency = _normalize_currency(line.currency, default=txn_currency)
         line_rate = _to_float(line.exchange_rate) if line.exchange_rate is not None else exchange_rate_value
         if line_rate <= 0:
@@ -2036,7 +2094,7 @@ async def update_voucher_status(
         _assert_voucher_transition(row.status, next_status)
     # Approval + posting transitions are restricted.
     if next_status in {"CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REVERSED"} and next_status != row.status:
-        await _require_manager_or_admin(db, user)
+        await _require_manager_or_admin(db, user, tenant.id)
     if next_status == "POSTED" and row.status != "POSTED":
         open_period = (
             await db.execute(
@@ -2051,9 +2109,13 @@ async def update_voucher_status(
         if not open_period:
             raise HTTPException(status_code=400, detail="No open accounting period for this voucher date")
         lines_result = await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))
-        for line in lines_result.scalars().all():
-            account = await db.get(ChartOfAccount, line.account_id)
-            if not account or account.tenant_id != tenant.id:
+        line_rows = list(lines_result.scalars().all())
+        locked_accounts = await _lock_chart_accounts_for_subset(
+            db, tenant.id, (line.account_id for line in line_rows)
+        )
+        for line in line_rows:
+            account = locked_accounts.get(line.account_id)
+            if not account:
                 continue
             current_balance = _to_float(account.balance)
             amount = _to_float(line.amount)
@@ -2458,6 +2520,8 @@ async def cash_flow_statement(
 
 @router.get("/cash-forecast/scenarios", response_model=list[CashScenarioOut])
 async def list_cash_forecast_scenarios(
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -2467,6 +2531,7 @@ async def list_cash_forecast_scenarios(
         (
             await db.execute(
                 select(CashForecastScenario).where(CashForecastScenario.tenant_id == tenant.id).order_by(CashForecastScenario.id.desc())
+                .offset(offset).limit(limit)
             )
         ).scalars().all()
     )
@@ -2624,6 +2689,8 @@ async def cash_forecast_summary(
 @router.get("/fx-receipts", response_model=list[FxReceiptOut])
 async def list_fx_receipts(
     status_filter: str | None = Query(default=None),
+    limit: int = Query(default=5000, ge=1, le=20000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -2632,7 +2699,7 @@ async def list_fx_receipts(
     stmt = select(FxReceipt).where(FxReceipt.tenant_id == tenant.id).order_by(FxReceipt.id.desc())
     if status_filter:
         stmt = stmt.where(FxReceipt.status == status_filter.strip().upper())
-    return list((await db.execute(stmt)).scalars().all())
+    return list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
 
 
 @router.post("/fx-receipts", response_model=FxReceiptOut)
@@ -2784,6 +2851,8 @@ async def multi_currency_revaluation_summary(
 async def list_bills(
     bill_type: str | None = Query(default=None),
     status_filter: str | None = Query(default=None),
+    limit: int = Query(default=5000, ge=1, le=20000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -2794,7 +2863,7 @@ async def list_bills(
         stmt = stmt.where(OutstandingBill.bill_type == bill_type.strip().upper())
     if status_filter:
         stmt = stmt.where(OutstandingBill.status == status_filter.strip().upper())
-    return list((await db.execute(stmt)).scalars().all())
+    return list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
 
 
 @router.post("/bills", response_model=BillOut)
@@ -3038,6 +3107,8 @@ async def bills_aging(
     bill_type: str = Query(default="RECEIVABLE"),
     as_of_date: date | None = Query(default=None),
     party_name: str | None = Query(default=None),
+    limit: int = Query(default=5000, ge=1, le=20000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -3050,7 +3121,7 @@ async def bills_aging(
     )
     if party_name:
         stmt = stmt.where(func.lower(func.coalesce(OutstandingBill.party_name, "")).like(f"%{party_name.strip().lower()}%"))
-    rows = list(((await db.execute(stmt)).scalars().all()))
+    rows = list(((await db.execute(stmt.offset(offset).limit(limit))).scalars().all()))
     buckets = {"current": 0.0, "1_30": 0.0, "31_60": 0.0, "61_90": 0.0, "90_plus": 0.0}
     lines = []
     for row in rows:
@@ -3086,6 +3157,8 @@ async def bills_aging(
 @router.get("/cost-centers", response_model=list[CostCenterOut])
 async def list_cost_centers(
     active_only: bool = Query(default=True),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -3094,7 +3167,7 @@ async def list_cost_centers(
     stmt = select(CostCenter).where(CostCenter.tenant_id == tenant.id).order_by(CostCenter.center_code)
     if active_only:
         stmt = stmt.where(CostCenter.is_active.is_(True))
-    return list((await db.execute(stmt)).scalars().all())
+    return list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
 
 
 @router.post("/cost-centers", response_model=CostCenterOut)
@@ -3176,6 +3249,8 @@ async def cost_center_dashboard(
 @router.get("/budgets", response_model=list[BudgetOut])
 async def list_budgets(
     fiscal_year: str | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -3184,7 +3259,7 @@ async def list_budgets(
     stmt = select(Budget).where(Budget.tenant_id == tenant.id).order_by(Budget.id.desc())
     if fiscal_year:
         stmt = stmt.where(Budget.fiscal_year == fiscal_year)
-    rows = list((await db.execute(stmt)).scalars().all())
+    rows = list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
     return [await _budget_out(db, row) for row in rows]
 
 
@@ -3280,6 +3355,8 @@ async def budget_vs_actual(
 @router.get("/banking/accounts", response_model=list[BankAccountOut])
 async def list_bank_accounts(
     active_only: bool = Query(default=True),
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -3288,7 +3365,7 @@ async def list_bank_accounts(
     stmt = select(BankAccount).where(BankAccount.tenant_id == tenant.id).order_by(BankAccount.id.desc())
     if active_only:
         stmt = stmt.where(BankAccount.is_active.is_(True))
-    return list((await db.execute(stmt)).scalars().all())
+    return list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
 
 
 @router.post("/banking/accounts", response_model=BankAccountOut)
@@ -3328,6 +3405,8 @@ async def update_bank_account(
 @router.get("/banking/reconciliation", response_model=list[BankReconciliationOut])
 async def list_bank_reconciliations(
     bank_account_id: int | None = Query(default=None),
+    limit: int = Query(default=5000, ge=1, le=20000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -3336,7 +3415,7 @@ async def list_bank_reconciliations(
     stmt = select(BankReconciliation).where(BankReconciliation.tenant_id == tenant.id).order_by(BankReconciliation.id.desc())
     if bank_account_id is not None:
         stmt = stmt.where(BankReconciliation.bank_account_id == bank_account_id)
-    return list((await db.execute(stmt)).scalars().all())
+    return list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
 
 
 @router.post("/banking/reconciliation", response_model=BankReconciliationOut)
@@ -3398,7 +3477,7 @@ async def finalize_bank_reconciliation(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     recon = await db.get(BankReconciliation, recon_id)
     if not recon or recon.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Reconciliation not found")
@@ -3416,6 +3495,8 @@ async def finalize_bank_reconciliation(
 @router.get("/banking/reconciliation/{recon_id}/match-logs", response_model=list[BankStatementMatchLogOut])
 async def list_bank_statement_match_logs(
     recon_id: int,
+    limit: int = Query(default=5000, ge=1, le=20000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -3430,6 +3511,7 @@ async def list_bank_statement_match_logs(
                 select(BankStatementMatchLog)
                 .where(BankStatementMatchLog.reconciliation_id == recon_id)
                 .order_by(BankStatementMatchLog.id.desc())
+                .offset(offset).limit(limit)
             )
         ).scalars().all()
     )
@@ -3482,6 +3564,8 @@ async def export_bank_statement_match_logs_csv(
 @router.get("/banking/reconciliation/{recon_id}/statement-lines", response_model=list[BankStatementLineOut])
 async def list_statement_lines(
     recon_id: int,
+    limit: int = Query(default=5000, ge=1, le=20000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -3496,6 +3580,7 @@ async def list_statement_lines(
                 select(BankStatementLine)
                 .where(BankStatementLine.reconciliation_id == recon_id)
                 .order_by(BankStatementLine.transaction_date, BankStatementLine.id)
+                .offset(offset).limit(limit)
             )
         ).scalars().all()
     )
@@ -3805,6 +3890,8 @@ async def auto_match_statement_lines(
 @router.get("/banking/payment-runs", response_model=list[PaymentRunOut])
 async def list_payment_runs(
     status_filter: str | None = Query(default=None),
+    limit: int = Query(default=5000, ge=1, le=20000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -3813,7 +3900,7 @@ async def list_payment_runs(
     stmt = select(PaymentRun).where(PaymentRun.tenant_id == tenant.id).order_by(PaymentRun.id.desc())
     if status_filter:
         stmt = stmt.where(PaymentRun.status == status_filter.strip().upper())
-    runs = list((await db.execute(stmt)).scalars().all())
+    runs = list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
     return [await _payment_run_out(db, run) for run in runs]
 
 
@@ -3928,7 +4015,7 @@ async def execute_payment_run(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     run_result = await db.execute(
         select(PaymentRun)
         .where(PaymentRun.id == run_id, PaymentRun.tenant_id == tenant.id)
@@ -3973,13 +4060,28 @@ async def execute_payment_run(
         if not open_period:
             raise HTTPException(status_code=400, detail="No open accounting period for this payment run date")
 
-        bank_gl = await db.get(ChartOfAccount, bank.gl_account_id)
-        if not bank_gl or bank_gl.tenant_id != tenant.id:
+        bank_gl_probe = await db.get(ChartOfAccount, bank.gl_account_id)
+        if not bank_gl_probe or bank_gl_probe.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail="Bank GL account is missing or invalid")
         party_totals: dict[str, float] = defaultdict(float)
         for item in items:
             party = (item.party_name or "").strip() or "Unknown Supplier"
             party_totals[party] += _to_float(item.base_amount)
+
+        # Ensure supplier AP accounts exist, then lock all touched GL accounts before updating balances.
+        supplier_party_lines: list[tuple[str, float, ChartOfAccount]] = []
+        for party_name, amount in party_totals.items():
+            rounded_amount = round(amount, 2)
+            if rounded_amount <= 0:
+                continue
+            supplier_ap = await _find_or_create_supplier_ap_account(db, tenant.id, party_name)
+            supplier_party_lines.append((party_name, rounded_amount, supplier_ap))
+
+        lock_ids = [bank_gl_probe.id] + [ap.id for _, _, ap in supplier_party_lines]
+        locked_gl = await _lock_chart_accounts_for_subset(db, tenant.id, lock_ids)
+        bank_gl = locked_gl.get(bank_gl_probe.id)
+        if not bank_gl:
+            raise HTTPException(status_code=400, detail="Bank GL account is missing or invalid")
 
         voucher = Voucher(
             tenant_id=tenant.id,
@@ -4001,23 +4103,22 @@ async def execute_payment_run(
         await db.flush()
 
         total_amount = round(_to_float(run.total_amount), 2)
-        for party_name, amount in party_totals.items():
-            rounded_amount = round(amount, 2)
-            if rounded_amount <= 0:
+        for party_name, rounded_amount, supplier_ap in supplier_party_lines:
+            acct = locked_gl.get(supplier_ap.id)
+            if not acct:
                 continue
-            supplier_ap = await _find_or_create_supplier_ap_account(db, tenant.id, party_name)
             db.add(
                 VoucherLine(
                     tenant_id=tenant.id,
                     voucher_id=voucher.id,
-                    account_id=supplier_ap.id,
+                    account_id=acct.id,
                     cost_center_id=None,
                     entry_type="DEBIT",
                     amount=str(rounded_amount),
                     notes=f"Payment run {run.run_code} - {party_name} ({run.base_currency})",
                 )
             )
-            _apply_voucher_impact(supplier_ap, "DEBIT", rounded_amount)
+            _apply_voucher_impact(acct, "DEBIT", rounded_amount)
 
         credit_line = VoucherLine(
             tenant_id=tenant.id,
@@ -4035,11 +4136,12 @@ async def execute_payment_run(
         item.status = "PAID"
         if item.bill_id:
             bill = await db.get(OutstandingBill, item.bill_id)
-            if bill and bill.tenant_id == tenant.id:
-                paid = _to_float(bill.paid_amount) + _to_float(item.amount)
-                total = _to_float(bill.amount)
-                bill.paid_amount = str(round(min(paid, total), 2))
-                bill.status = "PAID" if paid >= total else "PARTIAL"
+            if not bill or bill.tenant_id != tenant.id:
+                raise HTTPException(status_code=404, detail=f"Bill not found: {item.bill_id}")
+            paid = _to_float(bill.paid_amount) + _to_float(item.amount)
+            total = _to_float(bill.amount)
+            bill.paid_amount = str(round(min(paid, total), 2))
+            bill.status = "PAID" if paid >= total else "PARTIAL"
     if bank and bank.tenant_id == tenant.id:
         bank.current_balance = str(round(_to_float(bank.current_balance) - _to_float(run.total_amount), 2))
     run.status = "EXECUTED"
@@ -4621,7 +4723,7 @@ async def backfill_voucher_signatures(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     unsigned = list(
         (
             await db.execute(
@@ -4645,6 +4747,8 @@ async def backfill_voucher_signatures(
 
 @router.get("/accounting-periods", response_model=list[AccountingPeriodOut])
 async def list_accounting_periods(
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -4654,6 +4758,7 @@ async def list_accounting_periods(
         (
             await db.execute(
                 select(AccountingPeriod).where(AccountingPeriod.tenant_id == tenant.id).order_by(AccountingPeriod.start_date.desc())
+                .offset(offset).limit(limit)
             )
         ).scalars().all()
     )
@@ -4701,7 +4806,7 @@ async def close_accounting_period(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await db.get(AccountingPeriod, period_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Accounting period not found")
@@ -4780,7 +4885,7 @@ async def voucher_available_actions(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    role = await db.get(Role, user.role_id)
+    role = await get_user_role_scoped_to_tenant(db, user, tenant.id)
     role_name = (role.name if role else "").strip().lower()
     is_privileged = role_name in {"admin", "manager", "super_admin", "superadmin", "owner"}
     voucher = await db.get(Voucher, voucher_id)
@@ -4828,16 +4933,19 @@ async def cancel_posted_voucher(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     voucher = await db.get(Voucher, voucher_id)
     if not voucher or voucher.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher not found")
     if voucher.status != "POSTED":
         raise HTTPException(status_code=400, detail="Only posted vouchers can cancel posting")
     lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all())
+    locked_accounts = await _lock_chart_accounts_for_subset(
+        db, tenant.id, (line.account_id for line in lines)
+    )
     for line in lines:
-        account = await db.get(ChartOfAccount, line.account_id)
-        if not account or account.tenant_id != tenant.id:
+        account = locked_accounts.get(line.account_id)
+        if not account:
             continue
         # Reverse the previously posted effect.
         reverse_entry = "CREDIT" if line.entry_type == "DEBIT" else "DEBIT"
@@ -4861,11 +4969,14 @@ async def reverse_voucher(
         raise HTTPException(status_code=404, detail="Voucher not found")
     if src.status != "POSTED":
         raise HTTPException(status_code=400, detail="Only posted vouchers can be reversed")
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
 
     source_lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == src.id))).scalars().all())
     if not source_lines:
         raise HTTPException(status_code=400, detail="Voucher has no lines")
+    locked_accounts = await _lock_chart_accounts_for_subset(
+        db, tenant.id, (line.account_id for line in source_lines)
+    )
     rev = Voucher(
         tenant_id=tenant.id,
         voucher_number=await next_tenant_code(
@@ -4897,8 +5008,8 @@ async def reverse_voucher(
                 notes=f"Reversal line of voucher {src.voucher_number}",
             )
         )
-        account = await db.get(ChartOfAccount, line.account_id)
-        if account and account.tenant_id == tenant.id:
+        account = locked_accounts.get(line.account_id)
+        if account:
             _apply_voucher_impact(account, flipped, _to_float(line.amount))
     src.status = "REVERSED"
     await db.flush()
@@ -5001,7 +5112,7 @@ async def approve_payment_run(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     run = await db.get(PaymentRun, run_id)
     if not run or run.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Payment run not found")
@@ -5021,7 +5132,7 @@ async def process_payment_run(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     run = await db.get(PaymentRun, run_id)
     if not run or run.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Payment run not found")
@@ -5041,7 +5152,7 @@ async def reopen_accounting_period(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await db.get(AccountingPeriod, period_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Accounting period not found")
@@ -5085,7 +5196,7 @@ async def delete_accounting_period(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await db.get(AccountingPeriod, period_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Accounting period not found")
@@ -5338,6 +5449,8 @@ async def list_bill_references(
     status_filter: str | None = Query(default=None),
     account_id: int | None = Query(default=None),
     search: str | None = Query(default=None),
+    limit: int = Query(default=5000, ge=1, le=20000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -5356,7 +5469,7 @@ async def list_bill_references(
             func.lower(BillReference.bill_number).like(q)
             | func.lower(BillReference.party_name).like(q)
         )
-    rows = list((await db.execute(stmt)).scalars().all())
+    rows = list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
     out = []
     for r in rows:
         acct = await db.get(ChartOfAccount, r.account_id)
@@ -5450,6 +5563,8 @@ async def get_bill_reference_detail(
     alloc_out = []
     for a in allocs:
         v = await db.get(Voucher, a.voucher_id) if a.voucher_id else None
+        if v is not None and v.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Voucher not found for allocation")
         alloc_out.append({
             "id": a.id,
             "allocation_type": a.allocation_type,
@@ -5572,6 +5687,8 @@ async def auto_create_bill_refs_from_voucher(
         if not acct or not acct.enable_bill_wise:
             continue
         group = await db.get(AccountGroup, acct.group_id) if acct.group_id else None
+        if group and group.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Account group not found")
         is_creditor = False
         if group:
             gn = (group.name or "").lower()

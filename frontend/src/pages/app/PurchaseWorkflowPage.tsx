@@ -15,6 +15,13 @@ export function PurchaseWorkflowPage() {
   const [receivedGrnRows, setReceivedGrnRows] = useState<GoodsReceivingResponse[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [openActionsKey, setOpenActionsKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    const close = () => setOpenActionsKey(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, []);
 
   async function load() {
     try {
@@ -153,7 +160,7 @@ export function PurchaseWorkflowPage() {
               <th className="px-2 py-1 text-right">FX</th>
               <th className="px-2 py-1 text-right">Base Total</th>
               <th className="px-2 py-1">Status</th>
-              <th className="px-2 py-1">Action</th>
+              <th className="px-2 py-1 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -170,10 +177,35 @@ export function PurchaseWorkflowPage() {
                   {po.base_total_amount != null ? Number(po.base_total_amount).toLocaleString() : "—"}
                 </td>
                 <td className="px-2 py-1">{po.status}</td>
-                <td className="px-2 py-1">
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => void createPayable(po)}>
-                    Create AP Bill
-                  </button>
+                <td className="px-2 py-1 text-right">
+                  <div className="relative inline-block text-left">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const k = `po:${po.id}`;
+                        setOpenActionsKey((prev) => (prev === k ? null : k));
+                      }}
+                    >
+                      Actions
+                    </button>
+                    {openActionsKey === `po:${po.id}` && (
+                      <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                        <button
+                          type="button"
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenActionsKey(null);
+                            void createPayable(po);
+                          }}
+                        >
+                          Create AP bill
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -193,7 +225,7 @@ export function PurchaseWorkflowPage() {
               <th className="px-2 py-1">Received Date</th>
               <th className="px-2 py-1">PO Currency</th>
               <th className="px-2 py-1">Status</th>
-              <th className="px-2 py-1">Action</th>
+              <th className="px-2 py-1 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -204,10 +236,35 @@ export function PurchaseWorkflowPage() {
                 <td className="px-2 py-1">{grn.received_date ?? "-"}</td>
                 <td className="px-2 py-1">{grn.purchase_order_id ? poById.get(grn.purchase_order_id)?.currency ?? "BDT" : "BDT"}</td>
                 <td className="px-2 py-1">{grn.status}</td>
-                <td className="px-2 py-1">
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => void createPayableFromGrn(grn)}>
-                    Create AP Bill
-                  </button>
+                <td className="px-2 py-1 text-right">
+                  <div className="relative inline-block text-left">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const k = `grn:${grn.id}`;
+                        setOpenActionsKey((prev) => (prev === k ? null : k));
+                      }}
+                    >
+                      Actions
+                    </button>
+                    {openActionsKey === `grn:${grn.id}` && (
+                      <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                        <button
+                          type="button"
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenActionsKey(null);
+                            void createPayableFromGrn(grn);
+                          }}
+                        >
+                          Create AP bill
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

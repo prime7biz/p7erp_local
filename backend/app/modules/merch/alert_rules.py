@@ -346,6 +346,8 @@ async def rule_trim_overconsumption_above(
             if not item or item.tenant_id != tenant_id:
                 continue
             cat = await db.get(ItemCategory, item.category_id) if item.category_id else None
+            if cat and cat.tenant_id != tenant_id:
+                cat = None
             if not _is_trim_category(cat):
                 continue
             base = _to_float(line.base_consumption)

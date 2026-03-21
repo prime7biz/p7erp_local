@@ -5,6 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -14,7 +16,6 @@ from app.models import (
     Interview,
     JobRequisition,
     Offer,
-    Role,
     Tenant,
     User,
 )
@@ -41,8 +42,8 @@ def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
 
-async def _require_manager_or_admin(db: AsyncSession, user: User) -> None:
-    role = await db.get(Role, user.role_id)
+async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     role_name = (role.name if role else "").strip().lower()
     if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
         raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
@@ -168,6 +169,8 @@ def _offer_to_response(row: Offer) -> OfferResponse:
 @router.get("/requisitions", response_model=list[RequisitionResponse])
 async def list_requisitions(
     status_filter: str | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -176,7 +179,7 @@ async def list_requisitions(
     stmt = select(JobRequisition).where(JobRequisition.tenant_id == tenant.id)
     if status_filter and status_filter.strip():
         stmt = stmt.where(JobRequisition.status == status_filter.strip().lower())
-    stmt = stmt.order_by(JobRequisition.created_at.desc())
+    stmt = stmt.order_by(JobRequisition.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     return [_requisition_to_response(row) for row in result.scalars().all()]
 
@@ -189,7 +192,7 @@ async def create_requisition(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     requester = await _get_employee_by_user(db, tenant.id, user.id)
     if body.department_id is not None:
         department = await db.get(Department, body.department_id)
@@ -228,7 +231,7 @@ async def update_requisition_status(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await _get_requisition_or_404(db, tenant.id, requisition_id)
     next_status = body.status.strip().lower()
     row.status = next_status
@@ -245,6 +248,8 @@ async def update_requisition_status(
 async def list_candidates(
     requisition_id: int | None = Query(default=None),
     stage: str | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -255,7 +260,7 @@ async def list_candidates(
         stmt = stmt.where(Candidate.requisition_id == requisition_id)
     if stage and stage.strip():
         stmt = stmt.where(Candidate.stage == stage.strip().lower())
-    stmt = stmt.order_by(Candidate.created_at.desc())
+    stmt = stmt.order_by(Candidate.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     return [_candidate_to_response(row) for row in result.scalars().all()]
 
@@ -301,7 +306,7 @@ async def update_candidate_stage(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await _get_candidate_or_404(db, tenant.id, candidate_id)
     row.stage = body.stage.strip().lower()
     if body.status is not None:
@@ -314,6 +319,8 @@ async def update_candidate_stage(
 @router.get("/interviews", response_model=list[InterviewResponse])
 async def list_interviews(
     candidate_id: int | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -322,7 +329,7 @@ async def list_interviews(
     stmt = select(Interview).where(Interview.tenant_id == tenant.id)
     if candidate_id is not None:
         stmt = stmt.where(Interview.candidate_id == candidate_id)
-    stmt = stmt.order_by(Interview.scheduled_at.desc())
+    stmt = stmt.order_by(Interview.scheduled_at.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     return [_interview_to_response(row) for row in result.scalars().all()]
 
@@ -335,7 +342,7 @@ async def create_interview(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     await _get_candidate_or_404(db, tenant.id, body.candidate_id)
     if body.requisition_id is not None:
         await _get_requisition_or_404(db, tenant.id, body.requisition_id)
@@ -372,7 +379,7 @@ async def update_interview_status(
     row = await _get_interview_or_404(db, tenant.id, interview_id)
     is_interviewer = row.interviewer_user_id == user.id
     if not is_interviewer:
-        await _require_manager_or_admin(db, user)
+        await _require_manager_or_admin(db, user, tenant.id)
     row.status = body.status.strip().lower()
     if body.feedback is not None:
         row.feedback = body.feedback.strip() if body.feedback else None
@@ -386,6 +393,8 @@ async def update_interview_status(
 @router.get("/offers", response_model=list[OfferResponse])
 async def list_offers(
     candidate_id: int | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -394,7 +403,7 @@ async def list_offers(
     stmt = select(Offer).where(Offer.tenant_id == tenant.id)
     if candidate_id is not None:
         stmt = stmt.where(Offer.candidate_id == candidate_id)
-    stmt = stmt.order_by(Offer.created_at.desc())
+    stmt = stmt.order_by(Offer.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     return [_offer_to_response(row) for row in result.scalars().all()]
 
@@ -407,7 +416,7 @@ async def create_offer(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     await _get_candidate_or_404(db, tenant.id, body.candidate_id)
     if body.requisition_id is not None:
         await _get_requisition_or_404(db, tenant.id, body.requisition_id)
@@ -437,7 +446,7 @@ async def update_offer_status(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await _get_offer_or_404(db, tenant.id, offer_id)
     next_status = body.status.strip().lower()
     row.status = next_status

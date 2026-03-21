@@ -57,7 +57,10 @@ export interface NavItem {
   icon: LucideIcon;
   label: string;
   href: string;
+  /** When true, only `pathname === href` counts as active (not implemented in Layout for all items — see `isSidebarNavItemActive`). */
   exact?: boolean;
+  /** Small label e.g. "Soon" for routes not yet implemented. */
+  badge?: string;
   visibleFor?: TenantTypeFilter[];
 }
 
@@ -81,6 +84,16 @@ export interface BottomNavItem {
 }
 
 const PREFIX = "/app";
+
+/** Active state for sidebar links: avoids `/app/inventory` matching every inventory sub-route. */
+export function isSidebarNavItemActive(pathname: string, href: string): boolean {
+  if (pathname === href) return true;
+  if (href === `${PREFIX}/inventory`) {
+    return pathname === `${PREFIX}/inventory/items`;
+  }
+  if (href !== PREFIX && pathname.startsWith(`${href}/`)) return true;
+  return false;
+}
 
 export const menuSections: MenuSection[] = [
   {
@@ -136,14 +149,18 @@ export const menuSections: MenuSection[] = [
       { icon: Factory, label: "Process Orders", href: `${PREFIX}/inventory/process-orders` },
       { icon: Factory, label: "Manufacturing Orders", href: `${PREFIX}/inventory/manufacturing-orders` },
       { icon: ArrowRightLeft, label: "Transfers", href: `${PREFIX}/inventory/warehouse-transfers` },
-      { icon: ClipboardList, label: "Adjustments", href: `${PREFIX}/inventory/stock-adjustments/new` },
+      {
+        icon: ClipboardList,
+        label: "Adjustments",
+        href: `${PREFIX}/inventory/stock-adjustments`,
+      },
       { icon: Shield, label: "Consumption Control", href: `${PREFIX}/inventory/consumption-control` },
       { icon: FileBarChart, label: "Reconciliation", href: `${PREFIX}/inventory/reconciliation` },
       { icon: BarChart3, label: "Stock Summary", href: `${PREFIX}/inventory/stock-summary` },
       { icon: Activity, label: "Dashboard", href: `${PREFIX}/inventory/stock-dashboard` },
       { icon: FileBarChart, label: "Ledger", href: `${PREFIX}/inventory/stock-ledger` },
       { icon: DollarSign, label: "Valuation", href: `${PREFIX}/inventory/stock-valuation` },
-      { icon: Package, label: "Lot Traceability", href: `${PREFIX}/inventory/lots` },
+      { icon: Package, label: "Lot Traceability", href: `${PREFIX}/inventory/lots`, badge: "Soon" },
       { icon: Truck, label: "Delivery Challans", href: `${PREFIX}/inventory/delivery-challans` },
       { icon: Shield, label: "Gate Passes", href: `${PREFIX}/inventory/enhanced-gate-passes` },
     ],
@@ -271,6 +288,7 @@ export const menuSections: MenuSection[] = [
     items: [
       { icon: BarChart3, label: "Analytics", href: `${PREFIX}/reports` },
       { icon: Shirt, label: "Merchandising", href: `${PREFIX}/reports/merchandising` },
+      { icon: Shirt, label: "Style 360", href: `${PREFIX}/reports/style-360` },
       { icon: ShoppingCart, label: "Purchase Orders", href: `${PREFIX}/reports/purchase-orders` },
       { icon: PackageCheck, label: "GRN Summary", href: `${PREFIX}/reports/grn` },
       { icon: FileText, label: "Sales Orders", href: `${PREFIX}/reports/sales-orders` },

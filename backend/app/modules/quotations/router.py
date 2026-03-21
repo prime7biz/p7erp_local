@@ -10,6 +10,7 @@ from sqlalchemy import delete
 
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
+from app.common.db_errors import flush_handling_duplicate_document_code
 from app.common.tenant import require_tenant
 from app.common.workflow import (
   INQUIRY_TRANSITIONS,
@@ -326,7 +327,7 @@ async def revise_quotation(
     notes=quotation.notes,
   )
   db.add(revised)
-  await db.flush()
+  await flush_handling_duplicate_document_code(db)
   await db.refresh(revised)
   return _to_quotation_response(revised)
 
@@ -434,7 +435,7 @@ async def create_quotation_from_inquiry(
       notes=f"Converted to quotation {code}",
     )
   )
-  await db.flush()
+  await flush_handling_duplicate_document_code(db)
   await db.refresh(quotation)
 
   return _to_quotation_response(quotation)
@@ -495,7 +496,7 @@ async def create_quotation(
     notes=body.notes,
   )
   db.add(quotation)
-  await db.flush()
+  await flush_handling_duplicate_document_code(db)
   await db.refresh(quotation)
   return _to_quotation_response(quotation)
 

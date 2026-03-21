@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
+from app.common.pagination import MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import Customer, Tenant, User
@@ -124,11 +125,17 @@ async def list_customers(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=MAX_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Max rows (Finding #3); use /paginated for full paging"),
+    offset: int = Query(default=0, ge=0),
 ):
-    """List all customers for the current tenant."""
+    """List customers for the current tenant (capped). Prefer GET /customers/paginated for UI lists."""
     _ensure_user_tenant(user, tenant)
     result = await db.execute(
-        select(Customer).where(Customer.tenant_id == tenant.id).order_by(Customer.customer_code)
+        select(Customer)
+        .where(Customer.tenant_id == tenant.id)
+        .order_by(Customer.customer_code)
+        .limit(limit)
+        .offset(offset)
     )
     customers = result.scalars().all()
     return [_customer_to_response(c) for c in customers]
@@ -142,7 +149,7 @@ async def list_customers_paginated(
     country: str | None = Query(default=None, description="Filter by billing country/country"),
     customer_type: str | None = Query(default=None, description="Filter by customer type"),
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=10, ge=1, le=100),
+    page_size: int = Query(default=10, ge=1, le=MAX_PAGE_SIZE, description="Max rows per page (Finding #3)"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

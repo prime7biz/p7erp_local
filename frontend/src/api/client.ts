@@ -28,6 +28,15 @@ export interface TenantResponse {
   tenant_type: TenantType;
   company_code: string | null;
   is_active: boolean;
+  allow_negative_stock?: boolean;
+  default_rm_warehouse_id?: number | null;
+  default_fg_warehouse_id?: number | null;
+}
+
+export interface TenantInventoryPatch {
+  allow_negative_stock?: boolean;
+  default_rm_warehouse_id?: number | null;
+  default_fg_warehouse_id?: number | null;
 }
 
 export interface SettingsConfigResponse {
@@ -574,6 +583,25 @@ export function clearAuth(): void {
   localStorage.removeItem("p7_tenant_id");
 }
 
+/**
+ * JWT expired or rejected while a token was sent. Clears auth; redirects to login when on `/app/*`.
+ * Does not redirect on `/login` or `/signup` (wrong password / stale token during sign-in).
+ * See docs/PRE_PRODUCTION_AUDIT.md Finding #5.
+ */
+function handleSessionExpiredUnauthorized(sentAuthorization: boolean): void {
+  if (!sentAuthorization) return;
+  clearAuth();
+  try {
+    const path = window.location.pathname;
+    if (path === "/login" || path === "/signup") return;
+    if (!path.startsWith("/app")) return;
+    const next = path + window.location.search;
+    window.location.replace(`/login?reason=session_expired&next=${encodeURIComponent(next)}`);
+  } catch {
+    window.location.replace("/login?reason=session_expired");
+  }
+}
+
 export class ApiError extends Error {
   status: number;
   requestId: string | null;
@@ -583,6 +611,30 @@ export class ApiError extends Error {
     this.status = status;
     this.requestId = requestId;
   }
+}
+
+/** Standard shape for paginated list endpoints (Finding #3). */
+export interface PaginatedRows<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+async function fetchAllPaginated<T>(
+  fetchPage: (page: number, pageSize: number) => Promise<PaginatedRows<T>>,
+  pageSize = 500,
+): Promise<T[]> {
+  const out: T[] = [];
+  let page = 1;
+  while (true) {
+    const r = await fetchPage(page, pageSize);
+    out.push(...r.items);
+    if (page >= r.total_pages || r.items.length === 0) break;
+    page += 1;
+  }
+  return out;
 }
 
 async function request<T>(
@@ -599,8 +651,10 @@ async function request<T>(
   if (tid) headers["X-Tenant-Id"] = String(tid);
   const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
+  const sentAuthorization = Boolean(token);
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!res.ok) {
+    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     const raw = err as { detail?: string | { msg?: string }[]; message?: string };
     const d = raw.detail;
@@ -644,8 +698,10 @@ async function requestBlob(
   if (tid) headers["X-Tenant-Id"] = String(tid);
   const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
+  const sentAuthorization = Boolean(token);
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!res.ok) {
+    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     const raw = err as { detail?: string };
     const message = typeof raw.detail === "string" ? raw.detail : "Export failed";
@@ -667,8 +723,10 @@ async function requestText(
   if (tid) headers["X-Tenant-Id"] = String(tid);
   const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
+  const sentAuthorization = Boolean(token);
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!res.ok) {
+    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     const raw = err as { detail?: string | { msg?: string }[]; message?: string };
     const d = raw.detail;
@@ -907,6 +965,8 @@ export const api = {
     password: string;
     first_name?: string;
     last_name?: string;
+    /** When server sets BOOTSTRAP_REGISTRATION_KEY, first user must supply this (Finding #4). */
+    bootstrap_key?: string;
   }): Promise<unknown> {
     return request("/api/v1/auth/register", { method: "POST", body: JSON.stringify(data) });
   },
@@ -920,6 +980,15 @@ export const api = {
     const tid = getTenantId();
     if (!tid) throw new Error("No tenant");
     return request<TenantResponse>("/api/v1/tenants/me", { tenantId: Number(tid) });
+  },
+  async patchTenantInventory(data: TenantInventoryPatch): Promise<TenantResponse> {
+    const tid = getTenantId();
+    if (!tid) throw new Error("No tenant");
+    return request<TenantResponse>("/api/v1/tenants/me/inventory", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+      tenantId: Number(tid),
+    });
   },
   async listUsers(): Promise<UserWithRoleResponse[]> {
     return request<UserWithRoleResponse[]>("/api/v1/users");
@@ -1146,7 +1215,12 @@ export const api = {
     });
   },
   async listCustomers(): Promise<CustomerResponse[]> {
-    return request<CustomerResponse[]>("/api/v1/customers");
+    return fetchAllPaginated(async (page, pageSize) => {
+      const q = new URLSearchParams();
+      q.set("page", String(page));
+      q.set("page_size", String(pageSize));
+      return request<CustomerListPageResponse>(`/api/v1/customers/paginated?${q.toString()}`);
+    }, 200);
   },
   async listCustomersPaginated(params?: {
     q?: string;
@@ -1852,11 +1926,14 @@ export const api = {
     return request<void>(`/api/v1/inventory/item-units/${id}`, { method: "DELETE" });
   },
   async listInventoryItems(params?: { category_id?: number; subcategory_id?: number }): Promise<InventoryItemResponse[]> {
-    const q = new URLSearchParams();
-    if (params?.category_id != null) q.set("category_id", String(params.category_id));
-    if (params?.subcategory_id != null) q.set("subcategory_id", String(params.subcategory_id));
-    const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<InventoryItemResponse[]>(`/api/v1/inventory/items${suffix}`);
+    return fetchAllPaginated(async (page, pageSize) => {
+      const q = new URLSearchParams();
+      if (params?.category_id != null) q.set("category_id", String(params.category_id));
+      if (params?.subcategory_id != null) q.set("subcategory_id", String(params.subcategory_id));
+      q.set("page", String(page));
+      q.set("page_size", String(pageSize));
+      return request<PaginatedRows<InventoryItemResponse>>(`/api/v1/inventory/items?${q.toString()}`);
+    });
   },
   async createInventoryItem(data: InventoryItemCreate): Promise<InventoryItemResponse> {
     return request<InventoryItemResponse>("/api/v1/inventory/items", {
@@ -1899,15 +1976,18 @@ export const api = {
     ledger_id?: number;
     has_ledger?: boolean;
   }): Promise<VendorResponse[]> {
-    const q = new URLSearchParams();
-    if (params?.search) q.set("search", params.search);
-    if (params?.is_active !== undefined) q.set("is_active", String(params.is_active));
-    if (params?.vendor_type) q.set("vendor_type", params.vendor_type);
-    if (params?.currency) q.set("currency", params.currency);
-    if (params?.ledger_id != null) q.set("ledger_id", String(params.ledger_id));
-    if (params?.has_ledger !== undefined) q.set("has_ledger", String(params.has_ledger));
-    const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<VendorResponse[]>(`/api/v1/inventory/vendors${suffix}`);
+    return fetchAllPaginated(async (page, pageSize) => {
+      const q = new URLSearchParams();
+      if (params?.search) q.set("search", params.search);
+      if (params?.is_active !== undefined) q.set("is_active", String(params.is_active));
+      if (params?.vendor_type) q.set("vendor_type", params.vendor_type);
+      if (params?.currency) q.set("currency", params.currency);
+      if (params?.ledger_id != null) q.set("ledger_id", String(params.ledger_id));
+      if (params?.has_ledger !== undefined) q.set("has_ledger", String(params.has_ledger));
+      q.set("page", String(page));
+      q.set("page_size", String(pageSize));
+      return request<PaginatedRows<VendorResponse>>(`/api/v1/inventory/vendors?${q.toString()}`);
+    });
   },
   async getVendor(id: number): Promise<VendorResponse> {
     return request<VendorResponse>(`/api/v1/inventory/vendors/${id}`);
@@ -1945,13 +2025,25 @@ export const api = {
   async deleteStockGroup(id: number): Promise<void> {
     return request<void>(`/api/v1/inventory/stock-groups/${id}`, { method: "DELETE" });
   },
-  async listPurchaseOrders(params?: { status_filter?: string; date_from?: string; date_to?: string }): Promise<PurchaseOrderResponse[]> {
-    const q = new URLSearchParams();
-    if (params?.status_filter) q.set("status_filter", params.status_filter);
-    if (params?.date_from) q.set("date_from", params.date_from);
-    if (params?.date_to) q.set("date_to", params.date_to);
-    const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<PurchaseOrderResponse[]>(`/api/v1/inventory/purchase-orders${suffix}`);
+  async getPurchaseOrder(id: number): Promise<PurchaseOrderResponse> {
+    return request<PurchaseOrderResponse>(`/api/v1/inventory/purchase-orders/${id}`);
+  },
+  async listPurchaseOrders(params?: {
+    status_filter?: string;
+    date_from?: string;
+    date_to?: string;
+    source_bom_id?: number;
+  }): Promise<PurchaseOrderResponse[]> {
+    return fetchAllPaginated(async (page, pageSize) => {
+      const q = new URLSearchParams();
+      if (params?.status_filter) q.set("status_filter", params.status_filter);
+      if (params?.date_from) q.set("date_from", params.date_from);
+      if (params?.date_to) q.set("date_to", params.date_to);
+      if (params?.source_bom_id != null) q.set("source_bom_id", String(params.source_bom_id));
+      q.set("page", String(page));
+      q.set("page_size", String(pageSize));
+      return request<PaginatedRows<PurchaseOrderResponse>>(`/api/v1/inventory/purchase-orders?${q.toString()}`);
+    }, 100);
   },
   async createPurchaseOrder(data: PurchaseOrderCreate): Promise<PurchaseOrderResponse> {
     return request<PurchaseOrderResponse>("/api/v1/inventory/purchase-orders", {
@@ -1965,13 +2057,19 @@ export const api = {
       body: JSON.stringify({ status }),
     });
   },
+  async getGoodsReceiving(id: number): Promise<GoodsReceivingResponse> {
+    return request<GoodsReceivingResponse>(`/api/v1/inventory/goods-receiving/${id}`);
+  },
   async listGoodsReceiving(params?: { status_filter?: string; date_from?: string; date_to?: string }): Promise<GoodsReceivingResponse[]> {
-    const q = new URLSearchParams();
-    if (params?.status_filter) q.set("status_filter", params.status_filter);
-    if (params?.date_from) q.set("date_from", params.date_from);
-    if (params?.date_to) q.set("date_to", params.date_to);
-    const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<GoodsReceivingResponse[]>(`/api/v1/inventory/goods-receiving${suffix}`);
+    return fetchAllPaginated(async (page, pageSize) => {
+      const q = new URLSearchParams();
+      if (params?.status_filter) q.set("status_filter", params.status_filter);
+      if (params?.date_from) q.set("date_from", params.date_from);
+      if (params?.date_to) q.set("date_to", params.date_to);
+      q.set("page", String(page));
+      q.set("page_size", String(pageSize));
+      return request<PaginatedRows<GoodsReceivingResponse>>(`/api/v1/inventory/goods-receiving?${q.toString()}`);
+    }, 100);
   },
   async createGoodsReceiving(data: GoodsReceivingCreate): Promise<GoodsReceivingResponse> {
     return request<GoodsReceivingResponse>("/api/v1/inventory/goods-receiving", {
@@ -1984,15 +2082,77 @@ export const api = {
       method: "POST",
     });
   },
+  async bulkPurchaseOrderStatus(ids: number[], status: string): Promise<{ updated: number }> {
+    return request<{ updated: number }>("/api/v1/inventory/purchase-orders/bulk-status", {
+      method: "POST",
+      body: JSON.stringify({ ids, status }),
+    });
+  },
+  async bulkReceiveGoods(ids: number[]): Promise<Array<{ id: number; ok: boolean; grn_code?: string; detail?: unknown }>> {
+    return request(`/api/v1/inventory/goods-receiving/bulk-receive`, {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    });
+  },
   async getStockSummary(): Promise<StockSummaryRow[]> {
     return request<StockSummaryRow[]>("/api/v1/inventory/stock-summary");
   },
-  async getStockLedger(params?: { item_id?: number; warehouse_id?: number }): Promise<StockLedgerRow[]> {
+  async getStockValuation(): Promise<StockValuationResponse> {
+    return request<StockValuationResponse>("/api/v1/inventory/stock-valuation");
+  },
+  async getStockDashboard(params?: { low_stock_threshold?: number }): Promise<StockDashboardResponse> {
+    const q = new URLSearchParams();
+    if (params?.low_stock_threshold != null) q.set("low_stock_threshold", String(params.low_stock_threshold));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<StockDashboardResponse>(`/api/v1/inventory/stock-dashboard${suffix}`);
+  },
+  async getStockLedger(params?: {
+    item_id?: number;
+    warehouse_id?: number;
+    date_from?: string;
+    date_to?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<StockLedgerPageResponse> {
     const q = new URLSearchParams();
     if (params?.item_id != null) q.set("item_id", String(params.item_id));
     if (params?.warehouse_id != null) q.set("warehouse_id", String(params.warehouse_id));
+    if (params?.date_from) q.set("date_from", params.date_from);
+    if (params?.date_to) q.set("date_to", params.date_to);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<StockLedgerRow[]>(`/api/v1/inventory/stock-ledger${suffix}`);
+    return request<StockLedgerPageResponse>(`/api/v1/inventory/stock-ledger${suffix}`);
+  },
+  async listWarehouseTransfers(params?: { status_filter?: string }): Promise<WarehouseTransferResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.status_filter) q.set("status_filter", params.status_filter);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<WarehouseTransferResponse[]>(`/api/v1/inventory/warehouse-transfers${suffix}`);
+  },
+  async createWarehouseTransfer(data: WarehouseTransferCreate): Promise<WarehouseTransferResponse> {
+    return request<WarehouseTransferResponse>("/api/v1/inventory/warehouse-transfers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async postWarehouseTransfer(id: number): Promise<WarehouseTransferResponse> {
+    return request<WarehouseTransferResponse>(`/api/v1/inventory/warehouse-transfers/${id}/post`, { method: "POST" });
+  },
+  async listStockAdjustments(params?: { status_filter?: string }): Promise<StockAdjustmentResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.status_filter) q.set("status_filter", params.status_filter);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<StockAdjustmentResponse[]>(`/api/v1/inventory/stock-adjustments${suffix}`);
+  },
+  async createStockAdjustment(data: StockAdjustmentCreate): Promise<StockAdjustmentResponse> {
+    return request<StockAdjustmentResponse>("/api/v1/inventory/stock-adjustments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async postStockAdjustment(id: number): Promise<StockAdjustmentResponse> {
+    return request<StockAdjustmentResponse>(`/api/v1/inventory/stock-adjustments/${id}/post`, { method: "POST" });
   },
   async listDeliveryChallans(params?: { status_filter?: string; date_from?: string; date_to?: string }): Promise<DeliveryChallanResponse[]> {
     const q = new URLSearchParams();
@@ -2472,9 +2632,31 @@ export const api = {
     return request<LiveRatesResponse>(`/api/v1/currency/live-rates${q}`);
   },
   // Merchandising linked module
-  async listStyles(params?: { status?: string }): Promise<StyleResponse[]> {
+  async listStyles(params?: {
+    status?: string;
+    search?: string;
+    buyer_customer_id?: number;
+    season?: string;
+    department?: string;
+    lifecycle_stage?: string;
+    active_for_orders?: boolean;
+    priority?: string;
+    risk_level?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<StyleResponse[]> {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
+    if (params?.search) q.set("search", params.search);
+    if (params?.buyer_customer_id != null) q.set("buyer_customer_id", String(params.buyer_customer_id));
+    if (params?.season) q.set("season", params.season);
+    if (params?.department) q.set("department", params.department);
+    if (params?.lifecycle_stage) q.set("lifecycle_stage", params.lifecycle_stage);
+    if (params?.active_for_orders != null) q.set("active_for_orders", String(params.active_for_orders));
+    if (params?.priority) q.set("priority", params.priority);
+    if (params?.risk_level) q.set("risk_level", params.risk_level);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<StyleResponse[]>(`/api/v1/merch/styles${suffix}`);
   },
@@ -2495,6 +2677,29 @@ export const api = {
   },
   async deleteStyle(id: number): Promise<void> {
     return request<void>(`/api/v1/merch/styles/${id}`, { method: "DELETE" });
+  },
+  async getStyleSummary(id: number): Promise<StyleSummaryResponse> {
+    return request<StyleSummaryResponse>(`/api/v1/merch/styles/${id}/summary`);
+  },
+  async listStyleTimeline(id: number, params?: { limit?: number }): Promise<StyleTimelineEvent[]> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<StyleTimelineEvent[]>(`/api/v1/merch/styles/${id}/timeline${suffix}`);
+  },
+  async listStyleSummaryReport(params?: {
+    search?: string;
+    lifecycle_stage?: string;
+    critical_only?: boolean;
+    saved_view?: string;
+  }): Promise<StyleReportRow[]> {
+    const q = new URLSearchParams();
+    if (params?.search) q.set("search", params.search);
+    if (params?.lifecycle_stage) q.set("lifecycle_stage", params.lifecycle_stage);
+    if (params?.critical_only != null) q.set("critical_only", String(params.critical_only));
+    if (params?.saved_view) q.set("saved_view", params.saved_view);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<StyleReportRow[]>(`/api/v1/merch/styles/summary-report${suffix}`);
   },
   async listStyleComponents(styleId: number): Promise<StyleComponentResponse[]> {
     return request<StyleComponentResponse[]>(`/api/v1/merch/styles/${styleId}/components`);
@@ -2615,7 +2820,7 @@ export const api = {
   },
   async generatePurchaseOrderFromBom(
     bomId: number,
-    data: { quantity: number; supplier_name?: string },
+    data: { quantity: number; supplier_name?: string; vendor_id?: number },
   ): Promise<GeneratePOFromBOMResponse> {
     return request<GeneratePOFromBOMResponse>(`/api/v1/merch/boms/${bomId}/generate-purchase-order`, {
       method: "POST",
@@ -4563,6 +4768,7 @@ export interface InventoryItemResponse {
   category_id: number;
   subcategory_id: number | null;
   unit_id: number;
+  default_warehouse_id?: number | null;
   default_cost: string;
   is_active: boolean;
 }
@@ -4574,6 +4780,7 @@ export interface InventoryItemCreate {
   category_id: number;
   subcategory_id?: number | null;
   unit_id: number;
+  default_warehouse_id?: number | null;
   default_cost?: string;
   is_active?: boolean;
 }
@@ -4703,6 +4910,7 @@ export interface PurchaseOrderCreate {
   exchange_rate_to_base?: number | null;
   base_total_amount?: number | null;
   btb_lc_id?: number | null;
+  source_bom_id?: number | null;
   notes?: string;
   status?: string;
   items: PurchaseOrderItemCreate[];
@@ -4720,6 +4928,7 @@ export interface PurchaseOrderResponse {
   exchange_rate_to_base: number | null;
   base_total_amount: number | null;
   btb_lc_id: number | null;
+  source_bom_id?: number | null;
   status: string;
   notes: string | null;
   items: PurchaseOrderItemResponse[];
@@ -4729,6 +4938,7 @@ export interface GoodsReceivingItemCreate {
   item_id: number;
   warehouse_id: number;
   quantity: string;
+  lot_number?: string | null;
 }
 
 export interface GoodsReceivingItemResponse {
@@ -4737,6 +4947,7 @@ export interface GoodsReceivingItemResponse {
   item_id: number;
   warehouse_id: number;
   quantity: string;
+  lot_number?: string | null;
 }
 
 export interface GoodsReceivingCreate {
@@ -4770,6 +4981,23 @@ export interface StockSummaryRow {
   on_hand_qty: number;
 }
 
+export interface StockValuationRow {
+  item_id: number;
+  item_code: string;
+  item_name: string;
+  warehouse_id: number | null;
+  warehouse_name: string | null;
+  on_hand_qty: number;
+  unit_cost: number;
+  line_value: number;
+}
+
+export interface StockValuationResponse {
+  method: string;
+  total_value: number;
+  rows: StockValuationRow[];
+}
+
 export interface StockLedgerRow {
   id: number;
   movement_date: string | null;
@@ -4783,6 +5011,71 @@ export interface StockLedgerRow {
   reference_type: string | null;
   reference_id: number | null;
   notes: string | null;
+  /** Cumulative signed quantity (IN − OUT) for this item + warehouse after this movement. */
+  running_balance: number;
+}
+
+export interface StockLedgerPageResponse {
+  items: StockLedgerRow[];
+  total: number;
+}
+
+export interface StockDashboardResponse {
+  open_purchase_orders: number;
+  grns_pending_receive: number;
+  skus_with_positive_stock: number;
+  low_stock_lines: number;
+  low_stock_threshold: number;
+  recent_movements: StockLedgerRow[];
+}
+
+export interface WarehouseTransferLineResponse {
+  id: number;
+  transfer_id: number;
+  item_id: number;
+  quantity: string;
+}
+
+export interface WarehouseTransferResponse {
+  id: number;
+  tenant_id: number;
+  transfer_code: string;
+  from_warehouse_id: number;
+  to_warehouse_id: number;
+  transfer_date: string | null;
+  status: string;
+  notes: string | null;
+  items: WarehouseTransferLineResponse[];
+}
+
+export interface WarehouseTransferCreate {
+  from_warehouse_id: number;
+  to_warehouse_id: number;
+  transfer_date?: string | null;
+  notes?: string | null;
+  items: { item_id: number; quantity: string }[];
+}
+
+export interface StockAdjustmentResponse {
+  id: number;
+  tenant_id: number;
+  adjust_code: string;
+  warehouse_id: number;
+  item_id: number;
+  quantity: string;
+  reason_code: string;
+  adjustment_date: string | null;
+  status: string;
+  notes: string | null;
+}
+
+export interface StockAdjustmentCreate {
+  warehouse_id: number;
+  item_id: number;
+  quantity: string;
+  reason_code?: string;
+  adjustment_date?: string | null;
+  notes?: string | null;
 }
 
 export interface DeliveryChallanItemCreate {
@@ -5835,10 +6128,27 @@ export interface StyleResponse {
   tenant_id: number;
   style_code: string;
   name: string;
-  style_image_url?: string | null;
   buyer_customer_id: number | null;
   season: string | null;
   department: string | null;
+  product_type: string | null;
+  fabric_type: string | null;
+  gsm: string | null;
+  fit_type: string | null;
+  wash_type: string | null;
+  brand: string | null;
+  buyer_style_ref: string | null;
+  hs_code: string | null;
+  uom: string | null;
+  target_fob: string | null;
+  currency: string | null;
+  sample_lead_days: number | null;
+  production_lead_days: number | null;
+  is_active_for_new_orders: boolean;
+  lifecycle_stage: string;
+  priority: string | null;
+  risk_level: string | null;
+  style_image_url?: string | null;
   status: string;
   notes: string | null;
   created_at: string;
@@ -5848,10 +6158,27 @@ export interface StyleResponse {
 export interface StyleCreate {
   style_code?: string;
   name: string;
-  style_image_url?: string | null;
   buyer_customer_id?: number | null;
   season?: string | null;
   department?: string | null;
+  product_type?: string | null;
+  fabric_type?: string | null;
+  gsm?: string | null;
+  fit_type?: string | null;
+  wash_type?: string | null;
+  brand?: string | null;
+  buyer_style_ref?: string | null;
+  hs_code?: string | null;
+  uom?: string | null;
+  target_fob?: string | null;
+  currency?: string | null;
+  sample_lead_days?: number | null;
+  production_lead_days?: number | null;
+  is_active_for_new_orders?: boolean;
+  lifecycle_stage?: string;
+  priority?: string | null;
+  risk_level?: string | null;
+  style_image_url?: string | null;
   status?: string;
   notes?: string | null;
 }
@@ -5859,12 +6186,70 @@ export interface StyleCreate {
 export interface StyleUpdate {
   style_code?: string;
   name?: string;
-  style_image_url?: string | null;
   buyer_customer_id?: number | null;
   season?: string | null;
   department?: string | null;
+  product_type?: string | null;
+  fabric_type?: string | null;
+  gsm?: string | null;
+  fit_type?: string | null;
+  wash_type?: string | null;
+  brand?: string | null;
+  buyer_style_ref?: string | null;
+  hs_code?: string | null;
+  uom?: string | null;
+  target_fob?: string | null;
+  currency?: string | null;
+  sample_lead_days?: number | null;
+  production_lead_days?: number | null;
+  is_active_for_new_orders?: boolean;
+  lifecycle_stage?: string;
+  priority?: string | null;
+  risk_level?: string | null;
+  style_image_url?: string | null;
   status?: string;
   notes?: string | null;
+}
+
+export interface StyleSummaryResponse {
+  style_id: number;
+  inquiry_count: number;
+  quotation_count: number;
+  order_count: number;
+  open_followup_actions: number;
+  overdue_followup_actions: number;
+  shipment_count: number;
+  shipped_order_qty: number;
+  pending_order_qty: number;
+  invoice_amount: string;
+  received_amount: string;
+  due_amount: string;
+  last_event_at: string | null;
+  next_due_at: string | null;
+}
+
+export interface StyleTimelineEvent {
+  event_type: string;
+  reference: string;
+  status: string | null;
+  event_at: string;
+  notes: string | null;
+}
+
+export interface StyleReportRow {
+  style_id: number;
+  style_code: string;
+  style_name: string;
+  lifecycle_stage: string;
+  priority: string | null;
+  risk_level: string | null;
+  open_followup_actions: number;
+  overdue_followup_actions: number;
+  invoice_amount: string;
+  received_amount: string;
+  due_amount: string;
+  last_event_at: string | null;
+  next_due_at: string | null;
 }
 
 export interface StyleComponentResponse {
@@ -6675,6 +7060,8 @@ export interface ChartOfAccountResponse extends ChartOfAccountCreate {
   tenant_id: number;
   balance: string;
   enable_bill_wise: boolean;
+  /** Row version for optimistic locking (GL balance updates increment this). */
+  version: number;
 }
 
 export interface CoAConfigResponse {

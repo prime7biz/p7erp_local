@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
+from app.common.db_errors import flush_handling_duplicate_document_code
+from app.common.pagination import MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import Customer, CustomerIntermediary, Intermediary, Tenant, User
@@ -87,6 +89,7 @@ async def list_intermediaries(
   q: str | None = Query(default=None, description="Search by code/name/email/phone"),
   kind: str | None = Query(default=None, description="BUYING_HOUSE or AGENT"),
   is_active: bool | None = Query(default=None),
+  limit: int = Query(default=MAX_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Safety cap (Finding #3)"),
   tenant: Tenant = Depends(require_tenant),
   user: User = Depends(get_current_user),
   db: AsyncSession = Depends(get_db),
@@ -107,7 +110,7 @@ async def list_intermediaries(
     stmt = stmt.where(Intermediary.kind == kind.strip().upper())
   if is_active is not None:
     stmt = stmt.where(Intermediary.is_active == is_active)
-  result = await db.execute(stmt.order_by(Intermediary.created_at.desc()))
+  result = await db.execute(stmt.order_by(Intermediary.created_at.desc()).limit(limit))
   return [_to_intermediary_response(row) for row in result.scalars().all()]
 
 
@@ -147,7 +150,7 @@ async def create_intermediary(
     notes=_clean_optional(body.notes),
   )
   db.add(row)
-  await db.flush()
+  await flush_handling_duplicate_document_code(db)
   await db.refresh(row)
   return _to_intermediary_response(row)
 
@@ -238,6 +241,8 @@ async def list_customer_intermediaries(
   *,
   customer_id: int | None = Query(default=None, gt=0),
   intermediary_id: int | None = Query(default=None, gt=0),
+  limit: int = Query(default=MAX_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Safety cap (Finding #3)"),
+  offset: int = Query(default=0, ge=0),
   tenant: Tenant = Depends(require_tenant),
   user: User = Depends(get_current_user),
   db: AsyncSession = Depends(get_db),
@@ -248,7 +253,9 @@ async def list_customer_intermediaries(
     stmt = stmt.where(CustomerIntermediary.customer_id == customer_id)
   if intermediary_id is not None:
     stmt = stmt.where(CustomerIntermediary.intermediary_id == intermediary_id)
-  rows = (await db.execute(stmt.order_by(CustomerIntermediary.created_at.desc()))).scalars().all()
+  rows = (
+    await db.execute(stmt.order_by(CustomerIntermediary.created_at.desc()).limit(limit).offset(offset))
+  ).scalars().all()
   intermediary_ids = list({row.intermediary_id for row in rows})
   intermediaries = {}
   if intermediary_ids:
@@ -304,6 +311,8 @@ async def create_customer_intermediary(
   await db.flush()
   await db.refresh(row)
   intermediary = await db.get(Intermediary, row.intermediary_id)
+  if not intermediary or intermediary.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Intermediary not found")
   return _to_customer_intermediary_response(row, intermediary)
 
 
@@ -356,6 +365,8 @@ async def update_customer_intermediary(
   await db.flush()
   await db.refresh(row)
   intermediary = await db.get(Intermediary, row.intermediary_id)
+  if not intermediary or intermediary.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Intermediary not found")
   return _to_customer_intermediary_response(row, intermediary)
 
 

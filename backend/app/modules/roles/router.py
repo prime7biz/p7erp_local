@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,13 +18,16 @@ def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
 
 @router.get("", response_model=list[RoleResponse])
 async def list_roles(
+    limit: int = Query(500, ge=1, le=2000),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """List roles for the current tenant."""
     _ensure_user_tenant(user, tenant)
-    result = await db.execute(select(Role).where(Role.tenant_id == tenant.id))
+    result = await db.execute(
+        select(Role).where(Role.tenant_id == tenant.id).order_by(Role.id.asc()).limit(limit)
+    )
     rows = result.scalars().all()
     return [
         RoleResponse(id=r.id, tenant_id=r.tenant_id, name=r.name, display_name=r.display_name)

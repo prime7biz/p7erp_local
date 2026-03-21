@@ -7,6 +7,9 @@ import { getArticleBySlug } from "@/data/resourcesArticles";
 const raw = typeof import.meta.env?.VITE_SITE_URL === "string" ? import.meta.env.VITE_SITE_URL : "";
 const SITE_URL = raw ? raw.replace(/\/$/, "") : "https://prime7erp.com";
 
+/** Default share image for Open Graph / Twitter (public/images/og-default.png). */
+const DEFAULT_OG_IMAGE = `${SITE_URL}/images/og-default.png`;
+
 /** JSON-LD for the landing page: Organization + SoftwareApplication. */
 const LANDING_JSON_LD = {
   "@context": "https://schema.org",
@@ -70,6 +73,8 @@ export function Seo() {
   const articleSlug = articleMatch?.[1];
   const article = articleSlug ? getArticleBySlug(articleSlug) : null;
   const canonicalUrl = `${SITE_URL}${pathname === "/" ? "" : pathname}`;
+  const isApp = pathname.startsWith("/app");
+
   const articleJsonLd =
     article &&
     (() => ({
@@ -90,6 +95,9 @@ export function Seo() {
       <title>{meta.title}</title>
       <meta name="description" content={meta.description} />
       {meta.keywords && <meta name="keywords" content={meta.keywords} />}
+      {isApp ? (
+        <meta name="robots" content="noindex, nofollow" />
+      ) : null}
       <link rel="canonical" href={canonicalUrl} />
       <meta
         property="og:type"
@@ -99,7 +107,12 @@ export function Seo() {
       <meta property="og:title" content={meta.title} />
       <meta property="og:description" content={meta.description} />
       <meta property="og:site_name" content="Prime7 ERP" />
+      <meta property="og:image" content={DEFAULT_OG_IMAGE} />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta property="og:image:alt" content="Prime7 ERP — Cloud ERP for Garments and Buying Houses" />
       <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:image" content={DEFAULT_OG_IMAGE} />
       <meta name="twitter:title" content={meta.title} />
       <meta name="twitter:description" content={meta.description} />
       {isLanding && (

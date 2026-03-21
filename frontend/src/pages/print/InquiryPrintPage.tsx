@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type CustomerResponse, type InquiryResponse, type SettingsConfigResponse } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { logApiError } from "@/utils/logApiError";
 import "@/styles/quotation-print.css";
 
 function resolveAssetUrl(pathOrUrl: string | null | undefined): string {
@@ -47,8 +48,14 @@ export function InquiryPrintPage() {
       try {
         const inq = await api.getInquiry(inquiryId);
         const [cust, cfg] = await Promise.all([
-          api.getCustomer(inq.customer_id).catch(() => null),
-          api.getSettingsConfig().catch(() => null),
+          api.getCustomer(inq.customer_id).catch((e) => {
+            logApiError("InquiryPrintPage.getCustomer", e);
+            return null;
+          }),
+          api.getSettingsConfig().catch((e) => {
+            logApiError("InquiryPrintPage.getSettingsConfig", e);
+            return null;
+          }),
         ]);
         setInquiry(inq);
         setCustomer(cust);

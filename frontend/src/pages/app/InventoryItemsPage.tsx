@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   api,
   type InventoryItemCreate,
@@ -15,11 +16,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, Layers, FolderTree, Plus, X, Scale, Building2 } from "lucide-react";
+import { logApiError } from "@/utils/logApiError";
 
 type TabId = "masters" | "units" | "warehouses" | "items";
 
+const TAB_IDS: TabId[] = ["masters", "units", "warehouses", "items"];
+
+function tabFromSearchParam(raw: string | null): TabId | null {
+  if (!raw) return null;
+  const t = raw.trim().toLowerCase();
+  return TAB_IDS.includes(t as TabId) ? (t as TabId) : null;
+}
+
 export function InventoryItemsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("items");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<TabId>(() => tabFromSearchParam(searchParams.get("tab")) ?? "items");
   const [categories, setCategories] = useState<ItemCategoryResponse[]>([]);
   const [subcategories, setSubcategories] = useState<ItemSubcategoryResponse[]>([]);
   const [units, setUnits] = useState<ItemUnitResponse[]>([]);
@@ -58,11 +69,16 @@ export function InventoryItemsPage() {
     category_id: 0,
     subcategory_id: null,
     unit_id: 0,
+    default_warehouse_id: null,
     default_cost: "0",
   });
 
   const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
   const unitMap = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
+  const warehouseCodeById = useMemo(
+    () => new Map(warehouses.map((w) => [w.id, w.warehouse_code])),
+    [warehouses],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,6 +115,30 @@ export function InventoryItemsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const raw = searchParams.get("tab");
+    if (raw != null && raw !== "") {
+      const t = tabFromSearchParam(raw);
+      if (t) setActiveTab(t);
+    }
+  }, [searchParams]);
+
+  const setTab = useCallback(
+    (id: TabId) => {
+      setActiveTab(id);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (id === "items") next.delete("tab");
+          else next.set("tab", id);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   useEffect(() => {
     const closeActions = () => {
@@ -143,30 +183,54 @@ export function InventoryItemsPage() {
 
   const submitCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createInventoryItemCategory(categoryForm);
-    setCategoryForm({ category_code: "", name: "" });
-    await load();
+    setError("");
+    try {
+      await api.createInventoryItemCategory(categoryForm);
+      setCategoryForm({ category_code: "", name: "" });
+      await load();
+    } catch (err) {
+      logApiError("InventoryItemsPage.createCategory", err);
+      setError(err instanceof Error ? err.message : "Failed to save category");
+    }
   };
 
   const submitSubcategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createInventoryItemSubcategory(subcategoryForm);
-    setSubcategoryForm((prev) => ({ ...prev, subcategory_code: "", name: "" }));
-    await load();
+    setError("");
+    try {
+      await api.createInventoryItemSubcategory(subcategoryForm);
+      setSubcategoryForm((prev) => ({ ...prev, subcategory_code: "", name: "" }));
+      await load();
+    } catch (err) {
+      logApiError("InventoryItemsPage.createSubcategory", err);
+      setError(err instanceof Error ? err.message : "Failed to save subcategory");
+    }
   };
 
   const submitUnit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createInventoryItemUnit(unitForm);
-    setUnitForm({ unit_code: "", name: "" });
-    await load();
+    setError("");
+    try {
+      await api.createInventoryItemUnit(unitForm);
+      setUnitForm({ unit_code: "", name: "" });
+      await load();
+    } catch (err) {
+      logApiError("InventoryItemsPage.createUnit", err);
+      setError(err instanceof Error ? err.message : "Failed to save unit");
+    }
   };
 
   const submitWarehouse = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createWarehouse(warehouseForm);
-    setWarehouseForm({ warehouse_code: "", name: "", address: "" });
-    await load();
+    setError("");
+    try {
+      await api.createWarehouse(warehouseForm);
+      setWarehouseForm({ warehouse_code: "", name: "", address: "" });
+      await load();
+    } catch (err) {
+      logApiError("InventoryItemsPage.createWarehouse", err);
+      setError(err instanceof Error ? err.message : "Failed to save warehouse");
+    }
   };
 
   const openUnitEdit = (row: ItemUnitResponse) => {
@@ -185,6 +249,7 @@ export function InventoryItemsPage() {
       closeUnitEdit();
       await load();
     } catch (err) {
+      logApiError("InventoryItemsPage.updateUnit", err);
       setError(err instanceof Error ? err.message : "Failed to update unit");
     }
   };
@@ -194,6 +259,7 @@ export function InventoryItemsPage() {
       await api.deleteInventoryItemUnit(row.id);
       await load();
     } catch (err) {
+      logApiError("InventoryItemsPage.deleteUnit", err);
       setError(err instanceof Error ? err.message : "Failed to delete unit");
     }
   };
@@ -218,6 +284,7 @@ export function InventoryItemsPage() {
       closeWarehouseEdit();
       await load();
     } catch (err) {
+      logApiError("InventoryItemsPage.updateWarehouse", err);
       setError(err instanceof Error ? err.message : "Failed to update warehouse");
     }
   };
@@ -227,15 +294,28 @@ export function InventoryItemsPage() {
       await api.deleteWarehouse(row.id);
       await load();
     } catch (err) {
+      logApiError("InventoryItemsPage.deleteWarehouse", err);
       setError(err instanceof Error ? err.message : "Failed to delete warehouse");
     }
   };
 
   const submitItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createInventoryItem(itemForm);
-    setItemForm((prev) => ({ ...prev, item_code: "", name: "", default_cost: "0" }));
-    await load();
+    setError("");
+    try {
+      await api.createInventoryItem(itemForm);
+      setItemForm((prev) => ({
+        ...prev,
+        item_code: "",
+        name: "",
+        default_cost: "0",
+        default_warehouse_id: null,
+      }));
+      await load();
+    } catch (err) {
+      logApiError("InventoryItemsPage.createItem", err);
+      setError(err instanceof Error ? err.message : "Failed to save item");
+    }
   };
 
   const openEdit = (row: InventoryItemResponse) => {
@@ -246,6 +326,7 @@ export function InventoryItemsPage() {
       category_id: row.category_id,
       subcategory_id: row.subcategory_id,
       unit_id: row.unit_id,
+      default_warehouse_id: row.default_warehouse_id ?? null,
       default_cost: row.default_cost ?? "0",
     });
   };
@@ -263,6 +344,7 @@ export function InventoryItemsPage() {
       closeEdit();
       await load();
     } catch (err) {
+      logApiError("InventoryItemsPage.updateItem", err);
       setError(err instanceof Error ? err.message : "Failed to update item");
     }
   };
@@ -273,6 +355,7 @@ export function InventoryItemsPage() {
       await api.deleteInventoryItem(row.id);
       await load();
     } catch (err) {
+      logApiError("InventoryItemsPage.deleteItem", err);
       setError(err instanceof Error ? err.message : "Failed to delete item");
     }
   };
@@ -292,13 +375,16 @@ export function InventoryItemsPage() {
           <p className="mt-1 text-sm text-text-muted">
             Manage categories, subcategories, units, and inventory items.
           </p>
+          <p className="mt-1 text-xs text-text-muted">
+            Tip: the menu links for Units and Warehouses open this same Stock Master page. Use the tabs to switch quickly.
+          </p>
         </div>
         <div className="flex rounded-xl border border-border bg-surface-raised p-1 shadow-sm">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
-              onClick={() => setActiveTab(id)}
+              onClick={() => setTab(id)}
               className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === id
                   ? "bg-brand-primary text-brand-primary-foreground shadow-sm"
@@ -735,6 +821,24 @@ export function InventoryItemsPage() {
                     </option>
                   ))}
                 </select>
+                <select
+                  className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                  title="Default warehouse for new PO lines"
+                  value={itemForm.default_warehouse_id ?? ""}
+                  onChange={(e) =>
+                    setItemForm((p) => ({
+                      ...p,
+                      default_warehouse_id: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                >
+                  <option value="">Default WH (optional)</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.warehouse_code} — {w.name}
+                    </option>
+                  ))}
+                </select>
                 <div className="flex gap-2">
                   <input
                     className="flex-1 rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
@@ -777,6 +881,9 @@ export function InventoryItemsPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Unit
                       </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
+                        Def. WH
+                      </th>
                       <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Default Cost
                       </th>
@@ -788,7 +895,7 @@ export function InventoryItemsPage() {
                   <tbody className="divide-y divide-border-subtle">
                     {filteredItems.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-10 text-center text-sm text-text-muted">
+                        <td colSpan={7} className="px-4 py-10 text-center text-sm text-text-muted">
                           {items.length === 0
                             ? "No items yet. Add one using the form above."
                             : "No items match your search."}
@@ -803,6 +910,11 @@ export function InventoryItemsPage() {
                           {categoryMap.get(row.category_id) ?? "—"}
                         </td>
                         <td className="px-4 py-3 text-sm text-text-secondary">{unitMap.get(row.unit_id) ?? "—"}</td>
+                        <td className="px-4 py-3 text-sm text-text-secondary">
+                          {row.default_warehouse_id != null
+                            ? warehouseCodeById.get(row.default_warehouse_id) ?? `#${row.default_warehouse_id}`
+                            : "—"}
+                        </td>
                         <td className="px-4 py-3 text-right text-sm text-text-secondary">{row.default_cost}</td>
                         <td className="px-4 py-3 text-right">
                           <div className="relative inline-block text-left">
@@ -950,6 +1062,29 @@ export function InventoryItemsPage() {
                       onChange={(e) => setEditForm((p) => p && { ...p, default_cost: e.target.value })}
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">Default warehouse</label>
+                  <select
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    value={editForm.default_warehouse_id ?? ""}
+                    onChange={(e) =>
+                      setEditForm(
+                        (p) =>
+                          p && {
+                            ...p,
+                            default_warehouse_id: e.target.value ? Number(e.target.value) : null,
+                          },
+                      )
+                    }
+                  >
+                    <option value="">None</option>
+                    {warehouses.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.warehouse_code} — {w.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <Button type="button" variant="outline" onClick={closeEdit}>

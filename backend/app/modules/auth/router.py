@@ -21,6 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _is_dev_app_env(settings) -> bool:
+    return settings.app_env.lower() in {"dev", "development", "local", "test", "testing"}
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(
     request: Request,
@@ -86,6 +90,7 @@ async def login(
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
+    request: Request,
     body: RegisterRequest,
     current_user: User | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
@@ -101,6 +106,33 @@ async def register(
     )
     user_count = int(user_count_result.scalar() or 0)
     is_bootstrap = user_count == 0
+    clear_tenant_bootstrap_hash = False
+    if is_bootstrap:
+        supplied = (request.headers.get("X-Bootstrap-Key") or "").strip() or (body.bootstrap_key or "").strip()
+        env_key = (getattr(settings, "bootstrap_registration_key", None) or "").strip()
+        tenant_hash = (tenant.bootstrap_token_hash or "").strip() or None
+
+        if tenant_hash:
+            if not supplied or not verify_password(supplied, tenant_hash):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Bootstrap token required or invalid",
+                )
+            clear_tenant_bootstrap_hash = True
+        elif env_key:
+            if supplied != env_key:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Bootstrap registration key required or invalid",
+                )
+        elif not _is_dev_app_env(settings):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Bootstrap registration is disabled: set BOOTSTRAP_REGISTRATION_KEY or "
+                    "tenants.bootstrap_token_hash for this tenant"
+                ),
+            )
     if not is_bootstrap and not getattr(settings, "allow_public_registration", False):
         if current_user is None:
             raise HTTPException(
@@ -133,6 +165,8 @@ async def register(
     db.add(user)
     await db.flush()
     await db.refresh(user)
+    if is_bootstrap and clear_tenant_bootstrap_hash:
+        tenant.bootstrap_token_hash = None
     return UserResponse(
         id=user.id,
         tenant_id=user.tenant_id,

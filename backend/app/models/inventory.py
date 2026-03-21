@@ -34,6 +34,22 @@ class StockGroup(Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("stock_groups.id", ondelete="SET NULL"), nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # GL mapping (optional; falls back to tenant coa_config inventory accounts)
+    inventory_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    wip_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    cogs_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    adjustment_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    grni_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -172,6 +188,49 @@ class StockMovement(Base):
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    unit_cost: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    movement_value: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+
+class InventoryCostLayer(Base):
+    """FIFO cost layer: one row per inbound stock_movements.id (IN)."""
+    __tablename__ = "inventory_cost_layers"
+    __table_args__ = (UniqueConstraint("source_movement_id", name="uq_inventory_cost_layers_source_movement_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), nullable=False, index=True)
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_movement_id: Mapped[int] = mapped_column(
+        ForeignKey("stock_movements.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    qty_original: Mapped[str] = mapped_column(String(32), nullable=False)
+    qty_remaining: Mapped[str] = mapped_column(String(32), nullable=False)
+    unit_cost: Mapped[str] = mapped_column(String(32), nullable=False)
+    layer_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class InventoryGlPosting(Base):
+    """Idempotency: one posted voucher per (tenant, source document, action)."""
+    __tablename__ = "inventory_gl_postings"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "source_system",
+            "source_id",
+            "action",
+            name="uq_inventory_gl_postings_tenant_source_action",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_system: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    voucher_id: Mapped[int] = mapped_column(ForeignKey("vouchers.id", ondelete="CASCADE"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 

@@ -2097,8 +2097,42 @@ export const api = {
   async getStockSummary(): Promise<StockSummaryRow[]> {
     return request<StockSummaryRow[]>("/api/v1/inventory/stock-summary");
   },
-  async getStockValuation(): Promise<StockValuationResponse> {
-    return request<StockValuationResponse>("/api/v1/inventory/stock-valuation");
+  async getStockValuation(params?: { as_of_date?: string }): Promise<StockValuationResponse> {
+    const q = new URLSearchParams();
+    if (params?.as_of_date) q.set("as_of_date", params.as_of_date);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<StockValuationResponse>(`/api/v1/inventory/stock-valuation${suffix}`);
+  },
+
+  async postFifoRebuild(): Promise<{ ok: boolean; movements_replayed: number }> {
+    return request<{ ok: boolean; movements_replayed: number }>("/api/v1/inventory/fifo-rebuild", { method: "POST" });
+  },
+
+  async getStockSummaryByGroup(as_of_date?: string): Promise<StockSummaryByGroupResponse> {
+    const q = as_of_date ? `?as_of_date=${encodeURIComponent(as_of_date)}` : "";
+    return request<StockSummaryByGroupResponse>(`/api/v1/inventory/stock-summary/by-group${q}`);
+  },
+
+  async getStockSummaryByWarehouse(as_of_date?: string): Promise<StockSummaryByWarehouseResponse> {
+    const q = as_of_date ? `?as_of_date=${encodeURIComponent(as_of_date)}` : "";
+    return request<StockSummaryByWarehouseResponse>(`/api/v1/inventory/stock-summary/by-warehouse${q}`);
+  },
+
+  async getStockSummaryWip(): Promise<WipSummaryResponse> {
+    return request<WipSummaryResponse>("/api/v1/inventory/stock-summary/wip");
+  },
+
+  async getStockSummaryOverview(as_of_date?: string): Promise<StockOverviewResponse> {
+    const q = as_of_date ? `?as_of_date=${encodeURIComponent(as_of_date)}` : "";
+    return request<StockOverviewResponse>(`/api/v1/inventory/stock-summary/overview${q}`);
+  },
+
+  async getReconciliationStockVsGl(): Promise<StockVsGlResponse> {
+    return request<StockVsGlResponse>("/api/v1/inventory/reconciliation/stock-vs-gl");
+  },
+
+  async getReconciliationWipVsGl(): Promise<WipVsGlResponse> {
+    return request<WipVsGlResponse>("/api/v1/inventory/reconciliation/wip-vs-gl");
   },
   async getStockDashboard(params?: { low_stock_threshold?: number }): Promise<StockDashboardResponse> {
     const q = new URLSearchParams();
@@ -4769,6 +4803,7 @@ export interface InventoryItemResponse {
   subcategory_id: number | null;
   unit_id: number;
   default_warehouse_id?: number | null;
+  stock_group_id?: number | null;
   default_cost: string;
   is_active: boolean;
 }
@@ -4781,6 +4816,7 @@ export interface InventoryItemCreate {
   subcategory_id?: number | null;
   unit_id: number;
   default_warehouse_id?: number | null;
+  stock_group_id?: number | null;
   default_cost?: string;
   is_active?: boolean;
 }
@@ -4808,6 +4844,11 @@ export interface StockGroupResponse {
   name: string;
   parent_id: number | null;
   is_active: boolean;
+  inventory_account_id?: number | null;
+  wip_account_id?: number | null;
+  cogs_account_id?: number | null;
+  adjustment_account_id?: number | null;
+  grni_account_id?: number | null;
 }
 
 export interface StockGroupCreate {
@@ -4815,6 +4856,11 @@ export interface StockGroupCreate {
   name: string;
   parent_id?: number | null;
   is_active?: boolean;
+  inventory_account_id?: number | null;
+  wip_account_id?: number | null;
+  cogs_account_id?: number | null;
+  adjustment_account_id?: number | null;
+  grni_account_id?: number | null;
 }
 
 export interface PurchaseOrderItemCreate {
@@ -4996,6 +5042,83 @@ export interface StockValuationResponse {
   method: string;
   total_value: number;
   rows: StockValuationRow[];
+}
+
+export interface InventorySummaryLine {
+  item_id: number;
+  item_code: string;
+  item_name: string;
+  warehouse_id: number | null;
+  warehouse_name: string | null;
+  on_hand_qty: number;
+  unit_cost: number;
+  line_value: number;
+}
+
+export interface StockSummaryGroupBlock {
+  stock_group_id: number | null;
+  stock_group_code: string | null;
+  stock_group_name: string | null;
+  total_qty: number;
+  total_value: number;
+  lines: InventorySummaryLine[];
+}
+
+export interface StockSummaryByGroupResponse {
+  as_of_date: string | null;
+  groups: StockSummaryGroupBlock[];
+}
+
+export interface StockSummaryWarehouseBlock {
+  warehouse_id: number | null;
+  warehouse_code: string | null;
+  warehouse_name: string | null;
+  total_qty: number;
+  total_value: number;
+  lines: InventorySummaryLine[];
+}
+
+export interface StockSummaryByWarehouseResponse {
+  as_of_date: string | null;
+  warehouses: StockSummaryWarehouseBlock[];
+}
+
+export interface WipProcessLine {
+  process_order_id: number;
+  process_number: string;
+  warehouse_id: number | null;
+  input_item_id: number;
+  input_item_code: string;
+  output_item_id: number;
+  output_item_code: string;
+  input_quantity: string;
+  wip_value: number;
+}
+
+export interface WipSummaryResponse {
+  rows: WipProcessLine[];
+  total_wip_value: number;
+}
+
+export interface StockOverviewResponse {
+  as_of_date: string | null;
+  stock_on_hand_value: number;
+  wip_value: number;
+  grand_total: number;
+}
+
+export interface StockVsGlResponse {
+  fifo_stock_value: number;
+  gl_inventory_balance: number;
+  variance: number;
+  inventory_account_ids: number[];
+}
+
+export interface WipVsGlResponse {
+  process_wip_value: number;
+  gl_wip_balance: number;
+  variance: number;
+  wip_account_ids: number[];
 }
 
 export interface StockLedgerRow {
@@ -7075,6 +7198,8 @@ export interface CoAConfigResponse {
   max_group_depth: number | null;
   max_account_depth: number | null;
   validate_normal_balance: boolean;
+  inventory_stock_account_id?: number | null;
+  inventory_clearing_account_id?: number | null;
 }
 
 export interface CoAConfigUpdate {
@@ -7086,6 +7211,8 @@ export interface CoAConfigUpdate {
   max_group_depth?: number | null;
   max_account_depth?: number | null;
   validate_normal_balance?: boolean;
+  inventory_stock_account_id?: number | null;
+  inventory_clearing_account_id?: number | null;
 }
 
 export interface ReportingImpactResponse {

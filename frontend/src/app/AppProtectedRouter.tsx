@@ -100,6 +100,9 @@ const TutorialArticlePage = lazy(() =>
 const StockSummaryPage = lazy(() =>
   import("@/pages/app/StockSummaryPage").then((m) => ({ default: m.StockSummaryPage })),
 );
+const StockInventorySummaryPage = lazy(() =>
+  import("@/pages/app/StockInventorySummaryPage").then((m) => ({ default: m.StockInventorySummaryPage })),
+);
 const StockDashboardPage = lazy(() =>
   import("@/pages/app/StockDashboardPage").then((m) => ({ default: m.StockDashboardPage })),
 );
@@ -422,6 +425,7 @@ export function AppProtectedRouter() {
         <Route path="inventory/consumption-control" element={<ConsumptionControlPage />} />
         <Route path="inventory/reconciliation" element={<InventoryReconciliationPage />} />
         <Route path="inventory/stock-summary" element={<StockSummaryPage />} />
+        <Route path="inventory/stock-inventory-summary" element={<StockInventorySummaryPage />} />
         <Route path="inventory/stock-ledger" element={<StockLedgerPage />} />
         <Route path="commercial" element={<CommercialPage />} />
         <Route path="commercial/export-cases" element={<ExportCasesPage />} />

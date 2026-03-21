@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type StockGroupCreate, type StockGroupResponse } from "@/api/client";
+import { api, type ChartOfAccountResponse, type StockGroupCreate, type StockGroupResponse } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FolderTree, Plus, X, Search } from "lucide-react";
@@ -48,10 +48,50 @@ function flattenTreeWithMeta(
   return result;
 }
 
+const emptyGroupForm: StockGroupCreate = {
+  group_code: "",
+  name: "",
+  parent_id: null,
+  is_active: true,
+  inventory_account_id: null,
+  wip_account_id: null,
+  cogs_account_id: null,
+  adjustment_account_id: null,
+  grni_account_id: null,
+};
+
+function CoaSelect(props: {
+  label: string;
+  value: number | null | undefined;
+  onChange: (v: number | null) => void;
+  accounts: ChartOfAccountResponse[];
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-text-muted">{props.label}</label>
+      <select
+        className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+        value={props.value ?? ""}
+        onChange={(e) => props.onChange(e.target.value ? Number(e.target.value) : null)}
+      >
+        <option value="">— None —</option>
+        {props.accounts
+          .filter((a) => a.is_active && a.account_type === "posting")
+          .map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.account_number} {a.name}
+            </option>
+          ))}
+      </select>
+    </div>
+  );
+}
+
 export function StockGroupsPage() {
   const [items, setItems] = useState<StockGroupResponse[]>([]);
+  const [coaRows, setCoaRows] = useState<ChartOfAccountResponse[]>([]);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState<StockGroupCreate>({ group_code: "", name: "", parent_id: null });
+  const [form, setForm] = useState<StockGroupCreate>({ ...emptyGroupForm });
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<StockGroupResponse | null>(null);
   const [editForm, setEditForm] = useState<StockGroupCreate | null>(null);
@@ -77,7 +117,12 @@ export function StockGroupsPage() {
 
   const load = async () => {
     try {
-      setItems(await api.listStockGroups());
+      const [gr, coa] = await Promise.all([
+        api.listStockGroups(),
+        api.listChartOfAccounts({ active_only: true }),
+      ]);
+      setItems(gr);
+      setCoaRows(coa);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load stock groups");
     }
@@ -99,6 +144,12 @@ export function StockGroupsPage() {
       group_code: row.group_code,
       name: row.name,
       parent_id: row.parent_id,
+      is_active: row.is_active,
+      inventory_account_id: row.inventory_account_id ?? null,
+      wip_account_id: row.wip_account_id ?? null,
+      cogs_account_id: row.cogs_account_id ?? null,
+      adjustment_account_id: row.adjustment_account_id ?? null,
+      grni_account_id: row.grni_account_id ?? null,
     });
   };
 
@@ -162,7 +213,7 @@ export function StockGroupsPage() {
             onSubmit={async (e) => {
               e.preventDefault();
               await api.createStockGroup(form);
-              setForm({ group_code: "", name: "", parent_id: null });
+              setForm({ ...emptyGroupForm });
               await load();
             }}
             className="grid grid-cols-1 gap-3 md:grid-cols-4 md:gap-4"
@@ -195,7 +246,42 @@ export function StockGroupsPage() {
                 </option>
               ))}
             </select>
-            <Button type="submit">
+            <div className="md:col-span-4">
+              <p className="mb-2 text-xs font-medium text-text-muted">GL mapping (optional — falls back to tenant CoA inventory defaults)</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <CoaSelect
+                  label="Inventory asset"
+                  accounts={coaRows}
+                  value={form.inventory_account_id}
+                  onChange={(v) => setForm((p) => ({ ...p, inventory_account_id: v }))}
+                />
+                <CoaSelect
+                  label="GRNI / clearing"
+                  accounts={coaRows}
+                  value={form.grni_account_id}
+                  onChange={(v) => setForm((p) => ({ ...p, grni_account_id: v }))}
+                />
+                <CoaSelect
+                  label="COGS"
+                  accounts={coaRows}
+                  value={form.cogs_account_id}
+                  onChange={(v) => setForm((p) => ({ ...p, cogs_account_id: v }))}
+                />
+                <CoaSelect
+                  label="WIP"
+                  accounts={coaRows}
+                  value={form.wip_account_id}
+                  onChange={(v) => setForm((p) => ({ ...p, wip_account_id: v }))}
+                />
+                <CoaSelect
+                  label="Stock adjustment"
+                  accounts={coaRows}
+                  value={form.adjustment_account_id}
+                  onChange={(v) => setForm((p) => ({ ...p, adjustment_account_id: v }))}
+                />
+              </div>
+            </div>
+            <Button type="submit" className="md:col-span-4">
               <Plus className="mr-2 h-4 w-4" />
               Add Group
             </Button>
@@ -362,6 +448,41 @@ export function StockGroupsPage() {
                         </option>
                       ))}
                   </select>
+                </div>
+                <div className="space-y-3 border-t border-border-subtle pt-4">
+                  <p className="text-xs font-medium text-text-muted">Chart of accounts (optional)</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <CoaSelect
+                      label="Inventory asset"
+                      accounts={coaRows}
+                      value={editForm.inventory_account_id}
+                      onChange={(v) => setEditForm((p) => p && { ...p, inventory_account_id: v })}
+                    />
+                    <CoaSelect
+                      label="GRNI / clearing"
+                      accounts={coaRows}
+                      value={editForm.grni_account_id}
+                      onChange={(v) => setEditForm((p) => p && { ...p, grni_account_id: v })}
+                    />
+                    <CoaSelect
+                      label="COGS"
+                      accounts={coaRows}
+                      value={editForm.cogs_account_id}
+                      onChange={(v) => setEditForm((p) => p && { ...p, cogs_account_id: v })}
+                    />
+                    <CoaSelect
+                      label="WIP"
+                      accounts={coaRows}
+                      value={editForm.wip_account_id}
+                      onChange={(v) => setEditForm((p) => p && { ...p, wip_account_id: v })}
+                    />
+                    <CoaSelect
+                      label="Stock adjustment"
+                      accounts={coaRows}
+                      value={editForm.adjustment_account_id}
+                      onChange={(v) => setEditForm((p) => p && { ...p, adjustment_account_id: v })}
+                    />
+                  </div>
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <Button type="button" variant="outline" onClick={closeEdit}>

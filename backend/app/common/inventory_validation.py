@@ -31,7 +31,7 @@ def validate_non_negative_qty_str(raw: str | None, field_name: str = "quantity")
     v = parse_decimal_string(raw if (raw or "").strip() != "" else "0", field_name)
     if v < 0:
         raise ValueError(f"{field_name} cannot be negative")
-    return (raw or "").strip()
+    return (raw or "").strip() if (raw or "").strip() != "" else "0"
 
 
 def validate_signed_adjustment_qty_str(raw: str | None, field_name: str = "quantity") -> str:

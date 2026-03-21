@@ -116,6 +116,9 @@ class Item(Base):
     default_warehouse_id: Mapped[int | None] = mapped_column(
         ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    stock_group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("stock_groups.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     default_cost: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

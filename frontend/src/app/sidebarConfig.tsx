@@ -157,6 +157,7 @@ export const menuSections: MenuSection[] = [
       { icon: Shield, label: "Consumption Control", href: `${PREFIX}/inventory/consumption-control` },
       { icon: FileBarChart, label: "Reconciliation", href: `${PREFIX}/inventory/reconciliation` },
       { icon: BarChart3, label: "Stock Summary", href: `${PREFIX}/inventory/stock-summary` },
+      { icon: Layers, label: "Inventory Summary (FIFO)", href: `${PREFIX}/inventory/stock-inventory-summary` },
       { icon: Activity, label: "Dashboard", href: `${PREFIX}/inventory/stock-dashboard` },
       { icon: FileBarChart, label: "Ledger", href: `${PREFIX}/inventory/stock-ledger` },
       { icon: DollarSign, label: "Valuation", href: `${PREFIX}/inventory/stock-valuation` },

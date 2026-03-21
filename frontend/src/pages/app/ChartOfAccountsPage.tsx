@@ -165,6 +165,8 @@ export function ChartOfAccountsPage() {
         max_group_depth: coaConfig.max_group_depth,
         max_account_depth: coaConfig.max_account_depth,
         validate_normal_balance: coaConfig.validate_normal_balance,
+        inventory_stock_account_id: coaConfig.inventory_stock_account_id ?? null,
+        inventory_clearing_account_id: coaConfig.inventory_clearing_account_id ?? null,
       });
       setCoaConfig(updated);
     } catch (e) {
@@ -330,6 +332,66 @@ export function ChartOfAccountsPage() {
                 value={coaConfig.max_account_depth ?? ""}
                 onChange={(e) => setCoaConfig((c) => c ? { ...c, max_account_depth: e.target.value ? Number(e.target.value) : null } : c)}
               />
+            </div>
+            <div className="sm:col-span-2">
+              <p className="mb-2 text-xs font-medium text-text-primary">Inventory GL defaults (optional)</p>
+              <p className="mb-2 text-xs text-text-muted">
+                Used when stock group accounts are not set. Receipt: Dr stock / Cr clearing (GRNI).
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs text-text-muted">Default stock-in-hand account</label>
+                  <select
+                    className="w-full rounded border px-2 py-1.5 text-sm"
+                    value={coaConfig.inventory_stock_account_id ?? ""}
+                    onChange={(e) =>
+                      setCoaConfig((c) =>
+                        c
+                          ? {
+                              ...c,
+                              inventory_stock_account_id: e.target.value ? Number(e.target.value) : null,
+                            }
+                          : c,
+                      )
+                    }
+                  >
+                    <option value="">— None —</option>
+                    {rows
+                      .filter((a) => a.is_active && a.account_type === "posting")
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.account_number} {a.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-text-muted">Inventory clearing / GRNI account</label>
+                  <select
+                    className="w-full rounded border px-2 py-1.5 text-sm"
+                    value={coaConfig.inventory_clearing_account_id ?? ""}
+                    onChange={(e) =>
+                      setCoaConfig((c) =>
+                        c
+                          ? {
+                              ...c,
+                              inventory_clearing_account_id: e.target.value ? Number(e.target.value) : null,
+                            }
+                          : c,
+                      )
+                    }
+                  >
+                    <option value="">— None —</option>
+                    {rows
+                      .filter((a) => a.is_active && a.account_type === "posting")
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.account_number} {a.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
           <button

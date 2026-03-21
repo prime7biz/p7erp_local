@@ -10,6 +10,7 @@ import {
   type ItemSubcategoryResponse,
   type ItemUnitCreate,
   type ItemUnitResponse,
+  type StockGroupResponse,
   type WarehouseCreate,
   type WarehouseResponse,
 } from "@/api/client";
@@ -35,6 +36,7 @@ export function InventoryItemsPage() {
   const [subcategories, setSubcategories] = useState<ItemSubcategoryResponse[]>([]);
   const [units, setUnits] = useState<ItemUnitResponse[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
+  const [stockGroups, setStockGroups] = useState<StockGroupResponse[]>([]);
   const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -70,6 +72,7 @@ export function InventoryItemsPage() {
     subcategory_id: null,
     unit_id: 0,
     default_warehouse_id: null,
+    stock_group_id: null,
     default_cost: "0",
   });
 
@@ -79,22 +82,28 @@ export function InventoryItemsPage() {
     () => new Map(warehouses.map((w) => [w.id, w.warehouse_code])),
     [warehouses],
   );
+  const stockGroupLabelById = useMemo(
+    () => new Map(stockGroups.map((g) => [g.id, `${g.group_code} — ${g.name}`])),
+    [stockGroups],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [cat, sub, uni, wh, itm] = await Promise.all([
+      const [cat, sub, uni, wh, sg, itm] = await Promise.all([
         api.listInventoryItemCategories(),
         api.listInventoryItemSubcategories(),
         api.listInventoryItemUnits(),
         api.listWarehouses(),
+        api.listStockGroups(),
         api.listInventoryItems(),
       ]);
       setCategories(cat);
       setSubcategories(sub);
       setUnits(uni);
       setWarehouses(wh);
+      setStockGroups(sg);
       setItems(itm);
       const firstCategory = cat[0];
       const firstUnit = uni[0];
@@ -310,6 +319,7 @@ export function InventoryItemsPage() {
         name: "",
         default_cost: "0",
         default_warehouse_id: null,
+        stock_group_id: null,
       }));
       await load();
     } catch (err) {
@@ -327,6 +337,7 @@ export function InventoryItemsPage() {
       subcategory_id: row.subcategory_id,
       unit_id: row.unit_id,
       default_warehouse_id: row.default_warehouse_id ?? null,
+      stock_group_id: row.stock_group_id ?? null,
       default_cost: row.default_cost ?? "0",
     });
   };
@@ -839,6 +850,24 @@ export function InventoryItemsPage() {
                     </option>
                   ))}
                 </select>
+                <select
+                  className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                  title="Stock group for GL mapping and FIFO summary"
+                  value={itemForm.stock_group_id ?? ""}
+                  onChange={(e) =>
+                    setItemForm((p) => ({
+                      ...p,
+                      stock_group_id: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                >
+                  <option value="">Stock group (optional)</option>
+                  {stockGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.group_code} — {g.name}
+                    </option>
+                  ))}
+                </select>
                 <div className="flex gap-2">
                   <input
                     className="flex-1 rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
@@ -884,6 +913,9 @@ export function InventoryItemsPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Def. WH
                       </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
+                        Stock group
+                      </th>
                       <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-text-muted">
                         Default Cost
                       </th>
@@ -895,7 +927,7 @@ export function InventoryItemsPage() {
                   <tbody className="divide-y divide-border-subtle">
                     {filteredItems.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-4 py-10 text-center text-sm text-text-muted">
+                        <td colSpan={8} className="px-4 py-10 text-center text-sm text-text-muted">
                           {items.length === 0
                             ? "No items yet. Add one using the form above."
                             : "No items match your search."}
@@ -914,6 +946,9 @@ export function InventoryItemsPage() {
                           {row.default_warehouse_id != null
                             ? warehouseCodeById.get(row.default_warehouse_id) ?? `#${row.default_warehouse_id}`
                             : "—"}
+                        </td>
+                        <td className="max-w-[140px] truncate px-4 py-3 text-sm text-text-secondary" title={row.stock_group_id != null ? stockGroupLabelById.get(row.stock_group_id) : ""}>
+                          {row.stock_group_id != null ? stockGroupLabelById.get(row.stock_group_id) ?? `#${row.stock_group_id}` : "—"}
                         </td>
                         <td className="px-4 py-3 text-right text-sm text-text-secondary">{row.default_cost}</td>
                         <td className="px-4 py-3 text-right">
@@ -1082,6 +1117,29 @@ export function InventoryItemsPage() {
                     {warehouses.map((w) => (
                       <option key={w.id} value={w.id}>
                         {w.warehouse_code} — {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-text-muted">Stock group</label>
+                  <select
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    value={editForm.stock_group_id ?? ""}
+                    onChange={(e) =>
+                      setEditForm(
+                        (p) =>
+                          p && {
+                            ...p,
+                            stock_group_id: e.target.value ? Number(e.target.value) : null,
+                          },
+                      )
+                    }
+                  >
+                    <option value="">None</option>
+                    {stockGroups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.group_code} — {g.name}
                       </option>
                     ))}
                   </select>

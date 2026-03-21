@@ -49,6 +49,9 @@ from app.models import (
     StockGroup,
     StockAdjustment,
     StockMovement,
+    InventoryCostLayer,
+    CoAConfig,
+    ChartOfAccount,
     Tenant,
     User,
     Vendor,
@@ -59,7 +62,16 @@ from app.models import (
     PhysicalInventoryLine,
 )
 
+from app.services.fifo_inventory import finalize_movement_fifo, rebuild_fifo_layers_for_tenant, fifo_on_hand_value
 from app.services.grn_inventory_gl import post_grn_receipt_gl_journal
+from app.services.inventory_gl_service import (
+    post_consumption_issue_gl,
+    post_delivery_challan_gl,
+    post_physical_inventory_gl,
+    post_process_order_issue_gl,
+    post_process_order_receive_gl,
+    post_stock_adjustment_gl,
+)
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -260,6 +272,12 @@ async def _ensure_stock_group_deletable(db: AsyncSession, tenant_id: int, group_
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Cannot delete stock group: {n} child group(s) still reference it as parent.",
         )
+    ni = await _count_where(db, Item, tenant_id, Item.stock_group_id == group_id)
+    if ni:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot delete stock group: {ni} item(s) still reference it.",
+        )
 
 
 def _to_float(value: str | None) -> float:
@@ -345,6 +363,71 @@ async def _stock_summary_rows(db: AsyncSession, tenant_id: int) -> list[StockSum
     return rows
 
 
+async def _fifo_layer_qty_value_map(
+    db: AsyncSession, tenant_id: int, as_of_date: date | None = None
+) -> dict[tuple[int, int | None], tuple[float, float]]:
+    """Map (item_id, warehouse_id) -> (qty_remaining, value)."""
+    stmt = select(InventoryCostLayer).where(InventoryCostLayer.tenant_id == tenant_id)
+    if as_of_date is not None:
+        stmt = stmt.where(
+            InventoryCostLayer.layer_date.is_not(None),
+            InventoryCostLayer.layer_date <= as_of_date,
+        )
+    layers = list((await db.execute(stmt)).scalars().all())
+    acc: dict[tuple[int, int | None], list[float]] = defaultdict(lambda: [0.0, 0.0])
+    for layer in layers:
+        qr = _to_float(layer.qty_remaining)
+        if qr <= 0:
+            continue
+        key = (layer.item_id, layer.warehouse_id)
+        uc = _to_float(layer.unit_cost)
+        acc[key][0] += qr
+        acc[key][1] += qr * uc
+    return {k: (v[0], round(v[1], 4)) for k, v in acc.items()}
+
+
+def _inventory_line_from_summary(
+    s: StockSummaryRow,
+    item_map: dict[int, Item],
+    fifo_map: dict[tuple[int, int | None], tuple[float, float]],
+) -> InventorySummaryLine:
+    item = item_map.get(s.item_id)
+    key = (s.item_id, s.warehouse_id)
+    fq, fv = fifo_map.get(key, (0.0, 0.0))
+    if fq > 1e-9 and fv > 0:
+        uc = fv / fq
+        lv = round(fv, 2)
+    else:
+        uc = _to_float(item.default_cost if item else "0")
+        lv = round(s.on_hand_qty * uc, 2)
+    return InventorySummaryLine(
+        item_id=s.item_id,
+        item_code=s.item_code,
+        item_name=s.item_name,
+        warehouse_id=s.warehouse_id,
+        warehouse_name=s.warehouse_name,
+        on_hand_qty=s.on_hand_qty,
+        unit_cost=round(uc, 4),
+        line_value=lv,
+    )
+
+
+async def _ensure_chart_account_for_tenant(db: AsyncSession, tenant_id: int, account_id: int | None) -> None:
+    if account_id is None:
+        return
+    acc = await db.get(ChartOfAccount, account_id)
+    if not acc or acc.tenant_id != tenant_id:
+        raise HTTPException(status_code=400, detail="Invalid chart of accounts account for this tenant")
+
+
+async def _ensure_stock_group_for_item(db: AsyncSession, tenant_id: int, stock_group_id: int | None) -> None:
+    if stock_group_id is None:
+        return
+    sg = await db.get(StockGroup, stock_group_id)
+    if not sg or sg.tenant_id != tenant_id:
+        raise HTTPException(status_code=400, detail="Invalid stock group for this tenant")
+
+
 class ItemCategoryBody(BaseModel):
     category_code: str
     name: str
@@ -412,6 +495,7 @@ class ItemBody(BaseModel):
     subcategory_id: int | None = None
     unit_id: int
     default_warehouse_id: int | None = None
+    stock_group_id: int | None = None
     default_cost: str = "0"
     is_active: bool = True
 
@@ -426,6 +510,7 @@ class ItemOut(BaseModel):
     subcategory_id: int | None
     unit_id: int
     default_warehouse_id: int | None = None
+    stock_group_id: int | None = None
     default_cost: str
     is_active: bool
 
@@ -482,6 +567,11 @@ class StockGroupBody(BaseModel):
     name: str
     parent_id: int | None = None
     is_active: bool = True
+    inventory_account_id: int | None = None
+    wip_account_id: int | None = None
+    cogs_account_id: int | None = None
+    adjustment_account_id: int | None = None
+    grni_account_id: int | None = None
 
 
 class StockGroupOut(BaseModel):
@@ -491,6 +581,11 @@ class StockGroupOut(BaseModel):
     name: str
     parent_id: int | None
     is_active: bool
+    inventory_account_id: int | None = None
+    wip_account_id: int | None = None
+    cogs_account_id: int | None = None
+    adjustment_account_id: int | None = None
+    grni_account_id: int | None = None
 
     class Config:
         from_attributes = True
@@ -752,9 +847,9 @@ class StockValuationRow(BaseModel):
 
 
 class StockValuationOut(BaseModel):
-    """Valuation using item master default_cost × on-hand (phase 1; not FIFO)."""
+    """Valuation using FIFO layers (qty_remaining × unit_cost); falls back to default_cost if no layers."""
 
-    method: str = "default_cost"
+    method: str = "fifo"
     total_value: float
     rows: list[StockValuationRow]
 
@@ -766,6 +861,83 @@ class StockDashboardOut(BaseModel):
     low_stock_lines: int
     low_stock_threshold: float
     recent_movements: list[StockLedgerRow]
+
+
+class InventorySummaryLine(BaseModel):
+    item_id: int
+    item_code: str
+    item_name: str
+    warehouse_id: int | None
+    warehouse_name: str | None
+    on_hand_qty: float
+    unit_cost: float
+    line_value: float
+
+
+class StockSummaryGroupBlock(BaseModel):
+    stock_group_id: int | None
+    stock_group_code: str | None
+    stock_group_name: str | None
+    total_qty: float
+    total_value: float
+    lines: list[InventorySummaryLine]
+
+
+class StockSummaryByGroupOut(BaseModel):
+    as_of_date: date | None
+    groups: list[StockSummaryGroupBlock]
+
+
+class StockSummaryWarehouseBlock(BaseModel):
+    warehouse_id: int | None
+    warehouse_code: str | None
+    warehouse_name: str | None
+    total_qty: float
+    total_value: float
+    lines: list[InventorySummaryLine]
+
+
+class StockSummaryByWarehouseOut(BaseModel):
+    as_of_date: date | None
+    warehouses: list[StockSummaryWarehouseBlock]
+
+
+class WipProcessLine(BaseModel):
+    process_order_id: int
+    process_number: str
+    warehouse_id: int | None
+    input_item_id: int
+    input_item_code: str
+    output_item_id: int
+    output_item_code: str
+    input_quantity: str
+    wip_value: float
+
+
+class WipSummaryOut(BaseModel):
+    rows: list[WipProcessLine]
+    total_wip_value: float
+
+
+class StockOverviewOut(BaseModel):
+    as_of_date: date | None
+    stock_on_hand_value: float
+    wip_value: float
+    grand_total: float
+
+
+class StockVsGlOut(BaseModel):
+    fifo_stock_value: float
+    gl_inventory_balance: float
+    variance: float
+    inventory_account_ids: list[int]
+
+
+class WipVsGlOut(BaseModel):
+    process_wip_value: float
+    gl_wip_balance: float
+    variance: float
+    wip_account_ids: list[int]
 
 
 class DeliveryChallanItemBody(BaseModel):
@@ -1094,6 +1266,7 @@ async def create_item(
 ):
     _ensure_tenant(user, tenant)
     await _ensure_item_default_warehouse(db, tenant.id, body.default_warehouse_id)
+    await _ensure_stock_group_for_item(db, tenant.id, body.stock_group_id)
     row = Item(tenant_id=tenant.id, **body.model_dump())
     db.add(row)
     await db.commit()
@@ -1114,6 +1287,7 @@ async def update_item(
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Item not found")
     await _ensure_item_default_warehouse(db, tenant.id, body.default_warehouse_id)
+    await _ensure_stock_group_for_item(db, tenant.id, body.stock_group_id)
     for key, value in body.model_dump().items():
         setattr(row, key, value)
     await db.commit()
@@ -1223,6 +1397,21 @@ async def list_stock_groups(
     return list(result.scalars().all())
 
 
+async def _validate_stock_group_body(db: AsyncSession, tenant: Tenant, body: StockGroupBody) -> None:
+    if body.parent_id is not None:
+        parent = await db.get(StockGroup, body.parent_id)
+        if not parent or parent.tenant_id != tenant.id:
+            raise HTTPException(status_code=400, detail="Invalid parent stock group")
+    for aid in (
+        body.inventory_account_id,
+        body.wip_account_id,
+        body.cogs_account_id,
+        body.adjustment_account_id,
+        body.grni_account_id,
+    ):
+        await _ensure_chart_account_for_tenant(db, tenant.id, aid)
+
+
 @router.post("/stock-groups", response_model=StockGroupOut)
 async def create_stock_group(
     body: StockGroupBody,
@@ -1231,6 +1420,7 @@ async def create_stock_group(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _validate_stock_group_body(db, tenant, body)
     row = StockGroup(tenant_id=tenant.id, **body.model_dump())
     db.add(row)
     await commit_handling_duplicate_document_code(db)
@@ -1250,6 +1440,9 @@ async def update_stock_group(
     row = await db.get(StockGroup, group_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Stock group not found")
+    if body.parent_id is not None and body.parent_id == group_id:
+        raise HTTPException(status_code=400, detail="Stock group cannot be its own parent")
+    await _validate_stock_group_body(db, tenant, body)
     for key, value in body.model_dump().items():
         setattr(row, key, value)
     await db.commit()
@@ -1747,22 +1940,37 @@ async def _apply_grn_receive_goods(
     items = list(items_result.scalars().all())
     if not items:
         raise HTTPException(status_code=400, detail="GRN has no items")
-    for line in items:
-        db.add(
-            StockMovement(
-                tenant_id=tenant.id,
-                item_id=line.item_id,
-                warehouse_id=line.warehouse_id,
-                movement_type="IN",
-                quantity=line.quantity,
-                reference_type="GRN",
-                reference_id=row.id,
-                movement_date=row.received_date,
-                notes=f"Received via {row.grn_code}",
-                lot_number=getattr(line, "lot_number", None),
-                created_by_user_id=user.id,
+    po_lines: dict[tuple[int, int | None], PurchaseOrderItem] = {}
+    if row.purchase_order_id:
+        pls = (
+            await db.execute(
+                select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.purchase_order_id)
             )
+        ).scalars().all()
+        for pl in pls:
+            po_lines[(pl.item_id, pl.warehouse_id)] = pl
+    for line in items:
+        mv = StockMovement(
+            tenant_id=tenant.id,
+            item_id=line.item_id,
+            warehouse_id=line.warehouse_id,
+            movement_type="IN",
+            quantity=line.quantity,
+            reference_type="GRN",
+            reference_id=row.id,
+            movement_date=row.received_date,
+            notes=f"Received via {row.grn_code}",
+            lot_number=getattr(line, "lot_number", None),
+            created_by_user_id=user.id,
         )
+        db.add(mv)
+        await db.flush()
+        pl = po_lines.get((line.item_id, line.warehouse_id)) or po_lines.get((line.item_id, None))
+        uc = _to_float(pl.unit_price) if pl is not None else 0.0
+        if uc <= 0:
+            it_row = await db.get(Item, line.item_id)
+            uc = _to_float(it_row.default_cost) if it_row and it_row.tenant_id == tenant.id else 0.0
+        await finalize_movement_fifo(db, tenant.id, mv, in_unit_cost=uc)
     row.status = "RECEIVED"
     if row.purchase_order_id:
         po = await db.get(PurchaseOrder, row.purchase_order_id)
@@ -1835,11 +2043,13 @@ async def stock_summary(
 async def stock_valuation(
     limit: int = Query(default=5000, ge=1, le=20000),
     offset: int = Query(default=0, ge=0),
+    as_of_date: date | None = Query(default=None),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    fifo_map = await _fifo_layer_qty_value_map(db, tenant.id, as_of_date)
     all_summary = await _stock_summary_rows(db, tenant.id)
     summary = all_summary[offset:offset + limit]
     items_result = await db.execute(select(Item).where(Item.tenant_id == tenant.id))
@@ -1848,8 +2058,14 @@ async def stock_valuation(
     total = 0.0
     for s in summary:
         item = item_map.get(s.item_id)
-        uc = _to_float(item.default_cost if item else "0")
-        lv = round(s.on_hand_qty * uc, 2)
+        key = (s.item_id, s.warehouse_id)
+        fq, fv = fifo_map.get(key, (0.0, 0.0))
+        if fq > 1e-9 and fv > 0:
+            uc = fv / fq
+            lv = round(fv, 2)
+        else:
+            uc = _to_float(item.default_cost if item else "0")
+            lv = round(s.on_hand_qty * uc, 2)
         total += lv
         out_rows.append(
             StockValuationRow(
@@ -1864,7 +2080,243 @@ async def stock_valuation(
             )
         )
     out_rows.sort(key=lambda r: (r.item_code, r.warehouse_name or ""))
-    return StockValuationOut(total_value=round(total, 2), rows=out_rows)
+    return StockValuationOut(method="fifo", total_value=round(total, 2), rows=out_rows)
+
+
+@router.post("/fifo-rebuild")
+async def fifo_rebuild(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    stats = await rebuild_fifo_layers_for_tenant(db, tenant.id)
+    await db.commit()
+    return {"ok": True, **stats}
+
+
+@router.get("/stock-summary/by-group", response_model=StockSummaryByGroupOut)
+async def stock_summary_by_group(
+    as_of_date: date | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    fifo_map = await _fifo_layer_qty_value_map(db, tenant.id, as_of_date)
+    summary = await _stock_summary_rows(db, tenant.id)
+    items_result = await db.execute(select(Item).where(Item.tenant_id == tenant.id))
+    item_map = {r.id: r for r in items_result.scalars().all()}
+    sg_result = await db.execute(select(StockGroup).where(StockGroup.tenant_id == tenant.id))
+    sg_map = {r.id: r for r in sg_result.scalars().all()}
+
+    by_gid: dict[int | None, list[InventorySummaryLine]] = defaultdict(list)
+    for s in summary:
+        if s.on_hand_qty <= 0:
+            continue
+        it = item_map.get(s.item_id)
+        gid = it.stock_group_id if it else None
+        by_gid[gid].append(_inventory_line_from_summary(s, item_map, fifo_map))
+
+    blocks: list[StockSummaryGroupBlock] = []
+    for gid, lines in sorted(by_gid.items(), key=lambda x: (x[0] is None, x[0] or 0)):
+        lines.sort(key=lambda r: (r.item_code, r.warehouse_name or ""))
+        tq = sum(r.on_hand_qty for r in lines)
+        tv = sum(r.line_value for r in lines)
+        sg = sg_map.get(gid) if gid is not None else None
+        blocks.append(
+            StockSummaryGroupBlock(
+                stock_group_id=gid,
+                stock_group_code=sg.group_code if sg else None,
+                stock_group_name=sg.name if sg else None,
+                total_qty=round(tq, 4),
+                total_value=round(tv, 2),
+                lines=lines,
+            )
+        )
+    return StockSummaryByGroupOut(as_of_date=as_of_date, groups=blocks)
+
+
+@router.get("/stock-summary/by-warehouse", response_model=StockSummaryByWarehouseOut)
+async def stock_summary_by_warehouse(
+    as_of_date: date | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    fifo_map = await _fifo_layer_qty_value_map(db, tenant.id, as_of_date)
+    summary = await _stock_summary_rows(db, tenant.id)
+    items_result = await db.execute(select(Item).where(Item.tenant_id == tenant.id))
+    item_map = {r.id: r for r in items_result.scalars().all()}
+    wh_result = await db.execute(select(Warehouse).where(Warehouse.tenant_id == tenant.id))
+    wh_map = {r.id: r for r in wh_result.scalars().all()}
+
+    by_wh: dict[int | None, list[InventorySummaryLine]] = defaultdict(list)
+    for s in summary:
+        if s.on_hand_qty <= 0:
+            continue
+        by_wh[s.warehouse_id].append(_inventory_line_from_summary(s, item_map, fifo_map))
+
+    blocks: list[StockSummaryWarehouseBlock] = []
+    for wid, lines in sorted(by_wh.items(), key=lambda x: (x[0] is None, x[0] or 0)):
+        lines.sort(key=lambda r: (r.item_code, r.warehouse_name or ""))
+        tq = sum(r.on_hand_qty for r in lines)
+        tv = sum(r.line_value for r in lines)
+        wh = wh_map.get(wid) if wid is not None else None
+        blocks.append(
+            StockSummaryWarehouseBlock(
+                warehouse_id=wid,
+                warehouse_code=wh.warehouse_code if wh else None,
+                warehouse_name=wh.name if wh else None,
+                total_qty=round(tq, 4),
+                total_value=round(tv, 2),
+                lines=lines,
+            )
+        )
+    return StockSummaryByWarehouseOut(as_of_date=as_of_date, warehouses=blocks)
+
+
+@router.get("/stock-summary/wip", response_model=WipSummaryOut)
+async def stock_summary_wip(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    pos = (
+        await db.execute(
+            select(ProcessOrder).where(ProcessOrder.tenant_id == tenant.id, ProcessOrder.status == "ISSUED")
+        )
+    ).scalars().all()
+    items_result = await db.execute(select(Item).where(Item.tenant_id == tenant.id))
+    item_map = {r.id: r for r in items_result.scalars().all()}
+    rows_out: list[WipProcessLine] = []
+    total_wip = 0.0
+    for po in pos:
+        mvs = (
+            await db.execute(
+                select(StockMovement).where(
+                    StockMovement.tenant_id == tenant.id,
+                    StockMovement.reference_type == "PROCESS_ORDER",
+                    StockMovement.reference_id == po.id,
+                    StockMovement.movement_type == "OUT",
+                    StockMovement.item_id == po.input_item_id,
+                )
+            )
+        ).scalars().all()
+        wval = sum(_to_float(m.movement_value or "0") for m in mvs)
+        total_wip += wval
+        inp = item_map.get(po.input_item_id)
+        outp = item_map.get(po.output_item_id)
+        rows_out.append(
+            WipProcessLine(
+                process_order_id=po.id,
+                process_number=po.process_number,
+                warehouse_id=po.warehouse_id,
+                input_item_id=po.input_item_id,
+                input_item_code=inp.item_code if inp else str(po.input_item_id),
+                output_item_id=po.output_item_id,
+                output_item_code=outp.item_code if outp else str(po.output_item_id),
+                input_quantity=po.input_quantity,
+                wip_value=round(wval, 2),
+            )
+        )
+    return WipSummaryOut(rows=rows_out, total_wip_value=round(total_wip, 2))
+
+
+@router.get("/stock-summary/overview", response_model=StockOverviewOut)
+async def stock_summary_overview(
+    as_of_date: date | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    stock_v = await fifo_on_hand_value(db, tenant.id, as_of_date=as_of_date)
+    wip = await stock_summary_wip(tenant, user, db)
+    return StockOverviewOut(
+        as_of_date=as_of_date,
+        stock_on_hand_value=stock_v,
+        wip_value=wip.total_wip_value,
+        grand_total=round(stock_v + wip.total_wip_value, 2),
+    )
+
+
+async def _sum_chart_balances(db: AsyncSession, tenant_id: int, account_ids: list[int]) -> float:
+    if not account_ids:
+        return 0.0
+    accs = (
+        await db.execute(
+            select(ChartOfAccount).where(
+                ChartOfAccount.tenant_id == tenant_id,
+                ChartOfAccount.id.in_(account_ids),
+            )
+        )
+    ).scalars().all()
+    return round(sum(_to_float(a.balance) for a in accs), 4)
+
+
+@router.get("/reconciliation/stock-vs-gl", response_model=StockVsGlOut)
+async def reconciliation_stock_vs_gl(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    fifo_total = await fifo_on_hand_value(db, tenant.id, as_of_date=None)
+    cfg = (await db.execute(select(CoAConfig).where(CoAConfig.tenant_id == tenant.id))).scalars().first()
+    ids: set[int] = set()
+    if cfg and cfg.inventory_stock_account_id:
+        ids.add(cfg.inventory_stock_account_id)
+    sgs = (
+        await db.execute(
+            select(StockGroup).where(
+                StockGroup.tenant_id == tenant.id,
+                StockGroup.inventory_account_id.is_not(None),
+            )
+        )
+    ).scalars().all()
+    for sg in sgs:
+        if sg.inventory_account_id:
+            ids.add(sg.inventory_account_id)
+    gl_bal = await _sum_chart_balances(db, tenant.id, list(ids))
+    return StockVsGlOut(
+        fifo_stock_value=fifo_total,
+        gl_inventory_balance=gl_bal,
+        variance=round(fifo_total - gl_bal, 4),
+        inventory_account_ids=sorted(ids),
+    )
+
+
+@router.get("/reconciliation/wip-vs-gl", response_model=WipVsGlOut)
+async def reconciliation_wip_vs_gl(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    wip = await stock_summary_wip(tenant, user, db)
+    ids: set[int] = set()
+    sgs = (
+        await db.execute(
+            select(StockGroup).where(
+                StockGroup.tenant_id == tenant.id,
+                StockGroup.wip_account_id.is_not(None),
+            )
+        )
+    ).scalars().all()
+    for sg in sgs:
+        if sg.wip_account_id:
+            ids.add(sg.wip_account_id)
+    gl_bal = await _sum_chart_balances(db, tenant.id, list(ids))
+    return WipVsGlOut(
+        process_wip_value=wip.total_wip_value,
+        gl_wip_balance=gl_bal,
+        variance=round(wip.total_wip_value - gl_bal, 4),
+        wip_account_ids=sorted(ids),
+    )
 
 
 @router.get("/stock-dashboard", response_model=StockDashboardOut)
@@ -2131,20 +2583,22 @@ async def update_delivery_challan_status(
                         f"Available={round(available, 3)}, required={round(req_qty, 3)}"
                     ),
                 )
-            db.add(
-                StockMovement(
-                    tenant_id=tenant.id,
-                    item_id=line.item_id,
-                    warehouse_id=line.warehouse_id,
-                    movement_type="OUT",
-                    quantity=line.quantity,
-                    reference_type="DELIVERY_CHALLAN",
-                    reference_id=row.id,
-                    movement_date=row.delivery_date,
-                    notes=f"Posted {row.challan_code}",
-                    created_by_user_id=user.id,
-                )
+            dc_mv = StockMovement(
+                tenant_id=tenant.id,
+                item_id=line.item_id,
+                warehouse_id=line.warehouse_id,
+                movement_type="OUT",
+                quantity=line.quantity,
+                reference_type="DELIVERY_CHALLAN",
+                reference_id=row.id,
+                movement_date=row.delivery_date,
+                notes=f"Posted {row.challan_code}",
+                created_by_user_id=user.id,
             )
+            db.add(dc_mv)
+            await db.flush()
+            await finalize_movement_fifo(db, tenant.id, dc_mv)
+        await post_delivery_challan_gl(db, tenant.id, user.id, row.id, row.delivery_date, row.challan_code, lines)
 
     row.status = next_status
     await db.commit()
@@ -2359,18 +2813,28 @@ async def issue_process_order(
             status_code=400,
             detail=f"Insufficient stock for issue. Available={available}, Required={round(req_qty, 3)}",
         )
-    db.add(
-        StockMovement(
-            tenant_id=tenant.id,
-            item_id=row.input_item_id,
-            warehouse_id=row.warehouse_id,
-            movement_type="OUT",
-            quantity=row.input_quantity,
-            reference_type="PROCESS_ORDER",
-            reference_id=row.id,
-            notes=f"Issue input for {row.process_number}",
-            created_by_user_id=user.id,
-        )
+    po_out = StockMovement(
+        tenant_id=tenant.id,
+        item_id=row.input_item_id,
+        warehouse_id=row.warehouse_id,
+        movement_type="OUT",
+        quantity=row.input_quantity,
+        reference_type="PROCESS_ORDER",
+        reference_id=row.id,
+        notes=f"Issue input for {row.process_number}",
+        created_by_user_id=user.id,
+    )
+    db.add(po_out)
+    await db.flush()
+    await finalize_movement_fifo(db, tenant.id, po_out)
+    await post_process_order_issue_gl(
+        db,
+        tenant.id,
+        user.id,
+        row.id,
+        row.input_item_id,
+        row.output_item_id,
+        f"Issue input for {row.process_number}",
     )
     row.status = "ISSUED"
     await db.commit()
@@ -2395,22 +2859,45 @@ async def receive_process_order(
     actual_qty = _to_float(body.actual_output_qty)
     if actual_qty <= 0:
         raise HTTPException(status_code=400, detail="Actual output quantity must be greater than 0")
-    db.add(
-        StockMovement(
-            tenant_id=tenant.id,
-            item_id=row.output_item_id,
-            warehouse_id=row.warehouse_id,
-            movement_type="IN",
-            quantity=str(actual_qty),
-            reference_type="PROCESS_ORDER",
-            reference_id=row.id,
-            notes=f"Receive output for {row.process_number}",
-            created_by_user_id=user.id,
+    outs = (
+        await db.execute(
+            select(StockMovement).where(
+                StockMovement.tenant_id == tenant.id,
+                StockMovement.reference_type == "PROCESS_ORDER",
+                StockMovement.reference_id == row.id,
+                StockMovement.movement_type == "OUT",
+                StockMovement.item_id == row.input_item_id,
+            )
         )
+    ).scalars().all()
+    input_cost = sum(_to_float(m.movement_value or "0") for m in outs)
+    proc = _to_float(body.processing_charges or "0")
+    uc = (input_cost + proc) / actual_qty if actual_qty > 0 else 0.0
+    po_in = StockMovement(
+        tenant_id=tenant.id,
+        item_id=row.output_item_id,
+        warehouse_id=row.warehouse_id,
+        movement_type="IN",
+        quantity=str(actual_qty),
+        reference_type="PROCESS_ORDER",
+        reference_id=row.id,
+        notes=f"Receive output for {row.process_number}",
+        created_by_user_id=user.id,
     )
+    db.add(po_in)
+    await db.flush()
+    await finalize_movement_fifo(db, tenant.id, po_in, in_unit_cost=uc)
     row.actual_output_qty = str(actual_qty)
     row.processing_charges = body.processing_charges or "0"
     row.status = "RECEIVED"
+    await post_process_order_receive_gl(
+        db,
+        tenant.id,
+        user.id,
+        row.id,
+        row.output_item_id,
+        f"Receive output for {row.process_number}",
+    )
     await db.commit()
     await db.refresh(row)
     return row
@@ -2948,19 +3435,21 @@ async def issue_consumption_material(
     if body.issue_qty > available:
         raise HTTPException(status_code=400, detail=f"Insufficient stock in warehouse. Available={available}")
 
-    db.add(
-        StockMovement(
-            tenant_id=tenant.id,
-            item_id=body.item_id,
-            warehouse_id=body.warehouse_id,
-            movement_type="OUT",
-            quantity=str(body.issue_qty),
-            reference_type="CONSUMPTION_ISSUE",
-            reference_id=body.order_id,
-            notes=body.remarks or "Issue against finalized consumption plan",
-            created_by_user_id=user.id,
-        )
+    c_mv = StockMovement(
+        tenant_id=tenant.id,
+        item_id=body.item_id,
+        warehouse_id=body.warehouse_id,
+        movement_type="OUT",
+        quantity=str(body.issue_qty),
+        reference_type="CONSUMPTION_ISSUE",
+        reference_id=body.order_id,
+        notes=body.remarks or "Issue against finalized consumption plan",
+        created_by_user_id=user.id,
     )
+    db.add(c_mv)
+    await db.flush()
+    await finalize_movement_fifo(db, tenant.id, c_mv)
+    await post_consumption_issue_gl(db, tenant.id, user.id, c_mv.id)
     await db.commit()
     return {"ok": True}
 
@@ -3440,34 +3929,38 @@ async def post_warehouse_transfer(
     mv_date = row.transfer_date or date.today()
     for line in lines:
         qty_s = str(_to_float(line.quantity))
-        db.add(
-            StockMovement(
-                tenant_id=tenant.id,
-                item_id=line.item_id,
-                warehouse_id=row.from_warehouse_id,
-                movement_type="OUT",
-                quantity=qty_s,
-                reference_type="WAREHOUSE_TRANSFER",
-                reference_id=row.id,
-                movement_date=mv_date,
-                notes=f"Transfer {row.transfer_code} out",
-                created_by_user_id=user.id,
-            )
+        qf = _to_float(qty_s)
+        out_mv = StockMovement(
+            tenant_id=tenant.id,
+            item_id=line.item_id,
+            warehouse_id=row.from_warehouse_id,
+            movement_type="OUT",
+            quantity=qty_s,
+            reference_type="WAREHOUSE_TRANSFER",
+            reference_id=row.id,
+            movement_date=mv_date,
+            notes=f"Transfer {row.transfer_code} out",
+            created_by_user_id=user.id,
         )
-        db.add(
-            StockMovement(
-                tenant_id=tenant.id,
-                item_id=line.item_id,
-                warehouse_id=row.to_warehouse_id,
-                movement_type="IN",
-                quantity=qty_s,
-                reference_type="WAREHOUSE_TRANSFER",
-                reference_id=row.id,
-                movement_date=mv_date,
-                notes=f"Transfer {row.transfer_code} in",
-                created_by_user_id=user.id,
-            )
+        db.add(out_mv)
+        await db.flush()
+        await finalize_movement_fifo(db, tenant.id, out_mv)
+        uc = _to_float(out_mv.movement_value or "0") / qf if qf > 0 else 0.0
+        in_mv = StockMovement(
+            tenant_id=tenant.id,
+            item_id=line.item_id,
+            warehouse_id=row.to_warehouse_id,
+            movement_type="IN",
+            quantity=qty_s,
+            reference_type="WAREHOUSE_TRANSFER",
+            reference_id=row.id,
+            movement_date=mv_date,
+            notes=f"Transfer {row.transfer_code} in",
+            created_by_user_id=user.id,
         )
+        db.add(in_mv)
+        await db.flush()
+        await finalize_movement_fifo(db, tenant.id, in_mv, in_unit_cost=uc)
     row.status = "POSTED"
     await db.commit()
     await db.refresh(row)
@@ -3556,35 +4049,40 @@ async def post_stock_adjustment(
                 status_code=400,
                 detail=f"Insufficient stock for negative adjustment. Available={round(available, 3)}, required={round(abs(qty_f), 3)}",
             )
-        db.add(
-            StockMovement(
-                tenant_id=tenant.id,
-                item_id=row.item_id,
-                warehouse_id=row.warehouse_id,
-                movement_type="OUT",
-                quantity=str(abs(qty_f)),
-                reference_type="STOCK_ADJUSTMENT",
-                reference_id=row.id,
-                movement_date=mv_date,
-                notes=f"Adjustment {row.adjust_code} ({row.reason_code})",
-                created_by_user_id=user.id,
-            )
+        adj_mv = StockMovement(
+            tenant_id=tenant.id,
+            item_id=row.item_id,
+            warehouse_id=row.warehouse_id,
+            movement_type="OUT",
+            quantity=str(abs(qty_f)),
+            reference_type="STOCK_ADJUSTMENT",
+            reference_id=row.id,
+            movement_date=mv_date,
+            notes=f"Adjustment {row.adjust_code} ({row.reason_code})",
+            created_by_user_id=user.id,
         )
+        db.add(adj_mv)
+        await db.flush()
+        await finalize_movement_fifo(db, tenant.id, adj_mv)
     else:
-        db.add(
-            StockMovement(
-                tenant_id=tenant.id,
-                item_id=row.item_id,
-                warehouse_id=row.warehouse_id,
-                movement_type="IN",
-                quantity=str(qty_f),
-                reference_type="STOCK_ADJUSTMENT",
-                reference_id=row.id,
-                movement_date=mv_date,
-                notes=f"Adjustment {row.adjust_code} ({row.reason_code})",
-                created_by_user_id=user.id,
-            )
+        it_adj = await db.get(Item, row.item_id)
+        uc_adj = _to_float(it_adj.default_cost) if it_adj and it_adj.tenant_id == tenant.id else 0.0
+        adj_mv = StockMovement(
+            tenant_id=tenant.id,
+            item_id=row.item_id,
+            warehouse_id=row.warehouse_id,
+            movement_type="IN",
+            quantity=str(qty_f),
+            reference_type="STOCK_ADJUSTMENT",
+            reference_id=row.id,
+            movement_date=mv_date,
+            notes=f"Adjustment {row.adjust_code} ({row.reason_code})",
+            created_by_user_id=user.id,
         )
+        db.add(adj_mv)
+        await db.flush()
+        await finalize_movement_fifo(db, tenant.id, adj_mv, in_unit_cost=uc_adj)
+    await post_stock_adjustment_gl(db, tenant.id, user.id, row)
     row.status = "POSTED"
     await db.commit()
     await db.refresh(row)
@@ -3778,35 +4276,40 @@ async def post_physical_inventory_session(
                 )
         qty_s = abs(delta)
         if delta > 0:
-            db.add(
-                StockMovement(
-                    tenant_id=tenant.id,
-                    item_id=line.item_id,
-                    warehouse_id=row.warehouse_id,
-                    movement_type="IN",
-                    quantity=str(qty_s),
-                    reference_type="PHYSICAL_COUNT",
-                    reference_id=row.id,
-                    movement_date=mv_date,
-                    notes=f"Physical count {row.session_code}",
-                    created_by_user_id=user.id,
-                )
+            pic_mv = StockMovement(
+                tenant_id=tenant.id,
+                item_id=line.item_id,
+                warehouse_id=row.warehouse_id,
+                movement_type="IN",
+                quantity=str(qty_s),
+                reference_type="PHYSICAL_COUNT",
+                reference_id=row.id,
+                movement_date=mv_date,
+                notes=f"Physical count {row.session_code}",
+                created_by_user_id=user.id,
             )
+            db.add(pic_mv)
+            await db.flush()
+            it_pic = await db.get(Item, line.item_id)
+            uc_pic = _to_float(it_pic.default_cost) if it_pic and it_pic.tenant_id == tenant.id else 0.0
+            await finalize_movement_fifo(db, tenant.id, pic_mv, in_unit_cost=uc_pic)
         else:
-            db.add(
-                StockMovement(
-                    tenant_id=tenant.id,
-                    item_id=line.item_id,
-                    warehouse_id=row.warehouse_id,
-                    movement_type="OUT",
-                    quantity=str(qty_s),
-                    reference_type="PHYSICAL_COUNT",
-                    reference_id=row.id,
-                    movement_date=mv_date,
-                    notes=f"Physical count {row.session_code}",
-                    created_by_user_id=user.id,
-                )
+            pic_mv = StockMovement(
+                tenant_id=tenant.id,
+                item_id=line.item_id,
+                warehouse_id=row.warehouse_id,
+                movement_type="OUT",
+                quantity=str(qty_s),
+                reference_type="PHYSICAL_COUNT",
+                reference_id=row.id,
+                movement_date=mv_date,
+                notes=f"Physical count {row.session_code}",
+                created_by_user_id=user.id,
             )
+            db.add(pic_mv)
+            await db.flush()
+            await finalize_movement_fifo(db, tenant.id, pic_mv)
+    await post_physical_inventory_gl(db, tenant.id, user.id, row.id, row.session_code, row.count_date)
     row.status = "POSTED"
     await db.commit()
     await db.refresh(row)

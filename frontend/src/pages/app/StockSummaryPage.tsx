@@ -309,7 +309,15 @@ export function StockSummaryPage() {
         </div>
       )}
       <p className="text-xs text-text-muted">
-        Tip: see valuation at <Link className="text-status-info hover:underline" to="/app/inventory/stock-valuation">Stock Valuation</Link> using item default cost.
+        Tip: FIFO valuation and group/warehouse summaries:{" "}
+        <Link className="text-status-info hover:underline" to="/app/inventory/stock-inventory-summary">
+          Inventory Summary (FIFO)
+        </Link>
+        {" · "}
+        <Link className="text-status-info hover:underline" to="/app/inventory/stock-valuation">
+          Stock Valuation
+        </Link>
+        .
       </p>
     </div>
   );

@@ -303,6 +303,8 @@ class CoAConfigBody(BaseModel):
     max_group_depth: int | None = None
     max_account_depth: int | None = None
     validate_normal_balance: bool = True
+    inventory_stock_account_id: int | None = None
+    inventory_clearing_account_id: int | None = None
 
 
 class CoAConfigOut(CoAConfigBody):
@@ -1425,6 +1427,8 @@ async def get_coa_config(
         max_group_depth=None,
         max_account_depth=None,
         validate_normal_balance=True,
+        inventory_stock_account_id=None,
+        inventory_clearing_account_id=None,
     )
 
 
@@ -4807,6 +4811,14 @@ async def close_accounting_period(
 ):
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    from app.services.inventory_pending import inventory_period_close_blockers
+
+    blockers = await inventory_period_close_blockers(db, tenant.id)
+    if blockers:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot close period until inventory is cleared: " + "; ".join(blockers),
+        )
     row = await db.get(AccountingPeriod, period_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Accounting period not found")

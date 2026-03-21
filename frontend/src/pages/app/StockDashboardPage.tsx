@@ -38,6 +38,17 @@ export function StockDashboardPage() {
           <p className="text-sm text-text-muted">
             Open purchase orders, GRNs to receive, low-stock lines (by threshold), and recent movements.
           </p>
+          <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
+            <Link className="text-status-info hover:underline" to="/app/inventory/stock-inventory-summary">
+              Inventory Summary (FIFO)
+            </Link>
+            <Link className="text-status-info hover:underline" to="/app/inventory/stock-valuation">
+              Stock valuation
+            </Link>
+            <Link className="text-status-info hover:underline" to="/app/inventory/reconciliation">
+              Stock vs GL reconciliation
+            </Link>
+          </p>
         </div>
         <label className="flex flex-col gap-0.5 text-xs text-text-muted">
           Low-stock threshold (on-hand &lt; this and &gt; 0)
@@ -83,9 +94,14 @@ export function StockDashboardPage() {
             <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
               <p className="text-xs font-medium uppercase text-text-muted">SKUs in stock</p>
               <p className="mt-1 text-2xl font-semibold text-text-primary">{data.skus_with_positive_stock}</p>
-              <Link className="mt-2 inline-block text-xs text-status-info hover:underline" to="/app/inventory/stock-summary">
-                Stock summary
-              </Link>
+              <div className="mt-2 flex flex-col gap-0.5">
+                <Link className="text-xs text-status-info hover:underline" to="/app/inventory/stock-summary">
+                  Stock summary
+                </Link>
+                <Link className="text-xs text-status-info hover:underline" to="/app/inventory/stock-inventory-summary">
+                  FIFO summary
+                </Link>
+              </div>
             </div>
             <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
               <p className="text-xs font-medium uppercase text-text-muted">Low stock lines</p>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "@/api/client";
+import { api, type StockVsGlResponse, type WipVsGlResponse } from "@/api/client";
 
-type TabKey = "po" | "grn" | "challan" | "gatepass" | "stock";
+type TabKey = "po" | "grn" | "challan" | "gatepass" | "stock" | "finance";
 
 function statusBadgeClass(status: string) {
   const s = status.toUpperCase();
@@ -23,6 +23,8 @@ export function InventoryReconciliationPage() {
   const [challanRows, setChallanRows] = useState<Awaited<ReturnType<typeof api.listDeliveryChallans>>>([]);
   const [gateRows, setGateRows] = useState<Awaited<ReturnType<typeof api.listEnhancedGatePasses>>>([]);
   const [stockRows, setStockRows] = useState<Awaited<ReturnType<typeof api.getStockSummary>>>([]);
+  const [stockGl, setStockGl] = useState<StockVsGlResponse | null>(null);
+  const [wipGl, setWipGl] = useState<WipVsGlResponse | null>(null);
   const [overview, setOverview] = useState<Awaited<ReturnType<typeof api.getInventoryReconciliationOverview>> | null>(null);
   const [pendingCrCount, setPendingCrCount] = useState(0);
   const [prevOverview, setPrevOverview] = useState<{
@@ -51,10 +53,14 @@ export function InventoryReconciliationPage() {
         api.listEnhancedGatePasses(filter),
         api.getStockSummary(),
       ]);
-      const [ov, pendingCrRows] = await Promise.all([
+      const [ov, pendingCrRows, sgl, wgl] = await Promise.all([
         api.getInventoryReconciliationOverview(),
         api.listConsumptionChangeRequests({ status_filter: "PENDING" }),
+        api.getReconciliationStockVsGl().catch(() => null),
+        api.getReconciliationWipVsGl().catch(() => null),
       ]);
+      setStockGl(sgl);
+      setWipGl(wgl);
       setPoRows(po);
       setGrnRows(grn);
       setChallanRows(ch);
@@ -122,6 +128,22 @@ export function InventoryReconciliationPage() {
     if (tab === "challan") data = challanRows as unknown as Array<Record<string, unknown>>;
     if (tab === "gatepass") data = gateRows as unknown as Array<Record<string, unknown>>;
     if (tab === "stock") data = stockRows as unknown as Array<Record<string, unknown>>;
+    if (tab === "finance") {
+      data = [
+        {
+          kind: "stock_vs_gl",
+          fifo_stock_value: stockGl?.fifo_stock_value,
+          gl_inventory_balance: stockGl?.gl_inventory_balance,
+          variance: stockGl?.variance,
+        },
+        {
+          kind: "wip_vs_gl",
+          process_wip_value: wipGl?.process_wip_value,
+          gl_wip_balance: wipGl?.gl_wip_balance,
+          variance: wipGl?.variance,
+        },
+      ];
+    }
     const content = toCsv(data);
     const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -193,6 +215,7 @@ export function InventoryReconciliationPage() {
         <button type="button" className={`rounded border px-3 py-1 text-sm ${tab === "challan" ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "border-border text-text-secondary"}`} onClick={() => setTab("challan")}>Challan</button>
         <button type="button" className={`rounded border px-3 py-1 text-sm ${tab === "gatepass" ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "border-border text-text-secondary"}`} onClick={() => setTab("gatepass")}>Gate Pass</button>
         <button type="button" className={`rounded border px-3 py-1 text-sm ${tab === "stock" ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "border-border text-text-secondary"}`} onClick={() => setTab("stock")}>Stock</button>
+        <button type="button" className={`rounded border px-3 py-1 text-sm ${tab === "finance" ? "border-brand-primary bg-brand-primary/10 font-semibold text-brand-primary" : "border-border text-text-secondary"}`} onClick={() => setTab("finance")}>Finance / GL</button>
         <input
           className="w-full rounded border px-3 py-1 text-sm sm:w-auto"
           placeholder="Status (e.g. DRAFT)"
@@ -245,6 +268,36 @@ export function InventoryReconciliationPage() {
             <thead className="bg-surface-subtle text-left text-text-secondary"><tr><th className="px-4 py-3">Item</th><th className="px-4 py-3">Warehouse</th><th className="px-4 py-3">In</th><th className="px-4 py-3">Out</th><th className="px-4 py-3">On Hand</th></tr></thead>
             <tbody>{fstock.map((r) => <tr key={`${r.item_id}-${r.warehouse_id ?? 0}`} className="border-t"><td className="px-4 py-3">{r.item_name}</td><td className="px-4 py-3">{r.warehouse_name ?? "-"}</td><td className="px-4 py-3">{r.in_qty}</td><td className="px-4 py-3">{r.out_qty}</td><td className="px-4 py-3 font-semibold">{r.on_hand_qty}</td></tr>)}</tbody>
           </table>
+        ) : null}
+        {tab === "finance" ? (
+          <div className="space-y-6 p-4 text-sm">
+            <div className="rounded-lg border border-border-subtle bg-surface-subtle p-4">
+              <h3 className="mb-2 font-semibold text-text-primary">Stock (FIFO) vs GL inventory</h3>
+              {stockGl ? (
+                <ul className="space-y-1 text-text-secondary">
+                  <li>FIFO on-hand value: <strong>{stockGl.fifo_stock_value}</strong></li>
+                  <li>GL balance (sum of mapped inventory accounts): <strong>{stockGl.gl_inventory_balance}</strong></li>
+                  <li>Variance: <strong>{stockGl.variance}</strong></li>
+                  <li className="text-xs text-text-muted">Account IDs: {stockGl.inventory_account_ids.join(", ") || "—"}</li>
+                </ul>
+              ) : (
+                <p className="text-text-muted">Could not load reconciliation.</p>
+              )}
+            </div>
+            <div className="rounded-lg border border-border-subtle bg-surface-subtle p-4">
+              <h3 className="mb-2 font-semibold text-text-primary">WIP (process orders) vs GL WIP</h3>
+              {wipGl ? (
+                <ul className="space-y-1 text-text-secondary">
+                  <li>Process WIP value: <strong>{wipGl.process_wip_value}</strong></li>
+                  <li>GL WIP balance: <strong>{wipGl.gl_wip_balance}</strong></li>
+                  <li>Variance: <strong>{wipGl.variance}</strong></li>
+                  <li className="text-xs text-text-muted">Account IDs: {wipGl.wip_account_ids.join(", ") || "—"}</li>
+                </ul>
+              ) : (
+                <p className="text-text-muted">Could not load reconciliation.</p>
+              )}
+            </div>
+          </div>
         ) : null}
       </div>
     </div>

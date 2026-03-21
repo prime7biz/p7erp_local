@@ -64,9 +64,9 @@ export function StockValuationPage() {
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Stock Valuation</h1>
           <p className="text-sm text-text-muted">
-            Phase 1: <strong>default cost</strong> from item master × on-hand per warehouse (not FIFO). Set default cost on{" "}
-            <Link className="text-status-info hover:underline" to="/app/inventory">
-              Stock Master → Items
+            Valuation uses <strong>FIFO layers</strong> when available (after GRN/receipts and FIFO rebuild); otherwise falls back to item <strong>default cost</strong>. Group/warehouse breakdown:{" "}
+            <Link className="text-status-info hover:underline" to="/app/inventory/stock-inventory-summary">
+              Inventory Summary (FIFO)
             </Link>
             .
           </p>

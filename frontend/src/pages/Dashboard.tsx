@@ -405,6 +405,8 @@ export function Dashboard() {
     { label: "Follow-up & Unified TNA", href: "/app/followup", icon: Truck },
     { label: "BOM Governance", href: "/app/bom", icon: ClipboardList },
     { label: "Critical Alerts", href: "/app/merchandising/alerts", icon: AlertTriangle },
+    { label: "Inventory FIFO", href: "/app/inventory/stock-inventory-summary", icon: Package },
+    { label: "Stock vs GL", href: "/app/inventory/reconciliation", icon: BarChart3 },
     { label: "Settings", href: "/app/settings/users", icon: Settings },
   ];
 

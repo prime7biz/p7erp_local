@@ -29,6 +29,7 @@ class AdminMeResponse(BaseModel):
     role: str
     is_active: bool
     last_login: datetime | None
+    capabilities: dict[str, bool]
 
 
 class AdminChangePasswordRequest(BaseModel):

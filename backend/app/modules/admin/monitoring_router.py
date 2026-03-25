@@ -2,21 +2,25 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
+import logging
 import shutil
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy import and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import engine, get_db
 from app.models import AuditLog, TenantUsageDaily
 from app.modules.admin.auth import AdminContext, any_admin, super_only
 from app.config import get_settings
 
 router = APIRouter(prefix="/monitoring", tags=["platform-admin-monitoring"])
+_log = logging.getLogger(__name__)
 
 
 @router.get("/audit")
@@ -200,6 +204,45 @@ async def system_health(
     }
 
 
+def _psutil_cpu_mem() -> tuple[float, int, int, float]:
+    import psutil
+
+    cpu = float(psutil.cpu_percent(interval=0.25))
+    vm = psutil.virtual_memory()
+    return cpu, int(vm.total), int(vm.used), float(vm.percent)
+
+
+@router.get("/system/resources")
+async def system_resources(
+    ctx: AdminContext = Depends(any_admin),
+):
+    """Host CPU / memory (process-local) and SQLAlchemy pool stats."""
+    out: dict = {"cpu_percent": None, "memory_total_bytes": None, "memory_used_bytes": None, "memory_percent": None, "note": None}
+    try:
+        cpu, mem_total, mem_used, mem_pct = await asyncio.to_thread(_psutil_cpu_mem)
+        out["cpu_percent"] = round(cpu, 2)
+        out["memory_total_bytes"] = mem_total
+        out["memory_used_bytes"] = mem_used
+        out["memory_percent"] = round(mem_pct, 2)
+    except Exception:
+        _log.warning("system_resources: psutil unavailable", exc_info=True)
+        out["note"] = "CPU/memory metrics require psutil on the API host."
+
+    try:
+        pool = engine.sync_engine.pool
+        out["db_pool"] = {
+            "size": pool.size(),
+            "checked_in": pool.checkedin(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+        }
+    except Exception:
+        _log.warning("system_resources: pool stats unavailable", exc_info=True)
+        out["db_pool"] = None
+
+    return out
+
+
 @router.get("/system/db-stats")
 async def db_stats(
     db: AsyncSession = Depends(get_db),
@@ -225,6 +268,7 @@ async def slow_queries(
     db: AsyncSession = Depends(get_db),
     ctx: AdminContext = Depends(super_only),
 ):
+    """Top statements by mean time from pg_stat_statements (requires extension + shared_preload_libraries)."""
     try:
         r = await db.execute(
             text(
@@ -236,6 +280,28 @@ async def slow_queries(
                 """
             )
         )
-        return {"items": [{"query": q[0][:500], "calls": q[1], "mean_ms": float(q[2]), "total_ms": float(q[3])} for q in r.all()]}
-    except Exception as e:
-        raise HTTPException(status_code=501, detail=f"pg_stat_statements not available: {e}") from e
+        rows = r.all()
+        return {
+            "items": [
+                {
+                    "query": (q[0] or "")[:500],
+                    "calls": int(q[1] or 0),
+                    "mean_ms": float(q[2] or 0),
+                    "total_ms": float(q[3] or 0),
+                }
+                for q in rows
+            ],
+        }
+    except Exception:
+        _log.warning("slow_queries: pg_stat_statements unavailable", exc_info=True)
+        # Explicit 200 — some setups still served an older handler that raised 501 until workers restart.
+        return JSONResponse(
+            status_code=200,
+            content={
+                "items": [],
+                "note": (
+                    "Slow-query stats need PostgreSQL pg_stat_statements: add it to shared_preload_libraries, "
+                    "restart Postgres, then run CREATE EXTENSION IF NOT EXISTS pg_stat_statements."
+                ),
+            },
+        )

@@ -149,6 +149,7 @@ class PlatformSettings(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     gemini_kill_switch: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    maintenance_mode: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
@@ -161,7 +162,11 @@ class PlatformPlan(Base):
     max_users: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_storage_gb: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_ai_tokens_monthly: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Module toggles; merged with tenant.feature_flags for effective entitlements.
     features_included: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    support_level: Mapped[str] = mapped_column(String(32), nullable=False, default="standard")
+    optional_addons: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    overage_rules: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     price_monthly_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     price_yearly_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -282,3 +287,40 @@ class TenantUsageDaily(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (UniqueConstraint("tenant_id", "date", name="uq_tenant_usage_daily_tenant_date"),)
+
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int | None] = mapped_column(ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True, index=True)
+    submitted_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    assigned_admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("platform_admins.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(String(64), nullable=False, default="general")
+    priority: Mapped[str] = mapped_column(String(16), nullable=False, default="medium")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open", index=True)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="admin_created")
+    sla_first_response_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    sla_resolution_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    first_response_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    escalation_level: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class SupportTicketMessage(Base):
+    __tablename__ = "support_ticket_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    author_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    author_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    is_internal_note: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

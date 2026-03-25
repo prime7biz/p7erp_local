@@ -38,8 +38,16 @@ async def list_plans(
                 "name": p.name,
                 "code": p.code,
                 "max_users": p.max_users,
+                "max_storage_gb": p.max_storage_gb,
+                "max_ai_tokens_monthly": p.max_ai_tokens_monthly,
+                "features_included": p.features_included,
+                "support_level": p.support_level,
+                "optional_addons": p.optional_addons,
+                "overage_rules": p.overage_rules,
                 "price_monthly_usd": float(p.price_monthly_usd),
+                "price_yearly_usd": float(p.price_yearly_usd),
                 "is_active": p.is_active,
+                "sort_order": p.sort_order,
             }
             for p in rows
         ]
@@ -59,6 +67,9 @@ async def create_plan(
         max_storage_gb=int(body.get("max_storage_gb") or 0),
         max_ai_tokens_monthly=int(body.get("max_ai_tokens_monthly") or 0),
         features_included=body.get("features_included"),
+        support_level=str(body.get("support_level") or "standard"),
+        optional_addons=body.get("optional_addons"),
+        overage_rules=body.get("overage_rules"),
         price_monthly_usd=Decimal(str(body.get("price_monthly_usd") or 0)),
         price_yearly_usd=Decimal(str(body.get("price_yearly_usd") or 0)),
         is_active=bool(body.get("is_active", True)),
@@ -79,13 +90,21 @@ async def patch_plan(
     p = await db.get(PlatformPlan, pid)
     if not p:
         raise HTTPException(404)
-    for k in ("name", "code", "is_active", "sort_order", "features_included"):
+    for k in ("name", "code", "is_active", "sort_order", "features_included", "optional_addons", "overage_rules"):
         if k in body:
             setattr(p, k, body[k])
+    if "support_level" in body:
+        p.support_level = str(body["support_level"])
     if "max_users" in body:
         p.max_users = int(body["max_users"])
+    if "max_storage_gb" in body:
+        p.max_storage_gb = int(body["max_storage_gb"])
+    if "max_ai_tokens_monthly" in body:
+        p.max_ai_tokens_monthly = int(body["max_ai_tokens_monthly"])
     if "price_monthly_usd" in body:
         p.price_monthly_usd = Decimal(str(body["price_monthly_usd"]))
+    if "price_yearly_usd" in body:
+        p.price_yearly_usd = Decimal(str(body["price_yearly_usd"]))
     await db.commit()
     return {"ok": True}
 
@@ -95,10 +114,13 @@ async def list_subscriptions(
     db: AsyncSession = Depends(get_db),
     ctx: AdminContext = Depends(super_or_billing),
     status: str | None = None,
+    tenant_id: int | None = None,
 ):
     q = select(TenantSubscription)
     if status:
         q = q.where(TenantSubscription.status == status)
+    if tenant_id is not None:
+        q = q.where(TenantSubscription.tenant_id == tenant_id)
     r = await db.execute(q.order_by(TenantSubscription.id.desc()).limit(500))
     rows = r.scalars().all()
     return {

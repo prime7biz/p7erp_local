@@ -336,6 +336,15 @@ const HrPerformanceCyclesPage = lazy(() =>
   import("@/pages/app/hr/performance/HrPerformanceCyclesPage").then((m) => ({ default: m.HrPerformanceCyclesPage })),
 );
 const HrEssTicketsPage = lazy(() => import("@/pages/app/hr/ess/HrEssTicketsPage").then((m) => ({ default: m.HrEssTicketsPage })));
+const SupportTicketsPage = lazy(() =>
+  import("@/pages/app/support/SupportTicketsPage").then((m) => ({ default: m.SupportTicketsPage })),
+);
+const SupportNewTicketPage = lazy(() =>
+  import("@/pages/app/support/SupportNewTicketPage").then((m) => ({ default: m.SupportNewTicketPage })),
+);
+const SupportTicketDetailPage = lazy(() =>
+  import("@/pages/app/support/SupportTicketDetailPage").then((m) => ({ default: m.SupportTicketDetailPage })),
+);
 const HrCompliancePage = lazy(() => import("@/pages/app/hr/HrCompliancePage").then((m) => ({ default: m.HrCompliancePage })));
 const GarmentProductionOverviewPage = lazy(() =>
   import("@/pages/app/production/GarmentProductionOverviewPage").then((m) => ({ default: m.GarmentProductionOverviewPage })),
@@ -474,6 +483,9 @@ export function AppProtectedRouter() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="support/tickets" element={<SupportTicketsPage />} />
+        <Route path="support/tickets/new" element={<SupportNewTicketPage />} />
+        <Route path="support/tickets/:id" element={<SupportTicketDetailPage />} />
         <Route path="customers/new" element={<CustomerCreatePage />} />
         <Route path="customers/:id/edit" element={<CustomerEditPage />} />
         <Route path="customers/:id" element={<CustomerDetailPage />} />

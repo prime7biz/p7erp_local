@@ -50,6 +50,7 @@ import {
   Menu,
   SlidersHorizontal,
   Droplets,
+  PlusCircle,
 } from "lucide-react";
 
 export type TenantTypeFilter = "manufacturer" | "buying_house" | "both";
@@ -131,6 +132,14 @@ export const menuSections: MenuSection[] = [
     icon: LayoutDashboard,
     directLink: `${PREFIX}`,
     items: [],
+  },
+  {
+    section: "Support",
+    icon: MessageSquare,
+    items: [
+      { icon: ClipboardList, label: "My tickets", href: `${PREFIX}/support/tickets` },
+      { icon: PlusCircle, label: "New ticket", href: `${PREFIX}/support/tickets/new` },
+    ],
   },
   {
     section: "Merchandising",

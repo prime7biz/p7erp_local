@@ -1,17 +1,23 @@
-"""Platform admin: admin users, rate limits, platform audit log."""
+"""Platform admin: admin users, rate limits, platform audit log, sessions."""
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import hash_password
 from app.database import get_db
-from app.models import PlatformAdmin, PlatformAdminAuditLog, TenantRateLimit
-from app.modules.admin.auth import AdminContext, super_only
+from app.models import (
+    AdminSession,
+    ImpersonationSession,
+    PlatformAdmin,
+    PlatformAdminAuditLog,
+    TenantRateLimit,
+)
+from app.modules.admin.auth import AdminContext, log_admin_action, super_only
 
 router = APIRouter(prefix="/security", tags=["platform-admin-security"])
 
@@ -47,8 +53,52 @@ async def create_admin(
         role=str(body.get("role") or "support_agent"),
     )
     db.add(a)
+    await db.flush()
+    await log_admin_action(db, admin_id=ctx.admin.id, action="ADMIN_USER_CREATE", resource="platform_admin", details=str(a.id))
     await db.commit()
     return {"id": a.id}
+
+
+@router.patch("/admins/{aid}")
+async def patch_admin(
+    aid: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(super_only),
+):
+    a = await db.get(PlatformAdmin, aid)
+    if not a:
+        raise HTTPException(404)
+    if aid == ctx.admin.id and body.get("is_active") is False:
+        raise HTTPException(400, detail="Cannot deactivate yourself")
+    if "email" in body and body["email"]:
+        a.email = str(body["email"]).strip()
+    if "role" in body:
+        a.role = str(body["role"])
+    if "is_active" in body:
+        a.is_active = bool(body["is_active"])
+    a.updated_at = datetime.utcnow()
+    await log_admin_action(db, admin_id=ctx.admin.id, action="ADMIN_USER_UPDATE", resource="platform_admin", details=str(aid))
+    await db.commit()
+    return {"ok": True}
+
+
+@router.delete("/admins/{aid}")
+async def deactivate_admin_user(
+    aid: int,
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(super_only),
+):
+    a = await db.get(PlatformAdmin, aid)
+    if not a:
+        raise HTTPException(404)
+    if aid == ctx.admin.id:
+        raise HTTPException(400, detail="Cannot deactivate yourself")
+    a.is_active = False
+    a.updated_at = datetime.utcnow()
+    await log_admin_action(db, admin_id=ctx.admin.id, action="ADMIN_USER_DEACTIVATE", resource="platform_admin", details=str(aid))
+    await db.commit()
+    return {"ok": True}
 
 
 @router.get("/rate-limits")
@@ -96,7 +146,13 @@ async def platform_audit_log(
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=500),
 ):
-    q = select(PlatformAdminAuditLog).order_by(PlatformAdminAuditLog.id.desc()).offset((page - 1) * page_size).limit(page_size)
+    total = (await db.execute(select(func.count()).select_from(PlatformAdminAuditLog))).scalar_one()
+    q = (
+        select(PlatformAdminAuditLog)
+        .order_by(PlatformAdminAuditLog.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     rows = (await db.execute(q)).scalars().all()
     return {
         "items": [
@@ -110,5 +166,82 @@ async def platform_audit_log(
                 "created_at": r.created_at,
             }
             for r in rows
-        ]
+        ],
+        "total": int(total or 0),
+        "page": page,
+        "page_size": page_size,
     }
+
+
+@router.get("/impersonation-sessions")
+async def list_impersonation_sessions(
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(super_only),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=500),
+):
+    total = (await db.execute(select(func.count()).select_from(ImpersonationSession))).scalar_one()
+    q = (
+        select(ImpersonationSession)
+        .order_by(ImpersonationSession.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    rows = (await db.execute(q)).scalars().all()
+    return {
+        "items": [
+            {
+                "id": r.id,
+                "admin_id": r.admin_id,
+                "tenant_id": r.tenant_id,
+                "user_id": r.user_id,
+                "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+                "revoked_at": r.revoked_at.isoformat() if r.revoked_at else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ],
+        "total": int(total or 0),
+    }
+
+
+@router.get("/sessions")
+async def list_admin_sessions(
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(super_only),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=500),
+):
+    total = (await db.execute(select(func.count()).select_from(AdminSession))).scalar_one()
+    q = select(AdminSession).order_by(AdminSession.id.desc()).offset((page - 1) * page_size).limit(page_size)
+    rows = (await db.execute(q)).scalars().all()
+    return {
+        "items": [
+            {
+                "id": r.id,
+                "admin_id": r.admin_id,
+                "ip_address": r.ip_address,
+                "user_agent": r.user_agent,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+                "revoked_at": r.revoked_at.isoformat() if r.revoked_at else None,
+            }
+            for r in rows
+        ],
+        "total": int(total or 0),
+    }
+
+
+@router.post("/sessions/{sid}/revoke")
+async def revoke_admin_session(
+    sid: int,
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(super_only),
+):
+    s = await db.get(AdminSession, sid)
+    if not s:
+        raise HTTPException(404)
+    s.revoked_at = datetime.utcnow()
+    await log_admin_action(db, admin_id=ctx.admin.id, action="ADMIN_SESSION_REVOKE", resource="admin_session", details=str(sid))
+    await db.commit()
+    return {"ok": True}

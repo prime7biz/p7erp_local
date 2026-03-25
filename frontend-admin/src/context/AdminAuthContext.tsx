@@ -1,7 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import type { AdminMeResponse } from "@/api/client";
 import { adminLogin, adminMe, clearAdminToken, getAdminToken, setAdminToken } from "@/api/client";
+import type { AdminCapability } from "@/auth/permissions";
 
-type Me = { id: number; username: string; email: string; role: string };
+type Me = AdminMeResponse;
 
 type Ctx = {
   token: string | null;
@@ -10,6 +12,7 @@ type Ctx = {
   login: (u: string, p: string) => Promise<void>;
   logout: () => void;
   refetch: () => Promise<void>;
+  can: (capability: AdminCapability) => boolean;
 };
 
 const AdminAuthContext = createContext<Ctx | null>(null);
@@ -51,13 +54,18 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     setMe(null);
   }, []);
 
+  const can = useCallback(
+    (capability: AdminCapability) => me?.capabilities?.[capability] === true,
+    [me],
+  );
+
   useEffect(() => {
     if (getAdminToken()) void refetch();
   }, [refetch]);
 
   const value = useMemo(
-    () => ({ token, me, loading, login, logout, refetch }),
-    [token, me, loading, login, logout, refetch],
+    () => ({ token, me, loading, login, logout, refetch, can }),
+    [token, me, loading, login, logout, refetch, can],
   );
 
   return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;

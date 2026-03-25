@@ -19,6 +19,7 @@ from app.modules.admin.auth import (
     create_admin_access_token,
     log_admin_action,
 )
+from app.modules.admin.permissions import compute_capabilities
 from app.modules.admin.schemas import (
     AdminChangePasswordRequest,
     AdminLoginRequest,
@@ -82,6 +83,7 @@ async def admin_me(ctx: AdminContext = Depends(any_admin)):
         role=a.role,
         is_active=a.is_active,
         last_login=a.last_login,
+        capabilities=compute_capabilities(a.role),
     )
 
 

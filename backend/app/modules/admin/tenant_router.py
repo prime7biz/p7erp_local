@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.storage import get_media_root
 from app.database import get_db
-from app.models import AuditLog, Customer, Order, Role, Tenant, User
+from app.models import AuditLog, Customer, Order, PlatformPlan, Role, Tenant, TenantSubscription, User
+from app.models.tenant import TenantType
 from app.modules.admin.auth import AdminContext, any_admin, client_ip, log_admin_action, super_only
 from app.modules.admin.schemas import (
     PaginatedMeta,
@@ -52,12 +53,21 @@ async def list_tenants(
     search: str | None = None,
     is_active: bool | None = None,
     include_deleted: bool = False,
+    tenant_type: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str = "desc",
 ):
     conditions = []
     if not include_deleted:
         conditions.append(Tenant.deleted_at.is_(None))
     if is_active is not None:
         conditions.append(Tenant.is_active.is_(is_active))
+    if tenant_type:
+        try:
+            tt = TenantType(tenant_type)
+            conditions.append(Tenant.tenant_type == tt)
+        except ValueError:
+            pass
     if search:
         term = f"%{search.strip()}%"
         conditions.append(
@@ -74,7 +84,15 @@ async def list_tenants(
     q = select(Tenant)
     if conditions:
         q = q.where(and_(*conditions))
-    q = q.order_by(Tenant.id.desc()).offset((page - 1) * page_size).limit(page_size)
+    sort_dir = (sort_dir or "desc").lower()
+    asc = sort_dir == "asc"
+    if sort_by == "name":
+        q = q.order_by(Tenant.name.asc() if asc else Tenant.name.desc())
+    elif sort_by == "created_at":
+        q = q.order_by(Tenant.created_at.asc() if asc else Tenant.created_at.desc())
+    else:
+        q = q.order_by(Tenant.id.desc())
+    q = q.offset((page - 1) * page_size).limit(page_size)
     rows = (await db.execute(q)).scalars().all()
     items = [
         TenantListItem(
@@ -328,3 +346,54 @@ async def tenant_stats(
         customer_count=int(customer_count or 0),
         storage_bytes_used=storage,
     )
+
+
+@router.get("/{tenant_id}/entitlements")
+async def tenant_entitlements(
+    tenant_id: int,
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(any_admin),
+):
+    """Effective limits: subscription plan merged with tenant feature_flags (for UI; enforcement stays in app services)."""
+    t = await db.get(Tenant, tenant_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    sub = (
+        await db.execute(select(TenantSubscription).where(TenantSubscription.tenant_id == tenant_id))
+    ).scalar_one_or_none()
+    plan: PlatformPlan | None = None
+    if sub:
+        plan = await db.get(PlatformPlan, sub.plan_id)
+    tf = t.feature_flags if isinstance(t.feature_flags, dict) else {}
+    pm = plan.features_included if plan and isinstance(plan.features_included, dict) else {}
+    return {
+        "tenant_id": tenant_id,
+        "subscription": (
+            {
+                "id": sub.id,
+                "plan_id": sub.plan_id,
+                "status": sub.status,
+                "billing_cycle": sub.billing_cycle,
+            }
+            if sub
+            else None
+        ),
+        "plan": (
+            {
+                "id": plan.id,
+                "code": plan.code,
+                "name": plan.name,
+                "max_users": plan.max_users,
+                "max_storage_gb": plan.max_storage_gb,
+                "max_ai_tokens_monthly": plan.max_ai_tokens_monthly,
+                "support_level": plan.support_level,
+                "features_included": plan.features_included,
+                "optional_addons": plan.optional_addons,
+                "overage_rules": plan.overage_rules,
+            }
+            if plan
+            else None
+        ),
+        "tenant_feature_flags": tf,
+        "effective_modules": {**pm, **tf},
+    }

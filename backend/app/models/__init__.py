@@ -12,6 +12,8 @@ from app.models.platform_admin import (
     PlatformAnnouncement,
     PlatformPlan,
     PlatformSettings,
+    SupportTicket,
+    SupportTicketMessage,
     TenantAiBudget,
     TenantNote,
     TenantRateLimit,

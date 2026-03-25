@@ -36,6 +36,37 @@ export async function getActiveAnnouncements(): Promise<{ items: ActiveAnnouncem
   return request<{ items: ActiveAnnouncementItem[] }>("/api/v1/announcements/active");
 }
 
+/** Platform (P7) support — tenant portal tickets to the operations team. */
+export type PlatformSupportTicketItem = {
+  id: number;
+  tenant_id: number | null;
+  title: string;
+  description: string;
+  category: string;
+  priority: string;
+  status: string;
+  source: string;
+  sla_first_response_due_at: string | null;
+  sla_resolution_due_at: string | null;
+  first_response_at: string | null;
+  resolved_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type PlatformSupportTicketMessage = {
+  id: number;
+  ticket_id: number;
+  author_type: string;
+  author_id: number;
+  content: string;
+  created_at: string | null;
+};
+
+export type PlatformSupportTicketDetail = PlatformSupportTicketItem & {
+  messages: PlatformSupportTicketMessage[];
+};
+
 export interface TenantResponse {
   id: number;
   name: string;
@@ -2481,6 +2512,35 @@ export const api = {
     return request<Record<string, unknown>>("/api/v1/hr/ess/my-tickets", {
       method: "POST",
       body: JSON.stringify(data),
+    });
+  },
+  async listPlatformSupportTickets(params?: {
+    page?: number;
+    page_size?: number;
+    status?: string;
+  }): Promise<{ items: PlatformSupportTicketItem[]; total: number; page: number; page_size: number }> {
+    const q = new URLSearchParams();
+    if (params?.page != null) q.set("page", String(params.page));
+    if (params?.page_size != null) q.set("page_size", String(params.page_size));
+    if (params?.status) q.set("status", params.status);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request(`/api/v1/support/tickets${suffix}`);
+  },
+  async getPlatformSupportTicket(id: number): Promise<PlatformSupportTicketDetail> {
+    return request(`/api/v1/support/tickets/${id}`);
+  },
+  async createPlatformSupportTicket(data: {
+    title: string;
+    description: string;
+    category?: string;
+    priority?: string;
+  }): Promise<{ id: number }> {
+    return request("/api/v1/support/tickets", { method: "POST", body: JSON.stringify(data) });
+  },
+  async replyPlatformSupportTicket(id: number, content: string): Promise<{ id: number }> {
+    return request(`/api/v1/support/tickets/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
     });
   },
   async getHrReportSummary(params?: { month?: string }): Promise<HrReportSummaryResponse> {

@@ -102,9 +102,15 @@ export type AdminMeResponse = {
 };
 
 export async function adminLogin(username: string, password: string) {
+  const body = new URLSearchParams();
+  body.set("username", username);
+  body.set("password", password);
   return request<AdminTokenResponse>("/api/v1/admin/auth/login", {
     method: "POST",
-    body: JSON.stringify({ username, password }),
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: body.toString(),
   });
 }
 

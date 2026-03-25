@@ -15,6 +15,8 @@ export default {
         surface: {
           base: "#f8fafc",
           raised: "#ffffff",
+          /** Cards / modals above base — used as bg-surface-elevated across the app */
+          elevated: "#ffffff",
           subtle: "#f1f5f9",
           inverse: "#0f172a",
         },

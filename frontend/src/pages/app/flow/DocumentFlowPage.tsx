@@ -52,6 +52,8 @@ export function DocumentFlowPage() {
   const [proformas, setProformas] = useState<ProformaInvoiceRow[]>([]);
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [tradeCases, setTradeCases] = useState<TradeCaseRow[]>([]);
+  const [tradeDocCounts, setTradeDocCounts] = useState<Record<number, number>>({});
+  const [tradeShipCounts, setTradeShipCounts] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -64,13 +66,14 @@ export function DocumentFlowPage() {
     setLoading(true);
     setError("");
     try {
-      const [orderList, quotationList, inquiryList, proformaList, customerList, tradeCaseList] = await Promise.all([
+      const [orderList, quotationList, inquiryList, proformaList, customerList, tradeCaseList, countRes] = await Promise.all([
         api.listOrders({ limit: 500, offset: 0 }),
         api.listQuotations({ limit: 500, offset: 0 }),
         api.listInquiries({ limit: 500, offset: 0 }),
         api.listProformaInvoices(),
         api.listCustomers(),
         api.listTradeCases({ limit: 500 }),
+        api.getTradeCaseDocumentCounts().catch(() => ({ documents: {}, shipments: {} })),
       ]);
       setOrders(Array.isArray(orderList) ? orderList : []);
       setQuotations(Array.isArray(quotationList) ? quotationList : []);
@@ -78,6 +81,20 @@ export function DocumentFlowPage() {
       setProformas(Array.isArray(proformaList) ? proformaList : []);
       setCustomers(Array.isArray(customerList) ? customerList : []);
       setTradeCases(Array.isArray(tradeCaseList) ? tradeCaseList : []);
+      const docMap: Record<number, number> = {};
+      const shipMap: Record<number, number> = {};
+      if (countRes?.documents) {
+        Object.entries(countRes.documents).forEach(([k, v]) => {
+          docMap[Number(k)] = Number(v) || 0;
+        });
+      }
+      if (countRes?.shipments) {
+        Object.entries(countRes.shipments).forEach(([k, v]) => {
+          shipMap[Number(k)] = Number(v) || 0;
+        });
+      }
+      setTradeDocCounts(docMap);
+      setTradeShipCounts(shipMap);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load document flow");
       setOrders([]);
@@ -86,6 +103,8 @@ export function DocumentFlowPage() {
       setProformas([]);
       setCustomers([]);
       setTradeCases([]);
+      setTradeDocCounts({});
+      setTradeShipCounts({});
     } finally {
       setLoading(false);
     }
@@ -197,6 +216,9 @@ export function DocumentFlowPage() {
       "Quantity",
       "Proforma Count",
       "Proforma Refs",
+      "Trade Case Ref",
+      "Trade Docs",
+      "Shipments",
     ];
     const lines = [
       headers.join(","),
@@ -213,6 +235,9 @@ export function DocumentFlowPage() {
           escapeCsvCell(r.order.quantity),
           String(r.proformas.length),
           escapeCsvCell(r.proformas.map((p) => p.reference ?? `#${p.id}`).join("; ")),
+          escapeCsvCell(tradeCaseByOrderId.get(r.order.id)?.reference),
+          String(tradeCaseByOrderId.get(r.order.id) ? tradeDocCounts[tradeCaseByOrderId.get(r.order.id)!.id] ?? 0 : ""),
+          String(tradeCaseByOrderId.get(r.order.id) ? tradeShipCounts[tradeCaseByOrderId.get(r.order.id)!.id] ?? 0 : ""),
         ].join(",")
       ),
     ];
@@ -223,7 +248,7 @@ export function DocumentFlowPage() {
     a.download = `document-flow-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [filteredRows]);
+  }, [filteredRows, tradeCaseByOrderId, tradeDocCounts, tradeShipCounts]);
 
   return (
     <div className="space-y-6">
@@ -436,6 +461,7 @@ export function DocumentFlowPage() {
                   <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Delivery</th>
                   <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Proforma</th>
                   <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Trade Case</th>
+                  <th className="px-4 py-3 font-semibold text-text-secondary uppercase tracking-wider">Docs / Shipments</th>
                   <th className="px-4 py-3 text-right font-semibold text-text-secondary uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -559,6 +585,30 @@ export function DocumentFlowPage() {
                       ) : (
                         "—"
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-text-secondary">
+                      {(() => {
+                        const tc = tradeCaseByOrderId.get(row.order.id);
+                        if (!tc) return "—";
+                        const d = tradeDocCounts[tc.id] ?? 0;
+                        const sh = tradeShipCounts[tc.id] ?? 0;
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <Link
+                              to={`${PREFIX}/trade/cases/${tc.id}#trade-case-documents`}
+                              className="text-brand-primary hover:underline"
+                            >
+                              {d} doc{d === 1 ? "" : "s"}
+                            </Link>
+                            <Link
+                              to={`${PREFIX}/logistics?trade_case_id=${tc.id}`}
+                              className="text-text-muted hover:underline"
+                            >
+                              {sh} shipment{sh === 1 ? "" : "s"}
+                            </Link>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Link

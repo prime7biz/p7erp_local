@@ -11,6 +11,7 @@ export function HrMyPayslipsPage() {
       title="My Payslips"
       description="View your generated payslips."
       emptyMessage="No payslips found."
+      breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "My Payslips" }]}
       loadItems={() => api.listHrEssMyPayslips()}
       columns={[
         { header: "Payroll Run ID", cell: (row) => row.payroll_run_id },

@@ -7,7 +7,9 @@ import {
   type HrEmployeeCreate,
   type HrEmployeeResponse,
   type HrEmployeeUpdate,
+  type UserWithRoleResponse,
 } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 
 export function HrEmployeesPage() {
   const [departments, setDepartments] = useState<HrDepartmentResponse[]>([]);
@@ -15,11 +17,13 @@ export function HrEmployeesPage() {
   const [employees, setEmployees] = useState<HrEmployeeResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<HrEmployeeResponse | null>(null);
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [tenantUsers, setTenantUsers] = useState<UserWithRoleResponse[]>([]);
   const [form, setForm] = useState<HrEmployeeCreate>({
     employee_code: "",
     first_name: "",
@@ -29,6 +33,7 @@ export function HrEmployeesPage() {
     department_id: null,
     designation_id: null,
     joining_date: "",
+    user_id: null,
   });
 
   const departmentMap = useMemo(() => new Map(departments.map((d) => [d.id, d.name])), [departments]);
@@ -58,6 +63,13 @@ export function HrEmployeesPage() {
   }, [load]);
 
   useEffect(() => {
+    api
+      .listUsers()
+      .then(setTenantUsers)
+      .catch((e) => logApiError("HrEmployeesPage.listUsers", e));
+  }, []);
+
+  useEffect(() => {
     const close = () => setOpenActionsId(null);
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
@@ -74,6 +86,7 @@ export function HrEmployeesPage() {
       department_id: null,
       designation_id: null,
       joining_date: "",
+      user_id: null,
     });
     setModalOpen(true);
   };
@@ -89,6 +102,7 @@ export function HrEmployeesPage() {
       department_id: row.department_id,
       designation_id: row.designation_id,
       joining_date: row.joining_date ?? "",
+      user_id: row.user_id ?? null,
     });
     setModalOpen(true);
   };
@@ -113,6 +127,7 @@ export function HrEmployeesPage() {
           department_id: form.department_id ?? null,
           designation_id: form.designation_id ?? null,
           joining_date: form.joining_date || null,
+          user_id: form.user_id ?? null,
         };
         await api.updateHrEmployee(editing.id, payload);
       } else {
@@ -125,6 +140,7 @@ export function HrEmployeesPage() {
           department_id: form.department_id ?? null,
           designation_id: form.designation_id ?? null,
           joining_date: form.joining_date || null,
+          user_id: form.user_id ?? null,
         });
       }
       closeModal();
@@ -154,6 +170,48 @@ export function HrEmployeesPage() {
           </label>
           <button
             type="button"
+            onClick={async () => {
+              setInfo("");
+              try {
+                const blob = await api.exportHrEmployees();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "employees.xlsx";
+                a.click();
+                URL.revokeObjectURL(url);
+                setInfo("Export started.");
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Export failed");
+              }
+            }}
+            className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary"
+          >
+            Export Excel
+          </button>
+          <label className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary cursor-pointer">
+            Import Excel
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setError("");
+                try {
+                  const r = await api.importHrEmployees(file);
+                  setError(`Imported: ${r.created} created, ${r.updated} updated.`);
+                  await load();
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Import failed");
+                }
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <button
+            type="button"
             onClick={openCreate}
             className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-white"
           >
@@ -163,6 +221,7 @@ export function HrEmployeesPage() {
       </div>
 
       {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">{error}</div>}
+      {info && <div className="rounded-lg border border-status-success/30 bg-status-success-subtle px-4 py-2 text-sm text-status-success-foreground">{info}</div>}
 
       <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
         {loading ? (
@@ -299,6 +358,23 @@ export function HrEmployeesPage() {
                   </option>
                 ))}
               </select>
+              <label className="sm:col-span-2 flex flex-col gap-1 text-xs text-text-muted">
+                Linked app user (ESS / login)
+                <select
+                  className="rounded border border-border-strong px-3 py-2 text-sm text-text-primary"
+                  value={form.user_id ?? ""}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, user_id: e.target.value ? Number(e.target.value) : null }))
+                  }
+                >
+                  <option value="">None</option>
+                  {tenantUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.username} {u.email ? `(${u.email})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <input
                 type="date"
                 className="rounded border border-border-strong px-3 py-2 text-sm sm:col-span-2"

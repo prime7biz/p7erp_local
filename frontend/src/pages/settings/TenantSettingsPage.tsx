@@ -24,6 +24,8 @@ export function TenantSettingsPage() {
     logo: "",
     tenant_type: "both",
     default_commission_mode: null,
+    country_code: null,
+    timezone: null,
   });
 
   useEffect(() => {
@@ -37,6 +39,8 @@ export function TenantSettingsPage() {
           logo: data.logo ?? "",
           tenant_type: data.tenant_type,
           default_commission_mode: data.default_commission_mode ?? null,
+          country_code: data.country_code ?? null,
+          timezone: data.timezone ?? null,
         });
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load tenant settings"))
@@ -55,6 +59,8 @@ export function TenantSettingsPage() {
         logo: form.logo?.trim() || null,
         tenant_type: form.tenant_type,
         default_commission_mode: form.default_commission_mode ?? null,
+        country_code: form.country_code?.trim() || null,
+        timezone: form.timezone?.trim() || null,
       });
       setForm({
         company_name: updated.company_name,
@@ -62,6 +68,8 @@ export function TenantSettingsPage() {
         logo: updated.logo ?? "",
         tenant_type: updated.tenant_type,
         default_commission_mode: updated.default_commission_mode ?? null,
+        country_code: updated.country_code ?? null,
+        timezone: updated.timezone ?? null,
       });
       setSuccess("Tenant settings updated successfully.");
     } catch (e) {
@@ -149,6 +157,29 @@ export function TenantSettingsPage() {
           <p className="mt-1 text-xs text-text-muted">
             Used as fallback on inquiry/quotation create when no customer link commission is set.
           </p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">Country code (ISO)</label>
+          <input
+            type="text"
+            value={form.country_code ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, country_code: e.target.value || null }))}
+            className="w-full rounded border border-border px-3 py-2 text-sm uppercase max-w-[120px]"
+            placeholder="e.g. BD"
+            maxLength={4}
+          />
+          <p className="mt-1 text-xs text-text-muted">Used for public holiday import and factory calendar (e.g. BD, US).</p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">Timezone (IANA)</label>
+          <input
+            type="text"
+            value={form.timezone ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value || null }))}
+            className="w-full rounded border border-border px-3 py-2 text-sm"
+            placeholder="e.g. Asia/Dhaka"
+            maxLength={64}
+          />
         </div>
         <button
           type="submit"

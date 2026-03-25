@@ -10,6 +10,7 @@ import {
 } from "@/api/client";
 import { RefreshCw, Play, X, LayoutGrid, List, Bookmark } from "lucide-react";
 import { logApiError } from "@/utils/logApiError";
+import { MerchAlertCard } from "@/components/merch/MerchAlertCard";
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   critical: { bg: "bg-status-danger-subtle", text: "text-status-danger-foreground", label: "Critical" },
@@ -40,8 +41,9 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function MerchCriticalAlertsPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const entityTypeFromUrl = searchParams.get("entity_type") ?? "";
+  const alertTypeFromUrl = searchParams.get("alert_type") ?? "";
   const entityIdFromUrlRaw = searchParams.get("entity_id");
   const entityIdFromUrl = entityIdFromUrlRaw ? Number(entityIdFromUrlRaw) : undefined;
   const entityIdFilter = Number.isFinite(entityIdFromUrl) ? entityIdFromUrl : undefined;
@@ -82,6 +84,7 @@ export function MerchCriticalAlertsPage() {
           page_size: pageSize,
           severity: severityFilter || undefined,
           status: statusFilter || undefined,
+          alert_type: alertTypeFromUrl || undefined,
           entity_type: entityTypeFromUrl || undefined,
           entity_id: entityIdFilter,
           sort: "-created_at",
@@ -89,6 +92,7 @@ export function MerchCriticalAlertsPage() {
         api.getMerchAlertsSummary({
           severity: severityFilter || undefined,
           status: statusFilter || undefined,
+          alert_type: alertTypeFromUrl || undefined,
           entity_type: entityTypeFromUrl || undefined,
           entity_id: entityIdFilter,
         }),
@@ -97,11 +101,12 @@ export function MerchCriticalAlertsPage() {
       setTotal(listRes.total);
       setSummary(summaryRes);
     } catch (e) {
+      logApiError("MerchCriticalAlertsPage.fetchList", e);
       setError(e instanceof Error ? e.message : "Failed to load alerts");
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, severityFilter, statusFilter, entityTypeFromUrl, entityIdFilter]);
+  }, [page, pageSize, severityFilter, statusFilter, entityTypeFromUrl, entityIdFilter, alertTypeFromUrl]);
 
   useEffect(() => {
     fetchList();
@@ -141,6 +146,7 @@ export function MerchCriticalAlertsPage() {
       setSaveViewModalOpen(false);
       setSaveViewName("");
     } catch (e) {
+      logApiError("MerchCriticalAlertsPage.saveCurrentView", e);
       setError(e instanceof Error ? e.message : "Failed to save view");
     }
   };
@@ -158,6 +164,9 @@ export function MerchCriticalAlertsPage() {
       for (const id of selectedIds) await api.updateMerchAlertStatus(id, "resolved");
       setSelectedIds([]);
       await fetchList();
+    } catch (e) {
+      logApiError("MerchCriticalAlertsPage.bulkResolve", e);
+      setError(e instanceof Error ? e.message : "Failed to resolve selected alerts");
     } finally {
       setActionLoading(false);
     }
@@ -172,6 +181,7 @@ export function MerchCriticalAlertsPage() {
       await new Promise((r) => setTimeout(r, 2000));
       await fetchList();
     } catch (e) {
+      logApiError("MerchCriticalAlertsPage.runScan", e);
       const msg = e instanceof Error ? e.message : "Scan failed";
       const isNetworkError = typeof msg === "string" && (msg === "Failed to fetch" || msg.toLowerCase().includes("network"));
       setError(isNetworkError ? "Could not reach the server. Ensure the backend is running (e.g. port 8000) and try again." : msg);
@@ -232,6 +242,9 @@ export function MerchCriticalAlertsPage() {
       setDrawerAlert((prev) => (prev ? { ...prev, status } : null));
       await fetchList();
       if (["resolved", "closed"].includes(status)) setDrawerAlertId(null);
+    } catch (e) {
+      logApiError("MerchCriticalAlertsPage.updateStatus", e);
+      setError(e instanceof Error ? e.message : "Failed to update alert status");
     } finally {
       setActionLoading(false);
     }
@@ -243,12 +256,15 @@ export function MerchCriticalAlertsPage() {
       await api.snoozeMerchAlert(alertId, until);
       setDrawerAlertId(null);
       await fetchList();
+    } catch (e) {
+      logApiError("MerchCriticalAlertsPage.snoozeAlert", e);
+      setError(e instanceof Error ? e.message : "Failed to snooze alert");
     } finally {
       setActionLoading(false);
     }
   };
 
-  const hasFilters = severityFilter || statusFilter;
+  const hasFilters = Boolean(severityFilter || statusFilter || alertTypeFromUrl);
 
   return (
     <div className="space-y-6">
@@ -319,6 +335,24 @@ export function MerchCriticalAlertsPage() {
             Scoped: {entityTypeFromUrl || "entity"} {entityIdFilter != null ? `#${entityIdFilter}` : ""}
           </div>
         )}
+        {alertTypeFromUrl && (
+          <div className="rounded-md border border-status-info/30 bg-status-info/10 px-2.5 py-1 text-xs text-text-primary">
+            Alert type: <code className="font-mono">{alertTypeFromUrl}</code>
+            <button
+              type="button"
+              className="ml-2 font-medium text-brand-primary underline"
+              onClick={() => {
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.delete("alert_type");
+                  return next;
+                });
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
         <label className="text-sm text-text-secondary">
           Severity
           <select
@@ -352,7 +386,18 @@ export function MerchCriticalAlertsPage() {
         {hasFilters && (
           <button
             type="button"
-            onClick={() => { setSeverityFilter(""); setStatusFilter(""); setPage(1); }}
+            onClick={() => {
+              setSeverityFilter("");
+              setStatusFilter("");
+              setPage(1);
+              if (alertTypeFromUrl) {
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.delete("alert_type");
+                  return next;
+                });
+              }
+            }}
             className="text-sm text-brand-primary hover:underline"
           >
             Clear filters
@@ -445,7 +490,18 @@ export function MerchCriticalAlertsPage() {
             {hasFilters && (
               <button
                 type="button"
-                onClick={() => { setSeverityFilter(""); setStatusFilter(""); setPage(1); }}
+                onClick={() => {
+                  setSeverityFilter("");
+                  setStatusFilter("");
+                  setPage(1);
+                  if (alertTypeFromUrl) {
+                    setSearchParams((prev) => {
+                      const next = new URLSearchParams(prev);
+                      next.delete("alert_type");
+                      return next;
+                    });
+                  }
+                }}
                 className="mt-3 text-sm text-brand-primary hover:underline"
               >
                 Clear filters
@@ -454,40 +510,15 @@ export function MerchCriticalAlertsPage() {
           </div>
         ) : viewMode === "cards" ? (
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {items.map((a) => {
-              const s = SEVERITY_STYLES[a.severity] ?? SEVERITY_STYLES.medium ?? DEFAULT_SEVERITY_STYLE;
-              return (
-                <div
-                  key={a.id}
-                  className={`rounded-lg border-l-4 ${s.bg} border ${selectedIds.includes(a.id) ? "ring-2 ring-focus-ring/60 border-brand-primary/40" : "border-border"} bg-surface-raised p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow ${a.severity === "critical" ? "border-l-status-danger" : a.severity === "high" ? "border-l-status-warning" : ""}`}
-                  onClick={() => setDrawerAlertId(a.id)}
-                >
-                  <div className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(a.id)}
-                      onChange={(e) => { e.stopPropagation(); toggleSelect(a.id); }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="mt-0.5 rounded"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <SeverityBadge severity={a.severity} />
-                        <StatusBadge status={a.status} />
-                      </div>
-                      <p className="mt-1.5 font-medium text-text-primary line-clamp-2">{a.title}</p>
-                      <p className="text-xs text-text-muted mt-0.5">{a.alert_type.replace(/_/g, " ")}</p>
-                      {a.order_code && (
-                        <Link to={`/app/orders/${a.order_id!}`} className="text-xs text-brand-primary hover:underline mt-1 inline-block" onClick={(e) => e.stopPropagation()}>
-                          {a.order_code}
-                        </Link>
-                      )}
-                      <p className="text-xs text-text-muted mt-1">{a.created_at ? new Date(a.created_at).toLocaleDateString() : ""}</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {items.map((a) => (
+              <MerchAlertCard
+                key={a.id}
+                alert={a}
+                selected={selectedIds.includes(a.id)}
+                onToggleSelected={toggleSelect}
+                onOpen={setDrawerAlertId}
+              />
+            ))}
           </div>
         ) : (
           <table className="min-w-full text-sm">
@@ -679,6 +710,9 @@ export function MerchCriticalAlertsPage() {
                               const added = await api.addMerchAlertComment(drawerAlertId, newComment.trim());
                               setDrawerComments((prev) => [...prev, added]);
                               setNewComment("");
+                            } catch (e) {
+                              logApiError("MerchCriticalAlertsPage.addComment", e);
+                              setError(e instanceof Error ? e.message : "Failed to add comment");
                             } finally {
                               setActionLoading(false);
                             }
@@ -706,6 +740,9 @@ export function MerchCriticalAlertsPage() {
                               await api.escalateMerchAlert(drawerAlertId, 1, undefined, "Escalated from alert center");
                               setDrawerAlert((prev) => (prev ? { ...prev, status: "escalated" } : null));
                               await fetchList();
+                            } catch (e) {
+                              logApiError("MerchCriticalAlertsPage.escalateAlert", e);
+                              setError(e instanceof Error ? e.message : "Failed to escalate alert");
                             } finally {
                               setActionLoading(false);
                             }

@@ -7,6 +7,7 @@ export function HrReviewsPage() {
       title="Performance Reviews"
       description="Capture review cycle scores and reviewer comments."
       emptyMessage="No reviews found."
+      breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "Reviews" }]}
       loadItems={() => api.listHrReviews()}
       createItem={(payload) => api.createHrReview(payload)}
       createLabel="Add review"

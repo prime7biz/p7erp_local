@@ -4,6 +4,8 @@ import { Download, RefreshCw } from "lucide-react";
 
 import { api, type TradeCaseDashboardResponse, type TradeCaseRow } from "@/api/client";
 
+const ALERTS = "/app/merchandising/alerts";
+
 export function TradeDashboardPage() {
   const [summary, setSummary] = useState<TradeCaseDashboardResponse | null>(null);
   const [riskCases, setRiskCases] = useState<TradeCaseRow[]>([]);
@@ -56,10 +58,10 @@ export function TradeDashboardPage() {
             Refresh
           </button>
           <Link
-            to="/app/merch/critical-alerts?entity_type=trade_case"
+            to={`${ALERTS}?entity_type=trade_case`}
             className="rounded-xl border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
           >
-            Trade alerts
+            All trade alerts
           </Link>
           <Link
             to="/app/trade/cases"
@@ -77,31 +79,70 @@ export function TradeDashboardPage() {
       )}
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+        <Link
+          to="/app/trade/cases"
+          className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm transition hover:border-brand-primary/30"
+        >
           <p className="text-xs uppercase tracking-wide text-text-muted">Total Cases</p>
           <p className="mt-1 text-2xl font-semibold text-text-primary">{summary?.total_cases ?? 0}</p>
-        </div>
-        <div className="rounded-xl border border-brand-primary/30 bg-brand-primary/10/70 p-4 shadow-sm">
+          <p className="mt-1 text-xs text-brand-primary">View list →</p>
+        </Link>
+        <Link
+          to="/app/trade/cases"
+          className="rounded-xl border border-brand-primary/30 bg-brand-primary/10/70 p-4 shadow-sm transition hover:border-brand-primary/50"
+        >
           <p className="text-xs uppercase tracking-wide text-text-muted">Open Cases</p>
           <p className="mt-1 text-2xl font-semibold text-brand-primary">{summary?.open_cases ?? 0}</p>
-        </div>
-        <div className="rounded-xl border border-status-success/30 bg-status-success-subtle/70 p-4 shadow-sm">
+          <p className="mt-1 text-xs text-brand-primary">View list →</p>
+        </Link>
+        <Link
+          to="/app/trade/cases?stage=SHIPPED"
+          className="rounded-xl border border-status-success/30 bg-status-success-subtle/70 p-4 shadow-sm transition hover:border-status-success/50"
+        >
           <p className="text-xs uppercase tracking-wide text-text-muted">Shipped Cases</p>
           <p className="mt-1 text-2xl font-semibold text-status-success-foreground">{summary?.shipped_cases ?? 0}</p>
-        </div>
-        <div className="rounded-xl border border-status-success/30 bg-status-success-subtle/70 p-4 shadow-sm">
+          <p className="mt-1 text-xs text-status-success-foreground">Filter stage SHIPPED →</p>
+        </Link>
+        <Link
+          to="/app/trade/cases?stage=SETTLED"
+          className="rounded-xl border border-status-success/30 bg-status-success-subtle/70 p-4 shadow-sm transition hover:border-status-success/50"
+        >
           <p className="text-xs uppercase tracking-wide text-text-muted">Settled Cases</p>
           <p className="mt-1 text-2xl font-semibold text-status-success-foreground">{summary?.settled_cases ?? 0}</p>
-        </div>
-        <div className="rounded-xl border border-status-warning/30 bg-status-warning-subtle/70 p-4 shadow-sm">
+          <p className="mt-1 text-xs text-status-success-foreground">Filter stage SETTLED →</p>
+        </Link>
+        <Link
+          to={`${ALERTS}?entity_type=trade_case&alert_type=trade_docs_missing_before_etd`}
+          className="rounded-xl border border-status-warning/30 bg-status-warning-subtle/70 p-4 shadow-sm transition hover:border-status-warning/50"
+        >
           <p className="text-xs uppercase tracking-wide text-text-muted">Cases Missing Docs</p>
           <p className="mt-1 text-2xl font-semibold text-status-warning-foreground">{summary?.missing_docs_cases ?? 0}</p>
-        </div>
-        <div className="rounded-xl border border-status-danger/20 bg-status-danger-subtle/70 p-4 shadow-sm">
+          <p className="mt-1 text-xs text-status-warning-foreground">Alerts: docs before ETD →</p>
+        </Link>
+        <Link
+          to={`${ALERTS}?entity_type=shipment&alert_type=trade_shipment_delayed`}
+          className="rounded-xl border border-status-danger/20 bg-status-danger-subtle/70 p-4 shadow-sm transition hover:border-status-danger/40"
+        >
           <p className="text-xs uppercase tracking-wide text-text-muted">Overdue Shipments</p>
           <p className="mt-1 text-2xl font-semibold text-status-danger-foreground">{summary?.overdue_shipments ?? 0}</p>
-        </div>
+          <p className="mt-1 text-xs text-status-danger-foreground">Alerts: delayed shipment →</p>
+        </Link>
       </section>
+
+      <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+        <Link className="rounded-lg border border-border-strong px-2 py-1 text-brand-primary hover:bg-surface-subtle" to="/app/trade/cases?at_risk=1">
+          List: at-risk cases (ETD window)
+        </Link>
+        <span className="text-text-muted">·</span>
+        <span>More alert types:</span>
+        <Link className="text-brand-primary underline" to={`${ALERTS}?entity_type=trade_case&alert_type=trade_lc_expiry_soon`}>
+          LC expiry soon
+        </Link>
+        <span>·</span>
+        <Link className="text-brand-primary underline" to={`${ALERTS}?entity_type=trade_case&alert_type=trade_case_stuck`}>
+          Case stuck
+        </Link>
+      </div>
 
       <section className="rounded-xl border border-border bg-surface-raised shadow-sm overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-subtle px-4 py-2">
@@ -115,7 +156,7 @@ export function TradeDashboardPage() {
                 return t.includes(",") || t.includes('"') ? `"${t.replace(/"/g, '""')}"` : t;
               };
               const rows = riskCases.map((r) =>
-                [r.reference, r.direction, r.current_stage ?? "", r.status].map(escape).join(",")
+                [r.reference, r.direction, r.current_stage ?? "", r.status].map(escape).join(","),
               );
               const csv = [headers.join(","), ...rows].join("\n");
               const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });

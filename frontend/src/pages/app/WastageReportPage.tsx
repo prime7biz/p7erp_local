@@ -102,6 +102,7 @@ export function WastageReportPage() {
       setManagementSummary(mgmtSummary);
       setLastRefresh(new Date().toLocaleString());
     } catch (e) {
+      logApiError("WastageReportPage.load", e);
       setError(e instanceof Error ? e.message : "Failed to load wastage report");
       setRows([]);
       setSummary(null);
@@ -155,7 +156,8 @@ export function WastageReportPage() {
     try {
       const detail = await api.getWastageOrderDetail(orderIdParam);
       setDrawerDetail(detail);
-    } catch {
+    } catch (e) {
+      logApiError("WastageReportPage.getWastageOrderDetail", e);
       setDrawerDetail(null);
     } finally {
       setDrawerLoading(false);
@@ -196,6 +198,7 @@ export function WastageReportPage() {
       setSaveViewName("");
       setSaveViewModalOpen(false);
     } catch (e) {
+      logApiError("WastageReportPage.createWastageView", e);
       setError(e instanceof Error ? e.message : "Failed to save view");
     }
   }, [saveViewName, orderId, styleId, buyerId, dateFrom, dateTo, aboveThresholdOnly]);
@@ -209,6 +212,7 @@ export function WastageReportPage() {
       });
       load();
     } catch (e) {
+      logApiError("WastageReportPage.refreshWastageSummary", e);
       setError(e instanceof Error ? e.message : "Refresh summary failed");
     } finally {
       setRefreshingSummary(false);
@@ -232,6 +236,7 @@ export function WastageReportPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
+      logApiError("WastageReportPage.exportExcel", e);
       setError(e instanceof Error ? e.message : "Export failed");
     } finally {
       setExporting(false);
@@ -331,62 +336,6 @@ export function WastageReportPage() {
             <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Orders above threshold</p>
             <p className="mt-1 text-xl font-semibold text-status-warning-foreground">{summary.above_threshold_orders_count}</p>
           </div>
-        </div>
-      )}
-
-      {(trendsMonthly.length > 0 || trendsByBuyer.length > 0) && (
-        <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
-          <h2 className="text-sm font-semibold text-text-primary">Wastage trends</h2>
-          {trendsMonthly.length > 0 && (
-            <div>
-              <h3 className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">Monthly wastage value</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-[200px] w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-text-muted">
-                      <th className="px-3 py-1.5">Month</th>
-                      <th className="px-3 py-1.5 text-right">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trendsMonthly.map((s) => (
-                      <tr key={s.label} className="border-b border-border-subtle last:border-0">
-                        <td className="px-3 py-1.5 font-medium text-text-primary">{s.label}</td>
-                        <td className="px-3 py-1.5 text-right text-text-secondary">
-                          {s.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          {trendsByBuyer.length > 0 && (
-            <div>
-              <h3 className="text-xs font-medium text-text-muted uppercase tracking-wide mb-2">By buyer</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-[280px] w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-text-muted">
-                      <th className="px-3 py-1.5">Buyer</th>
-                      <th className="px-3 py-1.5 text-right">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trendsByBuyer.map((b) => (
-                      <tr key={b.buyer_id} className="border-b border-border-subtle last:border-0">
-                        <td className="px-3 py-1.5 font-medium text-text-primary">{b.buyer_name}</td>
-                        <td className="px-3 py-1.5 text-right text-text-secondary">
-                          {b.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </div>
       )}
 

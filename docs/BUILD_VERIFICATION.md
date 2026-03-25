@@ -64,6 +64,14 @@ npm run lint
 
 **Success:** No TypeScript or Vite errors; `frontend/dist/` is produced. (`npm run lint` may still report existing warnings/errors until the codebase is cleaned up.)
 
+## Optional: AI form extraction smoke test
+
+After B1–B3, with backend + frontend running and a logged-in session, you can verify the stateless **document → form** endpoints (see `docs/AI_FORM_EXTRACTION.md`):
+
+- `POST /api/v1/ai-extract/customer-form` and `POST /api/v1/ai-extract/inquiry-form` with `multipart/form-data` (`file` = PNG/JPEG/WebP/PDF, max 10 MB).
+
+Or use the **Import Customer Info** / **Import Inquiry Info** blocks on **New customer** and **New inquiry** pages.
+
 ## Quick reference
 
 | Step | Command |

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, type InventoryItemResponse, type ManufacturingOrderCreate, type ManufacturingStageResponse } from "@/api/client";
 import {
   InventoryCardListSkeleton,
@@ -28,7 +29,6 @@ function statusBadgeClass(status: string) {
 }
 
 export function ManufacturingOrdersPage() {
-  // inventory phase rollout marker
   const [orders, setOrders] = useState<Awaited<ReturnType<typeof api.listManufacturingOrders>>>([]);
   const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [stagesByOrder, setStagesByOrder] = useState<Record<number, ManufacturingStageResponse[]>>({});
@@ -307,6 +307,15 @@ export function ManufacturingOrdersPage() {
                       >
                         Complete
                       </button>
+                    ) : null}
+                    {order.status === "completed" ? (
+                      <Link
+                        to={`/app/inventory/delivery-challans?item_id=${order.finished_item_id}&qty=${order.planned_quantity}`}
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        onClick={() => setOpenActionsId(null)}
+                      >
+                        Create Delivery Challan
+                      </Link>
                     ) : null}
                   </div>
                 )}

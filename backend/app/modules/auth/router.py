@@ -62,12 +62,17 @@ async def login(
             select(Tenant).where(
                 func.lower(Tenant.company_code) == company_code.lower(),
                 Tenant.is_active.is_(True),
+                Tenant.deleted_at.is_(None),
             ).limit(1)
         )
         tenant = tenant_result.scalar_one_or_none()
     elif tenant_id is not None:
         tenant_result = await db.execute(
-            select(Tenant).where(Tenant.id == tenant_id, Tenant.is_active.is_(True))
+            select(Tenant).where(
+                Tenant.id == tenant_id,
+                Tenant.is_active.is_(True),
+                Tenant.deleted_at.is_(None),
+            )
         )
         tenant = tenant_result.scalar_one_or_none()
     if not tenant:
@@ -81,7 +86,7 @@ async def login(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide username or email")
     user_result = await db.execute(user_query.limit(1))
     user = user_result.scalar_one_or_none()
-    if not user or not verify_password(password, user.password_hash):
+    if not user or not await verify_password(password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     await log_action(db, tenant_id=user.tenant_id, action="LOGIN", user_id=user.id, resource="auth")
     token = create_access_token(subject=user.id)
@@ -97,7 +102,13 @@ async def register(
 ):
     """Register a new user under a tenant with admin-controlled access by default."""
     settings = get_settings()
-    tenant_result = await db.execute(select(Tenant).where(Tenant.id == body.tenant_id, Tenant.is_active.is_(True)))
+    tenant_result = await db.execute(
+        select(Tenant).where(
+            Tenant.id == body.tenant_id,
+            Tenant.is_active.is_(True),
+            Tenant.deleted_at.is_(None),
+        )
+    )
     tenant = tenant_result.scalar_one_or_none()
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
@@ -113,7 +124,7 @@ async def register(
         tenant_hash = (tenant.bootstrap_token_hash or "").strip() or None
 
         if tenant_hash:
-            if not supplied or not verify_password(supplied, tenant_hash):
+            if not supplied or not await verify_password(supplied, tenant_hash):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Bootstrap token required or invalid",
@@ -158,7 +169,7 @@ async def register(
         role_id=role.id,
         email=body.email,
         username=body.username,
-        password_hash=hash_password(body.password),
+        password_hash=await hash_password(body.password),
         first_name=body.first_name,
         last_name=body.last_name,
     )
@@ -201,4 +212,5 @@ async def me(
         tenant_name=tenant.name,
         tenant_type=tenant.tenant_type,
         company_code=tenant.company_code,
+        feature_flags=tenant.feature_flags if isinstance(tenant.feature_flags, dict) else None,
     )

@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends
@@ -5,8 +6,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.gemini_client import generate_text_for_tenant
 from app.common.tenant import require_tenant
 from app.database import get_db
+from app.modules.dashboard.ai_services import (
+    generate_ai_brief,
+    generate_ai_profitability,
+)
 from app.models import (
     BankReconciliation,
     Customer,
@@ -199,7 +205,60 @@ async def ai_insights(
             }
         )
 
+    snapshot = {
+        "active_orders": active_orders,
+        "total_customers": total_customers,
+        "cards": [f"{x.get('title')}: {x.get('message', '')[:200]}" for x in insights],
+    }
+    prompt = (
+        "You advise a garment factory owner using P7 ERP. Based on this dashboard snapshot, write 3-5 short "
+        "bullet points (each line starting with '- ') on what deserves attention today. If data is sparse, "
+        "encourage onboarding steps. Max 120 words.\n\n"
+        f"{json.dumps(snapshot, default=str)}"
+    )
+    try:
+        summary = await generate_text_for_tenant(db, tenant.id, user.id, "brief", prompt)
+        if summary and len(summary.strip()) > 20:
+            insights.append(
+                {
+                    "id": "gemini-daily-summary",
+                    "title": "AI summary",
+                    "message": summary.strip()[:2000],
+                    "type": "info",
+                }
+            )
+    except Exception:
+        pass
+
     return insights
+
+
+@router.get("/ai-brief")
+async def ai_brief(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Executive KPI snapshot + Gemini narrative brief."""
+    if user.tenant_id != tenant.id:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    return await generate_ai_brief(db, tenant.id)
+
+
+@router.get("/ai-profitability")
+async def ai_profitability(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Quotation/trade margin signals + Gemini narrative."""
+    if user.tenant_id != tenant.id:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    return await generate_ai_profitability(db, tenant.id)
 
 
 @router.get("/production-trends")

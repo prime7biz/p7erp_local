@@ -81,6 +81,12 @@ Use this quick list whenever dependencies or runtime versions change:
 | `API_V1_PREFIX` | No | `/api/v1` | API path prefix. |
 | `AI_CONFIRMATION_TOKEN_PEPPER` | No | (dev default) | Change in production if using AI tool. |
 | `AI_RATE_LIMIT_*` / `AI_TIMEOUT_*` / `AI_CIRCUIT_BREAKER_*` | No | (see `backend/app/config.py`) | Optional tuning for AI module. |
+| `GEMINI_API_KEY` | No | (empty) | Google Gemini API key. Required for production planning AI, AI assistant, document extraction, and dashboard briefs. |
+| `GEMINI_MODEL` | No | `gemini-2.0-flash-lite` | Model name passed to the Gemini API. |
+| `GEMINI_ENABLED` | No | `true` | Set to `false` to disable Gemini calls (e.g. load tests). |
+| `AI_MONTHLY_BUDGET_LIMIT` | No | (none) | Optional cap on Gemini **text** calls per calendar month (see `backend/app/common/gemini_budget.py`). |
+
+**Docker Compose:** When you run `docker compose up`, variables are injected from a **repo root** `.env` (same folder as `docker-compose.yml`). `backend/.env` is used when you run Uvicorn **locally** without Docker. The compose files map `GEMINI_*` and `AI_MONTHLY_BUDGET_LIMIT` into the backend container—set them in the root `.env` so AI works inside Docker.
 
 ### Frontend (build-time; `frontend/.env`)
 

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
@@ -12,7 +11,9 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.storage import FileStorageService
 from app.common.tenant import require_tenant
+from app.config import get_settings
 from app.database import get_db
 from app.models import (
     AlertInstance,
@@ -23,6 +24,7 @@ from app.models import (
     OrderFollowupAction,
     ProformaInvoice,
     PurchaseOrder,
+    Shipment,
     Tenant,
     TradeCase,
     TradeCaseStage,
@@ -30,6 +32,12 @@ from app.models import (
     TradeDocument,
     User,
     Vendor,
+)
+from app.modules.trade_case.permissions import (
+    TRADE_PERMISSION_CREATE,
+    TRADE_PERMISSION_DOCUMENT_UPLOAD,
+    TRADE_PERMISSION_TRANSITION,
+    require_trade_permission,
 )
 from app.modules.audit.service import log_action
 from app.modules.trade_case.schemas import (
@@ -45,9 +53,6 @@ from app.modules.trade_case.schemas import (
 )
 
 router = APIRouter(prefix="/trade-cases", tags=["trade-cases"])
-
-TRADE_DOCS_DIR = Path(__file__).resolve().parents[3] / "media" / "trade_docs"
-TRADE_DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 DEFAULT_STAGE_FLOW = [
@@ -152,10 +157,13 @@ async def _validate_trade_case_links(db: AsyncSession, tenant_id: int, payload: 
 @router.get("", response_model=list[TradeCaseResponse])
 async def list_trade_cases(
     status_filter: str | None = Query(default=None, alias="status"),
+    current_stage: str | None = Query(default=None),
     direction: str | None = Query(default=None),
     search: str | None = Query(default=None),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
+    at_risk: bool = Query(default=False),
+    at_risk_days: int = Query(default=7, ge=1, le=90),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
@@ -166,12 +174,24 @@ async def list_trade_cases(
     stmt = select(TradeCase).where(TradeCase.tenant_id == tenant.id)
     if status_filter:
         stmt = stmt.where(TradeCase.status == status_filter.strip().upper())
+    if current_stage:
+        stmt = stmt.where(TradeCase.current_stage == current_stage.strip().upper())
     if direction:
         stmt = stmt.where(TradeCase.direction == direction.strip().upper())
     if date_from is not None:
         stmt = stmt.where(TradeCase.created_at >= datetime.combine(date_from, datetime.min.time()))
     if date_to is not None:
         stmt = stmt.where(TradeCase.created_at <= datetime.combine(date_to, datetime.max.time()))
+    if at_risk:
+        today = date.today()
+        horizon = today + timedelta(days=at_risk_days)
+        terminal_stages = ("SETTLED", "SHIPPED")
+        stmt = stmt.where(
+            TradeCase.etd.isnot(None),
+            TradeCase.etd <= horizon,
+            TradeCase.closed_at.is_(None),
+            TradeCase.current_stage.notin_(terminal_stages),
+        )
     if search:
         pattern = f"%{search.lower()}%"
         stmt = stmt.where(
@@ -187,12 +207,36 @@ async def list_trade_cases(
     return [_trade_case_to_response(row) for row in result.scalars().all()]
 
 
+@router.get("/document-counts")
+async def trade_document_and_shipment_counts(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per trade_case_id: document count and shipment count (for Document Flow and dashboards)."""
+    await _ensure_tenant_user(user, tenant)
+    doc_rows = await db.execute(
+        select(TradeDocument.trade_case_id, func.count())
+        .where(TradeDocument.tenant_id == tenant.id)
+        .group_by(TradeDocument.trade_case_id)
+    )
+    ship_rows = await db.execute(
+        select(Shipment.trade_case_id, func.count())
+        .where(Shipment.tenant_id == tenant.id)
+        .group_by(Shipment.trade_case_id)
+    )
+    documents = {int(r[0]): int(r[1]) for r in doc_rows.all() if r[0] is not None}
+    shipments = {int(r[0]): int(r[1]) for r in ship_rows.all() if r[0] is not None}
+    return {"documents": documents, "shipments": shipments}
+
+
 @router.post("", response_model=TradeCaseResponse, status_code=status.HTTP_201_CREATED)
 async def create_trade_case(
     body: TradeCaseCreate,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_trade_permission(TRADE_PERMISSION_CREATE)),
 ):
     await _ensure_tenant_user(user, tenant)
     await _ensure_default_stages(db, tenant.id)
@@ -338,6 +382,7 @@ async def transition_trade_case(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_trade_permission(TRADE_PERMISSION_TRANSITION)),
 ):
     await _ensure_tenant_user(user, tenant)
     row = await db.get(TradeCase, trade_case_id)
@@ -450,17 +495,14 @@ async def upload_trade_document(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_trade_permission(TRADE_PERMISSION_DOCUMENT_UPLOAD)),
 ):
     await _ensure_tenant_user(user, tenant)
     trade_case = await db.get(TradeCase, trade_case_id)
     if not trade_case or trade_case.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Trade case not found")
 
-    ext = Path(file.filename or "").suffix
-    safe_name = f"{tenant.id}_{trade_case_id}_{uuid4().hex}{ext}"
-    full_path = TRADE_DOCS_DIR / safe_name
-    content = await file.read()
-    full_path.write_bytes(content)
+    safe_name, _api_url, full_path_str = await FileStorageService.save_file(file, tenant.id, "trade_docs")
 
     version_result = await db.execute(
         select(func.count()).select_from(TradeDocument).where(
@@ -477,7 +519,7 @@ async def upload_trade_document(
         shipment_id=shipment_id,
         document_type=document_type.strip().upper(),
         file_name=file.filename or safe_name,
-        storage_path=str(full_path),
+        storage_path=full_path_str,
         version=version,
         linked_entity_type=linked_entity_type,
         linked_entity_id=linked_entity_id,
@@ -524,22 +566,26 @@ async def list_trade_documents(
         .limit(limit)
     )
     rows = result.scalars().all()
-    return [
-        {
-            "id": row.id,
-            "trade_case_id": row.trade_case_id,
-            "shipment_id": row.shipment_id,
-            "document_type": row.document_type,
-            "file_name": row.file_name,
-            "storage_path": row.storage_path,
-            "version": row.version,
-            "linked_entity_type": row.linked_entity_type,
-            "linked_entity_id": row.linked_entity_id,
-            "uploaded_by_id": row.uploaded_by_id,
-            "created_at": row.created_at.isoformat(),
-        }
-        for row in rows
-    ]
+    api_prefix = get_settings().api_v1_prefix.rstrip("/")
+    out: list[dict] = []
+    for row in rows:
+        file_url = f"{api_prefix}/files/trade_docs/{Path(row.storage_path).name}"
+        out.append(
+            {
+                "id": row.id,
+                "trade_case_id": row.trade_case_id,
+                "shipment_id": row.shipment_id,
+                "document_type": row.document_type,
+                "file_name": row.file_name,
+                "file_url": file_url,
+                "version": row.version,
+                "linked_entity_type": row.linked_entity_type,
+                "linked_entity_id": row.linked_entity_id,
+                "uploaded_by_id": row.uploaded_by_id,
+                "created_at": row.created_at.isoformat(),
+            }
+        )
+    return out
 
 
 @router.delete("/{trade_case_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -549,6 +595,7 @@ async def delete_trade_document(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_trade_permission(TRADE_PERMISSION_DOCUMENT_UPLOAD)),
 ):
     """Delete a trade document. Allowed only when the trade case status is DRAFT."""
     await _ensure_tenant_user(user, tenant)
@@ -568,12 +615,7 @@ async def delete_trade_document(
     ):
         raise HTTPException(status_code=404, detail="Document not found")
     doc_type = doc.document_type
-    full_path = Path(doc.storage_path).resolve()
-    if full_path.exists():
-        try:
-            full_path.unlink()
-        except OSError:
-            pass
+    FileStorageService.delete_trade_document_file(tenant.id, doc.storage_path)
     await db.delete(doc)
     await db.flush()
     await log_action(
@@ -603,10 +645,14 @@ async def download_trade_document(
         or row.trade_case_id != trade_case_id
     ):
         raise HTTPException(status_code=404, detail="Document not found")
-    full_path = Path(row.storage_path).resolve()
-    if not full_path.exists():
+    full_path = FileStorageService.resolve_trade_document_path(tenant.id, row.storage_path)
+    if full_path is None:
         raise HTTPException(status_code=404, detail="File not found on disk")
-    return FileResponse(path=str(full_path), filename=row.file_name)
+    return FileResponse(
+        path=str(full_path),
+        filename=row.file_name,
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.get("/{trade_case_id}/margin", response_model=TradeCaseMarginResponse)

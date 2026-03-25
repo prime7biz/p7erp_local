@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,8 +15,11 @@ from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
     AccountingPeriod,
+    BonusDeclaration,
     ChartOfAccount,
     Employee,
+    EmployeeAdvance,
+    PayrollAccountingConfig,
     PayrollApproval,
     PayrollComponent,
     PayrollPayslip,
@@ -116,6 +120,8 @@ def _component_out(row: PayrollComponent) -> PayrollComponentOut:
         calculation_type=row.calculation_type,
         default_amount=row.default_amount,
         gl_account_id=row.gl_account_id,
+        formula=getattr(row, "formula", None),
+        applies_to=getattr(row, "applies_to", "ALL") or "ALL",
         is_active=row.is_active,
         created_at=row.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
@@ -194,6 +200,7 @@ def _run_line_out(row: PayrollRunLine) -> PayrollRunLineOut:
         gross_pay=row.gross_pay,
         deductions=row.deductions,
         net_pay=row.net_pay,
+        overtime_amount=getattr(row, "overtime_amount", "0") or "0",
         remarks=row.remarks,
         created_at=row.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
@@ -250,6 +257,8 @@ async def create_component(
         calculation_type=body.calculation_type.strip().upper(),
         default_amount=body.default_amount,
         gl_account_id=body.gl_account_id,
+        formula=body.formula,
+        applies_to=body.applies_to.strip().upper() if body.applies_to else "ALL",
         is_active=body.is_active,
     )
     db.add(row)
@@ -438,7 +447,7 @@ async def finalize_period(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     row = await _period_or_404(db, tenant.id, period_id)
     row.status = "FINALIZED"
     row.is_locked = True
@@ -585,7 +594,7 @@ async def finalize_run(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     run = await _run_or_404(db, tenant.id, run_id)
     if run.status not in {"DRAFT", "CHECKED", "REJECTED"}:
         raise HTTPException(status_code=400, detail="Run cannot be finalized from current status")
@@ -619,7 +628,7 @@ async def approve_run(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     run = await _run_or_404(db, tenant.id, run_id)
     if run.status not in {"FINALIZED", "CHECKED"}:
         raise HTTPException(status_code=400, detail="Only finalized run can be approved")
@@ -647,7 +656,7 @@ async def post_run(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     run = await _run_or_404(db, tenant.id, run_id)
     if run.status not in {"APPROVED", "POSTED"}:
         raise HTTPException(status_code=400, detail="Only approved run can be posted")
@@ -695,6 +704,14 @@ async def post_run(
 
     expense_account_id = body.payroll_expense_account_id
     payable_account_id = body.payroll_payable_account_id
+    cfg = (
+        await db.execute(select(PayrollAccountingConfig).where(PayrollAccountingConfig.tenant_id == tenant.id).limit(1))
+    ).scalar_one_or_none()
+    if cfg is not None:
+        if expense_account_id is None and cfg.salary_expense_account_id is not None:
+            expense_account_id = cfg.salary_expense_account_id
+        if payable_account_id is None and cfg.salary_payable_account_id is not None:
+            payable_account_id = cfg.salary_payable_account_id
     if expense_account_id is None or payable_account_id is None:
         accounts = (
             await db.execute(
@@ -777,7 +794,7 @@ async def generate_payslips(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     run = await _run_or_404(db, tenant.id, run_id)
     if run.status not in {"APPROVED", "POSTED"}:
         raise HTTPException(status_code=400, detail="Payslips can be generated for approved/posted runs only")
@@ -847,7 +864,7 @@ async def decide_approval(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _require_manager_or_admin(db, user)
+    await _require_manager_or_admin(db, user, tenant.id)
     decision = str(body.get("decision", "")).strip().upper()
     note = body.get("note")
     if decision not in {"APPROVED", "REJECTED"}:
@@ -908,3 +925,214 @@ async def list_payslips(
         }
         for payslip, run_line in rows
     ]
+
+
+@router.get("/accounting-config")
+async def get_payroll_accounting_config(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = (
+        await db.execute(select(PayrollAccountingConfig).where(PayrollAccountingConfig.tenant_id == tenant.id).limit(1))
+    ).scalar_one_or_none()
+    if not row:
+        return {
+            "salary_expense_account_id": None,
+            "salary_payable_account_id": None,
+            "bank_account_id": None,
+            "cash_account_id": None,
+            "tax_payable_account_id": None,
+            "pf_payable_account_id": None,
+            "advance_receivable_account_id": None,
+        }
+    return {
+        "salary_expense_account_id": row.salary_expense_account_id,
+        "salary_payable_account_id": row.salary_payable_account_id,
+        "bank_account_id": row.bank_account_id,
+        "cash_account_id": row.cash_account_id,
+        "tax_payable_account_id": row.tax_payable_account_id,
+        "pf_payable_account_id": row.pf_payable_account_id,
+        "advance_receivable_account_id": row.advance_receivable_account_id,
+    }
+
+
+@router.put("/accounting-config")
+async def upsert_payroll_accounting_config(
+    body: dict,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    row = (
+        await db.execute(select(PayrollAccountingConfig).where(PayrollAccountingConfig.tenant_id == tenant.id).limit(1))
+    ).scalar_one_or_none()
+    if not row:
+        row = PayrollAccountingConfig(tenant_id=tenant.id)
+        db.add(row)
+    for key in (
+        "salary_expense_account_id",
+        "salary_payable_account_id",
+        "bank_account_id",
+        "cash_account_id",
+        "tax_payable_account_id",
+        "pf_payable_account_id",
+        "advance_receivable_account_id",
+    ):
+        if key in body:
+            setattr(row, key, body[key])
+    await db.commit()
+    await db.refresh(row)
+    return await get_payroll_accounting_config(tenant, user, db)
+
+
+@router.get("/advances", response_model=list[dict])
+async def list_advances(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    rows = (await db.execute(select(EmployeeAdvance).where(EmployeeAdvance.tenant_id == tenant.id).limit(500))).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "employee_id": r.employee_id,
+            "advance_date": r.advance_date.isoformat(),
+            "amount": r.amount,
+            "monthly_deduction": r.monthly_deduction,
+            "outstanding": r.outstanding,
+            "status": r.status,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/advances", status_code=status.HTTP_201_CREATED)
+async def create_advance(
+    body: dict,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    emp_id = int(body.get("employee_id", 0))
+    await _employee_or_404(db, tenant.id, emp_id)
+    amt = str(body.get("amount", "0"))
+    monthly = str(body.get("monthly_deduction", "0"))
+    row = EmployeeAdvance(
+        tenant_id=tenant.id,
+        employee_id=emp_id,
+        advance_date=datetime.utcnow().date(),
+        amount=amt,
+        monthly_deduction=monthly,
+        total_recovered="0",
+        outstanding=amt,
+        status="ACTIVE",
+        reason=str(body.get("reason") or "") or None,
+        created_by=user.id,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return {"id": row.id, "ok": True}
+
+
+@router.get("/bonuses", response_model=list[dict])
+async def list_bonuses(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    rows = (await db.execute(select(BonusDeclaration).where(BonusDeclaration.tenant_id == tenant.id).limit(200))).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "bonus_type": r.bonus_type,
+            "period_code": r.period_code,
+            "title": r.title,
+            "status": r.status,
+            "amount_or_pct": r.amount_or_pct,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/bonuses", status_code=status.HTTP_201_CREATED)
+async def create_bonus(
+    body: dict,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    row = BonusDeclaration(
+        tenant_id=tenant.id,
+        bonus_type=str(body.get("bonus_type", "FESTIVAL")),
+        period_code=str(body.get("period_code", "")),
+        title=str(body.get("title", "Bonus")),
+        eligibility_criteria=body.get("eligibility_criteria"),
+        amount_or_pct=str(body.get("amount_or_pct")) if body.get("amount_or_pct") is not None else None,
+        status="DRAFT",
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return {"id": row.id, "ok": True}
+
+
+@router.get("/payslips/{payslip_id}/pdf")
+async def download_payslip_pdf(
+    payslip_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    slip = await db.get(PayrollPayslip, payslip_id)
+    if not slip or slip.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Payslip not found")
+    line = await db.get(PayrollRunLine, slip.payroll_run_line_id)
+    if not line:
+        raise HTTPException(status_code=404, detail="Payroll line not found")
+    emp = await db.get(Employee, line.employee_id)
+    name = f"{emp.first_name} {emp.last_name}".strip() if emp and emp.last_name else (emp.first_name if emp else "")
+    text = (
+        f"PAYSLIP {slip.slip_number}\n"
+        f"Employee: {name} ({emp.employee_code if emp else ''})\n"
+        f"Gross: {line.gross_pay}  Deductions: {line.deductions}  Net: {line.net_pay}\n"
+        f"OT: {getattr(line, 'overtime_amount', '0')}\n"
+    )
+    return PlainTextResponse(text, media_type="text/plain")
+
+
+@router.get("/runs/{run_id}/bank-file")
+async def download_bank_file(
+    run_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    run = await _run_or_404(db, tenant.id, run_id)
+    lines = (
+        await db.execute(select(PayrollRunLine).where(PayrollRunLine.tenant_id == tenant.id, PayrollRunLine.run_id == run.id))
+    ).scalars().all()
+    rows_csv = ["employee_code,net_pay,currency"]
+    for ln in lines:
+        emp = await db.get(Employee, ln.employee_id)
+        code = emp.employee_code if emp else str(ln.employee_id)
+        rows_csv.append(f"{code},{ln.net_pay},BDT")
+    content = "\n".join(rows_csv)
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="payroll_run_{run.id}_bank.csv"'},
+    )

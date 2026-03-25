@@ -120,6 +120,9 @@ export function Dashboard() {
   const [kpis, setKpis] = useState<DashboardKpi[]>([]);
   const [orderStatus, setOrderStatus] = useState<OrderStatusSummary[]>([]);
   const [insights, setInsights] = useState<DashboardInsight[]>([]);
+  const [aiBriefText, setAiBriefText] = useState<string | null>(null);
+  const [aiBriefLoading, setAiBriefLoading] = useState(false);
+  const [aiBriefUpdated, setAiBriefUpdated] = useState<string | null>(null);
   const [productionTrends, setProductionTrends] = useState<DashboardProductionPoint[]>([]);
   const [recentOrders, setRecentOrders] = useState<DashboardRecentOrder[]>([]);
   const [tasks, setTasks] = useState<DashboardTask[]>([]);
@@ -218,6 +221,18 @@ export function Dashboard() {
   useEffect(() => {
     fetchPromiseSummary();
   }, [fetchPromiseSummary]);
+
+  const refreshAiBrief = useCallback(() => {
+    setAiBriefLoading(true);
+    api
+      .getDashboardAiBrief()
+      .then((r) => {
+        setAiBriefText(r.brief);
+        setAiBriefUpdated(r.generated_at);
+      })
+      .catch((err) => logApiError("Dashboard.aiBrief", err))
+      .finally(() => setAiBriefLoading(false));
+  }, []);
 
   const maxTrendOutput = useMemo(
     () => Math.max(...productionTrends.map((row) => row.output), 1),
@@ -985,6 +1000,39 @@ export function Dashboard() {
                   <p className="text-xs text-text-muted">No open follow-up tasks.</p>
                 )}
               </div>
+            </div>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-[0.12em] mb-2.5">
+              AI daily brief
+            </h2>
+            <div className="rounded-xl border border-border bg-surface-raised shadow-sm p-4 mb-4">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-status-info-foreground" />
+                  <span className="text-sm font-semibold text-text-primary">Executive brief (Gemini)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void refreshAiBrief()}
+                  disabled={aiBriefLoading}
+                  className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${aiBriefLoading ? "animate-spin" : ""}`} />
+                  Refresh
+                </button>
+              </div>
+              {aiBriefText ? (
+                <p className="text-sm text-text-secondary whitespace-pre-wrap">{aiBriefText}</p>
+              ) : (
+                <p className="text-xs text-text-muted">
+                  Click Refresh to generate a KPI-based brief using Gemini (requires GEMINI_API_KEY in Docker env).
+                </p>
+              )}
+              {aiBriefUpdated && (
+                <p className="text-[10px] text-text-muted mt-2">Generated: {new Date(aiBriefUpdated).toLocaleString()}</p>
+              )}
             </div>
           </section>
 

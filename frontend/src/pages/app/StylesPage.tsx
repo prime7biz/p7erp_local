@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type CustomerResponse, type StyleCreate, type StyleReportRow, type StyleResponse } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 
 const lifecycleOptions = ["INQUIRY", "DEVELOPMENT", "QUOTED", "ORDERED", "IN_PRODUCTION", "SHIPPED", "PAID", "CLOSED"];
 const priorityOptions = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
@@ -8,6 +9,7 @@ const riskOptions = ["LOW", "MEDIUM", "HIGH"];
 
 export function StylesPage() {
   const [items, setItems] = useState<StyleResponse[]>([]);
+  const [totalStyles, setTotalStyles] = useState<number | null>(null);
   const [reportRows, setReportRows] = useState<StyleReportRow[]>([]);
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,8 +37,8 @@ export function StylesPage() {
     setError("");
     try {
       const buyerId = Number(buyerFilter);
-      const [rows, reports, customerRows] = await Promise.all([
-        api.listStyles({
+      const [styleList, reports, customerRows] = await Promise.all([
+        api.listStylesWithTotal({
           search: search || undefined,
           status: statusFilter || undefined,
           lifecycle_stage: lifecycleFilter || undefined,
@@ -50,11 +52,14 @@ export function StylesPage() {
         }),
         api.listCustomers(),
       ]);
-      setItems(rows);
+      setItems(styleList.rows);
+      setTotalStyles(styleList.total);
       setReportRows(reports);
       setCustomers(customerRows);
     } catch (e) {
+      logApiError("StylesPage.load", e);
       setError(e instanceof Error ? e.message : "Failed to load styles");
+      setTotalStyles(null);
     } finally {
       setLoading(false);
     }
@@ -83,6 +88,7 @@ export function StylesPage() {
       });
       await load();
     } catch (e) {
+      logApiError("StylesPage.submit", e);
       setError(e instanceof Error ? e.message : "Failed to create style");
     }
   };
@@ -102,6 +108,11 @@ export function StylesPage() {
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Garment Styles</h1>
           <p className="text-text-muted text-sm mt-0.5">Style control tower for inquiry, production, shipment, and payment follow-up.</p>
+          <p className="text-xs text-text-muted mt-1">
+            Showing {visibleItems.length}
+            {totalStyles != null ? ` of ${totalStyles}` : ""}
+            {" "}styles
+          </p>
         </div>
         <button type="button" onClick={() => setShowForm((v) => !v)} className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground">
           {showForm ? "Close" : "New style"}
@@ -265,6 +276,7 @@ export function StylesPage() {
                                     await api.updateStyle(s.id, { status: "INACTIVE", is_active_for_new_orders: false });
                                     await load();
                                   } catch (e) {
+                                    logApiError("StylesPage.archiveStyle", e);
                                     setError(e instanceof Error ? e.message : "Archive failed");
                                   }
                                 }}

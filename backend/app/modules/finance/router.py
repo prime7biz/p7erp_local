@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
+from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -447,6 +448,13 @@ class CashScenarioBody(BaseModel):
     months: int = 6
 
 
+class CashScenarioUpdateBody(BaseModel):
+    name: str | None = None
+    start_date: date | None = None
+    months: int | None = None
+    status: str | None = None
+
+
 class CashForecastLineOut(BaseModel):
     id: int
     scenario_id: int
@@ -803,9 +811,9 @@ class BankReconciliationFinalizeBody(BaseModel):
     reason: str | None = None
 
 
-async def _voucher_out(db: AsyncSession, voucher: Voucher) -> VoucherOut:
-    lines_result = await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id).order_by(VoucherLine.id))
-    lines = list(lines_result.scalars().all())
+def _voucher_to_out(voucher: Voucher, lines: list[VoucherLine]) -> VoucherOut:
+    """Build VoucherOut from preloaded lines (avoids N+1 when listing many vouchers)."""
+    sorted_lines = sorted(lines, key=lambda x: x.id)
     return VoucherOut(
         id=voucher.id,
         tenant_id=voucher.tenant_id,
@@ -829,12 +837,17 @@ async def _voucher_out(db: AsyncSession, voucher: Voucher) -> VoucherOut:
         created_by=voucher.created_by,
         created_at=voucher.created_at,
         updated_at=voucher.updated_at,
-        lines=lines,
+        lines=sorted_lines,
     )
 
 
-async def _budget_out(db: AsyncSession, budget: Budget) -> BudgetOut:
-    line_rows = list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all())
+async def _voucher_out(db: AsyncSession, voucher: Voucher) -> VoucherOut:
+    lines_result = await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id).order_by(VoucherLine.id))
+    lines = list(lines_result.scalars().all())
+    return _voucher_to_out(voucher, lines)
+
+
+def _budget_to_out(budget: Budget, line_rows: list[BudgetLine]) -> BudgetOut:
     return BudgetOut(
         id=budget.id,
         tenant_id=budget.tenant_id,
@@ -842,12 +855,16 @@ async def _budget_out(db: AsyncSession, budget: Budget) -> BudgetOut:
         fiscal_year=budget.fiscal_year,
         status=budget.status,
         created_by=budget.created_by,
-        lines=line_rows,
+        lines=sorted(line_rows, key=lambda x: x.id),
     )
 
 
-async def _payment_run_out(db: AsyncSession, run: PaymentRun) -> PaymentRunOut:
-    items = list((await db.execute(select(PaymentRunItem).where(PaymentRunItem.payment_run_id == run.id))).scalars().all())
+async def _budget_out(db: AsyncSession, budget: Budget) -> BudgetOut:
+    line_rows = list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all())
+    return _budget_to_out(budget, line_rows)
+
+
+def _payment_run_to_out(run: PaymentRun, items: list[PaymentRunItem]) -> PaymentRunOut:
     return PaymentRunOut(
         id=run.id,
         tenant_id=run.tenant_id,
@@ -861,8 +878,13 @@ async def _payment_run_out(db: AsyncSession, run: PaymentRun) -> PaymentRunOut:
         trade_case_id=run.trade_case_id,
         remarks=run.remarks,
         created_by=run.created_by,
-        items=items,
+        items=sorted(items, key=lambda x: x.id),
     )
+
+
+async def _payment_run_out(db: AsyncSession, run: PaymentRun) -> PaymentRunOut:
+    items = list((await db.execute(select(PaymentRunItem).where(PaymentRunItem.payment_run_id == run.id))).scalars().all())
+    return _payment_run_to_out(run, items)
 
 
 async def _find_or_create_ap_clearing_account(db: AsyncSession, tenant_id: int) -> ChartOfAccount:
@@ -1261,7 +1283,7 @@ async def seed_account_groups(
 @router.get("/chart-of-accounts", response_model=list[ChartAccountOut])
 async def list_chart_of_accounts(
     active_only: bool = Query(default=True),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -1803,7 +1825,7 @@ async def list_vouchers(
     status_filter: str | None = Query(default=None),
     from_date: date | None = Query(default=None),
     to_date: date | None = Query(default=None),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -1819,7 +1841,18 @@ async def list_vouchers(
         stmt = stmt.where(Voucher.voucher_date <= to_date)
     result = await db.execute(stmt.offset(offset).limit(limit))
     rows = list(result.scalars().all())
-    return [await _voucher_out(db, row) for row in rows]
+    if not rows:
+        return []
+    voucher_ids = [r.id for r in rows]
+    lines_result = await db.execute(
+        select(VoucherLine)
+        .where(VoucherLine.voucher_id.in_(voucher_ids))
+        .order_by(VoucherLine.voucher_id, VoucherLine.id)
+    )
+    lines_by_voucher: dict[int, list[VoucherLine]] = defaultdict(list)
+    for line in lines_result.scalars().all():
+        lines_by_voucher[line.voucher_id].append(line)
+    return [_voucher_to_out(row, lines_by_voucher.get(row.id, [])) for row in rows]
 
 
 @router.get("/vouchers/{voucher_id}", response_model=VoucherOut)
@@ -2180,9 +2213,20 @@ async def day_book_report(
     }
     total_amount = 0.0
     out = []
+    if rows:
+        voucher_ids = [row.id for row in rows]
+        lines_result = await db.execute(
+            select(VoucherLine)
+            .where(VoucherLine.voucher_id.in_(voucher_ids))
+            .order_by(VoucherLine.voucher_id, VoucherLine.id)
+        )
+        lines_by_voucher: dict[int, list[VoucherLine]] = defaultdict(list)
+        for line in lines_result.scalars().all():
+            lines_by_voucher[line.voucher_id].append(line)
+    else:
+        lines_by_voucher = {}
     for row in rows:
-        lines_result = await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))
-        lines = list(lines_result.scalars().all())
+        lines = lines_by_voucher.get(row.id, [])
         if account_id is not None and not any(line.account_id == account_id for line in lines):
             continue
         if group_id is not None and not any(account_group_map.get(line.account_id) == group_id for line in lines):
@@ -2588,6 +2632,67 @@ async def create_cash_forecast_scenario(
     )
 
 
+@router.delete("/cash-forecast/scenarios/{scenario_id}")
+async def delete_cash_forecast_scenario(
+    scenario_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    scenario = await db.get(CashForecastScenario, scenario_id)
+    if not scenario or scenario.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    for line in list(
+        (await db.execute(select(CashForecastLine).where(CashForecastLine.scenario_id == scenario.id))).scalars().all()
+    ):
+        await db.delete(line)
+    await db.delete(scenario)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.put("/cash-forecast/scenarios/{scenario_id}", response_model=CashScenarioOut)
+async def update_cash_forecast_scenario(
+    scenario_id: int,
+    body: CashScenarioUpdateBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    scenario = await db.get(CashForecastScenario, scenario_id)
+    if not scenario or scenario.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    if body.name is not None:
+        next_name = body.name.strip()
+        if not next_name:
+            raise HTTPException(status_code=400, detail="Scenario name is required")
+        scenario.name = next_name
+    if body.start_date is not None:
+        scenario.start_date = body.start_date
+    if body.months is not None:
+        scenario.months = max(1, min(int(body.months), 24))
+    if body.status is not None:
+        scenario.status = body.status.strip().upper()
+
+    await db.commit()
+    await db.refresh(scenario)
+    lines_result = await db.execute(
+        select(CashForecastLine).where(CashForecastLine.scenario_id == scenario.id).order_by(CashForecastLine.id)
+    )
+    return CashScenarioOut(
+        id=scenario.id,
+        tenant_id=scenario.tenant_id,
+        name=scenario.name,
+        start_date=scenario.start_date,
+        months=scenario.months,
+        status=scenario.status,
+        lines=list(lines_result.scalars().all()),
+    )
+
+
 @router.post("/cash-forecast/scenarios/{scenario_id}/generate", response_model=CashScenarioOut)
 async def generate_cash_forecast(
     scenario_id: int,
@@ -2648,6 +2753,38 @@ async def generate_cash_forecast(
                 cumulative=str(running),
             )
         )
+    await db.flush()
+    lines_list = list(
+        (
+            await db.execute(
+                select(CashForecastLine).where(CashForecastLine.scenario_id == scenario.id).order_by(CashForecastLine.id)
+            )
+        ).scalars().all()
+    )
+    line_by_label = {ln.month_label: ln for ln in lines_list}
+    lc_rows = list((await db.execute(select(BtbLc).where(BtbLc.tenant_id == tenant.id, BtbLc.maturity_date.isnot(None)))).scalars().all())
+    for lc in lc_rows:
+        md = lc.maturity_date
+        if not md:
+            continue
+        amt = _to_float(str(lc.maturity_amount or lc.amount or 0))
+        if amt <= 0:
+            continue
+        for idx in range(scenario.months):
+            month_date = _add_months(start, idx)
+            if month_date.year != md.year or month_date.month != md.month:
+                continue
+            label = month_date.strftime("%b-%Y")
+            line = line_by_label.get(label)
+            if line:
+                new_out = round(_to_float(line.outflow) + amt, 2)
+                line.outflow = str(new_out)
+                line.net = str(round(_to_float(line.inflow) - new_out, 2))
+            break
+    running2 = 0.0
+    for ln in sorted(lines_list, key=lambda x: x.id):
+        running2 = round(running2 + _to_float(ln.net), 2)
+        ln.cumulative = str(running2)
     scenario.status = "GENERATED"
     await db.commit()
     await db.refresh(scenario)
@@ -2693,7 +2830,7 @@ async def cash_forecast_summary(
 @router.get("/fx-receipts", response_model=list[FxReceiptOut])
 async def list_fx_receipts(
     status_filter: str | None = Query(default=None),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -2855,7 +2992,7 @@ async def multi_currency_revaluation_summary(
 async def list_bills(
     bill_type: str | None = Query(default=None),
     status_filter: str | None = Query(default=None),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -3111,7 +3248,7 @@ async def bills_aging(
     bill_type: str = Query(default="RECEIVABLE"),
     as_of_date: date | None = Query(default=None),
     party_name: str | None = Query(default=None),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -3231,9 +3368,19 @@ async def cost_center_dashboard(
 ):
     _ensure_tenant(user, tenant)
     centers = list((await db.execute(select(CostCenter).where(CostCenter.tenant_id == tenant.id))).scalars().all())
+    if not centers:
+        return []
+    center_ids = [c.id for c in centers]
+    all_lines = list(
+        (await db.execute(select(VoucherLine).where(VoucherLine.cost_center_id.in_(center_ids)))).scalars().all()
+    )
+    lines_by_center: dict[int, list[VoucherLine]] = defaultdict(list)
+    for line in all_lines:
+        if line.cost_center_id is not None:
+            lines_by_center[line.cost_center_id].append(line)
     out = []
     for c in centers:
-        lines = list((await db.execute(select(VoucherLine).where(VoucherLine.cost_center_id == c.id))).scalars().all())
+        lines = lines_by_center.get(c.id, [])
         debit = sum(_to_float(l.amount) for l in lines if l.entry_type == "DEBIT")
         credit = sum(_to_float(l.amount) for l in lines if l.entry_type == "CREDIT")
         out.append(
@@ -3264,7 +3411,16 @@ async def list_budgets(
     if fiscal_year:
         stmt = stmt.where(Budget.fiscal_year == fiscal_year)
     rows = list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
-    return [await _budget_out(db, row) for row in rows]
+    if not rows:
+        return []
+    budget_ids = [r.id for r in rows]
+    bl_result = await db.execute(
+        select(BudgetLine).where(BudgetLine.budget_id.in_(budget_ids)).order_by(BudgetLine.budget_id, BudgetLine.id)
+    )
+    lines_by_budget: dict[int, list[BudgetLine]] = defaultdict(list)
+    for bl in bl_result.scalars().all():
+        lines_by_budget[bl.budget_id].append(bl)
+    return [_budget_to_out(row, lines_by_budget.get(row.id, [])) for row in rows]
 
 
 @router.post("/budgets", response_model=BudgetOut)
@@ -3301,6 +3457,60 @@ async def create_budget(
     return await _budget_out(db, row)
 
 
+@router.put("/budgets/{budget_id}", response_model=BudgetOut)
+async def update_budget(
+    budget_id: int,
+    body: BudgetBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    budget = await db.get(Budget, budget_id)
+    if not budget or budget.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    budget.budget_name = body.budget_name
+    budget.fiscal_year = body.fiscal_year
+    budget.status = body.status
+    old_lines = list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all())
+    for line in old_lines:
+        await db.delete(line)
+    await db.flush()
+    for line in body.lines:
+        db.add(
+            BudgetLine(
+                tenant_id=tenant.id,
+                budget_id=budget.id,
+                cost_center_id=line.cost_center_id,
+                account_id=line.account_id,
+                period_month=line.period_month,
+                amount=line.amount,
+                notes=line.notes,
+            )
+        )
+    await db.commit()
+    await db.refresh(budget)
+    return await _budget_out(db, budget)
+
+
+@router.delete("/budgets/{budget_id}")
+async def delete_budget(
+    budget_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    budget = await db.get(Budget, budget_id)
+    if not budget or budget.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    for line in list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all()):
+        await db.delete(line)
+    await db.delete(budget)
+    await db.commit()
+    return {"ok": True}
+
+
 @router.get("/budgets/{budget_id}/vs-actual")
 async def budget_vs_actual(
     budget_id: int,
@@ -3313,17 +3523,17 @@ async def budget_vs_actual(
     if not budget or budget.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Budget not found")
     lines = list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all())
+    posted_lines_query = (
+        select(VoucherLine, Voucher)
+        .join(Voucher, VoucherLine.voucher_id == Voucher.id)
+        .where(VoucherLine.tenant_id == tenant.id, Voucher.status == "POSTED")
+    )
+    posted_rows = list((await db.execute(posted_lines_query)).all())
     rows = []
     total_budget = 0.0
     total_actual = 0.0
     for line in lines:
         budget_amount = _to_float(line.amount)
-        posted_lines_query = (
-            select(VoucherLine, Voucher)
-            .join(Voucher, VoucherLine.voucher_id == Voucher.id)
-            .where(VoucherLine.tenant_id == tenant.id, Voucher.status == "POSTED")
-        )
-        posted_rows = list((await db.execute(posted_lines_query)).all())
         actual_amount = 0.0
         for voucher_line, _voucher in posted_rows:
             if line.account_id is not None and voucher_line.account_id != line.account_id:
@@ -3409,7 +3619,7 @@ async def update_bank_account(
 @router.get("/banking/reconciliation", response_model=list[BankReconciliationOut])
 async def list_bank_reconciliations(
     bank_account_id: int | None = Query(default=None),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -3499,7 +3709,7 @@ async def finalize_bank_reconciliation(
 @router.get("/banking/reconciliation/{recon_id}/match-logs", response_model=list[BankStatementMatchLogOut])
 async def list_bank_statement_match_logs(
     recon_id: int,
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -3568,7 +3778,7 @@ async def export_bank_statement_match_logs_csv(
 @router.get("/banking/reconciliation/{recon_id}/statement-lines", response_model=list[BankStatementLineOut])
 async def list_statement_lines(
     recon_id: int,
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -3894,7 +4104,7 @@ async def auto_match_statement_lines(
 @router.get("/banking/payment-runs", response_model=list[PaymentRunOut])
 async def list_payment_runs(
     status_filter: str | None = Query(default=None),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -3905,7 +4115,18 @@ async def list_payment_runs(
     if status_filter:
         stmt = stmt.where(PaymentRun.status == status_filter.strip().upper())
     runs = list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
-    return [await _payment_run_out(db, run) for run in runs]
+    if not runs:
+        return []
+    run_ids = [r.id for r in runs]
+    items_result = await db.execute(
+        select(PaymentRunItem)
+        .where(PaymentRunItem.payment_run_id.in_(run_ids))
+        .order_by(PaymentRunItem.payment_run_id, PaymentRunItem.id)
+    )
+    items_by_run: dict[int, list[PaymentRunItem]] = defaultdict(list)
+    for item in items_result.scalars().all():
+        items_by_run[item.payment_run_id].append(item)
+    return [_payment_run_to_out(run, items_by_run.get(run.id, [])) for run in runs]
 
 
 @router.post("/banking/payment-runs", response_model=PaymentRunOut)
@@ -4577,9 +4798,12 @@ async def costing_variance(
         ).scalars().all()
     )
     actual = 0.0
-    for v in posted:
-        lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == v.id))).scalars().all())
-        actual += sum(_to_float(line.amount) for line in lines if line.entry_type == "DEBIT")
+    if posted:
+        v_ids = [v.id for v in posted]
+        vl_rows = list(
+            (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id.in_(v_ids)))).scalars().all()
+        )
+        actual = sum(_to_float(line.amount) for line in vl_rows if line.entry_type == "DEBIT")
     return {
         "order_id": order.id,
         "order_code": order.order_code,
@@ -4610,17 +4834,45 @@ async def voucher_print(
             parts = [creator.first_name or "", creator.last_name or ""]
             created_by_name = " ".join(p for p in parts if p).strip() or creator.username
 
+    account_ids = {line.account_id for line in lines if line.account_id is not None}
+    if account_ids:
+        acct_rows = list(
+            (
+                await db.execute(
+                    select(ChartOfAccount).where(
+                        ChartOfAccount.tenant_id == tenant.id,
+                        ChartOfAccount.id.in_(account_ids),
+                    )
+                )
+            ).scalars().all()
+        )
+        account_by_id = {a.id: a for a in acct_rows}
+    else:
+        account_by_id = {}
+    cc_ids = {line.cost_center_id for line in lines if line.cost_center_id is not None}
+    if cc_ids:
+        cc_rows = list(
+            (
+                await db.execute(
+                    select(CostCenter).where(CostCenter.tenant_id == tenant.id, CostCenter.id.in_(cc_ids))
+                )
+            ).scalars().all()
+        )
+        cc_by_id = {c.id: c for c in cc_rows}
+    else:
+        cc_by_id = {}
+
     output_lines = []
     total_debit = 0.0
     total_credit = 0.0
     for line in lines:
-        account = await db.get(ChartOfAccount, line.account_id)
+        account = account_by_id.get(line.account_id) if line.account_id is not None else None
         account_name = account.name if account and account.tenant_id == tenant.id else f"Account#{line.account_id}"
         account_code = account.account_number if account and account.tenant_id == tenant.id else ""
 
         cost_center_name = ""
         if line.cost_center_id:
-            cc = await db.get(CostCenter, line.cost_center_id)
+            cc = cc_by_id.get(line.cost_center_id)
             if cc and cc.tenant_id == tenant.id:
                 cost_center_name = cc.name
 
@@ -5461,7 +5713,7 @@ async def list_bill_references(
     status_filter: str | None = Query(default=None),
     account_id: int | None = Query(default=None),
     search: str | None = Query(default=None),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -5482,9 +5734,24 @@ async def list_bill_references(
             | func.lower(BillReference.party_name).like(q)
         )
     rows = list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
+    account_ids = {r.account_id for r in rows if r.account_id is not None}
+    if account_ids:
+        acct_rows = list(
+            (
+                await db.execute(
+                    select(ChartOfAccount).where(
+                        ChartOfAccount.tenant_id == tenant.id,
+                        ChartOfAccount.id.in_(account_ids),
+                    )
+                )
+            ).scalars().all()
+        )
+        acct_by_id = {a.id: a for a in acct_rows}
+    else:
+        acct_by_id = {}
     out = []
     for r in rows:
-        acct = await db.get(ChartOfAccount, r.account_id)
+        acct = acct_by_id.get(r.account_id)
         out.append(BillRefOut(
             id=r.id, tenant_id=r.tenant_id, bill_number=r.bill_number,
             bill_date=r.bill_date, due_date=r.due_date, bill_type=r.bill_type,

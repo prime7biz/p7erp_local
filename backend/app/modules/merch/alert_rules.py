@@ -1,7 +1,7 @@
 """Merch Critical Alert rules: evaluate conditions and return raw alert payloads for upsert."""
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import and_, func, select
@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     Bom,
     BomItem,
+    CmCostActual,
     ConsumptionPlan,
     Followup,
     ManufacturingTnaPlan,
@@ -598,7 +599,7 @@ async def rule_trade_case_stuck(
 ) -> list[dict[str, Any]]:
     """Trade case not updated for configured days and not settled."""
     days = int((config or {}).get("trade_case_stuck_days", 10))
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     rows = (
         await db.execute(
             select(TradeCase).where(
@@ -757,6 +758,50 @@ async def rule_btb_lc_maturity_due_or_overdue(
     return out
 
 
+async def rule_production_cm_overrun(
+    db: AsyncSession, tenant_id: int, config: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """CM actual exceeds quoted CM beyond tenant threshold (see production CM recalc)."""
+    stmt = (
+        select(CmCostActual, Order)
+        .outerjoin(Order, Order.id == CmCostActual.order_id)
+        .where(
+            CmCostActual.tenant_id == tenant_id,
+            CmCostActual.is_over_budget.is_(True),
+            CmCostActual.order_id.isnot(None),
+        )
+    )
+    result = await db.execute(stmt)
+    out: list[dict[str, Any]] = []
+    for cm, ord_row in result.all():
+        oid = int(cm.order_id)  # type: ignore[arg-type]
+        sid = int(cm.style_id) if cm.style_id is not None else 0
+        pd = cm.period_date.isoformat()
+        natural_key = f"production_cm_overrun:order:{oid}:period:{pd}:style:{sid}"
+        code = ord_row.order_code if ord_row else f"#{oid}"
+        actual = float(cm.actual_cm_per_piece or 0)
+        quoted = float(cm.quoted_cm_per_piece or 0)
+        var_pct = float(cm.variance_pct or 0)
+        severity = "high" if var_pct > 20 else "medium"
+        out.append(
+            {
+                "natural_key": natural_key,
+                "title": f"CM overrun: order {code} ({pd})",
+                "description": (
+                    f"Actual CM {actual:.4f} vs quoted {quoted:.4f} per piece "
+                    f"(variance {var_pct:.1f}%)."
+                ),
+                "severity": severity,
+                "reason_text": f"Production CM recalc flagged spend vs quoted CM for period {pd}.",
+                "recommended_action": "Review line efficiency, rework, and costing inputs; adjust quote or recover variance.",
+                "entity_type": "order",
+                "entity_id": oid,
+                "order_id": oid,
+            }
+        )
+    return out
+
+
 RULE_REGISTRY: dict[str, callable] = {
     "followup_overdue": rule_followup_overdue,
     "tna_action_overdue": rule_tna_action_overdue,
@@ -772,6 +817,7 @@ RULE_REGISTRY: dict[str, callable] = {
     "trade_case_stuck": rule_trade_case_stuck,
     "master_contract_btb_utilization_risk": rule_master_contract_btb_utilization_risk,
     "btb_lc_maturity_due_or_overdue": rule_btb_lc_maturity_due_or_overdue,
+    "production_cm_overrun": rule_production_cm_overrun,
 }
 
 DEFAULT_DEFINITIONS: list[dict[str, Any]] = [
@@ -789,4 +835,5 @@ DEFAULT_DEFINITIONS: list[dict[str, Any]] = [
     {"rule_key": "trade_case_stuck", "name": "Trade case stuck in stage", "severity_default": "medium", "entity_type": "trade_case"},
     {"rule_key": "master_contract_btb_utilization_risk", "name": "Master contract BTB utilization risk", "severity_default": "high", "entity_type": "master_contract"},
     {"rule_key": "btb_lc_maturity_due_or_overdue", "name": "BTB LC maturity due/overdue", "severity_default": "high", "entity_type": "btb_lc"},
+    {"rule_key": "production_cm_overrun", "name": "Production CM overrun vs quote", "severity_default": "high", "entity_type": "order"},
 ]

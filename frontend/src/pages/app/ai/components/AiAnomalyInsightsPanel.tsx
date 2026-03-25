@@ -4,10 +4,11 @@ interface Props {
   loading: boolean;
   running: boolean;
   events: AiAnomalyEventResponse[];
+  geminiNarrative?: string | null;
   onGenerate: () => Promise<void>;
 }
 
-export function AiAnomalyInsightsPanel({ loading, running, events, onGenerate }: Props) {
+export function AiAnomalyInsightsPanel({ loading, running, events, geminiNarrative, onGenerate }: Props) {
   const severityClass = (severity: string) => {
     const s = severity.toUpperCase();
     if (s === "HIGH") return "text-status-danger-foreground";
@@ -28,6 +29,12 @@ export function AiAnomalyInsightsPanel({ loading, running, events, onGenerate }:
           {running ? "Running..." : "Generate"}
         </button>
       </div>
+      {geminiNarrative ? (
+        <div className="mb-3 rounded-md border border-border bg-surface-subtle p-2 text-xs text-text-secondary whitespace-pre-wrap">
+          <span className="font-semibold text-text-primary">Gemini analysis: </span>
+          {geminiNarrative}
+        </div>
+      ) : null}
       {loading ? (
         <p className="text-sm text-text-muted">Loading anomaly events...</p>
       ) : events.length === 0 ? (

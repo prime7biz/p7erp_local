@@ -1,4 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from __future__ import annotations
+
+import io
+from datetime import date
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +14,22 @@ from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
 from app.common.tenant import require_tenant
 from app.database import get_db
-from app.models import Department, Designation, Employee, Tenant, User
+from app.models import (
+    AttendanceEntry,
+    ComplianceCheck,
+    Department,
+    Designation,
+    Employee,
+    EmployeeDocument,
+    EmployeeStatusHistory,
+    HrSection,
+    JobRequisition,
+    LeaveRequest,
+    PayrollRun,
+    Tenant,
+    User,
+)
+from app.modules.hr import service as hr_domain
 from app.modules.hr.schemas import (
     DepartmentCreate,
     DepartmentResponse,
@@ -17,8 +38,15 @@ from app.modules.hr.schemas import (
     DesignationResponse,
     DesignationUpdate,
     EmployeeCreate,
+    EmployeeDocumentCreate,
+    EmployeeDocumentResponse,
     EmployeeResponse,
+    EmployeeStatusHistoryCreate,
+    EmployeeStatusHistoryResponse,
     EmployeeUpdate,
+    SectionCreate,
+    SectionResponse,
+    SectionUpdate,
 )
 
 router = APIRouter(prefix="/hr", tags=["hr"])
@@ -118,6 +146,8 @@ def _employee_to_response(row: Employee) -> EmployeeResponse:
         exit_date=row.exit_date,
         department_id=row.department_id,
         designation_id=row.designation_id,
+        section_id=row.section_id,
+        employee_category=row.employee_category,
         reporting_manager_id=row.reporting_manager_id,
         user_id=row.user_id,
         is_active=row.is_active,
@@ -155,11 +185,16 @@ async def _validate_fk_values(
     reporting_manager_id: int | None,
     user_id: int | None = None,
     employee_id: int | None = None,
+    section_id: int | None = None,
 ) -> None:
     if department_id is not None:
         await _get_department_or_404(db, tenant_id, department_id)
     if designation_id is not None:
         await _get_designation_or_404(db, tenant_id, designation_id)
+    if section_id is not None:
+        sec = await db.get(HrSection, section_id)
+        if not sec or sec.tenant_id != tenant_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Section not found")
     if reporting_manager_id is not None:
         manager = await _get_employee_or_404(db, tenant_id, reporting_manager_id)
         if employee_id is not None and manager.id == employee_id:
@@ -482,6 +517,7 @@ async def create_employee(
         body.designation_id,
         body.reporting_manager_id,
         user_id=body.user_id,
+        section_id=body.section_id,
     )
     row = Employee(
         tenant_id=tenant.id,
@@ -506,6 +542,8 @@ async def create_employee(
         exit_date=body.exit_date,
         department_id=body.department_id,
         designation_id=body.designation_id,
+        section_id=body.section_id,
+        employee_category=body.employee_category.strip() if body.employee_category else None,
         reporting_manager_id=body.reporting_manager_id,
         user_id=body.user_id,
         is_active=body.is_active,
@@ -539,6 +577,7 @@ async def update_employee(
         payload.get("reporting_manager_id"),
         user_id=payload.get("user_id"),
         employee_id=employee_id,
+        section_id=payload.get("section_id"),
     )
     if "employee_code" in payload and payload["employee_code"] is not None:
         row.employee_code = payload["employee_code"].strip()
@@ -582,6 +621,12 @@ async def update_employee(
         row.department_id = payload["department_id"]
     if "designation_id" in payload:
         row.designation_id = payload["designation_id"]
+    if "section_id" in payload:
+        row.section_id = payload["section_id"]
+    if "employee_category" in payload:
+        row.employee_category = (
+            payload["employee_category"].strip() if payload["employee_category"] else None
+        )
     if "reporting_manager_id" in payload:
         row.reporting_manager_id = payload["reporting_manager_id"]
     if "user_id" in payload:
@@ -627,3 +672,385 @@ async def deactivate_employee(
     await db.commit()
     await db.refresh(row)
     return _employee_to_response(row)
+
+
+@router.get("/dashboard-data")
+async def hr_dashboard_data(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    total_emp = int(
+        await db.scalar(select(func.count()).select_from(Employee).where(Employee.tenant_id == tenant.id)) or 0
+    )
+    active_emp = int(
+        await db.scalar(
+            select(func.count()).select_from(Employee).where(
+                Employee.tenant_id == tenant.id,
+                Employee.is_active.is_(True),
+            )
+        )
+        or 0
+    )
+    pending_leave = int(
+        await db.scalar(
+            select(func.count()).select_from(LeaveRequest).where(
+                LeaveRequest.tenant_id == tenant.id,
+                LeaveRequest.status == "PENDING",
+            )
+        )
+        or 0
+    )
+    pending_payroll = int(
+        await db.scalar(
+            select(func.count()).select_from(PayrollRun).where(
+                PayrollRun.tenant_id == tenant.id,
+                PayrollRun.status == "FINALIZED",
+            )
+        )
+        or 0
+    )
+    open_req = int(
+        await db.scalar(
+            select(func.count()).select_from(JobRequisition).where(
+                JobRequisition.tenant_id == tenant.id,
+                func.lower(JobRequisition.status) != "closed",
+            )
+        )
+        or 0
+    )
+    today = date.today()
+    att_today = int(
+        await db.scalar(
+            select(func.count()).select_from(AttendanceEntry).where(
+                AttendanceEntry.tenant_id == tenant.id,
+                AttendanceEntry.attendance_date == today,
+            )
+        )
+        or 0
+    )
+    present_today = int(
+        await db.scalar(
+            select(func.count()).select_from(AttendanceEntry).where(
+                AttendanceEntry.tenant_id == tenant.id,
+                AttendanceEntry.attendance_date == today,
+                func.upper(func.coalesce(AttendanceEntry.status, "")) != "ABSENT",
+            )
+        )
+        or 0
+    )
+    att_rate = (present_today / att_today * 100.0) if att_today else 0.0
+    return {
+        "total_employees": total_emp,
+        "active_employees": active_emp,
+        "pending_leave_requests": pending_leave,
+        "pending_payroll_approvals": pending_payroll,
+        "open_recruitment_requisitions": open_req,
+        "today_attendance_entries": att_today,
+        "today_attendance_rate_percent": round(att_rate, 2),
+    }
+
+
+@router.get("/sections", response_model=list[SectionResponse])
+async def list_sections(
+    active_only: bool = Query(default=False),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    stmt = select(HrSection).where(HrSection.tenant_id == tenant.id)
+    if active_only:
+        stmt = stmt.where(HrSection.is_active.is_(True))
+    stmt = stmt.order_by(HrSection.code)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [SectionResponse(**hr_domain.section_to_dict(r)) for r in rows]
+
+
+@router.post("/sections", response_model=SectionResponse, status_code=status.HTTP_201_CREATED)
+async def create_section(
+    body: SectionCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    code = body.code.strip() if body.code else await hr_domain.next_section_code(db, tenant.id)
+    if body.department_id is not None:
+        await _get_department_or_404(db, tenant.id, body.department_id)
+    if body.parent_section_id is not None:
+        await hr_domain.get_section_or_404(db, tenant.id, body.parent_section_id)
+    if body.head_employee_id is not None:
+        await _get_employee_or_404(db, tenant.id, body.head_employee_id)
+    row = HrSection(
+        tenant_id=tenant.id,
+        code=code,
+        name=body.name.strip(),
+        section_type=body.section_type.strip(),
+        parent_section_id=body.parent_section_id,
+        department_id=body.department_id,
+        head_employee_id=body.head_employee_id,
+        is_active=body.is_active,
+    )
+    db.add(row)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Section code already exists")
+    await db.refresh(row)
+    return SectionResponse(**hr_domain.section_to_dict(row))
+
+
+@router.patch("/sections/{section_id}", response_model=SectionResponse)
+async def update_section(
+    section_id: int,
+    body: SectionUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    row = await hr_domain.get_section_or_404(db, tenant.id, section_id)
+    payload = body.model_dump(exclude_unset=True)
+    if "code" in payload and payload["code"] is not None:
+        row.code = payload["code"].strip()
+    if "name" in payload and payload["name"] is not None:
+        row.name = payload["name"].strip()
+    if "section_type" in payload and payload["section_type"] is not None:
+        row.section_type = payload["section_type"].strip()
+    if "parent_section_id" in payload:
+        if payload["parent_section_id"] is not None:
+            await hr_domain.get_section_or_404(db, tenant.id, payload["parent_section_id"])
+        row.parent_section_id = payload["parent_section_id"]
+    if "department_id" in payload:
+        if payload["department_id"] is not None:
+            await _get_department_or_404(db, tenant.id, payload["department_id"])
+        row.department_id = payload["department_id"]
+    if "head_employee_id" in payload:
+        if payload["head_employee_id"] is not None:
+            await _get_employee_or_404(db, tenant.id, payload["head_employee_id"])
+        row.head_employee_id = payload["head_employee_id"]
+    if "is_active" in payload:
+        row.is_active = bool(payload["is_active"])
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Section code already exists")
+    await db.refresh(row)
+    return SectionResponse(**hr_domain.section_to_dict(row))
+
+
+@router.get("/employees/{employee_id}/documents", response_model=list[EmployeeDocumentResponse])
+async def list_employee_documents(
+    employee_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await _get_employee_or_404(db, tenant.id, employee_id)
+    rows = (
+        await db.execute(
+            select(EmployeeDocument)
+            .where(EmployeeDocument.tenant_id == tenant.id, EmployeeDocument.employee_id == employee_id)
+            .order_by(EmployeeDocument.id.desc())
+        )
+    ).scalars().all()
+    return [
+        EmployeeDocumentResponse(
+            id=r.id,
+            tenant_id=r.tenant_id,
+            employee_id=r.employee_id,
+            document_type=r.document_type,
+            document_number=r.document_number,
+            issue_date=r.issue_date,
+            expiry_date=r.expiry_date,
+            file_path=r.file_path,
+            notes=r.notes,
+            created_by=r.created_by,
+            created_at=r.created_at.isoformat(),
+        )
+        for r in rows
+    ]
+
+
+@router.post("/employees/{employee_id}/documents", response_model=EmployeeDocumentResponse, status_code=status.HTTP_201_CREATED)
+async def create_employee_document(
+    employee_id: int,
+    body: EmployeeDocumentCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await _get_employee_or_404(db, tenant.id, employee_id)
+    row = EmployeeDocument(
+        tenant_id=tenant.id,
+        employee_id=employee_id,
+        document_type=body.document_type.strip(),
+        document_number=body.document_number.strip() if body.document_number else None,
+        issue_date=body.issue_date,
+        expiry_date=body.expiry_date,
+        file_path=body.file_path,
+        notes=body.notes.strip() if body.notes else None,
+        created_by=user.id,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return EmployeeDocumentResponse(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        employee_id=row.employee_id,
+        document_type=row.document_type,
+        document_number=row.document_number,
+        issue_date=row.issue_date,
+        expiry_date=row.expiry_date,
+        file_path=row.file_path,
+        notes=row.notes,
+        created_by=row.created_by,
+        created_at=row.created_at.isoformat(),
+    )
+
+
+@router.get("/employees/{employee_id}/status-history", response_model=list[EmployeeStatusHistoryResponse])
+async def list_employee_status_history(
+    employee_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await _get_employee_or_404(db, tenant.id, employee_id)
+    rows = (
+        await db.execute(
+            select(EmployeeStatusHistory)
+            .where(EmployeeStatusHistory.tenant_id == tenant.id, EmployeeStatusHistory.employee_id == employee_id)
+            .order_by(EmployeeStatusHistory.effective_date.desc(), EmployeeStatusHistory.id.desc())
+        )
+    ).scalars().all()
+    return [
+        EmployeeStatusHistoryResponse(
+            id=r.id,
+            tenant_id=r.tenant_id,
+            employee_id=r.employee_id,
+            status=r.status,
+            effective_date=r.effective_date,
+            remarks=r.remarks,
+            changed_by=r.changed_by,
+            created_at=r.created_at.isoformat(),
+        )
+        for r in rows
+    ]
+
+
+@router.post("/employees/{employee_id}/status-history", response_model=EmployeeStatusHistoryResponse, status_code=status.HTTP_201_CREATED)
+async def create_employee_status_history(
+    employee_id: int,
+    body: EmployeeStatusHistoryCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await _get_employee_or_404(db, tenant.id, employee_id)
+    row = EmployeeStatusHistory(
+        tenant_id=tenant.id,
+        employee_id=employee_id,
+        status=body.status.strip(),
+        effective_date=body.effective_date,
+        remarks=body.remarks.strip() if body.remarks else None,
+        changed_by=user.id,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return EmployeeStatusHistoryResponse(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        employee_id=row.employee_id,
+        status=row.status,
+        effective_date=row.effective_date,
+        remarks=row.remarks,
+        changed_by=row.changed_by,
+        created_at=row.created_at.isoformat(),
+    )
+
+
+@router.get("/employees/export")
+async def export_employees(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    data = await hr_domain.export_employees_excel(db, tenant.id)
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="employees.xlsx"'},
+    )
+
+
+@router.post("/employees/import")
+async def import_employees(
+    file: UploadFile = File(...),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    return await hr_domain.import_employees_excel(db, tenant, user, file)
+
+
+@router.get("/compliance-checks", response_model=list[dict])
+async def list_compliance_checks(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    rows = (
+        await db.execute(select(ComplianceCheck).where(ComplianceCheck.tenant_id == tenant.id).limit(500))
+    ).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "employee_id": r.employee_id,
+            "check_type": r.check_type,
+            "status": r.status,
+            "due_date": r.due_date.isoformat() if r.due_date else None,
+            "completed_date": r.completed_date.isoformat() if r.completed_date else None,
+            "notes": r.notes,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/compliance-checks", status_code=status.HTTP_201_CREATED)
+async def create_compliance_check(
+    body: dict,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    employee_id = int(body.get("employee_id", 0))
+    await _get_employee_or_404(db, tenant.id, employee_id)
+    row = ComplianceCheck(
+        tenant_id=tenant.id,
+        employee_id=employee_id,
+        check_type=str(body.get("check_type", "GENERAL")),
+        status=str(body.get("status", "OPEN")),
+        due_date=body.get("due_date"),
+        notes=str(body.get("notes") or "") or None,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return {"id": row.id, "ok": True}

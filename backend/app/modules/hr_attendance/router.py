@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
-from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
+from app.common.pagination import (
+    HR_LIST_DEFAULT_LIMIT,
+    HR_LIST_MAX_LIMIT,
+    HR_REPORT_SUB_LIMIT,
+    HR_REPORT_SUB_MAX,
+)
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -19,10 +24,13 @@ from app.models import (
     AttendanceRoster,
     AttendanceShift,
     Employee,
+    OvertimeEntry,
+    OvertimeRule,
     Tenant,
     User,
 )
 from app.modules.hr_attendance.schemas import (
+    AttendanceBulkEntryBody,
     AttendanceEntryCreate,
     AttendanceEntryOut,
     AttendanceSummaryRow,
@@ -30,6 +38,11 @@ from app.modules.hr_attendance.schemas import (
     HolidayCreate,
     HolidayOut,
     HolidayUpdate,
+    OvertimeEntryCreate,
+    OvertimeEntryOut,
+    OvertimeRuleCreate,
+    OvertimeRuleOut,
+    OvertimeRuleUpdate,
     RegularizationCreate,
     RegularizationDecision,
     RegularizationOut,
@@ -434,7 +447,7 @@ async def attendance_summary(
     department_id: int | None = Query(default=None),
     limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Max employees in summary (Finding #3)"),
     offset: int = Query(default=0, ge=0),
-    entries_limit: int = Query(default=HR_LIST_MAX_LIMIT, ge=1, le=100000, description="Cap attendance rows loaded for aggregation"),
+    entries_limit: int = Query(default=HR_REPORT_SUB_LIMIT, ge=1, le=HR_REPORT_SUB_MAX, description="Cap attendance rows loaded for aggregation"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -567,3 +580,211 @@ async def reject_regularization(
     await db.commit()
     await db.refresh(req)
     return _regularization_out(req)
+
+
+def _ot_rule_out(row: OvertimeRule) -> OvertimeRuleOut:
+    return OvertimeRuleOut(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        code=row.code,
+        name=row.name,
+        employee_category=row.employee_category,
+        max_ot_hours_per_day=row.max_ot_hours_per_day,
+        weekday_multiplier=row.weekday_multiplier,
+        weekend_multiplier=row.weekend_multiplier,
+        holiday_multiplier=row.holiday_multiplier,
+        is_active=row.is_active,
+        created_at=row.created_at.isoformat(),
+        updated_at=row.updated_at.isoformat(),
+    )
+
+
+def _ot_entry_out(row: OvertimeEntry) -> OvertimeEntryOut:
+    return OvertimeEntryOut(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        employee_id=row.employee_id,
+        work_date=row.work_date,
+        ot_hours=row.ot_hours,
+        ot_type=row.ot_type,
+        rate_multiplier=row.rate_multiplier,
+        amount=row.amount,
+        rule_id=row.rule_id,
+        status=row.status,
+        approved_by=row.approved_by,
+        approved_at=row.approved_at.isoformat() if row.approved_at else None,
+        remarks=row.remarks,
+        created_at=row.created_at.isoformat(),
+        updated_at=row.updated_at.isoformat(),
+    )
+
+
+@router.get("/overtime-rules", response_model=list[OvertimeRuleOut])
+async def list_overtime_rules(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    rows = (
+        await db.execute(select(OvertimeRule).where(OvertimeRule.tenant_id == tenant.id).order_by(OvertimeRule.code))
+    ).scalars().all()
+    return [_ot_rule_out(r) for r in rows]
+
+
+@router.post("/overtime-rules", response_model=OvertimeRuleOut, status_code=status.HTTP_201_CREATED)
+async def create_overtime_rule(
+    body: OvertimeRuleCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    code = body.code.strip()
+    row = OvertimeRule(
+        tenant_id=tenant.id,
+        code=code,
+        name=body.name.strip(),
+        employee_category=body.employee_category.strip() if body.employee_category else None,
+        max_ot_hours_per_day=body.max_ot_hours_per_day,
+        weekday_multiplier=body.weekday_multiplier,
+        weekend_multiplier=body.weekend_multiplier,
+        holiday_multiplier=body.holiday_multiplier,
+        is_active=body.is_active,
+    )
+    db.add(row)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Overtime rule code already exists")
+    await db.refresh(row)
+    return _ot_rule_out(row)
+
+
+@router.patch("/overtime-rules/{rule_id}", response_model=OvertimeRuleOut)
+async def update_overtime_rule(
+    rule_id: int,
+    body: OvertimeRuleUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    row = await db.get(OvertimeRule, rule_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    payload = body.model_dump(exclude_unset=True)
+    for k, v in payload.items():
+        if v is None:
+            continue
+        if k in {"code", "name"} and isinstance(v, str):
+            setattr(row, k, v.strip())
+        elif k == "employee_category" and isinstance(v, str):
+            row.employee_category = v.strip() or None
+        else:
+            setattr(row, k, v)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Overtime rule code already exists")
+    await db.refresh(row)
+    return _ot_rule_out(row)
+
+
+@router.get("/overtime", response_model=list[OvertimeEntryOut])
+async def list_overtime_entries(
+    status_filter: str | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    stmt = select(OvertimeEntry).where(OvertimeEntry.tenant_id == tenant.id).order_by(OvertimeEntry.work_date.desc())
+    if status_filter:
+        stmt = stmt.where(OvertimeEntry.status == status_filter.strip().upper())
+    rows = (await db.execute(stmt.limit(500))).scalars().all()
+    return [_ot_entry_out(r) for r in rows]
+
+
+@router.post("/overtime", response_model=OvertimeEntryOut, status_code=status.HTTP_201_CREATED)
+async def create_overtime_entry(
+    body: OvertimeEntryCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _employee_or_404(db, tenant.id, body.employee_id)
+    row = OvertimeEntry(
+        tenant_id=tenant.id,
+        employee_id=body.employee_id,
+        work_date=body.work_date,
+        ot_hours=body.ot_hours,
+        ot_type=body.ot_type,
+        rate_multiplier=body.rate_multiplier,
+        amount=None,
+        rule_id=body.rule_id,
+        status="PENDING",
+        remarks=body.remarks.strip() if body.remarks else None,
+        created_by=user.id,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return _ot_entry_out(row)
+
+
+@router.post("/overtime/{entry_id}/approve", response_model=OvertimeEntryOut)
+async def approve_overtime_entry(
+    entry_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    row = await db.get(OvertimeEntry, entry_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Overtime entry not found")
+    if row.status != "PENDING":
+        raise HTTPException(status_code=400, detail="Only pending entries can be approved")
+    row.status = "APPROVED"
+    row.approved_by = user.id
+    row.approved_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(row)
+    return _ot_entry_out(row)
+
+
+@router.post("/entries/bulk", response_model=dict)
+async def bulk_create_entries(
+    body: AttendanceBulkEntryBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    n = 0
+    for r in body.rows:
+        await _employee_or_404(db, tenant.id, r.employee_id)
+        entry = AttendanceEntry(
+            tenant_id=tenant.id,
+            employee_id=r.employee_id,
+            attendance_date=r.attendance_date,
+            in_time=r.in_time,
+            out_time=r.out_time,
+            status=r.status,
+            source=r.source or "MANUAL",
+            overtime_minutes=r.overtime_minutes,
+            remarks=r.remarks,
+            created_by=user.id,
+        )
+        db.add(entry)
+        n += 1
+    await db.commit()
+    return {"ok": True, "created": n}

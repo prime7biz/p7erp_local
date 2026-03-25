@@ -15,7 +15,7 @@ class IntentResult:
 def detect_intent(prompt: str) -> IntentResult:
     text = prompt.lower().strip()
 
-    action_keywords = {"approve", "post", "create", "update", "delete", "execute", "run payment", "submit"}
+    action_keywords = {"approve", "post", "create", "update", "delete", "execute", "run payment", "submit", "add holiday", "import holiday"}
     report_verb_keywords = {"generate", "create", "build", "prepare"}
     forecast_keywords = {"forecast", "projection", "project", "trend prediction", "outlook", "shortfall", "delay risk"}
     report_keywords = {"report", "summary report", "executive summary", "insight report"}
@@ -41,6 +41,11 @@ def detect_intent(prompt: str) -> IntentResult:
         "suggest item",
         "similar style",
         "orders with shortage",
+        "working days",
+        "working day",
+        "holiday",
+        "calendar",
+        "next holiday",
     }
     summary_keywords = {"summary", "snapshot", "dashboard", "production issues", "inventory", "finance"}
     help_keywords = {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
@@ -21,6 +22,7 @@ from app.models import (
     StockMovement,
     User,
 )
+from app.common.gemini_client import generate_text_for_tenant
 from app.modules.ai_tool import repository
 from app.modules.ai_tool.authz import has_tool_permission
 
@@ -378,8 +380,23 @@ async def generate_anomaly_insights(
         persisted_ids.append(row.id)
 
     narrative = _build_narrative(findings)
+    gemini_narrative: str | None = None
+    if findings:
+        gprompt = (
+            "Given these ERP anomaly signals (JSON), describe the top 3 bottlenecks or risks for a garment "
+            "factory and one recommended action each. Under 180 words. Plain text.\n"
+            f"{json.dumps([{'title': f.title, 'explanation': f.explanation, 'severity': f.severity} for f in findings], default=str)[:6000]}"
+        )
+        try:
+            gemini_narrative = await generate_text_for_tenant(
+                db, tenant_id, user.id, "assistant", gprompt
+            )
+        except Exception:
+            gemini_narrative = None
+
     return {
         "summary": narrative,
+        "gemini_narrative": gemini_narrative,
         "events": [
             {
                 "source_area": x.source_area,

@@ -6,6 +6,7 @@ import {
   type HrPayrollReportRow,
   type HrReportSummaryResponse,
 } from "@/api/client";
+import { HrPageHeader } from "@/components/hr/HrPageHeader";
 
 export function HrReportsDashboardPage() {
   const [summary, setSummary] = useState<HrReportSummaryResponse | null>(null);
@@ -43,10 +44,11 @@ export function HrReportsDashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">HR Reports Dashboard</h1>
-          <p className="text-sm text-text-muted">Attendance, leave, and payroll insights in one place.</p>
-        </div>
+        <HrPageHeader
+          title="HR Reports"
+          description="Attendance, leave, and payroll insights in one place."
+          breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "Reports" }]}
+        />
         <button
           type="button"
           onClick={() => void load()}

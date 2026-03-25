@@ -9,6 +9,9 @@ import {
   type InquiryItemCreate,
   type StyleResponse,
 } from "@/api/client";
+import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel";
+import { ExtractionStatusBanner } from "@/components/ai-extract/ExtractionStatusBanner";
+import { FileImportCard } from "@/components/ai-extract/FileImportCard";
 import {
   COMMISSION_MODE_OPTIONS,
   COMMISSION_TYPE_OPTIONS,
@@ -16,6 +19,16 @@ import {
   withLegacyOption,
 } from "@/lib/commercialTerms";
 import { InquiryCreateSidebar } from "@/features/inquiries/create/InquiryCreateSidebar";
+import { cn } from "@/lib/utils";
+import type { ConflictResolutionChoice, FieldApplyState, FieldConfidence } from "@/types/extraction";
+import { useDocumentExtraction } from "@/hooks/useDocumentExtraction";
+import {
+  buildInquiryFieldApplyStates,
+  deriveConfidenceLevel,
+  formatExtractedValue,
+  inquiryFormSnapshot,
+} from "@/utils/extractionHelpers";
+import { useSecureImage } from "@/hooks/useSecureImage";
 
 const emptyItem = (): InquiryItemCreate => ({
   item_name: "",
@@ -40,6 +53,16 @@ const emptyForm = (): InquiryCreate => ({
   notes: "",
   items: [emptyItem()],
 });
+
+const INQ_INPUT =
+  "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring";
+
+function inquiryAutofillRing(level?: FieldConfidence): string {
+  if (!level) return "";
+  if (level === "high") return "border-l-[3px] border-l-status-success pl-2";
+  if (level === "medium") return "border-l-[3px] border-l-status-warning pl-2";
+  return "border-l-[3px] border-l-status-danger pl-2";
+}
 
 export function InquiryCreatePage() {
   const navigate = useNavigate();
@@ -69,10 +92,15 @@ export function InquiryCreatePage() {
   const [fetchingRates, setFetchingRates] = useState(false);
   const [rateSource, setRateSource] = useState<"" | "live" | "fallback">("");
 
+  const extraction = useDocumentExtraction("inquiry");
+  const [autofilled, setAutofilled] = useState<Partial<Record<string, FieldConfidence>>>({});
+  const [reviewRows, setReviewRows] = useState<FieldApplyState[]>([]);
+
   const selectedStyle = useMemo(
     () => styles.find((s) => s.id === form.style_id) ?? null,
     [styles, form.style_id]
   );
+  const selectedStyleImageUrl = useSecureImage(selectedStyle?.style_image_url);
 
   const customerLinks = useMemo(() => {
     if (!form.customer_id) return [];
@@ -207,6 +235,210 @@ export function InquiryCreatePage() {
     }));
   };
 
+  useEffect(() => {
+    const res = extraction.inquiryResponse;
+    if (!res) {
+      setReviewRows([]);
+      return;
+    }
+    const next = buildInquiryFieldApplyStates(res, inquiryFormSnapshot(form));
+    setReviewRows((prev) => {
+      const applied = new Set(prev.filter((r) => r.applied).map((r) => r.fieldKey));
+      const skipped = new Set(prev.filter((r) => r.skipped).map((r) => r.fieldKey));
+      return next.map((row) => ({
+        ...row,
+        applied: applied.has(row.fieldKey),
+        skipped: skipped.has(row.fieldKey),
+      }));
+    });
+  }, [extraction.inquiryResponse, form]);
+
+  const patchForm = (patch: Partial<InquiryCreate>) => {
+    setAutofilled((af) => {
+      const n = { ...af };
+      if ("season" in patch) delete n.season;
+      if ("department" in patch) delete n.department;
+      if ("style_ref" in patch) delete n.style_ref;
+      if ("quantity" in patch) delete n.quantity;
+      if ("target_price" in patch) delete n.target_price;
+      if ("target_price_currency" in patch) delete n.target_price_currency;
+      if ("currency" in patch) delete n.currency;
+      if ("exchange_rate" in patch) delete n.exchange_rate;
+      if ("expected_delivery_date" in patch) delete n.expected_delivery_date;
+      if ("shipping_term" in patch) delete n.shipping_term;
+      if ("commission_mode" in patch) delete n.commission_mode;
+      if ("commission_type" in patch) delete n.commission_type;
+      if ("commission_value" in patch) delete n.commission_value;
+      if ("notes" in patch) delete n.notes;
+      if ("customer_intermediary_id" in patch) delete n.intermediary_name;
+      return n;
+    });
+    setForm((prev) => ({ ...prev, ...patch }));
+  };
+
+  const applyExtractedPatch = (
+    patch: Partial<InquiryCreate>,
+    levels: Partial<Record<string, FieldConfidence>>,
+  ) => {
+    setForm((prev) => ({ ...prev, ...patch }));
+    setAutofilled((prev) => ({ ...prev, ...levels }));
+  };
+
+  const applySingleExtractedField = (key: string, value: unknown, level: FieldConfidence) => {
+    const raw = formatExtractedValue(value);
+    if (key === "quantity") {
+      const n = raw ? Number(raw) : undefined;
+      applyExtractedPatch(
+        { quantity: Number.isFinite(n) ? n : undefined },
+        { quantity: level },
+      );
+      return;
+    }
+    if (key === "intermediary_name") {
+      const match = customerLinks.find(
+        (l) =>
+          (l.intermediary_name ?? "").toLowerCase().includes(raw.toLowerCase()) ||
+          (l.intermediary_code ?? "").toLowerCase() === raw.toLowerCase(),
+      );
+      if (match) {
+        applyExtractedPatch({ customer_intermediary_id: match.id }, { intermediary_name: level });
+      }
+      return;
+    }
+    const map: Partial<Record<string, keyof InquiryCreate>> = {
+      style_ref: "style_ref",
+      season: "season",
+      department: "department",
+      target_price: "target_price",
+      target_price_currency: "target_price_currency",
+      currency: "currency",
+      exchange_rate: "exchange_rate",
+      expected_delivery_date: "expected_delivery_date",
+      shipping_term: "shipping_term",
+      commission_mode: "commission_mode",
+      commission_type: "commission_type",
+      commission_value: "commission_value",
+      notes: "notes",
+    };
+    const formKey = map[key];
+    if (formKey) {
+      applyExtractedPatch({ [formKey]: raw } as Partial<InquiryCreate>, { [key]: level });
+    }
+  };
+
+  const handleApplyInquiryField = (key: string) => {
+    const res = extraction.inquiryResponse;
+    if (!res?.fields[key]) return;
+    const ef = res.fields[key];
+    const level = deriveConfidenceLevel(typeof ef.confidence === "number" ? ef.confidence : 0);
+    applySingleExtractedField(key, ef.value, level);
+    setReviewRows((rs) =>
+      rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+    );
+  };
+
+  const handleApplyAllHighInquiry = () => {
+    const res = extraction.inquiryResponse;
+    if (!res) return;
+    const toApply = reviewRows.filter(
+      (r) => !r.applied && !r.skipped && r.confidenceLevel === "high" && !r.hasConflict,
+    );
+    if (toApply.length === 0) return;
+    const patch: Partial<InquiryCreate> = {};
+    const levels: Partial<Record<string, FieldConfidence>> = {};
+    for (const row of toApply) {
+      const ef = res.fields[row.fieldKey];
+      if (!ef) continue;
+      const level = deriveConfidenceLevel(typeof ef.confidence === "number" ? ef.confidence : 0);
+      const key = row.fieldKey;
+      const raw = formatExtractedValue(ef.value);
+      if (key === "quantity") {
+        const n = raw ? Number(raw) : undefined;
+        patch.quantity = Number.isFinite(n) ? n : undefined;
+        levels.quantity = level;
+      } else if (key === "intermediary_name") {
+        const match = customerLinks.find(
+          (l) =>
+            (l.intermediary_name ?? "").toLowerCase().includes(raw.toLowerCase()) ||
+            (l.intermediary_code ?? "").toLowerCase() === raw.toLowerCase(),
+        );
+        if (match) {
+          patch.customer_intermediary_id = match.id;
+          levels.intermediary_name = level;
+        }
+      } else {
+        const map: Partial<Record<string, keyof InquiryCreate>> = {
+          style_ref: "style_ref",
+          season: "season",
+          department: "department",
+          target_price: "target_price",
+          target_price_currency: "target_price_currency",
+          currency: "currency",
+          exchange_rate: "exchange_rate",
+          expected_delivery_date: "expected_delivery_date",
+          shipping_term: "shipping_term",
+          commission_mode: "commission_mode",
+          commission_type: "commission_type",
+          commission_value: "commission_value",
+          notes: "notes",
+        };
+        const formKey = map[key];
+        if (formKey) {
+          (patch as Record<string, string | number | undefined>)[formKey] = raw;
+          levels[key] = level;
+        }
+      }
+    }
+    applyExtractedPatch(patch, levels);
+    setReviewRows((rs) =>
+      rs.map((r) =>
+        toApply.some((t) => t.fieldKey === r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+      ),
+    );
+  };
+
+  const handleSkipInquiryField = (key: string) => {
+    setReviewRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
+  };
+
+  const handleResolveInquiryConflict = (key: string, choice: ConflictResolutionChoice) => {
+    if (choice === "keep") {
+      handleSkipInquiryField(key);
+      return;
+    }
+    const res = extraction.inquiryResponse;
+    if (!res?.fields[key]) return;
+    const ef = res.fields[key];
+    const level: FieldConfidence = choice === "merge" ? "low" : deriveConfidenceLevel(ef.confidence ?? 0);
+    applySingleExtractedField(key, ef.value, level);
+    setReviewRows((rs) =>
+      rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+    );
+  };
+
+  const handleApplyExtractedItems = () => {
+    const res = extraction.inquiryResponse;
+    if (!res?.items?.length) return;
+    const lines: InquiryItemCreate[] = res.items
+      .filter((it) => (it.item_name?.trim() || it.description?.trim()) && it.confidence >= 0.5)
+      .map((it) => ({
+        item_name: it.item_name ?? "",
+        description: it.description ?? "",
+        quantity: it.quantity ?? undefined,
+      }));
+    if (lines.length === 0) return;
+    setForm((prev) => ({ ...prev, items: lines }));
+  };
+
+  const handleExtractFile = async (file: File) => {
+    await extraction.extract(file);
+  };
+
+  const handleClearImport = () => {
+    extraction.clear();
+    setReviewRows([]);
+  };
+
   const handleSave = async () => {
     if (!form.customer_id) {
       setError("Please select a customer.");
@@ -243,10 +475,9 @@ export function InquiryCreatePage() {
       const bdtRate = live.rates?.BDT;
       const targetRate = live.rates?.[targetCode];
       if (bdtRate && targetRate) {
-        setForm((prev) => ({
-          ...prev,
+        patchForm({
           exchange_rate: (bdtRate / targetRate).toFixed(4),
-        }));
+        });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch exchange rates");
@@ -380,6 +611,96 @@ export function InquiryCreatePage() {
         </div>
       )}
 
+      {!loading && !isEdit && (
+        <div className="space-y-4">
+          <FileImportCard
+            title="Import Inquiry Info"
+            subtitle="Upload buyer inquiry sheet, email screenshot, tech-pack summary, PO summary, or PDF to auto-fill the form."
+            status={extraction.status}
+            error={extraction.error}
+            onExtract={handleExtractFile}
+            onClear={handleClearImport}
+          />
+          <ExtractionStatusBanner
+            status={extraction.status}
+            extractedCount={
+              Object.values(extraction.inquiryResponse?.fields ?? {}).filter(
+                (f) => f.value !== null && f.value !== undefined && String(f.value).trim() !== "",
+              ).length + (extraction.inquiryResponse?.items?.length ?? 0)
+            }
+            warnings={[
+              ...(extraction.inquiryResponse?.warnings ?? []),
+              ...(extraction.inquiryResponse?.unmapped_text?.map((t) => `Unmapped: ${t}`) ?? []),
+            ]}
+            error={extraction.error}
+          />
+          {extraction.inquiryResponse?.candidate_matches?.customer &&
+          extraction.inquiryResponse.candidate_matches.customer.length > 0 ? (
+            <div className="rounded-xl border border-border bg-surface-raised p-4 text-sm">
+              <p className="font-semibold text-text-primary">Suggested customers</p>
+              <p className="text-text-muted mt-1 text-xs">
+                Select a match to set Customer — the system does not create customers from extraction.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {extraction.inquiryResponse.candidate_matches.customer.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => onCustomerChange(m.id)}
+                    className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-primary hover:bg-surface-subtle"
+                  >
+                    {m.name}{" "}
+                    <span className="text-text-muted">({Math.round(m.score * 100)}%)</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {extraction.inquiryResponse?.candidate_matches?.style &&
+          extraction.inquiryResponse.candidate_matches.style.length > 0 ? (
+            <div className="rounded-xl border border-border bg-surface-raised p-4 text-sm">
+              <p className="font-semibold text-text-primary">Suggested styles</p>
+              <p className="text-text-muted mt-1 text-xs">
+                Select a match to set Style — verify the code matches your inquiry.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {extraction.inquiryResponse.candidate_matches.style.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => onStyleChange(m.id)}
+                    className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-primary hover:bg-surface-subtle"
+                  >
+                    {m.name}{" "}
+                    <span className="text-text-muted">({Math.round(m.score * 100)}%)</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {extraction.inquiryResponse && extraction.inquiryResponse.items.length > 0 ? (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleApplyExtractedItems}
+                className="rounded-lg border border-border-strong bg-surface-base px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-subtle"
+              >
+                Apply extracted garment lines
+              </button>
+            </div>
+          ) : null}
+          {reviewRows.length > 0 && extraction.inquiryResponse ? (
+            <AutofillReviewPanel
+              fields={reviewRows}
+              onApply={handleApplyInquiryField}
+              onApplyAllHigh={handleApplyAllHighInquiry}
+              onSkip={handleSkipInquiryField}
+              onResolveConflict={handleResolveInquiryConflict}
+            />
+          ) : null}
+        </div>
+      )}
+
       {loading ? (
         <div className="rounded-xl border border-border bg-surface-raised p-10 text-center text-text-muted">
           Loading...
@@ -495,8 +816,8 @@ export function InquiryCreatePage() {
                 <input
                   type="text"
                   value={form.season ?? ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, season: e.target.value }))}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  onChange={(e) => patchForm({ season: e.target.value })}
+                  className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.season))}
                 />
               </div>
               <div>
@@ -504,8 +825,8 @@ export function InquiryCreatePage() {
                 <input
                   type="text"
                   value={form.department ?? ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, department: e.target.value }))}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  onChange={(e) => patchForm({ department: e.target.value })}
+                  className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.department))}
                 />
               </div>
               <div>
@@ -513,8 +834,8 @@ export function InquiryCreatePage() {
                 <input
                   type="text"
                   value={form.style_ref ?? ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, style_ref: e.target.value }))}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  onChange={(e) => patchForm({ style_ref: e.target.value })}
+                  className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.style_ref))}
                 />
               </div>
             </div>
@@ -523,11 +844,15 @@ export function InquiryCreatePage() {
               <div className="rounded-lg border border-border bg-surface-subtle p-3">
                 <div className="flex items-center gap-3">
                   {selectedStyle.style_image_url ? (
-                    <img
-                      src={selectedStyle.style_image_url}
-                      alt={selectedStyle.name}
-                      className="h-16 w-16 rounded object-cover border border-border"
-                    />
+                    selectedStyleImageUrl ? (
+                      <img
+                        src={selectedStyleImageUrl}
+                        alt={selectedStyle.name}
+                        className="h-16 w-16 rounded object-cover border border-border"
+                      />
+                    ) : (
+                      <div className="h-16 w-16 rounded border border-border bg-surface-subtle animate-pulse" aria-hidden />
+                    )
                   ) : (
                     <div className="h-16 w-16 rounded bg-border-subtle text-xs text-text-secondary flex items-center justify-center">
                       No image
@@ -582,8 +907,8 @@ export function InquiryCreatePage() {
                   <label className="block text-xs text-text-secondary mb-1">Shipping term</label>
                   <select
                     value={form.shipping_term ?? ""}
-                    onChange={(e) => setForm((prev) => ({ ...prev, shipping_term: e.target.value }))}
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    onChange={(e) => patchForm({ shipping_term: e.target.value })}
+                    className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.shipping_term))}
                   >
                     <option value="">Select shipping term</option>
                     {withLegacyOption(form.shipping_term, SHIPPING_TERM_OPTIONS).map((term) => (
@@ -601,8 +926,8 @@ export function InquiryCreatePage() {
                   <label className="block text-xs text-text-secondary mb-1">Commission mode</label>
                   <select
                     value={form.commission_mode ?? ""}
-                    onChange={(e) => setForm((prev) => ({ ...prev, commission_mode: e.target.value }))}
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    onChange={(e) => patchForm({ commission_mode: e.target.value })}
+                    className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.commission_mode))}
                   >
                     <option value="">Select mode</option>
                     {withLegacyOption(form.commission_mode, COMMISSION_MODE_OPTIONS).map((mode) => (
@@ -618,8 +943,8 @@ export function InquiryCreatePage() {
                   <label className="block text-xs text-text-secondary mb-1">Commission type</label>
                   <select
                     value={form.commission_type ?? ""}
-                    onChange={(e) => setForm((prev) => ({ ...prev, commission_type: e.target.value }))}
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    onChange={(e) => patchForm({ commission_type: e.target.value })}
+                    className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.commission_type))}
                   >
                     <option value="">Select type</option>
                     {withLegacyOption(form.commission_type, COMMISSION_TYPE_OPTIONS).map((type) => (
@@ -636,8 +961,8 @@ export function InquiryCreatePage() {
                   <input
                     type="text"
                     value={form.commission_value ?? ""}
-                    onChange={(e) => setForm((prev) => ({ ...prev, commission_value: e.target.value }))}
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    onChange={(e) => patchForm({ commission_value: e.target.value })}
+                    className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.commission_value))}
                   />
                 </div>
               </div>
@@ -648,12 +973,11 @@ export function InquiryCreatePage() {
                     type="number"
                     value={form.quantity ?? ""}
                     onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
+                      patchForm({
                         quantity: e.target.value ? Number(e.target.value) : undefined,
-                      }))
+                      })
                     }
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.quantity))}
                   />
                 </div>
                 <div>
@@ -663,13 +987,16 @@ export function InquiryCreatePage() {
                       type="number"
                       step="0.0001"
                       value={form.target_price ?? ""}
-                      onChange={(e) => setForm((prev) => ({ ...prev, target_price: e.target.value }))}
-                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                      onChange={(e) => patchForm({ target_price: e.target.value })}
+                      className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.target_price))}
                     />
                     <select
                       value={form.target_price_currency ?? "USD"}
-                      onChange={(e) => setForm((prev) => ({ ...prev, target_price_currency: e.target.value }))}
-                      className="w-28 rounded-lg border border-border-strong px-2 py-2 text-sm"
+                      onChange={(e) => patchForm({ target_price_currency: e.target.value })}
+                      className={cn(
+                        "w-28 rounded-lg border border-border-strong px-2 py-2 text-sm",
+                        inquiryAutofillRing(autofilled.target_price_currency),
+                      )}
                     >
                       {currencyOptions.map((code) => (
                         <option key={code} value={code}>
@@ -685,8 +1012,8 @@ export function InquiryCreatePage() {
                   <label className="block text-xs text-text-secondary mb-1">Document currency</label>
                   <select
                     value={form.currency ?? "USD"}
-                    onChange={(e) => setForm((prev) => ({ ...prev, currency: e.target.value }))}
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    onChange={(e) => patchForm({ currency: e.target.value })}
+                    className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.currency))}
                   >
                     {currencyOptions.map((code) => (
                       <option key={code} value={code}>
@@ -702,8 +1029,8 @@ export function InquiryCreatePage() {
                       type="number"
                       step="0.0001"
                       value={form.exchange_rate ?? "1"}
-                      onChange={(e) => setForm((prev) => ({ ...prev, exchange_rate: e.target.value }))}
-                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                      onChange={(e) => patchForm({ exchange_rate: e.target.value })}
+                      className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.exchange_rate))}
                     />
                     <button
                       type="button"
@@ -726,9 +1053,9 @@ export function InquiryCreatePage() {
                     type="date"
                     value={(form.expected_delivery_date ?? "").slice(0, 10)}
                     onChange={(e) =>
-                      setForm((prev) => ({ ...prev, expected_delivery_date: e.target.value || undefined }))
+                      patchForm({ expected_delivery_date: e.target.value || undefined })
                     }
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.expected_delivery_date))}
                   />
                 </div>
               </div>
@@ -793,8 +1120,8 @@ export function InquiryCreatePage() {
               <textarea
                 rows={3}
                 value={form.notes ?? ""}
-                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                onChange={(e) => patchForm({ notes: e.target.value })}
+                className={cn(INQ_INPUT, inquiryAutofillRing(autofilled.notes))}
               />
             </div>
           </div>

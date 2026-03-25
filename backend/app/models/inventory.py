@@ -230,7 +230,7 @@ class InventoryGlPosting(Base):
     source_system: Mapped[str] = mapped_column(String(32), nullable=False)
     source_id: Mapped[int] = mapped_column(Integer, nullable=False)
     action: Mapped[str] = mapped_column(String(64), nullable=False)
-    voucher_id: Mapped[int] = mapped_column(ForeignKey("vouchers.id", ondelete="CASCADE"), nullable=False)
+    voucher_id: Mapped[int] = mapped_column(ForeignKey("vouchers.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
@@ -240,7 +240,7 @@ class PhysicalInventorySession(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False)
+    warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False, index=True)
     session_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
     count_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -359,6 +359,10 @@ class ManufacturingOrder(Base):
     current_stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft", index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    migrated_mfg_work_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("mfg_work_orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    legacy_deprecated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -395,8 +399,8 @@ class WarehouseTransfer(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     transfer_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    from_warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False)
-    to_warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False)
+    from_warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False, index=True)
+    to_warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False, index=True)
     transfer_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -429,8 +433,8 @@ class StockAdjustment(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     adjust_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False)
-    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False)
+    warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False, index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
     quantity: Mapped[str] = mapped_column(String(32), nullable=False)
     reason_code: Mapped[str] = mapped_column(String(32), nullable=False, default="OTHER")
     adjustment_date: Mapped[date | None] = mapped_column(Date, nullable=True)

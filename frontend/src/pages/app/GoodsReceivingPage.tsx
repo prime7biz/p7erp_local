@@ -32,6 +32,7 @@ export function GoodsReceivingPage() {
   });
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [apMessage, setApMessage] = useState("");
 
   useEffect(() => {
     const close = () => setOpenActionsId(null);
@@ -76,6 +77,22 @@ export function GoodsReceivingPage() {
     [load],
   );
 
+  const createApFromGrn = useCallback(
+    async (grnId: number) => {
+      setError("");
+      setApMessage("");
+      try {
+        await api.createPayableFromGoodsReceiving(grnId, { due_in_days: 30 });
+        setApMessage("Payable bill created from GRN (check Outstanding Bills).");
+        await load();
+      } catch (e) {
+        logApiError("GoodsReceivingPage.createPayableFromGoodsReceiving", e);
+        setError(e instanceof Error ? e.message : "Failed to create payable");
+      }
+    },
+    [load],
+  );
+
   return (
     <div className="min-w-0 space-y-6 touch-manipulation">
       <div>
@@ -84,6 +101,9 @@ export function GoodsReceivingPage() {
         <p className="mt-1 text-xs text-text-muted">Controls use larger tap targets on phones and tablets.</p>
       </div>
       {error ? <InventoryErrorPanel message={error} onRetry={() => void load()} /> : null}
+      {apMessage ? (
+        <div className="rounded-lg border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{apMessage}</div>
+      ) : null}
       <div className="rounded-xl border border-border bg-surface-raised p-3 sm:p-4">
         <label className="mb-2 block text-xs font-semibold text-text-secondary">Status filter</label>
         <input
@@ -179,7 +199,7 @@ export function GoodsReceivingPage() {
                         Actions
                       </button>
                       {openActionsId === row.id && (
-                        <div className="absolute right-0 z-10 mt-1 w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                        <div className="absolute right-0 z-10 mt-1 w-56 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
                           <button
                             type="button"
                             className="block min-h-[44px] w-full rounded-md px-3 py-3 text-left text-sm text-gray-800 hover:bg-gray-50 active:bg-gray-100"
@@ -204,6 +224,19 @@ export function GoodsReceivingPage() {
                               Receive to stock
                             </button>
                           )}
+                          {row.status === "RECEIVED" ? (
+                            <button
+                              type="button"
+                              className="block min-h-[44px] w-full rounded-md px-3 py-3 text-left text-sm text-gray-800 hover:bg-gray-50 active:bg-gray-100"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setOpenActionsId(null);
+                                await createApFromGrn(row.id);
+                              }}
+                            >
+                              Create AP bill from GRN
+                            </button>
+                          ) : null}
                         </div>
                       )}
                     </div>

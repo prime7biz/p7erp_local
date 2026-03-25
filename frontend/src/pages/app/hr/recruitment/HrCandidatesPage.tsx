@@ -7,6 +7,7 @@ export function HrCandidatesPage() {
       title="Candidates"
       description="Maintain candidate pipeline for recruitment."
       emptyMessage="No candidates found."
+      breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "Candidates" }]}
       loadItems={() => api.listHrCandidates()}
       createItem={(payload) => api.createHrCandidate(payload)}
       createLabel="Add candidate"

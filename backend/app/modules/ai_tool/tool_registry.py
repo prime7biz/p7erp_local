@@ -23,6 +23,11 @@ from app.modules.ai_tool.tools import (
     suggest_orders_with_shortage,
     suggest_vendor_for_item,
 )
+from app.modules.ai_tool.tools.calendar_tools import (
+    calendar_impact_tool,
+    calendar_manage_tool,
+    calendar_summary_tool,
+)
 
 ToolHandler = Callable[[AsyncSession, int, str], Awaitable[dict]]
 
@@ -97,6 +102,18 @@ async def _suggest_vendor_handler(db: AsyncSession, tenant_id: int, prompt: str)
 
 async def _orders_shortage_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
     return await suggest_orders_with_shortage(db, tenant_id=tenant_id, prompt=prompt)
+
+
+async def _calendar_summary_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
+    return await calendar_summary_tool(db, tenant_id, prompt)
+
+
+async def _calendar_impact_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
+    return await calendar_impact_tool(db, tenant_id, prompt)
+
+
+async def _calendar_manage_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
+    return await calendar_manage_tool(db, tenant_id, prompt)
 
 
 REGISTRY: dict[str, ToolDefinition] = {
@@ -226,6 +243,33 @@ REGISTRY: dict[str, ToolDefinition] = {
         is_read_only=True,
         handler=_orders_shortage_handler,
     ),
+    "calendar_summary": ToolDefinition(
+        name="calendar_summary",
+        source_area="manufacturing",
+        allowed_intents={"search_query", "summary_request", "help_request", "action_request"},
+        permission_key="ai.tools.production.read",
+        requires_confirmation=False,
+        is_read_only=True,
+        handler=_calendar_summary_handler,
+    ),
+    "calendar_impact": ToolDefinition(
+        name="calendar_impact",
+        source_area="manufacturing",
+        allowed_intents={"search_query", "summary_request"},
+        permission_key="ai.tools.production.read",
+        requires_confirmation=False,
+        is_read_only=True,
+        handler=_calendar_impact_handler,
+    ),
+    "calendar_manage": ToolDefinition(
+        name="calendar_manage",
+        source_area="manufacturing",
+        allowed_intents={"action_request"},
+        permission_key="ai.tools.production.read",
+        requires_confirmation=False,
+        is_read_only=True,
+        handler=_calendar_manage_handler,
+    ),
 }
 
 
@@ -233,8 +277,38 @@ def _contains_any(text: str, tokens: set[str]) -> bool:
     return any(x in text for x in tokens)
 
 
+def _factory_calendar_tools(intent: AiIntent, prompt: str) -> list[ToolDefinition] | None:
+    text = prompt.lower()
+    cal_keys = (
+        "factory calendar",
+        "working days",
+        "working day",
+        "next holiday",
+        "public holiday",
+        "calendar impact",
+        "import holiday",
+        "import holidays",
+    )
+    holiday_cal = "holiday" in text and any(
+        x in text for x in ("factory", "working", "calendar", "next", "public", "import", "add ", "eid")
+    )
+    matched = any(k in text for k in cal_keys) or holiday_cal
+    if intent == "action_request" and any(k in text for k in ("add holiday", "import holiday", "eid")):
+        matched = True
+    if not matched:
+        return None
+    if any(k in text for k in ("what happens", "calendar impact", "if i add", "if we add")) and "holiday" in text:
+        return [REGISTRY["calendar_impact"]]
+    if intent == "action_request" and any(k in text for k in ("add holiday", "import holiday", "eid")):
+        return [REGISTRY["calendar_manage"]]
+    return [REGISTRY["calendar_summary"]]
+
+
 def select_tools(intent: AiIntent, prompt: str) -> list[ToolDefinition]:
     text = prompt.lower()
+    cal_pick = _factory_calendar_tools(intent, prompt)
+    if cal_pick is not None:
+        return cal_pick
     parsed = parse_search_query(prompt)
     if intent == "search_query":
         if parsed.ambiguous:

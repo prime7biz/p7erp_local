@@ -55,7 +55,7 @@ Fix mismatches between the sidebar and real routes so users are not sent to dead
 | 2.2 | **Stock adjustments** | **Done:** `stock_adjustments`, API, `StockAdjustmentsPage`; signed qty draft; post creates IN (positive) or OUT (negative) with `STOCK_ADJUSTMENT`. |
 | 2.3 | **Stock valuation report** | **Done (phase 1):** `GET /stock-valuation` = **default_cost** × on-hand; `StockValuationPage` + CSV. FIFO/moving average later. |
 | 2.4 | **Stock dashboard** | **Done:** `GET /stock-dashboard` + `StockDashboardPage` (open POs, pending GRNs, SKUs in stock, low-stock count with threshold, recent movements). |
-| 2.5 | **Lot / batch (optional)** | If required for traceability: `lot_id` on movements and receiving lines. |
+| 2.5 | **Lot / batch (optional)** | **Lot trace shipped:** `GET /lot-trace` + `LotTraceabilityPage` (search by lot on GRN lines and movements). Optional later: `lot_id` FK on movements/receiving lines everywhere for stricter batch control. |
 | 2.6 | **Manufacturing order ↔ stock (decision)** | MO completion is currently **workflow-only** (no automatic `StockMovement` for finished goods). Decide whether completing an MO should post **IN** for `finished_item_id` (and optionally component **OUT** from BOM), or stay decoupled with explicit process orders/GRN — align with costing and shop-floor process. |
 
 **Files:** backend router + models; new pages replacing `AppComingSoonPage` entries in `AppProtectedRouter.tsx`.

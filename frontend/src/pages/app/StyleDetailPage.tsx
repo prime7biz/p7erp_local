@@ -12,6 +12,7 @@ import {
   type StyleUpdate,
   type BomResponse,
 } from "@/api/client";
+import { useSecureImage } from "@/hooks/useSecureImage";
 
 export function StyleDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -135,6 +136,7 @@ export function StyleDetailPage() {
     if (summary.open_followup_actions > 0) return "In progress";
     return "Healthy";
   }, [summary]);
+  const styleImageUrl = useSecureImage(style?.style_image_url);
 
   if (loading) return <div className="p-6 text-text-muted">Loading style…</div>;
   if (!style) return <div className="p-6 text-status-danger text-sm">{error || "Style not found"}</div>;
@@ -196,11 +198,41 @@ export function StyleDetailPage() {
         </div>
       )}
 
+      <section className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-text-primary">Related Records</h2>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Link
+            to={`/app/bom?styleId=${styleId}`}
+            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            BOMs ({boms.length})
+          </Link>
+          <Link
+            to="/app/followup"
+            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            Follow-up actions ({summary?.open_followup_actions ?? 0})
+          </Link>
+          <Link
+            to={`/app/reports/style-360?styleId=${styleId}`}
+            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            Style 360 report
+          </Link>
+          <Link
+            to="/app/orders"
+            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            Orders ({summary?.order_count ?? 0})
+          </Link>
+        </div>
+      </section>
+
       <div className="rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="text-sm font-semibold text-text-primary mb-3">Style Picture</h2>
-        {style.style_image_url ? (
+        {styleImageUrl ? (
           <img
-            src={style.style_image_url}
+            src={styleImageUrl}
             alt={style.name}
             className="h-36 w-36 rounded object-cover border border-border"
           />

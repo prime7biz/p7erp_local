@@ -3,8 +3,16 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { getToken, getTenantId } from "@/api/client";
 import type { TenantType } from "@/api/client";
-import { isSidebarNavItemActive, menuSections, type NavItem, type TenantTypeFilter } from "@/app/sidebarConfig";
+import {
+  isNavItemVisibleForTenant,
+  isSidebarNavItemActive,
+  menuSections,
+  type NavItem,
+  type TenantTypeFilter,
+} from "@/app/sidebarConfig";
+import { useProductionOptionalUnits } from "@/hooks/useProductionOptionalUnits";
 import { prefetchSidebarRoute, prefetchTopSearchRoutes } from "@/app/prefetchRoutes";
+import { getActiveAnnouncements } from "@/api/client";
 import { AppBottomNav } from "@/components/navigation/AppBottomNav";
 import {
   Bell,
@@ -38,6 +46,8 @@ function Sidebar({
   userName,
   isCollapsed,
   onToggleCollapse,
+  enabledOptionalProductionUnits,
+  featureFlags,
 }: {
   tenantType: TenantType;
   tenantName: string;
@@ -45,6 +55,8 @@ function Sidebar({
   userName: string;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  enabledOptionalProductionUnits: string[];
+  featureFlags?: MeResponse["feature_flags"];
 }) {
   const location = useLocation();
   const [openSection, setOpenSection] = useState<string | null>("Dashboard");
@@ -57,16 +69,42 @@ function Sidebar({
   const filtered = useMemo(() => {
     return menuSections
       .filter((s) => isVisible(tenantType, s.visibleFor))
-      .map((s) => ({
-        ...s,
-        items: s.items.filter((i) => isVisible(tenantType, i.visibleFor)),
-      }));
-  }, [tenantType]);
+      .map((s) => {
+        if (s.subsections && s.subsections.length > 0) {
+          const subsections = s.subsections
+            .map((sub) => ({
+              ...sub,
+              items: sub.items.filter((i) =>
+                isNavItemVisibleForTenant(i, tenantType, enabledOptionalProductionUnits, featureFlags),
+              ),
+            }))
+            .filter((sub) => sub.items.length > 0);
+          return { ...s, items: [], subsections };
+        }
+        return {
+          ...s,
+          items: s.items.filter((i) =>
+            isNavItemVisibleForTenant(i, tenantType, enabledOptionalProductionUnits, featureFlags),
+          ),
+        };
+      })
+      .filter((s) => {
+        if (s.directLink) return true;
+        if (s.subsections && s.subsections.length > 0) return s.subsections.some((sub) => sub.items.length > 0);
+        return s.items.length > 0;
+      });
+  }, [tenantType, enabledOptionalProductionUnits, featureFlags]);
 
   useEffect(() => {
-    const activeModule = filtered.find((mod) =>
-      mod.items.some((item) => location.pathname === item.href || location.pathname.startsWith(item.href)),
-    );
+    const path = location.pathname;
+    const activeModule = filtered.find((mod) => {
+      if (mod.subsections?.length) {
+        return mod.subsections.some((sub) =>
+          sub.items.some((item) => isSidebarNavItemActive(path, item.href, item.exact)),
+        );
+      }
+      return mod.items.some((item) => isSidebarNavItemActive(path, item.href, item.exact));
+    });
     if (activeModule) setOpenSection(activeModule.section);
   }, [location.pathname, filtered]);
 
@@ -93,7 +131,7 @@ function Sidebar({
 
   const navLink = (item: NavItem) => {
     const Icon = item.icon;
-    const isActive = isSidebarNavItemActive(location.pathname, item.href);
+    const isActive = isSidebarNavItemActive(location.pathname, item.href, item.exact);
     const to = item.href;
     const label = item.label;
     return (
@@ -198,10 +236,15 @@ function Sidebar({
         {filtered.map((mod, index) => {
           const SectionIcon = mod.icon;
           const isOpen = openSection === mod.section;
-          const hasItems = mod.items.length > 0;
+          const hasSubsections = Boolean(mod.subsections && mod.subsections.length > 0);
+          const hasItems = mod.items.length > 0 || hasSubsections;
           const directLink = mod.directLink;
           const hasActiveItem =
-            hasItems && mod.items.some((item) => isSidebarNavItemActive(location.pathname, item.href));
+            hasSubsections && mod.subsections
+              ? mod.subsections.some((sub) =>
+                  sub.items.some((item) => isSidebarNavItemActive(location.pathname, item.href, item.exact)),
+                )
+              : hasItems && mod.items.some((item) => isSidebarNavItemActive(location.pathname, item.href, item.exact));
           const sectionWrapperClass =
             (index > 0 ? "border-t border-border/70 pt-2 mt-0.5 mb-1" : "mb-1") + (hasItems ? " relative" : "");
 
@@ -234,8 +277,17 @@ function Sidebar({
                   )}
                 </button>
                 {!isCollapsed && isOpen && (
-                  <div id={sectionId(mod.section)} className="pl-6 pr-1 py-1 space-y-0.5" role="region" aria-labelledby={buttonId(mod.section)}>
-                    {mod.items.map((item) => navLink(item))}
+                  <div id={sectionId(mod.section)} className="pl-2 pr-1 py-1 space-y-1" role="region" aria-labelledby={buttonId(mod.section)}>
+                    {mod.subsections && mod.subsections.length > 0
+                      ? mod.subsections.map((sub) => (
+                          <div key={sub.label} className="space-y-0.5">
+                            <p className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted">{sub.label}</p>
+                            <div className="pl-2 space-y-0.5 border-l border-border/60 ml-2">
+                              {sub.items.map((item) => navLink(item))}
+                            </div>
+                          </div>
+                        ))
+                      : mod.items.map((item) => navLink(item))}
                   </div>
                 )}
                 {isCollapsed && hoveredSection === mod.section && (
@@ -248,9 +300,9 @@ function Sidebar({
                     <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
                       {mod.section}
                     </p>
-                    {mod.items.map((item) => {
+                    {(mod.subsections ?? []).flatMap((sub) => sub.items).concat(mod.items).map((item) => {
                       const ItemIcon = item.icon;
-                      const active = isSidebarNavItemActive(location.pathname, item.href);
+                      const active = isSidebarNavItemActive(location.pathname, item.href, item.exact);
                       return (
                         <Link
                           key={item.href}
@@ -461,6 +513,8 @@ function AppFooter() {
 export function Layout() {
   const { me, loading, error, logout, refetch } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { enabledOptionalUnits } = useProductionOptionalUnits(me?.tenant_type);
+  const [announcements, setAnnouncements] = useState<{ id: number; title: string; content: string; type: string }[]>([]);
 
   useEffect(() => {
     if (getToken() && getTenantId() && !me && !loading) refetch();
@@ -474,6 +528,19 @@ export function Layout() {
   useEffect(() => {
     localStorage.setItem("p7_sidebar_collapsed", isCollapsed ? "1" : "0");
   }, [isCollapsed]);
+
+  useEffect(() => {
+    if (!me) return;
+    let cancelled = false;
+    getActiveAnnouncements()
+      .then((r) => {
+        if (!cancelled) setAnnouncements(r.items ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [me]);
 
   if (loading) return <div className="p-6">Loading...</div>;
   if (error) return <div className="p-6 text-status-danger">{error}</div>;
@@ -491,18 +558,42 @@ export function Layout() {
           userName={displayName}
           isCollapsed={isCollapsed}
           onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
+          enabledOptionalProductionUnits={enabledOptionalUnits}
+          featureFlags={me.feature_flags}
         />
       </div>
       <div className="flex-1 min-w-0 flex flex-col">
         <TopHeader me={me} displayName={displayName} onLogout={logout} />
         <main className="erp-main-content flex-1 overflow-y-auto bg-surface-base p-3 sm:p-4 md:p-5 lg:p-6 pb-20 lg:pb-6">
+          {announcements.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {announcements.map((a) => (
+                <div
+                  key={a.id}
+                  role="status"
+                  className={
+                    a.type === "warning" || a.type === "maintenance"
+                      ? "rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                      : "rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900"
+                  }
+                >
+                  <div className="font-semibold">{a.title}</div>
+                  <div className="mt-1 whitespace-pre-wrap text-xs opacity-90">{a.content}</div>
+                </div>
+              ))}
+            </div>
+          )}
           <Outlet />
         </main>
         <div className="hidden lg:block">
           <AppFooter />
         </div>
       </div>
-      <AppBottomNav tenantType={me.tenant_type} />
+      <AppBottomNav
+        tenantType={me.tenant_type}
+        enabledOptionalProductionUnits={enabledOptionalUnits}
+        featureFlags={me.feature_flags}
+      />
     </div>
   );
 }

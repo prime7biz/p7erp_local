@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from datetime import date
 from time import perf_counter
 from uuid import uuid4
@@ -23,6 +25,8 @@ from app.modules.ai_tool.guardrails import (
     should_block_circuit,
 )
 from app.modules.ai_tool.intents import detect_intent
+from app.modules.ai_tool.llm_provider import get_llm_provider
+from app.modules.ai_tool.llm_provider.stub_provider import StubLlmProvider
 from app.modules.ai_tool.knowledge import build_knowledge_tool_payload, list_knowledge_documents as list_knowledge_documents_core, query_knowledge
 from app.modules.ai_tool.reporting import build_report_tool_result, execute_report_request
 from app.modules.ai_tool.schemas import (
@@ -244,6 +248,43 @@ def _assistant_text(results: list[AiToolInvocationResult], intent: str, blocked:
     if intent == "action_request":
         return top.summary
     return top.summary
+
+
+async def _assistant_text_with_llm(
+    user_prompt: str,
+    tool_results: list[AiToolInvocationResult],
+    intent: str,
+    blocked: bool,
+) -> str:
+    """Rule-based reply, optionally rewritten by Gemini for natural language."""
+    base = _assistant_text(tool_results, intent, blocked)
+    provider = get_llm_provider()
+    if isinstance(provider, StubLlmProvider):
+        return base
+    payload = {
+        "user_prompt": user_prompt,
+        "draft_reply": base,
+        "tool_results": [x.model_dump() for x in tool_results],
+    }
+    llm_prompt = (
+        "You are a helpful assistant for a garment manufacturing ERP (P7 ERP). "
+        "Use the draft_reply and tool_results to produce a clear, professional answer for the user. "
+        "Stay under 250 words. Do not invent numbers or facts not present in the data.\n\n"
+        f"{json.dumps(payload, default=str)[:14000]}"
+    )
+    settings = get_settings()
+    try:
+        out = await asyncio.wait_for(
+            provider.generate(llm_prompt),
+            timeout=float(max(5, settings.ai_timeout_chat_seconds)),
+        )
+        if out and len(str(out).strip()) > 15 and "unavailable" not in str(out).lower():
+            return str(out).strip()
+    except (TimeoutError, asyncio.CancelledError):
+        pass
+    except Exception:
+        pass
+    return base
 
 
 def default_quick_actions() -> AiQuickActionsResponse:
@@ -951,6 +992,7 @@ async def process_prompt(
                     "logic_version": anomaly_payload.get("logic_version"),
                     "scheduler_ready": anomaly_payload.get("scheduler_ready"),
                     "persisted_event_ids": anomaly_payload.get("persisted_event_ids", []),
+                    "gemini_narrative": anomaly_payload.get("gemini_narrative"),
                 },
             )
         )
@@ -1118,7 +1160,7 @@ async def process_prompt(
                 error_category="runtime",
             )
 
-    assistant_text = _assistant_text(tool_results, intent_result.intent, blocked)
+    assistant_text = await _assistant_text_with_llm(prompt, tool_results, intent_result.intent, blocked)
     assistant_msg = await repository.create_message(
         db,
         tenant_id=tenant.id,
@@ -1559,6 +1601,7 @@ async def generate_anomaly_insights_direct(
     )
     return AiAnomalyGenerateResponse(
         summary=str(payload.get("summary") or ""),
+        gemini_narrative=payload.get("gemini_narrative"),
         events=list(payload.get("events") or []),
         persisted_event_ids=list(payload.get("persisted_event_ids") or []),
         logic_version=str(payload.get("logic_version") or "phase7-rules-v1"),

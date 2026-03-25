@@ -34,6 +34,10 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       TENANT_STRATEGY: ${TENANT_STRATEGY:-header}
       CORS_ORIGINS: ${CORS_ORIGINS}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash-lite}
+      GEMINI_ENABLED: ${GEMINI_ENABLED:-true}
+      AI_MONTHLY_BUDGET_LIMIT: ${AI_MONTHLY_BUDGET_LIMIT:-0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,7 +45,9 @@ services:
         condition: service_healthy
     expose:
       - "8000"
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    volumes:
+      - backend_media:/app/media
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
   frontend:
     build:
@@ -57,3 +63,4 @@ services:
 
 volumes:
   postgres_data:
+  backend_media:

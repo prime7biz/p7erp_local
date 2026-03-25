@@ -1,0 +1,59 @@
+# docker-compose.loadtest.yml
+#
+# Load-testing overlay. Use together with the base compose file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.loadtest.yml up
+#
+# This file:
+#   1. Adds a Locust load-test runner (dashboard on http://localhost:8089)
+#   2. Increases backend Uvicorn workers to 8 (no --reload)
+#   3. Increases PostgreSQL max_connections to 300
+
+services:
+  # Override: run backend with multiple workers (no hot-reload) for realistic load.
+  # Tune --workers to roughly (2 * CPU cores) + 1 on the host running Docker.
+  backend:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 8
+    environment:
+      DATABASE_URL: postgresql://p7erp:p7erp@postgres:5432/p7erp
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      TENANT_STRATEGY: header
+      # Larger DB pool for load testing (picked up in database.py)
+      DB_POOL_SIZE: "20"
+      DB_MAX_OVERFLOW: "40"
+      # Disable Gemini during load tests unless explicitly enabled (saves API quota)
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash-lite}
+      GEMINI_ENABLED: ${GEMINI_ENABLED:-false}
+      AI_MONTHLY_BUDGET_LIMIT: ${AI_MONTHLY_BUDGET_LIMIT:-0}
+
+  # Override: increase PostgreSQL connection limit and tune for load tests
+  postgres:
+    command: >
+      postgres
+      -c max_connections=300
+      -c shared_buffers=256MB
+      -c work_mem=8MB
+      -c effective_cache_size=768MB
+      -c maintenance_work_mem=128MB
+      -c random_page_cost=1.1
+
+  # New service: Locust load-test runner
+  locust:
+    image: locustio/locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./load_tests/locustfile.py:/mnt/locust/locustfile.py
+    command: -f /mnt/locust/locustfile.py --host http://backend:8000
+    environment:
+      # Override in project `.env` to match a real tenant + user in your DB
+      LOADTEST_COMPANY_CODE: ${LOADTEST_COMPANY_CODE:-DEMO}
+      LOADTEST_USERNAME: ${LOADTEST_USERNAME:-admin}
+      LOADTEST_PASSWORD: ${LOADTEST_PASSWORD:-admin123}
+      # Employee id for POST /hr/attendance/entries (must exist in tenant)
+      LOADTEST_EMPLOYEE_ID: ${LOADTEST_EMPLOYEE_ID:-1}
+      # Optional: LOADTEST_USERS_JSON='[{"username":"u1","password":"p1"}]'
+    depends_on:
+      - backend

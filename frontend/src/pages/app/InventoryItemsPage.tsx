@@ -52,6 +52,9 @@ export function InventoryItemsPage() {
   const [openUnitActionsId, setOpenUnitActionsId] = useState<number | null>(null);
   const [openWarehouseActionsId, setOpenWarehouseActionsId] = useState<number | null>(null);
   const [openItemActionsId, setOpenItemActionsId] = useState<number | null>(null);
+  const [itemModalMode, setItemModalMode] = useState<"view" | "edit">("view");
+  const [unitModalMode, setUnitModalMode] = useState<"view" | "edit">("view");
+  const [warehouseModalMode, setWarehouseModalMode] = useState<"view" | "edit">("view");
 
   const [categoryForm, setCategoryForm] = useState<ItemCategoryCreate>({ category_code: "", name: "" });
   const [subcategoryForm, setSubcategoryForm] = useState<ItemSubcategoryCreate>({
@@ -132,6 +135,36 @@ export function InventoryItemsPage() {
       if (t) setActiveTab(t);
     }
   }, [searchParams]);
+
+  const itemIdFromUrl = searchParams.get("item");
+  useEffect(() => {
+    if (!itemIdFromUrl || loading) return;
+    const id = Number(itemIdFromUrl);
+    if (!Number.isFinite(id)) return;
+    const row = items.find((i) => i.id === id);
+    if (!row) return;
+    setActiveTab("items");
+    setEditingItem(row);
+    setItemModalMode("view");
+    setEditForm({
+      item_code: row.item_code,
+      name: row.name,
+      category_id: row.category_id,
+      subcategory_id: row.subcategory_id,
+      unit_id: row.unit_id,
+      default_warehouse_id: row.default_warehouse_id ?? null,
+      stock_group_id: row.stock_group_id ?? null,
+      default_cost: row.default_cost ?? "0",
+    });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("item");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [itemIdFromUrl, loading, items, setSearchParams]);
 
   const setTab = useCallback(
     (id: TabId) => {
@@ -242,16 +275,25 @@ export function InventoryItemsPage() {
     }
   };
 
-  const openUnitEdit = (row: ItemUnitResponse) => {
+  const openUnitModal = (row: ItemUnitResponse, mode: "view" | "edit") => {
     setEditingUnit(row);
+    setUnitModalMode(mode);
     setUnitEditForm({ unit_code: row.unit_code, name: row.name });
   };
   const closeUnitEdit = () => {
     setEditingUnit(null);
     setUnitEditForm(null);
+    setUnitModalMode("view");
+  };
+  const backUnitToView = () => {
+    if (!editingUnit) return;
+    setUnitModalMode("view");
+    const row = editingUnit;
+    setUnitEditForm({ unit_code: row.unit_code, name: row.name });
   };
   const saveUnitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (unitModalMode !== "edit") return;
     if (!editingUnit || !unitEditForm) return;
     try {
       await api.updateInventoryItemUnit(editingUnit.id, unitEditForm);
@@ -273,8 +315,9 @@ export function InventoryItemsPage() {
     }
   };
 
-  const openWarehouseEdit = (row: WarehouseResponse) => {
+  const openWarehouseModal = (row: WarehouseResponse, mode: "view" | "edit") => {
     setEditingWarehouse(row);
+    setWarehouseModalMode(mode);
     setWarehouseEditForm({
       warehouse_code: row.warehouse_code,
       name: row.name,
@@ -284,9 +327,21 @@ export function InventoryItemsPage() {
   const closeWarehouseEdit = () => {
     setEditingWarehouse(null);
     setWarehouseEditForm(null);
+    setWarehouseModalMode("view");
+  };
+  const backWarehouseToView = () => {
+    if (!editingWarehouse) return;
+    setWarehouseModalMode("view");
+    const row = editingWarehouse;
+    setWarehouseEditForm({
+      warehouse_code: row.warehouse_code,
+      name: row.name,
+      address: row.address ?? "",
+    });
   };
   const saveWarehouseEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (warehouseModalMode !== "edit") return;
     if (!editingWarehouse || !warehouseEditForm) return;
     try {
       await api.updateWarehouse(editingWarehouse.id, warehouseEditForm);
@@ -328,8 +383,9 @@ export function InventoryItemsPage() {
     }
   };
 
-  const openEdit = (row: InventoryItemResponse) => {
+  const openItemModal = (row: InventoryItemResponse, mode: "view" | "edit") => {
     setEditingItem(row);
+    setItemModalMode(mode);
     setEditForm({
       item_code: row.item_code,
       name: row.name,
@@ -345,10 +401,28 @@ export function InventoryItemsPage() {
   const closeEdit = () => {
     setEditingItem(null);
     setEditForm(null);
+    setItemModalMode("view");
+  };
+
+  const backItemToView = () => {
+    if (!editingItem) return;
+    setItemModalMode("view");
+    const row = editingItem;
+    setEditForm({
+      item_code: row.item_code,
+      name: row.name,
+      category_id: row.category_id,
+      subcategory_id: row.subcategory_id,
+      unit_id: row.unit_id,
+      default_warehouse_id: row.default_warehouse_id ?? null,
+      stock_group_id: row.stock_group_id ?? null,
+      default_cost: row.default_cost ?? "0",
+    });
   };
 
   const saveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (itemModalMode !== "edit") return;
     if (!editingItem || !editForm) return;
     try {
       await api.updateInventoryItem(editingItem.id, editForm);
@@ -603,10 +677,22 @@ export function InventoryItemsPage() {
                       </tr>
                     )}
                     {filteredUnits.map((row) => (
-                      <tr key={row.id} className="hover:bg-surface-subtle/50">
+                      <tr
+                        key={row.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openUnitModal(row, "view")}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openUnitModal(row, "view");
+                          }
+                        }}
+                        className="cursor-pointer hover:bg-surface-subtle/50"
+                      >
                         <td className="px-4 py-3 text-sm font-medium text-text-primary">{row.unit_code}</td>
                         <td className="px-4 py-3 text-sm text-text-secondary">{row.name}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="relative inline-block text-left">
                             <button
                               type="button"
@@ -619,7 +705,7 @@ export function InventoryItemsPage() {
                               <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
-                                  onClick={() => { openUnitEdit(row); setOpenUnitActionsId(null); }}
+                                  onClick={() => { openUnitModal(row, "edit"); setOpenUnitActionsId(null); }}
                                   className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                                 >
                                   Edit
@@ -724,11 +810,23 @@ export function InventoryItemsPage() {
                       </tr>
                     )}
                     {filteredWarehouses.map((row) => (
-                      <tr key={row.id} className="hover:bg-surface-subtle/50">
+                      <tr
+                        key={row.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openWarehouseModal(row, "view")}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openWarehouseModal(row, "view");
+                          }
+                        }}
+                        className="cursor-pointer hover:bg-surface-subtle/50"
+                      >
                         <td className="px-4 py-3 text-sm font-medium text-text-primary">{row.warehouse_code}</td>
                         <td className="px-4 py-3 text-sm text-text-secondary">{row.name}</td>
                         <td className="px-4 py-3 text-sm text-text-secondary">{row.address ?? "—"}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="relative inline-block text-left">
                             <button
                               type="button"
@@ -741,7 +839,7 @@ export function InventoryItemsPage() {
                               <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
-                                  onClick={() => { openWarehouseEdit(row); setOpenWarehouseActionsId(null); }}
+                                  onClick={() => { openWarehouseModal(row, "edit"); setOpenWarehouseActionsId(null); }}
                                   className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                                 >
                                   Edit
@@ -935,7 +1033,19 @@ export function InventoryItemsPage() {
                       </tr>
                     )}
                     {filteredItems.map((row) => (
-                      <tr key={row.id} className="hover:bg-surface-subtle/50">
+                      <tr
+                        key={row.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openItemModal(row, "view")}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openItemModal(row, "view");
+                          }
+                        }}
+                        className="cursor-pointer hover:bg-surface-subtle/50"
+                      >
                         <td className="px-4 py-3 text-sm font-medium text-text-primary">{row.item_code}</td>
                         <td className="px-4 py-3 text-sm text-text-secondary">{row.name}</td>
                         <td className="px-4 py-3 text-sm text-text-secondary">
@@ -951,7 +1061,7 @@ export function InventoryItemsPage() {
                           {row.stock_group_id != null ? stockGroupLabelById.get(row.stock_group_id) ?? `#${row.stock_group_id}` : "—"}
                         </td>
                         <td className="px-4 py-3 text-right text-sm text-text-secondary">{row.default_cost}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="relative inline-block text-left">
                             <button
                               type="button"
@@ -964,7 +1074,7 @@ export function InventoryItemsPage() {
                               <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
-                                  onClick={() => { openEdit(row); setOpenItemActionsId(null); }}
+                                  onClick={() => { openItemModal(row, "edit"); setOpenItemActionsId(null); }}
                                   className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                                 >
                                   Edit
@@ -1005,7 +1115,7 @@ export function InventoryItemsPage() {
           >
             <CardHeader className="flex flex-row items-center justify-between border-b border-border-subtle pb-3">
               <CardTitle id="edit-item-title" className="text-lg">
-                Edit Item
+                {itemModalMode === "view" ? "Item" : "Edit item"}
               </CardTitle>
               <Button type="button" variant="ghost" size="icon" onClick={closeEdit}>
                 <X className="h-4 w-4" />
@@ -1017,8 +1127,9 @@ export function InventoryItemsPage() {
                   <div>
                     <label className="mb-1 block text-xs font-medium text-text-muted">Code</label>
                     <input
-                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm read-only:bg-surface-subtle"
                       value={editForm.item_code}
+                      readOnly={itemModalMode === "view"}
                       onChange={(e) => setEditForm((p) => p && { ...p, item_code: e.target.value })}
                       required
                     />
@@ -1026,8 +1137,9 @@ export function InventoryItemsPage() {
                   <div>
                     <label className="mb-1 block text-xs font-medium text-text-muted">Name</label>
                     <input
-                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm read-only:bg-surface-subtle"
                       value={editForm.name}
+                      readOnly={itemModalMode === "view"}
                       onChange={(e) => setEditForm((p) => p && { ...p, name: e.target.value })}
                       required
                     />
@@ -1037,8 +1149,9 @@ export function InventoryItemsPage() {
                   <div>
                     <label className="mb-1 block text-xs font-medium text-text-muted">Category</label>
                     <select
-                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
                       value={editForm.category_id}
+                      disabled={itemModalMode === "view"}
                       onChange={(e) =>
                         setEditForm((p) => p && { ...p, category_id: Number(e.target.value) })
                       }
@@ -1054,8 +1167,9 @@ export function InventoryItemsPage() {
                   <div>
                     <label className="mb-1 block text-xs font-medium text-text-muted">Subcategory</label>
                     <select
-                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
                       value={editForm.subcategory_id ?? ""}
+                      disabled={itemModalMode === "view"}
                       onChange={(e) =>
                         setEditForm((p) =>
                           p && { ...p, subcategory_id: e.target.value ? Number(e.target.value) : null }
@@ -1077,8 +1191,9 @@ export function InventoryItemsPage() {
                   <div>
                     <label className="mb-1 block text-xs font-medium text-text-muted">Unit</label>
                     <select
-                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
                       value={editForm.unit_id}
+                      disabled={itemModalMode === "view"}
                       onChange={(e) => setEditForm((p) => p && { ...p, unit_id: Number(e.target.value) })}
                       required
                     >
@@ -1092,8 +1207,9 @@ export function InventoryItemsPage() {
                   <div>
                     <label className="mb-1 block text-xs font-medium text-text-muted">Default cost</label>
                     <input
-                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm read-only:bg-surface-subtle"
                       value={editForm.default_cost ?? "0"}
+                      readOnly={itemModalMode === "view"}
                       onChange={(e) => setEditForm((p) => p && { ...p, default_cost: e.target.value })}
                     />
                   </div>
@@ -1101,8 +1217,9 @@ export function InventoryItemsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Default warehouse</label>
                   <select
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
                     value={editForm.default_warehouse_id ?? ""}
+                    disabled={itemModalMode === "view"}
                     onChange={(e) =>
                       setEditForm(
                         (p) =>
@@ -1124,8 +1241,9 @@ export function InventoryItemsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Stock group</label>
                   <select
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
                     value={editForm.stock_group_id ?? ""}
+                    disabled={itemModalMode === "view"}
                     onChange={(e) =>
                       setEditForm(
                         (p) =>
@@ -1145,10 +1263,23 @@ export function InventoryItemsPage() {
                   </select>
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={closeEdit}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">Save changes</Button>
+                  {itemModalMode === "view" ? (
+                    <>
+                      <Button type="button" variant="outline" onClick={closeEdit}>
+                        Close
+                      </Button>
+                      <Button type="button" onClick={() => setItemModalMode("edit")}>
+                        Edit
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button type="button" variant="outline" onClick={backItemToView}>
+                        Cancel
+                      </Button>
+                      <Button type="submit">Save changes</Button>
+                    </>
+                  )}
                 </div>
               </form>
             </CardContent>
@@ -1171,7 +1302,7 @@ export function InventoryItemsPage() {
           >
             <CardHeader className="flex flex-row items-center justify-between border-b border-border-subtle pb-3">
               <CardTitle id="edit-unit-title" className="text-lg">
-                Edit Unit
+                {unitModalMode === "view" ? "Unit" : "Edit unit"}
               </CardTitle>
               <Button type="button" variant="ghost" size="icon" onClick={closeUnitEdit}>
                 <X className="h-4 w-4" />
@@ -1182,8 +1313,9 @@ export function InventoryItemsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Code</label>
                   <input
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm read-only:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                     value={unitEditForm.unit_code}
+                    readOnly={unitModalMode === "view"}
                     onChange={(e) => setUnitEditForm((p) => p && { ...p, unit_code: e.target.value })}
                     required
                   />
@@ -1191,17 +1323,31 @@ export function InventoryItemsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Name</label>
                   <input
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm read-only:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                     value={unitEditForm.name}
+                    readOnly={unitModalMode === "view"}
                     onChange={(e) => setUnitEditForm((p) => p && { ...p, name: e.target.value })}
                     required
                   />
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={closeUnitEdit}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">Save changes</Button>
+                  {unitModalMode === "view" ? (
+                    <>
+                      <Button type="button" variant="outline" onClick={closeUnitEdit}>
+                        Close
+                      </Button>
+                      <Button type="button" onClick={() => setUnitModalMode("edit")}>
+                        Edit
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button type="button" variant="outline" onClick={backUnitToView}>
+                        Cancel
+                      </Button>
+                      <Button type="submit">Save changes</Button>
+                    </>
+                  )}
                 </div>
               </form>
             </CardContent>
@@ -1224,7 +1370,7 @@ export function InventoryItemsPage() {
           >
             <CardHeader className="flex flex-row items-center justify-between border-b border-border-subtle pb-3">
               <CardTitle id="edit-warehouse-title" className="text-lg">
-                Edit Warehouse
+                {warehouseModalMode === "view" ? "Warehouse" : "Edit warehouse"}
               </CardTitle>
               <Button type="button" variant="ghost" size="icon" onClick={closeWarehouseEdit}>
                 <X className="h-4 w-4" />
@@ -1235,8 +1381,9 @@ export function InventoryItemsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Code</label>
                   <input
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm read-only:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                     value={warehouseEditForm.warehouse_code}
+                    readOnly={warehouseModalMode === "view"}
                     onChange={(e) =>
                       setWarehouseEditForm((p) => p && { ...p, warehouse_code: e.target.value })
                     }
@@ -1246,8 +1393,9 @@ export function InventoryItemsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Name</label>
                   <input
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm read-only:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                     value={warehouseEditForm.name}
+                    readOnly={warehouseModalMode === "view"}
                     onChange={(e) => setWarehouseEditForm((p) => p && { ...p, name: e.target.value })}
                     required
                   />
@@ -1255,18 +1403,32 @@ export function InventoryItemsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Address (optional)</label>
                   <input
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm read-only:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                     value={warehouseEditForm.address ?? ""}
+                    readOnly={warehouseModalMode === "view"}
                     onChange={(e) =>
                       setWarehouseEditForm((p) => p && { ...p, address: e.target.value })
                     }
                   />
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={closeWarehouseEdit}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">Save changes</Button>
+                  {warehouseModalMode === "view" ? (
+                    <>
+                      <Button type="button" variant="outline" onClick={closeWarehouseEdit}>
+                        Close
+                      </Button>
+                      <Button type="button" onClick={() => setWarehouseModalMode("edit")}>
+                        Edit
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button type="button" variant="outline" onClick={backWarehouseToView}>
+                        Cancel
+                      </Button>
+                      <Button type="submit">Save changes</Button>
+                    </>
+                  )}
                 </div>
               </form>
             </CardContent>

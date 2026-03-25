@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { TenantType } from "@/api/client";
-import { bottomNavItems, menuSections, type BottomNavItem, type TenantTypeFilter } from "@/app/sidebarConfig";
+import {
+  bottomNavItems,
+  isNavItemVisibleForTenant,
+  menuSections,
+  type BottomNavItem,
+  type TenantTypeFilter,
+} from "@/app/sidebarConfig";
 import { prefetchSidebarRoute } from "@/app/prefetchRoutes";
 import { X } from "lucide-react";
 
@@ -26,7 +32,16 @@ function isTabActive(pathname: string, tab: BottomNavItem, hasPrimaryActive: boo
   return prefixes.some((prefix) => isPathMatch(pathname, prefix));
 }
 
-export function AppBottomNav({ tenantType }: { tenantType: TenantType }) {
+export function AppBottomNav({
+  tenantType,
+  enabledOptionalProductionUnits = [],
+  featureFlags,
+}: {
+  tenantType: TenantType;
+  /** From Production setup; gates optional units (knitting, dyeing, …) in the mobile “More” menu. */
+  enabledOptionalProductionUnits?: string[];
+  featureFlags?: Record<string, boolean | string | number | null> | null;
+}) {
   const location = useLocation();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
 
@@ -38,12 +53,23 @@ export function AppBottomNav({ tenantType }: { tenantType: TenantType }) {
   const filteredSections = useMemo(() => {
     return menuSections
       .filter((section) => isVisible(tenantType, section.visibleFor))
-      .map((section) => ({
-        ...section,
-        items: section.items.filter((item) => isVisible(tenantType, item.visibleFor)),
-      }))
+      .map((section) => {
+        const topItems = section.items.filter((item) =>
+          isNavItemVisibleForTenant(item, tenantType, enabledOptionalProductionUnits, featureFlags),
+        );
+        const subItems =
+          section.subsections?.flatMap((sub) =>
+            sub.items.filter((item) =>
+              isNavItemVisibleForTenant(item, tenantType, enabledOptionalProductionUnits, featureFlags),
+            ),
+          ) ?? [];
+        return {
+          ...section,
+          items: [...topItems, ...subItems],
+        };
+      })
       .filter((section) => section.items.length > 0 || Boolean(section.directLink));
-  }, [tenantType]);
+  }, [tenantType, enabledOptionalProductionUnits, featureFlags]);
 
   const hasPrimaryActive = useMemo(() => {
     const primaryTabs = tabs.filter((tab) => !tab.isMore);

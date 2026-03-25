@@ -10,6 +10,8 @@ class PayrollComponentCreate(BaseModel):
     calculation_type: str = Field(default="FIXED", min_length=1, max_length=24)
     default_amount: str = "0"
     gl_account_id: int | None = None
+    formula: str | None = None
+    applies_to: str = Field(default="ALL", max_length=16)
     is_active: bool = True
 
 
@@ -20,6 +22,8 @@ class PayrollComponentUpdate(BaseModel):
     calculation_type: str | None = Field(None, min_length=1, max_length=24)
     default_amount: str | None = None
     gl_account_id: int | None = None
+    formula: str | None = None
+    applies_to: str | None = Field(None, max_length=16)
     is_active: bool | None = None
 
 
@@ -32,6 +36,8 @@ class PayrollComponentOut(BaseModel):
     calculation_type: str
     default_amount: str
     gl_account_id: int | None
+    formula: str | None
+    applies_to: str
     is_active: bool
     created_at: str
     updated_at: str
@@ -136,6 +142,7 @@ class PayrollRunLineOut(BaseModel):
     gross_pay: str
     deductions: str
     net_pay: str
+    overtime_amount: str = "0"
     remarks: str | None
     created_at: str
     updated_at: str

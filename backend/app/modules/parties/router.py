@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
 from app.common.db_errors import flush_handling_duplicate_document_code
-from app.common.pagination import MAX_PAGE_SIZE
+from app.common.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import Customer, CustomerIntermediary, Intermediary, Tenant, User
@@ -89,7 +89,8 @@ async def list_intermediaries(
   q: str | None = Query(default=None, description="Search by code/name/email/phone"),
   kind: str | None = Query(default=None, description="BUYING_HOUSE or AGENT"),
   is_active: bool | None = Query(default=None),
-  limit: int = Query(default=MAX_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Safety cap (Finding #3)"),
+  limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Safety cap (Finding #3)"),
+  offset: int = Query(default=0, ge=0),
   tenant: Tenant = Depends(require_tenant),
   user: User = Depends(get_current_user),
   db: AsyncSession = Depends(get_db),
@@ -110,7 +111,7 @@ async def list_intermediaries(
     stmt = stmt.where(Intermediary.kind == kind.strip().upper())
   if is_active is not None:
     stmt = stmt.where(Intermediary.is_active == is_active)
-  result = await db.execute(stmt.order_by(Intermediary.created_at.desc()).limit(limit))
+  result = await db.execute(stmt.order_by(Intermediary.created_at.desc()).offset(offset).limit(limit))
   return [_to_intermediary_response(row) for row in result.scalars().all()]
 
 

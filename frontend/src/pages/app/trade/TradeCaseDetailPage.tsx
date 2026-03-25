@@ -81,6 +81,39 @@ export function TradeCaseDetailPage() {
         >
           ← Back to Trade Cases
         </Link>
+        <nav className="mb-1 flex flex-wrap items-center gap-1 text-xs text-text-muted">
+          {item.customer_id ? (
+            <>
+              <Link to={`/app/customers/${item.customer_id}`} className="text-brand-primary hover:underline">Customer #{item.customer_id}</Link>
+              <span>›</span>
+            </>
+          ) : null}
+          {item.order_id ? (
+            <>
+              <Link to={`/app/orders/${item.order_id}`} className="text-brand-primary hover:underline">Order #{item.order_id}</Link>
+              <span>›</span>
+            </>
+          ) : null}
+          {item.proforma_invoice_id ? (
+            <>
+              <Link to={`/app/commercial/proforma-invoices/${item.proforma_invoice_id}/edit`} className="text-brand-primary hover:underline">PI #{item.proforma_invoice_id}</Link>
+              <span>›</span>
+            </>
+          ) : null}
+          {item.master_contract_id ? (
+            <>
+              <span className="text-brand-primary">MC #{item.master_contract_id}</span>
+              <span>›</span>
+            </>
+          ) : null}
+          {item.btb_lc_id ? (
+            <>
+              <Link to="/app/commercial/btb-lcs" className="text-brand-primary hover:underline">BTB #{item.btb_lc_id}</Link>
+              <span>›</span>
+            </>
+          ) : null}
+          <span className="font-medium text-text-primary">{item.reference}</span>
+        </nav>
         <h1 className="text-2xl font-bold text-text-primary">Trade Case {item.reference}</h1>
         <p className="mt-0.5 text-sm text-text-muted">
           {item.direction} · Status {item.status} · Current stage {item.current_stage}
@@ -114,7 +147,25 @@ export function TradeCaseDetailPage() {
             )}
           </p>
           <p className="mt-3 text-xs uppercase tracking-wide text-text-muted">BTB LC</p>
-          <p className="mt-1 text-sm text-text-primary">{item.btb_lc_id ? `#${item.btb_lc_id}` : "—"}</p>
+          <p className="mt-1 text-sm text-text-primary">
+            {item.btb_lc_id ? (
+              <Link to="/app/commercial/btb-lcs" className="text-brand-primary hover:underline">
+                #{item.btb_lc_id} (open list)
+              </Link>
+            ) : (
+              "—"
+            )}
+          </p>
+          <p className="mt-3 text-xs uppercase tracking-wide text-text-muted">Customer</p>
+          <p className="mt-1 text-sm text-text-primary">
+            {item.customer_id ? (
+              <Link to={`/app/customers/${item.customer_id}`} className="text-brand-primary hover:underline">
+                #{item.customer_id}
+              </Link>
+            ) : (
+              "—"
+            )}
+          </p>
         </div>
         <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
           <p className="text-xs uppercase tracking-wide text-text-muted">ETD / ETA</p>
@@ -134,6 +185,96 @@ export function TradeCaseDetailPage() {
           <p className="mt-1 text-xs text-text-secondary">
             Revenue: {(margin?.amount ?? 0).toLocaleString()} · Cost: {(margin?.estimated_cost ?? 0).toLocaleString()}
           </p>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-text-primary">Create Next</h2>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Link
+            to={`/app/logistics?trade_case_id=${id}`}
+            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            Plan shipment
+          </Link>
+          <Link
+            to="/app/commercial/btb-lcs"
+            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            Open BTB LC list
+          </Link>
+          {item.order_id ? (
+            <Link
+              to={`/app/orders/${item.order_id}`}
+              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            >
+              Open source order
+            </Link>
+          ) : null}
+          <Link
+            to="/app/finance/vouchers"
+            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            View vouchers
+          </Link>
+          {item.master_contract_id ? (
+            <Link
+              to={`/app/commercial/master-contracts`}
+              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            >
+              Master contract #{item.master_contract_id}
+            </Link>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-text-primary">Related Records</h2>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {item.order_id ? (
+            <Link
+              to={`/app/orders/${item.order_id}`}
+              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            >
+              Order #{item.order_id}
+            </Link>
+          ) : null}
+          {item.proforma_invoice_id ? (
+            <Link
+              to={`/app/commercial/proforma-invoices/${item.proforma_invoice_id}/edit`}
+              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            >
+              Proforma #{item.proforma_invoice_id}
+            </Link>
+          ) : null}
+          {item.master_contract_id ? (
+            <Link
+              to="/app/commercial/master-contracts"
+              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            >
+              Master contract #{item.master_contract_id}
+            </Link>
+          ) : null}
+          {item.btb_lc_id ? (
+            <Link
+              to="/app/commercial/btb-lcs"
+              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            >
+              BTB LC #{item.btb_lc_id}
+            </Link>
+          ) : null}
+          <Link
+            to="/app/finance/vouchers"
+            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            Finance vouchers
+          </Link>
+          <Link
+            to={`/app/logistics?trade_case_id=${id}`}
+            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            Shipments ({shipments.length})
+          </Link>
         </div>
       </section>
 
@@ -247,7 +388,7 @@ export function TradeCaseDetailPage() {
             </div>
           )}
         </div>
-        <div className="rounded-xl border border-border bg-surface-raised shadow-sm">
+        <div id="trade-case-documents" className="scroll-mt-24 rounded-xl border border-border bg-surface-raised shadow-sm">
           <div className="border-b border-border bg-surface-subtle px-4 py-2">
             <h2 className="text-sm font-semibold text-text-primary">Documents</h2>
           </div>

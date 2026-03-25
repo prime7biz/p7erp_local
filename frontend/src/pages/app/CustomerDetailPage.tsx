@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, type CustomerResponse } from "@/api/client";
+import { api, type BillsAgingResponse, type CustomerResponse, type OrderResponse, type InquiryResponse, type QuotationResponse } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 import { ArrowLeft, Building2, Mail, MapPin, Pencil, Phone, UserRound } from "lucide-react";
 
 function formatDateTime(value: string): string {
@@ -19,6 +20,10 @@ export function CustomerDetailPage() {
   const [customer, setCustomer] = useState<CustomerResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [recvAging, setRecvAging] = useState<BillsAgingResponse | null>(null);
+  const [orders, setOrders] = useState<OrderResponse[]>([]);
+  const [inquiries, setInquiries] = useState<InquiryResponse[]>([]);
+  const [quotations, setQuotations] = useState<QuotationResponse[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -40,6 +45,39 @@ export function CustomerDetailPage() {
     };
     void load();
   }, [id]);
+
+  useEffect(() => {
+    setRecvAging(null);
+    setOrders([]);
+    setInquiries([]);
+    setQuotations([]);
+  }, [id]);
+
+  useEffect(() => {
+    if (!customer) return;
+    let cancelled = false;
+
+    if (customer.name) {
+      api
+        .getBillsAging({ bill_type: "RECEIVABLE", party_name: customer.name })
+        .then((d) => { if (!cancelled) setRecvAging(d); })
+        .catch((e) => { logApiError("CustomerDetailPage.getBillsAging", e); if (!cancelled) setRecvAging(null); });
+    }
+
+    api.listOrders({ search: customer.name, limit: 10 })
+      .then((d) => { if (!cancelled) setOrders(d.filter((o) => o.customer_id === customer.id)); })
+      .catch((e) => logApiError("CustomerDetailPage.listOrders", e));
+
+    api.listInquiries({ search: customer.name, limit: 10 })
+      .then((d) => { if (!cancelled) setInquiries(d.filter((i) => i.customer_id === customer.id)); })
+      .catch((e) => logApiError("CustomerDetailPage.listInquiries", e));
+
+    api.listQuotations({ search: customer.name, limit: 10 })
+      .then((d) => { if (!cancelled) setQuotations(d.filter((q) => q.customer_id === customer.id)); })
+      .catch((e) => logApiError("CustomerDetailPage.listQuotations", e));
+
+    return () => { cancelled = true; };
+  }, [customer]);
 
   if (loading) {
     return <div className="p-6 text-text-muted">Loading customer profile...</div>;
@@ -210,6 +248,92 @@ export function CustomerDetailPage() {
           </dl>
         </section>
       </div>
+
+      {(orders.length > 0 || inquiries.length > 0 || quotations.length > 0) ? (
+        <section className="rounded-xl border border-border bg-surface-raised p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-status-warning">Related Records</h2>
+          <div className="grid gap-4 lg:grid-cols-3">
+            {orders.length > 0 ? (
+              <div>
+                <div className="text-xs text-text-muted mb-1">Orders ({orders.length})</div>
+                <ul className="space-y-1">
+                  {orders.slice(0, 5).map((o) => (
+                    <li key={o.id}>
+                      <Link to={`/app/orders/${o.id}`} className="text-sm text-brand-primary hover:underline">
+                        {o.order_code} — {o.status}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {inquiries.length > 0 ? (
+              <div>
+                <div className="text-xs text-text-muted mb-1">Inquiries ({inquiries.length})</div>
+                <ul className="space-y-1">
+                  {inquiries.slice(0, 5).map((i) => (
+                    <li key={i.id}>
+                      <Link to={`/app/inquiries/${i.id}`} className="text-sm text-brand-primary hover:underline">
+                        {i.inquiry_code} — {i.status}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {quotations.length > 0 ? (
+              <div>
+                <div className="text-xs text-text-muted mb-1">Quotations ({quotations.length})</div>
+                <ul className="space-y-1">
+                  {quotations.slice(0, 5).map((q) => (
+                    <li key={q.id}>
+                      <Link to={`/app/quotations/${q.id}`} className="text-sm text-brand-primary hover:underline">
+                        {q.quotation_code} — {q.status}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {recvAging && recvAging.rows?.length ? (
+        <section className="rounded-xl border border-border bg-surface-raised p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-status-warning">Outstanding receivable bills</h2>
+            <Link
+              to="/app/accounts/reports/ar-ap-aging"
+              className="text-xs font-medium text-brand-primary hover:underline"
+            >
+              View full AR/AP aging
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-surface-subtle text-left">
+                <tr>
+                  <th className="px-2 py-1">Bill</th>
+                  <th className="px-2 py-1">Due</th>
+                  <th className="px-2 py-1 text-right">Outstanding</th>
+                  <th className="px-2 py-1">Bucket</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recvAging.rows.slice(0, 12).map((r) => (
+                  <tr key={r.bill_id} className="border-t">
+                    <td className="px-2 py-1">{r.bill_no}</td>
+                    <td className="px-2 py-1">{r.due_date}</td>
+                    <td className="px-2 py-1 text-right">{r.outstanding_amount.toLocaleString()}</td>
+                    <td className="px-2 py-1">{r.bucket}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-xl border border-border bg-surface-raised p-5">

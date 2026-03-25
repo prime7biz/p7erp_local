@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import String, Boolean, DateTime, Enum as SQLEnum, ForeignKey, text
+from sqlalchemy import JSON, String, Boolean, DateTime, Enum as SQLEnum, ForeignKey, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from app.database import Base
@@ -34,6 +34,8 @@ class Tenant(Base):
     # Bcrypt hash of a one-time setup token for POST /auth/register when tenant has zero users (Finding #4).
     # Cleared automatically after the first admin registers. Alternative: BOOTSTRAP_REGISTRATION_KEY in env.
     bootstrap_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Optional feature toggles, e.g. {"trade_enabled": false} to hide Trade/Logistics nav for buying_house tenants.
+    feature_flags: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     default_commission_mode: Mapped[CommissionMode | None] = mapped_column(
         SQLEnum(CommissionMode, name="commissionmode"),
         nullable=True,
@@ -47,8 +49,13 @@ class Tenant(Base):
     default_fg_warehouse_id: Mapped[int | None] = mapped_column(
         ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # ISO 3166-1 alpha-2 (e.g. BD, US) for public holiday import and locale.
+    country_code: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    # Soft-delete: platform admin sets deleted_at; tenant users cannot log in when set.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     users = relationship("User", back_populates="tenant")
     roles = relationship("Role", back_populates="tenant")

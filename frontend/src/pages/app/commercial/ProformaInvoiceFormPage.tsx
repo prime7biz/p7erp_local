@@ -340,6 +340,14 @@ export function ProformaInvoiceFormPage() {
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Back to list
         </Link>
+        {isEdit && numericId > 0 ? (
+          <Link
+            to={`/app/commercial/master-contracts?proforma_invoice_id=${numericId}`}
+            className="inline-flex items-center gap-2 rounded-lg border border-status-info/30 bg-status-info-subtle px-3 py-2 text-sm font-medium text-status-info-foreground hover:bg-status-info-subtle/80"
+          >
+            Create Master Contract
+          </Link>
+        ) : null}
       </header>
 
       {error && (

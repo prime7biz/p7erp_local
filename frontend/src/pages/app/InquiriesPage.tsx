@@ -6,6 +6,7 @@ import {
   humanizeStatus,
   INQUIRY_STATUS_FILTER_OPTIONS,
 } from "@/features/merch/workflow";
+import { SecureImage } from "@/components/SecureImage";
 
 const statusClass = (status: string) => {
   const value = status.toUpperCase();
@@ -142,7 +143,8 @@ export function InquiriesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredItems.map((inq) => (
+                {filteredItems.map((inq) => {
+                  return (
                   <tr key={inq.id} className="border-b border-border-subtle last:border-0 hover:bg-surface-subtle/70">
                     <td className="py-2.5 px-4 font-medium text-text-primary whitespace-nowrap">
                       <Link to={`/app/inquiries/${inq.id}`} className="text-status-info hover:underline">
@@ -155,8 +157,8 @@ export function InquiriesPage() {
                     <td className="py-2.5 px-4">
                       <div className="flex items-center gap-2 min-w-0">
                         {inq.style_image_url ? (
-                          <img
-                            src={inq.style_image_url}
+                          <SecureImage
+                            url={inq.style_image_url}
                             alt={inq.style_name ?? inq.style_ref ?? "style"}
                             className="h-9 w-9 shrink-0 rounded object-cover border border-border"
                           />
@@ -282,7 +284,8 @@ export function InquiriesPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

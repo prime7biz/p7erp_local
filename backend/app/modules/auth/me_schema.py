@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel
 
 from app.models import TenantType
@@ -14,3 +16,4 @@ class MeResponse(BaseModel):
     tenant_name: str
     tenant_type: TenantType
     company_code: str | None = None
+    feature_flags: dict[str, Any] | None = None

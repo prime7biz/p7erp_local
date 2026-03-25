@@ -233,6 +233,7 @@ class AiGenerateAnomalyInsightsRequest(BaseModel):
 
 class AiAnomalyGenerateResponse(BaseModel):
     summary: str
+    gemini_narrative: str | None = None
     events: list[dict[str, Any]] = Field(default_factory=list)
     persisted_event_ids: list[int] = Field(default_factory=list)
     logic_version: str
@@ -246,3 +247,19 @@ class AiOpsOverviewResponse(BaseModel):
     error_events: int
     avg_duration_ms: int
     tool_success_rate: float
+
+
+class AiWeeklyReportResponse(BaseModel):
+    id: int
+    tenant_id: int
+    week_start: date
+    week_end: date
+    narrative: str
+    kpi_snapshot_json: dict[str, Any] | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AiWeeklyReportListResponse(BaseModel):
+    items: list[AiWeeklyReportResponse]

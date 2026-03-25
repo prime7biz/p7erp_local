@@ -1,12 +1,12 @@
 from datetime import datetime, timedelta
 from pathlib import Path
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import or_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.storage import FileStorageService
 from app.common.codegen import next_tenant_code
 from app.common.pagination import MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
@@ -21,15 +21,6 @@ from app.modules.customers.schemas import (
 )
 
 router = APIRouter(prefix="/customers", tags=["customers"])
-LOGO_MAX_BYTES = 2 * 1024 * 1024
-ALLOWED_LOGO_CONTENT_TYPES = {
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/jpg": ".jpg",
-    "image/gif": ".gif",
-    "image/webp": ".webp",
-}
-CUSTOMER_LOGO_DIR = Path(__file__).resolve().parents[3] / "media" / "customer_logos"
 
 
 def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
@@ -239,28 +230,12 @@ async def upload_customer_logo(
     user: User = Depends(get_current_user),
 ):
     _ensure_user_tenant(user, tenant)
-    content_type = (file.content_type or "").lower()
-    extension = ALLOWED_LOGO_CONTENT_TYPES.get(content_type)
-    if not extension:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file type. Allowed: PNG, JPG, GIF, WEBP.",
-        )
-
-    data = await file.read()
-    size_bytes = len(data)
-    if size_bytes == 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
-    if size_bytes > LOGO_MAX_BYTES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Logo file exceeds 2MB limit.")
-
-    CUSTOMER_LOGO_DIR.mkdir(parents=True, exist_ok=True)
-    safe_filename = f"tenant_{tenant.id}_{uuid4().hex}{extension}"
-    target_path = CUSTOMER_LOGO_DIR / safe_filename
-    target_path.write_bytes(data)
+    safe_filename, logo_url, _disk = await FileStorageService.save_file(file, tenant.id, "customer_logos")
+    p = Path(_disk)
+    size_bytes = p.stat().st_size if p.exists() else 0
 
     return CustomerLogoUploadResponse(
-        logo_url=f"/media/customer_logos/{safe_filename}",
+        logo_url=logo_url,
         filename=safe_filename,
         size_bytes=size_bytes,
     )

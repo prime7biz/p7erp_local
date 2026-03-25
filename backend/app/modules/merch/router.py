@@ -6,20 +6,20 @@ Merchandising linked module (PrimeX parity slice):
 - order followups and pipeline/alerts aggregates
 """
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation
+from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
-from uuid import uuid4
 
 from io import BytesIO
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import and_, delete, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.storage import FileStorageService
 from app.common.codegen import next_tenant_code
 from app.common.pagination import MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
@@ -33,6 +33,27 @@ from app.common.workflow import (
 )
 from app.database import get_db
 from app.modules.audit.service import log_action
+from app.modules.merch import constants as merch_c
+from app.modules.merch.deps import (
+    ensure_tenant,
+    normalize_optional_choice,
+    normalize_style_stage,
+    to_decimal,
+    to_float_safe,
+)
+from app.modules.merch.permissions import (
+    MERCH_PERMISSION_ALERT_ASSIGN,
+    MERCH_PERMISSION_ALERT_SCAN,
+    MERCH_PERMISSION_BOM_APPROVE,
+    MERCH_PERMISSION_BOM_FREEZE,
+    MERCH_PERMISSION_PO_GENERATE,
+    MERCH_PERMISSION_STYLE_MANAGE,
+    MERCH_PERMISSION_TNA_MANAGE,
+    MERCH_PERMISSION_WASTAGE_MANAGE,
+    MERCH_PERMISSION_ALERT_DEFINITIONS,
+    require_merch_permission,
+)
+
 from app.models import (
     AlertDefinition,
     AlertInstance,
@@ -66,6 +87,7 @@ from app.models import (
     Shipment,
     StockMovement,
     StyleColorway,
+    Warehouse,
     StyleComponent,
     StyleSizeScale,
     Tenant,
@@ -80,65 +102,15 @@ from app.models import (
 )
 
 router = APIRouter(prefix="/merch", tags=["merch"])
-STYLE_PICTURE_MAX_BYTES = 2 * 1024 * 1024
-ALLOWED_STYLE_PICTURE_CONTENT_TYPES = {
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/jpg": ".jpg",
-    "image/gif": ".gif",
-    "image/webp": ".webp",
-}
-STYLE_PICTURE_DIR = Path(__file__).resolve().parents[3] / "media" / "style_pictures"
-STYLE_LIFECYCLE_STAGES = {
-    "INQUIRY",
-    "DEVELOPMENT",
-    "QUOTED",
-    "ORDERED",
-    "IN_PRODUCTION",
-    "SHIPPED",
-    "PAID",
-    "CLOSED",
-}
-STYLE_PRIORITY_VALUES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
-STYLE_RISK_VALUES = {"LOW", "MEDIUM", "HIGH"}
+STYLE_LIFECYCLE_STAGES = merch_c.STYLE_LIFECYCLE_STAGES
+STYLE_PRIORITY_VALUES = merch_c.STYLE_PRIORITY_VALUES
+STYLE_RISK_VALUES = merch_c.STYLE_RISK_VALUES
 
-
-def _ensure_tenant(user: User, tenant: Tenant) -> None:
-    if user.tenant_id != tenant.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
-
-
-def _to_decimal(value: str | int | float | Decimal | None) -> Decimal:
-    if value is None:
-        return Decimal("0")
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, ValueError, TypeError):
-        return Decimal("0")
-
-
-def _normalize_style_stage(value: str | None) -> str:
-    normalized = (value or "INQUIRY").strip().upper()
-    if normalized not in STYLE_LIFECYCLE_STAGES:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid lifecycle_stage. Allowed: {', '.join(sorted(STYLE_LIFECYCLE_STAGES))}",
-        )
-    return normalized
-
-
-def _normalize_optional_choice(value: str | None, allowed_values: set[str], field_name: str) -> str | None:
-    if value is None:
-        return None
-    normalized = value.strip().upper()
-    if not normalized:
-        return None
-    if normalized not in allowed_values:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid {field_name}. Allowed: {', '.join(sorted(allowed_values))}",
-        )
-    return normalized
+_ensure_tenant = ensure_tenant
+_to_decimal = to_decimal
+_normalize_style_stage = normalize_style_stage
+_normalize_optional_choice = normalize_optional_choice
+_to_float_safe = to_float_safe
 
 
 class StyleCreate(BaseModel):
@@ -344,18 +316,77 @@ async def _resolve_style_order_ids(db: AsyncSession, tenant_id: int, style: Garm
     return list({oid for oid in order_ids})
 
 
-async def _build_style_summary(db: AsyncSession, tenant_id: int, style: GarmentStyle) -> StyleSummaryResponse:
-    inquiry_count = (
-        await db.execute(
-            select(func.count(Inquiry.id)).where(Inquiry.tenant_id == tenant_id, Inquiry.style_id == style.id)
+async def _resolve_style_order_ids_batch(
+    db: AsyncSession, tenant_id: int, styles: list[GarmentStyle]
+) -> dict[int, list[int]]:
+    """Resolve order ids for many styles with one quotations query and one orders query (avoids N+1)."""
+    if not styles:
+        return {}
+    style_ids = [s.id for s in styles]
+    qres = await db.execute(
+        select(Quotation.id, Quotation.style_id).where(
+            Quotation.tenant_id == tenant_id,
+            Quotation.style_id.in_(style_ids),
         )
-    ).scalar_one()
-    quotation_count = (
-        await db.execute(
-            select(func.count(Quotation.id)).where(Quotation.tenant_id == tenant_id, Quotation.style_id == style.id)
+    )
+    quot_by_style: dict[int, list[int]] = defaultdict(list)
+    all_qids: list[int] = []
+    for qid, sid in qres.all():
+        quot_by_style[sid].append(qid)
+        all_qids.append(qid)
+    ref_set: set[str] = set()
+    for s in styles:
+        ref_set.add((s.style_code or "").lower())
+        ref_set.add((s.name or "").lower())
+    conditions = []
+    if all_qids:
+        conditions.append(Order.quotation_id.in_(all_qids))
+    conditions.append(func.lower(func.coalesce(Order.style_ref, "")).in_(list(ref_set)))
+    ores = await db.execute(select(Order).where(Order.tenant_id == tenant_id, or_(*conditions)))
+    orders = list(ores.scalars().all())
+    out: dict[int, list[int]] = {}
+    for s in styles:
+        qids = set(quot_by_style.get(s.id, []))
+        cl = (s.style_code or "").lower()
+        nl = (s.name or "").lower()
+        seen: set[int] = set()
+        oid_list: list[int] = []
+        for o in orders:
+            if o.quotation_id in qids or (o.style_ref or "").lower() == cl or (o.style_ref or "").lower() == nl:
+                if o.id not in seen:
+                    seen.add(o.id)
+                    oid_list.append(o.id)
+        out[s.id] = oid_list
+    return out
+
+
+async def _build_style_summary(
+    db: AsyncSession,
+    tenant_id: int,
+    style: GarmentStyle,
+    *,
+    inquiry_count: int | None = None,
+    quotation_count: int | None = None,
+    order_ids: list[int] | None = None,
+) -> StyleSummaryResponse:
+    if inquiry_count is None:
+        inquiry_count = int(
+            (
+                await db.execute(
+                    select(func.count(Inquiry.id)).where(Inquiry.tenant_id == tenant_id, Inquiry.style_id == style.id)
+                )
+            ).scalar_one()
         )
-    ).scalar_one()
-    order_ids = await _resolve_style_order_ids(db, tenant_id, style)
+    if quotation_count is None:
+        quotation_count = int(
+            (
+                await db.execute(
+                    select(func.count(Quotation.id)).where(Quotation.tenant_id == tenant_id, Quotation.style_id == style.id)
+                )
+            ).scalar_one()
+        )
+    if order_ids is None:
+        order_ids = await _resolve_style_order_ids(db, tenant_id, style)
     order_count = len(order_ids)
     open_followup_actions = 0
     overdue_followup_actions = 0
@@ -467,6 +498,7 @@ async def _build_style_summary(db: AsyncSession, tenant_id: int, style: GarmentS
 
 @router.get("/styles")
 async def list_styles(
+    response: Response,
     search: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     buyer_customer_id: int | None = Query(default=None),
@@ -512,8 +544,11 @@ async def list_styles(
     normalized_risk = _normalize_optional_choice(risk_level, STYLE_RISK_VALUES, "risk_level")
     if normalized_risk:
         stmt = stmt.where(GarmentStyle.risk_level == normalized_risk)
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = int((await db.execute(count_stmt)).scalar() or 0)
     result = await db.execute(stmt.order_by(GarmentStyle.updated_at.desc(), GarmentStyle.id.desc()).offset(offset).limit(limit))
     rows = result.scalars().all()
+    response.headers["X-Total-Count"] = str(total)
     return rows
 
 
@@ -523,8 +558,13 @@ async def create_style(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_merch_permission(MERCH_PERMISSION_STYLE_MANAGE)),
 ):
     _ensure_tenant(user, tenant)
+    if body.buyer_customer_id is not None:
+        bc = await db.get(Customer, body.buyer_customer_id)
+        if not bc or bc.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Buyer customer not found")
     style_code = (body.style_code or "").strip().upper()
     if not style_code:
         style_code = await next_tenant_code(
@@ -611,11 +651,40 @@ async def list_style_summary_report(
         )
     if lifecycle_stage:
         stmt = stmt.where(GarmentStyle.lifecycle_stage == _normalize_style_stage(lifecycle_stage))
-    styles = (await db.execute(stmt.order_by(GarmentStyle.updated_at.desc()))).scalars().all()
+    styles = list((await db.execute(stmt.order_by(GarmentStyle.updated_at.desc()))).scalars().all())
     rows: list[StyleReportRow] = []
     normalized_saved_view = (saved_view or "").strip().lower()
+    inquiry_counts: dict[int, int] = {}
+    quotation_counts: dict[int, int] = {}
+    order_ids_by_style: dict[int, list[int]] = {}
+    if styles:
+        sid_list = [s.id for s in styles]
+        for sid, cnt in (
+            await db.execute(
+                select(Inquiry.style_id, func.count(Inquiry.id))
+                .where(Inquiry.tenant_id == tenant.id, Inquiry.style_id.in_(sid_list))
+                .group_by(Inquiry.style_id)
+            )
+        ).all():
+            inquiry_counts[int(sid)] = int(cnt)
+        for sid, cnt in (
+            await db.execute(
+                select(Quotation.style_id, func.count(Quotation.id))
+                .where(Quotation.tenant_id == tenant.id, Quotation.style_id.in_(sid_list))
+                .group_by(Quotation.style_id)
+            )
+        ).all():
+            quotation_counts[int(sid)] = int(cnt)
+        order_ids_by_style = await _resolve_style_order_ids_batch(db, tenant.id, styles)
     for style in styles:
-        summary = await _build_style_summary(db, tenant.id, style)
+        summary = await _build_style_summary(
+            db,
+            tenant.id,
+            style,
+            inquiry_count=inquiry_counts.get(style.id, 0),
+            quotation_count=quotation_counts.get(style.id, 0),
+            order_ids=order_ids_by_style.get(style.id, []),
+        )
         is_payment_overdue = _to_decimal(summary.due_amount) > Decimal("0")
         has_overdue_milestone = summary.overdue_followup_actions > 0
         if critical_only and not (has_overdue_milestone or is_payment_overdue):
@@ -773,28 +842,11 @@ async def upload_style_picture(
     if not style or style.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Style not found")
 
-    content_type = (file.content_type or "").lower()
-    extension = ALLOWED_STYLE_PICTURE_CONTENT_TYPES.get(content_type)
-    if not extension:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file type. Allowed: PNG, JPG, GIF, WEBP.",
-        )
-
-    data = await file.read()
-    size_bytes = len(data)
-    if size_bytes == 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
-    if size_bytes > STYLE_PICTURE_MAX_BYTES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Style picture exceeds 2MB limit.")
-
-    STYLE_PICTURE_DIR.mkdir(parents=True, exist_ok=True)
-    safe_filename = f"tenant_{tenant.id}_style_{style.id}_{uuid4().hex}{extension}"
-    target_path = STYLE_PICTURE_DIR / safe_filename
-    target_path.write_bytes(data)
-
-    style.style_image_url = f"/media/style_pictures/{safe_filename}"
+    safe_filename, api_url, disk_path = await FileStorageService.save_file(file, tenant.id, "style_pictures")
+    style.style_image_url = api_url
     await db.flush()
+
+    size_bytes = Path(disk_path).stat().st_size if Path(disk_path).exists() else 0
 
     return StyleImageUploadResponse(
         style_image_url=style.style_image_url,
@@ -1223,7 +1275,10 @@ async def delete_style_size_scale(
 
 @router.get("/boms")
 async def list_boms(
+    response: Response,
     style_id: int | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1232,7 +1287,10 @@ async def list_boms(
     stmt = select(Bom).where(Bom.tenant_id == tenant.id)
     if style_id is not None:
         stmt = stmt.where(Bom.style_id == style_id)
-    result = await db.execute(stmt.order_by(Bom.created_at.desc()))
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = int((await db.execute(count_stmt)).scalar() or 0)
+    result = await db.execute(stmt.order_by(Bom.created_at.desc()).offset(offset).limit(limit))
+    response.headers["X-Total-Count"] = str(total)
     return result.scalars().all()
 
 
@@ -1356,6 +1414,7 @@ async def approve_bom(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_merch_permission(MERCH_PERMISSION_BOM_APPROVE)),
 ):
     _ensure_tenant(user, tenant)
     row = await db.get(Bom, bom_id)
@@ -1379,6 +1438,7 @@ async def freeze_bom(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_merch_permission(MERCH_PERMISSION_BOM_FREEZE)),
 ):
     _ensure_tenant(user, tenant)
     row = await db.get(Bom, bom_id)
@@ -1491,6 +1551,7 @@ async def generate_purchase_order_from_bom(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_merch_permission(MERCH_PERMISSION_PO_GENERATE)),
 ):
     """Create a draft purchase order from BOM lines that have item_id set. Qty = quantity × base_consumption × (1 + wastage_pct/100)."""
     _ensure_tenant(user, tenant)
@@ -1531,11 +1592,14 @@ async def generate_purchase_order_from_bom(
     else:
         vendor_id = None
 
-    last_id_result = await db.execute(
-        select(func.coalesce(func.max(PurchaseOrder.id), 0)).where(PurchaseOrder.tenant_id == tenant.id)
+    po_code = await next_tenant_code(
+        db,
+        model=PurchaseOrder,
+        tenant_id=tenant.id,
+        prefix="PO-",
+        width=4,
     )
-    last_id = last_id_result.scalar() or 0
-    po_code = f"PO-{(last_id + 1):04d}"
+    warnings: list[str] = []
 
     po = PurchaseOrder(
         tenant_id=tenant.id,
@@ -1552,6 +1616,7 @@ async def generate_purchase_order_from_bom(
     for line in bom_lines:
         item = await db.get(Item, line.item_id)
         if not item or item.tenant_id != tenant.id:
+            warnings.append(f"Skipped BOM line {line.id}: item not found or wrong tenant.")
             continue
         try:
             base = float(line.base_consumption or 0)
@@ -1577,17 +1642,10 @@ async def generate_purchase_order_from_bom(
         )
     await db.commit()
     await db.refresh(po)
-    return {"id": po.id, "po_code": po.po_code}
+    return {"id": po.id, "po_code": po.po_code, "warnings": warnings}
 
 
-def _to_float_safe(value: str | None) -> float:
-    try:
-        return float(value or 0)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-GOVERNED_BOM_STATUSES = {"APPROVED", "FROZEN"}
+GOVERNED_BOM_STATUSES = merch_c.GOVERNED_BOM_STATUSES
 
 
 async def _get_latest_governed_bom(
@@ -1686,15 +1744,22 @@ async def get_order_material_requirement(
         base = _to_float_safe(line.base_consumption)
         wastage = _to_float_safe(line.wastage_pct) / 100.0
         required = order_qty * base * (1.0 + wastage)
-        mov_result = await db.execute(
-            select(StockMovement).where(
+        mov_in = await db.execute(
+            select(StockMovement.quantity).where(
                 StockMovement.tenant_id == tenant.id,
                 StockMovement.item_id == line.item_id,
+                func.upper(StockMovement.movement_type) == "IN",
             )
         )
-        movements = list(mov_result.scalars().all())
-        in_qty = sum(_to_float_safe(m.quantity) for m in movements if (m.movement_type or "").upper() == "IN")
-        out_qty = sum(_to_float_safe(m.quantity) for m in movements if (m.movement_type or "").upper() == "OUT")
+        mov_out = await db.execute(
+            select(StockMovement.quantity).where(
+                StockMovement.tenant_id == tenant.id,
+                StockMovement.item_id == line.item_id,
+                func.upper(StockMovement.movement_type) == "OUT",
+            )
+        )
+        in_qty = sum(_to_float_safe(q[0]) for q in mov_in.all())
+        out_qty = sum(_to_float_safe(q[0]) for q in mov_out.all())
         available = round(in_qty - out_qty, 4)
         shortage = round(max(0.0, required - available), 4)
         unit_name = None
@@ -1727,7 +1792,10 @@ async def get_order_material_requirement(
 
 @router.get("/consumption-plans")
 async def list_consumption_plans(
+    response: Response,
     order_id: int | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1736,7 +1804,10 @@ async def list_consumption_plans(
     stmt = select(ConsumptionPlan).where(ConsumptionPlan.tenant_id == tenant.id)
     if order_id is not None:
         stmt = stmt.where(ConsumptionPlan.order_id == order_id)
-    result = await db.execute(stmt.order_by(ConsumptionPlan.created_at.desc()))
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = int((await db.execute(count_stmt)).scalar() or 0)
+    result = await db.execute(stmt.order_by(ConsumptionPlan.created_at.desc()).offset(offset).limit(limit))
+    response.headers["X-Total-Count"] = str(total)
     return result.scalars().all()
 
 
@@ -1892,8 +1963,11 @@ async def delete_consumption_plan_item(
 
 @router.get("/followups")
 async def list_followups(
+    response: Response,
     order_id: int | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=200, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1904,7 +1978,10 @@ async def list_followups(
         stmt = stmt.where(Followup.order_id == order_id)
     if status_filter:
         stmt = stmt.where(Followup.status == status_filter)
-    result = await db.execute(stmt.order_by(Followup.created_at.desc()))
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = int((await db.execute(count_stmt)).scalar() or 0)
+    result = await db.execute(stmt.order_by(Followup.created_at.desc()).offset(offset).limit(limit))
+    response.headers["X-Total-Count"] = str(total)
     return result.scalars().all()
 
 
@@ -1916,6 +1993,9 @@ async def create_followup(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    ord_row = await db.get(Order, body.order_id)
+    if not ord_row or ord_row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Order not found")
     row = Followup(tenant_id=tenant.id, **body.model_dump())
     db.add(row)
     await db.flush()
@@ -1961,39 +2041,11 @@ async def delete_followup(
 
 # ---------- TNA / Advanced Order Follow-up: templates and action lines ----------
 
-TNA_PHASES = [
-    "pre_order", "sampling", "approval", "sourcing", "fabric", "trims",
-    "production", "inspection", "finishing", "packing", "commercial", "shipment", "payment", "other",
-]
-TNA_ACTION_STATUSES = [
-    "pending", "in_progress", "submitted", "approved", "rejected", "resubmitted", "completed", "cancelled", "on_hold",
-]
-TNA_APPROVAL_STATUSES = ["pending", "approved", "rejected", "not_applicable"]
-TNA_SEVERITIES = ["low", "medium", "high", "critical"]
-
-# Default template seed: code, name, phase, default_days_before_delivery, sequence_no
-TNA_DEFAULT_TEMPLATE_SEED: list[tuple[str, str, str, int | None, int]] = [
-    ("order_confirmed", "Order confirmed", "pre_order", None, 10),
-    ("lc_received", "LC received", "pre_order", None, 20),
-    ("proto_sample_submit", "Proto sample submission", "sampling", 120, 30),
-    ("fit_sample_submit", "Fit sample submission", "sampling", 100, 40),
-    ("fit_sample_approval", "Fit sample approval", "sampling", 95, 45),
-    ("size_set_submit", "Size set sample submission", "sampling", 85, 50),
-    ("pp_sample_submit", "PP sample submission", "sampling", 55, 60),
-    ("pp_approval", "PP approval", "sampling", 50, 65),
-    ("lab_dip_approval", "Lab dip approval", "approval", 75, 70),
-    ("bulk_fabric_approval", "Bulk fabric approval", "approval", 60, 75),
-    ("accessories_approval", "Accessories approval", "approval", 55, 80),
-    ("fabric_in_house", "Fabric in-house", "fabric", 45, 90),
-    ("accessories_in_house", "Accessories in-house", "trims", 40, 95),
-    ("cutting_start", "Cutting start", "production", 35, 100),
-    ("sewing_start", "Sewing start", "production", 28, 110),
-    ("inline_inspection", "Inline inspection", "inspection", 20, 120),
-    ("final_inspection", "Final inspection", "inspection", 10, 130),
-    ("ex_factory", "Ex-factory", "shipment", 5, 140),
-    ("shipment_docs", "Shipping docs / BL", "commercial", 3, 145),
-    ("shipment_confirmation", "Shipment confirmation to buyer", "commercial", 0, 150),
-]
+TNA_PHASES = merch_c.TNA_PHASES
+TNA_ACTION_STATUSES = merch_c.TNA_ACTION_STATUSES
+TNA_APPROVAL_STATUSES = merch_c.TNA_APPROVAL_STATUSES
+TNA_SEVERITIES = merch_c.TNA_SEVERITIES
+TNA_DEFAULT_TEMPLATE_SEED = merch_c.TNA_DEFAULT_TEMPLATE_SEED
 
 
 class FollowupActionTemplateOut(BaseModel):
@@ -2019,6 +2071,14 @@ class FollowupActionTemplateCreate(BaseModel):
     is_mandatory: bool = False
     is_active: bool = True
     buyer_id: int | None = None
+
+    @field_validator("phase")
+    @classmethod
+    def _validate_phase(cls, v: str) -> str:
+        s = (v or "").strip().lower()
+        if s not in set(merch_c.TNA_PHASES):
+            raise ValueError(f"Invalid phase. Allowed: {', '.join(merch_c.TNA_PHASES)}")
+        return s
 
 
 class OrderFollowupActionOut(BaseModel):
@@ -2163,6 +2223,44 @@ async def _order_context_for_action(
     return order_code, delivery_date, style_code
 
 
+async def _batch_order_context_map(
+    db: AsyncSession, tenant_id: int, order_ids: list[int]
+) -> dict[int, tuple[str | None, date | None, str | None]]:
+    """Batch-load (order_code, delivery_date, style_code) for many orders (one query set per entity type)."""
+    out: dict[int, tuple[str | None, date | None, str | None]] = {}
+    if not order_ids:
+        return out
+    uids = list({oid for oid in order_ids})
+    orows = (
+        await db.execute(select(Order).where(Order.tenant_id == tenant_id, Order.id.in_(uids)))
+    ).scalars().all()
+    qids = [o.quotation_id for o in orows if o.quotation_id]
+    quotes: dict[int, Quotation] = {}
+    if qids:
+        qres = await db.execute(
+            select(Quotation).where(Quotation.tenant_id == tenant_id, Quotation.id.in_(list({q for q in qids if q})))
+        )
+        for q in qres.scalars().all():
+            quotes[q.id] = q
+    sids = [q.style_id for q in quotes.values() if q.style_id]
+    styles: dict[int, GarmentStyle] = {}
+    if sids:
+        sid_set = {s for s in sids if s}
+        sres = await db.execute(
+            select(GarmentStyle).where(GarmentStyle.tenant_id == tenant_id, GarmentStyle.id.in_(sid_set))
+        )
+        for s in sres.scalars().all():
+            styles[s.id] = s
+    for o in orows:
+        sc: str | None = None
+        if o.quotation_id and o.quotation_id in quotes:
+            q = quotes[o.quotation_id]
+            if q.style_id and q.style_id in styles:
+                sc = styles[q.style_id].style_code
+        out[o.id] = (o.order_code, o.delivery_date, sc)
+    return out
+
+
 @router.get("/followup-templates", response_model=list[FollowupActionTemplateOut])
 async def list_followup_templates(
     phase: str | None = Query(default=None),
@@ -2248,6 +2346,7 @@ async def create_followup_template(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_merch_permission(MERCH_PERMISSION_TNA_MANAGE)),
 ):
     _ensure_tenant(user, tenant)
     row = FollowupActionTemplate(tenant_id=tenant.id, **body.model_dump())
@@ -2271,6 +2370,16 @@ class FollowupActionTemplateUpdate(BaseModel):
     is_active: bool | None = None
     buyer_id: int | None = None
 
+    @field_validator("phase")
+    @classmethod
+    def _validate_phase_optional(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip().lower()
+        if s not in set(merch_c.TNA_PHASES):
+            raise ValueError(f"Invalid phase. Allowed: {', '.join(merch_c.TNA_PHASES)}")
+        return s
+
 
 @router.patch("/followup-templates/{template_id}", response_model=FollowupActionTemplateOut)
 async def update_followup_template(
@@ -2279,6 +2388,7 @@ async def update_followup_template(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_merch_permission(MERCH_PERMISSION_TNA_MANAGE)),
 ):
     _ensure_tenant(user, tenant)
     row = await db.get(FollowupActionTemplate, template_id)
@@ -2303,6 +2413,7 @@ async def delete_followup_template(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_merch_permission(MERCH_PERMISSION_TNA_MANAGE)),
 ):
     _ensure_tenant(user, tenant)
     row = await db.get(FollowupActionTemplate, template_id)
@@ -2348,9 +2459,12 @@ async def list_followup_actions(
         )
     result = await db.execute(stmt.order_by(OrderFollowupAction.planned_date.asc().nullslast(), OrderFollowupAction.sequence_no, OrderFollowupAction.id))
     actions = result.scalars().all()
+    ctx_map = await _batch_order_context_map(db, tenant.id, [a.order_id for a in actions])
     out: list[OrderFollowupActionOut] = []
     for a in actions:
-        order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, a.order_id)
+        order_code, delivery_date, style_code = ctx_map.get(
+            a.order_id, (None, None, None)
+        )
         out.append(
             OrderFollowupActionOut(
                 id=a.id,
@@ -3439,7 +3553,7 @@ async def get_pipeline_analytics(
 # ---------- Phase E: Wastage reporting ----------
 
 
-DEFAULT_WASTAGE_THRESHOLD_PCT = 15.0
+DEFAULT_WASTAGE_THRESHOLD_PCT = merch_c.DEFAULT_WASTAGE_THRESHOLD_PCT
 
 
 class WastageReportRowOut(BaseModel):
@@ -3516,10 +3630,9 @@ async def get_wastage_report(
             StockMovement.reference_id.isnot(None),
         ).distinct()
     )
-    order_ids_with_issues = [r for r in mov_result.scalars().all() if r[0] is not None]
-    if not order_ids_with_issues:
+    oids = [x for x in mov_result.scalars().all() if x is not None]
+    if not oids:
         return []
-    oids = [r[0] for r in order_ids_with_issues]
     stmt = select(Order).where(Order.tenant_id == tenant.id, Order.id.in_(oids))
     if order_id is not None:
         stmt = stmt.where(Order.id == order_id)
@@ -3531,56 +3644,112 @@ async def get_wastage_report(
         stmt = stmt.where(Order.order_date <= date_to)
     orders_result = await db.execute(stmt)
     orders = list(orders_result.scalars().all())
+    if not orders:
+        return []
     out: list[WastageReportRowOut] = []
+
+    qids = {o.quotation_id for o in orders if o.quotation_id}
+    quotations: dict[int, Quotation] = {}
+    if qids:
+        qr = await db.execute(select(Quotation).where(Quotation.id.in_(qids)))
+        quotations = {q.id: q for q in qr.scalars().all()}
+    style_ids = {q.style_id for q in quotations.values() if q.style_id}
+    styles_map: dict[int, GarmentStyle] = {}
+    if style_ids:
+        sr = await db.execute(select(GarmentStyle).where(GarmentStyle.id.in_(style_ids)))
+        styles_map = {s.id: s for s in sr.scalars().all()}
+    cids = {o.customer_id for o in orders if o.customer_id}
+    customers: dict[int, Customer] = {}
+    if cids:
+        cr = await db.execute(select(Customer).where(Customer.id.in_(cids)))
+        customers = {c.id: c for c in cr.scalars().all()}
+
+    bom_by_style: dict[int, Bom] = {}
+    if style_ids:
+        br = await db.execute(
+            select(Bom).where(
+                Bom.tenant_id == tenant.id,
+                Bom.style_id.in_(style_ids),
+                Bom.status.in_(GOVERNED_BOM_STATUSES),
+            )
+        )
+        for b in br.scalars().all():
+            cur = bom_by_style.get(b.style_id)
+            if cur is None or (b.version_no or 0) > (cur.version_no or 0):
+                bom_by_style[b.style_id] = b
+
+    bom_ids = [b.id for b in bom_by_style.values()]
+    bom_lines_by_bom: dict[int, list[BomItem]] = defaultdict(list)
+    if bom_ids:
+        blr = await db.execute(
+            select(BomItem).where(
+                BomItem.tenant_id == tenant.id,
+                BomItem.bom_id.in_(bom_ids),
+                BomItem.item_id.isnot(None),
+            )
+        )
+        for bi in blr.scalars().all():
+            bom_lines_by_bom[bi.bom_id].append(bi)
+
+    all_item_ids = {bi.item_id for lines in bom_lines_by_bom.values() for bi in lines if bi.item_id}
+    items_map: dict[int, Item] = {}
+    if all_item_ids:
+        ir = await db.execute(select(Item).where(Item.tenant_id == tenant.id, Item.id.in_(all_item_ids)))
+        items_map = {i.id: i for i in ir.scalars().all()}
+    cat_ids = {it.category_id for it in items_map.values() if it.category_id}
+    categories: dict[int, ItemCategory] = {}
+    if cat_ids:
+        catr = await db.execute(select(ItemCategory).where(ItemCategory.id.in_(cat_ids)))
+        categories = {c.id: c for c in catr.scalars().all()}
+
+    order_id_list = [o.id for o in orders]
+    mov_map: dict[tuple[int, int], list[StockMovement]] = defaultdict(list)
+    if order_id_list:
+        movr = await db.execute(
+            select(StockMovement).where(
+                StockMovement.tenant_id == tenant.id,
+                StockMovement.reference_type == "CONSUMPTION_ISSUE",
+                StockMovement.reference_id.in_(order_id_list),
+            )
+        )
+        for m in movr.scalars().all():
+            if m.reference_id is not None and m.item_id is not None:
+                mov_map[(m.reference_id, m.item_id)].append(m)
+
     for order in orders:
         allowed_pct = _resolve_wastage_threshold_pct(threshold_rules, order.customer_id)
         if not order.quotation_id:
             continue
-        quotation = await db.get(Quotation, order.quotation_id)
+        quotation = quotations.get(order.quotation_id)
         if not quotation or quotation.tenant_id != tenant.id or not quotation.style_id:
             continue
         sid = quotation.style_id
         if style_id is not None and sid != style_id:
             continue
-        style = await db.get(GarmentStyle, sid)
+        style = styles_map.get(sid)
         style_code = style.style_code if style else str(sid)
-        customer = await db.get(Customer, order.customer_id)
+        customer = customers.get(order.customer_id) if order.customer_id else None
         buyer_name = customer.name if customer else f"Customer #{order.customer_id}"
         order_qty = _to_float_safe(str(order.quantity)) if order.quantity is not None else 0.0
         if order_qty <= 0:
             continue
-        bom = await _get_latest_governed_bom(
-            db,
-            tenant_id=tenant.id,
-            style_id=sid,
-        )
+        bom = bom_by_style.get(sid)
         if not bom:
             continue
-        lines_result = await db.execute(
-            select(BomItem).where(
-                BomItem.tenant_id == tenant.id,
-                BomItem.bom_id == bom.id,
-                BomItem.item_id.isnot(None),
-            )
-        )
-        for line in lines_result.scalars().all():
-            item = await db.get(Item, line.item_id)
+        for line in bom_lines_by_bom.get(bom.id, []):
+            item = items_map.get(line.item_id)
             if not item or item.tenant_id != tenant.id:
                 continue
-            cat = await db.get(ItemCategory, item.category_id) if item.category_id else None
+            cat = categories.get(item.category_id) if item.category_id else None
             category = _wastage_category_from_item(item, cat)
             base = _to_float_safe(line.base_consumption)
             wastage = _to_float_safe(line.wastage_pct) / 100.0
             expected = order_qty * base * (1.0 + wastage)
-            act_result = await db.execute(
-                select(StockMovement).where(
-                    StockMovement.tenant_id == tenant.id,
-                    StockMovement.reference_type == "CONSUMPTION_ISSUE",
-                    StockMovement.reference_id == order.id,
-                    StockMovement.item_id == line.item_id,
-                )
+            actual = sum(
+                _to_float_safe(m.quantity)
+                for m in mov_map.get((order.id, line.item_id), [])
+                if (m.movement_type or "").upper() == "OUT"
             )
-            actual = sum(_to_float_safe(m.quantity) for m in act_result.scalars().all() if (m.movement_type or "").upper() == "OUT")
             if expected <= 0:
                 wastage_pct = 0.0
             else:
@@ -4424,7 +4593,30 @@ async def get_wastage_order_detail(
 # ---------- Advanced Critical Alerts (Phase 1: persisted alert engine) ----------
 
 class AlertStatusUpdateBody(BaseModel):
-    status: str  # acknowledged | in_progress | waiting_on_buyer | waiting_on_supplier | resolved | closed
+    status: str = Field(
+        ...,
+        description="acknowledged | in_progress | waiting_on_buyer | waiting_on_supplier | resolved | closed | escalated | dismissed",
+    )
+
+    @field_validator("status")
+    @classmethod
+    def _status_allowed(cls, v: str) -> str:
+        allowed = {
+            "acknowledged",
+            "in_progress",
+            "waiting_on_buyer",
+            "waiting_on_supplier",
+            "resolved",
+            "closed",
+            "escalated",
+            "dismissed",
+            "open",
+            "snoozed",
+        }
+        s = (v or "").strip().lower()
+        if s not in allowed:
+            raise ValueError(f"Invalid alert status. Allowed: {', '.join(sorted(allowed))}")
+        return s
 
 
 class AlertSnoozeBody(BaseModel):
@@ -4489,6 +4681,86 @@ def _alert_sla_bucket(alert: AlertInstance, now: datetime) -> str:
     sev = (alert.severity or "").lower()
     breach_hours = {"critical": 24, "high": 48, "medium": 72, "low": 120, "informational": 168}.get(sev, 72)
     return "breach" if age_hours > breach_hours else "at_risk"
+
+
+class AlertDefinitionOut(BaseModel):
+    id: int
+    rule_key: str
+    name: str
+    description: str | None
+    severity_default: str
+    entity_type: str
+    is_system: bool
+    is_enabled: bool
+    config_json: dict | None = None
+
+
+class AlertDefinitionPatch(BaseModel):
+    is_enabled: bool | None = None
+    config_json: dict | None = None
+
+
+@router.get("/alert-definitions", response_model=list[AlertDefinitionOut])
+async def list_alert_definitions(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Tenant-scoped alert rule definitions (enable/disable and JSON config per rule)."""
+    from app.modules.merch.alert_engine import ensure_definitions_for_tenant as _seed_defs
+
+    _ensure_tenant(user, tenant)
+    await _seed_defs(db, tenant.id)
+    result = await db.execute(
+        select(AlertDefinition).where(AlertDefinition.tenant_id == tenant.id).order_by(AlertDefinition.rule_key)
+    )
+    rows = result.scalars().all()
+    return [
+        AlertDefinitionOut(
+            id=r.id,
+            rule_key=r.rule_key,
+            name=r.name,
+            description=r.description,
+            severity_default=r.severity_default,
+            entity_type=r.entity_type,
+            is_system=r.is_system,
+            is_enabled=r.is_enabled,
+            config_json=r.config_json if isinstance(r.config_json, dict) else None,
+        )
+        for r in rows
+    ]
+
+
+@router.patch("/alert-definitions/{definition_id}", response_model=AlertDefinitionOut)
+async def patch_alert_definition(
+    definition_id: int,
+    body: AlertDefinitionPatch,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_merch_permission(MERCH_PERMISSION_ALERT_DEFINITIONS)),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(AlertDefinition, definition_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Alert definition not found")
+    if body.is_enabled is not None:
+        row.is_enabled = body.is_enabled
+    if body.config_json is not None:
+        row.config_json = body.config_json
+    await db.flush()
+    await db.refresh(row)
+    return AlertDefinitionOut(
+        id=row.id,
+        rule_key=row.rule_key,
+        name=row.name,
+        description=row.description,
+        severity_default=row.severity_default,
+        entity_type=row.entity_type,
+        is_system=row.is_system,
+        is_enabled=row.is_enabled,
+        config_json=row.config_json if isinstance(row.config_json, dict) else None,
+    )
 
 
 @router.get("/alerts")
@@ -4632,6 +4904,7 @@ async def list_alerts(
 async def get_alerts_summary(
     severity: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
+    alert_type: str | None = Query(default=None, alias="alert_type"),
     entity_type: str | None = Query(default=None, alias="entity_type"),
     entity_id: int | None = Query(default=None, alias="entity_id"),
     tenant: Tenant = Depends(require_tenant),
@@ -4640,8 +4913,7 @@ async def get_alerts_summary(
 ):
     """KPI counts for alert center (critical, high, medium, low, total)."""
     _ensure_tenant(user, tenant)
-    from datetime import datetime as dt
-    now = dt.utcnow()
+    now = datetime.now(timezone.utc)
     stmt = select(AlertInstance.severity, func.count()).where(
         AlertInstance.tenant_id == tenant.id,
         or_(
@@ -4653,6 +4925,8 @@ async def get_alerts_summary(
         stmt = stmt.where(AlertInstance.severity == severity)
     if status_filter:
         stmt = stmt.where(AlertInstance.status == status_filter)
+    if alert_type:
+        stmt = stmt.where(AlertInstance.alert_type == alert_type.strip())
     if entity_type:
         stmt = stmt.join(AlertDefinition, AlertInstance.definition_id == AlertDefinition.id).where(
             AlertDefinition.tenant_id == tenant.id,
@@ -4780,11 +5054,11 @@ async def update_alert_status(
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Alert not found")
     old_status = row.status
-    row.status = body.status.lower()
-    if body.status.lower() in ("resolved", "closed"):
+    row.status = body.status
+    if body.status in ("resolved", "closed"):
         row.resolved_at = datetime.now(timezone.utc)
         row.resolved_by_id = user.id
-    elif body.status.lower() == "acknowledged":
+    elif body.status == "acknowledged":
         row.acknowledged_at = datetime.now(timezone.utc)
         row.acknowledged_by_id = user.id
     hist = AlertHistory(
@@ -4838,12 +5112,17 @@ async def assign_alert(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_merch_permission(MERCH_PERMISSION_ALERT_ASSIGN)),
 ):
     """Assign alert to a user."""
     _ensure_tenant(user, tenant)
     row = await db.get(AlertInstance, alert_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Alert not found")
+    if body.assigned_to_id is not None:
+        assignee = await db.get(User, body.assigned_to_id)
+        if not assignee or assignee.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Assignee user not found in this tenant")
     old_val = str(row.assigned_to_id) if row.assigned_to_id else None
     row.assigned_to_id = body.assigned_to_id
     hist = AlertHistory(
@@ -4879,6 +5158,8 @@ async def run_alerts_scan(
     background_tasks: BackgroundTasks,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_merch_permission(MERCH_PERMISSION_ALERT_SCAN)),
 ):
     """Start alert rule scan for current tenant (runs in background; returns immediately)."""
     _ensure_tenant(user, tenant)
@@ -5023,6 +5304,10 @@ async def escalate_alert(
     row = await db.get(AlertInstance, alert_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Alert not found")
+    if body.assigned_to_id is not None:
+        assignee = await db.get(User, body.assigned_to_id)
+        if not assignee or assignee.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Assignee user not found in this tenant")
     from_level = row.escalation_level
     row.status = "escalated"
     row.escalated_at = datetime.now(timezone.utc)
@@ -5193,6 +5478,12 @@ class ConsumptionReconItemOut(BaseModel):
     actual_qty: float
     variance: float
     variance_pct: float
+    unit_cost: float | None = None
+    planned_cost: float | None = None
+    actual_cost: float | None = None
+    cost_variance: float | None = None
+    last_issued_at: str | None = None
+    movement_count: int = 0
 
 
 class ConsumptionReconSummaryOut(BaseModel):
@@ -5201,12 +5492,79 @@ class ConsumptionReconSummaryOut(BaseModel):
     variance: float
     overall_variance_pct: float
     items_exceeding_tolerance: int
+    total_planned_cost: float = 0.0
+    total_actual_cost: float = 0.0
+    cost_variance: float = 0.0
+    cost_variance_pct: float = 0.0
 
 
 class ConsumptionReconResponse(BaseModel):
     order: ConsumptionReconOrderOut
     items: list[ConsumptionReconItemOut]
     summary: ConsumptionReconSummaryOut
+    bom_version: str | None = None
+    bom_status: str | None = None
+    order_status: str | None = None
+    consumption_plan_status: str | None = None
+
+
+class ConsumptionReconMovementOut(BaseModel):
+    movement_id: int
+    movement_date: str | None
+    quantity: float
+    warehouse_name: str | None
+    issued_by: str | None
+    reference_code: str | None = None
+    notes: str | None
+
+
+class ConsumptionReconMovementsResponse(BaseModel):
+    item_id: int
+    item_code: str
+    item_name: str
+    planned_qty: float
+    total_issued: float
+    movements: list[ConsumptionReconMovementOut]
+
+
+def _empty_recon_summary() -> ConsumptionReconSummaryOut:
+    return ConsumptionReconSummaryOut(
+        total_planned=0.0,
+        total_actual=0.0,
+        variance=0.0,
+        overall_variance_pct=0.0,
+        items_exceeding_tolerance=0,
+        total_planned_cost=0.0,
+        total_actual_cost=0.0,
+        cost_variance=0.0,
+        cost_variance_pct=0.0,
+    )
+
+
+async def _consumption_plan_status_for_order(
+    db: AsyncSession, tenant_id: int, order_id: int
+) -> str | None:
+    r = await db.execute(
+        select(ConsumptionPlan.status)
+        .where(
+            ConsumptionPlan.tenant_id == tenant_id,
+            ConsumptionPlan.order_id == order_id,
+        )
+        .order_by(ConsumptionPlan.id.desc())
+        .limit(1)
+    )
+    row = r.first()
+    return row[0] if row else None
+
+
+def _recon_aggregate_status(overall_pct: float, items_exceeding: int, tolerance_pct: float) -> str:
+    if items_exceeding > 0:
+        return "exceeds"
+    if abs(overall_pct) <= 2.0:
+        return "on_target"
+    if abs(overall_pct) <= tolerance_pct:
+        return "minor"
+    return "exceeds"
 
 
 async def _get_consumption_recon_data(
@@ -5219,6 +5577,7 @@ async def _get_consumption_recon_data(
     order = await db.get(Order, order_id)
     if not order or order.tenant_id != tenant.id:
         return None
+    plan_status = await _consumption_plan_status_for_order(db, tenant.id, order.id)
     style_code = str(order_id)
     order_qty = _to_float_safe(str(order.quantity)) if order.quantity is not None else 0.0
     if not order.quotation_id or order_qty <= 0:
@@ -5230,13 +5589,11 @@ async def _get_consumption_recon_data(
                 quantity=order.quantity,
             ),
             items=[],
-            summary=ConsumptionReconSummaryOut(
-                total_planned=0.0,
-                total_actual=0.0,
-                variance=0.0,
-                overall_variance_pct=0.0,
-                items_exceeding_tolerance=0,
-            ),
+            summary=_empty_recon_summary(),
+            bom_version=None,
+            bom_status=None,
+            order_status=order.status,
+            consumption_plan_status=plan_status,
         )
     quotation = await db.get(Quotation, order.quotation_id)
     if not quotation or quotation.tenant_id != tenant.id or not quotation.style_id:
@@ -5248,13 +5605,11 @@ async def _get_consumption_recon_data(
                 quantity=order.quantity,
             ),
             items=[],
-            summary=ConsumptionReconSummaryOut(
-                total_planned=0.0,
-                total_actual=0.0,
-                variance=0.0,
-                overall_variance_pct=0.0,
-                items_exceeding_tolerance=0,
-            ),
+            summary=_empty_recon_summary(),
+            bom_version=None,
+            bom_status=None,
+            order_status=order.status,
+            consumption_plan_status=plan_status,
         )
     sid = quotation.style_id
     style = await db.get(GarmentStyle, sid)
@@ -5273,13 +5628,11 @@ async def _get_consumption_recon_data(
                 quantity=order.quantity,
             ),
             items=[],
-            summary=ConsumptionReconSummaryOut(
-                total_planned=0.0,
-                total_actual=0.0,
-                variance=0.0,
-                overall_variance_pct=0.0,
-                items_exceeding_tolerance=0,
-            ),
+            summary=_empty_recon_summary(),
+            bom_version=None,
+            bom_status=None,
+            order_status=order.status,
+            consumption_plan_status=plan_status,
         )
     lines_result = await db.execute(
         select(BomItem).where(
@@ -5291,6 +5644,8 @@ async def _get_consumption_recon_data(
     items_out: list[ConsumptionReconItemOut] = []
     total_planned = 0.0
     total_actual = 0.0
+    total_planned_cost = 0.0
+    total_actual_cost = 0.0
     items_exceeding = 0
     for line in lines_result.scalars().all():
         item = await db.get(Item, line.item_id)
@@ -5309,10 +5664,39 @@ async def _get_consumption_recon_data(
                 StockMovement.item_id == line.item_id,
             )
         )
-        actual_qty = sum(
-            _to_float_safe(m.quantity) for m in act_result.scalars().all()
-            if (m.movement_type or "").upper() == "OUT"
-        )
+        movements = act_result.scalars().all()
+        out_movements = [m for m in movements if (m.movement_type or "").upper() == "OUT"]
+        actual_qty = sum(_to_float_safe(m.quantity) for m in out_movements)
+        movement_count = len(out_movements)
+        cost_qty_weighted = 0.0
+        cost_sum = 0.0
+        last_dt: datetime | None = None
+        for m in out_movements:
+            q = _to_float_safe(m.quantity)
+            uc_m = _to_float_safe(m.unit_cost) if m.unit_cost else 0.0
+            if uc_m > 0:
+                cost_qty_weighted += q
+                cost_sum += q * uc_m
+            cand = None
+            if m.movement_date:
+                cand = datetime.combine(m.movement_date, time.min)
+            elif m.created_at:
+                cand = m.created_at
+            if cand and (last_dt is None or cand > last_dt):
+                last_dt = cand
+        base_uc = _to_float_safe(item.default_cost)
+        if cost_qty_weighted > 0:
+            unit_cost = cost_sum / cost_qty_weighted
+        else:
+            unit_cost = base_uc
+        planned_cost = planned_qty * unit_cost
+        actual_cost_computed = 0.0
+        for m in out_movements:
+            q = _to_float_safe(m.quantity)
+            uc_line = _to_float_safe(m.unit_cost) if m.unit_cost else unit_cost
+            actual_cost_computed += q * uc_line
+        cost_variance = actual_cost_computed - planned_cost
+        last_issued_at = last_dt.isoformat() if last_dt else None
         variance = actual_qty - planned_qty
         variance_pct = (variance / planned_qty * 100.0) if planned_qty > 0 else 0.0
         if abs(variance_pct) > tolerance_pct:
@@ -5323,6 +5707,8 @@ async def _get_consumption_recon_data(
             uom = u.code if u else None
         total_planned += planned_qty
         total_actual += actual_qty
+        total_planned_cost += planned_cost
+        total_actual_cost += actual_cost_computed
         items_out.append(
             ConsumptionReconItemOut(
                 item_id=line.item_id,
@@ -5334,9 +5720,17 @@ async def _get_consumption_recon_data(
                 actual_qty=round(actual_qty, 4),
                 variance=round(variance, 4),
                 variance_pct=round(variance_pct, 2),
+                unit_cost=round(unit_cost, 4),
+                planned_cost=round(planned_cost, 4),
+                actual_cost=round(actual_cost_computed, 4),
+                cost_variance=round(cost_variance, 4),
+                last_issued_at=last_issued_at,
+                movement_count=movement_count,
             )
         )
     overall_pct = (total_actual - total_planned) / total_planned * 100.0 if total_planned > 0 else 0.0
+    cost_var = total_actual_cost - total_planned_cost
+    cost_var_pct = (cost_var / total_planned_cost * 100.0) if total_planned_cost > 0 else 0.0
     return ConsumptionReconResponse(
         order=ConsumptionReconOrderOut(
             id=order.id,
@@ -5351,7 +5745,461 @@ async def _get_consumption_recon_data(
             variance=round(total_actual - total_planned, 4),
             overall_variance_pct=round(overall_pct, 2),
             items_exceeding_tolerance=items_exceeding,
+            total_planned_cost=round(total_planned_cost, 4),
+            total_actual_cost=round(total_actual_cost, 4),
+            cost_variance=round(cost_var, 4),
+            cost_variance_pct=round(cost_var_pct, 2),
         ),
+        bom_version=str(bom.version_no),
+        bom_status=bom.status,
+        order_status=order.status,
+        consumption_plan_status=plan_status,
+    )
+
+
+CONSUMPTION_RECON_DASHBOARD_MAX_ORDERS = 500
+
+
+class ConsumptionReconDashboardOrderRow(BaseModel):
+    order_id: int
+    order_code: str
+    style_code: str
+    style_id: int | None = None
+    buyer_name: str | None
+    order_qty: int | None
+    total_planned: float
+    total_actual: float
+    variance: float
+    overall_variance_pct: float
+    items_exceeding_tolerance: int
+    total_items: int
+    worst_item_name: str | None
+    worst_item_variance_pct: float
+    status: str
+
+
+class ConsumptionReconCategoryBreakdown(BaseModel):
+    material_type: str
+    total_planned: float
+    total_actual: float
+    variance_pct: float
+
+
+class ConsumptionReconDashboardSummary(BaseModel):
+    total_orders: int
+    orders_on_target: int
+    orders_minor: int
+    orders_exceeding: int
+    avg_variance_pct: float
+    total_planned_qty: float
+    total_actual_qty: float
+
+
+class ConsumptionReconDashboardResponse(BaseModel):
+    orders: list[ConsumptionReconDashboardOrderRow]
+    summary: ConsumptionReconDashboardSummary
+    category_breakdown: list[ConsumptionReconCategoryBreakdown]
+    total_count: int
+
+
+class ConsumptionReconTrendPoint(BaseModel):
+    period: str
+    orders_count: int
+    avg_variance_pct: float
+    total_planned: float
+    total_actual: float
+    exceeding_count: int
+
+
+class ConsumptionReconTrendsResponse(BaseModel):
+    points: list[ConsumptionReconTrendPoint]
+    tolerance_pct: float
+
+
+async def _orders_base_query_for_recon(
+    tenant_id: int,
+    buyer_id: int | None,
+    style_id: int | None,
+    date_from: date | None,
+    date_to: date | None,
+):
+    q = select(Order).where(Order.tenant_id == tenant_id)
+    if buyer_id is not None:
+        q = q.where(Order.customer_id == buyer_id)
+    if style_id is not None:
+        q = q.join(Quotation, Order.quotation_id == Quotation.id).where(Quotation.style_id == style_id)
+    if date_from is not None:
+        start = datetime.combine(date_from, time.min)
+        q = q.where(Order.created_at >= start)
+    if date_to is not None:
+        end = datetime.combine(date_to, time.max)
+        q = q.where(Order.created_at <= end)
+    return q.order_by(Order.created_at.desc()).limit(CONSUMPTION_RECON_DASHBOARD_MAX_ORDERS)
+
+
+def _worst_variance_item(items: list[ConsumptionReconItemOut]) -> tuple[str | None, float]:
+    if not items:
+        return None, 0.0
+    worst = max(items, key=lambda x: abs(x.variance_pct))
+    label = f"{worst.item_code} {worst.item_name}".strip()
+    return label, worst.variance_pct
+
+
+@router.get("/consumption-reconciliation/dashboard", response_model=ConsumptionReconDashboardResponse)
+async def get_consumption_reconciliation_dashboard(
+    buyer_id: int | None = Query(default=None),
+    style_id: int | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    material_type: str | None = Query(default=None),
+    tolerance_pct: float = Query(default=5.0),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    sort_by: str = Query(default="overall_variance_pct"),
+    sort_dir: str = Query(default="desc"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Multi-order consumption reconciliation summary (scans up to 500 most recent matching orders)."""
+    _ensure_tenant(user, tenant)
+    q = await _orders_base_query_for_recon(tenant.id, buyer_id, style_id, date_from, date_to)
+    ores = await db.execute(q)
+    orders_list = ores.scalars().unique().all()
+    rows_full: list[ConsumptionReconDashboardOrderRow] = []
+    cat_acc: dict[str, tuple[float, float]] = defaultdict(lambda: (0.0, 0.0))
+    for order in orders_list:
+        data = await _get_consumption_recon_data(order.id, tolerance_pct, tenant, db)
+        if data is None:
+            continue
+        worst_name, worst_pct = _worst_variance_item(data.items)
+        st = _recon_aggregate_status(
+            data.summary.overall_variance_pct,
+            data.summary.items_exceeding_tolerance,
+            tolerance_pct,
+        )
+        if status_filter and status_filter.strip().lower() != st:
+            continue
+        if material_type and material_type.strip():
+            mt = material_type.strip().lower()
+            if not any(it.material_type.lower() == mt for it in data.items):
+                continue
+        cust = await db.get(Customer, order.customer_id)
+        buyer_name = None
+        if cust:
+            buyer_name = (cust.trade_name or cust.legal_entity_name or cust.name or "").strip() or None
+        sid_row: int | None = None
+        if order.quotation_id:
+            qo = await db.get(Quotation, order.quotation_id)
+            if qo and qo.style_id:
+                sid_row = qo.style_id
+        rows_full.append(
+            ConsumptionReconDashboardOrderRow(
+                order_id=order.id,
+                order_code=data.order.order_code,
+                style_code=data.order.style_code,
+                style_id=sid_row,
+                buyer_name=buyer_name,
+                order_qty=data.order.quantity,
+                total_planned=data.summary.total_planned,
+                total_actual=data.summary.total_actual,
+                variance=data.summary.variance,
+                overall_variance_pct=data.summary.overall_variance_pct,
+                items_exceeding_tolerance=data.summary.items_exceeding_tolerance,
+                total_items=len(data.items),
+                worst_item_name=worst_name,
+                worst_item_variance_pct=round(worst_pct, 2),
+                status=st,
+            )
+        )
+        for it in data.items:
+            p0, a0 = cat_acc[it.material_type]
+            cat_acc[it.material_type] = (p0 + it.planned_qty, a0 + it.actual_qty)
+    sort_key = sort_by if sort_by in (
+        "order_code",
+        "overall_variance_pct",
+        "total_planned",
+        "total_actual",
+        "variance",
+    ) else "overall_variance_pct"
+    reverse = sort_dir.lower() != "asc"
+
+    def sort_val(r: ConsumptionReconDashboardOrderRow) -> float | str:
+        v = getattr(r, sort_key, r.overall_variance_pct)
+        return v if isinstance(v, (int, float)) else str(v)
+
+    rows_full.sort(key=sort_val, reverse=reverse)
+    total_count = len(rows_full)
+    page_rows = rows_full[offset : offset + limit]
+    on_target = sum(1 for r in rows_full if r.status == "on_target")
+    minor = sum(1 for r in rows_full if r.status == "minor")
+    exceeds = sum(1 for r in rows_full if r.status == "exceeds")
+    avg_var = (
+        sum(r.overall_variance_pct for r in rows_full) / len(rows_full) if rows_full else 0.0
+    )
+    tp = sum(r.total_planned for r in rows_full)
+    ta = sum(r.total_actual for r in rows_full)
+    breakdown: list[ConsumptionReconCategoryBreakdown] = []
+    for mtype, (cp, ca) in sorted(cat_acc.items()):
+        vp = ((ca - cp) / cp * 100.0) if cp > 0 else 0.0
+        breakdown.append(
+            ConsumptionReconCategoryBreakdown(
+                material_type=mtype,
+                total_planned=round(cp, 4),
+                total_actual=round(ca, 4),
+                variance_pct=round(vp, 2),
+            )
+        )
+    return ConsumptionReconDashboardResponse(
+        orders=page_rows,
+        summary=ConsumptionReconDashboardSummary(
+            total_orders=len(rows_full),
+            orders_on_target=on_target,
+            orders_minor=minor,
+            orders_exceeding=exceeds,
+            avg_variance_pct=round(avg_var, 2),
+            total_planned_qty=round(tp, 4),
+            total_actual_qty=round(ta, 4),
+        ),
+        category_breakdown=breakdown,
+        total_count=total_count,
+    )
+
+
+@router.get("/consumption-reconciliation/trends", response_model=ConsumptionReconTrendsResponse)
+async def get_consumption_reconciliation_trends(
+    months: int = Query(default=6, ge=1, le=24),
+    buyer_id: int | None = Query(default=None),
+    style_id: int | None = Query(default=None),
+    tolerance_pct: float = Query(default=5.0),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Monthly aggregates of consumption reconciliation variance."""
+    _ensure_tenant(user, tenant)
+    today = date.today()
+    start_month = date(today.year, today.month, 1)
+    for _ in range(months - 1):
+        if start_month.month == 1:
+            start_month = date(start_month.year - 1, 12, 1)
+        else:
+            start_month = date(start_month.year, start_month.month - 1, 1)
+    points: list[ConsumptionReconTrendPoint] = []
+    cur = start_month
+    while cur <= today.replace(day=1):
+        if cur.month == 12:
+            next_m = date(cur.year + 1, 1, 1)
+        else:
+            next_m = date(cur.year, cur.month + 1, 1)
+        q = select(Order).where(Order.tenant_id == tenant.id)
+        q = q.where(Order.created_at >= datetime.combine(cur, time.min))
+        q = q.where(Order.created_at < datetime.combine(next_m, time.min))
+        if buyer_id is not None:
+            q = q.where(Order.customer_id == buyer_id)
+        if style_id is not None:
+            q = q.join(Quotation, Order.quotation_id == Quotation.id).where(Quotation.style_id == style_id)
+        ores = await db.execute(q)
+        month_orders = ores.scalars().unique().all()
+        var_list: list[float] = []
+        tp_sum = 0.0
+        ta_sum = 0.0
+        ex_count = 0
+        for order in month_orders:
+            data = await _get_consumption_recon_data(order.id, tolerance_pct, tenant, db)
+            if data is None or not data.items:
+                continue
+            var_list.append(data.summary.overall_variance_pct)
+            tp_sum += data.summary.total_planned
+            ta_sum += data.summary.total_actual
+            if data.summary.items_exceeding_tolerance > 0:
+                ex_count += 1
+        label = f"{cur.year:04d}-{cur.month:02d}"
+        n = len(var_list)
+        avg_v = sum(var_list) / n if n else 0.0
+        points.append(
+            ConsumptionReconTrendPoint(
+                period=label,
+                orders_count=n,
+                avg_variance_pct=round(avg_v, 2),
+                total_planned=round(tp_sum, 4),
+                total_actual=round(ta_sum, 4),
+                exceeding_count=ex_count,
+            )
+        )
+        cur = next_m
+    return ConsumptionReconTrendsResponse(points=points, tolerance_pct=tolerance_pct)
+
+
+@router.get("/consumption-reconciliation/dashboard/export")
+async def get_consumption_reconciliation_dashboard_export(
+    buyer_id: int | None = Query(default=None),
+    style_id: int | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    material_type: str | None = Query(default=None),
+    tolerance_pct: float = Query(default=5.0),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Excel export of dashboard reconciliation rows (same filters as dashboard, all matching rows)."""
+    _ensure_tenant(user, tenant)
+    body = await get_consumption_reconciliation_dashboard(
+        buyer_id=buyer_id,
+        style_id=style_id,
+        date_from=date_from,
+        date_to=date_to,
+        status_filter=status_filter,
+        material_type=material_type,
+        tolerance_pct=tolerance_pct,
+        limit=CONSUMPTION_RECON_DASHBOARD_MAX_ORDERS,
+        offset=0,
+        sort_by="overall_variance_pct",
+        sort_dir="desc",
+        tenant=tenant,
+        user=user,
+        db=db,
+    )
+    try:
+        from openpyxl import Workbook
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Excel export not available (openpyxl missing)")
+    wb = Workbook()
+    ws = wb.active
+    if ws is None:
+        raise HTTPException(status_code=500, detail="Workbook error")
+    ws.title = "Summary"
+    ws.append(["Consumption reconciliation dashboard"])
+    ws.append(["Total orders (in scan)", body.summary.total_orders])
+    ws.append(["On target", body.summary.orders_on_target])
+    ws.append(["Minor", body.summary.orders_minor])
+    ws.append(["Exceeding", body.summary.orders_exceeding])
+    ws.append([])
+    ws.append(
+        [
+            "Order",
+            "Style",
+            "Buyer",
+            "Qty",
+            "Planned",
+            "Actual",
+            "Var %",
+            "Worst item",
+            "Status",
+        ]
+    )
+    for r in body.orders:
+        ws.append(
+            [
+                r.order_code,
+                r.style_code,
+                r.buyer_name or "",
+                r.order_qty or "",
+                r.total_planned,
+                r.total_actual,
+                r.overall_variance_pct,
+                r.worst_item_name or "",
+                r.status,
+            ]
+        )
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="consumption_recon_dashboard.xlsx"'},
+    )
+
+
+@router.get(
+    "/consumption-reconciliation/{order_id}/movements/{item_id}",
+    response_model=ConsumptionReconMovementsResponse,
+)
+async def get_consumption_reconciliation_movements(
+    order_id: int,
+    item_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """CONSUMPTION_ISSUE stock movements for one order line item."""
+    _ensure_tenant(user, tenant)
+    order = await db.get(Order, order_id)
+    if not order or order.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Order not found")
+    item = await db.get(Item, item_id)
+    if not item or item.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Item not found")
+    act_result = await db.execute(
+        select(StockMovement)
+        .where(
+            StockMovement.tenant_id == tenant.id,
+            StockMovement.reference_type == "CONSUMPTION_ISSUE",
+            StockMovement.reference_id == order.id,
+            StockMovement.item_id == item_id,
+        )
+        .order_by(StockMovement.created_at.desc())
+    )
+    movements_raw = [m for m in act_result.scalars().all() if (m.movement_type or "").upper() == "OUT"]
+    total_issued = sum(_to_float_safe(m.quantity) for m in movements_raw)
+    out_list: list[ConsumptionReconMovementOut] = []
+    for m in movements_raw:
+        wh_name = None
+        if m.warehouse_id:
+            wh = await db.get(Warehouse, m.warehouse_id)
+            wh_name = wh.name if wh else None
+        issuer = None
+        if m.created_by_user_id:
+            u = await db.get(User, m.created_by_user_id)
+            if u:
+                parts = [u.first_name or "", u.last_name or ""]
+                issuer = " ".join(p for p in parts if p).strip() or u.username
+        md = None
+        if m.movement_date:
+            md = m.movement_date.isoformat()
+        elif m.created_at:
+            md = m.created_at.isoformat()
+        out_list.append(
+            ConsumptionReconMovementOut(
+                movement_id=m.id,
+                movement_date=md,
+                quantity=round(_to_float_safe(m.quantity), 4),
+                warehouse_name=wh_name,
+                issued_by=issuer,
+                reference_code=m.lot_number,
+                notes=m.notes,
+            )
+        )
+    planned_qty = 0.0
+    if order.quotation_id:
+        quotation = await db.get(Quotation, order.quotation_id)
+        if quotation and quotation.style_id:
+            bom = await _get_latest_governed_bom(db, tenant_id=tenant.id, style_id=quotation.style_id)
+            if bom:
+                bres = await db.execute(
+                    select(BomItem).where(
+                        BomItem.tenant_id == tenant.id,
+                        BomItem.bom_id == bom.id,
+                        BomItem.item_id == item_id,
+                    )
+                )
+                bline = bres.scalars().first()
+                if bline:
+                    oq = _to_float_safe(str(order.quantity)) if order.quantity else 0.0
+                    base = _to_float_safe(bline.base_consumption)
+                    wastage = _to_float_safe(bline.wastage_pct) / 100.0
+                    planned_qty = oq * base * (1.0 + wastage)
+    return ConsumptionReconMovementsResponse(
+        item_id=item_id,
+        item_code=item.item_code or "",
+        item_name=item.name or item.description or "",
+        planned_qty=round(planned_qty, 4),
+        total_issued=round(total_issued, 4),
+        movements=out_list,
     )
 
 
@@ -5396,7 +6244,21 @@ async def get_consumption_reconciliation_export(
     ws.title = "Reconciliation"
     ws.append(["Order", data.order.order_code, "Style", data.order.style_code, "Qty", data.order.quantity or ""])
     ws.append([])
-    ws.append(["Item", "Type", "Unit", "Planned", "Actual", "Variance", "Variance %"])
+    ws.append(
+        [
+            "Item",
+            "Type",
+            "Unit",
+            "Planned",
+            "Actual",
+            "Variance",
+            "Variance %",
+            "Planned cost",
+            "Actual cost",
+            "Cost var.",
+            "Movements",
+        ]
+    )
     for i in data.items:
         ws.append([
             f"{i.item_code} {i.item_name}".strip(),
@@ -5406,6 +6268,10 @@ async def get_consumption_reconciliation_export(
             i.actual_qty,
             i.variance,
             i.variance_pct,
+            i.planned_cost if i.planned_cost is not None else "",
+            i.actual_cost if i.actual_cost is not None else "",
+            i.cost_variance if i.cost_variance is not None else "",
+            i.movement_count,
         ])
     ws.append([])
     ws.append(["Total planned", data.summary.total_planned])
@@ -5413,6 +6279,10 @@ async def get_consumption_reconciliation_export(
     ws.append(["Variance", data.summary.variance])
     ws.append(["Overall variance %", data.summary.overall_variance_pct])
     ws.append(["Items exceeding tolerance", data.summary.items_exceeding_tolerance])
+    ws.append(["Total planned cost", data.summary.total_planned_cost])
+    ws.append(["Total actual cost", data.summary.total_actual_cost])
+    ws.append(["Cost variance", data.summary.cost_variance])
+    ws.append(["Cost variance %", data.summary.cost_variance_pct])
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)

@@ -29,7 +29,13 @@ async def get_tenant(
     """Load tenant by ID. Returns None if tenant_id is None."""
     if tenant_id is None:
         return None
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id, Tenant.is_active.is_(True)))
+    result = await db.execute(
+        select(Tenant).where(
+            Tenant.id == tenant_id,
+            Tenant.is_active.is_(True),
+            Tenant.deleted_at.is_(None),
+        )
+    )
     tenant = result.scalar_one_or_none()
     return tenant
 

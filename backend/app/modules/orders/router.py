@@ -508,6 +508,19 @@ async def get_orders_promise_summary(
   )
 
 
+@router.get("/{order_id}/materials")
+async def get_order_materials(
+  order_id: int,
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  """PrimeX-style alias: same payload as GET /api/v1/merch/orders/{order_id}/material-requirement."""
+  from app.modules.merch.router import get_order_material_requirement
+
+  return await get_order_material_requirement(order_id, tenant, user, db)
+
+
 @router.get("/{order_id}", response_model=OrderResponse)
 async def get_order(
   order_id: int,

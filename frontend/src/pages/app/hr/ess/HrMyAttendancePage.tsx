@@ -11,13 +11,14 @@ export function HrMyAttendancePage() {
       title="My Attendance"
       description="Review your own attendance records."
       emptyMessage="No attendance records found."
+      breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "My Attendance" }]}
       loadItems={() => api.listHrEssMyAttendance()}
       columns={[
         { header: "Date", cell: (row) => row.attendance_date },
-        { header: "Check In", cell: (row) => row.check_in },
-        { header: "Check Out", cell: (row) => row.check_out },
+        { header: "In", cell: (row) => row.in_time },
+        { header: "Out", cell: (row) => row.out_time },
         { header: "Status", cell: (row) => row.status },
-        { header: "Note", cell: (row) => row.note },
+        { header: "Remarks", cell: (row) => row.remarks },
       ]}
     />
   );

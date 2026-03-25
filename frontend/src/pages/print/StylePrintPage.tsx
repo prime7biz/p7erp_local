@@ -9,16 +9,9 @@ import {
   type SettingsConfigResponse,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { SecureImage } from "@/components/SecureImage";
 import { logApiError } from "@/utils/logApiError";
 import "@/styles/quotation-print.css";
-
-function resolveAssetUrl(pathOrUrl: string | null | undefined): string {
-  if (!pathOrUrl) return "";
-  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
-  const base = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/$/, "");
-  const path = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
-  return `${base}${path}`;
-}
 
 function formatDateTime(value: string | Date): string {
   const d = value instanceof Date ? value : new Date(value);
@@ -170,8 +163,8 @@ export function StylePrintPage() {
           <h2>Style picture</h2>
           <div style={{ marginTop: 8 }}>
             {style.style_image_url ? (
-              <img
-                src={resolveAssetUrl(style.style_image_url)}
+              <SecureImage
+                url={style.style_image_url}
                 alt={style.name}
                 style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 8, border: "1px solid #e2e8f0" }}
               />

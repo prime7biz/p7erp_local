@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, type StyleReportRow } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 
 export function ReportStyle360Page() {
   const [searchParams] = useSearchParams();
@@ -26,6 +27,7 @@ export function ReportStyle360Page() {
       const filtered = initialStyleId ? data.filter((row) => row.style_id === Number(initialStyleId)) : data;
       setRows(filtered);
     } catch (e) {
+      logApiError("ReportStyle360Page", e);
       setError(e instanceof Error ? e.message : "Failed to load style report");
     } finally {
       setLoading(false);
@@ -73,7 +75,7 @@ export function ReportStyle360Page() {
 
       <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
         {loading ? (
-          <div className="p-10 text-center text-text-muted">Loading report...</div>
+          <div className="space-y-3 p-6"><div className="h-4 w-3/4 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-full animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-5/6 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-2/3 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-4/5 animate-pulse rounded bg-surface-subtle" /></div>
         ) : rows.length === 0 ? (
           <div className="p-10 text-center text-text-muted">No rows found.</div>
         ) : (

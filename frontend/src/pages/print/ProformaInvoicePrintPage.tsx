@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { api, type ProformaInvoiceForPrint } from "@/api/client";
+import { SecureImage } from "@/components/SecureImage";
 import "@/styles/quotation-print.css";
 
 function formatMoney(value: string | number | null | undefined): string {
@@ -13,14 +14,6 @@ function formatDate(value: string | null | undefined): string {
   if (!value) return "-";
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString();
-}
-
-function resolveAssetUrl(pathOrUrl: string | null | undefined): string {
-  if (!pathOrUrl) return "";
-  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
-  const base = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/$/, "");
-  const path = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
-  return `${base}${path}`;
 }
 
 export function ProformaInvoicePrintPage() {
@@ -133,7 +126,7 @@ export function ProformaInvoicePrintPage() {
           <div className="qp-header-left">
             <div className="qp-logo-wrap">
               {logo ? (
-                <img src={resolveAssetUrl(logo)} alt={`${tenantName} logo`} className="qp-logo" />
+                <SecureImage url={logo} alt={`${tenantName} logo`} className="qp-logo" />
               ) : (
                 <div className="qp-logo-fallback">{(tenantName || "C").slice(0, 1).toUpperCase()}</div>
               )}

@@ -56,6 +56,80 @@ class DesignationResponse(BaseModel):
     updated_at: str
 
 
+class SectionCreate(BaseModel):
+    code: str | None = Field(None, min_length=1, max_length=32)
+    name: str = Field(..., min_length=1, max_length=128)
+    section_type: str = Field(default="SECTION", max_length=24)
+    parent_section_id: int | None = None
+    department_id: int | None = None
+    head_employee_id: int | None = None
+    is_active: bool = True
+
+
+class SectionUpdate(BaseModel):
+    code: str | None = Field(None, min_length=1, max_length=32)
+    name: str | None = Field(None, min_length=1, max_length=128)
+    section_type: str | None = Field(None, max_length=24)
+    parent_section_id: int | None = None
+    department_id: int | None = None
+    head_employee_id: int | None = None
+    is_active: bool | None = None
+
+
+class SectionResponse(BaseModel):
+    id: int
+    tenant_id: int
+    code: str
+    name: str
+    section_type: str
+    parent_section_id: int | None
+    department_id: int | None
+    head_employee_id: int | None
+    is_active: bool
+    created_at: str
+    updated_at: str
+
+
+class EmployeeDocumentCreate(BaseModel):
+    document_type: str = Field(..., min_length=1, max_length=64)
+    document_number: str | None = Field(None, max_length=128)
+    issue_date: date | None = None
+    expiry_date: date | None = None
+    file_path: str | None = Field(None, max_length=255)
+    notes: str | None = None
+
+
+class EmployeeDocumentResponse(BaseModel):
+    id: int
+    tenant_id: int
+    employee_id: int
+    document_type: str
+    document_number: str | None
+    issue_date: date | None
+    expiry_date: date | None
+    file_path: str | None
+    notes: str | None
+    created_by: int | None
+    created_at: str
+
+
+class EmployeeStatusHistoryCreate(BaseModel):
+    status: str = Field(..., min_length=1, max_length=32)
+    effective_date: date
+    remarks: str | None = None
+
+
+class EmployeeStatusHistoryResponse(BaseModel):
+    id: int
+    tenant_id: int
+    employee_id: int
+    status: str
+    effective_date: date
+    remarks: str | None
+    changed_by: int | None
+    created_at: str
+
+
 class EmployeeCreate(BaseModel):
     employee_code: str | None = Field(None, min_length=1, max_length=32)
     first_name: str = Field(..., min_length=1, max_length=128)
@@ -78,6 +152,8 @@ class EmployeeCreate(BaseModel):
     exit_date: date | None = None
     department_id: int | None = None
     designation_id: int | None = None
+    section_id: int | None = None
+    employee_category: str | None = Field(None, max_length=24)
     reporting_manager_id: int | None = None
     user_id: int | None = None
     is_active: bool = True
@@ -105,6 +181,8 @@ class EmployeeUpdate(BaseModel):
     exit_date: date | None = None
     department_id: int | None = None
     designation_id: int | None = None
+    section_id: int | None = None
+    employee_category: str | None = Field(None, max_length=24)
     reporting_manager_id: int | None = None
     user_id: int | None = None
     is_active: bool | None = None
@@ -134,6 +212,8 @@ class EmployeeResponse(BaseModel):
     exit_date: date | None
     department_id: int | None
     designation_id: int | None
+    section_id: int | None
+    employee_category: str | None
     reporting_manager_id: int | None
     user_id: int | None
     is_active: bool

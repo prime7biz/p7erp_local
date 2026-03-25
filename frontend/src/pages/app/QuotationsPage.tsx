@@ -14,6 +14,7 @@ import {
   humanizeStatus,
   QUOTATION_STATUS_FILTER_OPTIONS,
 } from "@/features/merch/workflow";
+import { SecureImage } from "@/components/SecureImage";
 
 export function QuotationsPage() {
   const navigate = useNavigate();
@@ -292,8 +293,8 @@ export function QuotationsPage() {
                     <td className="py-2.5 px-4">
                       <div className="flex items-center gap-2 min-w-0">
                         {q.style_image_url ? (
-                          <img
-                            src={q.style_image_url}
+                          <SecureImage
+                            url={q.style_image_url}
                             alt={q.style_name ?? q.style_ref ?? "Style"}
                             className="h-8 w-8 shrink-0 rounded object-cover border border-border"
                           />

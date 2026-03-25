@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type PipelineAnalyticsBucket, type PipelineAnalyticsResponse } from "@/api/client";
 import { BarChart3, Calendar, RefreshCw, TrendingUp, ArrowLeft } from "lucide-react";
+import { logApiError } from "@/utils/logApiError";
 
 type ViewMode = "month" | "quarter";
 
@@ -28,6 +29,7 @@ export function PipelineAnalyticsPage() {
       const res = await api.getMerchPipelineAnalytics({ years_back: yearsBack });
       setData(res);
     } catch (e) {
+      logApiError("PipelineAnalyticsPage.load", e);
       setError(e instanceof Error ? e.message : "Failed to load analytics");
     } finally {
       setLoading(false);
@@ -145,6 +147,35 @@ export function PipelineAnalyticsPage() {
               Quarterly
             </button>
           </div>
+
+          {/* Simple bar chart: confirmed orders count */}
+          {displayBuckets.length > 0 && (
+            <div className="rounded-xl border border-border bg-surface-raised p-4">
+              <h2 className="mb-3 text-sm font-semibold text-text-primary">Confirmed orders (count) by period</h2>
+              <div className="flex h-36 items-end gap-1 overflow-x-auto pb-1">
+                {(() => {
+                  const rows = [...displayBuckets].reverse();
+                  const max = Math.max(1, ...rows.map((b) => b.confirmed_orders_count));
+                  const barMaxPx = 120;
+                  return rows.map((b) => (
+                    <div key={b.period_key} className="flex min-w-[2.5rem] flex-1 flex-col items-center">
+                      <div
+                        className="w-full max-w-[28px] rounded-t bg-brand-primary/75"
+                        style={{
+                          height: `${Math.max(0, (b.confirmed_orders_count / max) * barMaxPx)}px`,
+                          minHeight: b.confirmed_orders_count ? 4 : 0,
+                        }}
+                        title={`${b.period_label}: ${b.confirmed_orders_count}`}
+                      />
+                      <span className="mt-1 line-clamp-2 w-full text-center text-[10px] text-text-muted">
+                        {b.period_label}
+                      </span>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
 
           {/* Table */}
           <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">

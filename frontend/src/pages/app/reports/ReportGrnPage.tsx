@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type ReportGrnRow } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 
 export function ReportGrnPage() {
   const [rows, setRows] = useState<ReportGrnRow[]>([]);
@@ -16,6 +17,7 @@ export function ReportGrnPage() {
         if (!cancelled) setRows(Array.isArray(data) ? data : []);
       })
       .catch((e) => {
+        logApiError("ReportGrnPage", e);
         if (!cancelled) {
           setRows([]);
           setError(e instanceof Error ? e.message : "Failed to load report");
@@ -44,7 +46,7 @@ export function ReportGrnPage() {
       )}
       <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-text-muted">Loading…</div>
+          <div className="space-y-3 p-6"><div className="h-4 w-3/4 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-full animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-5/6 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-2/3 animate-pulse rounded bg-surface-subtle" /><div className="h-4 w-4/5 animate-pulse rounded bg-surface-subtle" /></div>
         ) : rows.length === 0 ? (
           <div className="p-12 text-center text-text-muted">No data</div>
         ) : (

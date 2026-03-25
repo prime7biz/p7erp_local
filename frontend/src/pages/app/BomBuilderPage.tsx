@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { logApiError } from "@/utils/logApiError";
+import { BomLineRow } from "@/components/merch/BomLineRow";
 import {
   api,
   type BomResponse,
@@ -35,9 +37,12 @@ export function BomBuilderPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [styles, setStyles] = useState<StyleResponse[]>([]);
+  const [stylesTotal, setStylesTotal] = useState<number | null>(null);
   const [boms, setBoms] = useState<BomResponse[]>([]);
+  const [bomsTotal, setBomsTotal] = useState<number | null>(null);
   const [selectedBom, setSelectedBom] = useState<BomDetailResponse | null>(null);
   const [styleId, setStyleId] = useState<number>(0);
+  const [styleQuery, setStyleQuery] = useState("");
   const [activeTab, setActiveTab] = useState<BomCommandTab>("bom_lines");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -45,6 +50,7 @@ export function BomBuilderPage() {
   const [vendors, setVendors] = useState<VendorResponse[]>([]);
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [consumptionPlans, setConsumptionPlans] = useState<ConsumptionPlanResponse[]>([]);
+  const [consumptionPlansTotal, setConsumptionPlansTotal] = useState<number | null>(null);
   const [consumptionRows, setConsumptionRows] = useState<ConsumptionOrderSummaryRow[]>([]);
   const [pendingChangeRequests, setPendingChangeRequests] = useState(0);
   const [wastageRows, setWastageRows] = useState<WastageReportRowResponse[]>([]);
@@ -71,7 +77,8 @@ export function BomBuilderPage() {
   const [workflowConfirmAction, setWorkflowConfirmAction] = useState<WorkflowAction | null>(null);
   const [activeWorkflowAction, setActiveWorkflowAction] = useState<WorkflowAction | null>(null);
   const [openActionsItemId, setOpenActionsItemId] = useState<number | null>(null);
-  const actionsRef = useRef<HTMLDivElement | null>(null);
+  const [openConsumptionRowActionsId, setOpenConsumptionRowActionsId] = useState<number | null>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
   const workflowModalRef = useRef<HTMLDivElement | null>(null);
   const workflowCancelBtnRef = useRef<HTMLButtonElement | null>(null);
   const initialStyleIdRef = useRef<number | null>(null);
@@ -162,6 +169,17 @@ export function BomBuilderPage() {
     }).format(value);
   };
 
+  const filteredStyles = useMemo(() => {
+    const q = styleQuery.trim().toLowerCase();
+    if (!q) return styles;
+    return styles.filter(
+      (s) =>
+        s.style_code.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
+        (s.buyer_style_ref || "").toLowerCase().includes(q),
+    );
+  }, [styles, styleQuery]);
+
   const itemMap = useMemo(() => {
     const map = new Map<number, InventoryItemResponse>();
     for (const item of inventoryItems) map.set(item.id, item);
@@ -190,20 +208,23 @@ export function BomBuilderPage() {
 
   const loadStylesAndMasters = useCallback(async () => {
     try {
-      const [styleRows, itemRows, vendorRows] = await Promise.all([
-        api.listStyles(),
+      const [styleList, itemRows, vendorRows] = await Promise.all([
+        api.listStylesWithTotal({ limit: 500 }),
         api.listInventoryItems(),
         api.listVendors(),
       ]);
-      setStyles(styleRows);
+      setStyles(styleList.rows);
+      setStylesTotal(styleList.total);
       setInventoryItems(itemRows);
       setVendors(vendorRows);
 
-      if (initialStyleIdRef.current && styleRows.some((s) => s.id === initialStyleIdRef.current)) {
+      if (initialStyleIdRef.current && styleList.rows.some((s) => s.id === initialStyleIdRef.current)) {
         setStyleId(initialStyleIdRef.current);
       }
     } catch (e) {
+      logApiError("BomBuilderPage.loadStylesAndMasters", e);
       setError(e instanceof Error ? e.message : "Failed to load BOM master data");
+      setStylesTotal(null);
     }
   }, []);
 
@@ -214,26 +235,29 @@ export function BomBuilderPage() {
 
   const loadBoms = useCallback(async () => {
     try {
-      const rows = await api.listBoms(styleId ? { style_id: styleId } : undefined);
-      setBoms(rows);
-      if (rows.length === 0) {
+      const list = await api.listBomsWithTotal(styleId ? { style_id: styleId } : undefined);
+      setBoms(list.rows);
+      setBomsTotal(list.total);
+      if (list.rows.length === 0) {
         setSelectedBom(null);
         return;
       }
 
       const preferredBomId = initialBomIdRef.current;
-      if (preferredBomId && rows.some((r) => r.id === preferredBomId)) {
+      if (preferredBomId && list.rows.some((r) => r.id === preferredBomId)) {
         await openBom(preferredBomId);
         initialBomIdRef.current = null;
         return;
       }
 
-      if (!selectedBom || !rows.some((r) => r.id === selectedBom.bom.id)) {
-        const first = rows[0];
+      if (!selectedBom || !list.rows.some((r) => r.id === selectedBom.bom.id)) {
+        const first = list.rows[0];
         if (first) await openBom(first.id);
       }
     } catch (e) {
+      logApiError("BomBuilderPage.loadBoms", e);
       setError(e instanceof Error ? e.message : "Failed to load BOM data");
+      setBomsTotal(null);
     }
   }, [openBom, selectedBom, styleId]);
 
@@ -252,11 +276,12 @@ export function BomBuilderPage() {
     if (!selectedBom) return;
     setLoadingConsumption(true);
     try {
-      const [allOrders, allPlans, pendingCR] = await Promise.all([
+      const [allOrders, allPlansWithTotal, pendingCR] = await Promise.all([
         api.listOrders({ limit: 200 }),
-        api.listConsumptionPlans(),
+        api.listConsumptionPlansWithTotal(),
         api.listConsumptionChangeRequests({ status_filter: "PENDING" }),
       ]);
+      const allPlans = allPlansWithTotal.rows;
       const styleOrders = allOrders.filter((order) => order.style_id === selectedBom.bom.style_id);
       const planOrderIds = new Set(allPlans.map((plan) => plan.order_id));
 
@@ -296,11 +321,14 @@ export function BomBuilderPage() {
 
       setOrders(styleOrders);
       setConsumptionPlans(allPlans);
+      setConsumptionPlansTotal(allPlansWithTotal.total);
       setConsumptionRows(rows);
       setPendingChangeRequests(stylePendingCRCount);
     } catch (e) {
+      logApiError("BomBuilderPage.loadConsumptionSnapshot", e);
       setError(e instanceof Error ? e.message : "Failed to load consumption snapshot");
       setConsumptionRows([]);
+      setConsumptionPlansTotal(null);
       setPendingChangeRequests(0);
     } finally {
       setLoadingConsumption(false);
@@ -326,6 +354,7 @@ export function BomBuilderPage() {
       setWastageRows(reportRows.slice(0, 12));
       setWastageSummary(summary);
     } catch (e) {
+      logApiError("BomBuilderPage.loadWastageSnapshot", e);
       setError(e instanceof Error ? e.message : "Failed to load wastage summary");
       setWastageRows([]);
       setWastageSummary(null);
@@ -357,6 +386,7 @@ export function BomBuilderPage() {
       if (action === "freeze") setSuccess("BOM frozen successfully.");
       setWorkflowConfirmAction(null);
     } catch (e) {
+      logApiError("BomBuilderPage.runWorkflowAction", e);
       if (action === "submit") setError(e instanceof Error ? e.message : "Failed to submit BOM");
       if (action === "approve") setError(e instanceof Error ? e.message : "Failed to approve BOM");
       if (action === "freeze") setError(e instanceof Error ? e.message : "Failed to freeze BOM");
@@ -410,11 +440,19 @@ export function BomBuilderPage() {
                   · BOM #{selectedBom.bom.id} · V{selectedBom.bom.version_no}
                 </>
               ) : null}
+              <span className="ml-2">· Styles loaded: {styles.length}{stylesTotal != null ? ` / ${stylesTotal}` : ""}</span>
             </div>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <div>
               <label className="mb-0.5 block text-xs font-medium text-text-muted">Style</label>
+              <input
+                type="search"
+                placeholder="Filter styles…"
+                value={styleQuery}
+                onChange={(e) => setStyleQuery(e.target.value)}
+                className="mb-1.5 block w-full min-w-64 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-xs text-text-primary"
+              />
               <select
                 value={styleId || ""}
                 onChange={(e) => {
@@ -425,7 +463,7 @@ export function BomBuilderPage() {
                 className="min-w-64 rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary"
               >
                 <option value="">Select style…</option>
-                {styles.map((s) => (
+                {filteredStyles.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.style_code} · {s.name}
                   </option>
@@ -443,6 +481,7 @@ export function BomBuilderPage() {
                   await loadBoms();
                   setSuccess("New BOM created in DRAFT status.");
                 } catch (e) {
+                  logApiError("BomBuilderPage.createBom", e);
                   setError(e instanceof Error ? e.message : "Failed to create BOM");
                 }
               }}
@@ -479,7 +518,13 @@ export function BomBuilderPage() {
 
       <div className="grid gap-4 xl:grid-cols-[280px_1fr]">
         <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
-          <div className="px-4 py-3 border-b border-border text-sm font-semibold text-text-primary">BOM versions</div>
+          <div className="px-4 py-3 border-b border-border text-sm font-semibold text-text-primary">
+            BOM versions
+            <span className="ml-2 text-xs font-normal text-text-muted">
+              {boms.length}
+              {bomsTotal != null ? ` / ${bomsTotal}` : ""}
+            </span>
+          </div>
           <div className="max-h-[640px] overflow-y-auto divide-y divide-border-subtle">
             {boms.map((b) => (
               <button
@@ -635,6 +680,7 @@ export function BomBuilderPage() {
                             await openBom(selectedBom.bom.id);
                             setSuccess("BOM line added successfully.");
                           } catch (e) {
+                            logApiError("BomBuilderPage.createBomItem", e);
                             setError(e instanceof Error ? e.message : "Failed to add BOM item");
                           }
                         }}
@@ -733,6 +779,7 @@ export function BomBuilderPage() {
                               resetEditForm();
                               setSuccess("BOM line updated successfully.");
                             } catch (e) {
+                              logApiError("BomBuilderPage.updateBomItem", e);
                               setError(e instanceof Error ? e.message : "Failed to update BOM item");
                             }
                           }}
@@ -768,60 +815,28 @@ export function BomBuilderPage() {
                             const unitCost = parseNumber(linkedItem?.default_cost || "0");
                             const estCost = requiredQty * unitCost;
                             return (
-                              <tr key={line.id} className="border-b border-border-subtle last:border-0">
-                                <td className="px-3 py-2 text-text-primary">
-                                  {line.item_id != null ? (
-                                    <span title={`Item #${line.item_id}`}>{line.item_code ?? line.description ?? "—"}</span>
-                                  ) : (
-                                    line.description || line.item_code || "—"
-                                  )}
-                                </td>
-                                <td className="px-3 py-2 text-text-secondary">{line.category ?? "—"}</td>
-                                <td className="px-3 py-2 text-text-secondary">{line.uom ?? "—"}</td>
-                                <td className="px-3 py-2 text-text-secondary">{line.base_consumption}</td>
-                                <td className="px-3 py-2 text-text-secondary">{line.wastage_pct ?? "—"}</td>
-                                <td className="px-3 py-2 text-text-secondary">{formatNumber(requiredQty, 4)}</td>
-                                <td className="px-3 py-2 text-text-secondary">{line.item_id != null ? formatNumber(estCost, 2) : "—"}</td>
-                                <td className="px-3 py-2 text-right">
-                                  <div className="relative inline-block text-left" ref={openActionsItemId === line.id ? actionsRef : undefined}>
-                                    <button
-                                      type="button"
-                                      disabled={isGovernedBom}
-                                      onClick={() => setOpenActionsItemId((prev) => (prev === line.id ? null : line.id))}
-                                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                      Actions
-                                    </button>
-                                    {openActionsItemId === line.id && !isGovernedBom && (
-                                      <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                                        <button
-                                          type="button"
-                                          onClick={() => startEditingLine(line.id)}
-                                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                                        >
-                                          Edit
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={async () => {
-                                            try {
-                                              setError("");
-                                              await api.deleteBomItem(selectedBom.bom.id, line.id);
-                                              await openBom(selectedBom.bom.id);
-                                              setSuccess("BOM line deleted successfully.");
-                                            } finally {
-                                              setOpenActionsItemId(null);
-                                            }
-                                          }}
-                                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
-                                        >
-                                          Delete
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
+                              <BomLineRow
+                                key={line.id}
+                                line={line}
+                                requiredQty={requiredQty}
+                                estimatedCost={estCost}
+                                isGovernedBom={isGovernedBom}
+                                isActionsOpen={openActionsItemId === line.id}
+                                actionsRef={actionsRef}
+                                onToggleActions={(lineId) => setOpenActionsItemId((prev) => (prev === lineId ? null : lineId))}
+                                onEdit={startEditingLine}
+                                onDelete={async (lineId) => {
+                                  try {
+                                    setError("");
+                                    await api.deleteBomItem(selectedBom.bom.id, lineId);
+                                    await openBom(selectedBom.bom.id);
+                                    setSuccess("BOM line deleted successfully.");
+                                  } finally {
+                                    setOpenActionsItemId(null);
+                                  }
+                                }}
+                                formatNumber={formatNumber}
+                              />
                             );
                           })}
                         </tbody>
@@ -902,6 +917,7 @@ export function BomBuilderPage() {
                             setSuccess(`Draft PO ${res.po_code} generated successfully.`);
                             navigate("/app/inventory/purchase-orders", { state: { createdPO: res } });
                           } catch (e) {
+                            logApiError("BomBuilderPage.generatePurchaseOrder", e);
                             setError(e instanceof Error ? e.message : "Failed to generate PO");
                           } finally {
                             setGeneratingPO(false);
@@ -998,7 +1014,8 @@ export function BomBuilderPage() {
                       </Link>
                     </div>
                     <p className="mt-1 text-xs text-text-muted">
-                      Orders linked to this style: {orders.length} · Plans found: {consumptionPlans.filter((row) => orders.some((o) => o.id === row.order_id)).length} · Pending change requests: {pendingChangeRequests}
+                      Orders linked to this style: {orders.length} · Plans found: {consumptionPlans.filter((row) => orders.some((o) => o.id === row.order_id)).length}
+                      {consumptionPlansTotal != null ? ` / ${consumptionPlansTotal}` : ""} · Pending change requests: {pendingChangeRequests}
                     </p>
                   </div>
 
@@ -1029,10 +1046,36 @@ export function BomBuilderPage() {
                               <td className="px-3 py-2">{formatNumber(row.plannedQty, 3)}</td>
                               <td className="px-3 py-2">{formatNumber(row.issuedQty, 3)}</td>
                               <td className="px-3 py-2">{formatNumber(row.remainingQty, 3)}</td>
-                              <td className="px-3 py-2 text-right">
-                                <Link to="/app/inventory/consumption-control" className="text-xs text-brand-primary hover:underline">
-                                  Open
-                                </Link>
+                              <td className="px-3 py-2 text-right relative">
+                                <button
+                                  type="button"
+                                  className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                                  onClick={() =>
+                                    setOpenConsumptionRowActionsId((id) =>
+                                      id === row.order.id ? null : row.order.id
+                                    )
+                                  }
+                                >
+                                  Actions
+                                </button>
+                                {openConsumptionRowActionsId === row.order.id && (
+                                  <div className="absolute right-0 z-10 mt-1 w-44 rounded-lg border border-gray-200 bg-white p-1 shadow-lg text-left">
+                                    <Link
+                                      to={`/app/merchandising/consumption-reconciliation?orderId=${row.order.id}`}
+                                      className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                      onClick={() => setOpenConsumptionRowActionsId(null)}
+                                    >
+                                      Reconciliation
+                                    </Link>
+                                    <Link
+                                      to={`/app/inventory/consumption-control?orderId=${row.order.id}`}
+                                      className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                      onClick={() => setOpenConsumptionRowActionsId(null)}
+                                    >
+                                      Consumption control
+                                    </Link>
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           ))}

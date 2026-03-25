@@ -47,7 +47,7 @@ async def main() -> None:
             role_id=role.id,
             username="hrmanager",
             email="hrmanager@lakhsma.com",
-            password_hash=hash_password("Lakhsma123"),
+            password_hash=await hash_password("Lakhsma123"),
             first_name="HR",
             last_name="Manager",
             is_active=True,

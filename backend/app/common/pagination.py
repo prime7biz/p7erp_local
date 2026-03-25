@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-DEFAULT_PAGE_SIZE = 100
+DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 500
 
 # HR / heavy list endpoints (Finding #3): default safety cap on unbounded tenant lists.
-HR_LIST_DEFAULT_LIMIT = 5000
-HR_LIST_MAX_LIMIT = 20000
+HR_LIST_DEFAULT_LIMIT = 100
+HR_LIST_MAX_LIMIT = 1000
+
+# Sub-queries in HR reports (e.g. cap nested rows per aggregate).
+HR_REPORT_SUB_LIMIT = 500
+HR_REPORT_SUB_MAX = 5000
 
 
 def clamp_page_size(page_size: int) -> int:

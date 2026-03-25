@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import type { QuotationOtherCostLine } from "@/api/client";
+import { api, type QuotationOtherCostLine } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
+import { SecureImage } from "@/components/SecureImage";
 import {
   COMMISSION_MODE_OPTIONS,
   COMMISSION_TYPE_OPTIONS,
@@ -136,6 +138,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
   const isPrintMode = new URLSearchParams(location.search).get("print") === "1";
   const [sizeRatioCollapsed, setSizeRatioCollapsed] = useState(false);
   const [openRowActions, setOpenRowActions] = useState<string | null>(null);
+  const [creatingOrder, setCreatingOrder] = useState(false);
 
   useEffect(() => {
     if (!openRowActions) return;
@@ -242,6 +245,29 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary"
             >
               Print / Save PDF
+            </button>
+          )}
+          {!isNew && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (creatingOrder) return;
+                setCreatingOrder(true);
+                try {
+                  const order = await api.convertQuotationToOrder(quotation.id);
+                  navigate(`/app/orders/${order.id}`);
+                } catch (e) {
+                  logApiError("QuotationWorkspace.createOrder", e);
+                  const message = e instanceof Error ? e.message : "Failed to create order from quotation";
+                  window.alert(message);
+                } finally {
+                  setCreatingOrder(false);
+                }
+              }}
+              disabled={creatingOrder}
+              className="rounded-lg border border-status-info/30 bg-status-info-subtle px-3 py-1.5 text-sm font-medium text-status-info-foreground disabled:opacity-60"
+            >
+              {creatingOrder ? "Creating Order..." : "Create Order"}
             </button>
           )}
           {!isNew && (
@@ -1560,16 +1586,16 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               </p>
             )}
           </section>
-          {quotation.style_image_url && (
+          {quotation.style_image_url ? (
             <section className="rounded-2xl border border-border bg-surface-raised p-4 shadow-sm print-card">
               <h3 className="text-sm font-semibold text-text-primary">Style Preview</h3>
-              <img
-                src={quotation.style_image_url}
+              <SecureImage
+                url={quotation.style_image_url}
                 alt={quotation.style_name ?? quotation.style_ref ?? "Style"}
                 className="mt-2 h-36 w-full rounded object-cover border border-border"
               />
             </section>
-          )}
+          ) : null}
         </aside>
       </div>
     </div>

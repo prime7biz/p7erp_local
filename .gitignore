@@ -33,6 +33,7 @@ debug-*.log
 
 # Runtime uploads (tenant/user content)
 backend/media/
+backups/
 
 # Database / local data (optional: remove if you want to track SQLite)
 *.db

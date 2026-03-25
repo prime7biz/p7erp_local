@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from app.models import CommissionMode, TenantType
@@ -14,6 +16,9 @@ class SettingsConfigResponse(BaseModel):
     tenant_type: TenantType
     default_commission_mode: CommissionMode
     is_active: bool
+    feature_flags: dict[str, Any] | None = None
+    country_code: str | None = None
+    timezone: str | None = None
 
 
 class SettingsConfigUpdate(BaseModel):
@@ -22,6 +27,9 @@ class SettingsConfigUpdate(BaseModel):
     logo: str | None = Field(default=None, max_length=512)
     tenant_type: TenantType
     default_commission_mode: CommissionMode | None = None
+    feature_flags: dict[str, Any] | None = None
+    country_code: str | None = Field(default=None, max_length=4)
+    timezone: str | None = Field(default=None, max_length=64)
 
 
 class BackupStatusResponse(BaseModel):

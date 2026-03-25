@@ -11,7 +11,7 @@ export function HrLeaveApprovalsPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await api.listHrLeaveRequests({ status: "pending" });
+      const data = await api.listHrLeaveRequests({ status_filter: "PENDING" });
       setRows(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load leave approvals");
@@ -83,7 +83,7 @@ export function HrLeaveApprovalsPage() {
                     <td className="px-4 py-3 text-sm text-text-secondary">{row.leave_type_id}</td>
                     <td className="px-4 py-3 text-sm text-text-secondary">{row.from_date}</td>
                     <td className="px-4 py-3 text-sm text-text-secondary">{row.to_date}</td>
-                    <td className="px-4 py-3 text-sm text-text-secondary">{row.total_days}</td>
+                    <td className="px-4 py-3 text-sm text-text-secondary">{row.days_requested}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
                         <button

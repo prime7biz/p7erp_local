@@ -1,5 +1,6 @@
 import type { StyleResponse } from "@/api/client";
 import { formatMoney, toSafeNumber } from "@/features/quotations/workspace/mappers/quotationNumeric";
+import { useSecureImage } from "@/hooks/useSecureImage";
 
 interface InquiryCreateSidebarProps {
   isEdit: boolean;
@@ -41,6 +42,7 @@ export function InquiryCreateSidebar({
   const targetPriceNumber = toSafeNumber(targetPrice);
   const exchangeRateNumber = toSafeNumber(exchangeRate);
   const commissionValueNumber = toSafeNumber(commissionValue);
+  const styleImageUrl = useSecureImage(selectedStyle?.style_image_url);
   const hasStyleImage = Boolean(selectedStyle?.style_image_url);
 
   return (
@@ -126,11 +128,18 @@ export function InquiryCreateSidebar({
       <section className="rounded-2xl border border-border bg-surface-raised p-4 shadow-sm print-card">
         <h3 className="text-sm font-semibold text-text-primary">Style Preview</h3>
         {hasStyleImage ? (
-          <img
-            src={selectedStyle?.style_image_url ?? undefined}
-            alt={selectedStyle?.name ?? "Style"}
-            className="mt-2 h-36 w-full rounded border border-border object-cover"
-          />
+          styleImageUrl ? (
+            <img
+              src={styleImageUrl}
+              alt={selectedStyle?.name ?? "Style"}
+              className="mt-2 h-36 w-full rounded border border-border object-cover"
+            />
+          ) : (
+            <div
+              className="mt-2 h-36 w-full rounded border border-border bg-surface-subtle animate-pulse"
+              aria-hidden
+            />
+          )
         ) : (
           <p className="mt-2 text-xs text-text-muted">
             No style image selected yet. Uploading an image helps the team review inquiry details quickly.

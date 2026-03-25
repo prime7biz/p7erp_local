@@ -7,6 +7,7 @@ export function HrInterviewsPage() {
       title="Interviews"
       description="Track interview schedules and outcomes."
       emptyMessage="No interviews found."
+      breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "Interviews" }]}
       loadItems={() => api.listHrInterviews()}
       createItem={(payload) => api.createHrInterview(payload)}
       createLabel="Add interview"

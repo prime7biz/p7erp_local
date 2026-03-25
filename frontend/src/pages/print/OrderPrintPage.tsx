@@ -8,16 +8,9 @@ import {
   type SettingsConfigResponse,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { SecureImage } from "@/components/SecureImage";
 import { logApiError } from "@/utils/logApiError";
 import "@/styles/quotation-print.css";
-
-function resolveAssetUrl(pathOrUrl: string | null | undefined): string {
-  if (!pathOrUrl) return "";
-  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
-  const base = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/$/, "");
-  const path = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
-  return `${base}${path}`;
-}
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "-";
@@ -271,7 +264,7 @@ export function OrderPrintPage() {
             {printPrefs.showLogo && (
               <div className="qp-logo-wrap">
                 {settings?.logo ? (
-                  <img src={resolveAssetUrl(settings.logo)} alt={`${tenantName} logo`} className="qp-logo" />
+                  <SecureImage url={settings.logo} alt={`${tenantName} logo`} className="qp-logo" />
                 ) : (
                   <div className="qp-logo-fallback">{tenantName.slice(0, 1).toUpperCase()}</div>
                 )}
@@ -331,8 +324,8 @@ export function OrderPrintPage() {
                 <tr>
                   <td style={{ width: "110px" }}>
                     {styleImage ? (
-                      <img
-                        src={resolveAssetUrl(styleImage)}
+                      <SecureImage
+                        url={styleImage}
                         alt={styleName}
                         style={{ width: "92px", height: "92px", objectFit: "cover", borderRadius: "8px", border: "1px solid #cbd5e1" }}
                       />

@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models import (
     AttendanceEntry,
     Employee,
+    EmployeeTicket,
     EssPreference,
     LeaveRequest,
     PayrollPayslip,
@@ -302,3 +303,56 @@ async def my_payslips(
         )
         for payslip, run_line in rows
     ]
+
+
+@router.get("/my-tickets", response_model=list[dict])
+async def my_tickets(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    employee = await _get_my_employee_or_404(db, tenant.id, user.id)
+    rows = (
+        await db.execute(
+            select(EmployeeTicket)
+            .where(EmployeeTicket.tenant_id == tenant.id, EmployeeTicket.employee_id == employee.id)
+            .order_by(EmployeeTicket.created_at.desc())
+            .limit(200)
+        )
+    ).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "category": r.category,
+            "subject": r.subject,
+            "status": r.status,
+            "priority": r.priority,
+            "created_at": r.created_at.isoformat(),
+        }
+        for r in rows
+    ]
+
+
+@router.post("/my-tickets", status_code=status.HTTP_201_CREATED)
+async def create_my_ticket(
+    body: dict,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    employee = await _get_my_employee_or_404(db, tenant.id, user.id)
+    row = EmployeeTicket(
+        tenant_id=tenant.id,
+        employee_id=employee.id,
+        category=str(body.get("category", "general")),
+        subject=str(body.get("subject", "Ticket")),
+        description=str(body.get("description") or "") or None,
+        priority=str(body.get("priority", "medium")),
+        status="open",
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return {"id": row.id, "ok": True}

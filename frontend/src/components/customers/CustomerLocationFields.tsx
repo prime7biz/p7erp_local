@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { citiesForCountry, FORM_COUNTRIES } from "@/data/formLocations";
+import { cn } from "@/lib/utils";
 
 const FIELD_SELECT_CLASS =
   "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring";
@@ -11,11 +12,13 @@ export function FormCountrySelect({
   onChange,
   disabled,
   required,
+  className,
 }: {
   value: string;
   onChange: (next: string) => void;
   disabled?: boolean;
   required?: boolean;
+  className?: string;
 }) {
   const inList = FORM_COUNTRIES.includes(value);
   return (
@@ -24,7 +27,7 @@ export function FormCountrySelect({
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
       required={required && !disabled}
-      className={`${FIELD_SELECT_CLASS}${disabled ? " disabled:bg-surface-subtle" : ""}`}
+      className={cn(FIELD_SELECT_CLASS, disabled && "disabled:bg-surface-subtle", className)}
     >
       <option value="">{required ? "Select country **" : "Select country"}</option>
       {!inList && value.trim() ? (
@@ -45,12 +48,14 @@ export function FormCitySelect({
   onChange,
   disabled,
   required,
+  className,
 }: {
   country: string;
   value: string;
   onChange: (next: string) => void;
   disabled?: boolean;
   required?: boolean;
+  className?: string;
 }) {
   const options = useMemo(() => citiesForCountry(country), [country]);
   const [otherActive, setOtherActive] = useState(false);
@@ -78,7 +83,7 @@ export function FormCitySelect({
         disabled={disabled}
         required={required && !disabled}
         placeholder="City name"
-        className={`${FIELD_SELECT_CLASS}${disabled ? " disabled:bg-surface-subtle" : ""}`}
+        className={cn(FIELD_SELECT_CLASS, disabled && "disabled:bg-surface-subtle", className)}
       />
     );
   }
@@ -99,7 +104,7 @@ export function FormCitySelect({
         }}
         disabled={disabled}
         required={required && !disabled && !otherActive}
-        className={`${FIELD_SELECT_CLASS}${disabled ? " disabled:bg-surface-subtle" : ""}`}
+        className={cn(FIELD_SELECT_CLASS, disabled && "disabled:bg-surface-subtle", className)}
       >
         <option value="">{required ? "Select city **" : "Select city"}</option>
         {options.map((c) => (
@@ -117,7 +122,7 @@ export function FormCitySelect({
           disabled={disabled}
           required={required && !disabled}
           placeholder="Enter city name"
-          className={`${FIELD_SELECT_CLASS}${disabled ? " disabled:bg-surface-subtle" : ""}`}
+          className={cn(FIELD_SELECT_CLASS, disabled && "disabled:bg-surface-subtle", className)}
         />
       ) : null}
     </div>

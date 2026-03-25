@@ -8,6 +8,7 @@ import {
 } from "@/api/client";
 import { LayoutGrid, List, RefreshCw, ChevronDown, BarChart3 } from "lucide-react";
 import { logApiError } from "@/utils/logApiError";
+import { PipelineCard } from "@/components/merch/PipelineCard";
 
 type ViewMode = "kanban" | "list";
 
@@ -38,6 +39,7 @@ export function MerchPipelinePage() {
   const [customersLoadError, setCustomersLoadError] = useState("");
   const [moveMenuId, setMoveMenuId] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
+  const [dragItemKey, setDragItemKey] = useState<string | null>(null);
 
   const loadPipeline = useCallback(async () => {
     setLoading(true);
@@ -50,6 +52,7 @@ export function MerchPipelinePage() {
       });
       setData(res);
     } catch (e) {
+      logApiError("MerchPipelinePage.loadPipeline", e);
       setError(e instanceof Error ? e.message : "Failed to load pipeline");
     } finally {
       setLoading(false);
@@ -74,6 +77,27 @@ export function MerchPipelinePage() {
       });
   }, []);
 
+  const handleDropOnStage = async (targetStageKey: string) => {
+    if (!data || !dragItemKey) return;
+    const sep = dragItemKey.indexOf("-");
+    if (sep < 0) return;
+    const docType = dragItemKey.slice(0, sep) as PipelineItemOut["document_type"];
+    const id = Number(dragItemKey.slice(sep + 1));
+    const item = data.items.find((i) => i.document_type === docType && i.id === id);
+    setDragItemKey(null);
+    if (!item || item.stage_key === targetStageKey) return;
+    const ix = visibleStages.findIndex((s) => s.stage_key === item.stage_key);
+    const tix = visibleStages.findIndex((s) => s.stage_key === targetStageKey);
+    if (tix !== ix + 1 || !item.next_status_options.length) {
+      setError("Drag to the next column only (one stage at a time).");
+      return;
+    }
+    const nextStatus = item.next_status_options[0];
+    if (!nextStatus) return;
+    setError("");
+    await handleMoveTo(item, nextStatus);
+  };
+
   const handleMoveTo = async (item: PipelineItemOut, newStatus: string) => {
     setMoveMenuId(null);
     setMoving(true);
@@ -88,6 +112,7 @@ export function MerchPipelinePage() {
       }
       await loadPipeline();
     } catch (e) {
+      logApiError("MerchPipelinePage.handleMoveTo", e);
       setError(e instanceof Error ? e.message : "Failed to update status");
     } finally {
       setMoving(false);
@@ -255,7 +280,17 @@ export function MerchPipelinePage() {
               return (
                 <div
                   key={stage.stage_key}
-                  className={`w-72 shrink-0 rounded-xl border-2 ${stageColor(stage)} p-3`}
+                  className={`w-72 shrink-0 rounded-xl border-2 ${stageColor(stage)} p-3 ${
+                    dragItemKey ? "ring-1 ring-brand-primary/20" : ""
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    void handleDropOnStage(stage.stage_key);
+                  }}
                 >
                   <div className="mb-2 flex items-center justify-between">
                     <h3 className="font-semibold text-brand-primary">{stage.label}</h3>
@@ -274,10 +309,12 @@ export function MerchPipelinePage() {
                           key={`${item.document_type}-${item.id}`}
                           item={item}
                           docTypeBadge={docTypeBadge}
+                          formatAmount={formatAmount}
                           moveMenuId={moveMenuId}
                           setMoveMenuId={setMoveMenuId}
                           onMoveTo={handleMoveTo}
                           moving={moving}
+                          onDragStartKey={setDragItemKey}
                         />
                       ))
                     )}
@@ -387,81 +424,6 @@ export function MerchPipelinePage() {
           Updating status…
         </div>
       )}
-    </div>
-  );
-}
-
-function PipelineCard({
-  item,
-  docTypeBadge,
-  moveMenuId,
-  setMoveMenuId,
-  onMoveTo,
-  moving,
-}: {
-  item: PipelineItemOut;
-  docTypeBadge: (doc: string) => React.ReactNode;
-  moveMenuId: string | null;
-  setMoveMenuId: (id: string | null) => void;
-  onMoveTo: (item: PipelineItemOut, status: string) => void;
-  moving: boolean;
-}) {
-  const menuId = `${item.document_type}-${item.id}`;
-  const isOpen = moveMenuId === menuId;
-  return (
-    <div className="rounded-lg border border-border bg-surface-raised p-2.5 shadow-sm">
-      <div className="flex items-start justify-between gap-1">
-        <div className="min-w-0 flex-1">
-          {docTypeBadge(item.document_type)}
-          <Link
-            to={item.detail_path}
-            className="mt-1 block font-medium text-brand-primary hover:text-brand-primary hover:underline"
-          >
-            {item.code}
-          </Link>
-          <p className="mt-0.5 truncate text-xs text-text-secondary" title={item.customer_name}>
-            {item.customer_name}
-          </p>
-          {(item.style_ref || item.style_name) && (
-            <p className="truncate text-xs text-text-muted" title={item.style_ref || item.style_name || ""}>
-              {item.style_name || item.style_ref}
-            </p>
-          )}
-          <div className="mt-1 flex flex-wrap gap-1 text-xs text-text-muted">
-            {item.quantity != null && <span>Qty: {item.quantity.toLocaleString()}</span>}
-            {(item.total_amount != null && item.total_amount !== "") && (
-              <span>· {formatAmount(item.total_amount)}</span>
-            )}
-          </div>
-        </div>
-        {item.next_status_options.length > 0 && (
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => setMoveMenuId(isOpen ? null : menuId)}
-              disabled={moving}
-              className="rounded border border-border-strong p-1 text-text-muted hover:bg-surface-subtle disabled:opacity-50"
-              title="Move to next stage"
-            >
-              <ChevronDown className="h-3.5 w-3.5" />
-            </button>
-            {isOpen && (
-              <div className="absolute right-0 top-full z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised py-1 shadow-lg">
-                {item.next_status_options.map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => onMoveTo(item, opt)}
-                    className="block w-full px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
-                  >
-                    → {opt.replace(/_/g, " ")}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

@@ -83,6 +83,48 @@ class AttendanceEntry(Base):
     )
 
 
+class OvertimeRule(Base):
+    __tablename__ = "hr_overtime_rules"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    employee_category: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    max_ot_hours_per_day: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    weekday_multiplier: Mapped[str] = mapped_column(String(16), nullable=False, default="1.5")
+    weekend_multiplier: Mapped[str] = mapped_column(String(16), nullable=False, default="2")
+    holiday_multiplier: Mapped[str] = mapped_column(String(16), nullable=False, default="2")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class OvertimeEntry(Base):
+    __tablename__ = "hr_overtime_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("hr_employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    work_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    ot_hours: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
+    ot_type: Mapped[str] = mapped_column(String(24), nullable=False, default="WEEKDAY")
+    rate_multiplier: Mapped[str] = mapped_column(String(16), nullable=False, default="1.5")
+    amount: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    rule_id: Mapped[int | None] = mapped_column(ForeignKey("hr_overtime_rules.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="PENDING", index=True)
+    approved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 class AttendanceRegularizationRequest(Base):
     __tablename__ = "hr_attendance_regularizations"
 

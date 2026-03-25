@@ -1,9 +1,21 @@
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Building2, CheckCircle2, Mail, MapPin, PlusCircle, Save, Upload } from "lucide-react";
 import { api, type CustomerCreate } from "@/api/client";
+import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel";
+import { ExtractionStatusBanner } from "@/components/ai-extract/ExtractionStatusBanner";
+import { FileImportCard } from "@/components/ai-extract/FileImportCard";
 import { FormCitySelect, FormCountrySelect } from "@/components/customers/CustomerLocationFields";
 import { citiesForCountry } from "@/data/formLocations";
+import { useDocumentExtraction } from "@/hooks/useDocumentExtraction";
+import { useSecureImage } from "@/hooks/useSecureImage";
+import { cn } from "@/lib/utils";
+import type { ConflictResolutionChoice, FieldApplyState, FieldConfidence } from "@/types/extraction";
+import {
+  buildCustomerFieldApplyStates,
+  deriveConfidenceLevel,
+  formatExtractedValue,
+} from "@/utils/extractionHelpers";
 
 type CustomerFormState = {
   legalEntityName: string;
@@ -55,6 +67,38 @@ const INITIAL_FORM: CustomerFormState = {
   shippingCountry: "United States",
 };
 
+const BASE_INPUT =
+  "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring";
+
+function autofillBorder(level?: FieldConfidence): string {
+  if (!level) return "";
+  if (level === "high") return "border-l-[3px] border-l-status-success pl-2";
+  if (level === "medium") return "border-l-[3px] border-l-status-warning pl-2";
+  return "border-l-[3px] border-l-status-danger pl-2";
+}
+
+function customerFormSnapshot(f: CustomerFormState): Record<string, string> {
+  return {
+    legalEntityName: f.legalEntityName,
+    tradeName: f.tradeName,
+    taxIdVatNumber: f.taxIdVatNumber,
+    website: f.website,
+    primaryContactName: f.primaryContactName,
+    designation: f.designation,
+    contactEmail: f.contactEmail,
+    countryCode: f.countryCode,
+    contactPhone: f.contactPhone,
+    billingAddressLine1: f.billingAddressLine1,
+    billingCity: f.billingCity,
+    billingPostalCode: f.billingPostalCode,
+    billingCountry: f.billingCountry,
+    shippingAddressLine1: f.shippingAddressLine1,
+    shippingCity: f.shippingCity,
+    shippingPostalCode: f.shippingPostalCode,
+    shippingCountry: f.shippingCountry,
+  };
+}
+
 function normalizeOptional(value: string): string | undefined {
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
@@ -75,12 +119,6 @@ function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-function resolveAssetUrl(pathOrUrl: string): string {
-  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
-  const base = import.meta.env.VITE_API_BASE_URL ?? "";
-  return `${base}${pathOrUrl}`;
-}
-
 export function CustomerCreatePage() {
   const [form, setForm] = useState<CustomerFormState>(INITIAL_FORM);
   const [error, setError] = useState("");
@@ -89,6 +127,39 @@ export function CustomerCreatePage() {
   const [logoUploading, setLogoUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
+  const companyLogoDisplayUrl = useSecureImage(form.companyLogoUrl);
+
+  const extraction = useDocumentExtraction("customer");
+  const [autofilled, setAutofilled] = useState<Partial<Record<string, FieldConfidence>>>({});
+  const [reviewRows, setReviewRows] = useState<FieldApplyState[]>([]);
+
+  useEffect(() => {
+    const res = extraction.customerResponse;
+    if (!res) {
+      setReviewRows([]);
+      return;
+    }
+    const next = buildCustomerFieldApplyStates(res, customerFormSnapshot(form));
+    setReviewRows((prev) => {
+      const applied = new Set(prev.filter((r) => r.applied).map((r) => r.fieldKey));
+      const skipped = new Set(prev.filter((r) => r.skipped).map((r) => r.fieldKey));
+      return next.map((row) => ({
+        ...row,
+        applied: applied.has(row.fieldKey),
+        skipped: skipped.has(row.fieldKey),
+      }));
+    });
+  }, [extraction.customerResponse, form]);
+
+  const suggestSameAsBilling = useMemo(() => {
+    const res = extraction.customerResponse;
+    if (!res?.success) return false;
+    const b1 = res.fields.billingAddressLine1?.value;
+    const s1 = res.fields.shippingAddressLine1?.value;
+    const hasBilling = Boolean(b1 && String(b1).trim());
+    const hasShipping = Boolean(s1 && String(s1).trim());
+    return hasBilling && !hasShipping;
+  }, [extraction.customerResponse]);
 
   const shippingValues = useMemo(() => {
     if (!form.sameAsBilling) {
@@ -153,9 +224,103 @@ export function CustomerCreatePage() {
     };
   };
 
+  const patchForm = (patch: Partial<CustomerFormState>) => {
+    setAutofilled((af) => {
+      const n = { ...af };
+      for (const k of Object.keys(patch)) {
+        delete n[k];
+      }
+      return n;
+    });
+    setForm((prev) => ({ ...prev, ...patch }));
+  };
+
+  const applyExtractedPatch = (
+    patch: Partial<CustomerFormState>,
+    levels: Partial<Record<string, FieldConfidence>>,
+  ) => {
+    setForm((prev) => ({ ...prev, ...patch }));
+    setAutofilled((prev) => ({ ...prev, ...levels }));
+  };
+
+  const clearAutofillKeys = (...keys: string[]) => {
+    setAutofilled((af) => {
+      const n = { ...af };
+      for (const k of keys) delete n[k];
+      return n;
+    });
+  };
+
   const resetForm = () => {
     setForm(INITIAL_FORM);
     setError("");
+    extraction.clear();
+    setAutofilled({});
+    setReviewRows([]);
+  };
+
+  const handleExtractFile = async (file: File) => {
+    await extraction.extract(file);
+  };
+
+  const handleClearImport = () => {
+    extraction.clear();
+    setReviewRows([]);
+  };
+
+  const handleApplyField = (key: string) => {
+    const res = extraction.customerResponse;
+    if (!res?.fields[key]) return;
+    const ef = res.fields[key];
+    const v = formatExtractedValue(ef.value);
+    const level = deriveConfidenceLevel(typeof ef.confidence === "number" ? ef.confidence : 0);
+    applyExtractedPatch({ [key]: v } as Partial<CustomerFormState>, { [key]: level });
+    setReviewRows((rs) =>
+      rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+    );
+  };
+
+  const handleApplyAllHigh = () => {
+    const res = extraction.customerResponse;
+    if (!res) return;
+    const toApply = reviewRows.filter(
+      (r) => !r.applied && !r.skipped && r.confidenceLevel === "high" && !r.hasConflict,
+    );
+    if (toApply.length === 0) return;
+    const patch: Partial<CustomerFormState> = {};
+    const levels: Partial<Record<string, FieldConfidence>> = {};
+    for (const row of toApply) {
+      const ef = res.fields[row.fieldKey];
+      if (!ef) continue;
+      (patch as Record<string, string>)[row.fieldKey] = formatExtractedValue(ef.value);
+      levels[row.fieldKey] = deriveConfidenceLevel(ef.confidence);
+    }
+    applyExtractedPatch(patch, levels);
+    setReviewRows((rs) =>
+      rs.map((r) =>
+        toApply.some((t) => t.fieldKey === r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+      ),
+    );
+  };
+
+  const handleSkipField = (key: string) => {
+    setReviewRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
+  };
+
+  const handleResolveConflict = (key: string, choice: ConflictResolutionChoice) => {
+    if (choice === "keep") {
+      handleSkipField(key);
+      return;
+    }
+    const res = extraction.customerResponse;
+    if (!res?.fields[key]) return;
+    const ef = res.fields[key];
+    const v = formatExtractedValue(ef.value);
+    const level: FieldConfidence = choice === "merge" ? "low" : deriveConfidenceLevel(ef.confidence);
+    applyExtractedPatch({ [key]: v } as Partial<CustomerFormState>, { [key]: level });
+    setReviewRows((rs) =>
+      rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+    );
   };
 
   const handleLogoPick = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -235,6 +400,66 @@ export function CustomerCreatePage() {
         </div>
       )}
 
+      <FileImportCard
+        title="Import Customer Info"
+        subtitle="Upload a business card, company profile, letterhead, form, email screenshot, or registration document to auto-fill known fields."
+        status={extraction.status}
+        error={extraction.error}
+        onExtract={handleExtractFile}
+        onClear={handleClearImport}
+      />
+
+      <ExtractionStatusBanner
+        status={extraction.status}
+        extractedCount={Object.values(extraction.customerResponse?.fields ?? {}).filter(
+          (f) => f.value !== null && f.value !== undefined && String(f.value).trim() !== "",
+        ).length}
+        warnings={[
+          ...(extraction.customerResponse?.warnings ?? []),
+          ...(extraction.customerResponse?.unmapped_text?.map((t) => `Unmapped: ${t}`) ?? []),
+        ]}
+        error={extraction.error}
+      />
+
+      {extraction.customerResponse && extraction.customerResponse.duplicate_warnings.length > 0 ? (
+        <div className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm">
+          <p className="font-medium text-text-primary">Possible duplicate customers</p>
+          <ul className="text-text-secondary mt-1 list-inside list-disc">
+            {extraction.customerResponse.duplicate_warnings.map((d) => (
+              <li key={`${d.field}-${d.existing_id}`}>
+                {d.field}: similar to “{d.existing_value}” (ID {d.existing_id})
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {suggestSameAsBilling ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-brand-primary/25 bg-brand-primary/5 px-3 py-3 text-sm text-text-primary sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            Billing address was detected but shipping was not. If delivery is the same, enable{" "}
+            <strong>Same as billing</strong> for shipping.
+          </p>
+          <button
+            type="button"
+            onClick={() => patchForm({ sameAsBilling: true })}
+            className="shrink-0 rounded-lg border border-brand-primary/40 bg-surface-base px-3 py-1.5 text-xs font-semibold text-brand-primary hover:bg-brand-primary/10"
+          >
+            Enable same as billing
+          </button>
+        </div>
+      ) : null}
+
+      {reviewRows.length > 0 && extraction.customerResponse ? (
+        <AutofillReviewPanel
+          fields={reviewRows}
+          onApply={handleApplyField}
+          onApplyAllHigh={handleApplyAllHigh}
+          onSkip={handleSkipField}
+          onResolveConflict={handleResolveConflict}
+        />
+      ) : null}
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -253,9 +478,9 @@ export function CustomerCreatePage() {
               <input
                 type="text"
                 value={form.legalEntityName}
-                onChange={(e) => setForm((prev) => ({ ...prev, legalEntityName: e.target.value }))}
+                onChange={(e) => patchForm({ legalEntityName: e.target.value })}
                 placeholder="e.g. Acme Corp Industries Ltd."
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                className={cn(BASE_INPUT, autofillBorder(autofilled.legalEntityName))}
                 required
               />
             </div>
@@ -264,9 +489,9 @@ export function CustomerCreatePage() {
               <input
                 type="text"
                 value={form.tradeName}
-                onChange={(e) => setForm((prev) => ({ ...prev, tradeName: e.target.value }))}
+                onChange={(e) => patchForm({ tradeName: e.target.value })}
                 placeholder="e.g. Acme Retail"
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                className={cn(BASE_INPUT, autofillBorder(autofilled.tradeName))}
               />
             </div>
             <div>
@@ -274,9 +499,9 @@ export function CustomerCreatePage() {
               <input
                 type="text"
                 value={form.taxIdVatNumber}
-                onChange={(e) => setForm((prev) => ({ ...prev, taxIdVatNumber: e.target.value }))}
+                onChange={(e) => patchForm({ taxIdVatNumber: e.target.value })}
                 placeholder="TX-992031"
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                className={cn(BASE_INPUT, autofillBorder(autofilled.taxIdVatNumber))}
               />
             </div>
             <div>
@@ -284,17 +509,17 @@ export function CustomerCreatePage() {
               <input
                 type="url"
                 value={form.website}
-                onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
+                onChange={(e) => patchForm({ website: e.target.value })}
                 placeholder="https://www.acme.com"
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                className={cn(BASE_INPUT, autofillBorder(autofilled.website))}
               />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-text-secondary">Customer Type</label>
               <select
                 value={form.customerType}
-                onChange={(e) => setForm((prev) => ({ ...prev, customerType: e.target.value }))}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                onChange={(e) => patchForm({ customerType: e.target.value })}
+                className={cn(BASE_INPUT, autofillBorder(autofilled.customerType))}
               >
                 <option value="enterprise">Enterprise</option>
                 <option value="sme">SME</option>
@@ -342,7 +567,7 @@ export function CustomerCreatePage() {
               {form.companyLogoUrl ? (
                 <div className="mt-3 inline-flex items-center gap-3 rounded-lg border border-border bg-surface-subtle px-3 py-2">
                   <img
-                    src={resolveAssetUrl(form.companyLogoUrl)}
+                    src={companyLogoDisplayUrl ?? undefined}
                     alt="Company logo preview"
                     className="h-10 w-10 rounded object-cover"
                   />
@@ -371,9 +596,9 @@ export function CustomerCreatePage() {
               <input
                 type="text"
                 value={form.primaryContactName}
-                onChange={(e) => setForm((prev) => ({ ...prev, primaryContactName: e.target.value }))}
+                onChange={(e) => patchForm({ primaryContactName: e.target.value })}
                 placeholder="Full name of person in charge"
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                className={cn(BASE_INPUT, autofillBorder(autofilled.primaryContactName))}
                 required
               />
             </div>
@@ -382,9 +607,9 @@ export function CustomerCreatePage() {
               <input
                 type="text"
                 value={form.designation}
-                onChange={(e) => setForm((prev) => ({ ...prev, designation: e.target.value }))}
+                onChange={(e) => patchForm({ designation: e.target.value })}
                 placeholder="e.g. Procurement Manager"
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                className={cn(BASE_INPUT, autofillBorder(autofilled.designation))}
               />
             </div>
             <div>
@@ -392,9 +617,9 @@ export function CustomerCreatePage() {
               <input
                 type="email"
                 value={form.contactEmail}
-                onChange={(e) => setForm((prev) => ({ ...prev, contactEmail: e.target.value }))}
+                onChange={(e) => patchForm({ contactEmail: e.target.value })}
                 placeholder="contact@company.com"
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                className={cn(BASE_INPUT, autofillBorder(autofilled.contactEmail))}
                 required
               />
             </div>
@@ -404,15 +629,15 @@ export function CustomerCreatePage() {
                 <input
                   type="text"
                   value={form.countryCode}
-                  onChange={(e) => setForm((prev) => ({ ...prev, countryCode: e.target.value }))}
-                  className="w-20 rounded-lg border border-border-strong px-2 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                  onChange={(e) => patchForm({ countryCode: e.target.value })}
+                  className={cn(BASE_INPUT, "w-20", autofillBorder(autofilled.countryCode))}
                 />
                 <input
                   type="text"
                   value={form.contactPhone}
-                  onChange={(e) => setForm((prev) => ({ ...prev, contactPhone: e.target.value }))}
+                  onChange={(e) => patchForm({ contactPhone: e.target.value })}
                   placeholder="(555) 000-0000"
-                  className="flex-1 rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                  className={cn(BASE_INPUT, "flex-1", autofillBorder(autofilled.contactPhone))}
                 />
               </div>
             </div>
@@ -443,8 +668,8 @@ export function CustomerCreatePage() {
                 <input
                   type="text"
                   value={form.billingAddressLine1}
-                  onChange={(e) => setForm((prev) => ({ ...prev, billingAddressLine1: e.target.value }))}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                  onChange={(e) => patchForm({ billingAddressLine1: e.target.value })}
+                  className={cn(BASE_INPUT, autofillBorder(autofilled.billingAddressLine1))}
                   required
                 />
               </div>
@@ -454,7 +679,8 @@ export function CustomerCreatePage() {
                   <FormCitySelect
                     country={form.billingCountry}
                     value={form.billingCity}
-                    onChange={(next) => setForm((prev) => ({ ...prev, billingCity: next }))}
+                    onChange={(next) => patchForm({ billingCity: next })}
+                    className={autofillBorder(autofilled.billingCity)}
                     required
                   />
                 </div>
@@ -463,8 +689,8 @@ export function CustomerCreatePage() {
                   <input
                     type="text"
                     value={form.billingPostalCode}
-                    onChange={(e) => setForm((prev) => ({ ...prev, billingPostalCode: e.target.value }))}
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                    onChange={(e) => patchForm({ billingPostalCode: e.target.value })}
+                    className={cn(BASE_INPUT, autofillBorder(autofilled.billingPostalCode))}
                   />
                 </div>
               </div>
@@ -502,9 +728,9 @@ export function CustomerCreatePage() {
                 <input
                   type="text"
                   value={shippingValues.shippingAddressLine1}
-                  onChange={(e) => setForm((prev) => ({ ...prev, shippingAddressLine1: e.target.value }))}
+                  onChange={(e) => patchForm({ shippingAddressLine1: e.target.value })}
                   disabled={form.sameAsBilling}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                  className={cn(BASE_INPUT, "disabled:bg-surface-subtle", autofillBorder(autofilled.shippingAddressLine1))}
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -513,8 +739,9 @@ export function CustomerCreatePage() {
                   <FormCitySelect
                     country={shippingValues.shippingCountry}
                     value={shippingValues.shippingCity}
-                    onChange={(next) => setForm((prev) => ({ ...prev, shippingCity: next }))}
+                    onChange={(next) => patchForm({ shippingCity: next })}
                     disabled={form.sameAsBilling}
+                    className={autofillBorder(autofilled.shippingCity)}
                     required={!form.sameAsBilling}
                   />
                 </div>
@@ -523,9 +750,13 @@ export function CustomerCreatePage() {
                   <input
                     type="text"
                     value={shippingValues.shippingPostalCode}
-                    onChange={(e) => setForm((prev) => ({ ...prev, shippingPostalCode: e.target.value }))}
+                    onChange={(e) => patchForm({ shippingPostalCode: e.target.value })}
                     disabled={form.sameAsBilling}
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                    className={cn(
+                      BASE_INPUT,
+                      "disabled:bg-surface-subtle",
+                      autofillBorder(autofilled.shippingPostalCode),
+                    )}
                   />
                 </div>
               </div>
@@ -533,15 +764,17 @@ export function CustomerCreatePage() {
                 <label className="mb-1 block text-sm font-medium text-text-secondary">Country **</label>
                 <FormCountrySelect
                   value={shippingValues.shippingCountry}
-                  onChange={(next) =>
+                  onChange={(next) => {
+                    if (form.sameAsBilling) return;
+                    clearAutofillKeys("shippingCountry", "shippingCity");
                     setForm((prev) => {
-                      if (prev.sameAsBilling) return prev;
                       const cities = citiesForCountry(next);
                       const keep = cities.includes(prev.shippingCity);
                       return { ...prev, shippingCountry: next, shippingCity: keep ? prev.shippingCity : "" };
-                    })
-                  }
+                    });
+                  }}
                   disabled={form.sameAsBilling}
+                  className={autofillBorder(autofilled.shippingCountry)}
                   required={!form.sameAsBilling}
                 />
               </div>

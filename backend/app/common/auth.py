@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 from typing import Annotated
 
@@ -16,17 +17,23 @@ from app.models import User
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+async def hash_password(password: str) -> str:
+    """CPU-bound bcrypt work runs in a thread pool so it does not block the async event loop."""
+    return await asyncio.to_thread(pwd_context.hash, password)
 
 
-def verify_password(plain: str, hashed: str) -> bool:
+def _verify_password_sync(plain: str, hashed: str) -> bool:
     try:
         return pwd_context.verify(plain, hashed)
     except (ValueError, TypeError, UnknownHashError):
         # If stored hash is malformed/legacy, treat as invalid credentials
         # instead of raising a 500 error from the login endpoint.
         return False
+
+
+async def verify_password(plain: str, hashed: str) -> bool:
+    """CPU-bound bcrypt work runs in a thread pool so it does not block the async event loop."""
+    return await asyncio.to_thread(_verify_password_sync, plain, hashed)
 
 
 def create_access_token(subject: str | int, expires_delta: timedelta | None = None) -> str:

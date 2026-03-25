@@ -1,7 +1,7 @@
 """Merch Critical Alert engine: seed definitions, run rules, upsert instances, scan log."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -19,6 +19,37 @@ from app.modules.merch.alert_rules import DEFAULT_DEFINITIONS, RULE_REGISTRY, TR
 
 
 ACTIVE_STATUSES = ("new", "acknowledged", "in_progress", "waiting_on_buyer", "waiting_on_supplier", "snoozed", "escalated")
+
+
+async def resolve_stale_production_cm_alerts_for_period(
+    db: AsyncSession,
+    tenant_id: int,
+    period_date: date,
+    active_natural_keys: set[str],
+) -> int:
+    """Resolve CM overrun alerts for this day when those keys are no longer over budget."""
+    pd = period_date.isoformat()
+    like_pat = f"%:period:{pd}:style:%"
+    r = await db.execute(
+        select(AlertInstance).where(
+            AlertInstance.tenant_id == tenant_id,
+            AlertInstance.alert_type == "production_cm_overrun",
+            AlertInstance.natural_key.like(like_pat),
+        )
+    )
+    resolved = 0
+    now = datetime.now(timezone.utc)
+    for inst in r.scalars().all():
+        if inst.natural_key in active_natural_keys:
+            continue
+        if inst.status not in ACTIVE_STATUSES:
+            continue
+        inst.status = "resolved"
+        inst.resolved_at = now
+        inst.updated_at = now
+        resolved += 1
+    await db.flush()
+    return resolved
 
 
 async def ensure_definitions_for_tenant(db: AsyncSession, tenant_id: int) -> None:
@@ -189,8 +220,7 @@ async def run_scan(
             log_row.status = "failed"
             log_row.finished_at = datetime.now(timezone.utc)
             log_row.error_message = str(e)[:2000]
-            await db.flush()
-            raise
+            # Continue remaining rules; scan log row records the failure
         await db.flush()
     return {
         "instances_created": total_created,
@@ -239,8 +269,7 @@ async def run_scan_trade_rules_only(
             log_row.status = "failed"
             log_row.finished_at = datetime.now(timezone.utc)
             log_row.error_message = str(e)[:2000]
-            await db.flush()
-            raise
+            # Continue remaining rules; scan log row records the failure
         await db.flush()
     return {
         "instances_created": total_created,

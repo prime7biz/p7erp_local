@@ -75,7 +75,7 @@ async def main() -> None:
             role_id=admin_role.id,
             username=USERNAME,
             email=EMAIL,
-            password_hash=hash_password(PASSWORD),
+            password_hash=await hash_password(PASSWORD),
             first_name="Shahriyar",
             last_name=None,
         )

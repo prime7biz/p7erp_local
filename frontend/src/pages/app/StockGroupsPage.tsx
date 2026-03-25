@@ -65,13 +65,15 @@ function CoaSelect(props: {
   value: number | null | undefined;
   onChange: (v: number | null) => void;
   accounts: ChartOfAccountResponse[];
+  disabled?: boolean;
 }) {
   return (
     <div>
       <label className="mb-1 block text-xs font-medium text-text-muted">{props.label}</label>
       <select
-        className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+        className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
         value={props.value ?? ""}
+        disabled={props.disabled}
         onChange={(e) => props.onChange(e.target.value ? Number(e.target.value) : null)}
       >
         <option value="">— None —</option>
@@ -95,6 +97,7 @@ export function StockGroupsPage() {
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<StockGroupResponse | null>(null);
   const [editForm, setEditForm] = useState<StockGroupCreate | null>(null);
+  const [groupModalMode, setGroupModalMode] = useState<"view" | "edit">("view");
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
 
   const idToItem = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
@@ -138,8 +141,9 @@ export function StockGroupsPage() {
     return () => document.removeEventListener("click", closeActions);
   }, []);
 
-  const openEdit = (row: StockGroupResponse) => {
+  const openGroupModal = (row: StockGroupResponse, mode: "view" | "edit") => {
     setEditing(row);
+    setGroupModalMode(mode);
     setEditForm({
       group_code: row.group_code,
       name: row.name,
@@ -156,10 +160,29 @@ export function StockGroupsPage() {
   const closeEdit = () => {
     setEditing(null);
     setEditForm(null);
+    setGroupModalMode("view");
+  };
+
+  const backToGroupView = () => {
+    if (!editing) return;
+    setGroupModalMode("view");
+    const row = editing;
+    setEditForm({
+      group_code: row.group_code,
+      name: row.name,
+      parent_id: row.parent_id,
+      is_active: row.is_active,
+      inventory_account_id: row.inventory_account_id ?? null,
+      wip_account_id: row.wip_account_id ?? null,
+      cogs_account_id: row.cogs_account_id ?? null,
+      adjustment_account_id: row.adjustment_account_id ?? null,
+      grni_account_id: row.grni_account_id ?? null,
+    });
   };
 
   const saveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (groupModalMode !== "edit") return;
     if (!editing || !editForm) return;
     try {
       await api.updateStockGroup(editing.id, editForm);
@@ -341,7 +364,19 @@ export function StockGroupsPage() {
                   </tr>
                 )}
                 {orderedRows.map((row) => (
-                  <tr key={row.id} className="hover:bg-surface-subtle/50">
+                  <tr
+                    key={row.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openGroupModal(row, "view")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openGroupModal(row, "view");
+                      }
+                    }}
+                    className="cursor-pointer hover:bg-surface-subtle/50"
+                  >
                     <td
                       className="px-4 py-3 text-sm font-medium text-text-primary"
                       style={{ paddingLeft: 16 + row.level * 24 }}
@@ -353,7 +388,7 @@ export function StockGroupsPage() {
                     <td className="max-w-[280px] truncate px-4 py-3 text-sm text-text-secondary" title={row.path}>
                       {row.path || "—"}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
@@ -366,7 +401,7 @@ export function StockGroupsPage() {
                           <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
                             <button
                               type="button"
-                              onClick={() => { openEdit(row); setOpenActionsId(null); }}
+                              onClick={() => { openGroupModal(row, "edit"); setOpenActionsId(null); }}
                               className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
                             >
                               Edit
@@ -402,7 +437,7 @@ export function StockGroupsPage() {
           <Card className="w-full max-w-md rounded-xl shadow-xl" onClick={(e) => e.stopPropagation()}>
             <CardHeader className="flex flex-row items-center justify-between border-b border-border-subtle pb-3">
               <CardTitle id="edit-group-title" className="text-lg">
-                Edit Stock Group
+                {groupModalMode === "view" ? "Stock group" : "Edit stock group"}
               </CardTitle>
               <Button type="button" variant="ghost" size="icon" onClick={closeEdit}>
                 <X className="h-4 w-4" />
@@ -413,8 +448,9 @@ export function StockGroupsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Code</label>
                   <input
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring read-only:bg-surface-subtle"
                     value={editForm.group_code}
+                    readOnly={groupModalMode === "view"}
                     onChange={(e) => setEditForm((p) => p && { ...p, group_code: e.target.value })}
                     required
                   />
@@ -422,8 +458,9 @@ export function StockGroupsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Name</label>
                   <input
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring read-only:bg-surface-subtle"
                     value={editForm.name}
+                    readOnly={groupModalMode === "view"}
                     onChange={(e) => setEditForm((p) => p && { ...p, name: e.target.value })}
                     required
                   />
@@ -431,8 +468,9 @@ export function StockGroupsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Parent</label>
                   <select
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
                     value={editForm.parent_id ?? ""}
+                    disabled={groupModalMode === "view"}
                     onChange={(e) =>
                       setEditForm((p) =>
                         p && { ...p, parent_id: e.target.value ? Number(e.target.value) : null }
@@ -457,38 +495,56 @@ export function StockGroupsPage() {
                       accounts={coaRows}
                       value={editForm.inventory_account_id}
                       onChange={(v) => setEditForm((p) => p && { ...p, inventory_account_id: v })}
+                      disabled={groupModalMode === "view"}
                     />
                     <CoaSelect
                       label="GRNI / clearing"
                       accounts={coaRows}
                       value={editForm.grni_account_id}
                       onChange={(v) => setEditForm((p) => p && { ...p, grni_account_id: v })}
+                      disabled={groupModalMode === "view"}
                     />
                     <CoaSelect
                       label="COGS"
                       accounts={coaRows}
                       value={editForm.cogs_account_id}
                       onChange={(v) => setEditForm((p) => p && { ...p, cogs_account_id: v })}
+                      disabled={groupModalMode === "view"}
                     />
                     <CoaSelect
                       label="WIP"
                       accounts={coaRows}
                       value={editForm.wip_account_id}
                       onChange={(v) => setEditForm((p) => p && { ...p, wip_account_id: v })}
+                      disabled={groupModalMode === "view"}
                     />
                     <CoaSelect
                       label="Stock adjustment"
                       accounts={coaRows}
                       value={editForm.adjustment_account_id}
                       onChange={(v) => setEditForm((p) => p && { ...p, adjustment_account_id: v })}
+                      disabled={groupModalMode === "view"}
                     />
                   </div>
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={closeEdit}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">Save changes</Button>
+                  {groupModalMode === "view" ? (
+                    <>
+                      <Button type="button" variant="outline" onClick={closeEdit}>
+                        Close
+                      </Button>
+                      <Button type="button" onClick={() => setGroupModalMode("edit")}>
+                        Edit
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button type="button" variant="outline" onClick={backToGroupView}>
+                        Cancel
+                      </Button>
+                      <Button type="submit">Save changes</Button>
+                    </>
+                  )}
                 </div>
               </form>
             </CardContent>

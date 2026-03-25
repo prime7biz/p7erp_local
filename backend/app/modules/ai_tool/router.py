@@ -8,6 +8,8 @@ from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import Tenant, User
 from app.modules.ai_tool import repository, service
+from app.modules.ai_tool.weekly_report_service import list_weekly_reports
+from app.modules.dashboard.ai_services import generate_data_quality_scan
 from app.modules.ai_tool.authz import ensure_tenant_access, require_ai_access
 from app.modules.ai_tool.guardrails import rate_limit_dependency
 from app.modules.ai_tool.schemas import (
@@ -32,6 +34,8 @@ from app.modules.ai_tool.schemas import (
     AiReportRunResponse,
     AiSessionCreateRequest,
     AiSessionResponse,
+    AiWeeklyReportListResponse,
+    AiWeeklyReportResponse,
 )
 
 router = APIRouter(prefix="/ai-tool", tags=["ai-tool"])
@@ -275,6 +279,46 @@ async def generate_anomaly_insights(
         user=user,
         session_id=body.session_id,
     )
+
+
+@router.get("/weekly-reports", response_model=AiWeeklyReportListResponse)
+async def weekly_reports_list(
+    limit: int = Query(default=24, ge=1, le=100),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    rows = await list_weekly_reports(db, tenant.id, limit=limit)
+    return AiWeeklyReportListResponse(
+        items=[
+            AiWeeklyReportResponse(
+                id=r.id,
+                tenant_id=r.tenant_id,
+                week_start=r.week_start,
+                week_end=r.week_end,
+                narrative=r.narrative,
+                kpi_snapshot_json=r.kpi_snapshot_json,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ]
+    )
+
+
+@router.post("/data-quality-scan")
+async def data_quality_scan(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    """Scan for common data issues + optional Gemini narrative."""
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    return await generate_data_quality_scan(db, tenant.id)
 
 
 @router.get("/ops/overview", response_model=AiOpsOverviewResponse)

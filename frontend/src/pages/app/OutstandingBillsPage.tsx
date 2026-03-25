@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, type OutstandingBillCreate, type OutstandingBillResponse, type BillsAgingResponse } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 
 export function OutstandingBillsPage() {
   const [rows, setRows] = useState<OutstandingBillResponse[]>([]);
@@ -10,6 +12,8 @@ export function OutstandingBillsPage() {
   const [settleMap, setSettleMap] = useState<Record<number, string>>({});
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [voucherToolId, setVoucherToolId] = useState("");
+  const [autoPartyName, setAutoPartyName] = useState("");
   const [form, setForm] = useState<OutstandingBillCreate>({
     bill_no: "",
     party_name: "",
@@ -33,6 +37,7 @@ export function OutstandingBillsPage() {
       setRows(bills);
       setAging(ag);
     } catch (e) {
+      logApiError("OutstandingBillsPage.load", e);
       setError((e as Error).message);
     }
   }
@@ -72,6 +77,49 @@ export function OutstandingBillsPage() {
       setSuccess("Bill settlement applied.");
       await load();
     } catch (e) {
+      logApiError("OutstandingBillsPage.settle", e);
+      setError((e as Error).message);
+    }
+  }
+
+  async function runAutoCreateBillRefs() {
+    const vid = Number(voucherToolId);
+    if (!Number.isFinite(vid) || vid <= 0) {
+      setError("Enter a valid voucher ID for auto-create.");
+      return;
+    }
+    try {
+      setError("");
+      const res = await api.autoCreateBillRefs(vid);
+      setSuccess(`Created ${res.bills_created} bill reference(s): ${res.bill_numbers.join(", ") || "—"}`);
+      await load();
+    } catch (e) {
+      logApiError("OutstandingBillsPage.autoCreateBillRefs", e);
+      setError((e as Error).message);
+    }
+  }
+
+  async function runAutoCreateBillFromVoucher() {
+    const vid = Number(voucherToolId);
+    if (!Number.isFinite(vid) || vid <= 0) {
+      setError("Enter a valid voucher ID.");
+      return;
+    }
+    if (!autoPartyName.trim()) {
+      setError("Party name is required for outstanding bill auto-create.");
+      return;
+    }
+    try {
+      setError("");
+      await api.autoCreateBillFromVoucher(vid, {
+        party_name: autoPartyName.trim(),
+        bill_type: billType,
+        due_in_days: 30,
+      });
+      setSuccess("Outstanding bill created from voucher.");
+      await load();
+    } catch (e) {
+      logApiError("OutstandingBillsPage.autoCreateBillFromVoucher", e);
       setError((e as Error).message);
     }
   }
@@ -81,12 +129,54 @@ export function OutstandingBillsPage() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Outstanding Bills</h1>
-          <p className="text-sm text-text-muted">AP/AR bill tracking with aging buckets.</p>
+          <p className="text-sm text-text-muted">
+            AP/AR bill tracking with aging buckets.{" "}
+            <Link className="font-medium text-brand-primary hover:underline" to="/app/accounts/reports/ar-ap-aging">
+              View full AR/AP aging report
+            </Link>
+            {" · "}
+            <Link className="font-medium text-brand-primary hover:underline" to="/app/vouchers">
+              Vouchers
+            </Link>
+          </p>
         </div>
         <select className="rounded border px-2 py-1 text-sm" value={billType} onChange={(e) => setBillType(e.target.value as "PAYABLE" | "RECEIVABLE")}>
           <option value="RECEIVABLE">Receivable</option>
           <option value="PAYABLE">Payable</option>
         </select>
+      </div>
+
+      <div className="rounded-xl border border-border bg-surface-raised p-4">
+        <h2 className="text-sm font-semibold text-text-primary">From voucher</h2>
+        <p className="mt-1 text-xs text-text-muted">
+          Create structured bill references (allocation tracking) or a simple outstanding bill row from a posted voucher.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <div>
+            <label className="block text-xs text-text-muted">Voucher ID</label>
+            <input
+              className="w-32 rounded border px-2 py-1 text-sm"
+              value={voucherToolId}
+              onChange={(e) => setVoucherToolId(e.target.value)}
+              placeholder="e.g. 42"
+            />
+          </div>
+          <div className="min-w-[12rem]">
+            <label className="block text-xs text-text-muted">Party name (for outstanding bill)</label>
+            <input
+              className="w-full rounded border px-2 py-1 text-sm"
+              value={autoPartyName}
+              onChange={(e) => setAutoPartyName(e.target.value)}
+              placeholder="Matches customer/vendor name"
+            />
+          </div>
+          <button type="button" className="rounded border border-border-strong px-3 py-1.5 text-sm" onClick={() => void runAutoCreateBillRefs()}>
+            Auto-create bill references
+          </button>
+          <button type="button" className="rounded bg-brand-primary px-3 py-1.5 text-sm text-brand-primary-foreground" onClick={() => void runAutoCreateBillFromVoucher()}>
+            Auto-create outstanding bill
+          </button>
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         <select

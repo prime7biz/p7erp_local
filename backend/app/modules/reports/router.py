@@ -3,6 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import Customer, GoodsReceiving, Order, PurchaseOrder, Tenant, User
@@ -73,6 +74,7 @@ async def customer_performance(
         .where(Customer.tenant_id == tenant.id)
         .group_by(Customer.id, Customer.name)
         .order_by(Customer.name)
+        .offset(offset)
         .limit(limit)
     )
     rows = q.all()

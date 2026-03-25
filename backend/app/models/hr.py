@@ -8,6 +8,32 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
+class HrSection(Base):
+    """Floor / line / section / unit hierarchy for garments factories."""
+
+    __tablename__ = "hr_sections"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    section_type: Mapped[str] = mapped_column(String(24), nullable=False, default="SECTION")
+    parent_section_id: Mapped[int | None] = mapped_column(
+        ForeignKey("hr_sections.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    department_id: Mapped[int | None] = mapped_column(
+        ForeignKey("hr_departments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    head_employee_id: Mapped[int | None] = mapped_column(
+        ForeignKey("hr_employees.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 class Department(Base):
     __tablename__ = "hr_departments"
 
@@ -81,6 +107,10 @@ class Employee(Base):
         ForeignKey("hr_employees.id", ondelete="SET NULL"), nullable=True, index=True
     )
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    employee_category: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    section_id: Mapped[int | None] = mapped_column(
+        ForeignKey("hr_sections.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -93,3 +123,32 @@ class Employee(Base):
         "Employee", remote_side=[id], back_populates="direct_reports"
     )
     direct_reports: Mapped[list["Employee"]] = relationship("Employee", back_populates="reporting_manager")
+
+
+class EmployeeDocument(Base):
+    __tablename__ = "hr_employee_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("hr_employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    document_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    issue_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    file_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class EmployeeStatusHistory(Base):
+    __tablename__ = "hr_employee_status_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("hr_employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    effective_date: Mapped[date] = mapped_column(Date, nullable=False)
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    changed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)

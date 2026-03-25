@@ -7,11 +7,13 @@ import { PlaceholderPage } from "@/pages/app/PlaceholderPage";
 import { AiAssistantPage } from "@/pages/app/ai/AiAssistantPage";
 import { AiAutomationPage } from "@/pages/app/ai/AiAutomationPage";
 import { AiPredictionsPage } from "@/pages/app/ai/AiPredictionsPage";
+import { AiWeeklyReportsPage } from "@/pages/app/ai/AiWeeklyReportsPage";
 import { CommercialPage } from "@/pages/app/commercial/CommercialPage";
 import { ExportCasesPage } from "@/pages/app/commercial/ExportCasesPage";
 import { ProformaInvoicesPage } from "@/pages/app/commercial/ProformaInvoicesPage";
 import { BtbLcsPage } from "@/pages/app/commercial/BtbLcsPage";
 import { MasterContractsPage } from "@/pages/app/commercial/MasterContractsPage";
+import { TradeFeatureRouteGuard } from "@/components/TradeFeatureRouteGuard";
 import { LogisticsPage } from "@/pages/app/logistics/LogisticsPage";
 import { TradeCasesPage } from "@/pages/app/trade/TradeCasesPage";
 import { TradeCaseDetailPage } from "@/pages/app/trade/TradeCaseDetailPage";
@@ -167,8 +169,48 @@ const ReportSalesOrdersPage = lazy(() =>
 const ReportStyle360Page = lazy(() =>
   import("@/pages/app/reports/ReportStyle360Page").then((m) => ({ default: m.ReportStyle360Page })),
 );
-const ReportComingSoonPage = lazy(() =>
-  import("@/pages/app/reports/ReportComingSoonPage").then((m) => ({ default: m.ReportComingSoonPage })),
+const ReportsHubPage = lazy(() => import("@/pages/app/reports/ReportsHubPage").then((m) => ({ default: m.ReportsHubPage })));
+const ReportLcOutstandingPage = lazy(() =>
+  import("@/pages/app/reports/ReportLcOutstandingPage").then((m) => ({ default: m.ReportLcOutstandingPage })),
+);
+const ReportBtbMaturityPage = lazy(() =>
+  import("@/pages/app/reports/ReportBtbMaturityPage").then((m) => ({ default: m.ReportBtbMaturityPage })),
+);
+const ReportShipmentsPage = lazy(() =>
+  import("@/pages/app/reports/ReportShipmentsPage").then((m) => ({ default: m.ReportShipmentsPage })),
+);
+const ReportTradeOverviewPage = lazy(() =>
+  import("@/pages/app/reports/ReportTradeOverviewPage").then((m) => ({ default: m.ReportTradeOverviewPage })),
+);
+const ReportProductionEfficiencyPage = lazy(() =>
+  import("@/pages/app/reports/ReportProductionEfficiencyPage").then((m) => ({ default: m.ReportProductionEfficiencyPage })),
+);
+const ReportQcSummaryPage = lazy(() =>
+  import("@/pages/app/reports/ReportQcSummaryPage").then((m) => ({ default: m.ReportQcSummaryPage })),
+);
+const ReportEmployeeSummaryPage = lazy(() =>
+  import("@/pages/app/reports/ReportEmployeeSummaryPage").then((m) => ({ default: m.ReportEmployeeSummaryPage })),
+);
+const ReportPayrollSummaryPage = lazy(() =>
+  import("@/pages/app/reports/ReportPayrollSummaryPage").then((m) => ({ default: m.ReportPayrollSummaryPage })),
+);
+const ReportReconciliationPage = lazy(() =>
+  import("@/pages/app/reports/ReportReconciliationPage").then((m) => ({ default: m.ReportReconciliationPage })),
+);
+const ReportExceptionsPage = lazy(() =>
+  import("@/pages/app/reports/ReportExceptionsPage").then((m) => ({ default: m.ReportExceptionsPage })),
+);
+const ReportGatePassesPage = lazy(() =>
+  import("@/pages/app/reports/ReportGatePassesPage").then((m) => ({ default: m.ReportGatePassesPage })),
+);
+const ReportChallansPage = lazy(() =>
+  import("@/pages/app/reports/ReportChallansPage").then((m) => ({ default: m.ReportChallansPage })),
+);
+const CashflowCalendarPage = lazy(() =>
+  import("@/pages/app/CashflowCalendarPage").then((m) => ({ default: m.CashflowCalendarPage })),
+);
+const LotTraceabilityPage = lazy(() =>
+  import("@/pages/app/LotTraceabilityPage").then((m) => ({ default: m.LotTraceabilityPage })),
 );
 const DayBookPage = lazy(() => import("@/pages/app/DayBookPage").then((m) => ({ default: m.DayBookPage })));
 const TrialBalancePage = lazy(() =>
@@ -210,6 +252,9 @@ const HrAttendanceEntryPage = lazy(() =>
 );
 const HrAttendanceSummaryPage = lazy(() =>
   import("@/pages/app/hr/attendance/HrAttendanceSummaryPage").then((m) => ({ default: m.HrAttendanceSummaryPage })),
+);
+const HrRegularizationsPage = lazy(() =>
+  import("@/pages/app/hr/attendance/HrRegularizationsPage").then((m) => ({ default: m.HrRegularizationsPage })),
 );
 const HrLeaveTypesPage = lazy(() => import("@/pages/app/hr/leave/HrLeaveTypesPage").then((m) => ({ default: m.HrLeaveTypesPage })));
 const HrLeaveBalancesPage = lazy(() =>
@@ -260,14 +305,49 @@ const HrMyPayslipsPage = lazy(() =>
 const HrReportsDashboardPage = lazy(() =>
   import("@/pages/app/hr/HrReportsDashboardPage").then((m) => ({ default: m.HrReportsDashboardPage })),
 );
-const ProductionOverviewPage = lazy(() =>
-  import("@/pages/app/manufacturing/ProductionOverviewPage").then((m) => ({ default: m.ProductionOverviewPage })),
+const HrDashboardPage = lazy(() => import("@/pages/app/hr/HrDashboardPage").then((m) => ({ default: m.HrDashboardPage })));
+const HrSectionsPage = lazy(() => import("@/pages/app/hr/HrSectionsPage").then((m) => ({ default: m.HrSectionsPage })));
+const HrAttendanceHolidaysPage = lazy(() =>
+  import("@/pages/app/hr/attendance/HrAttendanceHolidaysPage").then((m) => ({ default: m.HrAttendanceHolidaysPage })),
+);
+const HrOvertimeRulesPage = lazy(() =>
+  import("@/pages/app/hr/attendance/HrOvertimeRulesPage").then((m) => ({ default: m.HrOvertimeRulesPage })),
+);
+const HrOvertimePage = lazy(() => import("@/pages/app/hr/attendance/HrOvertimePage").then((m) => ({ default: m.HrOvertimePage })));
+const HrLeavePoliciesPage = lazy(() =>
+  import("@/pages/app/hr/leave/HrLeavePoliciesPage").then((m) => ({ default: m.HrLeavePoliciesPage })),
+);
+const HrLeaveCalendarPage = lazy(() =>
+  import("@/pages/app/hr/leave/HrLeaveCalendarPage").then((m) => ({ default: m.HrLeaveCalendarPage })),
+);
+const HrPayrollComponentsPage = lazy(() =>
+  import("@/pages/app/hr/payroll/HrPayrollComponentsPage").then((m) => ({ default: m.HrPayrollComponentsPage })),
+);
+const HrPayrollAdvancesPage = lazy(() =>
+  import("@/pages/app/hr/payroll/HrPayrollAdvancesPage").then((m) => ({ default: m.HrPayrollAdvancesPage })),
+);
+const HrPayrollBonusesPage = lazy(() =>
+  import("@/pages/app/hr/payroll/HrPayrollBonusesPage").then((m) => ({ default: m.HrPayrollBonusesPage })),
+);
+const HrPayrollAccountingConfigPage = lazy(() =>
+  import("@/pages/app/hr/payroll/HrPayrollAccountingConfigPage").then((m) => ({ default: m.HrPayrollAccountingConfigPage })),
+);
+const HrPerformanceCyclesPage = lazy(() =>
+  import("@/pages/app/hr/performance/HrPerformanceCyclesPage").then((m) => ({ default: m.HrPerformanceCyclesPage })),
+);
+const HrEssTicketsPage = lazy(() => import("@/pages/app/hr/ess/HrEssTicketsPage").then((m) => ({ default: m.HrEssTicketsPage })));
+const HrCompliancePage = lazy(() => import("@/pages/app/hr/HrCompliancePage").then((m) => ({ default: m.HrCompliancePage })));
+const GarmentProductionOverviewPage = lazy(() =>
+  import("@/pages/app/production/GarmentProductionOverviewPage").then((m) => ({ default: m.GarmentProductionOverviewPage })),
+);
+const ProductionQualityPage = lazy(() =>
+  import("@/pages/app/production/ProductionQualityPage").then((m) => ({ default: m.ProductionQualityPage })),
+);
+const CrewRosterWeeklyPage = lazy(() =>
+  import("@/pages/app/production/CrewRosterWeeklyPage").then((m) => ({ default: m.CrewRosterWeeklyPage })),
 );
 const ProductionPlanningPage = lazy(() =>
   import("@/pages/app/manufacturing/ProductionPlanningPage").then((m) => ({ default: m.ProductionPlanningPage })),
-);
-const ProductionAdvancedPlanningPage = lazy(() =>
-  import("@/pages/app/manufacturing/ProductionAdvancedPlanningPage").then((m) => ({ default: m.ProductionAdvancedPlanningPage })),
 );
 const QualityCapaPage = lazy(() =>
   import("@/pages/app/manufacturing/QualityCapaPage").then((m) => ({ default: m.QualityCapaPage })),
@@ -303,6 +383,45 @@ const TnaPlansPage = lazy(() => import("@/pages/app/manufacturing/TnaPlansPage")
 const TnaPlanDetailPage = lazy(() =>
   import("@/pages/app/manufacturing/TnaPlanDetailPage").then((m) => ({ default: m.TnaPlanDetailPage })),
 );
+const ProductionSetupPage = lazy(() =>
+  import("@/pages/app/production/ProductionSetupPage").then((m) => ({ default: m.ProductionSetupPage })),
+);
+const ProductionLinePlanPage = lazy(() =>
+  import("@/pages/app/production/ProductionLinePlanPage").then((m) => ({ default: m.ProductionLinePlanPage })),
+);
+const ProductionFactoryCalendarPage = lazy(() =>
+  import("@/pages/app/production/ProductionFactoryCalendarPage").then((m) => ({ default: m.ProductionFactoryCalendarPage })),
+);
+const ProductionIeOperationsPage = lazy(() =>
+  import("@/pages/app/production/ProductionIeOperationsPage").then((m) => ({ default: m.ProductionIeOperationsPage })),
+);
+const ProductionOperationBulletinsPage = lazy(() =>
+  import("@/pages/app/production/ProductionOperationBulletinsPage").then((m) => ({ default: m.ProductionOperationBulletinsPage })),
+);
+const ProductionLineBalancePage = lazy(() =>
+  import("@/pages/app/production/ProductionLineBalancePage").then((m) => ({ default: m.ProductionLineBalancePage })),
+);
+const HourlyProductionPage = lazy(() =>
+  import("@/pages/app/production/HourlyProductionPage").then((m) => ({ default: m.HourlyProductionPage })),
+);
+const ProductionCostsPage = lazy(() =>
+  import("@/pages/app/production/ProductionCostsPage").then((m) => ({ default: m.ProductionCostsPage })),
+);
+const DailyCrewSheetPage = lazy(() =>
+  import("@/pages/app/production/DailyCrewSheetPage").then((m) => ({ default: m.DailyCrewSheetPage })),
+);
+const ProductionCuttingPage = lazy(() =>
+  import("@/pages/app/production/ProductionCuttingPage").then((m) => ({ default: m.ProductionCuttingPage })),
+);
+const ProductionKnittingPage = lazy(() =>
+  import("@/pages/app/production/ProductionKnittingPage").then((m) => ({ default: m.ProductionKnittingPage })),
+);
+const ProductionDyeingPage = lazy(() =>
+  import("@/pages/app/production/ProductionDyeingPage").then((m) => ({ default: m.ProductionDyeingPage })),
+);
+const DepartmentProductionPage = lazy(() =>
+  import("@/pages/app/production/DepartmentProductionPage").then((m) => ({ default: m.DepartmentProductionPage })),
+);
 
 export function AppProtectedRouter() {
   useEffect(() => {
@@ -319,7 +438,7 @@ export function AppProtectedRouter() {
       () => import("@/pages/app/PaymentRunsPage"),
       () => import("@/pages/app/ChartOfAccountsPage"),
       () => import("@/pages/app/hr/HrEmployeesPage"),
-      () => import("@/pages/app/manufacturing/ProductionOverviewPage"),
+      () => import("@/pages/app/production/GarmentProductionOverviewPage"),
     ];
 
     const runPrefetch = () => {
@@ -391,13 +510,13 @@ export function AppProtectedRouter() {
         <Route path="inventory/stock-adjustments" element={<StockAdjustmentsPage />} />
         <Route path="inventory/stock-adjustments/new" element={<StockAdjustmentsPage />} />
         <Route path="inventory/warehouse-transfers" element={<WarehouseTransfersPage />} />
-        <Route path="inventory/lots" element={<AppComingSoonPage title="Lot Traceability" description="Track lots and batches." />} />
+        <Route path="inventory/lots" element={<LotTraceabilityPage />} />
         <Route path="inventory/purchase-orders" element={<PurchaseOrdersPage />} />
         <Route path="inventory/goods-receiving" element={<GoodsReceivingPage />} />
         <Route path="inventory/delivery-challans" element={<DeliveryChallansPage />} />
         <Route path="inventory/enhanced-gate-passes" element={<EnhancedGatePassesPage />} />
         <Route path="inventory/process-orders" element={<ProcessOrdersPage />} />
-        <Route path="inventory/manufacturing-orders" element={<ManufacturingOrdersPage />} />
+        <Route path="inventory/manufacturing-orders" element={<Navigate to="/app/production/manufacturing-orders" replace />} />
         <Route path="samples" element={<PlaceholderPage title="Samples" />} />
         <Route path="samples/:id" element={<PlaceholderPage title="Sample Detail" />} />
         <Route path="samples/requests" element={<SamplesRequestsPage />} />
@@ -406,13 +525,29 @@ export function AppProtectedRouter() {
         <Route path="tna/templates" element={<TnaTemplatesPage />} />
         <Route path="tna/plans" element={<TnaPlansPage />} />
         <Route path="tna/plans/:planId" element={<TnaPlanDetailPage />} />
-        <Route path="production" element={<ProductionOverviewPage />} />
+        <Route path="production" element={<GarmentProductionOverviewPage />} />
+        <Route path="production/manufacturing-orders" element={<ManufacturingOrdersPage />} />
+        <Route path="production/setup" element={<ProductionSetupPage />} />
+        <Route path="production/calendar" element={<ProductionFactoryCalendarPage />} />
+        <Route path="production/line-plan" element={<ProductionLinePlanPage />} />
         <Route path="production/planning" element={<ProductionPlanningPage />} />
-        <Route path="production/advanced-planning" element={<ProductionAdvancedPlanningPage />} />
+        <Route path="production/advanced-planning" element={<Navigate to="/app/production/planning" replace />} />
+        <Route path="production/cutting/pipeline" element={<ProductionCuttingPage />} />
         <Route path="production/cutting" element={<ShopFloorExecutionPage />} />
         <Route path="production/sewing" element={<ShopFloorExecutionPage />} />
         <Route path="production/finishing-packing" element={<ShopFloorExecutionPage />} />
+        <Route path="production/ie/operations" element={<ProductionIeOperationsPage />} />
+        <Route path="production/ie/bulletins" element={<ProductionOperationBulletinsPage />} />
+        <Route path="production/ie/line-balance" element={<ProductionLineBalancePage />} />
         <Route path="production/ie" element={<ProductionIeEfficiencyPage />} />
+        <Route path="production/hourly/:dept" element={<HourlyProductionPage />} />
+        <Route path="production/crew-daily" element={<DailyCrewSheetPage />} />
+        <Route path="production/quality" element={<ProductionQualityPage />} />
+        <Route path="production/crew-roster" element={<CrewRosterWeeklyPage />} />
+        <Route path="production/costs" element={<ProductionCostsPage />} />
+        <Route path="production/knitting" element={<ProductionKnittingPage />} />
+        <Route path="production/dyeing" element={<ProductionDyeingPage />} />
+        <Route path="production/dept/:deptType" element={<DepartmentProductionPage />} />
         <Route path="quality/dashboard" element={<QualityDashboardPage />} />
         <Route path="quality/inspections" element={<QualityInspectionsPage />} />
         <Route path="quality/capa" element={<QualityCapaPage />} />
@@ -422,6 +557,7 @@ export function AppProtectedRouter() {
         <Route path="ai/assistant" element={<AiAssistantPage />} />
         <Route path="ai/automation" element={<AiAutomationPage />} />
         <Route path="ai/predictions" element={<AiPredictionsPage />} />
+        <Route path="ai/weekly-reports" element={<AiWeeklyReportsPage />} />
         <Route path="inventory/consumption-control" element={<ConsumptionControlPage />} />
         <Route path="inventory/reconciliation" element={<InventoryReconciliationPage />} />
         <Route path="inventory/stock-summary" element={<StockSummaryPage />} />
@@ -434,30 +570,33 @@ export function AppProtectedRouter() {
         <Route path="commercial/proforma-invoices/new" element={<ProformaInvoiceFormPage />} />
         <Route path="commercial/proforma-invoices/:id/edit" element={<ProformaInvoiceFormPage />} />
         <Route path="commercial/btb-lcs" element={<BtbLcsPage />} />
-        <Route path="trade/cases" element={<TradeCasesPage />} />
-        <Route path="trade/cases/:caseId" element={<TradeCaseDetailPage />} />
-        <Route path="trade/dashboard" element={<TradeDashboardPage />} />
-        <Route path="logistics" element={<LogisticsPage />} />
+        <Route element={<TradeFeatureRouteGuard />}>
+          <Route path="trade/cases" element={<TradeCasesPage />} />
+          <Route path="trade/cases/:caseId" element={<TradeCaseDetailPage />} />
+          <Route path="trade/dashboard" element={<TradeDashboardPage />} />
+          <Route path="logistics" element={<LogisticsPage />} />
+          <Route path="reports/trade-overview" element={<ReportTradeOverviewPage />} />
+        </Route>
         <Route path="followup" element={<FollowupPage />} />
         <Route path="parties" element={<PartiesPage />} />
         <Route path="flow" element={<DocumentFlowPage />} />
-        <Route path="reports" element={<AppComingSoonPage title="Reports" description="Merchandising, PO, GRN, Sales Orders, and more. Use the sidebar to open a specific report." />} />
+        <Route path="reports" element={<ReportsHubPage />} />
         <Route path="reports/merchandising" element={<ReportsOverviewPage />} />
         <Route path="reports/purchase-orders" element={<ReportPurchaseOrdersPage />} />
         <Route path="reports/grn" element={<ReportGrnPage />} />
         <Route path="reports/sales-orders" element={<ReportSalesOrdersPage />} />
         <Route path="reports/style-360" element={<ReportStyle360Page />} />
-        <Route path="reports/lc-outstanding" element={<ReportComingSoonPage title="LC Outstanding" description="View LC exposure and maturity." />} />
-        <Route path="reports/btb-maturity" element={<ReportComingSoonPage title="BTB LC Maturity" />} />
-        <Route path="reports/production-efficiency" element={<ReportComingSoonPage title="Production Efficiency" />} />
-        <Route path="reports/qc-summary" element={<ReportComingSoonPage title="QC Summary" />} />
-        <Route path="reports/employee" element={<ReportComingSoonPage title="Employee Summary" />} />
-        <Route path="reports/payroll" element={<ReportComingSoonPage title="Payroll Summary" />} />
-        <Route path="reports/shipments" element={<ReportComingSoonPage title="Shipment Tracking" />} />
-        <Route path="reports/gate-passes" element={<ReportComingSoonPage title="Gate Pass Register" />} />
-        <Route path="reports/challans" element={<ReportComingSoonPage title="Delivery Challans Report" />} />
-        <Route path="reports/reconciliation" element={<ReportComingSoonPage title="Data Reconciliation" />} />
-        <Route path="reports/exceptions" element={<ReportComingSoonPage title="Exceptions" />} />
+        <Route path="reports/lc-outstanding" element={<ReportLcOutstandingPage />} />
+        <Route path="reports/btb-maturity" element={<ReportBtbMaturityPage />} />
+        <Route path="reports/production-efficiency" element={<ReportProductionEfficiencyPage />} />
+        <Route path="reports/qc-summary" element={<ReportQcSummaryPage />} />
+        <Route path="reports/employee" element={<ReportEmployeeSummaryPage />} />
+        <Route path="reports/payroll" element={<ReportPayrollSummaryPage />} />
+        <Route path="reports/shipments" element={<ReportShipmentsPage />} />
+        <Route path="reports/gate-passes" element={<ReportGatePassesPage />} />
+        <Route path="reports/challans" element={<ReportChallansPage />} />
+        <Route path="reports/reconciliation" element={<ReportReconciliationPage />} />
+        <Route path="reports/exceptions" element={<ReportExceptionsPage />} />
         <Route path="accounts/advance-options" element={<AdvanceOptionsPage />} />
         <Route path="accounts/groups" element={<AccountGroupsPage />} />
         <Route path="accounts" element={<ChartOfAccountsPage />} />
@@ -475,7 +614,7 @@ export function AppProtectedRouter() {
         <Route path="banking/payment-runs" element={<PaymentRunsPage />} />
         <Route path="banking/settlement-audit" element={<SettlementAuditPage />} />
         <Route path="banking/payment-advice" element={<PaymentAdvicePage />} />
-        <Route path="cashflow/calendar" element={<AppComingSoonPage title="Cashflow Calendar" description="Plan and view cash flow by period." />} />
+        <Route path="cashflow/calendar" element={<CashflowCalendarPage />} />
         <Route path="accounts/reports/day-book" element={<DayBookPage />} />
         <Route path="accounts/reports/trial-balance" element={<TrialBalancePage />} />
         <Route path="accounts/reports/financial-statements" element={<FinancialStatementsPage />} />
@@ -491,23 +630,36 @@ export function AppProtectedRouter() {
         <Route path="finance/style-profitability" element={<ProfitabilityPage defaultMode="style" />} />
         <Route path="finance/lc-profitability" element={<ProfitabilityPage defaultMode="lc" />} />
         <Route path="finance/costing-variance" element={<ProfitabilityPage defaultMode="variance" />} />
+        <Route path="hr" element={<HrDashboardPage />} />
         <Route path="hr/departments" element={<HrDepartmentsPage />} />
         <Route path="hr/designations" element={<HrDesignationsPage />} />
+        <Route path="hr/sections" element={<HrSectionsPage />} />
         <Route path="hr/employees" element={<HrEmployeesPage />} />
         <Route path="hr/employees/:employeeId" element={<HrEmployeeDetailPage />} />
         <Route path="hr/attendance/shifts" element={<HrShiftsPage />} />
+        <Route path="hr/attendance/holidays" element={<HrAttendanceHolidaysPage />} />
         <Route path="hr/attendance/roster" element={<HrRosterPage />} />
         <Route path="hr/attendance/entries" element={<HrAttendanceEntryPage />} />
+        <Route path="hr/attendance/regularizations" element={<HrRegularizationsPage />} />
+        <Route path="hr/attendance/overtime-rules" element={<HrOvertimeRulesPage />} />
+        <Route path="hr/attendance/overtime" element={<HrOvertimePage />} />
         <Route path="hr/attendance/summary" element={<HrAttendanceSummaryPage />} />
         <Route path="hr/leave/types" element={<HrLeaveTypesPage />} />
+        <Route path="hr/leave/policies" element={<HrLeavePoliciesPage />} />
         <Route path="hr/leave/balances" element={<HrLeaveBalancesPage />} />
         <Route path="hr/leave/requests" element={<HrLeaveRequestsPage />} />
         <Route path="hr/leave/approvals" element={<HrLeaveApprovalsPage />} />
+        <Route path="hr/leave/calendar" element={<HrLeaveCalendarPage />} />
+        <Route path="hr/payroll/components" element={<HrPayrollComponentsPage />} />
         <Route path="hr/payroll/periods" element={<HrPayrollPeriodsPage />} />
         <Route path="hr/payroll/salary-structures" element={<HrSalaryStructuresPage />} />
         <Route path="hr/payroll/runs" element={<HrPayrollRunsPage />} />
+        <Route path="hr/payroll/advances" element={<HrPayrollAdvancesPage />} />
+        <Route path="hr/payroll/bonuses" element={<HrPayrollBonusesPage />} />
+        <Route path="hr/payroll/accounting-config" element={<HrPayrollAccountingConfigPage />} />
         <Route path="hr/payroll/approvals" element={<HrPayrollApprovalsPage />} />
         <Route path="hr/payroll/payslips" element={<HrPayslipsPage />} />
+        <Route path="hr/performance/cycles" element={<HrPerformanceCyclesPage />} />
         <Route path="hr/performance/goals" element={<HrGoalsPage />} />
         <Route path="hr/performance/reviews" element={<HrReviewsPage />} />
         <Route path="hr/performance/dashboard" element={<HrPerformanceDashboardPage />} />
@@ -519,6 +671,8 @@ export function AppProtectedRouter() {
         <Route path="hr/ess/attendance" element={<HrMyAttendancePage />} />
         <Route path="hr/ess/leave" element={<HrMyLeavePage />} />
         <Route path="hr/ess/payslips" element={<HrMyPayslipsPage />} />
+        <Route path="hr/ess/tickets" element={<HrEssTicketsPage />} />
+        <Route path="hr/compliance" element={<HrCompliancePage />} />
         <Route path="hr/reports" element={<HrReportsDashboardPage />} />
         <Route path="approvals" element={<AllApprovalsPage />} />
         <Route path="settings" element={<SettingsLayout />}>

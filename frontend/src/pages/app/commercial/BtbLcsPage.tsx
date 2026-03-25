@@ -280,6 +280,7 @@ export function BtbLcsPage() {
       const data = await api.getBtbLcAccounting(lc.id);
       setAccountingData(data);
     } catch (e) {
+      logApiError("BtbLcsPage.loadAccounting", e);
       setAccountingData(null);
       setAccountingError(e instanceof Error ? e.message : "Failed to load BTB LC accounting.");
     } finally {
@@ -356,6 +357,7 @@ export function BtbLcsPage() {
       });
       await Promise.all([loadAccounting(selectedAccountingLc), load()]);
     } catch (e) {
+      logApiError("BtbLcsPage.submitOpening", e);
       setAccountingError(e instanceof Error ? e.message : "Failed to record LC opening.");
     } finally {
       setSubmittingAccountingAction(false);
@@ -376,6 +378,7 @@ export function BtbLcsPage() {
       });
       await Promise.all([loadAccounting(selectedAccountingLc), load()]);
     } catch (e) {
+      logApiError("BtbLcsPage.submitDocumentsAcceptance", e);
       setAccountingError(e instanceof Error ? e.message : "Failed to record documents acceptance.");
     } finally {
       setSubmittingAccountingAction(false);
@@ -395,6 +398,7 @@ export function BtbLcsPage() {
       });
       await Promise.all([loadAccounting(selectedAccountingLc), load()]);
     } catch (e) {
+      logApiError("BtbLcsPage.submitRealization", e);
       setAccountingError(e instanceof Error ? e.message : "Failed to record realization.");
     } finally {
       setSubmittingAccountingAction(false);
@@ -813,6 +817,13 @@ export function BtbLcsPage() {
                               className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
                             >
                               Accounting
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void openAccountingDrawer(row)}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            >
+                              Record LC open
                             </button>
                             <button
                               type="button"

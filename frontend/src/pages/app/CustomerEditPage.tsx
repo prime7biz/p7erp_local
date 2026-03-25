@@ -4,6 +4,7 @@ import { ArrowLeft, Building2, CheckCircle2, Mail, MapPin, Save, Upload } from "
 import { api, type CustomerUpdate } from "@/api/client";
 import { FormCitySelect, FormCountrySelect } from "@/components/customers/CustomerLocationFields";
 import { citiesForCountry } from "@/data/formLocations";
+import { useSecureImage } from "@/hooks/useSecureImage";
 
 type CustomerFormState = {
   legalEntityName: string;
@@ -50,12 +51,6 @@ function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-function resolveAssetUrl(pathOrUrl: string): string {
-  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
-  const base = import.meta.env.VITE_API_BASE_URL ?? "";
-  return `${base}${pathOrUrl}`;
-}
-
 export function CustomerEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -67,6 +62,7 @@ export function CustomerEditPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [form, setForm] = useState<CustomerFormState | null>(null);
+  const companyLogoDisplayUrl = useSecureImage(form?.companyLogoUrl);
 
   useEffect(() => {
     const load = async () => {
@@ -375,7 +371,7 @@ export function CustomerEditPage() {
               />
               {form.companyLogoUrl ? (
                 <div className="mt-3 inline-flex items-center gap-3 rounded-lg border border-border bg-surface-subtle px-3 py-2">
-                  <img src={resolveAssetUrl(form.companyLogoUrl)} alt="Company logo preview" className="h-10 w-10 rounded object-cover" />
+                  <img src={companyLogoDisplayUrl ?? undefined} alt="Company logo preview" className="h-10 w-10 rounded object-cover" />
                   <button
                     type="button"
                     onClick={() => setForm((prev) => (prev ? { ...prev, companyLogoUrl: "" } : prev))}

@@ -2,6 +2,13 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: always
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c work_mem=8MB
+      -c effective_cache_size=768MB
+      -c maintenance_work_mem=128MB
+      -c random_page_cost=1.1
     environment:
       POSTGRES_USER: p7erp
       POSTGRES_PASSWORD: p7erp
@@ -37,6 +44,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
       TENANT_STRATEGY: header
       WATCHFILES_FORCE_POLLING: "true"
+      # Gemini (read from repo root .env when running: docker compose up)
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash-lite}
+      GEMINI_ENABLED: ${GEMINI_ENABLED:-true}
+      AI_MONTHLY_BUDGET_LIMIT: ${AI_MONTHLY_BUDGET_LIMIT:-0}
     ports:
       - "8000:8000"
     depends_on:
@@ -44,11 +56,19 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2).read()\"",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     volumes:
       - ./backend:/app
-    # Dev mode: reload on Python file changes from bind-mounted source.
-    # Note: migrations are run manually only when schema changes.
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app
+    # Stable mode: avoid reload restarts (prevents intermittent 502s behind nginx).
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
   frontend:
     build:
@@ -69,7 +89,21 @@ services:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+
+  frontend-admin:
+    build:
+      context: ./frontend-admin
+      dockerfile: Dockerfile.prod
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
+    restart: always
+    ports:
+      - "5174:80"
+    depends_on:
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:

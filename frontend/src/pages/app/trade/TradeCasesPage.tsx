@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Download, Plus } from "lucide-react";
 
 import { api, type TradeCaseCreate, type TradeCaseRow } from "@/api/client";
@@ -19,11 +19,15 @@ const EMPTY_FORM: TradeCaseCreate = {
 
 export function TradeCasesPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const searchParamsKey = useMemo(() => searchParams.toString(), [searchParams]);
   const [items, setItems] = useState<TradeCaseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [directionFilter, setDirectionFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") ?? "");
+  const [stageFilter, setStageFilter] = useState(() => searchParams.get("stage") ?? "");
+  const [atRiskOnly, setAtRiskOnly] = useState(searchParams.get("at_risk") === "1");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -38,9 +42,11 @@ export function TradeCasesPage() {
       const rows = await api.listTradeCases({
         direction: directionFilter || undefined,
         status: statusFilter || undefined,
+        current_stage: stageFilter || undefined,
         search: search || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
+        at_risk: atRiskOnly || undefined,
         limit: 500,
       });
       setItems(rows);
@@ -50,11 +56,19 @@ export function TradeCasesPage() {
     } finally {
       setLoading(false);
     }
-  }, [directionFilter, statusFilter, search, dateFrom, dateTo]);
+  }, [directionFilter, statusFilter, stageFilter, atRiskOnly, search, dateFrom, dateTo]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Keep filters in sync when opening the list from dashboard / deep links (?status=, ?stage=, ?at_risk=1).
+  useEffect(() => {
+    setStatusFilter(searchParams.get("status") ?? "");
+    setStageFilter(searchParams.get("stage") ?? "");
+    setAtRiskOnly(searchParams.get("at_risk") === "1");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync only when the URL query string changes
+  }, [searchParamsKey]);
 
   const exportCsv = () => {
     const headers = ["Reference", "Direction", "Status", "Stage", "Order", "PI", "ETD", "ETA", "Created"];
@@ -240,6 +254,7 @@ export function TradeCasesPage() {
             className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
+            title="Filters trade_cases.status"
           >
             <option value="">All statuses</option>
             <option value="DRAFT">DRAFT</option>
@@ -250,6 +265,29 @@ export function TradeCasesPage() {
             <option value="SHIPPED">SHIPPED</option>
             <option value="SETTLED">SETTLED</option>
           </select>
+          <select
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"
+            value={stageFilter}
+            onChange={(e) => setStageFilter(e.target.value)}
+            title="Filters current_stage (same values as workflow)"
+          >
+            <option value="">All stages</option>
+            <option value="DRAFT">DRAFT</option>
+            <option value="COMMERCIAL">COMMERCIAL</option>
+            <option value="LC_OPEN">LC_OPEN</option>
+            <option value="BOOKING">BOOKING</option>
+            <option value="DOCS">DOCS</option>
+            <option value="SHIPPED">SHIPPED</option>
+            <option value="SETTLED">SETTLED</option>
+          </select>
+          <label className="inline-flex items-center gap-2 rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              checked={atRiskOnly}
+              onChange={(e) => setAtRiskOnly(e.target.checked)}
+            />
+            At risk (ETD ≤ 7d, not shipped/settled)
+          </label>
           <input
             type="date"
             className="rounded-lg border border-border-strong px-3 py-1.5 text-sm"

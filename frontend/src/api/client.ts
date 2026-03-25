@@ -1,3 +1,5 @@
+import type { CustomerExtractionResponse, InquiryExtractionResponse } from "../types/extraction";
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
 export type TenantType = "manufacturer" | "buying_house" | "both";
@@ -13,12 +15,25 @@ export interface MeResponse {
   tenant_name: string;
   tenant_type: TenantType;
   company_code: string | null;
+  /** Optional tenant toggles, e.g. { trade_enabled: false } */
+  feature_flags?: Record<string, boolean | string | number | null> | null;
 }
 
 export interface TokenResponse {
   access_token: string;
   token_type: string;
   tenant_id?: number; // Set by backend when logging in so we can set X-Tenant-Id
+}
+
+export interface ActiveAnnouncementItem {
+  id: number;
+  title: string;
+  content: string;
+  type: string;
+}
+
+export async function getActiveAnnouncements(): Promise<{ items: ActiveAnnouncementItem[] }> {
+  return request<{ items: ActiveAnnouncementItem[] }>("/api/v1/announcements/active");
 }
 
 export interface TenantResponse {
@@ -48,6 +63,9 @@ export interface SettingsConfigResponse {
   tenant_type: TenantType;
   default_commission_mode?: CommissionMode | null;
   is_active: boolean;
+  feature_flags?: Record<string, boolean | string | number | null> | null;
+  country_code?: string | null;
+  timezone?: string | null;
 }
 
 export interface SettingsConfigUpdate {
@@ -56,6 +74,34 @@ export interface SettingsConfigUpdate {
   logo?: string | null;
   tenant_type: TenantType;
   default_commission_mode?: CommissionMode | null;
+  feature_flags?: Record<string, boolean | string | number | null> | null;
+  country_code?: string | null;
+  timezone?: string | null;
+}
+
+export interface FactoryCalendarOverrideRow {
+  id: number;
+  override_date: string;
+  override_type: string;
+  name: string | null;
+  notes: string | null;
+  category?: string | null;
+  source?: string | null;
+  is_paid?: boolean;
+  affects_hr?: boolean;
+}
+
+export interface CountryHolidayPreviewItem {
+  date: string;
+  name: string;
+  category: string;
+  garment_recommendation?: string | null;
+}
+
+export interface CountryHolidaysPreviewResponse {
+  country_code: string;
+  year: number;
+  items: CountryHolidayPreviewItem[];
 }
 
 export interface SettingsPricingResponse {
@@ -158,6 +204,8 @@ export interface HrEmployeeResponse {
   user_id: number | null;
   department_id: number | null;
   designation_id: number | null;
+  section_id: number | null;
+  employee_category: string | null;
   joining_date: string | null;
   date_of_birth: string | null;
   gender: string | null;
@@ -173,6 +221,8 @@ export interface HrEmployeeResponse {
   confirmation_date: string | null;
   exit_date: string | null;
   is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface HrEmployeeCreate {
@@ -196,6 +246,8 @@ export interface HrEmployeeCreate {
   exit_date?: string | null;
   department_id?: number | null;
   designation_id?: number | null;
+  section_id?: number | null;
+  employee_category?: string | null;
   reporting_manager_id?: number | null;
   user_id?: number | null;
   joining_date?: string | null;
@@ -223,10 +275,89 @@ export interface HrEmployeeUpdate {
   exit_date?: string | null;
   department_id?: number | null;
   designation_id?: number | null;
+  section_id?: number | null;
+  employee_category?: string | null;
   reporting_manager_id?: number | null;
   user_id?: number | null;
   joining_date?: string | null;
   is_active?: boolean;
+}
+
+export interface HrEmployeeDocumentResponse {
+  id: number;
+  tenant_id: number;
+  employee_id: number;
+  document_type: string;
+  document_number: string | null;
+  issue_date: string | null;
+  expiry_date: string | null;
+  file_path: string | null;
+  notes: string | null;
+  created_by: number | null;
+  created_at: string;
+}
+
+export interface HrEmployeeDocumentCreate {
+  document_type: string;
+  document_number?: string | null;
+  issue_date?: string | null;
+  expiry_date?: string | null;
+  file_path?: string | null;
+  notes?: string | null;
+}
+
+export interface HrEmployeeStatusHistoryResponse {
+  id: number;
+  tenant_id: number;
+  employee_id: number;
+  status: string;
+  effective_date: string;
+  remarks: string | null;
+  changed_by: number | null;
+  created_at: string;
+}
+
+export interface HrEmployeeStatusHistoryCreate {
+  status: string;
+  effective_date: string;
+  remarks?: string | null;
+}
+
+export interface HrDashboardData {
+  total_employees: number;
+  active_employees: number;
+  pending_leave_requests: number;
+  pending_payroll_approvals: number;
+  open_recruitment_requisitions: number;
+  today_attendance_entries: number;
+  today_attendance_rate_percent: number;
+}
+
+export interface HrSectionResponse {
+  id: number;
+  tenant_id: number;
+  code: string;
+  name: string;
+  section_type: string;
+  parent_section_id: number | null;
+  department_id: number | null;
+  head_employee_id: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HrPerformanceCycleResponse {
+  id: number;
+  tenant_id: number;
+  name: string;
+  description: string | null;
+  start_date: string;
+  end_date: string;
+  status: string;
+  created_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface HrShiftResponse {
@@ -253,33 +384,135 @@ export interface HrRosterEntryResponse {
   employee_id: number;
   roster_date: string;
   shift_id: number | null;
+  is_week_off?: boolean;
   note: string | null;
 }
 
 export interface HrRosterEntryCreate {
   employee_id: number;
   roster_date: string;
-  shift_id?: number | null;
+  shift_id: number;
+  is_week_off?: boolean;
   note?: string | null;
+}
+
+export interface HrRosterEntryUpdate {
+  shift_id?: number | null;
+  is_week_off?: boolean;
+  note?: string | null;
+}
+
+export interface HrHolidayResponse {
+  id: number;
+  tenant_id: number;
+  holiday_date: string;
+  name: string;
+  is_optional: boolean;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HrHolidayUpdate {
+  name?: string;
+  is_optional?: boolean;
+  note?: string | null;
+}
+
+export interface HrRegularizationResponse {
+  id: number;
+  tenant_id: number;
+  attendance_entry_id: number;
+  requested_in_time: string | null;
+  requested_out_time: string | null;
+  reason: string;
+  status: string;
+  requested_by: number;
+  approved_by: number | null;
+  decision_note: string | null;
+  decided_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HrRegularizationCreate {
+  attendance_entry_id: number;
+  requested_in_time?: string | null;
+  requested_out_time?: string | null;
+  reason: string;
+}
+
+export interface HrRegularizationDecision {
+  decision_note?: string | null;
+}
+
+export interface HrOvertimeRuleResponse {
+  id: number;
+  tenant_id: number;
+  code: string;
+  name: string;
+  employee_category: string | null;
+  max_ot_hours_per_day: string | null;
+  weekday_multiplier: string;
+  weekend_multiplier: string;
+  holiday_multiplier: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HrOvertimeRuleUpdate {
+  code?: string;
+  name?: string;
+  employee_category?: string | null;
+  max_ot_hours_per_day?: string | null;
+  weekday_multiplier?: string;
+  weekend_multiplier?: string;
+  holiday_multiplier?: string;
+  is_active?: boolean;
 }
 
 export interface HrAttendanceEntryResponse {
   id: number;
+  tenant_id?: number;
   employee_id: number;
   attendance_date: string;
-  check_in: string | null;
-  check_out: string | null;
+  in_time: string | null;
+  out_time: string | null;
   status: string;
-  note: string | null;
+  source: string;
+  late_minutes?: number;
+  early_out_minutes?: number;
+  overtime_minutes?: number;
+  remarks: string | null;
+  created_by?: number | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface HrAttendanceEntryCreate {
   employee_id: number;
   attendance_date: string;
-  check_in?: string | null;
-  check_out?: string | null;
-  status: string;
-  note?: string | null;
+  in_time?: string | null;
+  out_time?: string | null;
+  status?: string;
+  remarks?: string | null;
+  /** MANUAL | BIOMETRIC | CARD_READER | MOBILE_APP */
+  source?: string | null;
+  late_minutes?: number;
+  early_out_minutes?: number;
+  overtime_minutes?: number;
+}
+
+export interface HrAttendanceEntryUpdate {
+  in_time?: string | null;
+  out_time?: string | null;
+  status?: string;
+  source?: string;
+  late_minutes?: number;
+  early_out_minutes?: number;
+  overtime_minutes?: number;
+  remarks?: string | null;
 }
 
 export interface HrAttendanceSummaryRow {
@@ -296,38 +529,60 @@ export interface HrLeaveTypeResponse {
   id: number;
   code: string;
   name: string;
-  annual_quota: number;
   is_paid: boolean;
+  requires_approval: boolean;
   is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface HrLeaveTypeCreate {
   code: string;
   name: string;
-  annual_quota: number;
   is_paid?: boolean;
+  requires_approval?: boolean;
+  is_active?: boolean;
+}
+
+export interface HrLeaveTypeUpdate {
+  code?: string;
+  name?: string;
+  is_paid?: boolean;
+  requires_approval?: boolean;
   is_active?: boolean;
 }
 
 export interface HrLeaveBalanceResponse {
   id: number;
+  tenant_id?: number;
   employee_id: number;
   leave_type_id: number;
-  year: number;
-  allocated: number;
-  consumed: number;
-  remaining: number;
+  balance_year: number;
+  allocated_days: string;
+  used_days: string;
+  pending_days: string;
+  closing_balance_days: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface HrLeaveRequestResponse {
   id: number;
+  tenant_id?: number;
   employee_id: number;
   leave_type_id: number;
   from_date: string;
   to_date: string;
-  total_days: number;
+  /** Backend field name */
+  days_requested: string;
   reason: string | null;
   status: string;
+  requested_by?: number | null;
+  approved_by?: number | null;
+  approved_at?: string | null;
+  approval_note?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface HrLeaveRequestCreate {
@@ -335,21 +590,70 @@ export interface HrLeaveRequestCreate {
   leave_type_id: number;
   from_date: string;
   to_date: string;
+  days_requested: string;
   reason?: string | null;
+}
+
+export interface HrLeaveRequestUpdate {
+  from_date?: string;
+  to_date?: string;
+  days_requested?: string;
+  reason?: string | null;
+}
+
+export interface HrLeavePolicyResponse {
+  id: number;
+  tenant_id: number;
+  leave_type_id: number;
+  employment_type: string;
+  annual_quota_days: string;
+  max_carry_forward_days: string;
+  effective_from: string | null;
+  effective_to: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HrLeavePolicyUpdate {
+  employment_type?: string;
+  annual_quota_days?: string;
+  max_carry_forward_days?: string;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  is_active?: boolean;
+}
+
+export interface HrLeaveBalanceUpsert {
+  employee_id: number;
+  leave_type_id: number;
+  balance_year: number;
+  allocated_days: string;
+  used_days: string;
+  pending_days: string;
+  closing_balance_days: string;
 }
 
 export interface HrPayrollPeriodResponse {
   id: number;
-  code: string;
-  period_start: string;
-  period_end: string;
+  tenant_id?: number;
+  period_code: string;
+  start_date: string;
+  end_date: string;
+  payment_date: string;
   status: string;
+  is_locked: boolean;
+  finalized_by: number | null;
+  finalized_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface HrPayrollPeriodCreate {
-  code: string;
-  period_start: string;
-  period_end: string;
+  period_code: string;
+  start_date: string;
+  end_date: string;
+  payment_date: string;
 }
 
 export interface HrSalaryStructureResponse {
@@ -375,18 +679,67 @@ export interface HrSalaryStructureCreate {
 
 export interface HrPayrollRunResponse {
   id: number;
-  payroll_period_id: number;
+  tenant_id?: number;
+  period_id: number;
   run_code: string;
   run_date: string;
   status: string;
-  total_employees: number;
-  net_payable: number;
+  gross_total: string;
+  deduction_total: string;
+  net_total: string;
+  finalized_by: number | null;
+  finalized_at: string | null;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface HrPayrollRunCreate {
-  payroll_period_id: number;
-  run_code: string;
+  period_id: number;
   run_date: string;
+  run_code?: string | null;
+}
+
+export interface HrPayrollRunLineUpsert {
+  employee_id: number;
+  structure_id?: number | null;
+  gross_pay?: string;
+  deductions?: string;
+  net_pay?: string;
+  remarks?: string | null;
+}
+
+export interface HrPayrollRunLineResponse {
+  id: number;
+  tenant_id: number;
+  run_id: number;
+  employee_id: number;
+  structure_id: number | null;
+  gross_pay: string;
+  deductions: string;
+  net_pay: string;
+  overtime_amount: string;
+  remarks: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HrPayrollStructureLineResponse {
+  id: number;
+  tenant_id: number;
+  structure_id: number;
+  component_id: number;
+  amount: string;
+  formula: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface HrPayrollStructureLineCreate {
+  component_id: number;
+  amount: string;
+  formula?: string | null;
+  sort_order?: number;
 }
 
 export interface HrPayrollApprovalResponse {
@@ -452,18 +805,34 @@ export interface HrPerformanceDashboardResponse {
 
 export interface HrJobRequisitionResponse {
   id: number;
-  req_code: string;
+  tenant_id?: number;
   title: string;
   department_id: number | null;
-  openings: number;
+  requested_by_employee_id?: number | null;
+  hiring_manager_employee_id?: number | null;
+  vacancy_count: number;
+  employment_type?: string | null;
+  location?: string | null;
+  budget_min?: number | null;
+  budget_max?: number | null;
+  description?: string | null;
   status: string;
+  opened_at?: string | null;
+  closed_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface HrJobRequisitionCreate {
-  req_code: string;
   title: string;
   department_id?: number | null;
-  openings: number;
+  hiring_manager_employee_id?: number | null;
+  vacancy_count?: number;
+  employment_type?: string | null;
+  location?: string | null;
+  budget_min?: number | null;
+  budget_max?: number | null;
+  description?: string | null;
 }
 
 export interface HrCandidateResponse {
@@ -622,6 +991,11 @@ export interface PaginatedRows<T> {
   total_pages: number;
 }
 
+export interface ListWithTotal<T> {
+  rows: T[];
+  total: number | null;
+}
+
 async function fetchAllPaginated<T>(
   fetchPage: (page: number, pageSize: number) => Promise<PaginatedRows<T>>,
   pageSize = 500,
@@ -666,6 +1040,42 @@ async function request<T>(
     return undefined as T;
   }
   return res.json() as Promise<T>;
+}
+
+async function requestWithTotal<T>(
+  path: string,
+  options: RequestInit & { tenantId?: number | null } = {}
+): Promise<ListWithTotal<T>> {
+  const { tenantId, ...init } = options;
+  const tid = tenantId ?? getTenantId();
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+  const headers: Record<string, string> = {
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
+    ...(init.headers as Record<string, string>),
+  };
+  if (tid) headers["X-Tenant-Id"] = String(tid);
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const sentAuthorization = Boolean(token);
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  if (!res.ok) {
+    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization);
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    const raw = err as { detail?: string | { msg?: string }[]; message?: string };
+    const d = raw.detail;
+    const message = typeof d === "string" ? d : Array.isArray(d) && d[0]?.msg ? d[0].msg : raw.message ?? "Request failed";
+    const requestId = res.headers.get("X-Request-Id");
+    throw new ApiError(message, res.status, requestId);
+  }
+  if (res.status === 204) {
+    return { rows: [] as T[], total: 0 };
+  }
+  const totalHeader = res.headers.get("X-Total-Count");
+  const parsedTotal = totalHeader != null ? Number(totalHeader) : Number.NaN;
+  return {
+    rows: (await res.json()) as T[],
+    total: Number.isFinite(parsedTotal) ? parsedTotal : null,
+  };
 }
 
 /** Public request without auth (e.g. verify proforma token). */
@@ -915,10 +1325,39 @@ export interface AiAnomalyEventResponse {
 
 export interface AiAnomalyGenerateResponse {
   summary: string;
+  gemini_narrative?: string | null;
   events: Record<string, unknown>[];
   persisted_event_ids: number[];
   logic_version: string;
   scheduler_ready: boolean;
+}
+
+export interface AiDashboardBriefResponse {
+  brief: string;
+  generated_at: string;
+  kpi_snapshot: Record<string, unknown>;
+}
+
+export interface AiProfitabilityResponse {
+  narrative: string;
+  metrics: Record<string, unknown>;
+  generated_at: string;
+}
+
+export interface AiDataQualityScanResponse {
+  issues: Array<Record<string, unknown>>;
+  narrative: string;
+  generated_at: string;
+}
+
+export interface AiWeeklyReportItem {
+  id: number;
+  tenant_id: number;
+  week_start: string;
+  week_end: string;
+  narrative: string;
+  kpi_snapshot_json: Record<string, unknown> | null;
+  created_at: string;
 }
 
 export interface AiOpsOverviewResponse {
@@ -1179,6 +1618,15 @@ export const api = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<AiOpsOverviewResponse>(`/api/v1/ai-tool/ops/overview${suffix}`);
   },
+  async aiDataQualityScan(): Promise<AiDataQualityScanResponse> {
+    return request<AiDataQualityScanResponse>("/api/v1/ai-tool/data-quality-scan", { method: "POST" });
+  },
+  async aiListWeeklyReports(params?: { limit?: number }): Promise<{ items: AiWeeklyReportItem[] }> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<{ items: AiWeeklyReportItem[] }>(`/api/v1/ai-tool/weekly-reports${suffix}`);
+  },
   // Settings module
   async getSettingsConfig(): Promise<SettingsConfigResponse> {
     return request<SettingsConfigResponse>("/api/v1/settings/config");
@@ -1411,6 +1859,119 @@ export const api = {
   async deactivateHrEmployee(id: number): Promise<HrEmployeeResponse> {
     return request<HrEmployeeResponse>(`/api/v1/hr/employees/${id}/deactivate`, { method: "POST" });
   },
+  async listHrEmployeeDocuments(employeeId: number): Promise<HrEmployeeDocumentResponse[]> {
+    return request<HrEmployeeDocumentResponse[]>(`/api/v1/hr/employees/${employeeId}/documents`);
+  },
+  async createHrEmployeeDocument(employeeId: number, data: HrEmployeeDocumentCreate): Promise<HrEmployeeDocumentResponse> {
+    return request<HrEmployeeDocumentResponse>(`/api/v1/hr/employees/${employeeId}/documents`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async listHrEmployeeStatusHistory(employeeId: number): Promise<HrEmployeeStatusHistoryResponse[]> {
+    return request<HrEmployeeStatusHistoryResponse[]>(`/api/v1/hr/employees/${employeeId}/status-history`);
+  },
+  async createHrEmployeeStatusHistory(
+    employeeId: number,
+    data: HrEmployeeStatusHistoryCreate
+  ): Promise<HrEmployeeStatusHistoryResponse> {
+    return request<HrEmployeeStatusHistoryResponse>(`/api/v1/hr/employees/${employeeId}/status-history`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async getHrDashboardData(): Promise<HrDashboardData> {
+    return request<HrDashboardData>("/api/v1/hr/dashboard-data");
+  },
+  async listHrSections(params?: { active_only?: boolean }): Promise<HrSectionResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.active_only) q.set("active_only", "true");
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<HrSectionResponse[]>(`/api/v1/hr/sections${suffix}`);
+  },
+  async createHrSection(data: Record<string, unknown>): Promise<HrSectionResponse> {
+    return request<HrSectionResponse>("/api/v1/hr/sections", { method: "POST", body: JSON.stringify(data) });
+  },
+  async updateHrSection(id: number, data: Record<string, unknown>): Promise<HrSectionResponse> {
+    return request<HrSectionResponse>(`/api/v1/hr/sections/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  },
+  async exportHrEmployees(): Promise<Blob> {
+    return requestBlob("/api/v1/hr/employees/export", { method: "GET" });
+  },
+  async importHrEmployees(file: File): Promise<{ created: number; updated: number; errors: string[] }> {
+    const form = new FormData();
+    form.append("file", file);
+    return request<{ created: number; updated: number; errors: string[] }>("/api/v1/hr/employees/import", {
+      method: "POST",
+      body: form,
+    });
+  },
+  async listHrComplianceChecks(): Promise<Record<string, unknown>[]> {
+    return request<Record<string, unknown>[]>("/api/v1/hr/compliance-checks");
+  },
+  async createHrComplianceCheck(data: Record<string, unknown>): Promise<{ id: number; ok: boolean }> {
+    return request<{ id: number; ok: boolean }>("/api/v1/hr/compliance-checks", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async listHrPerformanceCycles(): Promise<HrPerformanceCycleResponse[]> {
+    return request<HrPerformanceCycleResponse[]>("/api/v1/hr/performance/cycles");
+  },
+  async createHrPerformanceCycle(data: Record<string, unknown>): Promise<HrPerformanceCycleResponse> {
+    return request<HrPerformanceCycleResponse>("/api/v1/hr/performance/cycles", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async postHrPerformanceCycleStatus(cycleId: number, body: { status: string }): Promise<HrPerformanceCycleResponse> {
+    return request<HrPerformanceCycleResponse>(`/api/v1/hr/performance/cycles/${cycleId}/status`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async submitHrGoal(goalId: number, body?: { manager_comment?: string | null }): Promise<HrGoalResponse> {
+    return request<HrGoalResponse>(`/api/v1/hr/performance/goals/${goalId}/submit`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    });
+  },
+  async submitHrReview(
+    reviewId: number,
+    body?: { manager_rating?: number | null; final_rating?: number | null; manager_comment?: string | null }
+  ): Promise<HrReviewResponse> {
+    return request<HrReviewResponse>(`/api/v1/hr/performance/reviews/${reviewId}/submit`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    });
+  },
+  async listHrPayrollAccountingConfig(): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/hr/payroll/accounting-config");
+  },
+  async upsertHrPayrollAccountingConfig(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/hr/payroll/accounting-config", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+  async listHrPayrollAdvances(): Promise<Record<string, unknown>[]> {
+    return request<Record<string, unknown>[]>("/api/v1/hr/payroll/advances");
+  },
+  async createHrPayrollAdvance(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/hr/payroll/advances", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async listHrPayrollBonuses(): Promise<Record<string, unknown>[]> {
+    return request<Record<string, unknown>[]>("/api/v1/hr/payroll/bonuses");
+  },
+  async createHrPayrollBonus(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/hr/payroll/bonuses", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
   async listHrShifts(params?: { active_only?: boolean }): Promise<HrShiftResponse[]> {
     const q = new URLSearchParams();
     if (params?.active_only === false) q.set("active_only", "false");
@@ -1423,10 +1984,18 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  async listHrRosterEntries(params?: { from_date?: string; to_date?: string; employee_id?: number }): Promise<HrRosterEntryResponse[]> {
+  async updateHrShift(id: number, data: Partial<HrShiftCreate>): Promise<HrShiftResponse> {
+    return request<HrShiftResponse>(`/api/v1/hr/attendance/shifts/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async listHrRosterEntries(params?: {
+    roster_date?: string;
+    employee_id?: number;
+  }): Promise<HrRosterEntryResponse[]> {
     const q = new URLSearchParams();
-    if (params?.from_date) q.set("from_date", params.from_date);
-    if (params?.to_date) q.set("to_date", params.to_date);
+    if (params?.roster_date) q.set("roster_date", params.roster_date);
     if (params?.employee_id != null) q.set("employee_id", String(params.employee_id));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<HrRosterEntryResponse[]>(`/api/v1/hr/attendance/rosters${suffix}`);
@@ -1437,15 +2006,21 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  async updateHrRosterEntry(id: number, data: HrRosterEntryUpdate): Promise<HrRosterEntryResponse> {
+    return request<HrRosterEntryResponse>(`/api/v1/hr/attendance/rosters/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
   async listHrAttendanceEntries(params?: {
-    from_date?: string;
-    to_date?: string;
+    attendance_date?: string;
     employee_id?: number;
+    status_filter?: string;
   }): Promise<HrAttendanceEntryResponse[]> {
     const q = new URLSearchParams();
-    if (params?.from_date) q.set("from_date", params.from_date);
-    if (params?.to_date) q.set("to_date", params.to_date);
+    if (params?.attendance_date) q.set("attendance_date", params.attendance_date);
     if (params?.employee_id != null) q.set("employee_id", String(params.employee_id));
+    if (params?.status_filter) q.set("status_filter", params.status_filter);
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<HrAttendanceEntryResponse[]>(`/api/v1/hr/attendance/entries${suffix}`);
   },
@@ -1455,12 +2030,127 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  async updateHrAttendanceEntry(id: number, data: HrAttendanceEntryUpdate): Promise<HrAttendanceEntryResponse> {
+    return request<HrAttendanceEntryResponse>(`/api/v1/hr/attendance/entries/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async listHrRegularizations(params?: { status_filter?: string }): Promise<HrRegularizationResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.status_filter) q.set("status_filter", params.status_filter);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<HrRegularizationResponse[]>(`/api/v1/hr/attendance/regularizations${suffix}`);
+  },
+  async createHrRegularization(data: HrRegularizationCreate): Promise<HrRegularizationResponse> {
+    return request<HrRegularizationResponse>("/api/v1/hr/attendance/regularizations", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async approveHrRegularization(id: number, body?: HrRegularizationDecision): Promise<HrRegularizationResponse> {
+    return request<HrRegularizationResponse>(`/api/v1/hr/attendance/regularizations/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    });
+  },
+  async rejectHrRegularization(id: number, body?: HrRegularizationDecision): Promise<HrRegularizationResponse> {
+    return request<HrRegularizationResponse>(`/api/v1/hr/attendance/regularizations/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    });
+  },
+  async postHrAttendanceEntriesBulk(body: { rows: Record<string, unknown>[] }): Promise<{ ok: boolean; created: number }> {
+    return request<{ ok: boolean; created: number }>("/api/v1/hr/attendance/entries/bulk", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
   async listHrAttendanceSummary(params?: { month?: string; department_id?: number }): Promise<HrAttendanceSummaryRow[]> {
     const q = new URLSearchParams();
     if (params?.month) q.set("month", params.month);
     if (params?.department_id != null) q.set("department_id", String(params.department_id));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<HrAttendanceSummaryRow[]>(`/api/v1/hr/attendance/summary${suffix}`);
+  },
+  async listHrHolidays(params?: { year?: number }): Promise<HrHolidayResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.year != null) q.set("year", String(params.year));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<HrHolidayResponse[]>(`/api/v1/hr/attendance/holidays${suffix}`);
+  },
+  async createHrHoliday(data: Record<string, unknown>): Promise<HrHolidayResponse> {
+    return request<HrHolidayResponse>("/api/v1/hr/attendance/holidays", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateHrHoliday(id: number, data: HrHolidayUpdate): Promise<HrHolidayResponse> {
+    return request<HrHolidayResponse>(`/api/v1/hr/attendance/holidays/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async listHrOvertimeRules(): Promise<HrOvertimeRuleResponse[]> {
+    return request<HrOvertimeRuleResponse[]>("/api/v1/hr/attendance/overtime-rules");
+  },
+  async createHrOvertimeRule(data: Record<string, unknown>): Promise<HrOvertimeRuleResponse> {
+    return request<HrOvertimeRuleResponse>("/api/v1/hr/attendance/overtime-rules", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateHrOvertimeRule(id: number, data: HrOvertimeRuleUpdate): Promise<HrOvertimeRuleResponse> {
+    return request<HrOvertimeRuleResponse>(`/api/v1/hr/attendance/overtime-rules/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async listHrOvertimeEntries(params?: { status?: string }): Promise<Record<string, unknown>[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status_filter", params.status);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<Record<string, unknown>[]>(`/api/v1/hr/attendance/overtime${suffix}`);
+  },
+  async createHrOvertimeEntry(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/hr/attendance/overtime", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async approveHrOvertimeEntry(id: number): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>(`/api/v1/hr/attendance/overtime/${id}/approve`, { method: "POST" });
+  },
+  async listHrLeavePolicies(): Promise<HrLeavePolicyResponse[]> {
+    return request<HrLeavePolicyResponse[]>("/api/v1/hr/leave/policies");
+  },
+  async updateHrLeavePolicy(id: number, data: HrLeavePolicyUpdate): Promise<HrLeavePolicyResponse> {
+    return request<HrLeavePolicyResponse>(`/api/v1/hr/leave/policies/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async postHrLeaveBalanceUpsert(data: HrLeaveBalanceUpsert): Promise<HrLeaveBalanceResponse> {
+    return request<HrLeaveBalanceResponse>("/api/v1/hr/leave/balances/upsert", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async getHrLeaveCalendarData(params: { year: number; month: number }): Promise<Record<string, unknown>[]> {
+    const q = new URLSearchParams({ year: String(params.year), month: String(params.month) });
+    return request<Record<string, unknown>[]>(`/api/v1/hr/leave/calendar-data?${q.toString()}`);
+  },
+  async postHrLeaveCarryForward(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/hr/leave/balances/carry-forward", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async postHrLeaveEncashment(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/hr/leave/encashment", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   },
   async listHrLeaveTypes(params?: { active_only?: boolean }): Promise<HrLeaveTypeResponse[]> {
     const q = new URLSearchParams();
@@ -1474,16 +2164,22 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  async listHrLeaveBalances(params?: { year?: number; employee_id?: number }): Promise<HrLeaveBalanceResponse[]> {
+  async updateHrLeaveType(id: number, data: HrLeaveTypeUpdate): Promise<HrLeaveTypeResponse> {
+    return request<HrLeaveTypeResponse>(`/api/v1/hr/leave/types/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async listHrLeaveBalances(params?: { balance_year?: number; employee_id?: number }): Promise<HrLeaveBalanceResponse[]> {
     const q = new URLSearchParams();
-    if (params?.year != null) q.set("year", String(params.year));
+    if (params?.balance_year != null) q.set("balance_year", String(params.balance_year));
     if (params?.employee_id != null) q.set("employee_id", String(params.employee_id));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<HrLeaveBalanceResponse[]>(`/api/v1/hr/leave/balances${suffix}`);
   },
-  async listHrLeaveRequests(params?: { status?: string; employee_id?: number }): Promise<HrLeaveRequestResponse[]> {
+  async listHrLeaveRequests(params?: { status_filter?: string; employee_id?: number }): Promise<HrLeaveRequestResponse[]> {
     const q = new URLSearchParams();
-    if (params?.status) q.set("status", params.status);
+    if (params?.status_filter) q.set("status_filter", params.status_filter);
     if (params?.employee_id != null) q.set("employee_id", String(params.employee_id));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<HrLeaveRequestResponse[]>(`/api/v1/hr/leave/requests${suffix}`);
@@ -1494,11 +2190,38 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  async updateHrLeaveRequest(id: number, data: HrLeaveRequestUpdate): Promise<HrLeaveRequestResponse> {
+    return request<HrLeaveRequestResponse>(`/api/v1/hr/leave/requests/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async submitHrLeaveRequest(id: number): Promise<HrLeaveRequestResponse> {
+    return request<HrLeaveRequestResponse>(`/api/v1/hr/leave/requests/${id}/submit`, { method: "POST" });
+  },
   async decideHrLeaveRequest(id: number, decision: "approved" | "rejected", note?: string): Promise<HrLeaveRequestResponse> {
     const actionPath = decision === "approved" ? "approve" : "reject";
     return request<HrLeaveRequestResponse>(`/api/v1/hr/leave/requests/${id}/${actionPath}`, {
       method: "POST",
       body: JSON.stringify({ note }),
+    });
+  },
+  async listHrPayrollComponents(params?: { active_only?: boolean }): Promise<Record<string, unknown>[]> {
+    const q = new URLSearchParams();
+    if (params?.active_only === false) q.set("active_only", "false");
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<Record<string, unknown>[]>(`/api/v1/hr/payroll/components${suffix}`);
+  },
+  async createHrPayrollComponent(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/hr/payroll/components", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateHrPayrollComponent(id: number, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>(`/api/v1/hr/payroll/components/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
     });
   },
   async listHrPayrollPeriods(): Promise<HrPayrollPeriodResponse[]> {
@@ -1509,6 +2232,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     });
+  },
+  async finalizeHrPayrollPeriod(periodId: number): Promise<HrPayrollPeriodResponse> {
+    return request<HrPayrollPeriodResponse>(`/api/v1/hr/payroll/periods/${periodId}/finalize`, { method: "POST" });
   },
   async listHrSalaryStructures(params?: { active_only?: boolean }): Promise<HrSalaryStructureResponse[]> {
     const q = new URLSearchParams();
@@ -1522,10 +2248,22 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  async listHrPayrollRuns(params?: { period_id?: number; status?: string }): Promise<HrPayrollRunResponse[]> {
+  async listHrSalaryStructureLines(structureId: number): Promise<HrPayrollStructureLineResponse[]> {
+    return request<HrPayrollStructureLineResponse[]>(`/api/v1/hr/payroll/structures/${structureId}/lines`);
+  },
+  async createHrSalaryStructureLine(
+    structureId: number,
+    data: HrPayrollStructureLineCreate
+  ): Promise<HrPayrollStructureLineResponse> {
+    return request<HrPayrollStructureLineResponse>(`/api/v1/hr/payroll/structures/${structureId}/lines`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async listHrPayrollRuns(params?: { period_id?: number; status_filter?: string }): Promise<HrPayrollRunResponse[]> {
     const q = new URLSearchParams();
     if (params?.period_id != null) q.set("period_id", String(params.period_id));
-    if (params?.status) q.set("status", params.status);
+    if (params?.status_filter) q.set("status_filter", params.status_filter);
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<HrPayrollRunResponse[]>(`/api/v1/hr/payroll/runs${suffix}`);
   },
@@ -1553,6 +2291,44 @@ export const api = {
     if (params?.employee_id != null) q.set("employee_id", String(params.employee_id));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<HrPayslipResponse[]>(`/api/v1/hr/payroll/payslips${suffix}`);
+  },
+  async downloadHrPayslipPdf(payslipId: number): Promise<Blob> {
+    return requestBlob(`/api/v1/hr/payroll/payslips/${payslipId}/pdf`, { method: "GET" });
+  },
+  async downloadHrPayrollRunBankFile(runId: number): Promise<Blob> {
+    return requestBlob(`/api/v1/hr/payroll/runs/${runId}/bank-file`, { method: "GET" });
+  },
+  async postHrPayrollRun(
+    runId: number,
+    body?: { note?: string | null; payroll_expense_account_id?: number | null; payroll_payable_account_id?: number | null }
+  ): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>(`/api/v1/hr/payroll/runs/${runId}/post`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    });
+  },
+  async listHrPayrollRunLines(runId: number): Promise<HrPayrollRunLineResponse[]> {
+    return request<HrPayrollRunLineResponse[]>(`/api/v1/hr/payroll/runs/${runId}/lines`);
+  },
+  async upsertHrPayrollRunLine(runId: number, data: HrPayrollRunLineUpsert): Promise<HrPayrollRunLineResponse> {
+    return request<HrPayrollRunLineResponse>(`/api/v1/hr/payroll/runs/${runId}/lines/upsert`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async finalizeHrPayrollRun(runId: number): Promise<HrPayrollRunResponse> {
+    return request<HrPayrollRunResponse>(`/api/v1/hr/payroll/runs/${runId}/finalize`, { method: "POST" });
+  },
+  async approveHrPayrollRun(runId: number, body?: { note?: string | null }): Promise<HrPayrollRunResponse> {
+    return request<HrPayrollRunResponse>(`/api/v1/hr/payroll/runs/${runId}/approve`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    });
+  },
+  async generateHrPayrollPayslips(runId: number): Promise<{ ok: boolean; created: number }> {
+    return request<{ ok: boolean; created: number }>(`/api/v1/hr/payroll/runs/${runId}/generate-payslips`, {
+      method: "POST",
+    });
   },
   async listHrGoals(params?: { employee_id?: number; status?: string }): Promise<HrGoalResponse[]> {
     const q = new URLSearchParams();
@@ -1598,6 +2374,21 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  async postHrJobRequisitionStatus(requisitionId: number, body: { status: string }): Promise<HrJobRequisitionResponse> {
+    return request<HrJobRequisitionResponse>(`/api/v1/hr/recruitment/requisitions/${requisitionId}/status`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async postHrCandidateStage(
+    candidateId: number,
+    body: { stage: string; status?: string | null }
+  ): Promise<HrCandidateResponse> {
+    return request<HrCandidateResponse>(`/api/v1/hr/recruitment/candidates/${candidateId}/stage`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
   async listHrCandidates(params?: { stage?: string }): Promise<HrCandidateResponse[]> {
     const q = new URLSearchParams();
     if (params?.stage) q.set("stage", params.stage);
@@ -1622,6 +2413,15 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  async postHrInterviewStatus(
+    interviewId: number,
+    body: { status: string; feedback?: string | null; rating?: number | null }
+  ): Promise<HrInterviewResponse> {
+    return request<HrInterviewResponse>(`/api/v1/hr/recruitment/interviews/${interviewId}/status`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
   async listHrOffers(params?: { status?: string }): Promise<HrOfferResponse[]> {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
@@ -1632,6 +2432,12 @@ export const api = {
     return request<HrOfferResponse>("/api/v1/hr/recruitment/offers", {
       method: "POST",
       body: JSON.stringify(data),
+    });
+  },
+  async postHrOfferStatus(offerId: number, body: { status: string }): Promise<HrOfferResponse> {
+    return request<HrOfferResponse>(`/api/v1/hr/recruitment/offers/${offerId}/status`, {
+      method: "POST",
+      body: JSON.stringify(body),
     });
   },
   async getHrEssMyProfile(): Promise<HrEssProfileResponse> {
@@ -1667,6 +2473,15 @@ export const api = {
     if (params?.year != null) q.set("year", String(params.year));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<HrPayslipResponse[]>(`/api/v1/hr/ess/my-payslips${suffix}`);
+  },
+  async listHrEssMyTickets(): Promise<Record<string, unknown>[]> {
+    return request<Record<string, unknown>[]>("/api/v1/hr/ess/my-tickets");
+  },
+  async createHrEssMyTicket(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/hr/ess/my-tickets", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   },
   async getHrReportSummary(params?: { month?: string }): Promise<HrReportSummaryResponse> {
     const q = new URLSearchParams();
@@ -1796,6 +2611,10 @@ export const api = {
   },
   async getOrder(id: number): Promise<OrderResponse> {
     return request<OrderResponse>(`/api/v1/orders/${id}`);
+  },
+  /** Same data as GET /merch/orders/{id}/material-requirement (PrimeX-style path). */
+  async getOrderMaterials(orderId: number): Promise<MaterialRequirementResponse> {
+    return request<MaterialRequirementResponse>(`/api/v1/orders/${orderId}/materials`);
   },
   async getOrderPromiseCheck(id: number): Promise<OrderPromiseCheckResponse> {
     return request<OrderPromiseCheckResponse>(`/api/v1/orders/${id}/promise-check`);
@@ -2187,6 +3006,10 @@ export const api = {
   },
   async postStockAdjustment(id: number): Promise<StockAdjustmentResponse> {
     return request<StockAdjustmentResponse>(`/api/v1/inventory/stock-adjustments/${id}/post`, { method: "POST" });
+  },
+  async traceLotNumber(lotNumber: string): Promise<LotTraceResponse> {
+    const q = new URLSearchParams({ lot_number: lotNumber });
+    return request<LotTraceResponse>(`/api/v1/inventory/lot-trace?${q.toString()}`);
   },
   async listDeliveryChallans(params?: { status_filter?: string; date_from?: string; date_to?: string }): Promise<DeliveryChallanResponse[]> {
     const q = new URLSearchParams();
@@ -2692,7 +3515,36 @@ export const api = {
     if (params?.limit != null) q.set("limit", String(params.limit));
     if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<StyleResponse[]>(`/api/v1/merch/styles${suffix}`);
+    const res = await requestWithTotal<StyleResponse>(`/api/v1/merch/styles${suffix}`);
+    return res.rows;
+  },
+  async listStylesWithTotal(params?: {
+    status?: string;
+    search?: string;
+    buyer_customer_id?: number;
+    season?: string;
+    department?: string;
+    lifecycle_stage?: string;
+    active_for_orders?: boolean;
+    priority?: string;
+    risk_level?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ListWithTotal<StyleResponse>> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.search) q.set("search", params.search);
+    if (params?.buyer_customer_id != null) q.set("buyer_customer_id", String(params.buyer_customer_id));
+    if (params?.season) q.set("season", params.season);
+    if (params?.department) q.set("department", params.department);
+    if (params?.lifecycle_stage) q.set("lifecycle_stage", params.lifecycle_stage);
+    if (params?.active_for_orders != null) q.set("active_for_orders", String(params.active_for_orders));
+    if (params?.priority) q.set("priority", params.priority);
+    if (params?.risk_level) q.set("risk_level", params.risk_level);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return requestWithTotal<StyleResponse>(`/api/v1/merch/styles${suffix}`);
   },
   async createStyle(data: StyleCreate): Promise<StyleResponse> {
     return request<StyleResponse>("/api/v1/merch/styles", {
@@ -2805,7 +3657,14 @@ export const api = {
     const q = new URLSearchParams();
     if (params?.style_id != null) q.set("style_id", String(params.style_id));
     const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<BomResponse[]>(`/api/v1/merch/boms${suffix}`);
+    const res = await requestWithTotal<BomResponse>(`/api/v1/merch/boms${suffix}`);
+    return res.rows;
+  },
+  async listBomsWithTotal(params?: { style_id?: number }): Promise<ListWithTotal<BomResponse>> {
+    const q = new URLSearchParams();
+    if (params?.style_id != null) q.set("style_id", String(params.style_id));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return requestWithTotal<BomResponse>(`/api/v1/merch/boms${suffix}`);
   },
   async createBom(data: BomCreate): Promise<BomResponse> {
     return request<BomResponse>("/api/v1/merch/boms", {
@@ -2865,7 +3724,14 @@ export const api = {
     const q = new URLSearchParams();
     if (params?.order_id != null) q.set("order_id", String(params.order_id));
     const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<ConsumptionPlanResponse[]>(`/api/v1/merch/consumption-plans${suffix}`);
+    const res = await requestWithTotal<ConsumptionPlanResponse>(`/api/v1/merch/consumption-plans${suffix}`);
+    return res.rows;
+  },
+  async listConsumptionPlansWithTotal(params?: { order_id?: number }): Promise<ListWithTotal<ConsumptionPlanResponse>> {
+    const q = new URLSearchParams();
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return requestWithTotal<ConsumptionPlanResponse>(`/api/v1/merch/consumption-plans${suffix}`);
   },
   async createConsumptionPlan(data: ConsumptionPlanCreate): Promise<ConsumptionPlanResponse> {
     return request<ConsumptionPlanResponse>("/api/v1/merch/consumption-plans", {
@@ -2909,7 +3775,15 @@ export const api = {
     if (params?.order_id != null) q.set("order_id", String(params.order_id));
     if (params?.status) q.set("status", params.status);
     const suffix = q.toString() ? `?${q.toString()}` : "";
-    return request<FollowupResponse[]>(`/api/v1/merch/followups${suffix}`);
+    const res = await requestWithTotal<FollowupResponse>(`/api/v1/merch/followups${suffix}`);
+    return res.rows;
+  },
+  async listFollowupsWithTotal(params?: { order_id?: number; status?: string }): Promise<ListWithTotal<FollowupResponse>> {
+    const q = new URLSearchParams();
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    if (params?.status) q.set("status", params.status);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return requestWithTotal<FollowupResponse>(`/api/v1/merch/followups${suffix}`);
   },
   async createFollowup(data: FollowupCreate): Promise<FollowupResponse> {
     return request<FollowupResponse>("/api/v1/merch/followups", {
@@ -3123,12 +3997,14 @@ export const api = {
   async getMerchAlertsSummary(params?: {
     severity?: string;
     status?: string;
+    alert_type?: string;
     entity_type?: string;
     entity_id?: number;
   }): Promise<MerchAlertsSummaryResponse> {
     const q = new URLSearchParams();
     if (params?.severity) q.set("severity", params.severity);
     if (params?.status) q.set("status", params.status);
+    if (params?.alert_type) q.set("alert_type", params.alert_type);
     if (params?.entity_type) q.set("entity_type", params.entity_type);
     if (params?.entity_id != null) q.set("entity_id", String(params.entity_id));
     const suffix = q.toString() ? `?${q.toString()}` : "";
@@ -3336,6 +4212,62 @@ export const api = {
       `/api/v1/merch/consumption-reconciliation/${orderId}/export?${q.toString()}`
     );
   },
+  async getConsumptionReconciliationDashboard(
+    params?: ConsumptionReconciliationDashboardParams
+  ): Promise<ConsumptionReconciliationDashboardResponse> {
+    const q = new URLSearchParams();
+    if (params?.buyer_id != null) q.set("buyer_id", String(params.buyer_id));
+    if (params?.style_id != null) q.set("style_id", String(params.style_id));
+    if (params?.date_from) q.set("date_from", params.date_from);
+    if (params?.date_to) q.set("date_to", params.date_to);
+    if (params?.status) q.set("status", params.status);
+    if (params?.material_type) q.set("material_type", params.material_type);
+    if (params?.tolerance_pct != null) q.set("tolerance_pct", String(params.tolerance_pct));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    if (params?.sort_by) q.set("sort_by", params.sort_by);
+    if (params?.sort_dir) q.set("sort_dir", params.sort_dir);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<ConsumptionReconciliationDashboardResponse>(
+      `/api/v1/merch/consumption-reconciliation/dashboard${suffix}`
+    );
+  },
+  async getConsumptionReconciliationTrends(
+    params?: { months?: number; buyer_id?: number; style_id?: number; tolerance_pct?: number }
+  ): Promise<ConsumptionReconciliationTrendsResponse> {
+    const q = new URLSearchParams();
+    if (params?.months != null) q.set("months", String(params.months));
+    if (params?.buyer_id != null) q.set("buyer_id", String(params.buyer_id));
+    if (params?.style_id != null) q.set("style_id", String(params.style_id));
+    if (params?.tolerance_pct != null) q.set("tolerance_pct", String(params.tolerance_pct));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<ConsumptionReconciliationTrendsResponse>(
+      `/api/v1/merch/consumption-reconciliation/trends${suffix}`
+    );
+  },
+  async getConsumptionReconciliationDashboardExportBlob(
+    params?: ConsumptionReconciliationDashboardParams
+  ): Promise<Blob> {
+    const q = new URLSearchParams();
+    if (params?.buyer_id != null) q.set("buyer_id", String(params.buyer_id));
+    if (params?.style_id != null) q.set("style_id", String(params.style_id));
+    if (params?.date_from) q.set("date_from", params.date_from);
+    if (params?.date_to) q.set("date_to", params.date_to);
+    if (params?.status) q.set("status", params.status);
+    if (params?.material_type) q.set("material_type", params.material_type);
+    if (params?.tolerance_pct != null) q.set("tolerance_pct", String(params.tolerance_pct));
+    return requestBlob(
+      `/api/v1/merch/consumption-reconciliation/dashboard/export?${q.toString()}`
+    );
+  },
+  async getConsumptionReconciliationMovements(
+    orderId: number,
+    itemId: number
+  ): Promise<ConsumptionReconciliationMovementsResponse> {
+    return request<ConsumptionReconciliationMovementsResponse>(
+      `/api/v1/merch/consumption-reconciliation/${orderId}/movements/${itemId}`
+    );
+  },
   async submitQuotation(id: number): Promise<QuotationResponse> {
     return request<QuotationResponse>(`/api/v1/quotations/${id}/submit`, { method: "POST" });
   },
@@ -3368,6 +4300,12 @@ export const api = {
   },
   async getDashboardInsights(): Promise<DashboardInsight[]> {
     return request<DashboardInsight[]>("/api/v1/dashboard/ai-insights");
+  },
+  async getDashboardAiBrief(): Promise<AiDashboardBriefResponse> {
+    return request<AiDashboardBriefResponse>("/api/v1/dashboard/ai-brief");
+  },
+  async getDashboardAiProfitability(): Promise<AiProfitabilityResponse> {
+    return request<AiProfitabilityResponse>("/api/v1/dashboard/ai-profitability");
   },
   async getDashboardProductionTrends(): Promise<DashboardProductionPoint[]> {
     return request<DashboardProductionPoint[]>("/api/v1/dashboard/production-trends");
@@ -3640,6 +4578,15 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  async updateCashForecastScenario(id: number, data: CashForecastScenarioUpdate): Promise<CashForecastScenarioResponse> {
+    return request<CashForecastScenarioResponse>(`/api/v1/finance/cash-forecast/scenarios/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+  async deleteCashForecastScenario(id: number): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>(`/api/v1/finance/cash-forecast/scenarios/${id}`, { method: "DELETE" });
+  },
   async generateCashForecastScenario(id: number): Promise<CashForecastScenarioResponse> {
     return request<CashForecastScenarioResponse>(`/api/v1/finance/cash-forecast/scenarios/${id}/generate`, {
       method: "POST",
@@ -3758,6 +4705,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     });
+  },
+  async updateBudget(budgetId: number, data: BudgetCreate): Promise<BudgetResponse> {
+    return request<BudgetResponse>(`/api/v1/finance/budgets/${budgetId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+  async deleteBudget(budgetId: number): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>(`/api/v1/finance/budgets/${budgetId}`, { method: "DELETE" });
   },
   async getBudgetVsActual(budgetId: number): Promise<BudgetVsActualResponse> {
     return request<BudgetVsActualResponse>(`/api/v1/finance/budgets/${budgetId}/vs-actual`);
@@ -4094,23 +5050,35 @@ export const api = {
   },
   async listTradeCases(params?: {
     status?: string;
+    current_stage?: string;
     direction?: string;
     search?: string;
     date_from?: string;
     date_to?: string;
+    at_risk?: boolean;
+    at_risk_days?: number;
     limit?: number;
     offset?: number;
   }): Promise<TradeCaseRow[]> {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
+    if (params?.current_stage) q.set("current_stage", params.current_stage);
     if (params?.direction) q.set("direction", params.direction);
     if (params?.search) q.set("search", params.search);
     if (params?.date_from) q.set("date_from", params.date_from);
     if (params?.date_to) q.set("date_to", params.date_to);
+    if (params?.at_risk === true) q.set("at_risk", "true");
+    if (params?.at_risk_days != null) q.set("at_risk_days", String(params.at_risk_days));
     if (params?.limit != null) q.set("limit", String(params.limit));
     if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<TradeCaseRow[]>(`/api/v1/trade-cases${suffix}`);
+  },
+  async getTradeCaseDocumentCounts(): Promise<{
+    documents: Record<string, number>;
+    shipments: Record<string, number>;
+  }> {
+    return request("/api/v1/trade-cases/document-counts");
   },
   async getTradeCase(id: number): Promise<TradeCaseRow> {
     return request<TradeCaseRow>(`/api/v1/trade-cases/${id}`);
@@ -4165,6 +5133,11 @@ export const api = {
   },
   async downloadTradeDocument(tradeCaseId: number, documentId: number): Promise<Blob> {
     return requestBlob(`/api/v1/trade-cases/${tradeCaseId}/documents/${documentId}/download`);
+  },
+  /** GET a tenant file by API path (e.g. /api/v1/files/customer_logos/xxx.png) with JWT + X-Tenant-Id. */
+  async fetchSecureFileBlob(apiPath: string): Promise<Blob> {
+    const p = apiPath.startsWith("/") ? apiPath : `/${apiPath}`;
+    return requestBlob(p, { method: "GET" });
   },
   async getTradeCaseMargin(tradeCaseId: number): Promise<TradeCaseMarginResponse> {
     return request<TradeCaseMarginResponse>(`/api/v1/trade-cases/${tradeCaseId}/margin`);
@@ -4233,6 +5206,878 @@ export const api = {
   },
   async backfillVoucherSignatures(): Promise<{ signed_count: number; message: string }> {
     return request<{ signed_count: number; message: string }>("/api/v1/finance/vouchers/backfill-signatures", { method: "POST" });
+  },
+
+  // ── AI document extraction (no file persistence) ──
+  async extractCustomerForm(file: File): Promise<CustomerExtractionResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<CustomerExtractionResponse>("/api/v1/ai-extract/customer-form", {
+      method: "POST",
+      body: fd,
+    });
+  },
+  async extractInquiryForm(file: File): Promise<InquiryExtractionResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<InquiryExtractionResponse>("/api/v1/ai-extract/inquiry-form", {
+      method: "POST",
+      body: fd,
+    });
+  },
+
+  // ── Production (garment manufacturing) ──
+  async getProductionSettings(): Promise<{
+    tenant_id: number;
+    enabled_optional_units: string[];
+    weekend_days: string[];
+    cm_alert_threshold_pct: number;
+    ai_provider_config?: Record<string, unknown> | null;
+  }> {
+    return request("/api/v1/production/settings");
+  },
+  async updateProductionSettings(body: {
+    enabled_optional_units?: string[];
+    weekend_days?: string[];
+    cm_alert_threshold_pct?: number;
+    ai_provider_config?: Record<string, unknown> | null;
+  }): Promise<{
+    tenant_id: number;
+    enabled_optional_units: string[];
+    weekend_days: string[];
+    cm_alert_threshold_pct: number;
+    ai_provider_config?: Record<string, unknown> | null;
+  }> {
+    return request("/api/v1/production/settings", { method: "PUT", body: JSON.stringify(body) });
+  },
+  async listProductionShifts(): Promise<
+    Array<{
+      id: number;
+      tenant_id: number;
+      shift_code: string;
+      name: string;
+      start_time: string;
+      end_time: string;
+      break_minutes: number;
+      is_active: boolean;
+    }>
+  > {
+    return request("/api/v1/production/shifts");
+  },
+  async createProductionShift(body: {
+    shift_code: string;
+    name: string;
+    start_time: string;
+    end_time: string;
+    break_minutes?: number;
+    is_active?: boolean;
+  }): Promise<unknown> {
+    return request("/api/v1/production/shifts", { method: "POST", body: JSON.stringify(body) });
+  },
+  async updateProductionShift(
+    shift_id: number,
+    body: {
+      shift_code?: string;
+      name?: string;
+      start_time?: string;
+      end_time?: string;
+      break_minutes?: number;
+      is_active?: boolean;
+    },
+  ): Promise<unknown> {
+    return request(`/api/v1/production/shifts/${shift_id}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  async listSewingLines(): Promise<
+    Array<{
+      id: number;
+      tenant_id: number;
+      line_code: string;
+      name: string;
+      default_machine_count: number;
+      running_machine_count: number;
+      default_operator_count: number;
+      default_helper_count: number;
+      supervisor_user_id: number | null;
+      is_active: boolean;
+    }>
+  > {
+    return request("/api/v1/production/sewing-lines");
+  },
+  async createSewingLine(body: {
+    line_code: string;
+    name: string;
+    default_machine_count?: number;
+    running_machine_count?: number;
+    default_operator_count?: number;
+    default_helper_count?: number;
+    supervisor_user_id?: number | null;
+    is_active?: boolean;
+  }): Promise<unknown> {
+    return request("/api/v1/production/sewing-lines", { method: "POST", body: JSON.stringify(body) });
+  },
+  async updateSewingLine(
+    line_id: number,
+    body: {
+      name?: string;
+      default_machine_count?: number;
+      running_machine_count?: number;
+      default_operator_count?: number;
+      default_helper_count?: number;
+      supervisor_user_id?: number | null;
+      is_active?: boolean;
+    },
+  ): Promise<unknown> {
+    return request(`/api/v1/production/sewing-lines/${line_id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+  async deleteSewingLine(line_id: number): Promise<void> {
+    return request(`/api/v1/production/sewing-lines/${line_id}`, { method: "DELETE" });
+  },
+  async listDepartmentMachines(department_type?: string): Promise<
+    Array<{
+      id: number;
+      tenant_id: number;
+      department_type: string;
+      machine_code: string;
+      name: string;
+      machine_type: string | null;
+      status: string;
+      is_active: boolean;
+    }>
+  > {
+    const q = department_type ? `?department_type=${encodeURIComponent(department_type)}` : "";
+    return request(`/api/v1/production/machines${q}`);
+  },
+  async createDepartmentMachine(body: {
+    department_type: string;
+    machine_code: string;
+    name: string;
+    machine_type?: string | null;
+    status?: string;
+    is_active?: boolean;
+  }): Promise<unknown> {
+    return request("/api/v1/production/machines", { method: "POST", body: JSON.stringify(body) });
+  },
+  async listCrewRoles(department_type?: string): Promise<
+    Array<{
+      id: number;
+      tenant_id: number;
+      department_type: string;
+      role_key: string;
+      role_name: string;
+      is_named: boolean;
+      designation_id: number | null;
+      designation_filter: string | null;
+      sort_order: number;
+      is_active: boolean;
+    }>
+  > {
+    const q = department_type ? `?department_type=${encodeURIComponent(department_type)}` : "";
+    return request(`/api/v1/production/crew-roles${q}`);
+  },
+  async createCrewRole(body: {
+    department_type: string;
+    role_key: string;
+    role_name: string;
+    is_named?: boolean;
+    designation_id?: number | null;
+    designation_filter?: string | null;
+    sort_order?: number;
+    is_active?: boolean;
+  }): Promise<unknown> {
+    return request("/api/v1/production/crew-roles", { method: "POST", body: JSON.stringify(body) });
+  },
+  async updateCrewRole(
+    crew_role_id: number,
+    body: {
+      role_name?: string;
+      is_named?: boolean;
+      designation_id?: number | null;
+      designation_filter?: string | null;
+      sort_order?: number;
+      is_active?: boolean;
+    },
+  ): Promise<unknown> {
+    return request(`/api/v1/production/crew-roles/${crew_role_id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+  async deleteCrewRole(crew_role_id: number): Promise<void> {
+    return request(`/api/v1/production/crew-roles/${crew_role_id}`, { method: "DELETE" });
+  },
+  async listHrEmployeesForCrew(params?: { designation_filter?: string; designation_id?: number }): Promise<{
+    items: Array<{
+      id: number;
+      employee_code: string;
+      name: string;
+      designation_id: number | null;
+      designation_title: string | null;
+      user_id: number | null;
+    }>;
+  }> {
+    const q = new URLSearchParams();
+    if (params?.designation_id != null) q.set("designation_id", String(params.designation_id));
+    if (params?.designation_filter) q.set("designation_filter", params.designation_filter);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request(`/api/v1/production/hr-employees${suffix}`);
+  },
+  async getHrAvailableForCrew(params: {
+    date: string;
+    designation_id?: number;
+    designation_filter?: string;
+  }): Promise<{
+    designation_id: number | null;
+    designation_filter: string | null;
+    date: string;
+    available_count: number;
+    active_count: number;
+    on_leave_count: number;
+    employees: Array<{ id: number; employee_code: string; name: string; designation_id: number | null }>;
+  }> {
+    const q = new URLSearchParams();
+    q.set("date", params.date);
+    if (params.designation_id != null) q.set("designation_id", String(params.designation_id));
+    if (params.designation_filter) q.set("designation_filter", params.designation_filter);
+    return request(`/api/v1/production/hr-available?${q.toString()}`);
+  },
+  async getLineCrewTemplate(line_id: number): Promise<
+    Array<{
+      crew_role_id: number;
+      role_key: string;
+      role_name: string;
+      is_named: boolean;
+      designation_id: number | null;
+      designation_filter: string | null;
+      default_count: number;
+      employee_id: number | null;
+      employee_name: string | null;
+      sort_order: number;
+    }>
+  > {
+    return request(`/api/v1/production/sewing-lines/${line_id}/crew-template`);
+  },
+  async putLineCrewTemplate(
+    line_id: number,
+    rows: Array<{ crew_role_id: number; default_count: number; employee_id?: number | null }>,
+  ): Promise<unknown> {
+    return request(`/api/v1/production/sewing-lines/${line_id}/crew-template`, {
+      method: "PUT",
+      body: JSON.stringify({ rows }),
+    });
+  },
+  async getUnitCrewTemplate(
+    department_type: string,
+    machine_id?: number | null,
+  ): Promise<
+    Array<{
+      crew_role_id: number;
+      role_key: string;
+      role_name: string;
+      is_named: boolean;
+      designation_id: number | null;
+      designation_filter: string | null;
+      default_count: number;
+      employee_id: number | null;
+      employee_name: string | null;
+      sort_order: number;
+    }>
+  > {
+    const q = machine_id != null ? `?machine_id=${machine_id}` : "";
+    return request(`/api/v1/production/units/${encodeURIComponent(department_type)}/crew-template${q}`);
+  },
+  async putUnitCrewTemplate(
+    department_type: string,
+    body: {
+      machine_id?: number | null;
+      rows: Array<{ crew_role_id: number; default_count: number; employee_id?: number | null }>;
+    },
+  ): Promise<unknown> {
+    return request(`/api/v1/production/units/${encodeURIComponent(department_type)}/crew-template`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+  async getCrewDaily(params: {
+    production_date: string;
+    shift_id: number;
+    line_id?: number | null;
+    department_type?: string | null;
+    machine_id?: number | null;
+  }): Promise<
+    Array<{
+      id: number;
+      crew_role_id: number;
+      role_key: string;
+      role_name: string;
+      is_named: boolean;
+      designation_id: number | null;
+      designation_filter: string | null;
+      planned_count: number;
+      actual_present: number;
+      shortfall: number;
+      employee_id: number | null;
+      employee_name: string | null;
+      notes: string | null;
+      sort_order: number;
+      validation_warning: string | null;
+    }>
+  > {
+    const q = new URLSearchParams();
+    q.set("production_date", params.production_date);
+    q.set("shift_id", String(params.shift_id));
+    if (params.line_id != null) q.set("line_id", String(params.line_id));
+    if (params.department_type) q.set("department_type", params.department_type);
+    if (params.machine_id != null) q.set("machine_id", String(params.machine_id));
+    return request(`/api/v1/production/crew-daily?${q.toString()}`);
+  },
+  async putCrewDaily(body: {
+    production_date: string;
+    shift_id: number;
+    line_id?: number | null;
+    department_type?: string | null;
+    machine_id?: number | null;
+    rows: Array<{ crew_role_id: number; planned_count: number; employee_id?: number | null; notes?: string | null }>;
+    override_validation?: boolean;
+  }): Promise<unknown> {
+    return request("/api/v1/production/crew-daily", { method: "PUT", body: JSON.stringify(body) });
+  },
+  async initCrewDailyFromTemplate(body: {
+    production_date: string;
+    shift_id: number;
+    line_id?: number | null;
+    department_type?: string | null;
+    machine_id?: number | null;
+  }): Promise<unknown> {
+    return request("/api/v1/production/crew-daily/init-from-template", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async syncCrewAttendance(date: string): Promise<{ ok: boolean; updated_rows: number }> {
+    return request(`/api/v1/production/crew-daily/sync-attendance?date=${encodeURIComponent(date)}`, {
+      method: "POST",
+    });
+  },
+  async getCrewDailyFilters(): Promise<{
+    shifts: Array<{ id: number; code: string; name: string }>;
+    lines: Array<{ id: number; line_code: string; name: string }>;
+    optional_units: string[];
+  }> {
+    return request("/api/v1/production/crew-daily/filters");
+  },
+  async getProductionDashboard(production_date: string): Promise<{
+    production_date: string;
+    total_output_today: number;
+    overall_efficiency_pct: number | null;
+    crew_fill_rate_pct: number | null;
+    cm_alerts_open: number;
+    lines: Array<Record<string, unknown>>;
+    cutting_bundles_pending: number;
+    cutting_bundles_issued: number;
+  }> {
+    return request(`/api/v1/production/dashboard?production_date=${encodeURIComponent(production_date)}`);
+  },
+  async getCrewSubstituteSuggestions(params: {
+    production_date: string;
+    shift_id: number;
+    line_id: number;
+  }): Promise<{
+    production_date: string;
+    line_id: number;
+    shift_id: number;
+    gaps: Array<{
+      crew_role_id: number;
+      role_name: string;
+      current_employee_id: number;
+      suggested_substitutes: Array<{ id: number; employee_code: string; name: string }>;
+    }>;
+  }> {
+    const q = new URLSearchParams();
+    q.set("production_date", params.production_date);
+    q.set("shift_id", String(params.shift_id));
+    q.set("line_id", String(params.line_id));
+    return request(`/api/v1/production/crew-daily/substitute-suggestions?${q.toString()}`);
+  },
+  async getLineCrewSheetStatus(params: { production_date: string; shift_id: number; line_id: number }): Promise<{
+    id: number | null;
+    sewing_line_id: number;
+    shift_id: number;
+    production_date: string;
+    status: string;
+    submitted_at: string | null;
+    approved_at: string | null;
+    locked_at: string | null;
+  }> {
+    const q = new URLSearchParams();
+    q.set("production_date", params.production_date);
+    q.set("shift_id", String(params.shift_id));
+    q.set("line_id", String(params.line_id));
+    return request(`/api/v1/production/line-crew-sheet/status?${q.toString()}`);
+  },
+  async updateLineCrewSheetStatus(
+    params: { production_date: string; shift_id: number; line_id: number },
+    body: { action: string },
+  ): Promise<unknown> {
+    const q = new URLSearchParams();
+    q.set("production_date", params.production_date);
+    q.set("shift_id", String(params.shift_id));
+    q.set("line_id", String(params.line_id));
+    return request(`/api/v1/production/line-crew-sheet/status?${q.toString()}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async listProductionDefectCodes(): Promise<
+    Array<{
+      id: number;
+      tenant_id: number;
+      code: string;
+      name: string;
+      category: string | null;
+      severity: string;
+      is_active: boolean;
+    }>
+  > {
+    return request("/api/v1/production/quality/defect-codes");
+  },
+  async createProductionDefectCode(body: {
+    code: string;
+    name: string;
+    category?: string | null;
+    severity?: string;
+    is_active?: boolean;
+  }): Promise<unknown> {
+    return request("/api/v1/production/quality/defect-codes", { method: "POST", body: JSON.stringify(body) });
+  },
+  async listProductionQcChecks(params: { production_date: string; shift_id?: number; line_id?: number }): Promise<
+    Array<{
+      id: number;
+      tenant_id: number;
+      sewing_line_id: number;
+      shift_id: number;
+      production_date: string;
+      hour_slot: number;
+      check_type: string;
+      total_checked: number;
+      pass_qty: number;
+      fail_qty: number;
+      defect_codes: unknown[] | null;
+      notes: string | null;
+    }>
+  > {
+    const q = new URLSearchParams();
+    q.set("production_date", params.production_date);
+    if (params.shift_id != null) q.set("shift_id", String(params.shift_id));
+    if (params.line_id != null) q.set("line_id", String(params.line_id));
+    return request(`/api/v1/production/quality/checks?${q.toString()}`);
+  },
+  async upsertProductionQcCheck(body: {
+    sewing_line_id: number;
+    shift_id: number;
+    production_date: string;
+    hour_slot: number;
+    check_type?: string;
+    total_checked?: number;
+    pass_qty?: number;
+    fail_qty?: number;
+    defect_codes?: unknown[] | null;
+    notes?: string | null;
+  }): Promise<unknown> {
+    return request("/api/v1/production/quality/checks", { method: "PUT", body: JSON.stringify(body) });
+  },
+  async listWorkerSkills(params?: { employee_id?: number }): Promise<
+    Array<{
+      id: number;
+      tenant_id: number;
+      employee_id: number;
+      ie_operation_id: number;
+      operation_code: string | null;
+      operation_name: string | null;
+      skill_level: string;
+      certified_at: string | null;
+      is_active: boolean;
+    }>
+  > {
+    const q = new URLSearchParams();
+    if (params?.employee_id != null) q.set("employee_id", String(params.employee_id));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request(`/api/v1/production/skills${suffix}`);
+  },
+  async createWorkerSkill(body: {
+    employee_id: number;
+    ie_operation_id: number;
+    skill_level?: string;
+    certified_at?: string | null;
+    is_active?: boolean;
+  }): Promise<unknown> {
+    return request("/api/v1/production/skills", { method: "POST", body: JSON.stringify(body) });
+  },
+  async listCrewRosterWeekly(params: {
+    week_start_date: string;
+    sewing_line_id?: number;
+    shift_id?: number;
+  }): Promise<
+    Array<{
+      id: number;
+      week_start_date: string;
+      sewing_line_id: number;
+      shift_id: number;
+      crew_role_id: number;
+      role_name: string | null;
+      day_of_week: number;
+      employee_id: number | null;
+      planned_count: number;
+      notes: string | null;
+    }>
+  > {
+    const q = new URLSearchParams();
+    q.set("week_start_date", params.week_start_date);
+    if (params.sewing_line_id != null) q.set("sewing_line_id", String(params.sewing_line_id));
+    if (params.shift_id != null) q.set("shift_id", String(params.shift_id));
+    return request(`/api/v1/production/roster-weekly?${q.toString()}`);
+  },
+  async upsertCrewRosterCell(body: {
+    week_start_date: string;
+    sewing_line_id: number;
+    shift_id: number;
+    crew_role_id: number;
+    day_of_week: number;
+    employee_id?: number | null;
+    planned_count?: number;
+    notes?: string | null;
+  }): Promise<unknown> {
+    return request("/api/v1/production/roster-weekly/cell", { method: "PUT", body: JSON.stringify(body) });
+  },
+  async generateCrewDailyFromRoster(body: {
+    week_start_date: string;
+    sewing_line_id: number;
+    shift_id: number;
+    target_date: string;
+  }): Promise<void> {
+    return request("/api/v1/production/roster-weekly/generate-daily", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async getEmployeeProductionProfile(employee_id: number, limit_days?: number): Promise<{
+    employee_id: number;
+    line_assignment: { line_id: number; line_code: string; last_date: string } | null;
+    skills: Array<{ operation_code: string; name: string; skill_level: string }>;
+    attendance_trend: Array<{ date: string; status: string }>;
+    hourly_good_qty_total_period: number;
+  }> {
+    const q = limit_days != null ? `?limit_days=${limit_days}` : "";
+    return request(`/api/v1/production/employees/${employee_id}/production-profile${q}`);
+  },
+  async getPlanBoard(from_date: string, to_date: string): Promise<{ items: unknown[] }> {
+    return request(`/api/v1/production/plan-board?from_date=${encodeURIComponent(from_date)}&to_date=${encodeURIComponent(to_date)}`);
+  },
+  async getPlanSuggest(start_date: string): Promise<{ suggestions: unknown[] }> {
+    return request(`/api/v1/production/plan-board/suggest?start_date=${encodeURIComponent(start_date)}`);
+  },
+  async getOrderReadiness(order_id: number): Promise<unknown> {
+    return request(`/api/v1/production/plan-board/readiness/${order_id}`);
+  },
+  /** Full chain readiness (style, OB, TNA, materials, line). */
+  async getOrderChainReadiness(order_id: number): Promise<unknown> {
+    return request(`/api/v1/production/planning/pipeline/${order_id}/readiness`);
+  },
+  /** Orders with readiness; optional group_by=style */
+  async getProductionPipeline(params?: { group_by?: "style" }): Promise<unknown> {
+    const q = params?.group_by === "style" ? "?group_by=style" : "";
+    return request(`/api/v1/production/planning/pipeline${q}`);
+  },
+  async aiAnalyzePipeline(): Promise<{ summary: string | null; pipeline_snapshot: unknown }> {
+    return request("/api/v1/production/planning/ai/analyze", { method: "POST" });
+  },
+  async aiSuggestAllocation(order_id: number): Promise<{ suggestion: Record<string, unknown> | null }> {
+    return request("/api/v1/production/planning/ai/suggest-allocation", {
+      method: "POST",
+      body: JSON.stringify({ order_id }),
+    });
+  },
+  async aiPredictMove(body: {
+    config_id: number;
+    target_line_id: number;
+    target_start_date: string;
+  }): Promise<{
+    prediction: string | null;
+    ai_status?: {
+      enabled: boolean;
+      has_api_key: boolean;
+      model: string;
+      rate_limited: boolean;
+      reason: string;
+    };
+  }> {
+    return request("/api/v1/production/planning/ai/predict-move", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async aiOptimizeBoard(): Promise<{
+    moves: Array<Record<string, unknown>>;
+    ai_status?: {
+      enabled: boolean;
+      has_api_key: boolean;
+      model: string;
+      rate_limited: boolean;
+      reason: string;
+    };
+  }> {
+    return request("/api/v1/production/planning/ai/optimize", { method: "POST" });
+  },
+  async aiRiskAlerts(): Promise<{ alerts: Array<Record<string, unknown>> | null }> {
+    return request("/api/v1/production/planning/ai/risk-alerts");
+  },
+  async aiEfficiencyForecast(): Promise<{
+    forecast_text: string;
+    lines: Array<Record<string, unknown>>;
+    generated_at: string;
+  }> {
+    return request("/api/v1/production/planning/ai/efficiency-forecast");
+  },
+  async getAiPlanningSettings(): Promise<{
+    effective_enabled: boolean;
+    effective_model: string;
+    tenant_override: Record<string, unknown> | null;
+  }> {
+    return request("/api/v1/production/planning/ai/settings");
+  },
+  async putAiPlanningSettings(body: { enabled?: boolean | null; model?: string | null }): Promise<{
+    effective_enabled: boolean;
+    effective_model: string;
+    tenant_override: Record<string, unknown> | null;
+  }> {
+    return request("/api/v1/production/planning/ai/settings", { method: "PUT", body: JSON.stringify(body) });
+  },
+  async getMaterialReadinessForOrder(order_id: number): Promise<unknown> {
+    return request(`/api/v1/inventory/orders/${order_id}/material-readiness`);
+  },
+  async listFactoryCalendar(from_date?: string, to_date?: string): Promise<FactoryCalendarOverrideRow[]> {
+    const q = new URLSearchParams();
+    if (from_date) q.set("from_date", from_date);
+    if (to_date) q.set("to_date", to_date);
+    const s = q.toString();
+    return request(`/api/v1/production/calendar${s ? `?${s}` : ""}`);
+  },
+  async upsertFactoryCalendar(body: {
+    override_date: string;
+    override_type: string;
+    name?: string | null;
+    notes?: string | null;
+    category?: string | null;
+    source?: string | null;
+    is_paid?: boolean;
+    affects_hr?: boolean;
+  }): Promise<FactoryCalendarOverrideRow> {
+    return request("/api/v1/production/calendar", { method: "POST", body: JSON.stringify(body) });
+  },
+  async deleteFactoryCalendarOverride(override_id: number): Promise<void> {
+    return request(`/api/v1/production/calendar/${override_id}`, { method: "DELETE" });
+  },
+  async getCountryHolidaysPreview(year: number): Promise<CountryHolidaysPreviewResponse> {
+    return request(`/api/v1/production/calendar/country-holidays?year=${encodeURIComponent(String(year))}`);
+  },
+  async importCountryHolidays(body: { year: number; selected_dates: string[] }): Promise<{
+    imported_count: number;
+    skipped_count: number;
+  }> {
+    return request("/api/v1/production/calendar/import-holidays", { method: "POST", body: JSON.stringify(body) });
+  },
+  async deleteProductionShift(shift_id: number): Promise<void> {
+    return request(`/api/v1/production/shifts/${shift_id}`, { method: "DELETE" });
+  },
+  async listIeOperations(): Promise<
+    Array<{
+      id: number;
+      operation_code: string;
+      name: string;
+      category: string;
+      default_smv: number;
+      machine_type_required: string | null;
+      is_active: boolean;
+    }>
+  > {
+    return request("/api/v1/production/ie/operations");
+  },
+  async createIeOperation(body: {
+    operation_code: string;
+    name: string;
+    category?: string;
+    default_smv?: number;
+    machine_type_required?: string | null;
+  }): Promise<unknown> {
+    return request("/api/v1/production/ie/operations", { method: "POST", body: JSON.stringify(body) });
+  },
+  async listOperationBulletins(style_id?: number): Promise<
+    Array<{ id: number; style_id: number; ob_code: string; version_no: number; total_smv: number; status: string }>
+  > {
+    const q = style_id != null ? `?style_id=${style_id}` : "";
+    return request(`/api/v1/production/ie/bulletins${q}`);
+  },
+  async createOperationBulletin(body: {
+    style_id: number;
+    ob_code: string;
+    version_no?: number;
+    notes?: string | null;
+    operations: Array<{
+      sequence_no: number;
+      operation_id?: number | null;
+      operation_name: string;
+      smv?: number;
+      machine_type?: string | null;
+      attachment_needed?: string | null;
+      is_critical?: boolean;
+    }>;
+  }): Promise<unknown> {
+    return request("/api/v1/production/ie/bulletins", { method: "POST", body: JSON.stringify(body) });
+  },
+  async runLineBalance(body: { ob_id: number; line_id: number; num_workstations: number }): Promise<unknown> {
+    return request("/api/v1/production/ie/line-balance", { method: "POST", body: JSON.stringify(body) });
+  },
+  async assignPlanBoard(body: {
+    line_id: number;
+    order_id?: number | null;
+    style_id?: number | null;
+    ob_id?: number | null;
+    machine_count?: number;
+    operator_count?: number;
+    helper_count?: number;
+    target_efficiency_pct?: number;
+    shift_id?: number | null;
+    start_date: string;
+    planned_qty?: number;
+    sort_order?: number;
+  }): Promise<{ id: number }> {
+    return request("/api/v1/production/plan-board/assign", { method: "POST", body: JSON.stringify(body) });
+  },
+  async movePlanBoard(config_id: number, body: { line_id?: number | null; start_date?: string | null }): Promise<{ ok: boolean }> {
+    return request(`/api/v1/production/plan-board/${config_id}/move`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  async upsertHourlyEntry(body: Record<string, unknown>): Promise<{ id: number }> {
+    return request("/api/v1/production/hourly/upsert", { method: "POST", body: JSON.stringify(body) });
+  },
+  async getHourlySheet(params: {
+    department_type: string;
+    production_date: string;
+    line_id?: number | null;
+    machine_id?: number | null;
+  }): Promise<{ items: unknown[] }> {
+    const q = new URLSearchParams();
+    q.set("department_type", params.department_type);
+    q.set("production_date", params.production_date);
+    if (params.line_id != null) q.set("line_id", String(params.line_id));
+    if (params.machine_id != null) q.set("machine_id", String(params.machine_id));
+    return request(`/api/v1/production/hourly/sheet?${q.toString()}`);
+  },
+  async getHourlySummary(line_style_config_id: number, production_date: string): Promise<unknown> {
+    return request(
+      `/api/v1/production/hourly/summary?line_style_config_id=${line_style_config_id}&production_date=${encodeURIComponent(production_date)}`,
+    );
+  },
+  async listMarkerPlans(): Promise<{ items: Array<{ id: number; marker_code: string; status: string }> }> {
+    return request("/api/v1/production/cutting/marker-plans");
+  },
+  async createMarkerPlan(body: Record<string, unknown>): Promise<{ id: number }> {
+    return request("/api/v1/production/cutting/marker-plans", { method: "POST", body: JSON.stringify(body) });
+  },
+  async createLayPlan(body: { marker_plan_id: number; lay_code: string; fabric_item_id?: number | null }): Promise<{ id: number }> {
+    return request("/api/v1/production/cutting/lay-plans", { method: "POST", body: JSON.stringify(body) });
+  },
+  async createCutTicket(body: { lay_plan_id: number; ticket_code: string }): Promise<{ id: number }> {
+    return request("/api/v1/production/cutting/cut-tickets", { method: "POST", body: JSON.stringify(body) });
+  },
+  async generateCuttingBundles(
+    ticket_id: number,
+    lines?: Array<{ size?: string; color?: string | null; qty_in_bundle?: number; bundle_count?: number }>,
+  ): Promise<{ barcodes: string[] }> {
+    return request(`/api/v1/production/cutting/cut-tickets/${ticket_id}/generate-bundles`, {
+      method: "POST",
+      body: JSON.stringify({ lines: lines ?? null }),
+    });
+  },
+  async lookupCuttingBundle(barcode: string): Promise<unknown> {
+    return request(`/api/v1/production/cutting/bundles/lookup/${encodeURIComponent(barcode)}`);
+  },
+  async issueCuttingBundles(body: { bundle_ids: number[]; issued_to_line_id: number }): Promise<{ ok: boolean }> {
+    return request("/api/v1/production/cutting/bundles/issue", { method: "POST", body: JSON.stringify(body) });
+  },
+  async downloadCuttingBundlePdf(cut_ticket_id: number): Promise<Blob> {
+    return requestBlob(`/api/v1/production/cutting/bundles/barcode-pdf/${cut_ticket_id}`, { method: "GET" });
+  },
+  async postProductionDailyCost(body: Record<string, unknown>): Promise<{ id: number }> {
+    return request("/api/v1/production/costs/daily", { method: "POST", body: JSON.stringify(body) });
+  },
+  async getCmAnalysis(period_date: string): Promise<{ items: unknown[] }> {
+    return request(`/api/v1/production/costs/cm-analysis?period_date=${encodeURIComponent(period_date)}`);
+  },
+  async recalcCm(period_date: string): Promise<unknown> {
+    return request(`/api/v1/production/costs/cm-recalc?period_date=${encodeURIComponent(period_date)}`, { method: "POST" });
+  },
+  async getCmAlerts(): Promise<{ items: unknown[] }> {
+    return request("/api/v1/production/costs/cm-alerts");
+  },
+  async listCmOverheadConfig(): Promise<
+    Array<{
+      id: number;
+      tenant_id: number;
+      cost_category: string;
+      account_id: number | null;
+      cost_center_id: number | null;
+      allocation_method: string;
+      is_active: boolean;
+    }>
+  > {
+    return request("/api/v1/production/costs/overhead-config");
+  },
+  async upsertCmOverheadConfig(
+    rows: Array<{
+      cost_category: string;
+      account_id?: number | null;
+      cost_center_id?: number | null;
+      allocation_method?: string;
+      is_active?: boolean;
+    }>,
+  ): Promise<unknown> {
+    return request("/api/v1/production/costs/overhead-config", {
+      method: "PUT",
+      body: JSON.stringify(rows),
+    });
+  },
+  async createWipJournal(body: Record<string, unknown>): Promise<{ id: number; voucher_id?: number | null }> {
+    return request("/api/v1/production/costs/wip-journal", { method: "POST", body: JSON.stringify(body) });
+  },
+  async listWipJournals(): Promise<{ items: unknown[] }> {
+    return request("/api/v1/production/costs/wip-journal");
+  },
+  async listKnittingPlans(): Promise<{ items: unknown[] }> {
+    return request("/api/v1/production/knitting/plans");
+  },
+  async createKnittingPlan(body: Record<string, unknown>): Promise<{ id: number }> {
+    return request("/api/v1/production/knitting/plans", { method: "POST", body: JSON.stringify(body) });
+  },
+  async listDyeRecipes(): Promise<{ items: unknown[] }> {
+    return request("/api/v1/production/dyeing/recipes");
+  },
+  async createDyeRecipe(body: Record<string, unknown>): Promise<{ id: number }> {
+    return request("/api/v1/production/dyeing/recipes", { method: "POST", body: JSON.stringify(body) });
+  },
+  async listDyeBatches(): Promise<{ items: unknown[] }> {
+    return request("/api/v1/production/dyeing/batches");
+  },
+  async createDyeBatch(body: Record<string, unknown>): Promise<{ id: number }> {
+    return request("/api/v1/production/dyeing/batches", { method: "POST", body: JSON.stringify(body) });
+  },
+  async listDepartmentProductionPlans(department_type?: string): Promise<{ items: unknown[] }> {
+    const q = department_type ? `?department_type=${encodeURIComponent(department_type)}` : "";
+    return request(`/api/v1/production/departments/plans${q}`);
+  },
+  async createDepartmentProductionPlan(body: Record<string, unknown>): Promise<{ id: number }> {
+    return request("/api/v1/production/departments/plans", { method: "POST", body: JSON.stringify(body) });
   },
 };
 
@@ -5042,6 +6887,35 @@ export interface StockValuationResponse {
   method: string;
   total_value: number;
   rows: StockValuationRow[];
+}
+
+export interface LotTraceGrnLine {
+  grn_id: number;
+  grn_code: string;
+  received_date: string | null;
+  item_id: number;
+  quantity: string;
+  warehouse_id: number;
+  lot_number: string | null;
+}
+
+export interface LotTraceMovement {
+  id: number;
+  movement_type: string;
+  quantity: string;
+  item_id: number;
+  warehouse_id: number | null;
+  reference_type: string | null;
+  reference_id: number | null;
+  movement_date: string | null;
+  lot_number: string | null;
+  created_at: string;
+}
+
+export interface LotTraceResponse {
+  lot_number: string;
+  grn_lines: LotTraceGrnLine[];
+  movements: LotTraceMovement[];
 }
 
 export interface InventorySummaryLine {
@@ -6482,6 +8356,7 @@ export interface BomDetailResponse {
 export interface GeneratePOFromBOMResponse {
   id: number;
   po_code: string;
+  warnings?: string[];
 }
 
 export interface MaterialRequirementLineResponse {
@@ -7096,6 +8971,12 @@ export interface ConsumptionReconciliationRow {
   actual_qty: number;
   variance: number;
   variance_pct: number;
+  unit_cost?: number | null;
+  planned_cost?: number | null;
+  actual_cost?: number | null;
+  cost_variance?: number | null;
+  last_issued_at?: string | null;
+  movement_count?: number;
 }
 
 export interface ConsumptionReconciliationResponse {
@@ -7112,7 +8993,104 @@ export interface ConsumptionReconciliationResponse {
     variance: number;
     overall_variance_pct: number;
     items_exceeding_tolerance: number;
+    total_planned_cost?: number;
+    total_actual_cost?: number;
+    cost_variance?: number;
+    cost_variance_pct?: number;
   };
+  bom_version?: string | null;
+  bom_status?: string | null;
+  order_status?: string | null;
+  consumption_plan_status?: string | null;
+}
+
+export interface ConsumptionReconciliationDashboardParams {
+  buyer_id?: number;
+  style_id?: number;
+  date_from?: string;
+  date_to?: string;
+  status?: string;
+  material_type?: string;
+  tolerance_pct?: number;
+  limit?: number;
+  offset?: number;
+  sort_by?: string;
+  sort_dir?: string;
+}
+
+export interface ConsumptionReconciliationDashboardOrderRow {
+  order_id: number;
+  order_code: string;
+  style_code: string;
+  style_id?: number | null;
+  buyer_name: string | null;
+  order_qty: number | null;
+  total_planned: number;
+  total_actual: number;
+  variance: number;
+  overall_variance_pct: number;
+  items_exceeding_tolerance: number;
+  total_items: number;
+  worst_item_name: string | null;
+  worst_item_variance_pct: number;
+  status: string;
+}
+
+export interface ConsumptionReconciliationCategoryBreakdown {
+  material_type: string;
+  total_planned: number;
+  total_actual: number;
+  variance_pct: number;
+}
+
+export interface ConsumptionReconciliationDashboardSummary {
+  total_orders: number;
+  orders_on_target: number;
+  orders_minor: number;
+  orders_exceeding: number;
+  avg_variance_pct: number;
+  total_planned_qty: number;
+  total_actual_qty: number;
+}
+
+export interface ConsumptionReconciliationDashboardResponse {
+  orders: ConsumptionReconciliationDashboardOrderRow[];
+  summary: ConsumptionReconciliationDashboardSummary;
+  category_breakdown: ConsumptionReconciliationCategoryBreakdown[];
+  total_count: number;
+}
+
+export interface ConsumptionReconciliationTrendPoint {
+  period: string;
+  orders_count: number;
+  avg_variance_pct: number;
+  total_planned: number;
+  total_actual: number;
+  exceeding_count: number;
+}
+
+export interface ConsumptionReconciliationTrendsResponse {
+  points: ConsumptionReconciliationTrendPoint[];
+  tolerance_pct: number;
+}
+
+export interface ConsumptionReconciliationMovementRow {
+  movement_id: number;
+  movement_date: string | null;
+  quantity: number;
+  warehouse_name: string | null;
+  issued_by: string | null;
+  reference_code?: string | null;
+  notes: string | null;
+}
+
+export interface ConsumptionReconciliationMovementsResponse {
+  item_id: number;
+  item_code: string;
+  item_name: string;
+  planned_qty: number;
+  total_issued: number;
+  movements: ConsumptionReconciliationMovementRow[];
 }
 
 export interface AccountGroupCreate {
@@ -7388,6 +9366,13 @@ export interface CashForecastScenarioCreate {
   name: string;
   start_date: string;
   months?: number;
+}
+
+export interface CashForecastScenarioUpdate {
+  name?: string;
+  start_date?: string;
+  months?: number;
+  status?: string;
 }
 
 export interface CashForecastLineResponse {
@@ -8327,7 +10312,8 @@ export interface TradeDocumentRow {
   shipment_id?: number | null;
   document_type: string;
   file_name: string;
-  storage_path: string;
+  /** API-relative URL for authenticated download (same tenant as JWT). */
+  file_url: string;
   version: number;
   linked_entity_type?: string | null;
   linked_entity_id?: number | null;

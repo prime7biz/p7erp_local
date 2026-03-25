@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { HrPageHeader } from "@/components/hr/HrPageHeader";
 
 export interface HrColumn<TItem> {
   header: string;
@@ -22,6 +23,10 @@ interface HrSimpleCrudPageProps<TItem, TCreate extends object> {
   createLabel?: string;
   fields?: HrFormField<TCreate>[];
   initialForm?: TCreate;
+  /** Optional breadcrumbs for enterprise HR layout */
+  breadcrumbs?: { label: string; href?: string }[];
+  /** Extra content below the table (e.g. batch actions) */
+  footer?: ReactNode;
 }
 
 export function HrSimpleCrudPage<TItem, TCreate extends object>(
@@ -37,6 +42,8 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
     createLabel = "Add",
     fields = [],
     initialForm,
+    breadcrumbs,
+    footer,
   } = props;
   const [items, setItems] = useState<TItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -98,10 +105,14 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">{title}</h1>
-          <p className="text-sm text-text-muted">{description}</p>
-        </div>
+        {breadcrumbs ? (
+          <HrPageHeader title={title} description={description} breadcrumbs={breadcrumbs} />
+        ) : (
+          <div>
+            <h1 className="text-2xl font-bold text-text-primary">{title}</h1>
+            <p className="text-sm text-text-muted">{description}</p>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => void refresh()}
@@ -146,6 +157,8 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
           </div>
         )}
       </div>
+
+      {footer}
 
       {createItem && form && fields.length > 0 && (
         <form onSubmit={onSubmit} className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">

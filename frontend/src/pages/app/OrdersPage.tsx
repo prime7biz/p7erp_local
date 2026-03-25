@@ -14,6 +14,7 @@ import {
   withLegacyOption,
 } from "@/lib/commercialTerms";
 import { getOrderStatusChoices } from "@/features/merch/workflow";
+import { SecureImage } from "@/components/SecureImage";
 
 export function OrdersPage() {
   const navigate = useNavigate();
@@ -271,7 +272,7 @@ export function OrdersPage() {
                   o.quotation_id != null ? quotationLookup.get(o.quotation_id) ?? null : null;
                 const styleName = o.style_name ?? linkedQuotation?.style_name ?? null;
                 const styleRef = o.style_ref ?? linkedQuotation?.style_ref ?? null;
-                const styleImageUrl = o.style_image_url ?? linkedQuotation?.style_image_url ?? null;
+                const styleImageForRow = o.style_image_url ?? linkedQuotation?.style_image_url ?? null;
                 const intermediaryName = o.intermediary_name ?? linkedQuotation?.intermediary_name ?? null;
                 const shippingTerm = o.shipping_term ?? linkedQuotation?.shipping_term ?? null;
                 const commissionMode = o.commission_mode ?? linkedQuotation?.commission_mode ?? null;
@@ -296,9 +297,9 @@ export function OrdersPage() {
                   </td>
                   <td className="py-2.5 px-4">
                     <div className="flex items-center gap-2 min-w-0">
-                      {styleImageUrl ? (
-                        <img
-                          src={styleImageUrl}
+                      {styleImageForRow ? (
+                        <SecureImage
+                          url={styleImageForRow}
                           alt={styleName ?? styleRef ?? "Style"}
                           className="h-8 w-8 shrink-0 rounded object-cover border border-border"
                         />

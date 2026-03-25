@@ -3,6 +3,86 @@ from datetime import date, time
 from pydantic import BaseModel, Field
 
 
+class OvertimeRuleCreate(BaseModel):
+    code: str = Field(..., min_length=1, max_length=32)
+    name: str = Field(..., min_length=1, max_length=128)
+    employee_category: str | None = Field(None, max_length=24)
+    max_ot_hours_per_day: str | None = None
+    weekday_multiplier: str = "1.5"
+    weekend_multiplier: str = "2"
+    holiday_multiplier: str = "2"
+    is_active: bool = True
+
+
+class OvertimeRuleUpdate(BaseModel):
+    code: str | None = Field(None, min_length=1, max_length=32)
+    name: str | None = Field(None, min_length=1, max_length=128)
+    employee_category: str | None = None
+    max_ot_hours_per_day: str | None = None
+    weekday_multiplier: str | None = None
+    weekend_multiplier: str | None = None
+    holiday_multiplier: str | None = None
+    is_active: bool | None = None
+
+
+class OvertimeRuleOut(BaseModel):
+    id: int
+    tenant_id: int
+    code: str
+    name: str
+    employee_category: str | None
+    max_ot_hours_per_day: str | None
+    weekday_multiplier: str
+    weekend_multiplier: str
+    holiday_multiplier: str
+    is_active: bool
+    created_at: str
+    updated_at: str
+
+
+class OvertimeEntryCreate(BaseModel):
+    employee_id: int
+    work_date: date
+    ot_hours: str = "0"
+    ot_type: str = "WEEKDAY"
+    rate_multiplier: str = "1.5"
+    rule_id: int | None = None
+    remarks: str | None = None
+
+
+class OvertimeEntryOut(BaseModel):
+    id: int
+    tenant_id: int
+    employee_id: int
+    work_date: date
+    ot_hours: str
+    ot_type: str
+    rate_multiplier: str
+    amount: str | None
+    rule_id: int | None
+    status: str
+    approved_by: int | None
+    approved_at: str | None
+    remarks: str | None
+    created_at: str
+    updated_at: str
+
+
+class AttendanceBulkEntryRow(BaseModel):
+    employee_id: int
+    attendance_date: date
+    in_time: time | None = None
+    out_time: time | None = None
+    status: str = "PRESENT"
+    source: str = "MANUAL"
+    overtime_minutes: int = 0
+    remarks: str | None = None
+
+
+class AttendanceBulkEntryBody(BaseModel):
+    rows: list[AttendanceBulkEntryRow]
+
+
 class ShiftCreate(BaseModel):
     code: str = Field(..., min_length=1, max_length=32)
     name: str = Field(..., min_length=1, max_length=128)

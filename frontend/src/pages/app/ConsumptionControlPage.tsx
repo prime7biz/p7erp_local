@@ -1,9 +1,11 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, type OrderResponse } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 
 export function ConsumptionControlPage() {
   const { me } = useAuth();
+  const [searchParams] = useSearchParams();
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<number>(0);
   const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof api.getConsumptionSnapshot>> | null>(null);
@@ -102,6 +104,12 @@ export function ConsumptionControlPage() {
   useEffect(() => {
     void loadOrders();
   }, [loadOrders]);
+
+  const orderIdFromUrl = searchParams.get("orderId");
+  useEffect(() => {
+    const oid = Number(orderIdFromUrl || 0);
+    if (oid > 0) setSelectedOrderId(oid);
+  }, [orderIdFromUrl]);
 
   useEffect(() => {
     const loadPermission = async () => {
@@ -257,6 +265,14 @@ export function ConsumptionControlPage() {
           >
             Finalize Order Snapshot
           </button>
+          {selectedOrderId > 0 ? (
+            <Link
+              to={`/app/merchandising/consumption-reconciliation?orderId=${selectedOrderId}`}
+              className="rounded-lg border border-border-strong px-3 py-2 text-sm text-brand-primary hover:bg-surface-subtle"
+            >
+              Open reconciliation
+            </Link>
+          ) : null}
         </div>
         <div className="rounded border border-border p-3 text-sm">
           <div className="mb-2 font-medium">Snapshot Status</div>

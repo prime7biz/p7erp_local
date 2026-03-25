@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -559,3 +559,109 @@ async def reject_leave_request(
     await db.commit()
     await db.refresh(row)
     return _leave_request_out(row)
+
+
+@router.post("/balances/carry-forward")
+async def carry_forward_balances(
+    body: dict,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Roll prior-year closing balances into the next year (simplified)."""
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    from_year = int(body.get("from_year", datetime.utcnow().year - 1))
+    to_year = int(body.get("to_year", datetime.utcnow().year))
+    rows = (
+        await db.execute(
+            select(LeaveBalance).where(LeaveBalance.tenant_id == tenant.id, LeaveBalance.balance_year == from_year)
+        )
+    ).scalars().all()
+    n = 0
+    for bal in rows:
+        existing = (
+            await db.execute(
+                select(LeaveBalance).where(
+                    LeaveBalance.tenant_id == tenant.id,
+                    LeaveBalance.employee_id == bal.employee_id,
+                    LeaveBalance.leave_type_id == bal.leave_type_id,
+                    LeaveBalance.balance_year == to_year,
+                )
+            )
+        ).scalar_one_or_none()
+        carry = max(_to_float(bal.closing_balance_days), 0.0)
+        if existing:
+            existing.allocated_days = _fmt(_to_float(existing.allocated_days) + carry)
+            existing.closing_balance_days = _fmt(
+                _to_float(existing.allocated_days)
+                - _to_float(existing.used_days)
+                - _to_float(existing.pending_days)
+            )
+        else:
+            db.add(
+                LeaveBalance(
+                    tenant_id=tenant.id,
+                    employee_id=bal.employee_id,
+                    leave_type_id=bal.leave_type_id,
+                    balance_year=to_year,
+                    allocated_days=_fmt(carry),
+                    used_days="0",
+                    pending_days="0",
+                    closing_balance_days=_fmt(carry),
+                )
+            )
+        n += 1
+    await db.commit()
+    return {"ok": True, "rows_processed": n, "from_year": from_year, "to_year": to_year}
+
+
+@router.post("/encashment")
+async def leave_encashment(
+    body: dict,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    return {
+        "ok": True,
+        "message": "Encashment amount should be posted via payroll as a one-off earning.",
+        "employee_id": body.get("employee_id"),
+        "days": body.get("days"),
+    }
+
+
+@router.get("/calendar-data")
+async def leave_calendar_data(
+    year: int = Query(...),
+    month: int = Query(..., ge=1, le=12),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    stmt = select(LeaveRequest).where(LeaveRequest.tenant_id == tenant.id, LeaveRequest.status == "APPROVED")
+    rows = (await db.execute(stmt)).scalars().all()
+    out: list[dict] = []
+    for r in rows:
+        if r.from_date.year != year and r.to_date.year != year:
+            continue
+        if not (
+            (r.from_date.year == year and r.from_date.month == month)
+            or (r.to_date.year == year and r.to_date.month == month)
+            or (r.from_date <= date(year, month, 1) <= r.to_date)
+        ):
+            continue
+        out.append(
+            {
+                "leave_request_id": r.id,
+                "employee_id": r.employee_id,
+                "leave_type_id": r.leave_type_id,
+                "from_date": r.from_date.isoformat(),
+                "to_date": r.to_date.isoformat(),
+                "status": r.status,
+            }
+        )
+    return out

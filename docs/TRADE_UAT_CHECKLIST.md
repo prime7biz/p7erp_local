@@ -6,7 +6,8 @@ Use this checklist to verify the Trade (export/import) workflow end-to-end befor
 
 - [ ] Tenant type is `buying_house` or `both` (so Trade Cases, Control Tower, and Logistics are visible).
 - [ ] At least one Order and optionally one Proforma Invoice exist for linking.
-- [ ] User has permission to create/edit Trade Cases and upload documents.
+- [ ] User has permission to create/edit Trade Cases and upload documents (or use default allow — see **TRADE-UAT-017**).
+- [ ] For **TRADE-UAT-018:** admin access to **Settings → Configuration** to toggle **Enable Trade module**.
 
 ---
 
@@ -127,6 +128,49 @@ Use this checklist to verify the Trade (export/import) workflow end-to-end befor
 2. Return to **Master Contracts** and **BTB LCs** list pages.
 3. Click alert badge from a row.
 4. **Pass:** Badge opens Alerts page scoped to that exact `entity_type` + `entity_id`; alerts show utilization or maturity risk correctly.
+
+---
+
+### TRADE-UAT-014: Scheduled daily trade alert scan
+
+1. Confirm the backend is running with the lifespan task that runs the trade alert scan on a **daily** interval (see `backend/app/main.py`).
+2. After at least one interval (or after a deploy that triggers startup), open **App → Merchandising → Critical Alerts** (or your alerts list) and verify **new** trade-related alerts exist without anyone clicking **Run scan**.
+3. Optionally compare with a manual **Run scan** — counts should be consistent for the same rules.
+4. **Pass:** Trade alerts are created/updated by the scheduled job, not only by manual scan.
+
+---
+
+### TRADE-UAT-015: Finance linkage (`trade_case_id`)
+
+1. Create or open a Trade Case and ensure linked finance activity (e.g. voucher or payment run) carries `trade_case_id` where your workflow sets it (migration / API).
+2. Open **Trade Case detail → Margin** (or margin API) for that case.
+3. **Pass:** Linked vouchers/payment runs appear in trade-linked finance data; margin view reflects linked amounts where implemented.
+
+---
+
+### TRADE-UAT-016: DELETE draft trade document (DRAFT-only)
+
+1. Open a Trade Case in **DRAFT** with at least one uploaded document.
+2. Delete a **draft** document via the API/UI (DRAFT case only).
+3. Move the case out of DRAFT (or use a non-DRAFT case) and attempt the same delete.
+4. **Pass:** Delete succeeds only for DRAFT cases; non-DRAFT returns **400** (or equivalent) and document remains.
+
+---
+
+### TRADE-UAT-017: Trade RBAC permissions
+
+1. On a test role, set `roles.permissions` JSON so `trade.create` is **false** (explicit). Assign to a test user.
+2. **Pass:** User cannot create a trade case (API/UI returns forbidden).
+3. Set `trade.document.upload` to **false**; **Pass:** Upload is blocked. Restore permissions for production users.
+
+---
+
+### TRADE-UAT-018: Feature flag `trade_enabled`
+
+1. In **Settings → Configuration**, uncheck **Enable Trade module** (sets `tenants.feature_flags.trade_enabled` to `false`) for a `buying_house` or `both` tenant. Save.
+2. Refresh the app (session refetch).
+3. **Pass:** Trade Cases, Control Tower, Logistics, and trade report routes are hidden or redirect; sidebar matches.
+4. Re-enable the checkbox and **Pass:** Trade navigation and routes return.
 
 ---
 

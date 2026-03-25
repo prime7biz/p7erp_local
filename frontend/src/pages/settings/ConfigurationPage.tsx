@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type SettingsConfigUpdate, type TenantType } from "@/api/client";
+import { useAuth } from "@/context/AuthContext";
 
 const TENANT_TYPE_OPTIONS: Array<{ value: TenantType; label: string }> = [
   { value: "manufacturer", label: "Manufacturer" },
@@ -8,16 +9,20 @@ const TENANT_TYPE_OPTIONS: Array<{ value: TenantType; label: string }> = [
 ];
 
 export function ConfigurationPage() {
+  const { refetch: refetchMe } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [companyCode, setCompanyCode] = useState("");
+  const [featureFlags, setFeatureFlags] = useState<Record<string, boolean | string | number | null>>({});
   const [form, setForm] = useState<SettingsConfigUpdate>({
     company_name: "",
     domain: "",
     logo: "",
     tenant_type: "both",
+    country_code: null,
+    timezone: null,
   });
 
   useEffect(() => {
@@ -25,11 +30,18 @@ export function ConfigurationPage() {
       .getSettingsConfig()
       .then((data) => {
         setCompanyCode(data.company_code ?? "N/A");
+        setFeatureFlags(
+          data.feature_flags && typeof data.feature_flags === "object" && !Array.isArray(data.feature_flags)
+            ? { ...data.feature_flags }
+            : {},
+        );
         setForm({
           company_name: data.company_name,
           domain: data.domain ?? "",
           logo: data.logo ?? "",
           tenant_type: data.tenant_type,
+          country_code: data.country_code ?? null,
+          timezone: data.timezone ?? null,
         });
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load settings"))
@@ -47,13 +59,24 @@ export function ConfigurationPage() {
         domain: form.domain?.trim() || null,
         logo: form.logo?.trim() || null,
         tenant_type: form.tenant_type,
+        feature_flags: { ...featureFlags },
+        country_code: form.country_code?.trim() || null,
+        timezone: form.timezone?.trim() || null,
       });
+      setFeatureFlags(
+        updated.feature_flags && typeof updated.feature_flags === "object" && !Array.isArray(updated.feature_flags)
+          ? { ...updated.feature_flags }
+          : {},
+      );
       setForm({
         company_name: updated.company_name,
         domain: updated.domain ?? "",
         logo: updated.logo ?? "",
         tenant_type: updated.tenant_type,
+        country_code: updated.country_code ?? null,
+        timezone: updated.timezone ?? null,
       });
+      await refetchMe();
       setSuccess("Configuration updated successfully.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save settings");
@@ -131,6 +154,54 @@ export function ConfigurationPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-secondary">Country code (ISO)</label>
+          <input
+            value={form.country_code ?? ""}
+            onChange={(e) => setForm((prev) => ({ ...prev, country_code: e.target.value || null }))}
+            className="w-full max-w-[140px] rounded-lg border border-border px-3 py-2 text-sm uppercase"
+            placeholder="e.g. BD"
+            maxLength={4}
+          />
+          <p className="mt-1 text-xs text-text-muted">Used for factory calendar public holiday import.</p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-secondary">Timezone (IANA)</label>
+          <input
+            value={form.timezone ?? ""}
+            onChange={(e) => setForm((prev) => ({ ...prev, timezone: e.target.value || null }))}
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+            placeholder="e.g. Asia/Dhaka"
+            maxLength={64}
+          />
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3">
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.trade_enabled !== false}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  trade_enabled: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Enable Trade module</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                When unchecked, Trade Cases, Control Tower, Logistics, and trade reports are hidden for this tenant
+                (requires <code className="rounded bg-surface-raised px-1">buying_house</code> or{" "}
+                <code className="rounded bg-surface-raised px-1">both</code> tenant type). Leave checked for default
+                behaviour.
+              </span>
+            </span>
+          </label>
         </div>
 
         <button

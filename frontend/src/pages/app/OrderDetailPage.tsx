@@ -11,6 +11,7 @@ import {
 } from "@/api/client";
 import { getOrderStatusChoices } from "@/features/merch/workflow";
 import { logApiError } from "@/utils/logApiError";
+import { useSecureImage } from "@/hooks/useSecureImage";
 
 export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +30,7 @@ export function OrderDetailPage() {
   const [promiseCheck, setPromiseCheck] = useState<OrderPromiseCheckResponse | null>(null);
   const [promiseLoading, setPromiseLoading] = useState(false);
   const [promiseError, setPromiseError] = useState("");
+  const styleImageUrl = useSecureImage(item?.style_image_url);
 
   useEffect(() => {
     const load = async () => {
@@ -81,6 +83,21 @@ export function OrderDetailPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <nav className="flex flex-wrap items-center gap-1 text-xs text-text-muted">
+        {customer ? (
+          <>
+            <Link to={`/app/customers/${customer.id}`} className="text-brand-primary hover:underline">{customer.name}</Link>
+            <span>›</span>
+          </>
+        ) : null}
+        {quotation ? (
+          <>
+            <Link to={`/app/quotations/${quotation.id}`} className="text-brand-primary hover:underline">{quotation.quotation_code}</Link>
+            <span>›</span>
+          </>
+        ) : null}
+        <span className="font-medium text-text-primary">{item.order_code}</span>
+      </nav>
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">
@@ -154,6 +171,40 @@ export function OrderDetailPage() {
         </div>
       </div>
 
+      <section className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-text-primary">Related Records</h2>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {item.customer_id ? (
+            <Link
+              to={`/app/customers/${item.customer_id}`}
+              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            >
+              Customer
+            </Link>
+          ) : null}
+          {item.quotation_id ? (
+            <Link
+              to={`/app/quotations/${item.quotation_id}`}
+              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            >
+              Quotation
+            </Link>
+          ) : null}
+          <Link
+            to="/app/inventory/delivery-challans"
+            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            Create delivery challan
+          </Link>
+          <Link
+            to={`/app/commercial/proforma-invoices/new?order_id=${item.id}&customer_id=${item.customer_id}`}
+            className="rounded-lg border border-status-info/30 bg-status-info-subtle px-2.5 py-1 text-xs font-medium text-status-info-foreground hover:bg-status-info-subtle/80"
+          >
+            Create Proforma Invoice
+          </Link>
+        </div>
+      </section>
+
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-2">
           <h2 className="text-sm font-semibold text-text-primary">Summary</h2>
@@ -197,9 +248,9 @@ export function OrderDetailPage() {
                 ? `${item.commission_mode ?? "-"} / ${item.commission_type ?? "-"} / ${item.commission_value ?? "-"}`
                 : "—"}
             </div>
-            {item.style_image_url && (
+            {styleImageUrl && (
               <img
-                src={item.style_image_url}
+                src={styleImageUrl}
                 alt={item.style_name ?? item.style_ref ?? "Style"}
                 className="h-20 w-20 rounded object-cover border border-border"
               />

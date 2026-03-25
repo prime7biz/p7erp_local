@@ -30,7 +30,7 @@ const prefetchRules: PrefetchRule[] = [
   {
     key: "hr-module",
     matches: (href) => href.startsWith("/app/hr/"),
-    load: () => import("@/pages/app/hr/HrEmployeesPage"),
+    load: () => import("@/pages/app/hr/HrDashboardPage"),
   },
   {
     key: "manufacturing-module",
@@ -39,7 +39,16 @@ const prefetchRules: PrefetchRule[] = [
       href.startsWith("/app/quality/") ||
       href.startsWith("/app/tna/") ||
       href.startsWith("/app/samples/"),
-    load: () => import("@/pages/app/manufacturing/ProductionOverviewPage"),
+    load: () => import("@/pages/app/production/GarmentProductionOverviewPage"),
+  },
+  {
+    key: "production-v2-pages",
+    matches: (href) =>
+      href.includes("/app/production/setup") ||
+      href.includes("/app/production/line-plan") ||
+      href.includes("/app/production/hourly/") ||
+      href.includes("/app/production/cutting/pipeline"),
+    load: () => import("@/pages/app/production/ProductionSetupPage"),
   },
   {
     key: "reports-module",

@@ -65,6 +65,7 @@ export function AiAssistantPage() {
   const [anomalyEvents, setAnomalyEvents] = useState<AiAnomalyEventResponse[]>([]);
   const [anomalyEventsLoading, setAnomalyEventsLoading] = useState(true);
   const [anomalyRunning, setAnomalyRunning] = useState(false);
+  const [anomalyGeminiText, setAnomalyGeminiText] = useState<string | null>(null);
   const [opsOverview, setOpsOverview] = useState<AiOpsOverviewResponse | null>(null);
 
   useEffect(() => {
@@ -280,7 +281,8 @@ export function AiAssistantPage() {
     const sessionId = await ensureSession();
     setAnomalyRunning(true);
     try {
-      await api.aiGenerateAnomalyInsights({ session_id: sessionId ?? null });
+      const gen = await api.aiGenerateAnomalyInsights({ session_id: sessionId ?? null });
+      setAnomalyGeminiText(gen.gemini_narrative ?? null);
       const rows = await api.aiListAnomalyEvents({ limit: 30 });
       setAnomalyEvents(rows);
     } catch (err) {
@@ -333,6 +335,7 @@ export function AiAssistantPage() {
                 loading={anomalyEventsLoading}
                 running={anomalyRunning}
                 events={anomalyEvents}
+                geminiNarrative={anomalyGeminiText}
                 onGenerate={runAnomalyInsights}
               />
               <AiAutomationPanel

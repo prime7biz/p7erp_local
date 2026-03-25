@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { api, type CustomerResponse, type InquiryResponse, type QuotationDetailResponse, type SettingsConfigResponse } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { SecureImage } from "@/components/SecureImage";
 import { logApiError } from "@/utils/logApiError";
 import "@/styles/quotation-print.css";
 
@@ -19,14 +20,6 @@ function formatDate(value: string | null | undefined): string {
 function formatDateTime(value: string | Date): string {
   const d = value instanceof Date ? value : new Date(value);
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString();
-}
-
-function resolveAssetUrl(pathOrUrl: string | null | undefined): string {
-  if (!pathOrUrl) return "";
-  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
-  const base = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/$/, "");
-  const path = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
-  return `${base}${path}`;
 }
 
 export function QuotationPrintPage() {
@@ -274,7 +267,7 @@ export function QuotationPrintPage() {
             {printPrefs.showLogo && (
               <div className="qp-logo-wrap">
                 {settings?.logo ? (
-                  <img src={resolveAssetUrl(settings.logo)} alt={`${tenantName} logo`} className="qp-logo" />
+                  <SecureImage url={settings.logo} alt={`${tenantName} logo`} className="qp-logo" />
                 ) : (
                   <div className="qp-logo-fallback">{tenantName.slice(0, 1).toUpperCase()}</div>
                 )}
@@ -334,8 +327,8 @@ export function QuotationPrintPage() {
                 <tr>
                   <td style={{ width: "110px" }}>
                     {quotation.style_image_url ? (
-                      <img
-                        src={resolveAssetUrl(quotation.style_image_url)}
+                      <SecureImage
+                        url={quotation.style_image_url}
                         alt={quotation.style_name ?? quotation.style_ref ?? "Style"}
                         style={{ width: "92px", height: "92px", objectFit: "cover", borderRadius: "8px", border: "1px solid #cbd5e1" }}
                       />

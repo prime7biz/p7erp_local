@@ -11,6 +11,7 @@ export function HrAttendanceSummaryPage() {
       title="Attendance Summary"
       description="View monthly attendance summary by employee."
       emptyMessage="No attendance summary data found."
+      breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "Attendance summary" }]}
       loadItems={() => api.listHrAttendanceSummary()}
       columns={[
         { header: "Employee Code", cell: (row) => row.employee_code },

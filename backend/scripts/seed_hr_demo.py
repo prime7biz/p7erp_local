@@ -208,6 +208,46 @@ async def main() -> None:
             title="Production Supervisor",
             department_id=prod.id,
         )
+        # Production crew role filters (must match crew_router seed titles exactly)
+        des_line_incharge = await _upsert_designation(
+            db, tenant.id, code="DS-LIC", title="Line Incharge", department_id=prod.id
+        )
+        des_sew_op = await _upsert_designation(
+            db, tenant.id, code="DS-SOP", title="Sewing Operator", department_id=prod.id
+        )
+        des_sew_hp = await _upsert_designation(
+            db, tenant.id, code="DS-SHP", title="Sewing Helper", department_id=prod.id
+        )
+        des_qc = await _upsert_designation(
+            db, tenant.id, code="DS-QCI", title="Quality Inspector", department_id=prod.id
+        )
+        des_iron = await _upsert_designation(
+            db, tenant.id, code="DS-IRM", title="Iron Man", department_id=prod.id
+        )
+        des_fqc = await _upsert_designation(
+            db, tenant.id, code="DS-FQC", title="Final QC", department_id=prod.id
+        )
+        des_fold = await _upsert_designation(
+            db, tenant.id, code="DS-FLD", title="Folding Man", department_id=prod.id
+        )
+        des_pack = await _upsert_designation(
+            db, tenant.id, code="DS-PCK", title="Packing Man", department_id=prod.id
+        )
+        des_supervisor = await _upsert_designation(
+            db, tenant.id, code="DS-SUP", title="Supervisor", department_id=prod.id
+        )
+        des_mach_op = await _upsert_designation(
+            db, tenant.id, code="DS-MOP", title="Machine Operator", department_id=prod.id
+        )
+        des_helper = await _upsert_designation(
+            db, tenant.id, code="DS-HLP", title="Helper", department_id=prod.id
+        )
+        des_operator = await _upsert_designation(
+            db, tenant.id, code="DS-OPR", title="Operator", department_id=prod.id
+        )
+        des_lab = await _upsert_designation(
+            db, tenant.id, code="DS-LAB", title="Lab Technician", department_id=prod.id
+        )
 
         # Employees (insert manager first, then team members)
         manager = await _upsert_employee(
@@ -251,6 +291,63 @@ async def main() -> None:
             designation_id=prod_sup.id,
             reporting_manager_id=manager.id,
             is_active=True,
+        )
+        # Sample production floor staff (for crew pickers / demos)
+        await _upsert_employee(
+            db, tenant.id, "EMP-0004", "Kamal", "Hossain", "kamal.line1@p7.local", "+8801700000004",
+            date(2024, 4, 1), prod.id, des_line_incharge.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0005", "Rashida", "Begum", "rashida.line2@p7.local", "+8801700000005",
+            date(2024, 4, 1), prod.id, des_line_incharge.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0006", "Jamal", "Uddin", "jamal.op@p7.local", "+8801700000006",
+            date(2024, 4, 5), prod.id, des_sew_op.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0007", "Fatema", "Akter", "fatema.op@p7.local", "+8801700000007",
+            date(2024, 4, 5), prod.id, des_sew_op.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0008", "Abdul", "Karim", "abdul.help@p7.local", "+8801700000008",
+            date(2024, 4, 10), prod.id, des_sew_hp.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0009", "Nasrin", "Sultana", "nasrin.qc@p7.local", "+8801700000009",
+            date(2024, 4, 10), prod.id, des_qc.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0010", "Shahid", "Alam", "shahid.iron@p7.local", "+8801700000010",
+            date(2024, 5, 1), prod.id, des_iron.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0011", "Mina", "Khatun", "mina.fold@p7.local", "+8801700000011",
+            date(2024, 5, 1), prod.id, des_fold.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0012", "Rafiq", "Islam", "rafiq.pack@p7.local", "+8801700000012",
+            date(2024, 5, 1), prod.id, des_pack.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0013", "Unit", "Supervisor", "unit.sup@p7.local", "+8801700000013",
+            date(2024, 5, 15), prod.id, des_supervisor.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0014", "Machine", "Op One", "mach.op@p7.local", "+8801700000014",
+            date(2024, 5, 15), prod.id, des_mach_op.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0015", "Helper", "One", "helper.one@p7.local", "+8801700000015",
+            date(2024, 5, 15), prod.id, des_helper.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0016", "Lab", "Tech", "lab.tech@p7.local", "+8801700000016",
+            date(2024, 5, 20), prod.id, des_lab.id, None, True,
+        )
+        await _upsert_employee(
+            db, tenant.id, "EMP-0017", "Dye", "Operator", "dye.op@p7.local", "+8801700000017",
+            date(2024, 5, 20), prod.id, des_operator.id, None, True,
         )
 
         await db.commit()

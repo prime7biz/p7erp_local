@@ -7,6 +7,7 @@ export function HrSalaryStructuresPage() {
       title="Salary Structures"
       description="Maintain grade-wise salary component templates."
       emptyMessage="No salary structures found."
+      breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "Salary structures" }]}
       loadItems={() => api.listHrSalaryStructures({ active_only: false })}
       createItem={(payload) => api.createHrSalaryStructure(payload)}
       createLabel="Add salary structure"

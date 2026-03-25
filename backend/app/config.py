@@ -11,7 +11,12 @@ class Settings(BaseSettings):
     tenant_strategy: str = "header"  # header | subdomain | path
     cors_origins: str = ""
     redis_url: str | None = None
+    # Global per-tenant API cap (Redis). All /api/v1 routes with X-Tenant-Id count, except exclusions in rate_limiter.
+    # Set to 0 to disable this middleware limit when Redis is enabled.
+    tenant_rate_limit_requests_per_minute: int = 2000
     api_v1_prefix: str = "/api/v1"
+    # Absolute path to media root (tenant dirs: {media_root}/{tenant_id}/...). Empty = backend/media next to app package.
+    media_root: str = ""
     ai_confirmation_token_pepper: str = "change-me-ai-token-pepper"
     allow_public_registration: bool = False
     # If set (non-empty), first-user POST /auth/register must send the same value in X-Bootstrap-Key header
@@ -26,6 +31,17 @@ class Settings(BaseSettings):
     ai_timeout_heavy_seconds: int = 35
     ai_circuit_breaker_failure_threshold: int = 5
     ai_circuit_breaker_cooldown_seconds: int = 45
+
+    # Production planning AI (Gemini). Use cheapest Flash-lite model; override via GEMINI_MODEL.
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash-lite"
+    gemini_enabled: bool = True
+    # 0 = unlimited; otherwise max Gemini API calls per calendar month (process-wide, persisted in media/)
+    ai_monthly_budget_limit: int = 0
+
+    # Platform admin (super admin panel): JWT lifetime and local backup directory
+    platform_admin_jwt_expire_minutes: int = 480
+    backup_dir: str = "./backups"
 
     # Trade document storage: currently backend uses local media/trade_docs; future: trade_docs_backend=local|s3, bucket, etc.
     # trade_docs_backend: str = "local"

@@ -126,7 +126,7 @@ async def _ensure_tenant_b() -> tuple[Tenant, User]:
                 role_id=admin_role.id,
                 username=TENANT_B_USERNAME,
                 email=TENANT_B_EMAIL,
-                password_hash=hash_password(TENANT_B_PASSWORD),
+                password_hash=await hash_password(TENANT_B_PASSWORD),
                 first_name="UAT",
                 last_name="TenantB",
                 is_active=True,

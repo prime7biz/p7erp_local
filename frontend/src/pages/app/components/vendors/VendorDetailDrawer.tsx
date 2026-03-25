@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { X } from "lucide-react";
 import {
   api,
   type BtbLcRow,
+  type GoodsReceivingResponse,
   type MasterContractRow,
   type OutstandingBillResponse,
+  type PaymentRunResponse,
   type ProformaInvoiceRow,
   type PurchaseOrderResponse,
   type VendorCreate,
   type VendorResponse,
   type VendorUpdate,
+  type VoucherResponse,
 } from "@/api/client";
 
-type DrawerTab = "profile" | "commercial" | "banking" | "accounting" | "activity" | "edit";
+type DrawerTab = "profile" | "commercial" | "banking" | "accounting" | "payments" | "activity" | "edit";
 
 interface VendorDetailDrawerProps {
   open: boolean;
@@ -62,9 +66,12 @@ export function VendorDetailDrawer({
   const [error, setError] = useState("");
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderResponse[]>([]);
   const [btbLcs, setBtbLcs] = useState<BtbLcRow[]>([]);
+  const [grns, setGrns] = useState<GoodsReceivingResponse[]>([]);
   const [payables, setPayables] = useState<OutstandingBillResponse[]>([]);
   const [vendorProformas, setVendorProformas] = useState<ProformaInvoiceRow[]>([]);
   const [masterContracts, setMasterContracts] = useState<MasterContractRow[]>([]);
+  const [paymentVouchers, setPaymentVouchers] = useState<VoucherResponse[]>([]);
+  const [paymentRuns, setPaymentRuns] = useState<PaymentRunResponse[]>([]);
 
   useEffect(() => {
     if (!open) {
@@ -100,6 +107,7 @@ export function VendorDetailDrawer({
     if (!open || !vendor) {
       setPurchaseOrders([]);
       setBtbLcs([]);
+      setGrns([]);
       setPayables([]);
       setVendorProformas([]);
       setMasterContracts([]);
@@ -108,17 +116,21 @@ export function VendorDetailDrawer({
     let mounted = true;
     const loadLinkage = async () => {
       try {
-        const [poRows, lcRows, payableRows, importPiRows, masterRows] = await Promise.all([
+        const [poRows, lcRows, grnRows, payableRows, importPiRows, masterRows] = await Promise.all([
           api.listPurchaseOrders(),
           api.listBtbLcs({ vendor_id: vendor.id }),
+          api.listGoodsReceiving(),
           api.listOutstandingBills({ bill_type: "PAYABLE" }),
           api.listProformaInvoices({ direction: "IMPORT", vendor_id: vendor.id }),
           api.listMasterContracts(),
         ]);
         if (!mounted) return;
         const vendorName = (vendor.name || "").trim().toLowerCase();
-        setPurchaseOrders(poRows.filter((r) => r.vendor_id === vendor.id));
+        const vendorPos = poRows.filter((r) => r.vendor_id === vendor.id);
+        const vendorPoIds = new Set(vendorPos.map((po) => po.id));
+        setPurchaseOrders(vendorPos);
         setBtbLcs(lcRows.filter((r) => (r.vendor_id ?? null) === vendor.id));
+        setGrns(grnRows.filter((row) => row.purchase_order_id != null && vendorPoIds.has(row.purchase_order_id)));
         setVendorProformas(importPiRows);
         setMasterContracts(masterRows);
         setPayables(
@@ -138,6 +150,41 @@ export function VendorDetailDrawer({
     };
   }, [open, vendor]);
 
+  useEffect(() => {
+    if (!open || !vendor || tab !== "payments") {
+      setPaymentVouchers([]);
+      setPaymentRuns([]);
+      return;
+    }
+    let mounted = true;
+    const loadPay = async () => {
+      try {
+        const [vouchers, runs] = await Promise.all([api.listVouchers({}), api.listPaymentRuns({})]);
+        if (!mounted || !vendor) return;
+        const lid = vendor.ledger_id;
+        const vFiltered =
+          lid != null
+            ? vouchers.filter((v) => v.lines?.some((l) => l.account_id === lid))
+            : [];
+        const nameLower = (vendor.name || "").trim().toLowerCase();
+        const runsFiltered = runs.filter((r) =>
+          r.items?.some((i) => (i.party_name || "").trim().toLowerCase() === nameLower),
+        );
+        setPaymentVouchers(vFiltered.slice(0, 40));
+        setPaymentRuns(runsFiltered.slice(0, 25));
+      } catch {
+        if (mounted) {
+          setPaymentVouchers([]);
+          setPaymentRuns([]);
+        }
+      }
+    };
+    void loadPay();
+    return () => {
+      mounted = false;
+    };
+  }, [open, vendor, tab]);
+
   const payableTotal = useMemo(() => {
     return payables.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   }, [payables]);
@@ -149,6 +196,8 @@ export function VendorDetailDrawer({
   const btbTotal = useMemo(() => {
     return btbLcs.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   }, [btbLcs]);
+
+  const paymentHistoryCount = useMemo(() => paymentVouchers.length + paymentRuns.length, [paymentVouchers, paymentRuns]);
 
   const linkedMasterCount = useMemo(() => {
     const ids = new Set(
@@ -232,7 +281,7 @@ export function VendorDetailDrawer({
 
         {!isCreate && vendor && (
           <div className="flex border-b border-border px-2 gap-1 shrink-0">
-            {(["profile", "commercial", "banking", "accounting", "activity", "edit"] as const).map((t) => (
+            {(["profile", "commercial", "banking", "accounting", "payments", "activity", "edit"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -247,9 +296,11 @@ export function VendorDetailDrawer({
                       ? "Banking"
                       : t === "accounting"
                         ? "Accounting"
-                        : t === "activity"
-                          ? "Activity"
-                          : "Edit"}
+                        : t === "payments"
+                          ? "Payments"
+                          : t === "activity"
+                            ? "Activity"
+                            : "Edit"}
               </button>
             ))}
           </div>
@@ -462,6 +513,30 @@ export function VendorDetailDrawer({
                       : "—"}
                   </p>
                 </div>
+                <div className="rounded-lg border border-border bg-surface-subtle p-3">
+                  <p className="text-xs font-medium text-text-muted uppercase mb-2">Related Records</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Link to="/app/inventory/purchase-orders" className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                      POs ({purchaseOrders.length})
+                    </Link>
+                    <Link to="/app/inventory/goods-receiving" className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                      GRNs ({grns.length})
+                    </Link>
+                    <Link to="/app/accounts/outstanding-bills" className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                      Outstanding bills ({payables.length})
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setTab("payments")}
+                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                    >
+                      Payment history ({paymentHistoryCount})
+                    </button>
+                    <Link to="/app/commercial/btb-lcs" className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                      BTB LCs ({btbLcs.length})
+                    </Link>
+                  </div>
+                </div>
                 <div className="pt-4 border-t border-border flex gap-2">
                   <button
                     type="button"
@@ -602,6 +677,56 @@ export function VendorDetailDrawer({
                   <p className="text-sm font-semibold text-status-warning-foreground">
                     Outstanding: {formatMoney(payableTotal - paidTotal)} | Total Bill: {formatMoney(payableTotal)}
                   </p>
+                  <Link to="/app/accounts/reports/ar-ap-aging" className="mt-1 inline-block text-xs font-medium text-brand-primary hover:underline">
+                    View full AP aging
+                  </Link>
+                </div>
+                <p className="text-xs text-text-muted">
+                  <button type="button" className="font-medium text-brand-primary hover:underline" onClick={() => setTab("payments")}>
+                    View payment history & vouchers
+                  </button>
+                </p>
+              </div>
+            ) : tab === "payments" ? (
+              <div className="space-y-3 text-sm">
+                {!vendor.ledger_id ? (
+                  <p className="text-text-muted">Link a ledger account to the vendor to match payment vouchers.</p>
+                ) : null}
+                <div>
+                  <p className="text-xs font-medium text-text-muted uppercase mb-1">Vouchers touching this ledger</p>
+                  {paymentVouchers.length === 0 ? (
+                    <p className="text-text-muted">No matching vouchers found.</p>
+                  ) : (
+                    <ul className="space-y-1 max-h-48 overflow-y-auto">
+                      {paymentVouchers.map((v) => (
+                        <li key={v.id}>
+                          <a
+                            href={`/app/vouchers/${v.id}`}
+                            className="text-brand-primary hover:underline"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {v.voucher_number}
+                          </a>{" "}
+                          {v.voucher_date} · {v.voucher_type} · {v.status}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-text-muted uppercase mb-1">Payment runs</p>
+                  {paymentRuns.length === 0 ? (
+                    <p className="text-text-muted">No payment runs with this party name.</p>
+                  ) : (
+                    <ul className="space-y-1 max-h-40 overflow-y-auto">
+                      {paymentRuns.map((r) => (
+                        <li key={r.id} className="rounded border border-border px-2 py-1">
+                          {r.run_code} · {r.run_date} · {r.status} · {formatMoney(Number(r.total_amount || 0))}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             ) : tab === "activity" ? (

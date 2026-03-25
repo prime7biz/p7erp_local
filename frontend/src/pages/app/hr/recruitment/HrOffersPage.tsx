@@ -7,6 +7,7 @@ export function HrOffersPage() {
       title="Offers"
       description="Create and monitor candidate offer lifecycle."
       emptyMessage="No offers found."
+      breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "Offers" }]}
       loadItems={() => api.listHrOffers()}
       createItem={(payload) => api.createHrOffer(payload)}
       createLabel="Add offer"

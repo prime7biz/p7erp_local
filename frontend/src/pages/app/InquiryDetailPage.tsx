@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, type InquiryResponse, type CustomerResponse } from "@/api/client";
+import { useSecureImage } from "@/hooks/useSecureImage";
 
 export function InquiryDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -10,6 +11,7 @@ export function InquiryDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [converting, setConverting] = useState(false);
+  const styleImageUrl = useSecureImage(item?.style_image_url);
 
   useEffect(() => {
     const load = async () => {
@@ -182,9 +184,9 @@ export function InquiryDetailPage() {
         <h2 className="text-sm font-semibold text-text-primary">Style & Intermediary</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="flex items-center gap-3">
-            {item.style_image_url ? (
+            {styleImageUrl ? (
               <img
-                src={item.style_image_url}
+                src={styleImageUrl}
                 alt={item.style_name ?? item.style_ref ?? "Style"}
                 className="h-20 w-20 rounded object-cover border border-border"
               />

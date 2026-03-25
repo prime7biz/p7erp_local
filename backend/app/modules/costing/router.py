@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from app.common.auth import get_current_user
+from app.common.pagination import DEFAULT_PAGE_SIZE, HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT, MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -82,7 +83,7 @@ class CurrencyResponse(BaseModel):
 # ----- Item categories -----
 @router.get("/item-categories", response_model=list[ItemCategoryResponse])
 async def list_item_categories(
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -114,7 +115,7 @@ async def list_item_categories(
 # ----- Item units -----
 @router.get("/item-units", response_model=list[ItemUnitResponse])
 async def list_item_units(
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -147,7 +148,7 @@ async def list_item_units(
 @router.get("/items", response_model=list[ItemResponse])
 async def list_items(
     category_id: int | None = Query(default=None, description="Filter by category"),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),

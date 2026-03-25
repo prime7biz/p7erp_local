@@ -22,7 +22,15 @@ from app.common.inventory_validation import (
     validate_signed_adjustment_qty_str,
 )
 from app.common.inventory_policy import tenant_allows_negative_stock
-from app.common.pagination import clamp_page_size, safe_page, total_pages
+from app.common.pagination import (
+    DEFAULT_PAGE_SIZE,
+    HR_LIST_DEFAULT_LIMIT,
+    HR_LIST_MAX_LIMIT,
+    MAX_PAGE_SIZE,
+    clamp_page_size,
+    safe_page,
+    total_pages,
+)
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -1025,7 +1033,7 @@ class GatePassOut(BaseModel):
 
 @router.get("/item-categories", response_model=list[ItemCategoryOut])
 async def list_item_categories(
-    limit: int = Query(5000, ge=1, le=5000),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1094,7 +1102,7 @@ async def delete_item_category(
 @router.get("/item-subcategories", response_model=list[ItemSubcategoryOut])
 async def list_item_subcategories(
     category_id: int | None = Query(default=None),
-    limit: int = Query(5000, ge=1, le=5000),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1160,7 +1168,7 @@ async def delete_item_subcategory(
 
 @router.get("/item-units", response_model=list[ItemUnitOut])
 async def list_item_units(
-    limit: int = Query(5000, ge=1, le=5000),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1314,7 +1322,7 @@ async def delete_item(
 
 @router.get("/warehouses", response_model=list[WarehouseOut])
 async def list_warehouses(
-    limit: int = Query(5000, ge=1, le=5000, description="Max rows (safety cap for large tenants)"),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Max rows (safety cap for large tenants)"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1382,7 +1390,7 @@ async def delete_warehouse(
 
 @router.get("/stock-groups", response_model=list[StockGroupOut])
 async def list_stock_groups(
-    limit: int = Query(5000, ge=1, le=5000),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1805,6 +1813,106 @@ async def update_purchase_order_status(
     )
 
 
+class LotTraceGrnLineOut(BaseModel):
+    grn_id: int
+    grn_code: str
+    received_date: date | None
+    item_id: int
+    quantity: str
+    warehouse_id: int
+    lot_number: str | None = None
+
+
+class LotTraceMovementOut(BaseModel):
+    id: int
+    movement_type: str
+    quantity: str
+    item_id: int
+    warehouse_id: int | None
+    reference_type: str | None
+    reference_id: int | None
+    movement_date: date | None
+    lot_number: str | None
+    created_at: datetime
+
+
+class LotTraceResponse(BaseModel):
+    lot_number: str
+    grn_lines: list[LotTraceGrnLineOut]
+    movements: list[LotTraceMovementOut]
+
+
+@router.get("/lot-trace", response_model=LotTraceResponse)
+async def trace_lot_number(
+    lot_number: str = Query(..., min_length=1, max_length=64),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trace a lot from GRN receipt lines through stock movements (same tenant)."""
+    _ensure_tenant(user, tenant)
+    raw = lot_number.strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="lot_number required")
+    like_pattern = f"%{raw}%"
+    grn_lines: list[LotTraceGrnLineOut] = []
+    grn_item_rows = list(
+        (
+            await db.execute(
+                select(GoodsReceivingItem, GoodsReceiving)
+                .join(GoodsReceiving, GoodsReceivingItem.goods_receiving_id == GoodsReceiving.id)
+                .where(
+                    GoodsReceivingItem.tenant_id == tenant.id,
+                    GoodsReceiving.tenant_id == tenant.id,
+                    or_(GoodsReceivingItem.lot_number == raw, GoodsReceivingItem.lot_number.ilike(like_pattern)),
+                )
+                .order_by(GoodsReceiving.id.desc(), GoodsReceivingItem.id)
+            )
+        ).all()
+    )
+    for gi, grn in grn_item_rows:
+        grn_lines.append(
+            LotTraceGrnLineOut(
+                grn_id=grn.id,
+                grn_code=grn.grn_code,
+                received_date=grn.received_date,
+                item_id=gi.item_id,
+                quantity=gi.quantity,
+                warehouse_id=gi.warehouse_id,
+                lot_number=gi.lot_number,
+            )
+        )
+    mov_rows = list(
+        (
+            await db.execute(
+                select(StockMovement)
+                .where(
+                    StockMovement.tenant_id == tenant.id,
+                    or_(StockMovement.lot_number == raw, StockMovement.lot_number.ilike(like_pattern)),
+                )
+                .order_by(StockMovement.id.desc())
+                .limit(500)
+            )
+        ).scalars().all()
+    )
+    movements = [
+        LotTraceMovementOut(
+            id=m.id,
+            movement_type=m.movement_type,
+            quantity=m.quantity,
+            item_id=m.item_id,
+            warehouse_id=m.warehouse_id,
+            reference_type=m.reference_type,
+            reference_id=m.reference_id,
+            movement_date=m.movement_date,
+            lot_number=m.lot_number,
+            created_at=m.created_at,
+        )
+        for m in mov_rows
+    ]
+    return LotTraceResponse(lot_number=raw, grn_lines=grn_lines, movements=movements)
+
+
 @router.get("/goods-receiving", response_model=GoodsReceivingListPageOut)
 async def list_goods_receiving(
     status_filter: str | None = Query(default=None),
@@ -2028,7 +2136,7 @@ async def receive_goods(
 
 @router.get("/stock-summary", response_model=list[StockSummaryRow])
 async def stock_summary(
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -2041,7 +2149,7 @@ async def stock_summary(
 
 @router.get("/stock-valuation", response_model=StockValuationOut)
 async def stock_valuation(
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     as_of_date: date | None = Query(default=None),
     tenant: Tenant = Depends(require_tenant),
@@ -2486,7 +2594,7 @@ async def list_delivery_challans(
     status_filter: str | None = Query(default=None),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -2502,13 +2610,18 @@ async def list_delivery_challans(
         stmt = stmt.where(DeliveryChallan.delivery_date <= date_to)
     result = await db.execute(stmt.order_by(DeliveryChallan.id.desc()).offset(offset).limit(limit))
     rows = list(result.scalars().all())
-    out: list[DeliveryChallanOut] = []
-    for row in rows:
-        lines_result = await db.execute(
-            select(DeliveryChallanItem).where(DeliveryChallanItem.challan_id == row.id).order_by(DeliveryChallanItem.id)
-        )
-        out.append(_delivery_challan_to_out(row, list(lines_result.scalars().all())))
-    return out
+    if not rows:
+        return []
+    challan_ids = [r.id for r in rows]
+    lines_result = await db.execute(
+        select(DeliveryChallanItem)
+        .where(DeliveryChallanItem.challan_id.in_(challan_ids))
+        .order_by(DeliveryChallanItem.challan_id, DeliveryChallanItem.id)
+    )
+    lines_by_challan: dict[int, list] = defaultdict(list)
+    for ln in lines_result.scalars().all():
+        lines_by_challan[ln.challan_id].append(ln)
+    return [_delivery_challan_to_out(row, lines_by_challan.get(row.id, [])) for row in rows]
 
 
 @router.post("/delivery-challans", response_model=DeliveryChallanOut)
@@ -2612,7 +2725,7 @@ async def list_enhanced_gate_passes(
     status_filter: str | None = Query(default=None),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -2715,7 +2828,7 @@ class ProcessReceiveBody(BaseModel):
 
 @router.get("/process-orders", response_model=list[ProcessOrderOut])
 async def list_process_orders(
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -2982,7 +3095,8 @@ STAGES = [
 
 @router.get("/manufacturing-orders", response_model=list[ManufacturingOrderOut])
 async def list_manufacturing_orders(
-    limit: int = Query(default=5000, ge=1, le=20000, description="Safety cap (Finding #3)"),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -2992,6 +3106,7 @@ async def list_manufacturing_orders(
         select(ManufacturingOrder)
         .where(ManufacturingOrder.tenant_id == tenant.id)
         .order_by(ManufacturingOrder.id.desc())
+        .offset(offset)
         .limit(limit)
     )
     return list(result.scalars().all())
@@ -3469,7 +3584,7 @@ async def reconciliation_overview(
     gate_rows = list(
         (await db.execute(select(EnhancedGatePass).where(EnhancedGatePass.tenant_id == tenant.id))).scalars().all()
     )
-    stock_rows = await stock_summary(tenant, user, db)
+    stock_rows = await _stock_summary_rows(db, tenant.id)
     on_hand_items = len([r for r in stock_rows if r.on_hand_qty > 0])
     return ReconciliationOverview(
         purchase_orders_total=len(po_rows),
@@ -3519,7 +3634,7 @@ class ConsumptionCRReviewBody(BaseModel):
 async def list_consumption_change_requests(
     status_filter: str | None = Query(default=None),
     order_id: int | None = Query(default=None),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -3820,7 +3935,7 @@ def _to_transfer_out(row: WarehouseTransfer, lines: list[WarehouseTransferLine])
 @router.get("/warehouse-transfers", response_model=list[WarehouseTransferOut])
 async def list_warehouse_transfers(
     status_filter: str | None = Query(default=None),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -3832,15 +3947,18 @@ async def list_warehouse_transfers(
         stmt = stmt.where(WarehouseTransfer.status == status_filter.strip().upper())
     result = await db.execute(stmt.offset(offset).limit(limit))
     rows = list(result.scalars().all())
-    out: list[WarehouseTransferOut] = []
-    for row in rows:
-        lines_result = await db.execute(
-            select(WarehouseTransferLine)
-            .where(WarehouseTransferLine.transfer_id == row.id)
-            .order_by(WarehouseTransferLine.id)
-        )
-        out.append(_to_transfer_out(row, list(lines_result.scalars().all())))
-    return out
+    if not rows:
+        return []
+    transfer_ids = [r.id for r in rows]
+    lines_result = await db.execute(
+        select(WarehouseTransferLine)
+        .where(WarehouseTransferLine.transfer_id.in_(transfer_ids))
+        .order_by(WarehouseTransferLine.transfer_id, WarehouseTransferLine.id)
+    )
+    lines_by_transfer: dict[int, list] = defaultdict(list)
+    for ln in lines_result.scalars().all():
+        lines_by_transfer[ln.transfer_id].append(ln)
+    return [_to_transfer_out(row, lines_by_transfer.get(row.id, [])) for row in rows]
 
 
 @router.post("/warehouse-transfers", response_model=WarehouseTransferOut)
@@ -3973,7 +4091,7 @@ async def post_warehouse_transfer(
 @router.get("/stock-adjustments", response_model=list[StockAdjustmentOut])
 async def list_stock_adjustments(
     status_filter: str | None = Query(default=None),
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -4157,7 +4275,7 @@ def _phys_session_out(row: PhysicalInventorySession, lines: list[PhysicalInvento
 
 @router.get("/physical-inventory-sessions", response_model=list[PhysicalInventorySessionOut])
 async def list_physical_inventory_sessions(
-    limit: int = Query(default=5000, ge=1, le=20000),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -4175,15 +4293,18 @@ async def list_physical_inventory_sessions(
             )
         ).scalars().all()
     )
-    out: list[PhysicalInventorySessionOut] = []
-    for row in rows:
-        lines_result = await db.execute(
-            select(PhysicalInventoryLine)
-            .where(PhysicalInventoryLine.session_id == row.id)
-            .order_by(PhysicalInventoryLine.id)
-        )
-        out.append(_phys_session_out(row, list(lines_result.scalars().all())))
-    return out
+    if not rows:
+        return []
+    session_ids = [r.id for r in rows]
+    lines_result = await db.execute(
+        select(PhysicalInventoryLine)
+        .where(PhysicalInventoryLine.session_id.in_(session_ids))
+        .order_by(PhysicalInventoryLine.session_id, PhysicalInventoryLine.id)
+    )
+    lines_by_session: dict[int, list] = defaultdict(list)
+    for ln in lines_result.scalars().all():
+        lines_by_session[ln.session_id].append(ln)
+    return [_phys_session_out(row, lines_by_session.get(row.id, [])) for row in rows]
 
 
 @router.post("/physical-inventory-sessions", response_model=PhysicalInventorySessionOut)
@@ -4365,4 +4486,18 @@ async def bulk_receive_grn(
         except HTTPException as e:
             out.append({"id": gid, "ok": False, "detail": e.detail})
     return out
+
+
+@router.get("/orders/{order_id}/material-readiness")
+async def order_material_readiness(
+    order_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """BOM vs stock readiness for a sales order (production planning)."""
+    _ensure_tenant(user, tenant)
+    from app.modules.production.readiness_service import get_order_readiness
+
+    return await get_order_readiness(db, tenant.id, order_id)
 

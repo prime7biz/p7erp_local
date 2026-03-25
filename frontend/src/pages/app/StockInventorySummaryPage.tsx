@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { logApiError } from "@/utils/logApiError";
 type Tab = "overview" | "group" | "warehouse" | "wip";
 
 export function StockInventorySummaryPage() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("overview");
   const [asOf, setAsOf] = useState("");
   const [error, setError] = useState("");
@@ -215,7 +217,19 @@ export function StockInventorySummaryPage() {
                   </thead>
                   <tbody>
                     {g.lines.map((ln) => (
-                      <tr key={`${ln.item_id}-${ln.warehouse_id}`} className="border-t border-border-subtle">
+                      <tr
+                        key={`${ln.item_id}-${ln.warehouse_id}`}
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => navigate(`/app/inventory?tab=items&item=${ln.item_id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            navigate(`/app/inventory?tab=items&item=${ln.item_id}`);
+                          }
+                        }}
+                        className="cursor-pointer border-t border-border-subtle hover:bg-surface-subtle/80"
+                      >
                         <td className="px-4 py-2">
                           {ln.item_code} — {ln.item_name}
                         </td>
@@ -262,7 +276,19 @@ export function StockInventorySummaryPage() {
                   </thead>
                   <tbody>
                     {w.lines.map((ln) => (
-                      <tr key={`${ln.item_id}-${ln.warehouse_id}`} className="border-t border-border-subtle">
+                      <tr
+                        key={`${ln.item_id}-${ln.warehouse_id}`}
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => navigate(`/app/inventory?tab=items&item=${ln.item_id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            navigate(`/app/inventory?tab=items&item=${ln.item_id}`);
+                          }
+                        }}
+                        className="cursor-pointer border-t border-border-subtle hover:bg-surface-subtle/80"
+                      >
                         <td className="px-4 py-2">
                           {ln.item_code} — {ln.item_name}
                         </td>

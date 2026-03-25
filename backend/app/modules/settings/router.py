@@ -73,6 +73,9 @@ async def get_settings_config(
         tenant_type=tenant.tenant_type,
         default_commission_mode=tenant.default_commission_mode or CommissionMode.EXCLUDE,
         is_active=tenant.is_active,
+        feature_flags=tenant.feature_flags if isinstance(tenant.feature_flags, dict) else None,
+        country_code=(tenant.country_code or "").strip() or None,
+        timezone=(tenant.timezone or "").strip() or None,
     )
 
 
@@ -100,6 +103,13 @@ async def update_settings_config(
     tenant.tenant_type = body.tenant_type
     if body.default_commission_mode is not None:
         tenant.default_commission_mode = body.default_commission_mode
+    if body.feature_flags is not None:
+        tenant.feature_flags = body.feature_flags
+    if body.country_code is not None:
+        cc = (body.country_code or "").strip().upper() or None
+        tenant.country_code = cc
+    if body.timezone is not None:
+        tenant.timezone = (body.timezone or "").strip() or None
     await db.flush()
     await db.refresh(tenant)
 
@@ -121,6 +131,9 @@ async def update_settings_config(
         tenant_type=tenant.tenant_type,
         default_commission_mode=tenant.default_commission_mode or CommissionMode.EXCLUDE,
         is_active=tenant.is_active,
+        feature_flags=tenant.feature_flags if isinstance(tenant.feature_flags, dict) else None,
+        country_code=(tenant.country_code or "").strip() or None,
+        timezone=(tenant.timezone or "").strip() or None,
     )
 
 
@@ -326,7 +339,7 @@ async def create_settings_user(
         role_id=role.id,
         email=email_value,
         username=body.username.strip(),
-        password_hash=hash_password(body.password),
+        password_hash=await hash_password(body.password),
         first_name=(body.first_name or "").strip() or None,
         last_name=(body.last_name or "").strip() or None,
         is_active=body.is_active,
@@ -404,7 +417,7 @@ async def update_settings_user(
     if body.is_active is not None:
         target.is_active = body.is_active
     if body.password is not None:
-        target.password_hash = hash_password(body.password)
+        target.password_hash = await hash_password(body.password)
 
     await db.flush()
     await db.refresh(target)

@@ -5,7 +5,12 @@ from sqlalchemy import and_, extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
-from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
+from app.common.pagination import (
+    HR_LIST_DEFAULT_LIMIT,
+    HR_LIST_MAX_LIMIT,
+    HR_REPORT_SUB_LIMIT,
+    HR_REPORT_SUB_MAX,
+)
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import AttendanceEntry, Employee, LeaveRequest, LeaveType, PayrollPeriod, PayrollRun, PayrollRunLine, Tenant, User
@@ -79,7 +84,7 @@ async def report_attendance(
     department_id: int | None = Query(default=None),
     limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Max employees (Finding #3)"),
     offset: int = Query(default=0, ge=0),
-    entries_limit: int = Query(default=HR_LIST_MAX_LIMIT, ge=1, le=100000, description="Cap attendance rows loaded"),
+    entries_limit: int = Query(default=HR_REPORT_SUB_LIMIT, ge=1, le=HR_REPORT_SUB_MAX, description="Cap attendance rows loaded"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -128,9 +133,9 @@ async def report_attendance(
 async def report_leave(
     year: int | None = Query(default=None),
     requests_limit: int = Query(
-        default=HR_LIST_MAX_LIMIT,
+        default=HR_REPORT_SUB_LIMIT,
         ge=1,
-        le=100000,
+        le=HR_REPORT_SUB_MAX,
         description="Cap leave requests scanned for aggregation (Finding #3)",
     ),
     tenant: Tenant = Depends(require_tenant),
@@ -168,7 +173,7 @@ async def report_leave(
 async def report_payroll(
     year: int | None = Query(default=None),
     runs_limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Cap payroll runs (Finding #3)"),
-    lines_limit: int = Query(default=HR_LIST_MAX_LIMIT, ge=1, le=100000, description="Cap payroll run lines loaded"),
+    lines_limit: int = Query(default=HR_REPORT_SUB_LIMIT, ge=1, le=HR_REPORT_SUB_MAX, description="Cap payroll run lines loaded"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

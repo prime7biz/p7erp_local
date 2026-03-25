@@ -66,8 +66,6 @@ class CoAConfig(Base):
 
 class ChartOfAccount(Base):
     __tablename__ = "chart_of_accounts"
-    # Optimistic locking: UPDATE ... WHERE version = :v; increments on successful write.
-    __mapper_args__ = {"version_id_col": "version"}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -98,6 +96,10 @@ class ChartOfAccount(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+    # Optimistic locking: UPDATE ... WHERE version = :v; must use Column ref, not str "version"
+    # (str breaks INSERT return_defaults in SQLAlchemy 2.x).
+    __mapper_args__ = {"version_id_col": version}
 
 
 class VoucherType(Base):
@@ -140,6 +142,9 @@ class Voucher(Base):
     )
     btb_lc_id: Mapped[int | None] = mapped_column(
         ForeignKey("btb_lcs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    mfg_work_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("mfg_work_orders.id", ondelete="SET NULL"), nullable=True, index=True
     )
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -312,7 +317,7 @@ class BankReconciliation(Base):
     bank_account_id: Mapped[int] = mapped_column(
         ForeignKey("bank_accounts.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    statement_date: Mapped[date] = mapped_column(Date, nullable=False)
+    statement_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     statement_balance: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
     book_balance: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
     difference_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
@@ -334,7 +339,7 @@ class BankStatementLine(Base):
     reconciliation_id: Mapped[int] = mapped_column(
         ForeignKey("bank_reconciliations.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    transaction_date: Mapped[date] = mapped_column(Date, nullable=False)
+    transaction_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reference: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     debit_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
@@ -373,7 +378,7 @@ class PaymentRun(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     run_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    run_date: Mapped[date] = mapped_column(Date, nullable=False)
+    run_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     bank_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("bank_accounts.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -456,7 +461,7 @@ class BillReference(Base):
     credit_period_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_overdue: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -468,13 +473,17 @@ class BillAllocation(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     bill_reference_id: Mapped[int | None] = mapped_column(ForeignKey("bill_references.id", ondelete="SET NULL"), nullable=True, index=True)
     voucher_id: Mapped[int] = mapped_column(ForeignKey("vouchers.id", ondelete="CASCADE"), nullable=False, index=True)
-    voucher_line_id: Mapped[int | None] = mapped_column(ForeignKey("voucher_lines.id", ondelete="SET NULL"), nullable=True)
+    voucher_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("voucher_lines.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     allocation_type: Mapped[str] = mapped_column(String(20), nullable=False)
     amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    account_id: Mapped[int] = mapped_column(ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"), nullable=False)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     allocation_date: Mapped[date] = mapped_column(Date, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 

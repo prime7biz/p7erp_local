@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -237,6 +237,23 @@ class AiActionRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     executed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AiWeeklyReport(Base):
+    """Stored Gemini-generated weekly executive summaries per tenant."""
+
+    __tablename__ = "ai_weekly_reports"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "week_start", name="uq_ai_weekly_reports_tenant_week"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    week_start: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    week_end: Mapped[date] = mapped_column(Date, nullable=False)
+    narrative: Mapped[str] = mapped_column(Text, nullable=False)
+    kpi_snapshot_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 
 class AiAnomalyEvent(Base):

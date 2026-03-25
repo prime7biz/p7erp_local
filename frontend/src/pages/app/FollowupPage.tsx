@@ -255,6 +255,7 @@ export function FollowupPage() {
   const [timelineActions, setTimelineActions] = useState<OrderFollowupActionResponse[]>([]);
   const [simpleSectionOpen, setSimpleSectionOpen] = useState(false);
   const [simpleRows, setSimpleRows] = useState<FollowupResponse[]>([]);
+  const [simpleTotal, setSimpleTotal] = useState<number | null>(null);
   const [simpleOrderId, setSimpleOrderId] = useState(0);
   const [simpleTitle, setSimpleTitle] = useState("");
   const [viewMode, setViewMode] = useState<"table" | "calendar" | "kanban">("table");
@@ -331,6 +332,7 @@ export function FollowupPage() {
       setUnifiedSummary(unifiedSum);
       setUnifiedActions(unifiedList);
     } catch (e) {
+      logApiError("FollowupPage.loadTna", e);
       setError(e instanceof Error ? e.message : "Failed to load follow-up data");
     } finally {
       setLoading(false);
@@ -356,6 +358,7 @@ export function FollowupPage() {
       const list = await api.searchFollowupActions(searchQ.trim());
       setActions(list);
     } catch (e) {
+      logApiError("FollowupPage.loadSearch", e);
       setError(e instanceof Error ? e.message : "Search failed");
     } finally {
       setLoading(false);
@@ -367,17 +370,21 @@ export function FollowupPage() {
     try {
       const list = await api.getFollowupActionsTimeline(orderId);
       setTimelineActions(list);
-    } catch {
+    } catch (e) {
+      logApiError("FollowupPage.loadTimeline", e);
       setTimelineActions([]);
     }
   }, []);
 
   const loadSimple = useCallback(async () => {
     try {
-      const f = await api.listFollowups(simpleOrderId ? { order_id: simpleOrderId } : undefined);
-      setSimpleRows(f);
-    } catch {
+      const list = await api.listFollowupsWithTotal(simpleOrderId ? { order_id: simpleOrderId } : undefined);
+      setSimpleRows(list.rows);
+      setSimpleTotal(list.total);
+    } catch (e) {
+      logApiError("FollowupPage.loadSimple", e);
       setSimpleRows([]);
+      setSimpleTotal(null);
     }
   }, [simpleOrderId]);
 
@@ -1929,6 +1936,7 @@ export function FollowupPage() {
         >
           <CardTitle className="text-base">Simple follow-ups (legacy)</CardTitle>
           <p className="text-sm text-text-muted">Basic task list per order. Use TNA above for full tracking.</p>
+          <p className="text-xs text-text-muted">Showing {simpleRows.length}{simpleTotal != null ? ` of ${simpleTotal}` : ""} follow-ups.</p>
         </CardHeader>
         {simpleSectionOpen && (
           <CardContent className="pt-0">

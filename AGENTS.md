@@ -43,3 +43,40 @@ Use this file and `.cursor/rules/` when working on this repo (e.g. on another ma
 
 - Login: Company Code (or Tenant ID) + Username or Email + Password. Tenant resolved by `company_code`.
 - All tenant-scoped data has `tenant_id`; APIs filter by tenant. Tenant types: `manufacturer` | `buying_house` | `both`.
+
+## Cursor Cloud specific instructions
+
+### Services overview
+
+| Service | How to start | Port | Notes |
+|---------|-------------|------|-------|
+| PostgreSQL (pgvector) | `sudo docker compose up -d postgres` | 5432 | Required. Uses `pgvector/pgvector:pg16`. |
+| Redis | `sudo docker compose up -d redis` | 6379 | Required for rate limiting and caching. |
+| Backend (FastAPI) | `cd backend && source venv/bin/activate && uvicorn app.main:app --reload --port 8000` | 8000 | Health check: `GET /health` → `{"status":"ok","db":"ok"}` |
+| Frontend (Vite dev) | `cd frontend && npm run dev` | 5173 | Uses Node.js 20 via nvm: `nvm use 20` before running. |
+
+### Starting Docker in Cloud VM
+
+Docker must be started manually before containers:
+```
+sudo dockerd &>/tmp/dockerd.log &
+sleep 3
+```
+
+### Startup sequence
+
+1. Start Docker daemon (see above).
+2. `sudo docker compose up -d postgres redis` (from repo root).
+3. Backend: activate venv (`source backend/venv/bin/activate`), then `cd backend && alembic upgrade head && uvicorn app.main:app --reload --port 8000`.
+4. Frontend: `export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && nvm use 20 && cd frontend && npm run dev`.
+
+### Gotchas
+
+- **Node.js version**: The project requires Node.js 20 LTS. Use `nvm use 20` before any frontend commands. The system default may be Node 22.
+- **Backend venv**: A Python virtualenv lives at `backend/venv/`. Always activate it before running backend commands locally.
+- **`npm run build` has pre-existing TS errors** in `frontend/src/pages/app/components/vendors/vendorFormShared.ts` (type narrowing issues). The Vite dev server works fine since it skips strict type checking at runtime.
+- **Backend tests**: Run with `cd backend && source venv/bin/activate && python -m pytest tests/`. One test file (`test_customer_ai_integration.py`) has a pre-existing import error; skip it with `--ignore=tests/test_customer_ai_integration.py`. Many AI-related tests are skipped unless the appropriate API keys are configured.
+- **Frontend lint**: `cd frontend && npm run lint` (ESLint). Passes cleanly.
+- **Frontend tests**: `cd frontend && npm run test` (Vitest). All pass.
+- **Ollama is optional**: The `docker-compose.yml` backend depends on Ollama, but for dev you can start services individually (`postgres`, `redis`) and run the backend natively to avoid the large Ollama model download.
+- **Seeding test data**: To create a tenant and admin user for testing, use the API: `POST /api/v1/tenants` (create tenant) then `POST /api/v1/auth/register` (register user). Login via `POST /api/v1/auth/login` with `company_code`, `username`, `password`.

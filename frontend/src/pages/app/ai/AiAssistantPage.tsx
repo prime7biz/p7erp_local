@@ -11,6 +11,7 @@ import {
   type AiQuickAction,
   type AiReportRunResponse,
 } from "@/api/client";
+import { AiArtifactsPanel } from "@/pages/app/ai/components/AiArtifactsPanel";
 import { AiChatThread } from "@/pages/app/ai/components/AiChatThread";
 import { AiAutomationPanel } from "@/pages/app/ai/components/AiAutomationPanel";
 import { AiAnomalyInsightsPanel } from "@/pages/app/ai/components/AiAnomalyInsightsPanel";
@@ -48,8 +49,11 @@ export function AiAssistantPage() {
     messages,
     loadingMessages,
     sending,
+    approvingEscalationId,
     error: chatError,
     sendMessage,
+    approveEscalation,
+    cancelEscalation,
     setError: setChatError,
   } = useAiChat(activeSessionId);
   const [quickActions, setQuickActions] = useState<AiQuickAction[]>([]);
@@ -303,6 +307,8 @@ export function AiAssistantPage() {
 
       {sessionsError ? <AiStateNotice type="error" message={sessionsError} /> : null}
       {chatError ? <AiStateNotice type="error" message={chatError} /> : null}
+      {sending ? <AiStateNotice message="Local AI is thinking..." /> : null}
+      {approvingEscalationId ? <AiStateNotice message="Cloud AI is processing..." /> : null}
       {opsOverview ? (
         <AiStateNotice
           message={`AI ops (24h): success ${opsOverview.tool_success_rate.toFixed(1)}%, blocked ${opsOverview.blocked_events}, errors ${opsOverview.error_events}, avg ${opsOverview.avg_duration_ms}ms`}
@@ -321,7 +327,18 @@ export function AiAssistantPage() {
         />
 
         <div className="space-y-4">
-          <AiChatThread messages={messages} loading={loadingMessages} />
+          <AiChatThread
+            messages={messages}
+            loading={loadingMessages}
+            sending={sending}
+            approvingEscalationId={approvingEscalationId}
+            onApproveEscalation={(messageId, toolRequired) => {
+              void approveEscalation(messageId, toolRequired);
+            }}
+            onCancelEscalation={(messageId) => {
+              cancelEscalation(messageId);
+            }}
+          />
           <AiPromptInput sending={sending} onSend={runPrompt} disabled={loadingSessions} />
         </div>
 
@@ -354,6 +371,7 @@ export function AiAssistantPage() {
               <AiForecastRequestPanel onGenerate={runForecast} disabled={sending} />
               <AiReportRunsPanel reports={reportRuns} loading={reportRunsLoading} />
               <AiForecastRunsPanel runs={forecastRuns} loading={forecastRunsLoading} />
+              <AiArtifactsPanel />
             </div>
           )}
         </div>

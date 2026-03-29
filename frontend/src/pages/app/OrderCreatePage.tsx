@@ -1,11 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   api,
   type CustomerResponse,
   type OrderCreate,
+  type OrderExtractionResponse,
   type QuotationResponse,
 } from "@/api/client";
+import { OrderAiPanel } from "@/components/orders/OrderAiPanel";
+import { useOrderAi } from "@/hooks/useOrderAi";
+import { logApiError } from "@/utils/logApiError";
 import {
   COMMISSION_MODE_OPTIONS,
   COMMISSION_TYPE_OPTIONS,
@@ -13,14 +24,98 @@ import {
   withLegacyOption,
 } from "@/lib/commercialTerms";
 
+const ORDER_AI_MERGE_KEYS = new Set([
+  "style_ref",
+  "customer_intermediary_id",
+  "shipping_term",
+  "commission_mode",
+  "commission_type",
+  "commission_value",
+  "order_date",
+  "delivery_date",
+  "quantity",
+  "remarks",
+]);
+
+function normalizeOrderExtractKey(raw: string): string | null {
+  const k = raw.trim().toLowerCase().replace(/\s+/g, "_");
+  const compact = k.replace(/_/g, "");
+  const aliases: Record<string, string> = {
+    notes: "remarks",
+    exfactorydate: "delivery_date",
+    orderdate: "order_date",
+    deliverydate: "delivery_date",
+    shippingterm: "shipping_term",
+    commissionmode: "commission_mode",
+    commissiontype: "commission_type",
+    commissionvalue: "commission_value",
+    customerintermediaryid: "customer_intermediary_id",
+    styleref: "style_ref",
+  };
+  const mapped = aliases[compact] ?? k;
+  if (ORDER_AI_MERGE_KEYS.has(mapped)) return mapped;
+  if (ORDER_AI_MERGE_KEYS.has(k)) return k;
+  return null;
+}
+
+function mergeOrderExtractionIntoForm(
+  extraction: OrderExtractionResponse,
+  setForm: Dispatch<SetStateAction<OrderCreate>>,
+) {
+  const MIN = 0.55;
+  setForm((prev) => {
+    const next = { ...prev };
+    for (const [rawKey, meta] of Object.entries(extraction.fields)) {
+      if ((meta.confidence ?? 0) < MIN) continue;
+      const key = normalizeOrderExtractKey(rawKey);
+      if (!key) continue;
+      const v = meta.value;
+      if (v == null) continue;
+      if (key === "quantity") {
+        const n = typeof v === "number" ? v : Number(String(v).replace(/,/g, ""));
+        if (!Number.isNaN(n)) next.quantity = n;
+      } else if (key === "customer_intermediary_id") {
+        const n = typeof v === "number" ? v : parseInt(String(v), 10);
+        if (!Number.isNaN(n)) next.customer_intermediary_id = n;
+      } else {
+        const s = typeof v === "string" ? v : String(v);
+        if (!s.trim()) continue;
+        (next as Record<string, unknown>)[key] = s.trim();
+      }
+    }
+    return next;
+  });
+}
+
 export function OrderCreatePage() {
   const navigate = useNavigate();
+  const orderAi = useOrderAi();
   const [form, setForm] = useState<OrderCreate>({ customer_id: 0 });
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [quotations, setQuotations] = useState<QuotationResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const orderAiFormSnapshot = useMemo(
+    () => ({
+      customer_id: form.customer_id,
+      quotation_id: form.quotation_id,
+      style_id: form.style_id,
+      style_ref: form.style_ref,
+      customer_intermediary_id: form.customer_intermediary_id,
+      shipping_term: form.shipping_term,
+      commission_mode: form.commission_mode,
+      commission_type: form.commission_type,
+      commission_value: form.commission_value,
+      order_date: form.order_date,
+      delivery_date: form.delivery_date,
+      quantity: form.quantity,
+      status: form.status,
+      remarks: form.remarks,
+    }),
+    [form],
+  );
 
   const quotationsById = useMemo(
     () => new Map<number, QuotationResponse>(quotations.map((row) => [row.id, row])),
@@ -55,7 +150,7 @@ export function OrderCreatePage() {
     void load();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.customer_id) {
       setError("Customer is required");
@@ -65,6 +160,18 @@ export function OrderCreatePage() {
     setError("");
     try {
       const created = await api.createOrder(form);
+      const finalizeIds = [
+        ...new Set(
+          [orderAi.extractionBatchId, orderAi.enrichBatchId].filter((x): x is number => x != null),
+        ),
+      ];
+      for (const batchId of finalizeIds) {
+        try {
+          await orderAi.finalizeSuggestionBatchAfterCreate(created.id, batchId);
+        } catch (e) {
+          logApiError("OrderCreate.finalizeAiBatch", e);
+        }
+      }
       navigate(`/app/orders/${created.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Create order failed");
@@ -104,7 +211,7 @@ export function OrderCreatePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
         <form onSubmit={handleSubmit} className="rounded-xl border border-border bg-surface-raised p-5 space-y-5">
           <section className="space-y-3">
             <h2 className="text-sm font-semibold text-text-primary">Basic information</h2>
@@ -387,6 +494,15 @@ export function OrderCreatePage() {
         </form>
 
         <aside className="space-y-4">
+          <OrderAiPanel
+            mode="create"
+            ai={orderAi}
+            formSnapshot={orderAiFormSnapshot}
+            hiddenActions={["summary", "next"]}
+            onMergeExtraction={() => {
+              if (orderAi.extraction) mergeOrderExtractionIntoForm(orderAi.extraction, setForm);
+            }}
+          />
           <div className="rounded-xl border border-border bg-surface-raised p-4">
             <h3 className="text-sm font-semibold text-text-primary">Live summary</h3>
             <div className="mt-3 space-y-1 text-sm text-text-secondary">

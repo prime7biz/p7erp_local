@@ -13,6 +13,37 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 
+def _normalize_gemini_model(model_name: str | None) -> str:
+    """Map deprecated model aliases to a currently available default."""
+    candidate = (model_name or "").strip()
+    if not candidate:
+        return "gemini-2.5-flash"
+    if candidate in {"gemini-2.0-flash-lite", "gemini-2.0-flash"}:
+        return "gemini-2.5-flash"
+    return candidate
+
+
+def _candidate_gemini_models(model_name: str | None) -> list[str]:
+    preferred = _normalize_gemini_model(model_name)
+    fallbacks = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for name in [preferred, *fallbacks]:
+        if name and name not in seen:
+            seen.add(name)
+            ordered.append(name)
+    return ordered
+
+
+def _is_model_not_available_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return (
+        "no longer available to new users" in msg
+        or ("statuscode.not_found" in msg)
+        or ("not found" in msg and "model" in msg)
+    )
+
+
 def _extract_usage_from_response(resp: Any) -> tuple[int | None, int | None, int | None]:
     u = getattr(resp, "usage_metadata", None)
     if u is None:
@@ -40,19 +71,33 @@ def _raw_generate_text_sync(
     api_key = (s.gemini_api_key or "").strip()
     if not api_key:
         return None, None, None, None, None
-    model_name = (model_override or s.gemini_model or "gemini-2.0-flash-lite").strip()
+    model_candidates = _candidate_gemini_models(model_override or s.gemini_model)
     try:
         import google.generativeai as genai  # type: ignore[import-untyped]
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(model_name)
-        resp = model.generate_content(prompt)
-        if not resp or not getattr(resp, "text", None):
-            return None, model_name, None, None, None
-        pt, ct, tt = _extract_usage_from_response(resp)
-        return resp.text.strip(), model_name, pt, ct, tt
+        last_err: Exception | None = None
+        for model_name in model_candidates:
+            try:
+                model = genai.GenerativeModel(model_name)
+                resp = model.generate_content(prompt)
+                if not resp or not getattr(resp, "text", None):
+                    return None, model_name, None, None, None
+                pt, ct, tt = _extract_usage_from_response(resp)
+                return resp.text.strip(), model_name, pt, ct, tt
+            except Exception as exc:
+                last_err = exc
+                if _is_model_not_available_error(exc):
+                    logger.warning("Gemini model unavailable, trying fallback (model=%s)", model_name)
+                    continue
+                logger.exception("Gemini generate_content failed (model=%s)", model_name)
+                return None, model_name, None, None, None
+        if last_err is not None:
+            logger.exception("Gemini generate_content failed after trying all fallback models")
+        return None, model_candidates[0] if model_candidates else None, None, None, None
     except Exception:
-        logger.exception("Gemini generate_content failed (model=%s)", model_name)
+        model_name = model_candidates[0] if model_candidates else None
+        logger.exception("Gemini generate_content setup failed (model=%s)", model_name)
         return None, model_name, None, None, None
 
 
@@ -122,20 +167,34 @@ def _raw_multimodal_sync(
     api_key = (s.gemini_api_key or "").strip()
     if not api_key:
         return None, None, None, None, None
-    model_name = (model_override or s.gemini_model or "gemini-2.0-flash-lite").strip()
+    model_candidates = _candidate_gemini_models(model_override or s.gemini_model)
     ct = (mime_type or "application/octet-stream").lower().split(";")[0].strip()
     try:
         import google.generativeai as genai  # type: ignore[import-untyped]
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(model_name)
-        resp = model.generate_content([{"mime_type": ct, "data": file_bytes}, prompt])
-        if not resp or not getattr(resp, "text", None):
-            return None, model_name, None, None, None
-        pt, ctk, tt = _extract_usage_from_response(resp)
-        return resp.text.strip(), model_name, pt, ctk, tt
+        last_err: Exception | None = None
+        for model_name in model_candidates:
+            try:
+                model = genai.GenerativeModel(model_name)
+                resp = model.generate_content([{"mime_type": ct, "data": file_bytes}, prompt])
+                if not resp or not getattr(resp, "text", None):
+                    return None, model_name, None, None, None
+                pt, ctk, tt = _extract_usage_from_response(resp)
+                return resp.text.strip(), model_name, pt, ctk, tt
+            except Exception as exc:
+                last_err = exc
+                if _is_model_not_available_error(exc):
+                    logger.warning("Gemini multimodal model unavailable, trying fallback (model=%s)", model_name)
+                    continue
+                logger.exception("Gemini multimodal generate_content failed (model=%s)", model_name)
+                return None, model_name, None, None, None
+        if last_err is not None:
+            logger.exception("Gemini multimodal generate_content failed after trying fallback models")
+        return None, model_candidates[0] if model_candidates else None, None, None, None
     except Exception:
-        logger.exception("Gemini multimodal generate_content failed (model=%s)", model_name)
+        model_name = model_candidates[0] if model_candidates else None
+        logger.exception("Gemini multimodal generate_content setup failed (model=%s)", model_name)
         return None, model_name, None, None, None
 
 
@@ -199,5 +258,5 @@ def gemini_config_dict() -> dict[str, Any]:
     return {
         "enabled": bool(s.gemini_enabled),
         "has_api_key": bool((s.gemini_api_key or "").strip()),
-        "model": (s.gemini_model or "gemini-2.0-flash-lite").strip(),
+        "model": _normalize_gemini_model(s.gemini_model),
     }

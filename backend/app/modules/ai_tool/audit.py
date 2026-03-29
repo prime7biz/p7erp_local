@@ -42,6 +42,18 @@ async def log_ai_event(
     decision: str | None = None,
     reason_code: str | None = None,
     error_category: str | None = None,
+    trace_id: str | None = None,
+    route_selected: str | None = None,
+    tools_called: list | None = None,
+    model_used: str | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    total_tokens: int | None = None,
+    latency_ms: int | None = None,
+    cost_estimate_usd: float | None = None,
+    approval_status: str | None = None,
+    escalation_reason: str | None = None,
+    prompt_category: str | None = None,
 ) -> AiAuditLog:
     merged_details: dict[str, Any] = {}
     if isinstance(details_json, dict):
@@ -64,6 +76,18 @@ async def log_ai_event(
         resource=resource,
         details=details,
         details_json=merged_details or None,
+        trace_id=trace_id,
+        route_selected=route_selected,
+        tools_called=tools_called,
+        model_used=model_used,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        latency_ms=latency_ms,
+        cost_estimate_usd=cost_estimate_usd,
+        approval_status=approval_status,
+        escalation_reason=escalation_reason,
+        prompt_category=prompt_category,
     )
     db.add(row)
     await db.flush()

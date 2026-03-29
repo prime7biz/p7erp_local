@@ -26,8 +26,7 @@ from app.models import (
     BtbLcAccounting,
 )
 from app.models.merch import ConsumptionPlanItem
-from app.models.inventory import Item
-from app.models.costing import ItemCategory, ItemUnit
+from app.models.costing import Item, ItemCategory, ItemUnit
 
 
 ACTIVE_ORDER_STATUSES = ("NEW", "IN_PROGRESS", "CONFIRMED")

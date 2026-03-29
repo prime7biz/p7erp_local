@@ -10,6 +10,10 @@ type Props = {
   onSkip: (fieldKey: string) => void;
   onResolveConflict: (fieldKey: string, choice: ConflictResolutionChoice) => void;
   className?: string;
+  /** Explains whether applies hit the server / main Save button */
+  persistNote?: string;
+  /** Column header for the AI-suggested value (default: extracted from document) */
+  valueColumnLabel?: string;
 };
 
 export function AutofillReviewPanel({
@@ -20,6 +24,8 @@ export function AutofillReviewPanel({
   onSkip,
   onResolveConflict,
   className,
+  persistNote,
+  valueColumnLabel = "Extracted",
 }: Props) {
   const pending = fields.filter((f) => !f.applied && !f.skipped);
   const highPending = pending.filter((f) => f.confidenceLevel === "high" && !f.hasConflict);
@@ -40,7 +46,8 @@ export function AutofillReviewPanel({
         </button>
       </div>
       <p className="text-text-muted mt-1 text-xs">
-        Values are not saved until you use the main Save button. Resolve conflicts before applying.
+        {persistNote ??
+          "Values are not saved until you use the main Save button. Resolve conflicts before applying."}
       </p>
 
       <div className="mt-4 overflow-x-auto">
@@ -48,7 +55,7 @@ export function AutofillReviewPanel({
           <thead>
             <tr className="border-b border-border text-xs uppercase tracking-wide text-text-muted">
               <th className="py-2 pr-2">Field</th>
-              <th className="py-2 pr-2">Extracted</th>
+              <th className="py-2 pr-2">{valueColumnLabel}</th>
               <th className="py-2 pr-2">Confidence</th>
               <th className="py-2 pr-2">Current</th>
               <th className="py-2 pr-2">Status</th>

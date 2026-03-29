@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -53,7 +53,24 @@ class OrderResponse(BaseModel):
   remarks: str | None
   created_at: str
   updated_at: str
+  ai_indicators: Any | None = None
 
   class Config:
     from_attributes = True
+
+
+class PromiseCheckLine(BaseModel):
+  item_id: int
+  item_code: str
+  required_qty: float
+  available_qty: float
+  shortage_qty: float
+
+
+class PromiseCheckOut(BaseModel):
+  order_id: int
+  atp_ok: bool
+  ctp_ok: bool
+  reasons: list[str]
+  lines: list[PromiseCheckLine]
 

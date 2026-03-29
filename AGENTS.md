@@ -27,8 +27,8 @@ Use this file and `.cursor/rules/` when working on this repo (e.g. on another ma
 - **Merchandising RBAC (optional JSON on `roles.permissions`):** keys like `merch.bom.approve`, `merch.bom.freeze`, `merch.po.generate`, `merch.alert.scan`, `merch.alert.assign`, `merch.alert.definitions`, `merch.tna.manage`, `merch.style.manage`, `merch.wastage.manage`. Missing key ⇒ allowed; explicit `false` denies. `merch.*` or `*` as true grants all merch permissions.
 - **Trade RBAC (optional JSON on `roles.permissions`):** `trade.create`, `trade.transition`, `trade.document.upload`. Same convention as merch (missing ⇒ allow; explicit `false` denies; `trade.*` or `*` grants all trade keys). Per-tenant **feature flag:** `tenants.feature_flags.trade_enabled` — if `false`, Trade sidebar/routes hidden; see `docs/TRADE_MODULE_SOP.md` §14.
 - **Build:** `docs/BUILD_VERIFICATION.md` – B1–B3 checklist (backend deps, env, frontend build). Frontend: `npm run lint` (ESLint) and `npm run lint:fix` in `frontend/`.
-- **Cursor rules:** `.cursor/rules/project.mdc` (project context, always apply).
-- **Run / structure:** `README.md`, `.env.example`, `docker-compose.yml`.
+- **Cursor rules:** `.cursor/rules/project.mdc` (project context, always apply); `.cursor/rules/docker-python.mdc` (backend Python only via Docker, local and production).
+- **Run / structure:** `README.md`, `.env.example`, `docker-compose.yml`. Run backend commands with `docker compose exec` on the backend service—do not assume a working host `python`/`pip` for the app.
 - **Marketing SEO:** `docs/SITEMAP_NOTE.md`, `docs/SEO_SEARCH_CONSOLE.md`; sitemap generator `frontend/scripts/generate-sitemap.mjs`, meta in `frontend/src/components/Seo.tsx`.
 - **Finance UAT and go-live:**
   - `docs/FINANCE_UAT_CHECKLIST.md` – high-level test checklist

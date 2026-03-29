@@ -23,6 +23,11 @@ from app.models.platform_admin import (
 from app.models.tenant import CommissionMode, Tenant, TenantType
 from app.models.user import User, Role
 from app.models.customer import Customer
+from app.models.customer_ai_suggestion import CustomerAiSuggestionBatch, CustomerAiSuggestionItem
+from app.models.vendor_ai_suggestion import VendorAiSuggestionBatch, VendorAiSuggestionItem
+from app.models.inquiry_ai_suggestion import InquiryAiSuggestionBatch, InquiryAiSuggestionItem
+from app.models.quotation_ai_suggestion import QuotationAiSuggestionBatch, QuotationAiSuggestionItem
+from app.models.order_ai_suggestion import OrderAiSuggestionBatch, OrderAiSuggestionItem
 from app.models.codegen import TenantCodeCounter
 from app.models.merch import (
     Inquiry,
@@ -203,10 +208,19 @@ from app.models.ai_tool import (
     AiSavedPrompt,
     AiReportRun,
     AiForecastRun,
+    AiForecastModel,
     AiKnowledgeDocument,
     AiKnowledgeChunk,
+    AiEmbeddingChunk,
     AiAutomationRule,
     AiActionRun,
+    AiApprovalArtifact,
+    AiFeedback,
+    AiIngestionJob,
+    AiPermissionPolicy,
+    AiSystemTask,
+    AiSystemTaskDeadLetter,
+    AiTaskPolicy,
     AiAnomalyEvent,
     AiWeeklyReport,
 )
@@ -279,6 +293,16 @@ __all__ = [
     "User",
     "Role",
     "Customer",
+    "CustomerAiSuggestionBatch",
+    "CustomerAiSuggestionItem",
+    "VendorAiSuggestionBatch",
+    "VendorAiSuggestionItem",
+    "InquiryAiSuggestionBatch",
+    "InquiryAiSuggestionItem",
+    "QuotationAiSuggestionBatch",
+    "QuotationAiSuggestionItem",
+    "OrderAiSuggestionBatch",
+    "OrderAiSuggestionItem",
     "TenantCodeCounter",
     "Inquiry",
     "InquiryItem",
@@ -433,10 +457,19 @@ __all__ = [
     "AiSavedPrompt",
     "AiReportRun",
     "AiForecastRun",
+    "AiForecastModel",
     "AiKnowledgeDocument",
     "AiKnowledgeChunk",
+    "AiEmbeddingChunk",
     "AiAutomationRule",
     "AiActionRun",
+    "AiApprovalArtifact",
+    "AiFeedback",
+    "AiIngestionJob",
+    "AiPermissionPolicy",
+    "AiSystemTask",
+    "AiSystemTaskDeadLetter",
+    "AiTaskPolicy",
     "AiAnomalyEvent",
     "AiWeeklyReport",
     "AlertDefinition",

@@ -1027,7 +1027,7 @@ export function Dashboard() {
                 <p className="text-sm text-text-secondary whitespace-pre-wrap">{aiBriefText}</p>
               ) : (
                 <p className="text-xs text-text-muted">
-                  Click Refresh to generate a KPI-based brief using Gemini (requires GEMINI_API_KEY in Docker env).
+                  Click Refresh to generate a KPI-based executive brief powered by AI.
                 </p>
               )}
               {aiBriefUpdated && (

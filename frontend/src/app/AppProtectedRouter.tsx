@@ -1,74 +1,121 @@
 import { Suspense, lazy, useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
-import { Dashboard } from "@/pages/Dashboard";
-import { AppComingSoonPage } from "@/pages/app/AppComingSoonPage";
-import { PlaceholderPage } from "@/pages/app/PlaceholderPage";
-import { AiAssistantPage } from "@/pages/app/ai/AiAssistantPage";
-import { AiAutomationPage } from "@/pages/app/ai/AiAutomationPage";
-import { AiPredictionsPage } from "@/pages/app/ai/AiPredictionsPage";
-import { AiWeeklyReportsPage } from "@/pages/app/ai/AiWeeklyReportsPage";
-import { CommercialPage } from "@/pages/app/commercial/CommercialPage";
-import { ExportCasesPage } from "@/pages/app/commercial/ExportCasesPage";
-import { ProformaInvoicesPage } from "@/pages/app/commercial/ProformaInvoicesPage";
-import { BtbLcsPage } from "@/pages/app/commercial/BtbLcsPage";
-import { MasterContractsPage } from "@/pages/app/commercial/MasterContractsPage";
 import { TradeFeatureRouteGuard } from "@/components/TradeFeatureRouteGuard";
-import { LogisticsPage } from "@/pages/app/logistics/LogisticsPage";
-import { TradeCasesPage } from "@/pages/app/trade/TradeCasesPage";
-import { TradeCaseDetailPage } from "@/pages/app/trade/TradeCaseDetailPage";
-import { TradeDashboardPage } from "@/pages/app/trade/TradeDashboardPage";
-import { PartiesPage } from "@/pages/app/parties/PartiesPage";
-import { DocumentFlowPage } from "@/pages/app/flow/DocumentFlowPage";
-import { CustomersPage } from "@/pages/app/CustomersPage";
-import { CustomerCreatePage } from "@/pages/app/CustomerCreatePage";
-import { CustomerDetailPage } from "@/pages/app/CustomerDetailPage";
-import { CustomerEditPage } from "@/pages/app/CustomerEditPage";
-import { InquiriesPage } from "@/pages/app/InquiriesPage";
-import { InquiryCreatePage } from "@/pages/app/InquiryCreatePage";
-import { QuotationsPage } from "@/pages/app/QuotationsPage";
-import { OrdersPage } from "@/pages/app/OrdersPage";
-import { OrderCreatePage } from "@/pages/app/OrderCreatePage";
-import { InquiryDetailPage } from "@/pages/app/InquiryDetailPage";
-import { QuotationDetailPage } from "@/pages/app/QuotationDetailPage";
-import { OrderDetailPage } from "@/pages/app/OrderDetailPage";
-import { StylesPage } from "@/pages/app/StylesPage";
-import { StyleDetailPage } from "@/pages/app/StyleDetailPage";
-import { BomBuilderPage } from "@/pages/app/BomBuilderPage";
-import { ConsumptionPlansPage } from "@/pages/app/ConsumptionPlansPage";
-import { FollowupPage } from "@/pages/app/FollowupPage";
-import { MerchPipelinePage } from "@/pages/app/MerchPipelinePage";
-import { PipelineAnalyticsPage } from "@/pages/app/PipelineAnalyticsPage";
-import { MerchCriticalAlertsPage } from "@/pages/app/MerchCriticalAlertsPage";
-import { ConsumptionReconciliationPage } from "@/pages/app/ConsumptionReconciliationPage";
-import { WastageReportPage } from "@/pages/app/WastageReportPage";
-import { InventoryItemsPage } from "@/pages/app/InventoryItemsPage";
-import { VendorsPage } from "@/pages/app/VendorsPage";
-import { StockGroupsPage } from "@/pages/app/StockGroupsPage";
-import { PurchaseOrdersPage } from "@/pages/app/PurchaseOrdersPage";
-import { GoodsReceivingPage } from "@/pages/app/GoodsReceivingPage";
-import { DeliveryChallansPage } from "@/pages/app/DeliveryChallansPage";
-import { EnhancedGatePassesPage } from "@/pages/app/EnhancedGatePassesPage";
-import { ProcessOrdersPage } from "@/pages/app/ProcessOrdersPage";
-import { ConsumptionControlPage } from "@/pages/app/ConsumptionControlPage";
-import { VoucherApprovalsPage } from "@/pages/app/VoucherApprovalsPage";
-import { FxReceiptsPage } from "@/pages/app/FxReceiptsPage";
-import { AccountsCurrencyPage } from "@/pages/app/AccountsCurrencyPage";
-import { CostCentersPage } from "@/pages/app/CostCentersPage";
-import { BudgetsPage } from "@/pages/app/BudgetsPage";
-import { BankAccountsPage } from "@/pages/app/BankAccountsPage";
-import { VoucherPrintPage } from "@/pages/app/VoucherPrintPage";
-import { VoucherDetailPage } from "@/pages/app/VoucherDetailPage";
-import { AccountingPeriodsPage } from "@/pages/app/AccountingPeriodsPage";
-import { PaymentAdvicePage } from "@/pages/app/PaymentAdvicePage";
-import { AllApprovalsPage } from "@/pages/app/AllApprovalsPage";
-import { QuotationPrintPage } from "@/pages/print/QuotationPrintPage";
-import { CustomerPrintPage } from "@/pages/print/CustomerPrintPage";
-import { InquiryPrintPage } from "@/pages/print/InquiryPrintPage";
-import { OrderPrintPage } from "@/pages/print/OrderPrintPage";
-import { StylePrintPage } from "@/pages/print/StylePrintPage";
-import { ProformaInvoicePrintPage } from "@/pages/print/ProformaInvoicePrintPage";
-import { ProformaInvoiceFormPage } from "@/pages/app/commercial/ProformaInvoiceFormPage";
+
+const Dashboard = lazy(() => import("@/pages/Dashboard").then((m) => ({ default: m.Dashboard })));
+const AppComingSoonPage = lazy(() => import("@/pages/app/AppComingSoonPage").then((m) => ({ default: m.AppComingSoonPage })));
+const PlaceholderPage = lazy(() => import("@/pages/app/PlaceholderPage").then((m) => ({ default: m.PlaceholderPage })));
+const AiAssistantPage = lazy(() => import("@/pages/app/ai/AiAssistantPage").then((m) => ({ default: m.AiAssistantPage })));
+const AiAutomationPage = lazy(() => import("@/pages/app/ai/AiAutomationPage").then((m) => ({ default: m.AiAutomationPage })));
+const AiPredictionsPage = lazy(() => import("@/pages/app/ai/AiPredictionsPage").then((m) => ({ default: m.AiPredictionsPage })));
+const AiWeeklyReportsPage = lazy(() =>
+  import("@/pages/app/ai/AiWeeklyReportsPage").then((m) => ({ default: m.AiWeeklyReportsPage })),
+);
+const CommercialPage = lazy(() => import("@/pages/app/commercial/CommercialPage").then((m) => ({ default: m.CommercialPage })));
+const ExportCasesPage = lazy(() => import("@/pages/app/commercial/ExportCasesPage").then((m) => ({ default: m.ExportCasesPage })));
+const ProformaInvoicesPage = lazy(() =>
+  import("@/pages/app/commercial/ProformaInvoicesPage").then((m) => ({ default: m.ProformaInvoicesPage })),
+);
+const BtbLcsPage = lazy(() => import("@/pages/app/commercial/BtbLcsPage").then((m) => ({ default: m.BtbLcsPage })));
+const MasterContractsPage = lazy(() =>
+  import("@/pages/app/commercial/MasterContractsPage").then((m) => ({ default: m.MasterContractsPage })),
+);
+const LogisticsPage = lazy(() => import("@/pages/app/logistics/LogisticsPage").then((m) => ({ default: m.LogisticsPage })));
+const TradeCasesPage = lazy(() => import("@/pages/app/trade/TradeCasesPage").then((m) => ({ default: m.TradeCasesPage })));
+const TradeCaseDetailPage = lazy(() =>
+  import("@/pages/app/trade/TradeCaseDetailPage").then((m) => ({ default: m.TradeCaseDetailPage })),
+);
+const TradeDashboardPage = lazy(() =>
+  import("@/pages/app/trade/TradeDashboardPage").then((m) => ({ default: m.TradeDashboardPage })),
+);
+const PartiesPage = lazy(() => import("@/pages/app/parties/PartiesPage").then((m) => ({ default: m.PartiesPage })));
+const DocumentFlowPage = lazy(() => import("@/pages/app/flow/DocumentFlowPage").then((m) => ({ default: m.DocumentFlowPage })));
+const CustomersPage = lazy(() => import("@/pages/app/CustomersPage").then((m) => ({ default: m.CustomersPage })));
+const CustomerCreatePage = lazy(() =>
+  import("@/pages/app/CustomerCreatePage").then((m) => ({ default: m.CustomerCreatePage })),
+);
+const CustomerDetailPage = lazy(() =>
+  import("@/pages/app/CustomerDetailPage").then((m) => ({ default: m.CustomerDetailPage })),
+);
+const CustomerEditPage = lazy(() => import("@/pages/app/CustomerEditPage").then((m) => ({ default: m.CustomerEditPage })));
+const InquiriesPage = lazy(() => import("@/pages/app/InquiriesPage").then((m) => ({ default: m.InquiriesPage })));
+const InquiryCreatePage = lazy(() => import("@/pages/app/InquiryCreatePage").then((m) => ({ default: m.InquiryCreatePage })));
+const QuotationsPage = lazy(() => import("@/pages/app/QuotationsPage").then((m) => ({ default: m.QuotationsPage })));
+const OrdersPage = lazy(() => import("@/pages/app/OrdersPage").then((m) => ({ default: m.OrdersPage })));
+const OrderCreatePage = lazy(() => import("@/pages/app/OrderCreatePage").then((m) => ({ default: m.OrderCreatePage })));
+const InquiryDetailPage = lazy(() => import("@/pages/app/InquiryDetailPage").then((m) => ({ default: m.InquiryDetailPage })));
+const QuotationDetailPage = lazy(() =>
+  import("@/pages/app/QuotationDetailPage").then((m) => ({ default: m.QuotationDetailPage })),
+);
+const OrderDetailPage = lazy(() => import("@/pages/app/OrderDetailPage").then((m) => ({ default: m.OrderDetailPage })));
+const StylesPage = lazy(() => import("@/pages/app/StylesPage").then((m) => ({ default: m.StylesPage })));
+const StyleDetailPage = lazy(() => import("@/pages/app/StyleDetailPage").then((m) => ({ default: m.StyleDetailPage })));
+const BomBuilderPage = lazy(() => import("@/pages/app/BomBuilderPage").then((m) => ({ default: m.BomBuilderPage })));
+const ConsumptionPlansPage = lazy(() =>
+  import("@/pages/app/ConsumptionPlansPage").then((m) => ({ default: m.ConsumptionPlansPage })),
+);
+const FollowupPage = lazy(() => import("@/pages/app/FollowupPage").then((m) => ({ default: m.FollowupPage })));
+const MerchPipelinePage = lazy(() => import("@/pages/app/MerchPipelinePage").then((m) => ({ default: m.MerchPipelinePage })));
+const PipelineAnalyticsPage = lazy(() =>
+  import("@/pages/app/PipelineAnalyticsPage").then((m) => ({ default: m.PipelineAnalyticsPage })),
+);
+const MerchCriticalAlertsPage = lazy(() =>
+  import("@/pages/app/MerchCriticalAlertsPage").then((m) => ({ default: m.MerchCriticalAlertsPage })),
+);
+const ConsumptionReconciliationPage = lazy(() =>
+  import("@/pages/app/ConsumptionReconciliationPage").then((m) => ({ default: m.ConsumptionReconciliationPage })),
+);
+const WastageReportPage = lazy(() => import("@/pages/app/WastageReportPage").then((m) => ({ default: m.WastageReportPage })));
+const InventoryItemsPage = lazy(() => import("@/pages/app/InventoryItemsPage").then((m) => ({ default: m.InventoryItemsPage })));
+const VendorsPage = lazy(() => import("@/pages/app/VendorsPage").then((m) => ({ default: m.VendorsPage })));
+const StockGroupsPage = lazy(() => import("@/pages/app/StockGroupsPage").then((m) => ({ default: m.StockGroupsPage })));
+const PurchaseOrdersPage = lazy(() =>
+  import("@/pages/app/PurchaseOrdersPage").then((m) => ({ default: m.PurchaseOrdersPage })),
+);
+const GoodsReceivingPage = lazy(() =>
+  import("@/pages/app/GoodsReceivingPage").then((m) => ({ default: m.GoodsReceivingPage })),
+);
+const DeliveryChallansPage = lazy(() =>
+  import("@/pages/app/DeliveryChallansPage").then((m) => ({ default: m.DeliveryChallansPage })),
+);
+const EnhancedGatePassesPage = lazy(() =>
+  import("@/pages/app/EnhancedGatePassesPage").then((m) => ({ default: m.EnhancedGatePassesPage })),
+);
+const ProcessOrdersPage = lazy(() => import("@/pages/app/ProcessOrdersPage").then((m) => ({ default: m.ProcessOrdersPage })));
+const ConsumptionControlPage = lazy(() =>
+  import("@/pages/app/ConsumptionControlPage").then((m) => ({ default: m.ConsumptionControlPage })),
+);
+const VoucherApprovalsPage = lazy(() =>
+  import("@/pages/app/VoucherApprovalsPage").then((m) => ({ default: m.VoucherApprovalsPage })),
+);
+const FxReceiptsPage = lazy(() => import("@/pages/app/FxReceiptsPage").then((m) => ({ default: m.FxReceiptsPage })));
+const AccountsCurrencyPage = lazy(() =>
+  import("@/pages/app/AccountsCurrencyPage").then((m) => ({ default: m.AccountsCurrencyPage })),
+);
+const CostCentersPage = lazy(() => import("@/pages/app/CostCentersPage").then((m) => ({ default: m.CostCentersPage })));
+const BudgetsPage = lazy(() => import("@/pages/app/BudgetsPage").then((m) => ({ default: m.BudgetsPage })));
+const BankAccountsPage = lazy(() => import("@/pages/app/BankAccountsPage").then((m) => ({ default: m.BankAccountsPage })));
+const VoucherPrintPage = lazy(() => import("@/pages/app/VoucherPrintPage").then((m) => ({ default: m.VoucherPrintPage })));
+const VoucherDetailPage = lazy(() => import("@/pages/app/VoucherDetailPage").then((m) => ({ default: m.VoucherDetailPage })));
+const AccountingPeriodsPage = lazy(() =>
+  import("@/pages/app/AccountingPeriodsPage").then((m) => ({ default: m.AccountingPeriodsPage })),
+);
+const PaymentAdvicePage = lazy(() => import("@/pages/app/PaymentAdvicePage").then((m) => ({ default: m.PaymentAdvicePage })));
+const AllApprovalsPage = lazy(() => import("@/pages/app/AllApprovalsPage").then((m) => ({ default: m.AllApprovalsPage })));
+const QuotationPrintPage = lazy(() =>
+  import("@/pages/print/QuotationPrintPage").then((m) => ({ default: m.QuotationPrintPage })),
+);
+const CustomerPrintPage = lazy(() => import("@/pages/print/CustomerPrintPage").then((m) => ({ default: m.CustomerPrintPage })));
+const InquiryPrintPage = lazy(() => import("@/pages/print/InquiryPrintPage").then((m) => ({ default: m.InquiryPrintPage })));
+const OrderPrintPage = lazy(() => import("@/pages/print/OrderPrintPage").then((m) => ({ default: m.OrderPrintPage })));
+const StylePrintPage = lazy(() => import("@/pages/print/StylePrintPage").then((m) => ({ default: m.StylePrintPage })));
+const ProformaInvoicePrintPage = lazy(() =>
+  import("@/pages/print/ProformaInvoicePrintPage").then((m) => ({ default: m.ProformaInvoicePrintPage })),
+);
+const ProformaInvoiceFormPage = lazy(() =>
+  import("@/pages/app/commercial/ProformaInvoiceFormPage").then((m) => ({ default: m.ProformaInvoiceFormPage })),
+);
 
 const SettingsLayout = lazy(() => import("@/pages/settings/SettingsLayout").then((m) => ({ default: m.SettingsLayout })));
 const UsersPage = lazy(() => import("@/pages/settings/UsersPage").then((m) => ({ default: m.UsersPage })));

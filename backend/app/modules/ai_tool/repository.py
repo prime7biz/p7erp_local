@@ -10,13 +10,18 @@ from app.models.ai_tool import (
     AiActionRun,
     AiAnomalyEvent,
     AiAutomationRule,
+    AiFeedback,
     AiForecastRun,
+    AiIngestionJob,
     AiKnowledgeChunk,
     AiKnowledgeDocument,
     AiMessage,
+    AiPermissionPolicy,
     AiReportRun,
     AiSavedPrompt,
     AiSession,
+    AiSystemTask,
+    AiTaskPolicy,
     AiToolInvocation,
 )
 
@@ -88,6 +93,18 @@ async def list_messages(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+async def get_ai_message(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    message_id: int,
+) -> AiMessage | None:
+    r = await db.execute(
+        select(AiMessage).where(AiMessage.id == message_id, AiMessage.tenant_id == tenant_id)
+    )
+    return r.scalar_one_or_none()
 
 
 async def create_message(
@@ -302,6 +319,104 @@ async def list_forecast_runs(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+async def get_forecast_run(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    user_id: int,
+    run_id: int,
+) -> AiForecastRun | None:
+    result = await db.execute(
+        select(AiForecastRun).where(
+            AiForecastRun.id == run_id,
+            AiForecastRun.tenant_id == tenant_id,
+            AiForecastRun.user_id == user_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_system_task(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    user_id: int | None,
+    session_id: int | None,
+    task_code: str,
+    task_type: str,
+    task_category: str,
+    status: str,
+    priority: int,
+    execution_conditions: dict | None,
+    payload: dict | None,
+    requires_approval: bool,
+    idempotency_key: str | None,
+    simulation: bool = False,
+) -> AiSystemTask:
+    row = AiSystemTask(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        session_id=session_id,
+        task_code=task_code,
+        task_type=task_type,
+        task_category=task_category,
+        status=status,
+        priority=priority,
+        execution_conditions=execution_conditions,
+        payload=payload,
+        requires_approval=requires_approval,
+        idempotency_key=idempotency_key,
+        simulation=simulation,
+    )
+    db.add(row)
+    await db.flush()
+    return row
+
+
+async def list_system_tasks(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    limit: int = 50,
+) -> list[AiSystemTask]:
+    result = await db.execute(
+        select(AiSystemTask)
+        .where(AiSystemTask.tenant_id == tenant_id)
+        .order_by(AiSystemTask.created_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def get_system_task(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    task_id: int,
+) -> AiSystemTask | None:
+    result = await db.execute(
+        select(AiSystemTask).where(AiSystemTask.id == task_id, AiSystemTask.tenant_id == tenant_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_system_task_by_idempotency_key(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    idempotency_key: str,
+) -> AiSystemTask | None:
+    if not idempotency_key:
+        return None
+    result = await db.execute(
+        select(AiSystemTask).where(
+            AiSystemTask.tenant_id == tenant_id,
+            AiSystemTask.idempotency_key == idempotency_key,
+        )
+    )
+    return result.scalar_one_or_none()
 
 
 async def get_knowledge_document_by_code(
@@ -694,3 +809,198 @@ async def ai_ops_overview(
         "avg_duration_ms": int(float(avg_latency or 0.0)),
         "tool_success_rate": round(success_rate, 2),
     }
+
+
+async def create_ai_feedback(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    user_id: int,
+    session_id: int | None,
+    message_id: int | None,
+    trace_id: str | None,
+    rating: int,
+    correction_text: str | None,
+    feedback_category: str | None,
+    flagged_for_review: bool,
+    detected_intent: str | None,
+    route_used: str | None,
+    tools_used: list[str] | None,
+    retrieval_method: str | None,
+    model_used: str | None,
+    confidence: float | None,
+) -> AiFeedback:
+    row = AiFeedback(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        session_id=session_id,
+        message_id=message_id,
+        trace_id=trace_id,
+        rating=rating,
+        correction_text=correction_text,
+        feedback_category=feedback_category,
+        flagged_for_review=flagged_for_review,
+        detected_intent=detected_intent,
+        route_used=route_used,
+        tools_used=tools_used,
+        retrieval_method=retrieval_method,
+        model_used=model_used,
+        confidence=confidence,
+    )
+    db.add(row)
+    await db.flush()
+    return row
+
+
+async def list_ai_feedback(
+    db: AsyncSession,
+    *,
+    tenant_id: int | None = None,
+    flagged_only: bool = False,
+    limit: int = 100,
+) -> list[AiFeedback]:
+    q = select(AiFeedback).order_by(AiFeedback.created_at.desc()).limit(limit)
+    if tenant_id is not None:
+        q = q.where(AiFeedback.tenant_id == tenant_id)
+    if flagged_only:
+        q = q.where(AiFeedback.flagged_for_review.is_(True))
+    return list((await db.execute(q)).scalars().all())
+
+
+async def get_ai_feedback(db: AsyncSession, *, feedback_id: int) -> AiFeedback | None:
+    return await db.get(AiFeedback, feedback_id)
+
+
+async def update_ai_feedback_admin_review(
+    db: AsyncSession,
+    *,
+    feedback_id: int,
+    admin_id: int,
+    admin_notes: str | None,
+) -> AiFeedback | None:
+    row = await db.get(AiFeedback, feedback_id)
+    if not row:
+        return None
+    row.reviewed_by_admin_id = admin_id
+    row.admin_notes = admin_notes
+    row.reviewed_at = datetime.utcnow()
+    await db.flush()
+    return row
+
+
+async def create_ai_permission_policy(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    role_id: int | None,
+    module: str,
+    tool_name: str,
+    safety_class_allowed: str,
+    action: str,
+    priority: int,
+    is_active: bool,
+) -> AiPermissionPolicy:
+    row = AiPermissionPolicy(
+        tenant_id=tenant_id,
+        role_id=role_id,
+        module=module,
+        tool_name=tool_name,
+        safety_class_allowed=safety_class_allowed,
+        action=action,
+        priority=priority,
+        is_active=is_active,
+    )
+    db.add(row)
+    await db.flush()
+    return row
+
+
+async def list_ai_permission_policies(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    limit: int = 200,
+) -> list[AiPermissionPolicy]:
+    r = await db.execute(
+        select(AiPermissionPolicy)
+        .where(AiPermissionPolicy.tenant_id == tenant_id)
+        .order_by(AiPermissionPolicy.priority.desc(), AiPermissionPolicy.id.desc())
+        .limit(limit)
+    )
+    return list(r.scalars().all())
+
+
+async def create_ai_task_policy(
+    db: AsyncSession,
+    *,
+    tenant_id: int | None,
+    task_type: str,
+    is_enabled: bool,
+    max_frequency_per_hour: int | None,
+    cooldown_seconds: int | None,
+    allow_simulation: bool,
+    require_approval: bool | None,
+    max_retries_override: int | None,
+    priority: int,
+) -> AiTaskPolicy:
+    row = AiTaskPolicy(
+        tenant_id=tenant_id,
+        task_type=task_type,
+        is_enabled=is_enabled,
+        max_frequency_per_hour=max_frequency_per_hour,
+        cooldown_seconds=cooldown_seconds,
+        allow_simulation=allow_simulation,
+        require_approval=require_approval,
+        max_retries_override=max_retries_override,
+        priority=priority,
+    )
+    db.add(row)
+    await db.flush()
+    return row
+
+
+async def list_ai_task_policies(
+    db: AsyncSession,
+    *,
+    tenant_id: int | None = None,
+    limit: int = 200,
+) -> list[AiTaskPolicy]:
+    q = select(AiTaskPolicy).order_by(AiTaskPolicy.priority.desc(), AiTaskPolicy.id.desc()).limit(limit)
+    if tenant_id is not None:
+        q = q.where(or_(AiTaskPolicy.tenant_id.is_(None), AiTaskPolicy.tenant_id == tenant_id))
+    return list((await db.execute(q)).scalars().all())
+
+
+async def create_ai_ingestion_job(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    source_type: str,
+    status: str,
+    trigger: str,
+    source_checksum: str | None = None,
+    previous_checksum: str | None = None,
+) -> AiIngestionJob:
+    row = AiIngestionJob(
+        tenant_id=tenant_id,
+        source_type=source_type,
+        status=status,
+        trigger=trigger,
+        source_checksum=source_checksum,
+        previous_checksum=previous_checksum,
+    )
+    db.add(row)
+    await db.flush()
+    return row
+
+
+async def list_ai_ingestion_jobs(
+    db: AsyncSession,
+    *,
+    tenant_id: int | None = None,
+    limit: int = 100,
+) -> list[AiIngestionJob]:
+    q = select(AiIngestionJob).order_by(AiIngestionJob.created_at.desc()).limit(limit)
+    if tenant_id is not None:
+        q = q.where(AiIngestionJob.tenant_id == tenant_id)
+    return list((await db.execute(q)).scalars().all())

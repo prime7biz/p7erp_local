@@ -1,9 +1,15 @@
-import type { InquiryCreate } from "@/api/client";
+import type {
+  CustomerAiEnrichResponse,
+  InquiryAiEnrichResponse,
+  InquiryCreate,
+  VendorAiEnrichResponse,
+} from "@/api/client";
 import type {
   CustomerExtractionResponse,
   FieldApplyState,
   FieldConfidence,
   InquiryExtractionResponse,
+  VendorExtractionResponse,
 } from "@/types/extraction";
 
 export const CONFIDENCE_HIGH = 0.85;
@@ -95,6 +101,37 @@ export function buildCustomerFieldApplyStates(
   return out;
 }
 
+export function buildCustomerEnrichApplyStates(
+  enrich: CustomerAiEnrichResponse,
+  current: Record<string, string>,
+): FieldApplyState[] {
+  const out: FieldApplyState[] = [];
+  const sugg = enrich.suggestions ?? {};
+  for (const key of CUSTOMER_KEYS) {
+    const s = sugg[key];
+    if (!s || s.value === null || s.value === undefined) continue;
+    const extractedDisplay = formatExtractedValue(s.value);
+    if (!extractedDisplay.trim()) continue;
+    const cur = current[key] ?? "";
+    const conf = typeof s.confidence === "number" ? s.confidence : 0;
+    const level = deriveConfidenceLevel(conf);
+    const hasConflict = cur.trim().length > 0 && cur.trim() !== extractedDisplay.trim();
+    out.push({
+      fieldKey: key,
+      label: CUSTOMER_FIELD_LABELS[key] ?? key,
+      extractedValue: extractedDisplay,
+      extractedDisplay,
+      currentValue: cur,
+      applied: false,
+      skipped: false,
+      hasConflict,
+      confidence: conf,
+      confidenceLevel: level,
+    });
+  }
+  return out;
+}
+
 export function buildInquiryFieldApplyStates(
   res: InquiryExtractionResponse,
   current: Record<string, string>,
@@ -125,9 +162,144 @@ export function buildInquiryFieldApplyStates(
   return out;
 }
 
+export function buildInquiryEnrichApplyStates(
+  enrich: InquiryAiEnrichResponse,
+  current: Record<string, string>,
+): FieldApplyState[] {
+  const out: FieldApplyState[] = [];
+  const sugg = enrich.suggestions ?? {};
+  for (const key of INQUIRY_KEYS) {
+    const s = sugg[key];
+    if (!s || s.value === null || s.value === undefined) continue;
+    const extractedDisplay = formatExtractedValue(s.value);
+    if (!extractedDisplay.trim()) continue;
+    const cur = current[key] ?? "";
+    const conf = typeof s.confidence === "number" ? s.confidence : 0;
+    const level = deriveConfidenceLevel(conf);
+    const hasConflict = cur.trim().length > 0 && cur.trim() !== extractedDisplay.trim();
+    out.push({
+      fieldKey: key,
+      label: INQUIRY_FIELD_LABELS[key] ?? key,
+      extractedValue: extractedDisplay,
+      extractedDisplay,
+      currentValue: cur,
+      applied: false,
+      skipped: false,
+      hasConflict,
+      confidence: conf,
+      confidenceLevel: level,
+    });
+  }
+  return out;
+}
+
 /** Snapshot of inquiry form fields comparable to extraction field keys (candidates not stored on form). */
+export const VENDOR_FIELD_LABELS: Record<string, string> = {
+  vendorDisplayName: "Display name",
+  legalName: "Legal name",
+  tradeName: "Trade name",
+  contactPerson: "Contact person",
+  designation: "Designation",
+  email: "Email",
+  phone: "Phone",
+  mobile: "Mobile",
+  website: "Website",
+  address: "Address",
+  addressLine1: "Address line 1",
+  city: "City",
+  stateOrRegion: "State / region",
+  postalCode: "Postal code",
+  country: "Country",
+  taxId: "Tax ID",
+  registrationNumber: "Registration number",
+  vendorType: "Vendor type",
+  defaultCurrency: "Currency",
+  paymentTermsDays: "Payment terms (days)",
+  paymentTerms: "Payment terms (text)",
+  incoterms: "Incoterms",
+  shippingTerms: "Shipping terms",
+  leadTimeNotes: "Lead time notes",
+  bankName: "Bank name",
+  bankAccountTitle: "Account title",
+  bankAccountNo: "Account number",
+  swiftCode: "SWIFT",
+  iban: "IBAN",
+  complianceStatus: "Compliance status",
+  complianceReferenceNumbers: "Compliance references",
+  certificationsSummary: "Certifications",
+  onboardingStatus: "Onboarding status",
+  remarks: "Remarks",
+};
+
+const VENDOR_KEYS = Object.keys(VENDOR_FIELD_LABELS);
+
+export function buildVendorFieldApplyStates(
+  res: VendorExtractionResponse,
+  current: Record<string, string>,
+): FieldApplyState[] {
+  const out: FieldApplyState[] = [];
+  for (const key of VENDOR_KEYS) {
+    const ef = res.fields[key];
+    if (!ef || ef.value === null || ef.value === undefined) continue;
+    const extractedDisplay = formatExtractedValue(ef.value);
+    if (!extractedDisplay.trim()) continue;
+    const cur = current[key] ?? "";
+    const conf = typeof ef.confidence === "number" ? ef.confidence : 0;
+    const level = deriveConfidenceLevel(conf);
+    const hasConflict = cur.trim().length > 0 && cur.trim() !== extractedDisplay.trim();
+    out.push({
+      fieldKey: key,
+      label: VENDOR_FIELD_LABELS[key] ?? key,
+      extractedValue: extractedDisplay,
+      extractedDisplay,
+      currentValue: cur,
+      applied: false,
+      skipped: false,
+      hasConflict,
+      confidence: conf,
+      confidenceLevel: level,
+    });
+  }
+  return out;
+}
+
+export function buildVendorEnrichApplyStates(
+  enrich: VendorAiEnrichResponse,
+  current: Record<string, string>,
+): FieldApplyState[] {
+  const out: FieldApplyState[] = [];
+  const sugg = enrich.suggestions ?? {};
+  for (const key of VENDOR_KEYS) {
+    const s = sugg[key];
+    if (!s || s.value === null || s.value === undefined) continue;
+    const extractedDisplay = formatExtractedValue(s.value);
+    if (!extractedDisplay.trim()) continue;
+    const cur = current[key] ?? "";
+    const conf = typeof s.confidence === "number" ? s.confidence : 0;
+    const level = deriveConfidenceLevel(conf);
+    const hasConflict = cur.trim().length > 0 && cur.trim() !== extractedDisplay.trim();
+    out.push({
+      fieldKey: key,
+      label: VENDOR_FIELD_LABELS[key] ?? key,
+      extractedValue: extractedDisplay,
+      extractedDisplay,
+      currentValue: cur,
+      applied: false,
+      skipped: false,
+      hasConflict,
+      confidence: conf,
+      confidenceLevel: level,
+    });
+  }
+  return out;
+}
+
 export function inquiryFormSnapshot(form: InquiryCreate): Record<string, string> {
   return {
+    customer_id: form.customer_id ? String(form.customer_id) : "",
+    style_id: form.style_id != null ? String(form.style_id) : "",
+    customer_intermediary_id:
+      form.customer_intermediary_id != null ? String(form.customer_intermediary_id) : "",
     customer_name_candidate: "",
     customer_code_candidate: "",
     style_name_candidate: "",

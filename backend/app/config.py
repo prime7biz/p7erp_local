@@ -31,13 +31,48 @@ class Settings(BaseSettings):
     ai_timeout_heavy_seconds: int = 35
     ai_circuit_breaker_failure_threshold: int = 5
     ai_circuit_breaker_cooldown_seconds: int = 45
+    # Customer AI: retries for structured LLM calls after asyncio timeout (0 = no retry).
+    customer_ai_llm_retry_count: int = 1
+    # Suggestion and trace batches: default expiry window from creation (cleanup deletes after expires_at).
+    customer_ai_batch_retention_days: int = 90
 
     # Production planning AI (Gemini). Use cheapest Flash-lite model; override via GEMINI_MODEL.
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash-lite"
+    gemini_model: str = "gemini-2.5-flash"
     gemini_enabled: bool = True
     # 0 = unlimited; otherwise max Gemini API calls per calendar month (process-wide, persisted in media/)
     ai_monthly_budget_limit: int = 0
+    # Tier-1 local routing model (Docker service name by default)
+    ollama_enabled: bool = True
+    ollama_url: str = "http://ollama:11434"
+    ollama_model: str = "llama3"
+    # Tier-2 paid provider (used only after explicit escalation approval)
+    paid_llm_provider: str = ""
+    paid_llm_api_key: str = ""
+    paid_llm_model: str = ""
+    # Mounted in-process with FastAPI
+    mcp_enabled: bool = True
+    # Require JWT auth + tenant binding on HTTP /mcp endpoint (default True for production safety)
+    mcp_require_auth: bool = True
+    # Tier-1 vLLM (OpenAI-compatible). Preferred over Ollama when enabled and URL set.
+    vllm_enabled: bool = True
+    vllm_url: str = "http://vllm:8000"
+    vllm_model: str = "meta-llama/Meta-Llama-3-8B-Instruct"
+    vllm_max_tokens: int = 1024
+    # MCP COMMIT_REQUIRED tools: default False (production-safe). Set MCP_COMMIT_BYPASS=true for local demos.
+    mcp_commit_bypass: bool = False
+    # Optional shared secret validated when human_approval_confirmed=true on COMMIT_REQUIRED tools.
+    mcp_human_approval_secret: str = ""
+    # When True, COMMIT_REQUIRED MCP tools create an approval artifact instead of calling ERP immediately.
+    mcp_commit_uses_artifact: bool = False
+    # Celery / async jobs (defaults to redis_url when empty)
+    celery_broker_url: str = ""
+    celery_result_backend: str = ""
+    forecast_max_concurrent: int = 2
+    analysis_max_concurrent: int = 4
+    # MCP sync forecast path: guardrails (async Celery path can raise these later)
+    forecast_sync_max_horizon_days: int = 90
+    forecast_sync_timeout_seconds: int = 30
 
     # Platform admin (super admin panel): JWT lifetime and local backup directory
     platform_admin_jwt_expire_minutes: int = 480
@@ -59,5 +94,10 @@ def get_settings() -> Settings:
         if settings.ai_confirmation_token_pepper == "change-me-ai-token-pepper":
             raise RuntimeError(
                 "AI_CONFIRMATION_TOKEN_PEPPER must be set to a strong value in non-development environments."
+            )
+        if not settings.mcp_commit_bypass and not (settings.mcp_human_approval_secret or "").strip():
+            raise RuntimeError(
+                "In non-development environments, set MCP_HUMAN_APPROVAL_SECRET when MCP_COMMIT_BYPASS is false, "
+                "or set MCP_COMMIT_BYPASS=true only for controlled demos."
             )
     return settings

@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, type BillsAgingResponse, type CustomerResponse, type OrderResponse, type InquiryResponse, type QuotationResponse } from "@/api/client";
+import {
+  api,
+  type BillsAgingResponse,
+  type CustomerHealthResponse,
+  type CustomerRelatedResponse,
+  type CustomerResponse,
+} from "@/api/client";
+import { CustomerAiInsights } from "@/components/customers/CustomerAiInsights";
+import { useCustomerAi } from "@/hooks/useCustomerAi";
 import { logApiError } from "@/utils/logApiError";
 import { ArrowLeft, Building2, Mail, MapPin, Pencil, Phone, UserRound } from "lucide-react";
 
@@ -21,9 +29,11 @@ export function CustomerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [recvAging, setRecvAging] = useState<BillsAgingResponse | null>(null);
-  const [orders, setOrders] = useState<OrderResponse[]>([]);
-  const [inquiries, setInquiries] = useState<InquiryResponse[]>([]);
-  const [quotations, setQuotations] = useState<QuotationResponse[]>([]);
+  const [related, setRelated] = useState<CustomerRelatedResponse | null>(null);
+  const [health, setHealth] = useState<CustomerHealthResponse | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+
+  const customerAi = useCustomerAi();
 
   useEffect(() => {
     const load = async () => {
@@ -48,9 +58,8 @@ export function CustomerDetailPage() {
 
   useEffect(() => {
     setRecvAging(null);
-    setOrders([]);
-    setInquiries([]);
-    setQuotations([]);
+    setRelated(null);
+    setHealth(null);
   }, [id]);
 
   useEffect(() => {
@@ -60,23 +69,42 @@ export function CustomerDetailPage() {
     if (customer.name) {
       api
         .getBillsAging({ bill_type: "RECEIVABLE", party_name: customer.name })
-        .then((d) => { if (!cancelled) setRecvAging(d); })
-        .catch((e) => { logApiError("CustomerDetailPage.getBillsAging", e); if (!cancelled) setRecvAging(null); });
+        .then((d) => {
+          if (!cancelled) setRecvAging(d);
+        })
+        .catch((e) => {
+          logApiError("CustomerDetailPage.getBillsAging", e);
+          if (!cancelled) setRecvAging(null);
+        });
     }
 
-    api.listOrders({ search: customer.name, limit: 10 })
-      .then((d) => { if (!cancelled) setOrders(d.filter((o) => o.customer_id === customer.id)); })
-      .catch((e) => logApiError("CustomerDetailPage.listOrders", e));
+    setHealthLoading(true);
+    api
+      .getCustomerRelated(customer.id, 25)
+      .then((d) => {
+        if (!cancelled) setRelated(d);
+      })
+      .catch((e) => {
+        logApiError("CustomerDetailPage.getCustomerRelated", e);
+        if (!cancelled) setRelated(null);
+      });
 
-    api.listInquiries({ search: customer.name, limit: 10 })
-      .then((d) => { if (!cancelled) setInquiries(d.filter((i) => i.customer_id === customer.id)); })
-      .catch((e) => logApiError("CustomerDetailPage.listInquiries", e));
+    api
+      .getCustomerHealth(customer.id)
+      .then((d) => {
+        if (!cancelled) setHealth(d);
+      })
+      .catch((e) => {
+        logApiError("CustomerDetailPage.getCustomerHealth", e);
+        if (!cancelled) setHealth(null);
+      })
+      .finally(() => {
+        if (!cancelled) setHealthLoading(false);
+      });
 
-    api.listQuotations({ search: customer.name, limit: 10 })
-      .then((d) => { if (!cancelled) setQuotations(d.filter((q) => q.customer_id === customer.id)); })
-      .catch((e) => logApiError("CustomerDetailPage.listQuotations", e));
-
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [customer]);
 
   if (loading) {
@@ -118,6 +146,10 @@ export function CustomerDetailPage() {
     .filter(Boolean)
     .join(", ");
 
+  const orders = related?.orders ?? [];
+  const inquiries = related?.inquiries ?? [];
+  const quotations = related?.quotations ?? [];
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -157,6 +189,13 @@ export function CustomerDetailPage() {
           </span>
         </div>
       </div>
+
+      <CustomerAiInsights
+        customerId={customer.id}
+        health={health}
+        healthLoading={healthLoading}
+        ai={customerAi}
+      />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-border bg-surface-raised p-4">
@@ -249,7 +288,7 @@ export function CustomerDetailPage() {
         </section>
       </div>
 
-      {(orders.length > 0 || inquiries.length > 0 || quotations.length > 0) ? (
+      {orders.length > 0 || inquiries.length > 0 || quotations.length > 0 ? (
         <section className="rounded-xl border border-border bg-surface-raised p-5">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-status-warning">Related Records</h2>
           <div className="grid gap-4 lg:grid-cols-3">
@@ -257,10 +296,10 @@ export function CustomerDetailPage() {
               <div>
                 <div className="text-xs text-text-muted mb-1">Orders ({orders.length})</div>
                 <ul className="space-y-1">
-                  {orders.slice(0, 5).map((o) => (
+                  {orders.slice(0, 8).map((o) => (
                     <li key={o.id}>
                       <Link to={`/app/orders/${o.id}`} className="text-sm text-brand-primary hover:underline">
-                        {o.order_code} — {o.status}
+                        {o.code} — {o.status}
                       </Link>
                     </li>
                   ))}
@@ -271,10 +310,10 @@ export function CustomerDetailPage() {
               <div>
                 <div className="text-xs text-text-muted mb-1">Inquiries ({inquiries.length})</div>
                 <ul className="space-y-1">
-                  {inquiries.slice(0, 5).map((i) => (
+                  {inquiries.slice(0, 8).map((i) => (
                     <li key={i.id}>
                       <Link to={`/app/inquiries/${i.id}`} className="text-sm text-brand-primary hover:underline">
-                        {i.inquiry_code} — {i.status}
+                        {i.code} — {i.status}
                       </Link>
                     </li>
                   ))}
@@ -285,10 +324,10 @@ export function CustomerDetailPage() {
               <div>
                 <div className="text-xs text-text-muted mb-1">Quotations ({quotations.length})</div>
                 <ul className="space-y-1">
-                  {quotations.slice(0, 5).map((q) => (
+                  {quotations.slice(0, 8).map((q) => (
                     <li key={q.id}>
                       <Link to={`/app/quotations/${q.id}`} className="text-sm text-brand-primary hover:underline">
-                        {q.quotation_code} — {q.status}
+                        {q.code} — {q.status}
                       </Link>
                     </li>
                   ))}

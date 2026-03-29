@@ -48,6 +48,7 @@ from app.modules.files.router import router as files_router
 from app.modules.admin.router import router as admin_router
 from app.modules.announcements.router import router as announcements_router
 from app.modules.support.router import router as tenant_support_router
+from app.modules.mcp_server import mount_mcp
 from app.common.request_logger import RequestLoggingMiddleware
 from app.common.rate_limiter import TenantRateLimitMiddleware
 
@@ -200,6 +201,7 @@ app.add_middleware(
 )
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(TenantRateLimitMiddleware)
+mount_mcp(app)
 
 app.include_router(files_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)

@@ -46,7 +46,7 @@ export function InquiryCreateSidebar({
   const hasStyleImage = Boolean(selectedStyle?.style_image_url);
 
   return (
-    <aside className="space-y-4 xl:sticky xl:top-6 xl:col-span-4 2xl:col-span-3 self-start">
+    <div className="space-y-4">
       <section className="overflow-hidden rounded-2xl bg-surface-inverse text-text-inverse shadow-lg print-card">
         <div className="space-y-3 p-4">
           <h3 className="text-xl font-bold">Inquiry Snapshot</h3>
@@ -146,6 +146,6 @@ export function InquiryCreateSidebar({
           </p>
         )}
       </section>
-    </aside>
+    </div>
   );
 }

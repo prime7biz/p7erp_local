@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from time import monotonic
@@ -95,6 +96,38 @@ async def record_circuit_failure(tool_key: str) -> None:
         state["failures"] = failures
         if failures >= threshold:
             state["opened_until"] = now + cooldown_seconds
+
+
+_MAX_PROMPT_LEN = 4000
+
+_INJECTION_PATTERNS = [
+    re.compile(r"ignore\s+(previous|above|all)\s+(instructions?|rules?|context)", re.IGNORECASE),
+    re.compile(r"system\s*prompt", re.IGNORECASE),
+    re.compile(r"you\s+are\s+now", re.IGNORECASE),
+    re.compile(r"pretend\s+(to\s+be|you\s+are)", re.IGNORECASE),
+    re.compile(r"reveal\s+(your|the)\s+(instructions?|prompt|system)", re.IGNORECASE),
+    re.compile(r"(?:drop|delete|truncate|alter)\s+table", re.IGNORECASE),
+    re.compile(r";\s*(?:select|insert|update|delete|drop)\b", re.IGNORECASE),
+    re.compile(r"<script[^>]*>", re.IGNORECASE),
+    re.compile(r"\{\{.*\}\}", re.IGNORECASE),
+]
+
+
+def screen_prompt(prompt: str) -> tuple[bool, str | None]:
+    """
+    Basic prompt-injection and abuse screening.
+
+    Returns (is_safe, rejection_reason).
+    """
+    text = (prompt or "").strip()
+    if not text:
+        return False, "Prompt is empty."
+    if len(text) > _MAX_PROMPT_LEN:
+        return False, f"Prompt exceeds maximum length ({_MAX_PROMPT_LEN} characters)."
+    for pat in _INJECTION_PATTERNS:
+        if pat.search(text):
+            return False, "Prompt matched a safety pattern and was blocked."
+    return True, None
 
 
 def build_policy_metadata(*, decision: str, reason_code: str | None = None, error_category: str | None = None) -> dict[str, str]:

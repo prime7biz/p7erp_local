@@ -1,6 +1,8 @@
 from datetime import date
 from typing import Literal
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -68,6 +70,7 @@ class QuotationResponse(BaseModel):
   notes: str | None
   created_at: str
   updated_at: str
+  ai_indicators: Any | None = None
 
   class Config:
     from_attributes = True

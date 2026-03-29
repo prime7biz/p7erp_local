@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, type InquiryResponse, type CustomerResponse } from "@/api/client";
+import { InquiryAiAuditHistory } from "@/components/inquiries/InquiryAiAuditHistory";
+import { InquiryAiPanel } from "@/components/inquiries/InquiryAiPanel";
+import { useInquiryAi } from "@/hooks/useInquiryAi";
 import { useSecureImage } from "@/hooks/useSecureImage";
 
 export function InquiryDetailPage() {
@@ -12,6 +15,32 @@ export function InquiryDetailPage() {
   const [error, setError] = useState("");
   const [converting, setConverting] = useState(false);
   const styleImageUrl = useSecureImage(item?.style_image_url);
+  const inquiryAi = useInquiryAi();
+
+  const aiFormSnapshot = useMemo(() => {
+    if (!item) return {};
+    return {
+      customer_id: String(item.customer_id),
+      style_id: item.style_id != null ? String(item.style_id) : "",
+      customer_intermediary_id: item.customer_intermediary_id != null ? String(item.customer_intermediary_id) : "",
+      style_ref: item.style_ref ?? "",
+      season: item.season ?? "",
+      department: item.department ?? "",
+      quantity: item.quantity != null ? String(item.quantity) : "",
+      target_price: item.target_price ?? "",
+      target_price_currency: item.target_price_currency ?? "",
+      currency: item.currency ?? "",
+      exchange_rate: item.exchange_rate ?? "",
+      expected_delivery_date: item.expected_delivery_date ?? "",
+      shipping_term: item.shipping_term ?? "",
+      commission_mode: item.commission_mode ?? "",
+      commission_type: item.commission_type ?? "",
+      commission_value: item.commission_value != null ? String(item.commission_value) : "",
+      notes: item.notes ?? "",
+      status: item.status,
+      items_json: JSON.stringify(item.items ?? []),
+    };
+  }, [item]);
 
   useEffect(() => {
     const load = async () => {
@@ -125,6 +154,25 @@ export function InquiryDetailPage() {
           Missing recommended fields for clean quotation prefill: {missingForQuotation.join(", ")}.
         </div>
       )}
+
+      <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-text-primary">Inquiry AI</h2>
+        <p className="text-xs text-text-muted">
+          Validate and dedupe use the current inquiry record. Summary and next actions call the AI provider; results are
+          review-only until you change data on the edit screen or apply suggestion batches there.
+        </p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <InquiryAiPanel
+            ai={inquiryAi}
+            mode="edit"
+            inquiryId={item.id}
+            formSnapshot={aiFormSnapshot}
+          />
+          <div className="space-y-2">
+            <InquiryAiAuditHistory inquiryId={item.id} />
+          </div>
+        </div>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-2">

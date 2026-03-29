@@ -2,30 +2,47 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import date
+from datetime import date, datetime
 from time import perf_counter
 from uuid import uuid4
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.models import Tenant, User
-from app.models.ai_tool import AiActionRun, AiAnomalyEvent, AiForecastRun, AiMessage, AiReportRun, AiSession
+from app.models.ai_tool import (
+    AiActionRun,
+    AiAnomalyEvent,
+    AiApprovalArtifact,
+    AiFeedback,
+    AiForecastRun,
+    AiMessage,
+    AiReportRun,
+    AiSession,
+    AiSystemTask,
+)
 from app.modules.ai_tool import audit, repository
+from app.modules.ai_tool.artifacts import service as approval_artifact_service
 from app.modules.ai_tool.automation import confirm_and_execute_action, propose_action
 from app.modules.ai_tool.anomaly import generate_anomaly_insights
 from app.modules.ai_tool.authz import ensure_tenant_access, has_tool_permission, require_ai_access
+from app.modules.ai_tool.policy_eval import evaluate_ai_safety_for_user
+from app.modules.ai_tool.provenance import build_response_envelope
+from app.modules.ai_tool.tracing import RequestTracer
 from app.modules.ai_tool.forecasting import build_forecast_tool_result, execute_forecast_request
 from app.modules.ai_tool.guardrails import (
     build_policy_metadata,
     call_with_timeout,
     record_circuit_failure,
     record_circuit_success,
+    screen_prompt,
     should_block_circuit,
 )
 from app.modules.ai_tool.intents import detect_intent
-from app.modules.ai_tool.llm_provider import get_llm_provider
+from app.modules.ai_tool.llm_provider import get_llm_provider, get_paid_llm_provider, get_response_llm_provider
+from app.modules.ai_tool.llm_provider.paid_provider import PaidLlmProvider
 from app.modules.ai_tool.llm_provider.stub_provider import StubLlmProvider
 from app.modules.ai_tool.knowledge import build_knowledge_tool_payload, list_knowledge_documents as list_knowledge_documents_core, query_knowledge
 from app.modules.ai_tool.reporting import build_report_tool_result, execute_report_request
@@ -43,9 +60,21 @@ from app.modules.ai_tool.schemas import (
     AiQuickActionsResponse,
     AiReportRunResponse,
     AiSessionResponse,
+    AiApprovalArtifactCommitResult,
+    AiApprovalArtifactResponse,
+    AiApprovalArtifactReviewRequest,
+    AiApprovalArtifactRollbackRequest,
+    AiFeedbackResponse,
+    AiFeedbackSubmitRequest,
+    AiSystemTaskCreateRequest,
+    AiSystemTaskResponse,
     AiToolInvocationResult,
+    EscalationPayload,
 )
+from app.modules.ai_tool.router_engine.composer import merge_route_metadata
+from app.modules.ai_tool.router_engine.hybrid_router import HybridRouter
 from app.modules.ai_tool.tool_registry import select_tools
+from app.modules.ai_tool.triage import infer_tool_from_prompt, parse_ollama_response
 
 
 def _normalize_prompt(prompt: str) -> str:
@@ -87,12 +116,14 @@ async def _ensure_session_access(
             db,
             tenant_id=tenant.id,
             user_id=user.id,
-            session_id=session_id,
+            # Keep DB integrity when requested session id does not exist.
+            session_id=None,
             action=action,
             severity="WARN",
             request_id=request_id,
+            trace_id=request_id,
             resource="ai.session",
-            details="Invalid session access",
+            details=f"Invalid session access (requested_session_id={session_id})",
             decision="deny",
             reason_code="SESSION_ACCESS_DENIED",
             error_category="authorization",
@@ -165,6 +196,11 @@ def _forecast_to_schema(row: AiForecastRun) -> AiForecastRunResponse:
         narrative_explanation=row.narrative_explanation,
         created_at=row.created_at,
         completed_at=row.completed_at,
+        model_version=getattr(row, "model_version", None),
+        model_type=getattr(row, "model_type", None),
+        quality_metrics=getattr(row, "quality_metrics", None),
+        expires_at=getattr(row, "expires_at", None),
+        celery_task_id=getattr(row, "celery_task_id", None),
     )
 
 
@@ -258,7 +294,7 @@ async def _assistant_text_with_llm(
 ) -> str:
     """Rule-based reply, optionally rewritten by Gemini for natural language."""
     base = _assistant_text(tool_results, intent, blocked)
-    provider = get_llm_provider()
+    provider = get_response_llm_provider()
     if isinstance(provider, StubLlmProvider):
         return base
     payload = {
@@ -285,6 +321,35 @@ async def _assistant_text_with_llm(
     except Exception:
         pass
     return base
+
+
+async def _run_tier1_triage(prompt: str) -> tuple[str, EscalationPayload | None]:
+    """
+    Run local gatekeeper triage.
+
+    Returns:
+    - assistant text for normal local response
+    - escalation payload when paid tier approval is required
+    """
+    settings = get_settings()
+    if not settings.ollama_enabled:
+        return "", None
+    provider = get_llm_provider()
+    if isinstance(provider, StubLlmProvider):
+        return "", None
+    raw = await provider.generate(prompt)
+    if "Local AI is unavailable" in raw:
+        return "", None
+    triage = parse_ollama_response(raw, prompt=prompt)
+    if triage.tier == "escalate":
+        return (
+            "",
+            EscalationPayload(
+                tool_required=(triage.tool_required or infer_tool_from_prompt(prompt) or "mcp_tool_required"),
+                reason=triage.escalation_reason or "This request needs advanced paid processing.",
+            ),
+        )
+    return (triage.local_answer or "").strip(), None
 
 
 def default_quick_actions() -> AiQuickActionsResponse:
@@ -464,6 +529,21 @@ async def list_forecast_runs(
     return [_forecast_to_schema(row) for row in rows]
 
 
+async def get_forecast_run_by_id(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    run_id: int,
+) -> AiForecastRunResponse:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    row = await repository.get_forecast_run(db, tenant_id=tenant.id, user_id=user.id, run_id=run_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Forecast run not found")
+    return _forecast_to_schema(row)
+
+
 async def list_knowledge_documents(
     db: AsyncSession,
     *,
@@ -580,11 +660,12 @@ async def list_session_messages(
             db,
             tenant_id=tenant.id,
             user_id=user.id,
-            session_id=session_id,
+            # Keep DB integrity when requested session id does not exist.
+            session_id=None,
             action="SESSION_ACCESS_BLOCKED",
             severity="WARN",
             resource="ai.session",
-            details="Attempt to access another user's session",
+            details=f"Attempt to access another user's session (requested_session_id={session_id})",
             decision="deny",
             reason_code="SESSION_ACCESS_DENIED",
             error_category="authorization",
@@ -612,11 +693,12 @@ async def process_prompt(
             db,
             tenant_id=tenant.id,
             user_id=user.id,
-            session_id=session_id,
+            # Keep DB integrity when requested session id does not exist.
+            session_id=None,
             action="PROMPT_BLOCKED",
             severity="WARN",
             resource="ai.session",
-            details="Prompt blocked due to invalid session access",
+            details=f"Prompt blocked due to invalid session access (requested_session_id={session_id})",
             decision="deny",
             reason_code="SESSION_ACCESS_DENIED",
             error_category="authorization",
@@ -624,6 +706,19 @@ async def process_prompt(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
     request_id = uuid4().hex
+    tracer = RequestTracer()
+    t_screen = tracer.now_ms()
+    safe_prompt, block_reason = screen_prompt(prompt)
+    tracer.span_end(
+        "screen_prompt",
+        t_screen,
+        metadata={"safe": bool(safe_prompt), "reason": block_reason},
+    )
+    if not safe_prompt:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=block_reason or "Prompt failed safety screening.",
+        )
     user_msg = await repository.create_message(
         db,
         tenant_id=tenant.id,
@@ -642,11 +737,18 @@ async def process_prompt(
         message_id=user_msg.id,
         action="PROMPT_RECEIVED",
         request_id=request_id,
+        trace_id=request_id,
         resource="ai.prompt",
         details=_safe_prompt_excerpt(prompt, limit=500),
     )
 
+    t_intent = tracer.now_ms()
     intent_result = detect_intent(prompt)
+    tracer.span_end(
+        "intent_detection",
+        t_intent,
+        metadata={"intent": intent_result.intent, "confidence": intent_result.confidence},
+    )
     await audit.log_ai_event(
         db,
         tenant_id=tenant.id,
@@ -655,10 +757,140 @@ async def process_prompt(
         message_id=user_msg.id,
         action="INTENT_DETECTED",
         request_id=request_id,
+        trace_id=request_id,
         resource="ai.intent",
         details=intent_result.reason,
         details_json={"intent": intent_result.intent, "confidence": intent_result.confidence},
     )
+
+    t_route = tracer.now_ms()
+    route_decision = HybridRouter.route(intent_result=intent_result, prompt=prompt)
+    tracer.span_end(
+        "router_decision",
+        t_route,
+        metadata={
+            "primary_route": route_decision.primary_route,
+            "suggest_premium": route_decision.suggest_premium,
+        },
+    )
+    await audit.log_ai_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        session_id=session.id,
+        message_id=user_msg.id,
+        action="ROUTE_DECISION",
+        request_id=request_id,
+        trace_id=request_id,
+        route_selected=route_decision.primary_route,
+        prompt_category=intent_result.intent,
+        resource="ai.router",
+        details=route_decision.reasoning,
+        details_json={
+            "primary_route": route_decision.primary_route,
+            "secondary_routes": route_decision.secondary_routes,
+            "suggest_premium": route_decision.suggest_premium,
+            "premium_reason": route_decision.premium_reason,
+            "estimated_cost_class": route_decision.estimated_cost_class,
+            "estimated_latency_ms": route_decision.estimated_latency_ms,
+        },
+    )
+
+    # Tier-1 gatekeeper: try local answer first, or return escalation request.
+    triage_text = ""
+    escalation: EscalationPayload | None = None
+    if route_decision.use_tier1_triage:
+        t_tier1 = tracer.now_ms()
+        try:
+            triage_text, escalation = await _run_tier1_triage(prompt)
+        except Exception:
+            triage_text, escalation = "", None
+        tracer.span_end(
+            "llm:tier1",
+            t_tier1,
+            metadata={"has_escalation": escalation is not None, "has_text": bool(triage_text)},
+        )
+    if escalation is not None or triage_text:
+        assistant_content = triage_text or escalation.reason
+        elapsed_ms = int((perf_counter() - overall_start) * 1000)
+        prov = build_response_envelope(
+            answer=assistant_content,
+            tool_results=[],
+            primary_route=route_decision.primary_route,
+            secondary_routes=route_decision.secondary_routes,
+            total_latency_ms=elapsed_ms,
+            model_used="tier1",
+        )
+        assistant_meta = {
+            "request_id": request_id,
+            "intent": intent_result.intent,
+            "confidence": intent_result.confidence,
+            "tool_results": [],
+            "blocked": False,
+            "ambiguous_rejected": False,
+            "primary_route": route_decision.primary_route,
+            "suggest_premium": route_decision.suggest_premium,
+            "provenance": prov,
+            "trace_spans": tracer.to_json(),
+        }
+        if escalation is not None:
+            assistant_meta["escalation_pending"] = True
+            assistant_meta["tool_required"] = escalation.tool_required
+            assistant_meta["reason"] = escalation.reason
+        assistant_msg = await repository.create_message(
+            db,
+            tenant_id=tenant.id,
+            session_id=session.id,
+            sender_user_id=None,
+            role="assistant",
+            content=assistant_content,
+            content_json=assistant_meta,
+        )
+        await repository.touch_session_last_message(db, session=session)
+        await audit.log_ai_event(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            session_id=session.id,
+            message_id=assistant_msg.id,
+            action="TIER1_RESPONSE_SENT" if escalation is None else "ESCALATION_REQUESTED",
+            request_id=request_id,
+            trace_id=request_id,
+            resource="ai.gatekeeper",
+            details=assistant_content[:500],
+            details_json={"escalation": escalation.model_dump() if escalation else None},
+        )
+        await audit.log_ai_event(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            session_id=session.id,
+            message_id=assistant_msg.id,
+            action="REQUEST_COMPLETED",
+            request_id=request_id,
+            trace_id=request_id,
+            resource="ai.request",
+            details=f"Completed in {elapsed_ms}ms",
+            details_json={
+                "duration_ms": elapsed_ms,
+                "intent": intent_result.intent,
+                "tool_results_count": 0,
+                "blocked": False,
+                "spans": tracer.to_json(),
+                **build_policy_metadata(decision="allow"),
+            },
+        )
+        return AiChatResponse(
+            session=_session_to_schema(session),
+            user_message=_message_to_schema(user_msg),
+            assistant_message=_message_to_schema(assistant_msg),
+            detected_intent=intent_result.intent,
+            confidence=intent_result.confidence,
+            request_id=request_id,
+            tool_results=[],
+            blocked=False,
+            escalation=escalation,
+        )
 
     blocked = intent_result.intent in {"unsupported_request"}
     tool_results: list[AiToolInvocationResult] = []
@@ -676,6 +908,7 @@ async def process_prompt(
             message_id=user_msg.id,
             action="TOOLS_SELECTED",
             request_id=request_id,
+            trace_id=request_id,
             resource="ai.registry",
             details=f"Selected {len(selected_tools)} tool(s)",
             details_json={"tools": [x.name for x in selected_tools]},
@@ -691,6 +924,7 @@ async def process_prompt(
                 action="SEARCH_AMBIGUOUS_REJECTED",
                 severity="WARN",
                 request_id=request_id,
+                trace_id=request_id,
                 resource="ai.search",
                 details="Search request was ambiguous for safe tool mapping",
                 decision="deny",
@@ -708,6 +942,7 @@ async def process_prompt(
             action="REQUEST_BLOCKED",
             severity="WARN",
             request_id=request_id,
+            trace_id=request_id,
             resource="ai.guard",
             details=f"Blocked intent: {intent_result.intent}",
             decision="deny",
@@ -749,6 +984,7 @@ async def process_prompt(
                 action="REPORT_BLOCKED",
                 severity="WARN",
                 request_id=request_id,
+                trace_id=request_id,
                 resource="ai.report",
                 details=report_error,
                 decision="deny",
@@ -785,6 +1021,7 @@ async def process_prompt(
                 message_id=user_msg.id,
                 action="REPORT_GENERATED",
                 request_id=request_id,
+                trace_id=request_id,
                 resource="ai.report",
                 details=f"Generated report {report_template.report_code}",
                 details_json={"report_run_id": report_run.id, "report_code": report_template.report_code},
@@ -827,6 +1064,7 @@ async def process_prompt(
                 action="FORECAST_BLOCKED",
                 severity="WARN",
                 request_id=request_id,
+                trace_id=request_id,
                 resource="ai.forecast",
                 details=forecast_error,
                 decision="deny",
@@ -865,6 +1103,7 @@ async def process_prompt(
                 message_id=user_msg.id,
                 action="FORECAST_GENERATED",
                 request_id=request_id,
+                trace_id=request_id,
                 resource="ai.forecast",
                 details=f"Generated forecast {forecast_template.forecast_code}",
                 details_json={"forecast_run_id": forecast_run.id, "forecast_code": forecast_template.forecast_code},
@@ -927,6 +1166,7 @@ async def process_prompt(
                 action="ACTION_BLOCKED",
                 severity="WARN",
                 request_id=request_id,
+                trace_id=request_id,
                 resource="ai.automation",
                 details=proposal.blocked_reason,
                 decision="deny",
@@ -963,6 +1203,7 @@ async def process_prompt(
                 message_id=user_msg.id,
                 action="ACTION_PROPOSED",
                 request_id=request_id,
+                trace_id=request_id,
                 resource="ai.automation",
                 details=f"Proposed action {proposal.action_key}",
                 details_json={"action_run_id": run_id, "rule_code": proposal.rule_code, "rule_id": rule.id if rule else None},
@@ -1004,6 +1245,7 @@ async def process_prompt(
             message_id=user_msg.id,
             action="ANOMALY_INSIGHTS_GENERATED",
             request_id=request_id,
+            trace_id=request_id,
             resource="ai.insights",
             details="Anomaly insight run completed",
             details_json={
@@ -1013,18 +1255,34 @@ async def process_prompt(
         )
 
     for tool in selected_tools:
-        if not await has_tool_permission(db, user, tool.permission_key):
+        t_tool = tracer.now_ms()
+        allowed, pol_reason = await evaluate_ai_safety_for_user(
+            db,
+            user=user,
+            tenant=tenant,
+            tool_name=tool.name,
+            module=tool.source_area,
+            safety_class=tool.safety_class,
+            permission_key=tool.permission_key,
+        )
+        if not allowed:
             result = AiToolInvocationResult(
                 tool_name=tool.name,
                 status="BLOCKED",
-                summary=f"Blocked due to missing permission for {tool.name}.",
+                summary=f"Blocked: {pol_reason or 'policy'}",
                 source_area=tool.source_area,
                 data={},
-                error="Permission denied",
-                reason_code="RBAC_DENIED",
+                error=pol_reason or "Policy denied",
+                reason_code="POLICY_DENIED",
                 error_category="authorization",
             )
             tool_results.append(result)
+            tracer.span_end(
+                f"tool:{tool.name}",
+                t_tool,
+                status="error",
+                metadata={"blocked": True, "reason": pol_reason},
+            )
             await audit.log_ai_event(
                 db,
                 tenant_id=tenant.id,
@@ -1034,10 +1292,11 @@ async def process_prompt(
                 action="TOOL_BLOCKED",
                 severity="WARN",
                 request_id=request_id,
+                trace_id=request_id,
                 resource=tool.name,
-                details="Tool blocked by RBAC policy",
+                details="Tool blocked by AI policy / RBAC",
                 decision="deny",
-                reason_code="RBAC_DENIED",
+                reason_code="POLICY_DENIED",
                 error_category="authorization",
             )
             continue
@@ -1054,6 +1313,7 @@ async def process_prompt(
                 error_category="reliability",
             )
             tool_results.append(result)
+            tracer.span_end(f"tool:{tool.name}", t_tool, status="error", metadata={"circuit": True})
             await audit.log_ai_event(
                 db,
                 tenant_id=tenant.id,
@@ -1063,6 +1323,7 @@ async def process_prompt(
                 action="TOOL_BLOCKED",
                 severity="WARN",
                 request_id=request_id,
+                trace_id=request_id,
                 resource=tool.name,
                 details="Tool blocked by circuit breaker",
                 decision="deny",
@@ -1115,11 +1376,17 @@ async def process_prompt(
                 tool_invocation_id=invocation.id,
                 action="TOOL_EXECUTED",
                 request_id=request_id,
+                trace_id=request_id,
                 resource=tool.name,
                 details=f"Tool completed in {elapsed_ms}ms",
                 details_json={"result_keys": list((raw.get("data") or {}).keys())},
                 decision="allow",
                 reason_code="TOOL_EXECUTED",
+            )
+            tracer.span_end(
+                f"tool:{tool.name}",
+                t_tool,
+                metadata={"latency_ms": elapsed_ms, "status": "SUCCESS"},
             )
         except Exception as exc:
             elapsed_ms = int((perf_counter() - start) * 1000)
@@ -1153,14 +1420,32 @@ async def process_prompt(
                 action="TOOL_FAILED",
                 severity="ERROR",
                 request_id=request_id,
+                trace_id=request_id,
                 resource=tool.name,
                 details=str(exc),
                 decision="error",
                 reason_code="TOOL_EXECUTION_FAILED",
                 error_category="runtime",
             )
+            tracer.span_end(
+                f"tool:{tool.name}",
+                t_tool,
+                status="error",
+                metadata={"error": str(exc)[:200]},
+            )
 
+    t_llm = tracer.now_ms()
     assistant_text = await _assistant_text_with_llm(prompt, tool_results, intent_result.intent, blocked)
+    tracer.span_end("llm_compose", t_llm, metadata={})
+    elapsed_ms = int((perf_counter() - overall_start) * 1000)
+    prov = build_response_envelope(
+        answer=assistant_text,
+        tool_results=tool_results,
+        primary_route=route_decision.primary_route,
+        secondary_routes=route_decision.secondary_routes,
+        total_latency_ms=elapsed_ms,
+        model_used=None,
+    )
     assistant_msg = await repository.create_message(
         db,
         tenant_id=tenant.id,
@@ -1175,6 +1460,14 @@ async def process_prompt(
             "tool_results": [x.model_dump() for x in tool_results],
             "blocked": blocked,
             "ambiguous_rejected": ambiguous_rejected,
+            "primary_route": route_decision.primary_route,
+            "suggest_premium": route_decision.suggest_premium,
+            "provenance": prov,
+            "trace_spans": tracer.to_json(),
+            **merge_route_metadata(
+                tool_results=tool_results,
+                route_labels=[route_decision.primary_route, *route_decision.secondary_routes],
+            ),
         },
     )
     await repository.touch_session_last_message(db, session=session)
@@ -1186,10 +1479,10 @@ async def process_prompt(
         message_id=assistant_msg.id,
         action="RESPONSE_SENT",
         request_id=request_id,
+        trace_id=request_id,
         resource="ai.response",
         details=assistant_text[:500],
     )
-    elapsed_ms = int((perf_counter() - overall_start) * 1000)
     await audit.log_ai_event(
         db,
         tenant_id=tenant.id,
@@ -1198,6 +1491,7 @@ async def process_prompt(
         message_id=assistant_msg.id,
         action="REQUEST_COMPLETED",
         request_id=request_id,
+        trace_id=request_id,
         resource="ai.request",
         details=f"Completed in {elapsed_ms}ms",
         details_json={
@@ -1205,6 +1499,7 @@ async def process_prompt(
             "intent": intent_result.intent,
             "tool_results_count": len(tool_results),
             "blocked": blocked,
+            "spans": tracer.to_json(),
             **build_policy_metadata(decision="allow" if not blocked else "deny"),
         },
     )
@@ -1218,6 +1513,148 @@ async def process_prompt(
         request_id=request_id,
         tool_results=tool_results,
         blocked=blocked,
+        escalation=None,
+    )
+
+
+async def approve_escalation(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    session_id: int,
+    message_id: int,
+    tool_required: str,
+    approved: bool,
+) -> AiChatResponse:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    if not approved:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Escalation request was not approved.")
+
+    session = await repository.get_session(db, tenant_id=tenant.id, session_id=session_id)
+    if not session or session.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    escalation_msg_row = (
+        await db.execute(
+            select(AiMessage).where(
+                AiMessage.id == message_id,
+                AiMessage.tenant_id == tenant.id,
+                AiMessage.session_id == session.id,
+                AiMessage.role == "assistant",
+            )
+        )
+    ).scalar_one_or_none()
+    if escalation_msg_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Escalation message not found")
+
+    meta = escalation_msg_row.content_json if isinstance(escalation_msg_row.content_json, dict) else {}
+    if not meta.get("escalation_pending"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message is not pending escalation")
+
+    effective_tool = (tool_required or str(meta.get("tool_required") or "")).strip()
+    if not effective_tool:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="tool_required is missing")
+
+    request_id = uuid4().hex
+    # Critical: preserve full session context (not only the latest prompt).
+    session_messages = await repository.list_messages(
+        db,
+        tenant_id=tenant.id,
+        session_id=session.id,
+        limit=500,
+    )
+    history_rows = [m for m in session_messages if m.message_index <= escalation_msg_row.message_index]
+    if not history_rows:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Escalation context history not found")
+    latest_user_msg = next((m for m in reversed(history_rows) if m.role == "user"), None)
+    if latest_user_msg is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Original user message not found")
+    conversation: list[dict[str, str]] = []
+    for row in history_rows:
+        role = str(row.role or "user")
+        if role not in {"user", "assistant", "system"}:
+            role = "assistant" if role == "tool" else "user"
+        conversation.append({"role": role, "content": row.content or ""})
+
+    paid_provider = get_paid_llm_provider()
+    if isinstance(paid_provider, PaidLlmProvider):
+        paid_text = await paid_provider.generate_with_mcp_loop(
+            conversation=conversation,
+            tenant_id=tenant.id,
+            requested_tool=effective_tool,
+        )
+    else:
+        paid_prompt = (
+            "User approved paid processing.\n"
+            f"Requested tool: {effective_tool}\n"
+            f"Conversation context: {json.dumps(conversation, default=str)[:12000]}"
+        )
+        paid_text = await paid_provider.generate(paid_prompt)
+    assistant_text = (
+        paid_text.strip()
+        if paid_text and "not configured" not in paid_text.lower()
+        else "Paid processing completed."
+    )
+    tool_result = AiToolInvocationResult(
+        tool_name=effective_tool,
+        status="SUCCESS",
+        summary="Escalation approved and processed using paid AI + MCP tool loop.",
+        source_area="mcp",
+        data={
+            "requested_tool": effective_tool,
+            "context_messages": len(conversation),
+            "escalation_message_id": escalation_msg_row.id,
+        },
+    )
+
+    assistant_msg = await repository.create_message(
+        db,
+        tenant_id=tenant.id,
+        session_id=session.id,
+        sender_user_id=None,
+        role="assistant",
+        content=assistant_text,
+        content_json={
+            "request_id": request_id,
+            "intent": "action_request",
+            "confidence": 1.0,
+            "tool_results": [tool_result.model_dump()],
+            "blocked": False,
+            "escalation_approved": True,
+            "tool_required": effective_tool,
+        },
+    )
+    await repository.touch_session_last_message(db, session=session)
+    await audit.log_ai_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        session_id=session.id,
+        message_id=assistant_msg.id,
+        action="ESCALATION_APPROVED_EXECUTED",
+        request_id=request_id,
+        trace_id=request_id,
+        resource="ai.escalation",
+        details=f"Executed approved escalation using {effective_tool}",
+        details_json={
+            "tool_required": effective_tool,
+            "tool_status": "SUCCESS",
+            "context_messages": len(conversation),
+        },
+    )
+
+    return AiChatResponse(
+        session=_session_to_schema(session),
+        user_message=_message_to_schema(latest_user_msg),
+        assistant_message=_message_to_schema(assistant_msg),
+        detected_intent="action_request",
+        confidence=1.0,
+        request_id=request_id,
+        tool_results=[tool_result],
+        blocked=False,
+        escalation=None,
     )
 
 
@@ -1262,6 +1699,7 @@ async def generate_report_direct(
             action="REPORT_BLOCKED",
             severity="WARN",
             request_id=request_id,
+            trace_id=request_id,
             resource="ai.report",
             details=report_error or "Unable to determine report template",
             decision="deny",
@@ -1295,6 +1733,7 @@ async def generate_report_direct(
         session_id=session_id,
         action="REPORT_GENERATED",
         request_id=request_id,
+        trace_id=request_id,
         resource="ai.report",
         details=f"Generated report {report_template.report_code}",
         details_json={"report_run_id": row.id, "report_code": report_template.report_code},
@@ -1306,6 +1745,7 @@ async def generate_report_direct(
         session_id=session_id,
         action="REPORT_REQUEST_COMPLETED",
         request_id=request_id,
+        trace_id=request_id,
         resource="ai.report",
         details=f"Completed in {int((perf_counter() - start) * 1000)}ms",
     )
@@ -1359,6 +1799,7 @@ async def generate_forecast_direct(
             action="FORECAST_BLOCKED",
             severity="WARN",
             request_id=request_id,
+            trace_id=request_id,
             resource="ai.forecast",
             details=error or "Unable to determine forecast template",
             decision="deny",
@@ -1399,6 +1840,7 @@ async def generate_forecast_direct(
         session_id=session_id,
         action="FORECAST_GENERATED",
         request_id=request_id,
+        trace_id=request_id,
         resource="ai.forecast",
         details=f"Generated forecast {template.forecast_code}",
         details_json={"forecast_run_id": row.id, "forecast_code": template.forecast_code},
@@ -1410,6 +1852,7 @@ async def generate_forecast_direct(
         session_id=session_id,
         action="FORECAST_REQUEST_COMPLETED",
         request_id=request_id,
+        trace_id=request_id,
         resource="ai.forecast",
         details=f"Completed in {int((perf_counter() - start) * 1000)}ms",
     )
@@ -1478,6 +1921,7 @@ async def propose_action_direct(
             action="ACTION_BLOCKED",
             severity="WARN",
             request_id=request_id,
+            trace_id=request_id,
             resource="ai.automation",
             details=proposal.blocked_reason or "Blocked by policy",
             decision="deny",
@@ -1492,6 +1936,7 @@ async def propose_action_direct(
         session_id=session_id,
         action="ACTION_PROPOSED",
         request_id=request_id,
+        trace_id=request_id,
         resource="ai.automation",
         details=f"Proposed action {run.action_key}",
         details_json={"action_run_id": run.id, "duration_ms": int((perf_counter() - start) * 1000)},
@@ -1527,6 +1972,7 @@ async def confirm_action_direct(
             action="ACTION_CONFIRM_BLOCKED",
             severity="WARN",
             request_id=request_id,
+            trace_id=request_id,
             resource="ai.automation",
             details=error or "Action confirmation blocked",
             details_json={"action_run_id": action_run_id},
@@ -1542,6 +1988,7 @@ async def confirm_action_direct(
         session_id=run.session_id,
         action="ACTION_EXECUTED",
         request_id=request_id,
+        trace_id=request_id,
         resource="ai.automation",
         details=f"Executed action {run.action_key}",
         details_json={
@@ -1591,6 +2038,7 @@ async def generate_anomaly_insights_direct(
         session_id=session_id,
         action="ANOMALY_INSIGHTS_GENERATED",
         request_id=request_id,
+        trace_id=request_id,
         resource="ai.insights",
         details="Direct anomaly insight run completed",
         details_json={
@@ -1607,3 +2055,356 @@ async def generate_anomaly_insights_direct(
         logic_version=str(payload.get("logic_version") or "phase7-rules-v1"),
         scheduler_ready=bool(payload.get("scheduler_ready", True)),
     )
+
+
+def _system_task_to_schema(row: AiSystemTask) -> AiSystemTaskResponse:
+    return AiSystemTaskResponse(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        user_id=row.user_id,
+        session_id=row.session_id,
+        task_code=row.task_code,
+        task_type=row.task_type,
+        task_category=row.task_category,
+        status=row.status,
+        priority=row.priority,
+        requires_approval=row.requires_approval,
+        simulation=bool(getattr(row, "simulation", False)),
+        result_json=row.result_json,
+        error_text=row.error_text,
+        created_at=row.created_at,
+        completed_at=row.completed_at,
+    )
+
+
+async def create_system_task_direct(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    body: AiSystemTaskCreateRequest,
+) -> AiSystemTaskResponse:
+    from app.modules.ai_tool.tasks.executor import execute_system_task_inline
+    from app.modules.ai_tool.tasks.policies import classify_task
+
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    from app.modules.ai_tool.tasks.policy_engine import evaluate_task_creation_policy
+
+    ok_policy, pol_reason = await evaluate_task_creation_policy(
+        db,
+        tenant_id=tenant.id,
+        task_type=body.task_type,
+        simulation=body.simulation,
+    )
+    if not ok_policy:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=pol_reason or "Task creation blocked by policy.",
+        )
+
+    cat, requires = classify_task(body.task_type)
+    code = f"TSK-{uuid4().hex[:10].upper()}"
+    status_init = "pending_approval" if requires else "queued"
+    row = await repository.create_system_task(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        session_id=body.session_id,
+        task_code=code,
+        task_type=body.task_type,
+        task_category=cat,
+        status=status_init,
+        priority=body.priority,
+        execution_conditions=body.execution_conditions,
+        payload=body.payload,
+        requires_approval=requires,
+        idempotency_key=body.idempotency_key,
+        simulation=body.simulation,
+    )
+    if not requires:
+        row.queued_at = datetime.utcnow()
+        await execute_system_task_inline(db, row)
+    return _system_task_to_schema(row)
+
+
+async def list_system_tasks_direct(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    limit: int,
+) -> list[AiSystemTaskResponse]:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    rows = await repository.list_system_tasks(db, tenant_id=tenant.id, limit=limit)
+    return [_system_task_to_schema(r) for r in rows]
+
+
+async def get_system_task_direct(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    task_id: int,
+) -> AiSystemTaskResponse:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    row = await repository.get_system_task(db, tenant_id=tenant.id, task_id=task_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    return _system_task_to_schema(row)
+
+
+async def approve_system_task_direct(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    task_id: int,
+) -> AiSystemTaskResponse:
+    from app.modules.ai_tool.tasks.executor import execute_system_task_inline
+
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    row = await repository.get_system_task(db, tenant_id=tenant.id, task_id=task_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    if not row.requires_approval or row.status != "pending_approval":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Task is not awaiting approval")
+    row.approved_by_user_id = user.id
+    row.approved_at = datetime.utcnow()
+    row.status = "queued"
+    row.queued_at = datetime.utcnow()
+    await execute_system_task_inline(db, row)
+    return _system_task_to_schema(row)
+
+
+async def cancel_system_task_direct(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    task_id: int,
+) -> AiSystemTaskResponse:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    row = await repository.get_system_task(db, tenant_id=tenant.id, task_id=task_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    if row.status in {"completed", "cancelled", "failed"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Task cannot be cancelled")
+    row.status = "cancelled"
+    await db.flush()
+    return _system_task_to_schema(row)
+
+
+def _feedback_row_to_schema(row: AiFeedback) -> AiFeedbackResponse:
+    return AiFeedbackResponse(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        user_id=row.user_id,
+        message_id=row.message_id,
+        trace_id=row.trace_id,
+        rating=row.rating,
+        feedback_category=row.feedback_category,
+        flagged_for_review=row.flagged_for_review,
+        created_at=row.created_at,
+    )
+
+
+def _artifact_row_to_schema(row: AiApprovalArtifact) -> AiApprovalArtifactResponse:
+    return AiApprovalArtifactResponse(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        artifact_code=row.artifact_code,
+        artifact_type=row.artifact_type,
+        source_tool=row.source_tool,
+        source_module=row.source_module,
+        status=row.status,
+        original_input_json=row.original_input_json,
+        generated_payload_json=row.generated_payload_json,
+        diff_json=row.diff_json,
+        committed_payload_json=row.committed_payload_json,
+        commit_reference=row.commit_reference,
+        reviewer_comments=row.reviewer_comments,
+        created_at=row.created_at,
+        expires_at=row.expires_at,
+    )
+
+
+async def submit_ai_feedback_direct(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    body: AiFeedbackSubmitRequest,
+) -> AiFeedbackResponse:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    session_id: int | None = None
+    if body.message_id is not None:
+        msg = await repository.get_ai_message(db, tenant_id=tenant.id, message_id=body.message_id)
+        if not msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+        session_id = msg.session_id
+    row = await repository.create_ai_feedback(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        session_id=session_id,
+        message_id=body.message_id,
+        trace_id=body.trace_id,
+        rating=body.rating,
+        correction_text=body.correction_text,
+        feedback_category=body.feedback_category,
+        flagged_for_review=body.flagged_for_review,
+        detected_intent=body.detected_intent,
+        route_used=body.route_used,
+        tools_used=body.tools_used,
+        retrieval_method=body.retrieval_method,
+        model_used=body.model_used,
+        confidence=body.confidence,
+    )
+    await audit.log_ai_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        session_id=session_id,
+        message_id=body.message_id,
+        action="AI_FEEDBACK_SUBMITTED",
+        trace_id=body.trace_id,
+        resource="ai.feedback",
+        details_json={"rating": body.rating, "category": body.feedback_category},
+    )
+    return _feedback_row_to_schema(row)
+
+
+async def list_approval_artifacts_direct(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    status_filter: str | None,
+    limit: int,
+) -> list[AiApprovalArtifactResponse]:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    rows = await approval_artifact_service.list_artifacts_for_tenant(
+        db, tenant_id=tenant.id, status=status_filter, limit=limit
+    )
+    return [_artifact_row_to_schema(r) for r in rows]
+
+
+async def get_approval_artifact_direct(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    artifact_id: int,
+) -> AiApprovalArtifactResponse:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    row = await approval_artifact_service.get_artifact(db, tenant_id=tenant.id, artifact_id=artifact_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found")
+    return _artifact_row_to_schema(row)
+
+
+async def approve_approval_artifact_direct(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    artifact_id: int,
+    body: AiApprovalArtifactReviewRequest,
+) -> AiApprovalArtifactResponse:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    row = await approval_artifact_service.approve_artifact(
+        db,
+        tenant_id=tenant.id,
+        artifact_id=artifact_id,
+        reviewer=user,
+        comments=body.comments,
+    )
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Artifact not found or cannot be approved in its current state.",
+        )
+    return _artifact_row_to_schema(row)
+
+
+async def reject_approval_artifact_direct(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    artifact_id: int,
+    body: AiApprovalArtifactReviewRequest,
+) -> AiApprovalArtifactResponse:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    row = await approval_artifact_service.reject_artifact(
+        db,
+        tenant_id=tenant.id,
+        artifact_id=artifact_id,
+        reviewer=user,
+        comments=body.comments,
+    )
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Artifact not found or cannot be rejected in its current state.",
+        )
+    return _artifact_row_to_schema(row)
+
+
+async def commit_approval_artifact_direct(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    artifact_id: int,
+) -> AiApprovalArtifactCommitResult:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    row, erp_result, err = await approval_artifact_service.commit_artifact(
+        db, tenant_id=tenant.id, artifact_id=artifact_id, user=user
+    )
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=err or "Artifact not found",
+        )
+    return AiApprovalArtifactCommitResult(
+        artifact=_artifact_row_to_schema(row),
+        erp_result=erp_result,
+        error=err,
+    )
+
+
+async def rollback_approval_artifact_direct(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    user: User,
+    artifact_id: int,
+    body: AiApprovalArtifactRollbackRequest,
+) -> AiApprovalArtifactResponse:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    row = await approval_artifact_service.rollback_artifact(
+        db,
+        tenant_id=tenant.id,
+        artifact_id=artifact_id,
+        user=user,
+        reason=body.reason,
+    )
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Artifact not found or rollback is only allowed for committed artifacts.",
+        )
+    return _artifact_row_to_schema(row)

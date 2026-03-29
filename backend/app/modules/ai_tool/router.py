@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -32,8 +32,17 @@ from app.modules.ai_tool.schemas import (
     AiQuickAction,
     AiQuickActionsResponse,
     AiReportRunResponse,
+    ApproveEscalationRequest,
     AiSessionCreateRequest,
     AiSessionResponse,
+    AiApprovalArtifactCommitResult,
+    AiApprovalArtifactResponse,
+    AiApprovalArtifactReviewRequest,
+    AiApprovalArtifactRollbackRequest,
+    AiFeedbackResponse,
+    AiFeedbackSubmitRequest,
+    AiSystemTaskCreateRequest,
+    AiSystemTaskResponse,
     AiWeeklyReportListResponse,
     AiWeeklyReportResponse,
 )
@@ -107,17 +116,41 @@ async def list_messages(
 async def send_message(
     session_id: int,
     body: AiChatRequest,
+    response: Response,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _: None = chat_limit,
 ):
-    return await service.process_prompt(
+    result = await service.process_prompt(
         db,
         tenant=tenant,
         user=user,
         session_id=session_id,
         prompt=body.prompt.strip(),
+    )
+    if result.escalation is not None:
+        response.status_code = status.HTTP_202_ACCEPTED
+    return result
+
+
+@router.post("/sessions/{session_id}/approve-escalation", response_model=AiChatResponse)
+async def approve_escalation(
+    session_id: int,
+    body: ApproveEscalationRequest,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    return await service.approve_escalation(
+        db,
+        tenant=tenant,
+        user=user,
+        session_id=session_id,
+        message_id=body.message_id,
+        tool_required=body.tool_required.strip(),
+        approved=body.approved,
     )
 
 
@@ -160,6 +193,17 @@ async def list_forecast_runs(
     return await service.list_forecast_runs(db, tenant=tenant, user=user, limit=limit)
 
 
+@router.get("/forecast-runs/{run_id}", response_model=AiForecastRunResponse)
+async def get_forecast_run(
+    run_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    return await service.get_forecast_run_by_id(db, tenant=tenant, user=user, run_id=run_id)
+
+
 @router.post("/forecast-runs/generate", response_model=AiForecastRunResponse, status_code=201)
 async def generate_forecast(
     body: AiGenerateForecastRequest,
@@ -178,6 +222,61 @@ async def generate_forecast(
         to_date=body.to_date,
         session_id=body.session_id,
     )
+
+
+@router.post("/tasks", response_model=AiSystemTaskResponse, status_code=201)
+async def create_ai_system_task(
+    body: AiSystemTaskCreateRequest,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    return await service.create_system_task_direct(db, tenant=tenant, user=user, body=body)
+
+
+@router.get("/tasks", response_model=list[AiSystemTaskResponse])
+async def list_ai_system_tasks(
+    limit: int = Query(default=50, ge=1, le=200),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    return await service.list_system_tasks_direct(db, tenant=tenant, user=user, limit=limit)
+
+
+@router.get("/tasks/{task_id}", response_model=AiSystemTaskResponse)
+async def get_ai_system_task(
+    task_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    return await service.get_system_task_direct(db, tenant=tenant, user=user, task_id=task_id)
+
+
+@router.post("/tasks/{task_id}/approve", response_model=AiSystemTaskResponse)
+async def approve_ai_system_task(
+    task_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    return await service.approve_system_task_direct(db, tenant=tenant, user=user, task_id=task_id)
+
+
+@router.post("/tasks/{task_id}/cancel", response_model=AiSystemTaskResponse)
+async def cancel_ai_system_task(
+    task_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    return await service.cancel_system_task_direct(db, tenant=tenant, user=user, task_id=task_id)
 
 
 @router.get("/knowledge/documents", response_model=list[AiKnowledgeDocumentResponse])
@@ -330,3 +429,96 @@ async def ops_overview(
     _: None = read_limit,
 ):
     return await service.get_ops_overview(db, tenant=tenant, user=user, period_hours=period_hours)
+
+
+@router.post("/feedback", response_model=AiFeedbackResponse, status_code=201)
+async def submit_ai_feedback(
+    body: AiFeedbackSubmitRequest,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = chat_limit,
+):
+    return await service.submit_ai_feedback_direct(db, tenant=tenant, user=user, body=body)
+
+
+@router.get("/artifacts", response_model=list[AiApprovalArtifactResponse])
+async def list_ai_artifacts(
+    status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=50, ge=1, le=200),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    return await service.list_approval_artifacts_direct(
+        db, tenant=tenant, user=user, status_filter=status_filter, limit=limit
+    )
+
+
+@router.get("/artifacts/{artifact_id}", response_model=AiApprovalArtifactResponse)
+async def get_ai_artifact(
+    artifact_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    return await service.get_approval_artifact_direct(
+        db, tenant=tenant, user=user, artifact_id=artifact_id
+    )
+
+
+@router.post("/artifacts/{artifact_id}/approve", response_model=AiApprovalArtifactResponse)
+async def approve_ai_artifact(
+    artifact_id: int,
+    body: AiApprovalArtifactReviewRequest,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    return await service.approve_approval_artifact_direct(
+        db, tenant=tenant, user=user, artifact_id=artifact_id, body=body
+    )
+
+
+@router.post("/artifacts/{artifact_id}/reject", response_model=AiApprovalArtifactResponse)
+async def reject_ai_artifact(
+    artifact_id: int,
+    body: AiApprovalArtifactReviewRequest,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    return await service.reject_approval_artifact_direct(
+        db, tenant=tenant, user=user, artifact_id=artifact_id, body=body
+    )
+
+
+@router.post("/artifacts/{artifact_id}/commit", response_model=AiApprovalArtifactCommitResult)
+async def commit_ai_artifact(
+    artifact_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    return await service.commit_approval_artifact_direct(
+        db, tenant=tenant, user=user, artifact_id=artifact_id
+    )
+
+
+@router.post("/artifacts/{artifact_id}/rollback", response_model=AiApprovalArtifactResponse)
+async def rollback_ai_artifact(
+    artifact_id: int,
+    body: AiApprovalArtifactRollbackRequest,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    return await service.rollback_approval_artifact_direct(
+        db, tenant=tenant, user=user, artifact_id=artifact_id, body=body
+    )

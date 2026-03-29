@@ -20,15 +20,23 @@ import {
 } from "@/lib/commercialTerms";
 import { InquiryCreateSidebar } from "@/features/inquiries/create/InquiryCreateSidebar";
 import { cn } from "@/lib/utils";
-import type { ConflictResolutionChoice, FieldApplyState, FieldConfidence } from "@/types/extraction";
-import { useDocumentExtraction } from "@/hooks/useDocumentExtraction";
+import type {
+  ConflictResolutionChoice,
+  ExtractionStatus,
+  FieldApplyState,
+  FieldConfidence,
+} from "@/types/extraction";
+import { useInquiryAi } from "@/hooks/useInquiryAi";
+import { InquiryAiPanel } from "@/components/inquiries/InquiryAiPanel";
 import {
+  buildInquiryEnrichApplyStates,
   buildInquiryFieldApplyStates,
   deriveConfidenceLevel,
   formatExtractedValue,
   inquiryFormSnapshot,
 } from "@/utils/extractionHelpers";
 import { useSecureImage } from "@/hooks/useSecureImage";
+import { logApiError } from "@/utils/logApiError";
 
 const emptyItem = (): InquiryItemCreate => ({
   item_name: "",
@@ -92,9 +100,18 @@ export function InquiryCreatePage() {
   const [fetchingRates, setFetchingRates] = useState(false);
   const [rateSource, setRateSource] = useState<"" | "live" | "fallback">("");
 
-  const extraction = useDocumentExtraction("inquiry");
+  const inquiryAi = useInquiryAi();
   const [autofilled, setAutofilled] = useState<Partial<Record<string, FieldConfidence>>>({});
   const [reviewRows, setReviewRows] = useState<FieldApplyState[]>([]);
+  const [enrichReviewRows, setEnrichReviewRows] = useState<FieldApplyState[]>([]);
+
+  const aiFormSnapshot = useMemo(
+    () => ({
+      ...inquiryFormSnapshot(form),
+      items_json: JSON.stringify(form.items ?? []),
+    }),
+    [form],
+  );
 
   const selectedStyle = useMemo(
     () => styles.find((s) => s.id === form.style_id) ?? null,
@@ -113,6 +130,14 @@ export function InquiryCreatePage() {
     customerLinks.find((link) => link.id === form.customer_intermediary_id)?.intermediary_name ??
     customerLinks.find((link) => link.id === form.customer_intermediary_id)?.intermediary_code ??
     (form.customer_intermediary_id ? `#${form.customer_intermediary_id}` : "No linked intermediary");
+
+  const extractUiStatus = useMemo((): ExtractionStatus => {
+    if (inquiryAi.status === "processing") return "uploading";
+    if (inquiryAi.status === "success") return "extracted";
+    if (inquiryAi.status === "partial") return "partial";
+    if (inquiryAi.status === "failed") return "failed";
+    return "idle";
+  }, [inquiryAi.status]);
 
   useEffect(() => {
     const load = async () => {
@@ -236,7 +261,7 @@ export function InquiryCreatePage() {
   };
 
   useEffect(() => {
-    const res = extraction.inquiryResponse;
+    const res = inquiryAi.extraction;
     if (!res) {
       setReviewRows([]);
       return;
@@ -251,11 +276,32 @@ export function InquiryCreatePage() {
         skipped: skipped.has(row.fieldKey),
       }));
     });
-  }, [extraction.inquiryResponse, form]);
+  }, [inquiryAi.extraction, form]);
+
+  useEffect(() => {
+    const res = inquiryAi.enrich;
+    if (!res) {
+      setEnrichReviewRows([]);
+      return;
+    }
+    const next = buildInquiryEnrichApplyStates(res, inquiryFormSnapshot(form));
+    setEnrichReviewRows((prev) => {
+      const applied = new Set(prev.filter((r) => r.applied).map((r) => r.fieldKey));
+      const skipped = new Set(prev.filter((r) => r.skipped).map((r) => r.fieldKey));
+      return next.map((row) => ({
+        ...row,
+        applied: applied.has(row.fieldKey),
+        skipped: skipped.has(row.fieldKey),
+      }));
+    });
+  }, [inquiryAi.enrich, form]);
 
   const patchForm = (patch: Partial<InquiryCreate>) => {
     setAutofilled((af) => {
       const n = { ...af };
+      if ("customer_id" in patch) delete n.customer_id;
+      if ("style_id" in patch) delete n.style_id;
+      if ("customer_intermediary_id" in patch) delete n.customer_intermediary_id;
       if ("season" in patch) delete n.season;
       if ("department" in patch) delete n.department;
       if ("style_ref" in patch) delete n.style_ref;
@@ -326,8 +372,35 @@ export function InquiryCreatePage() {
     }
   };
 
-  const handleApplyInquiryField = (key: string) => {
-    const res = extraction.inquiryResponse;
+  const applySingleEnrichedField = (key: string, value: unknown, level: FieldConfidence) => {
+    const raw = formatExtractedValue(value);
+    if (key === "customer_id") {
+      const n = raw ? Number(raw) : NaN;
+      if (Number.isFinite(n) && n > 0) {
+        applyExtractedPatch({ customer_id: n }, { customer_id: level });
+      }
+      return;
+    }
+    if (key === "style_id") {
+      const n = raw ? Number(raw) : NaN;
+      if (Number.isFinite(n) && n > 0) {
+        onStyleChange(n);
+        setAutofilled((prev) => ({ ...prev, style_id: level }));
+      }
+      return;
+    }
+    if (key === "customer_intermediary_id") {
+      const n = raw ? Number(raw) : NaN;
+      if (Number.isFinite(n) && n > 0) {
+        applyExtractedPatch({ customer_intermediary_id: n }, { customer_intermediary_id: level });
+      }
+      return;
+    }
+    applySingleExtractedField(key, value, level);
+  };
+
+  const handleApplyInquiryField = async (key: string) => {
+    const res = inquiryAi.extraction;
     if (!res?.fields[key]) return;
     const ef = res.fields[key];
     const level = deriveConfidenceLevel(typeof ef.confidence === "number" ? ef.confidence : 0);
@@ -335,10 +408,37 @@ export function InquiryCreatePage() {
     setReviewRows((rs) =>
       rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
     );
+    const bid = inquiryAi.extractionBatchId;
+    if (bid != null) {
+      try {
+        await inquiryAi.markSuggestionDecisions(bid, [{ field_key: key, decision: "apply" }]);
+      } catch (e) {
+        logApiError("InquiryCreate.markAiDecision", e);
+      }
+    }
   };
 
-  const handleApplyAllHighInquiry = () => {
-    const res = extraction.inquiryResponse;
+  const handleApplyEnrichField = async (key: string) => {
+    const res = inquiryAi.enrich;
+    if (!res?.suggestions[key]) return;
+    const sug = res.suggestions[key];
+    const level = deriveConfidenceLevel(typeof sug.confidence === "number" ? sug.confidence : 0);
+    applySingleEnrichedField(key, sug.value, level);
+    setEnrichReviewRows((rs) =>
+      rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+    );
+    const bid = inquiryAi.enrichBatchId;
+    if (bid != null) {
+      try {
+        await inquiryAi.markSuggestionDecisions(bid, [{ field_key: key, decision: "apply" }]);
+      } catch (e) {
+        logApiError("InquiryCreate.markAiEnrich", e);
+      }
+    }
+  };
+
+  const handleApplyAllHighInquiry = async () => {
+    const res = inquiryAi.extraction;
     if (!res) return;
     const toApply = reviewRows.filter(
       (r) => !r.applied && !r.skipped && r.confidenceLevel === "high" && !r.hasConflict,
@@ -395,18 +495,143 @@ export function InquiryCreatePage() {
         toApply.some((t) => t.fieldKey === r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
       ),
     );
+    const bid = inquiryAi.extractionBatchId;
+    if (bid != null) {
+      try {
+        await inquiryAi.markSuggestionDecisions(
+          bid,
+          toApply.map((row) => ({ field_key: row.fieldKey, decision: "apply" as const })),
+        );
+      } catch (e) {
+        logApiError("InquiryCreate.markAiDecisionsBulk", e);
+      }
+    }
+  };
+
+  const handleApplyAllHighEnrich = async () => {
+    const res = inquiryAi.enrich;
+    if (!res) return;
+    const toApply = enrichReviewRows.filter(
+      (r) => !r.applied && !r.skipped && r.confidenceLevel === "high" && !r.hasConflict,
+    );
+    if (toApply.length === 0) return;
+    const patch: Partial<InquiryCreate> = {};
+    const levels: Partial<Record<string, FieldConfidence>> = {};
+    let styleIdToApply: number | undefined;
+    for (const row of toApply) {
+      const sug = res.suggestions[row.fieldKey];
+      if (!sug) continue;
+      const level = deriveConfidenceLevel(typeof sug.confidence === "number" ? sug.confidence : 0);
+      const key = row.fieldKey;
+      const raw = formatExtractedValue(sug.value);
+      if (key === "customer_id") {
+        const n = raw ? Number(raw) : NaN;
+        if (Number.isFinite(n) && n > 0) {
+          patch.customer_id = n;
+          levels.customer_id = level;
+        }
+      } else if (key === "style_id") {
+        const n = raw ? Number(raw) : NaN;
+        if (Number.isFinite(n) && n > 0) {
+          styleIdToApply = n;
+          levels.style_id = level;
+        }
+      } else if (key === "customer_intermediary_id") {
+        const n = raw ? Number(raw) : NaN;
+        if (Number.isFinite(n) && n > 0) {
+          patch.customer_intermediary_id = n;
+          levels.customer_intermediary_id = level;
+        }
+      } else if (key === "quantity") {
+        const n = raw ? Number(raw) : undefined;
+        patch.quantity = Number.isFinite(n) ? n : undefined;
+        levels.quantity = level;
+      } else if (key === "intermediary_name") {
+        const match = customerLinks.find(
+          (l) =>
+            (l.intermediary_name ?? "").toLowerCase().includes(raw.toLowerCase()) ||
+            (l.intermediary_code ?? "").toLowerCase() === raw.toLowerCase(),
+        );
+        if (match) {
+          patch.customer_intermediary_id = match.id;
+          levels.intermediary_name = level;
+        }
+      } else {
+        const map: Partial<Record<string, keyof InquiryCreate>> = {
+          style_ref: "style_ref",
+          season: "season",
+          department: "department",
+          target_price: "target_price",
+          target_price_currency: "target_price_currency",
+          currency: "currency",
+          exchange_rate: "exchange_rate",
+          expected_delivery_date: "expected_delivery_date",
+          shipping_term: "shipping_term",
+          commission_mode: "commission_mode",
+          commission_type: "commission_type",
+          commission_value: "commission_value",
+          notes: "notes",
+        };
+        const formKey = map[key];
+        if (formKey) {
+          (patch as Record<string, string | number | undefined>)[formKey] = raw;
+          levels[key] = level;
+        }
+      }
+    }
+    if (styleIdToApply != null) {
+      onStyleChange(styleIdToApply);
+    }
+    if (Object.keys(patch).length > 0) {
+      applyExtractedPatch(patch, levels);
+    } else if (Object.keys(levels).length > 0) {
+      setAutofilled((prev) => ({ ...prev, ...levels }));
+    }
+    setEnrichReviewRows((rs) =>
+      rs.map((r) =>
+        toApply.some((t) => t.fieldKey === r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+      ),
+    );
+    const bid = inquiryAi.enrichBatchId;
+    if (bid != null) {
+      try {
+        await inquiryAi.markSuggestionDecisions(
+          bid,
+          toApply.map((row) => ({ field_key: row.fieldKey, decision: "apply" as const })),
+        );
+      } catch (e) {
+        logApiError("InquiryCreate.markAiEnrichBulk", e);
+      }
+    }
   };
 
   const handleSkipInquiryField = (key: string) => {
+    if (inquiryAi.extractionBatchId != null) {
+      void inquiryAi.markSuggestionDecisions(inquiryAi.extractionBatchId, [
+        { field_key: key, decision: "skip" },
+      ]);
+    }
     setReviewRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
   };
 
-  const handleResolveInquiryConflict = (key: string, choice: ConflictResolutionChoice) => {
+  const handleSkipEnrichField = (key: string) => {
+    if (inquiryAi.enrichBatchId != null) {
+      void inquiryAi.markSuggestionDecisions(inquiryAi.enrichBatchId, [{ field_key: key, decision: "skip" }]);
+    }
+    setEnrichReviewRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
+  };
+
+  const handleResolveInquiryConflict = async (key: string, choice: ConflictResolutionChoice) => {
     if (choice === "keep") {
-      handleSkipInquiryField(key);
+      if (inquiryAi.extractionBatchId != null) {
+        void inquiryAi.markSuggestionDecisions(inquiryAi.extractionBatchId, [
+          { field_key: key, decision: "reject" },
+        ]);
+      }
+      setReviewRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
       return;
     }
-    const res = extraction.inquiryResponse;
+    const res = inquiryAi.extraction;
     if (!res?.fields[key]) return;
     const ef = res.fields[key];
     const level: FieldConfidence = choice === "merge" ? "low" : deriveConfidenceLevel(ef.confidence ?? 0);
@@ -414,10 +639,46 @@ export function InquiryCreatePage() {
     setReviewRows((rs) =>
       rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
     );
+    const bid = inquiryAi.extractionBatchId;
+    if (bid != null) {
+      try {
+        await inquiryAi.markSuggestionDecisions(bid, [{ field_key: key, decision: "apply" }]);
+      } catch (e) {
+        logApiError("InquiryCreate.markAiDecision", e);
+      }
+    }
+  };
+
+  const handleResolveEnrichConflict = async (key: string, choice: ConflictResolutionChoice) => {
+    if (choice === "keep") {
+      if (inquiryAi.enrichBatchId != null) {
+        void inquiryAi.markSuggestionDecisions(inquiryAi.enrichBatchId, [
+          { field_key: key, decision: "reject" },
+        ]);
+      }
+      setEnrichReviewRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
+      return;
+    }
+    const res = inquiryAi.enrich;
+    if (!res?.suggestions[key]) return;
+    const sug = res.suggestions[key];
+    const level: FieldConfidence = choice === "merge" ? "low" : deriveConfidenceLevel(sug.confidence ?? 0);
+    applySingleEnrichedField(key, sug.value, level);
+    setEnrichReviewRows((rs) =>
+      rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+    );
+    const bid = inquiryAi.enrichBatchId;
+    if (bid != null) {
+      try {
+        await inquiryAi.markSuggestionDecisions(bid, [{ field_key: key, decision: "apply" }]);
+      } catch (e) {
+        logApiError("InquiryCreate.markAiEnrich", e);
+      }
+    }
   };
 
   const handleApplyExtractedItems = () => {
-    const res = extraction.inquiryResponse;
+    const res = inquiryAi.extraction;
     if (!res?.items?.length) return;
     const lines: InquiryItemCreate[] = res.items
       .filter((it) => (it.item_name?.trim() || it.description?.trim()) && it.confidence >= 0.5)
@@ -431,12 +692,13 @@ export function InquiryCreatePage() {
   };
 
   const handleExtractFile = async (file: File) => {
-    await extraction.extract(file);
+    await inquiryAi.runExtract(file, isEdit && id ? Number(id) : undefined);
   };
 
   const handleClearImport = () => {
-    extraction.clear();
+    void inquiryAi.discardAiResults();
     setReviewRows([]);
+    setEnrichReviewRows([]);
   };
 
   const handleSave = async () => {
@@ -456,6 +718,18 @@ export function InquiryCreatePage() {
         navigate(`/app/inquiries/${id}`);
       } else {
         const created = await api.createInquiry(form);
+        const finalizeIds = [
+          ...new Set(
+            [inquiryAi.extractionBatchId, inquiryAi.enrichBatchId].filter((x): x is number => x != null),
+          ),
+        ];
+        for (const batchId of finalizeIds) {
+          try {
+            await inquiryAi.finalizeSuggestionBatchAfterCreate(created.id, batchId);
+          } catch (e) {
+            logApiError("InquiryCreate.finalizeAiBatch", e);
+          }
+        }
         navigate(`/app/inquiries/${created.id}`);
       }
     } catch (e) {
@@ -616,33 +890,33 @@ export function InquiryCreatePage() {
           <FileImportCard
             title="Import Inquiry Info"
             subtitle="Upload buyer inquiry sheet, email screenshot, tech-pack summary, PO summary, or PDF to auto-fill the form."
-            status={extraction.status}
-            error={extraction.error}
+            status={extractUiStatus}
+            error={inquiryAi.error}
             onExtract={handleExtractFile}
             onClear={handleClearImport}
           />
           <ExtractionStatusBanner
-            status={extraction.status}
+            status={extractUiStatus}
             extractedCount={
-              Object.values(extraction.inquiryResponse?.fields ?? {}).filter(
+              Object.values(inquiryAi.extraction?.fields ?? {}).filter(
                 (f) => f.value !== null && f.value !== undefined && String(f.value).trim() !== "",
-              ).length + (extraction.inquiryResponse?.items?.length ?? 0)
+              ).length + (inquiryAi.extraction?.items?.length ?? 0)
             }
             warnings={[
-              ...(extraction.inquiryResponse?.warnings ?? []),
-              ...(extraction.inquiryResponse?.unmapped_text?.map((t) => `Unmapped: ${t}`) ?? []),
+              ...(inquiryAi.extraction?.warnings ?? []),
+              ...(inquiryAi.extraction?.unmapped_text?.map((t) => `Unmapped: ${t}`) ?? []),
             ]}
-            error={extraction.error}
+            error={inquiryAi.error}
           />
-          {extraction.inquiryResponse?.candidate_matches?.customer &&
-          extraction.inquiryResponse.candidate_matches.customer.length > 0 ? (
+          {inquiryAi.extraction?.candidate_matches?.customer &&
+          inquiryAi.extraction.candidate_matches.customer.length > 0 ? (
             <div className="rounded-xl border border-border bg-surface-raised p-4 text-sm">
               <p className="font-semibold text-text-primary">Suggested customers</p>
               <p className="text-text-muted mt-1 text-xs">
                 Select a match to set Customer — the system does not create customers from extraction.
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {extraction.inquiryResponse.candidate_matches.customer.map((m) => (
+                {inquiryAi.extraction.candidate_matches.customer.map((m) => (
                   <button
                     key={m.id}
                     type="button"
@@ -656,15 +930,15 @@ export function InquiryCreatePage() {
               </div>
             </div>
           ) : null}
-          {extraction.inquiryResponse?.candidate_matches?.style &&
-          extraction.inquiryResponse.candidate_matches.style.length > 0 ? (
+          {inquiryAi.extraction?.candidate_matches?.style &&
+          inquiryAi.extraction.candidate_matches.style.length > 0 ? (
             <div className="rounded-xl border border-border bg-surface-raised p-4 text-sm">
               <p className="font-semibold text-text-primary">Suggested styles</p>
               <p className="text-text-muted mt-1 text-xs">
                 Select a match to set Style — verify the code matches your inquiry.
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {extraction.inquiryResponse.candidate_matches.style.map((m) => (
+                {inquiryAi.extraction.candidate_matches.style.map((m) => (
                   <button
                     key={m.id}
                     type="button"
@@ -678,7 +952,7 @@ export function InquiryCreatePage() {
               </div>
             </div>
           ) : null}
-          {extraction.inquiryResponse && extraction.inquiryResponse.items.length > 0 ? (
+          {inquiryAi.extraction && inquiryAi.extraction.items.length > 0 ? (
             <div className="flex justify-end">
               <button
                 type="button"
@@ -689,13 +963,25 @@ export function InquiryCreatePage() {
               </button>
             </div>
           ) : null}
-          {reviewRows.length > 0 && extraction.inquiryResponse ? (
+          {reviewRows.length > 0 && inquiryAi.extraction ? (
             <AutofillReviewPanel
               fields={reviewRows}
               onApply={handleApplyInquiryField}
               onApplyAllHigh={handleApplyAllHighInquiry}
               onSkip={handleSkipInquiryField}
               onResolveConflict={handleResolveInquiryConflict}
+            />
+          ) : null}
+          {enrichReviewRows.length > 0 && inquiryAi.enrich ? (
+            <AutofillReviewPanel
+              title="AI enrich suggestions"
+              persistNote="Merges into the form; finalize-after-create records accepted fields per batch."
+              valueColumnLabel="Suggested"
+              fields={enrichReviewRows}
+              onApply={handleApplyEnrichField}
+              onApplyAllHigh={handleApplyAllHighEnrich}
+              onSkip={handleSkipEnrichField}
+              onResolveConflict={handleResolveEnrichConflict}
             />
           ) : null}
         </div>
@@ -1125,24 +1411,33 @@ export function InquiryCreatePage() {
               />
             </div>
           </div>
-          <InquiryCreateSidebar
-            isEdit={isEdit}
-            inquiryCode={currentInquiryCode}
-            customerName={selectedCustomerName}
-            selectedStyle={selectedStyle}
-            garmentLineCount={(form.items ?? []).length}
-            expectedQuantity={form.quantity}
-            targetPrice={form.target_price}
-            targetPriceCurrency={form.target_price_currency}
-            currency={form.currency}
-            exchangeRate={form.exchange_rate}
-            rateSource={rateSource}
-            shippingTerm={form.shipping_term}
-            intermediaryLabel={selectedIntermediaryLabel}
-            commissionMode={form.commission_mode}
-            commissionType={form.commission_type}
-            commissionValue={form.commission_value}
-          />
+          <div className="space-y-4 xl:sticky xl:top-6 xl:col-span-4 2xl:col-span-3 self-start">
+            <InquiryCreateSidebar
+              isEdit={isEdit}
+              inquiryCode={currentInquiryCode}
+              customerName={selectedCustomerName}
+              selectedStyle={selectedStyle}
+              garmentLineCount={(form.items ?? []).length}
+              expectedQuantity={form.quantity}
+              targetPrice={form.target_price}
+              targetPriceCurrency={form.target_price_currency}
+              currency={form.currency}
+              exchangeRate={form.exchange_rate}
+              rateSource={rateSource}
+              shippingTerm={form.shipping_term}
+              intermediaryLabel={selectedIntermediaryLabel}
+              commissionMode={form.commission_mode}
+              commissionType={form.commission_type}
+              commissionValue={form.commission_value}
+            />
+            <InquiryAiPanel
+              ai={inquiryAi}
+              mode={isEdit ? "edit" : "create"}
+              inquiryId={id ? Number(id) : undefined}
+              formSnapshot={aiFormSnapshot}
+              hiddenActions={isEdit ? undefined : ["summary", "next"]}
+            />
+          </div>
         </div>
       )}
     </div>

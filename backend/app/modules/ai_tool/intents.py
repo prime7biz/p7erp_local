@@ -81,6 +81,24 @@ def detect_intent(prompt: str) -> IntentResult:
     if any(k in text for k in help_keywords):
         return IntentResult(intent="help_request", confidence=0.8, reason="Help keyword detected")
 
+    analysis_keywords = {
+        "margin",
+        "variance",
+        "wastage",
+        "costing",
+        "exception",
+        "tna delay",
+        "delay analysis",
+        "order risk",
+        "inventory variance",
+    }
+    if any(k in text for k in analysis_keywords):
+        return IntentResult(intent="analysis_request", confidence=0.85, reason="Structured analysis keyword detected")
+
+    semantic_keywords = {"semantic", "embedding", "vector search", "similar notes"}
+    if any(k in text for k in semantic_keywords):
+        return IntentResult(intent="semantic_search", confidence=0.82, reason="Semantic search keyword detected")
+
     if len(text) < 8:
         return IntentResult(intent="unsupported_request", confidence=0.5, reason="Prompt too short to classify")
 

@@ -61,6 +61,14 @@ class InquiryUpdate(BaseModel):
   items: list[InquiryItemCreate] | None = None
 
 
+class InquiryAiIndicatorsOut(BaseModel):
+  """Rules-based scores for list/detail (no LLM). Optional on list when ai_indicators=1."""
+
+  completeness_score: int = Field(ge=0, le=100, default=0)
+  quotation_readiness_score: int = Field(ge=0, le=100, default=0)
+  flags: list[str] = Field(default_factory=list)
+
+
 class InquiryResponse(BaseModel):
   id: int
   tenant_id: int
@@ -91,6 +99,7 @@ class InquiryResponse(BaseModel):
   items: list[InquiryItemResponse] = Field(default_factory=list)
   created_at: str
   updated_at: str
+  ai_indicators: InquiryAiIndicatorsOut | None = None
 
   class Config:
     from_attributes = True

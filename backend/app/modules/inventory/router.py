@@ -618,6 +618,27 @@ class VendorCreate(BaseModel):
     bank_account_no: str | None = None
     swift_code: str | None = None
     credit_limit: float | None = None
+    legal_name: str | None = None
+    trade_name: str | None = None
+    website: str | None = None
+    mobile: str | None = None
+    designation: str | None = None
+    address_line1: str | None = None
+    state_or_region: str | None = None
+    postal_code: str | None = None
+    registration_number: str | None = None
+    bank_account_title: str | None = None
+    iban: str | None = None
+    payment_terms: str | None = None
+    incoterms: str | None = None
+    shipping_terms: str | None = None
+    lead_time_notes: str | None = None
+    compliance_status: str | None = None
+    compliance_reference_numbers: str | None = None
+    certifications_summary: str | None = None
+    onboarding_status: str | None = None
+    remarks: str | None = None
+    internal_notes: str | None = None
 
 
 class VendorUpdate(BaseModel):
@@ -639,6 +660,27 @@ class VendorUpdate(BaseModel):
     bank_account_no: str | None = None
     swift_code: str | None = None
     credit_limit: float | None = None
+    legal_name: str | None = None
+    trade_name: str | None = None
+    website: str | None = None
+    mobile: str | None = None
+    designation: str | None = None
+    address_line1: str | None = None
+    state_or_region: str | None = None
+    postal_code: str | None = None
+    registration_number: str | None = None
+    bank_account_title: str | None = None
+    iban: str | None = None
+    payment_terms: str | None = None
+    incoterms: str | None = None
+    shipping_terms: str | None = None
+    lead_time_notes: str | None = None
+    compliance_status: str | None = None
+    compliance_reference_numbers: str | None = None
+    certifications_summary: str | None = None
+    onboarding_status: str | None = None
+    remarks: str | None = None
+    internal_notes: str | None = None
 
 
 class VendorOut(BaseModel):
@@ -662,6 +704,27 @@ class VendorOut(BaseModel):
     bank_account_no: str | None
     swift_code: str | None
     credit_limit: float | None
+    legal_name: str | None = None
+    trade_name: str | None = None
+    website: str | None = None
+    mobile: str | None = None
+    designation: str | None = None
+    address_line1: str | None = None
+    state_or_region: str | None = None
+    postal_code: str | None = None
+    registration_number: str | None = None
+    bank_account_title: str | None = None
+    iban: str | None = None
+    payment_terms: str | None = None
+    incoterms: str | None = None
+    shipping_terms: str | None = None
+    lead_time_notes: str | None = None
+    compliance_status: str | None = None
+    compliance_reference_numbers: str | None = None
+    certifications_summary: str | None = None
+    onboarding_status: str | None = None
+    remarks: str | None = None
+    internal_notes: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -4500,4 +4563,9 @@ async def order_material_readiness(
     from app.modules.production.readiness_service import get_order_readiness
 
     return await get_order_readiness(db, tenant.id, order_id)
+
+
+from app.modules.inventory.vendor_ai_router import router as _vendor_ai_router
+
+router.include_router(_vendor_ai_router, prefix="/vendors/ai", tags=["inventory-vendors-ai"])
 

@@ -247,6 +247,8 @@ async def update_operation(
 @router.get("/routing-templates", response_model=list[RoutingTemplateResponse])
 async def list_routing_templates(
     item_id: int | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -255,7 +257,12 @@ async def list_routing_templates(
     stmt = select(ManufacturingRoutingTemplate).where(ManufacturingRoutingTemplate.tenant_id == tenant.id)
     if item_id is not None:
         stmt = stmt.where(ManufacturingRoutingTemplate.item_id == item_id)
-    result = await db.execute(stmt.order_by(ManufacturingRoutingTemplate.routing_code, ManufacturingRoutingTemplate.version_no))
+    stmt = (
+        stmt.order_by(ManufacturingRoutingTemplate.routing_code, ManufacturingRoutingTemplate.version_no)
+        .limit(limit)
+        .offset(offset)
+    )
+    result = await db.execute(stmt)
     return [_to_routing_response(r) for r in result.scalars().all()]
 
 

@@ -1,0 +1,19 @@
+---
+description: Backend Python runs only via Docker (local and production); no host Python for app execution
+globs:
+alwaysApply: true
+---
+
+# P7 ERP – Docker-first Python (strict)
+
+- **Do not rely on a local (host) Python environment** for running the FastAPI backend, Alembic migrations, backend tests, Celery workers, or one-off `python` scripts that need project dependencies. **Local development and production both use Docker** for the Python runtime and installed packages.
+
+- **When suggesting or running commands**, prefer:
+  - `docker compose` (or the repo’s documented compose file, e.g. `docker-compose.yml` / `docker-compose.prod.yml`) to build and start services.
+  - `docker compose exec <backend-service> <command>` for **migrations** (`alembic upgrade head`), **shell checks**, **pytest**, **Celery**, and **scripts** under `backend/scripts/`, using the image’s Python and `requirements.txt`.
+
+- **Do not** instruct the user to `pip install` or `python -m` on the host for backend work unless the user explicitly opts out (this project standard is Docker-only).
+
+- **IDE / editor**: Type hints and static analysis in the editor are fine; **execution and verification** of backend code should assume the **container** is the source of truth for dependencies and OS libraries (e.g. `pgvector`, `torch` CPU wheels).
+
+- **Documentation**: When adding runbooks or agent instructions, phrase backend steps as Docker commands so they match production parity.

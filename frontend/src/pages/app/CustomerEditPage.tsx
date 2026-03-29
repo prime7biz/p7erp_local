@@ -1,40 +1,27 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Building2, CheckCircle2, Mail, MapPin, Save, Upload } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Save } from "lucide-react";
 import { api, type CustomerUpdate } from "@/api/client";
-import { FormCitySelect, FormCountrySelect } from "@/components/customers/CustomerLocationFields";
-import { citiesForCountry } from "@/data/formLocations";
+import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel";
+import { ExtractionStatusBanner } from "@/components/ai-extract/ExtractionStatusBanner";
+import { FileImportCard } from "@/components/ai-extract/FileImportCard";
+import { CustomerAiPanel } from "@/components/customers/CustomerAiPanel";
+import { CustomerFormFields } from "@/components/customers/CustomerFormFields";
+import {
+  buildCustomerUpdatePayload,
+  customerFromApiToFormState,
+  shippingValuesFromForm,
+  type CustomerFormState,
+} from "@/components/customers/customerFormShared";
+import { useCustomerAi } from "@/hooks/useCustomerAi";
 import { useSecureImage } from "@/hooks/useSecureImage";
-
-type CustomerFormState = {
-  legalEntityName: string;
-  tradeName: string;
-  taxIdVatNumber: string;
-  website: string;
-  customerType: string;
-  status: "active" | "inactive";
-  primaryContactName: string;
-  designation: string;
-  contactEmail: string;
-  countryCode: string;
-  contactPhone: string;
-  subscribeNewsletter: boolean;
-  companyLogoUrl: string;
-  billingAddressLine1: string;
-  billingCity: string;
-  billingPostalCode: string;
-  billingCountry: string;
-  sameAsBilling: boolean;
-  shippingAddressLine1: string;
-  shippingCity: string;
-  shippingPostalCode: string;
-  shippingCountry: string;
-};
-
-function normalizeOptional(value: string): string | undefined {
-  const trimmed = value.trim();
-  return trimmed ? trimmed : undefined;
-}
+import type { ConflictResolutionChoice, ExtractionStatus, FieldApplyState, FieldConfidence } from "@/types/extraction";
+import {
+  buildCustomerEnrichApplyStates,
+  buildCustomerFieldApplyStates,
+  deriveConfidenceLevel,
+  formatExtractedValue,
+} from "@/utils/extractionHelpers";
 
 function isValidWebsite(value: string): boolean {
   if (!value.trim()) return true;
@@ -51,10 +38,39 @@ function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
+function autofillBorder(level?: FieldConfidence): string {
+  if (!level) return "";
+  if (level === "high") return "border-l-[3px] border-l-status-success pl-2";
+  if (level === "medium") return "border-l-[3px] border-l-status-warning pl-2";
+  return "border-l-[3px] border-l-status-danger pl-2";
+}
+
+function customerFormSnapshot(f: CustomerFormState): Record<string, string> {
+  return {
+    legalEntityName: f.legalEntityName,
+    tradeName: f.tradeName,
+    taxIdVatNumber: f.taxIdVatNumber,
+    website: f.website,
+    primaryContactName: f.primaryContactName,
+    designation: f.designation,
+    contactEmail: f.contactEmail,
+    countryCode: f.countryCode,
+    contactPhone: f.contactPhone,
+    billingAddressLine1: f.billingAddressLine1,
+    billingCity: f.billingCity,
+    billingPostalCode: f.billingPostalCode,
+    billingCountry: f.billingCountry,
+    shippingAddressLine1: f.shippingAddressLine1,
+    shippingCity: f.shippingCity,
+    shippingPostalCode: f.shippingPostalCode,
+    shippingCountry: f.shippingCountry,
+  };
+}
+
 export function CustomerEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const logoFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -63,6 +79,23 @@ export function CustomerEditPage() {
   const [success, setSuccess] = useState("");
   const [form, setForm] = useState<CustomerFormState | null>(null);
   const companyLogoDisplayUrl = useSecureImage(form?.companyLogoUrl);
+
+  const customerAi = useCustomerAi();
+  const extractUiStatus: ExtractionStatus =
+    customerAi.status === "processing"
+      ? "uploading"
+      : customerAi.status === "success"
+        ? "extracted"
+        : customerAi.status === "partial"
+          ? "partial"
+          : customerAi.status === "failed"
+            ? "failed"
+            : "idle";
+
+  const [autofilled, setAutofilled] = useState<Partial<Record<string, FieldConfidence>>>({});
+  const [reviewRows, setReviewRows] = useState<FieldApplyState[]>([]);
+  const [enrichReviewRows, setEnrichReviewRows] = useState<FieldApplyState[]>([]);
+  const [aiUndoStack, setAiUndoStack] = useState<CustomerFormState[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -75,30 +108,12 @@ export function CustomerEditPage() {
       setError("");
       try {
         const customer = await api.getCustomer(Number(id));
-        setForm({
-          legalEntityName: customer.legal_entity_name ?? customer.name,
-          tradeName: customer.trade_name ?? "",
-          taxIdVatNumber: customer.tax_id_vat_number ?? "",
-          website: customer.website ?? "",
-          customerType: customer.customer_type ?? "enterprise",
-          status: (customer.status?.toLowerCase() === "inactive" ? "inactive" : "active") as "active" | "inactive",
-          primaryContactName: customer.primary_contact_name ?? "",
-          designation: customer.designation ?? "",
-          contactEmail: customer.contact_email ?? customer.email ?? "",
-          countryCode: customer.phone_country_code ?? "+1",
-          contactPhone: customer.contact_phone ?? customer.phone ?? "",
-          subscribeNewsletter: customer.subscribe_newsletter,
-          companyLogoUrl: customer.company_logo_url ?? "",
-          billingAddressLine1: customer.billing_address_line1 ?? "",
-          billingCity: customer.billing_city ?? "",
-          billingPostalCode: customer.billing_postal_code ?? "",
-          billingCountry: customer.billing_country ?? customer.country ?? "",
-          sameAsBilling: customer.same_as_billing,
-          shippingAddressLine1: customer.shipping_address_line1 ?? "",
-          shippingCity: customer.shipping_city ?? "",
-          shippingPostalCode: customer.shipping_postal_code ?? "",
-          shippingCountry: customer.shipping_country ?? "",
-        });
+        setForm(customerFromApiToFormState(customer));
+        customerAi.clear();
+        setAutofilled({});
+        setReviewRows([]);
+        setEnrichReviewRows([]);
+        setAiUndoStack([]);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load customer.");
       } finally {
@@ -106,7 +121,44 @@ export function CustomerEditPage() {
       }
     };
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset AI state when navigating to another id
   }, [id]);
+
+  useEffect(() => {
+    const res = customerAi.extraction;
+    if (!res || !form) {
+      setReviewRows([]);
+      return;
+    }
+    const next = buildCustomerFieldApplyStates(res, customerFormSnapshot(form));
+    setReviewRows((prev) => {
+      const applied = new Set(prev.filter((r) => r.applied).map((r) => r.fieldKey));
+      const skipped = new Set(prev.filter((r) => r.skipped).map((r) => r.fieldKey));
+      return next.map((row) => ({
+        ...row,
+        applied: applied.has(row.fieldKey),
+        skipped: skipped.has(row.fieldKey),
+      }));
+    });
+  }, [customerAi.extraction, form]);
+
+  useEffect(() => {
+    const res = customerAi.enrich;
+    if (!res || !form) {
+      setEnrichReviewRows([]);
+      return;
+    }
+    const next = buildCustomerEnrichApplyStates(res, customerFormSnapshot(form));
+    setEnrichReviewRows((prev) => {
+      const applied = new Set(prev.filter((r) => r.applied).map((r) => r.fieldKey));
+      const skipped = new Set(prev.filter((r) => r.skipped).map((r) => r.fieldKey));
+      return next.map((row) => ({
+        ...row,
+        applied: applied.has(row.fieldKey),
+        skipped: skipped.has(row.fieldKey),
+      }));
+    });
+  }, [customerAi.enrich, form]);
 
   const shippingValues = useMemo(() => {
     if (!form) {
@@ -117,21 +169,368 @@ export function CustomerEditPage() {
         shippingCountry: "",
       };
     }
-    if (!form.sameAsBilling) {
-      return {
-        shippingAddressLine1: form.shippingAddressLine1,
-        shippingCity: form.shippingCity,
-        shippingPostalCode: form.shippingPostalCode,
-        shippingCountry: form.shippingCountry,
-      };
-    }
-    return {
-      shippingAddressLine1: form.billingAddressLine1,
-      shippingCity: form.billingCity,
-      shippingPostalCode: form.billingPostalCode,
-      shippingCountry: form.billingCountry,
-    };
+    return shippingValuesFromForm(form);
   }, [form]);
+
+  const patchForm = (patch: Partial<CustomerFormState>) => {
+    if (!form) return;
+    setAutofilled((af) => {
+      const n = { ...af };
+      for (const k of Object.keys(patch)) {
+        delete n[k];
+      }
+      return n;
+    });
+    setForm((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
+  const clearAutofillKeys = (...keys: string[]) => {
+    setAutofilled((af) => {
+      const n = { ...af };
+      for (const k of keys) delete n[k];
+      return n;
+    });
+  };
+
+  const pushAiUndoSnapshot = () => {
+    if (form) setAiUndoStack((s) => [...s, { ...form }]);
+  };
+
+  const applyExtractedPatch = (
+    patch: Partial<CustomerFormState>,
+    levels: Partial<Record<string, FieldConfidence>>,
+  ) => {
+    pushAiUndoSnapshot();
+    setForm((prev) => (prev ? { ...prev, ...patch } : prev));
+    setAutofilled((prev) => ({ ...prev, ...levels }));
+  };
+
+  const handleUndoLastAi = async () => {
+    if (!id) return;
+    if (aiUndoStack.length === 0) return;
+    const prevForm = aiUndoStack[aiUndoStack.length - 1];
+    if (!prevForm) return;
+    setError("");
+    try {
+      await api.updateCustomer(Number(id), buildCustomerUpdatePayload(prevForm, shippingValuesFromForm(prevForm)));
+      setForm(prevForm);
+      setAutofilled({});
+      setAiUndoStack((s) => s.slice(0, -1));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not undo AI apply on the server.");
+    }
+  };
+
+  const handleExtractFile = async (file: File) => {
+    if (!id) return;
+    await customerAi.runExtract(file, Number(id));
+  };
+
+  const handleClearImport = () => {
+    void customerAi.discardAiResults();
+    setReviewRows([]);
+    setEnrichReviewRows([]);
+  };
+
+  const handleApplyExtractField = async (key: string) => {
+    const res = customerAi.extraction;
+    if (!res?.fields[key] || !form || !id) return;
+    const ef = res.fields[key];
+    const level = deriveConfidenceLevel(typeof ef.confidence === "number" ? ef.confidence : 0);
+    const bid = customerAi.extractionBatchId;
+    if (bid == null) {
+      const v = formatExtractedValue(ef.value);
+      applyExtractedPatch({ [key]: v } as Partial<CustomerFormState>, { [key]: level });
+      setReviewRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+      );
+      return;
+    }
+    const snapshot = { ...form };
+    setError("");
+    try {
+      const out = await customerAi.applySuggestionsToCustomer(
+        Number(id),
+        bid,
+        [{ field_key: key, decision: "apply" }],
+        "overwrite",
+      );
+      if (out.conflicts.some((c) => c.field === key)) {
+        setError("Could not apply this field. Try again or edit manually.");
+        return;
+      }
+      setForm(customerFromApiToFormState(out.customer));
+      setAiUndoStack((s) => [...s, snapshot]);
+      setAutofilled((prev) => ({ ...prev, [key]: level }));
+      setReviewRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Apply failed");
+    }
+  };
+
+  const handleApplyEnrichField = async (key: string) => {
+    const res = customerAi.enrich;
+    if (!res?.suggestions[key] || !form || !id) return;
+    const sug = res.suggestions[key];
+    const level = deriveConfidenceLevel(typeof sug.confidence === "number" ? sug.confidence : 0);
+    const bid = customerAi.enrichBatchId;
+    if (bid == null) {
+      const v = formatExtractedValue(sug.value);
+      applyExtractedPatch({ [key]: v } as Partial<CustomerFormState>, { [key]: level });
+      setEnrichReviewRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+      );
+      return;
+    }
+    const snapshot = { ...form };
+    setError("");
+    try {
+      const out = await customerAi.applySuggestionsToCustomer(
+        Number(id),
+        bid,
+        [{ field_key: key, decision: "apply" }],
+        "overwrite",
+      );
+      if (out.conflicts.some((c) => c.field === key)) {
+        setError("Could not apply this field. Try again or edit manually.");
+        return;
+      }
+      setForm(customerFromApiToFormState(out.customer));
+      setAiUndoStack((s) => [...s, snapshot]);
+      setAutofilled((prev) => ({ ...prev, [key]: level }));
+      setEnrichReviewRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Apply failed");
+    }
+  };
+
+  const handleApplyAllHighExtract = async () => {
+    const res = customerAi.extraction;
+    if (!res || !form || !id) return;
+    const toApply = reviewRows.filter(
+      (r) => !r.applied && !r.skipped && r.confidenceLevel === "high" && !r.hasConflict,
+    );
+    if (toApply.length === 0) return;
+    const bid = customerAi.extractionBatchId;
+    if (bid == null) {
+      pushAiUndoSnapshot();
+      const patch: Partial<CustomerFormState> = {};
+      const levels: Partial<Record<string, FieldConfidence>> = {};
+      for (const row of toApply) {
+        const ef = res.fields[row.fieldKey];
+        if (!ef) continue;
+        (patch as Record<string, string>)[row.fieldKey] = formatExtractedValue(ef.value);
+        levels[row.fieldKey] = deriveConfidenceLevel(ef.confidence);
+      }
+      setForm((prev) => (prev ? { ...prev, ...patch } : prev));
+      setAutofilled((prev) => ({ ...prev, ...levels }));
+      setReviewRows((rs) =>
+        rs.map((r) =>
+          toApply.some((t) => t.fieldKey === r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+        ),
+      );
+      return;
+    }
+    const snapshot = { ...form };
+    setError("");
+    try {
+      const out = await customerAi.applySuggestionsToCustomer(
+        Number(id),
+        bid,
+        toApply.map((row) => ({ field_key: row.fieldKey, decision: "apply" as const })),
+        "skip_if_different",
+      );
+      setForm(customerFromApiToFormState(out.customer));
+      setAiUndoStack((s) => [...s, snapshot]);
+      const levels: Partial<Record<string, FieldConfidence>> = {};
+      for (const row of toApply) {
+        const ef = res.fields[row.fieldKey];
+        if (ef) levels[row.fieldKey] = deriveConfidenceLevel(ef.confidence);
+      }
+      setAutofilled((prev) => ({ ...prev, ...levels }));
+      const appliedSet = new Set(out.applied_fields);
+      setReviewRows((rs) =>
+        rs.map((r) =>
+          appliedSet.has(r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+        ),
+      );
+      if (out.conflicts.length > 0) {
+        setError(
+          `${out.conflicts.length} field(s) skipped because saved values changed. Review conflicts and apply individually if needed.`,
+        );
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Apply failed");
+    }
+  };
+
+  const handleApplyAllHighEnrich = async () => {
+    const res = customerAi.enrich;
+    if (!res || !form || !id) return;
+    const toApply = enrichReviewRows.filter(
+      (r) => !r.applied && !r.skipped && r.confidenceLevel === "high" && !r.hasConflict,
+    );
+    if (toApply.length === 0) return;
+    const bid = customerAi.enrichBatchId;
+    if (bid == null) {
+      pushAiUndoSnapshot();
+      const patch: Partial<CustomerFormState> = {};
+      const levels: Partial<Record<string, FieldConfidence>> = {};
+      for (const row of toApply) {
+        const sug = res.suggestions[row.fieldKey];
+        if (!sug) continue;
+        (patch as Record<string, string>)[row.fieldKey] = formatExtractedValue(sug.value);
+        levels[row.fieldKey] = deriveConfidenceLevel(sug.confidence);
+      }
+      setForm((prev) => (prev ? { ...prev, ...patch } : prev));
+      setAutofilled((prev) => ({ ...prev, ...levels }));
+      setEnrichReviewRows((rs) =>
+        rs.map((r) =>
+          toApply.some((t) => t.fieldKey === r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+        ),
+      );
+      return;
+    }
+    const snapshot = { ...form };
+    setError("");
+    try {
+      const out = await customerAi.applySuggestionsToCustomer(
+        Number(id),
+        bid,
+        toApply.map((row) => ({ field_key: row.fieldKey, decision: "apply" as const })),
+        "skip_if_different",
+      );
+      setForm(customerFromApiToFormState(out.customer));
+      setAiUndoStack((s) => [...s, snapshot]);
+      const levels: Partial<Record<string, FieldConfidence>> = {};
+      for (const row of toApply) {
+        const sug = res.suggestions[row.fieldKey];
+        if (sug) levels[row.fieldKey] = deriveConfidenceLevel(sug.confidence);
+      }
+      setAutofilled((prev) => ({ ...prev, ...levels }));
+      const appliedSet = new Set(out.applied_fields);
+      setEnrichReviewRows((rs) =>
+        rs.map((r) =>
+          appliedSet.has(r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+        ),
+      );
+      if (out.conflicts.length > 0) {
+        setError(
+          `${out.conflicts.length} field(s) skipped because saved values changed. Review conflicts and apply individually if needed.`,
+        );
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Apply failed");
+    }
+  };
+
+  const handleSkipExtractField = (key: string) => {
+    if (customerAi.extractionBatchId != null) {
+      void customerAi.markSuggestionDecisions(customerAi.extractionBatchId, [
+        { field_key: key, decision: "skip" },
+      ]);
+    }
+    setReviewRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
+  };
+
+  const handleSkipEnrichField = (key: string) => {
+    if (customerAi.enrichBatchId != null) {
+      void customerAi.markSuggestionDecisions(customerAi.enrichBatchId, [{ field_key: key, decision: "skip" }]);
+    }
+    setEnrichReviewRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
+  };
+
+  const handleResolveExtractConflict = async (key: string, choice: ConflictResolutionChoice) => {
+    if (choice === "keep") {
+      if (customerAi.extractionBatchId != null) {
+        void customerAi.markSuggestionDecisions(customerAi.extractionBatchId, [
+          { field_key: key, decision: "reject" },
+        ]);
+      }
+      setReviewRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
+      return;
+    }
+    const res = customerAi.extraction;
+    if (!res?.fields[key] || !form || !id) return;
+    const ef = res.fields[key];
+    const level: FieldConfidence = choice === "merge" ? "low" : deriveConfidenceLevel(ef.confidence);
+    const bid = customerAi.extractionBatchId;
+    if (bid == null) {
+      const v = formatExtractedValue(ef.value);
+      applyExtractedPatch({ [key]: v } as Partial<CustomerFormState>, { [key]: level });
+      setReviewRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+      );
+      return;
+    }
+    const snapshot = { ...form };
+    setError("");
+    try {
+      const mode = choice === "merge" ? "skip_if_different" : "overwrite";
+      const out = await customerAi.applySuggestionsToCustomer(
+        Number(id),
+        bid,
+        [{ field_key: key, decision: "apply" }],
+        mode,
+      );
+      setForm(customerFromApiToFormState(out.customer));
+      setAiUndoStack((s) => [...s, snapshot]);
+      setAutofilled((prev) => ({ ...prev, [key]: level }));
+      setReviewRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Apply failed");
+    }
+  };
+
+  const handleResolveEnrichConflict = async (key: string, choice: ConflictResolutionChoice) => {
+    if (choice === "keep") {
+      if (customerAi.enrichBatchId != null) {
+        void customerAi.markSuggestionDecisions(customerAi.enrichBatchId, [
+          { field_key: key, decision: "reject" },
+        ]);
+      }
+      setEnrichReviewRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
+      return;
+    }
+    const res = customerAi.enrich;
+    if (!res?.suggestions[key] || !form || !id) return;
+    const sug = res.suggestions[key];
+    const level: FieldConfidence = choice === "merge" ? "low" : deriveConfidenceLevel(sug.confidence);
+    const bid = customerAi.enrichBatchId;
+    if (bid == null) {
+      const v = formatExtractedValue(sug.value);
+      applyExtractedPatch({ [key]: v } as Partial<CustomerFormState>, { [key]: level });
+      setEnrichReviewRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+      );
+      return;
+    }
+    const snapshot = { ...form };
+    setError("");
+    try {
+      const mode = choice === "merge" ? "skip_if_different" : "overwrite";
+      const out = await customerAi.applySuggestionsToCustomer(
+        Number(id),
+        bid,
+        [{ field_key: key, decision: "apply" }],
+        mode,
+      );
+      setForm(customerFromApiToFormState(out.customer));
+      setAiUndoStack((s) => [...s, snapshot]);
+      setAutofilled((prev) => ({ ...prev, [key]: level }));
+      setEnrichReviewRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Apply failed");
+    }
+  };
 
   const validate = (): string | null => {
     if (!form) return "Form is not ready.";
@@ -150,35 +549,7 @@ export function CustomerEditPage() {
 
   const toPayload = (): CustomerUpdate => {
     if (!form) return {};
-    return {
-      name: form.legalEntityName.trim(),
-      legal_entity_name: form.legalEntityName.trim(),
-      trade_name: normalizeOptional(form.tradeName),
-      tax_id_vat_number: normalizeOptional(form.taxIdVatNumber),
-      website: normalizeOptional(form.website),
-      customer_type: normalizeOptional(form.customerType),
-      status: form.status,
-      primary_contact_name: form.primaryContactName.trim(),
-      designation: normalizeOptional(form.designation),
-      contact_email: form.contactEmail.trim(),
-      email: form.contactEmail.trim(),
-      phone_country_code: normalizeOptional(form.countryCode),
-      contact_phone: normalizeOptional(form.contactPhone),
-      phone: normalizeOptional(`${form.countryCode} ${form.contactPhone}`),
-      subscribe_newsletter: form.subscribeNewsletter,
-      company_logo_url: normalizeOptional(form.companyLogoUrl),
-      billing_address_line1: form.billingAddressLine1.trim(),
-      billing_city: form.billingCity.trim(),
-      billing_postal_code: normalizeOptional(form.billingPostalCode),
-      billing_country: form.billingCountry.trim(),
-      shipping_address_line1: shippingValues.shippingAddressLine1.trim(),
-      shipping_city: shippingValues.shippingCity.trim(),
-      shipping_postal_code: normalizeOptional(shippingValues.shippingPostalCode),
-      shipping_country: shippingValues.shippingCountry.trim(),
-      same_as_billing: form.sameAsBilling,
-      address: form.billingAddressLine1.trim(),
-      country: form.billingCountry.trim(),
-    };
+    return buildCustomerUpdatePayload(form, shippingValues);
   };
 
   const handleLogoPick = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -245,6 +616,8 @@ export function CustomerEditPage() {
     );
   }
 
+  const numericId = Number(id);
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -269,323 +642,114 @@ export function CustomerEditPage() {
         </div>
       )}
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit();
-        }}
-        className="space-y-6"
-      >
-        <section className="rounded-xl border border-border bg-surface-raised p-5">
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-status-warning">
-            <Building2 className="h-4 w-4" />
-            General Information
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Legal Entity Name **</label>
-              <input
-                type="text"
-                value={form.legalEntityName}
-                onChange={(e) => setForm((prev) => (prev ? { ...prev, legalEntityName: e.target.value } : prev))}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-                required
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Trade Name / Brand</label>
-              <input
-                type="text"
-                value={form.tradeName}
-                onChange={(e) => setForm((prev) => (prev ? { ...prev, tradeName: e.target.value } : prev))}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Tax ID / VAT Number</label>
-              <input
-                type="text"
-                value={form.taxIdVatNumber}
-                onChange={(e) => setForm((prev) => (prev ? { ...prev, taxIdVatNumber: e.target.value } : prev))}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Website URL</label>
-              <input
-                type="url"
-                value={form.website}
-                onChange={(e) => setForm((prev) => (prev ? { ...prev, website: e.target.value } : prev))}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Customer Type</label>
-              <select
-                value={form.customerType}
-                onChange={(e) => setForm((prev) => (prev ? { ...prev, customerType: e.target.value } : prev))}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-              >
-                <option value="enterprise">Enterprise</option>
-                <option value="sme">SME</option>
-                <option value="startup">Startup</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Status</label>
-              <select
-                value={form.status}
-                onChange={(e) => setForm((prev) => (prev ? { ...prev, status: e.target.value as "active" | "inactive" } : prev))}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-            <div className="md:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Company Logo (Optional)</label>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <input
-                  type="url"
-                  value={form.companyLogoUrl}
-                  onChange={(e) => setForm((prev) => (prev ? { ...prev, companyLogoUrl: e.target.value } : prev))}
-                  placeholder="Upload a logo or paste URL"
-                  className="flex-1 rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-                />
+      <div className="grid gap-6 xl:grid-cols-[1fr_minmax(260px,320px)] items-start">
+        <div className="min-w-0 space-y-6">
+          <FileImportCard
+            title="Import / refresh from document"
+            subtitle="Upload an updated company profile or card to suggest field changes (review before saving)."
+            status={extractUiStatus}
+            error={customerAi.error}
+            onExtract={handleExtractFile}
+            onClear={handleClearImport}
+          />
+
+          <ExtractionStatusBanner
+            status={extractUiStatus}
+            extractedCount={Object.values(customerAi.extraction?.fields ?? {}).filter(
+              (f) => f.value !== null && f.value !== undefined && String(f.value).trim() !== "",
+            ).length}
+            warnings={[
+              ...(customerAi.extraction?.warnings ?? []),
+              ...(customerAi.extraction?.unmapped_text?.map((t) => "Unmapped: " + t) ?? []),
+            ]}
+            error={customerAi.error}
+          />
+
+          {reviewRows.length > 0 && customerAi.extraction ? (
+            <AutofillReviewPanel
+              title="Review extracted fields"
+              fields={reviewRows}
+              onApply={(k) => void handleApplyExtractField(k)}
+              onApplyAllHigh={() => void handleApplyAllHighExtract()}
+              onSkip={handleSkipExtractField}
+              onResolveConflict={(k, c) => void handleResolveExtractConflict(k, c)}
+              persistNote="On edit, each Apply updates the saved customer immediately (server-side, audited)."
+            />
+          ) : null}
+          {enrichReviewRows.length > 0 && customerAi.enrich ? (
+            <AutofillReviewPanel
+              title="Review enrichment suggestions"
+              fields={enrichReviewRows}
+              valueColumnLabel="AI suggested"
+              onApply={(k) => void handleApplyEnrichField(k)}
+              onApplyAllHigh={() => void handleApplyAllHighEnrich()}
+              onSkip={handleSkipEnrichField}
+              onResolveConflict={(k, c) => void handleResolveEnrichConflict(k, c)}
+              persistNote="On edit, each Apply updates the saved customer immediately (server-side, audited)."
+            />
+          ) : null}
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submit();
+            }}
+            className="space-y-6"
+          >
+            <CustomerFormFields
+              form={form}
+              patchForm={patchForm}
+              setForm={(u) => setForm((prev) => (prev ? (typeof u === "function" ? u(prev) : u) : prev))}
+              shippingValues={shippingValues}
+              clearAutofillKeys={clearAutofillKeys}
+              autofilled={autofilled}
+              autofillBorder={autofillBorder}
+              logoFileInputRef={logoFileInputRef}
+              companyLogoDisplayUrl={companyLogoDisplayUrl}
+              logoUploading={logoUploading}
+              onLogoPick={handleLogoPick}
+            />
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {aiUndoStack.length > 0 ? (
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={logoUploading}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
+                  onClick={() => void handleUndoLastAi()}
+                  className="mr-auto rounded-lg border border-border-strong px-3 py-2 text-xs font-medium text-text-secondary hover:bg-surface-subtle"
                 >
-                  <Upload className="h-4 w-4" />
-                  {logoUploading ? "Uploading..." : "Upload"}
+                  Undo last AI apply
                 </button>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
-                onChange={handleLogoPick}
-                className="hidden"
-              />
-              {form.companyLogoUrl ? (
-                <div className="mt-3 inline-flex items-center gap-3 rounded-lg border border-border bg-surface-subtle px-3 py-2">
-                  <img src={companyLogoDisplayUrl ?? undefined} alt="Company logo preview" className="h-10 w-10 rounded object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => setForm((prev) => (prev ? { ...prev, companyLogoUrl: "" } : prev))}
-                    className="text-xs font-medium text-text-secondary hover:text-text-primary"
-                  >
-                    Remove
-                  </button>
-                </div>
               ) : null}
-              <p className="mt-1 text-xs text-text-muted">Accepted: PNG, JPG, GIF, WEBP (max 2MB).</p>
+              <Link
+                to={`/app/customers/${id}`}
+                className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
+              >
+                Cancel
+              </Link>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground hover:bg-brand-primary/90 disabled:opacity-60"
+              >
+                <Save className="h-4 w-4" />
+                {submitting ? "Updating..." : "Update Customer"}
+              </button>
             </div>
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-border bg-surface-raised p-5">
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-status-warning">
-            <Mail className="h-4 w-4" />
-            Contact & Communication
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Primary Contact Name **</label>
-              <input
-                type="text"
-                value={form.primaryContactName}
-                onChange={(e) => setForm((prev) => (prev ? { ...prev, primaryContactName: e.target.value } : prev))}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-                required
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Designation / Role</label>
-              <input
-                type="text"
-                value={form.designation}
-                onChange={(e) => setForm((prev) => (prev ? { ...prev, designation: e.target.value } : prev))}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Email Address **</label>
-              <input
-                type="email"
-                value={form.contactEmail}
-                onChange={(e) => setForm((prev) => (prev ? { ...prev, contactEmail: e.target.value } : prev))}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-                required
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-text-secondary">Phone Number</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={form.countryCode}
-                  onChange={(e) => setForm((prev) => (prev ? { ...prev, countryCode: e.target.value } : prev))}
-                  className="w-20 rounded-lg border border-border-strong px-2 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-                />
-                <input
-                  type="text"
-                  value={form.contactPhone}
-                  onChange={(e) => setForm((prev) => (prev ? { ...prev, contactPhone: e.target.value } : prev))}
-                  className="flex-1 rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-                />
-              </div>
-            </div>
-            <div className="md:col-span-2">
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle">
-                <input
-                  type="checkbox"
-                  checked={form.subscribeNewsletter}
-                  onChange={(e) => setForm((prev) => (prev ? { ...prev, subscribeNewsletter: e.target.checked } : prev))}
-                  className="h-4 w-4 rounded border-border-strong text-brand-primary focus:ring-focus-ring"
-                />
-                Subscribe to newsletter & updates
-              </label>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-border bg-surface-raised p-5">
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-status-warning">
-            <MapPin className="h-4 w-4" />
-            Addresses
-          </div>
-          <div className="grid gap-6 md:grid-cols-2">
-            <div className="space-y-3 rounded-lg border border-border p-4">
-              <h3 className="text-sm font-semibold text-text-primary">Billing Address</h3>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-text-secondary">Street Address **</label>
-                <input
-                  type="text"
-                  value={form.billingAddressLine1}
-                  onChange={(e) => setForm((prev) => (prev ? { ...prev, billingAddressLine1: e.target.value } : prev))}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-                  required
-                />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-text-secondary">City **</label>
-                  <FormCitySelect
-                    country={form.billingCountry}
-                    value={form.billingCity}
-                    onChange={(next) => setForm((prev) => (prev ? { ...prev, billingCity: next } : prev))}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-text-secondary">Postal Code</label>
-                  <input
-                    type="text"
-                    value={form.billingPostalCode}
-                    onChange={(e) => setForm((prev) => (prev ? { ...prev, billingPostalCode: e.target.value } : prev))}
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-text-secondary">Country **</label>
-                <FormCountrySelect
-                  value={form.billingCountry}
-                  onChange={(next) =>
-                    setForm((prev) => {
-                      if (!prev) return prev;
-                      const cities = citiesForCountry(next);
-                      const keep = cities.includes(prev.billingCity);
-                      return { ...prev, billingCountry: next, billingCity: keep ? prev.billingCity : "" };
-                    })
-                  }
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-lg border border-border p-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-text-primary">Shipping Address</h3>
-                <label className="inline-flex items-center gap-2 text-xs font-medium text-status-warning">
-                  <input
-                    type="checkbox"
-                    checked={form.sameAsBilling}
-                    onChange={(e) => setForm((prev) => (prev ? { ...prev, sameAsBilling: e.target.checked } : prev))}
-                    className="h-4 w-4 rounded border-border-strong text-brand-primary focus:ring-focus-ring"
-                  />
-                  Same as billing
-                </label>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-text-secondary">Street Address **</label>
-                <input
-                  type="text"
-                  value={shippingValues.shippingAddressLine1}
-                  onChange={(e) => setForm((prev) => (prev ? { ...prev, shippingAddressLine1: e.target.value } : prev))}
-                  disabled={form.sameAsBilling}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-                />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-text-secondary">City **</label>
-                  <FormCitySelect
-                    country={shippingValues.shippingCountry}
-                    value={shippingValues.shippingCity}
-                    onChange={(next) => setForm((prev) => (prev ? { ...prev, shippingCity: next } : prev))}
-                    disabled={form.sameAsBilling}
-                    required={!form.sameAsBilling}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-text-secondary">Postal Code</label>
-                  <input
-                    type="text"
-                    value={shippingValues.shippingPostalCode}
-                    onChange={(e) => setForm((prev) => (prev ? { ...prev, shippingPostalCode: e.target.value } : prev))}
-                    disabled={form.sameAsBilling}
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm disabled:bg-surface-subtle focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-text-secondary">Country **</label>
-                <FormCountrySelect
-                  value={shippingValues.shippingCountry}
-                  onChange={(next) =>
-                    setForm((prev) => {
-                      if (!prev || prev.sameAsBilling) return prev;
-                      const cities = citiesForCountry(next);
-                      const keep = cities.includes(prev.shippingCity);
-                      return { ...prev, shippingCountry: next, shippingCity: keep ? prev.shippingCity : "" };
-                    })
-                  }
-                  disabled={form.sameAsBilling}
-                  required={!form.sameAsBilling}
-                />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Link to={`/app/customers/${id}`} className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle">
-            Cancel
-          </Link>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground hover:bg-brand-primary/90 disabled:opacity-60"
-          >
-            <Save className="h-4 w-4" />
-            {submitting ? "Updating..." : "Update Customer"}
-          </button>
+          </form>
         </div>
-      </form>
+
+        <CustomerAiPanel
+          className="xl:sticky xl:top-4"
+          ai={customerAi}
+          mode="edit"
+          customerId={numericId}
+          formSnapshot={{
+            ...customerFormSnapshot(form),
+            customerType: form.customerType,
+            status: form.status,
+          }}
+        />
+      </div>
     </div>
   );
 }

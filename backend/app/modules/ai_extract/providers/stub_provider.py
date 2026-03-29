@@ -102,3 +102,76 @@ class StubExtractionProvider(BaseExtractionProvider):
             "_unmapped_text": ["Payment: LC at sight"],
             "_warnings": ["Could not confirm buyer reference number."],
         }
+
+    async def extract_order_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        del file_bytes
+        del content_type
+        return {
+            "style_ref": "ST-ORDER-DEMO-01",
+            "quantity": 12000,
+            "order_date": "2026-03-01",
+            "delivery_date": "2026-09-30",
+            "shipping_term": "FOB",
+            "commission_mode": "INCLUDE",
+            "commission_type": "PERCENTAGE",
+            "commission_value": "2.5",
+            "remarks": "Stub extraction — replace with real PO in production.",
+            "buyer_po_number": "PO-778899",
+            "po_date": "2026-02-28",
+            "_confidences": {
+                "style_ref": 0.82,
+                "quantity": 0.91,
+                "delivery_date": 0.88,
+                "shipping_term": 0.79,
+                "buyer_po_number": 0.85,
+            },
+            "_unmapped_text": ["Payment: TT 30 days"],
+            "_warnings": ["Confirm ex-factory vs delivery date with buyer."],
+        }
+
+    async def extract_vendor_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        del file_bytes
+        is_pdf = "pdf" in content_type.lower()
+        return {
+            "vendorDisplayName": "Global Fabrics Trading",
+            "legalName": "Global Fabrics Trading Ltd.",
+            "tradeName": "GFT Supply",
+            "contactPerson": "Rahim Karim",
+            "designation": "Sales Manager",
+            "email": "rahim@gft-supply.example",
+            "phone": "+880-2-9998877",
+            "mobile": "+8801711002200",
+            "website": "https://gft-supply.example",
+            "addressLine1": "Plot 12, Sector 4",
+            "city": "Dhaka",
+            "stateOrRegion": "Dhaka Division",
+            "postalCode": "1230",
+            "country": "Bangladesh",
+            "taxId": "BIN-445566",
+            "registrationNumber": "C-102938",
+            "vendorType": "foreign",
+            "defaultCurrency": "USD",
+            "paymentTermsDays": 45,
+            "paymentTerms": "Net 45 days",
+            "incoterms": "FOB",
+            "shippingTerms": "Air / sea as agreed",
+            "leadTimeNotes": "Sample 2–3 weeks; bulk 60–75 days",
+            "bankName": "Demo Bank Ltd",
+            "bankAccountTitle": "Global Fabrics Trading Ltd.",
+            "bankAccountNo": "0192837465",
+            "swiftCode": "DEMOBDDH",
+            "iban": "",
+            "complianceStatus": "documents_pending",
+            "complianceReferenceNumbers": "TL-2025-001",
+            "certificationsSummary": "OEKO-TEX requested",
+            "onboardingStatus": "in_progress",
+            "remarks": "Preferred for knits" if is_pdf else "Scanned supplier profile",
+            "_confidences": {
+                "vendorDisplayName": 0.92,
+                "legalName": 0.88,
+                "email": 0.9,
+                "bankAccountNo": 0.72,
+            },
+            "_unmapped_text": ["ISO certificate mentioned but number unclear"],
+            "_warnings": ["Verify SWIFT with finance before first payment."],
+        }

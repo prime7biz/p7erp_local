@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
   api,
@@ -9,7 +9,10 @@ import {
   type MaterialRequirementResponse,
   type OrderPromiseCheckResponse,
 } from "@/api/client";
+import { OrderAiPanel } from "@/components/orders/OrderAiPanel";
+import { OrderAiAuditHistory } from "@/components/orders/OrderAiAuditHistory";
 import { getOrderStatusChoices } from "@/features/merch/workflow";
+import { useOrderAi } from "@/hooks/useOrderAi";
 import { logApiError } from "@/utils/logApiError";
 import { useSecureImage } from "@/hooks/useSecureImage";
 
@@ -31,6 +34,36 @@ export function OrderDetailPage() {
   const [promiseLoading, setPromiseLoading] = useState(false);
   const [promiseError, setPromiseError] = useState("");
   const styleImageUrl = useSecureImage(item?.style_image_url);
+  const orderAi = useOrderAi();
+
+  const orderAiFormSnapshot = useMemo(
+    () =>
+      item
+        ? {
+            customer_id: item.customer_id,
+            quotation_id: item.quotation_id,
+            style_id: item.style_id,
+            style_ref: item.style_ref,
+            customer_intermediary_id: item.customer_intermediary_id,
+            shipping_term: item.shipping_term,
+            commission_mode: item.commission_mode,
+            commission_type: item.commission_type,
+            commission_value: item.commission_value,
+            order_date: item.order_date,
+            delivery_date: item.delivery_date,
+            quantity: item.quantity,
+            status: item.status,
+            remarks: item.remarks,
+          }
+        : {},
+    [item],
+  );
+
+  const refreshOrder = async (orderId: number) => {
+    const order = await api.getOrder(orderId, { ai_indicators: 1 });
+    setItem(order);
+    setNewStatus(order.status);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -38,7 +71,7 @@ export function OrderDetailPage() {
       setLoading(true);
       setError("");
       try {
-        const order = await api.getOrder(Number(id));
+        const order = await api.getOrder(Number(id), { ai_indicators: 1 });
         setItem(order);
         const [cust, quote, promise] = await Promise.all([
           api.getCustomer(order.customer_id),
@@ -106,6 +139,24 @@ export function OrderDetailPage() {
           <p className="text-text-muted text-sm mt-0.5">
             {customer?.name ?? `Customer #${item.customer_id}`} ·{" "}
             {item.status}
+            {item.ai_indicators ? (
+              <span className="block sm:inline sm:ml-1 text-xs mt-1 sm:mt-0">
+                · Exec readiness {item.ai_indicators.execution_readiness_score}% · Completeness{" "}
+                {item.ai_indicators.completeness_score}%
+                {" · Material "}
+                {item.ai_indicators.material_readiness_score}%
+                {" · Plan confidence "}
+                {item.ai_indicators.planning_confidence_score}%
+                {" · Promise risk "}
+                {item.ai_indicators.promise_date_risk_score}%
+                {item.ai_indicators.duplicate_risk_score >= 35 ? (
+                  <span className="text-status-warning-foreground font-medium">
+                    {" "}
+                    · Possible duplicate risk
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -365,6 +416,24 @@ export function OrderDetailPage() {
             )}
           </div>
         )}
+      </div>
+
+      <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-2">
+        <h2 className="text-sm font-semibold text-text-primary">Order AI</h2>
+        <p className="text-xs text-text-muted">
+          Review-first assistance for PO extraction, context enrich, validation, overlap checks, summary, and follow-up
+          ideas. Planning checks in this panel are read-only: they do not change status, dates, costing, or production
+          plan commitments.
+        </p>
+        <OrderAiPanel
+          mode="edit"
+          orderId={item.id}
+          ai={orderAi}
+          formSnapshot={orderAiFormSnapshot}
+          onAfterApply={() => void refreshOrder(item.id)}
+        />
+        <OrderAiAuditHistory orderId={item.id} mode="planning" />
+        <OrderAiAuditHistory orderId={item.id} mode="simulation" />
       </div>
 
       <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-2">

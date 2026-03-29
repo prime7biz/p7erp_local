@@ -274,8 +274,13 @@ async def production_trends(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
     # Keep this DB-agnostic (SQLite + Postgres) by bucketing in Python.
+    # Cap scope: last 12 months and at most 10k rows to avoid full-table scans.
+    cutoff = datetime.utcnow() - timedelta(days=365)
     result = await db.execute(
-        select(Order.created_at).where(Order.tenant_id == tenant.id).order_by(Order.created_at.asc())
+        select(Order.created_at)
+        .where(Order.tenant_id == tenant.id, Order.created_at >= cutoff)
+        .order_by(Order.created_at.asc())
+        .limit(10000)
     )
     rows = result.all()
     month_counts: dict[str, int] = {}

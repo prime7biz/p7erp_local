@@ -27,7 +27,10 @@ export function PurchaseOrdersPage() {
   const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
   const [vendors, setVendors] = useState<VendorResponse[]>([]);
   const [error, setError] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    return (params.get("status") || "").toUpperCase();
+  });
   const [form, setForm] = useState<PurchaseOrderCreate>({
     supplier_name: "",
     vendor_id: null,
@@ -41,6 +44,10 @@ export function PurchaseOrdersPage() {
   const [line, setLine] = useState<PurchaseOrderItemCreate>({ item_id: 0, warehouse_id: null, quantity: "0", unit_price: "0" });
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [poPage, setPoPage] = useState(1);
+  const [poTotalPages, setPoTotalPages] = useState(1);
+  const [poTotal, setPoTotal] = useState(0);
+  const PO_PAGE_SIZE = 25;
   const { isNarrow, view, setView, showCards } = useListViewPreference();
 
   const itemName = useMemo(() => new Map(items.map((i) => [i.id, i.name])), [items]);
@@ -55,16 +62,23 @@ export function PurchaseOrdersPage() {
     setError("");
     setLoading(true);
     try {
-      const [po, itm, wh, vnd] = await Promise.all([
-        api.listPurchaseOrders(),
-        api.listInventoryItems(),
+      const [poRes, itmRes, wh, vndRes] = await Promise.all([
+        api.listPurchaseOrdersPaginated({
+          status_filter: statusFilter.trim() || undefined,
+          page: poPage,
+          page_size: PO_PAGE_SIZE,
+        }),
+        api.listInventoryItemsPaginated({ page: 1, page_size: 500 }),
         api.listWarehouses(),
-        api.listVendors({ is_active: true }),
+        api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }),
       ]);
-      setOrders(po);
+      setOrders(poRes.items);
+      setPoTotalPages(poRes.total_pages);
+      setPoTotal(poRes.total);
+      const itm = itmRes.items;
       setItems(itm);
       setWarehouses(wh);
-      setVendors(vnd);
+      setVendors(vndRes.items);
       const firstItem = itm[0];
       const firstWarehouse = wh[0];
       setLine((p) => {
@@ -81,7 +95,11 @@ export function PurchaseOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter, poPage]);
+
+  useEffect(() => {
+    setPoPage(1);
+  }, [statusFilter]);
 
   const patchPoStatus = useCallback(
     async (id: number, nextStatus: string) => {
@@ -98,13 +116,16 @@ export function PurchaseOrdersPage() {
   );
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const status = (params.get("status") || "").toUpperCase();
-    if (status) setStatusFilter(status);
     void load();
   }, [load]);
 
-  const filteredOrders = statusFilter ? orders.filter((o) => (o.status || "").toUpperCase() === statusFilter) : orders;
+  const visiblePoPages = useMemo(() => {
+    const start = Math.max(1, poPage - 2);
+    const end = Math.min(poTotalPages, poPage + 2);
+    const pages: number[] = [];
+    for (let i = start; i <= end; i += 1) pages.push(i);
+    return pages;
+  }, [poPage, poTotalPages]);
   const selectedVendor = useMemo(
     () => vendors.find((v) => v.id === (form.vendor_id ?? -1)) ?? null,
     [vendors, form.vendor_id]
@@ -286,14 +307,18 @@ export function PurchaseOrdersPage() {
 
       {loading ? (
         <InventoryTableSkeleton rows={8} cols={7} />
-      ) : !filteredOrders.length ? (
+      ) : !orders.length ? (
         <InventoryEmptyState
-          title={orders.length ? "No purchase orders match this status" : "No purchase orders yet"}
-          description={orders.length ? "Clear the status filter or try another value." : "Create a purchase order using the form above."}
+          title={statusFilter.trim() ? "No purchase orders match this status" : "No purchase orders yet"}
+          description={
+            statusFilter.trim()
+              ? "Clear the status filter or try another value."
+              : "Create a purchase order using the form above."
+          }
         />
       ) : showCards ? (
         <div className="space-y-3">
-          {filteredOrders.map((row) => (
+          {orders.map((row) => (
             <div key={row.id} className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -402,7 +427,7 @@ export function PurchaseOrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredOrders.map((row) => (
+              {orders.map((row) => (
                 <tr key={row.id}>
                   <td className="px-3 py-2 text-sm font-medium">{row.po_code}</td>
                   <td className="px-3 py-2 text-sm">{row.supplier_name}</td>
@@ -494,6 +519,45 @@ export function PurchaseOrdersPage() {
           </table>
         </div>
       )}
+      {!loading && orders.length > 0 && poTotalPages > 1 ? (
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-raised px-4 py-3 text-sm text-text-muted sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            Page {poPage} of {poTotalPages} ({poTotal} total)
+          </span>
+          <div className="flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPoPage((p) => Math.max(1, p - 1))}
+              disabled={poPage <= 1}
+              className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+            {visiblePoPages.map((pageNo) => (
+              <button
+                key={pageNo}
+                type="button"
+                onClick={() => setPoPage(pageNo)}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                  pageNo === poPage
+                    ? "bg-brand-primary text-brand-primary-foreground"
+                    : "border border-border-strong text-text-secondary hover:bg-surface-subtle"
+                }`}
+              >
+                {pageNo}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setPoPage((p) => p + 1)}
+              disabled={poPage >= poTotalPages}
+              className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

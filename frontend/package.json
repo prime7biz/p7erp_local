@@ -10,12 +10,15 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview",
     "analyze": "vite build --mode analyze"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "latest",
     "@radix-ui/react-tooltip": "latest",
+    "@tanstack/react-query": "^5.95.2",
     "class-variance-authority": "latest",
     "clsx": "latest",
     "framer-motion": "latest",
@@ -43,6 +46,7 @@
     "tailwindcss": "^3.4.17",
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.57.1",
-    "vite": "^6.0.1"
+    "vite": "^6.0.1",
+    "vitest": "^3.2.4"
   }
 }

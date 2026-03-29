@@ -1,6 +1,4 @@
-from collections import defaultdict
 from datetime import date, datetime, time, timedelta
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
@@ -27,14 +25,20 @@ from app.models import (
   OrderAmendment,
   OrderFollowupAction,
   Quotation,
+  SewingLineStyleConfig,
   StockMovement,
   Tenant,
   User,
 )
-from app.modules.orders.schemas import OrderCreate, OrderResponse, OrderUpdate
+from app.modules.orders.order_ai_router import router as order_ai_subrouter
+from app.modules.orders.order_ai_schemas import OrderAiIndicatorsOut
+from app.modules.orders.promise_checks import run_order_promise_check
+from app.modules.orders.order_ai_service import compute_order_ai_indicators
+from app.modules.orders.schemas import OrderCreate, OrderResponse, OrderUpdate, PromiseCheckLine, PromiseCheckOut
 
 
 router = APIRouter(prefix="/orders", tags=["orders"])
+router.include_router(order_ai_subrouter, prefix="/ai")
 
 
 async def _next_order_code(db: AsyncSession, tenant_id: int) -> str:
@@ -47,7 +51,11 @@ async def _next_order_code(db: AsyncSession, tenant_id: int) -> str:
   )
 
 
-def _to_order_response(order: Order) -> OrderResponse:
+def _to_order_response(
+  order: Order,
+  *,
+  ai_indicators: OrderAiIndicatorsOut | None = None,
+) -> OrderResponse:
   commission_value = float(order.commission_value) if order.commission_value is not None else None
   return OrderResponse(
     id=order.id,
@@ -68,6 +76,7 @@ def _to_order_response(order: Order) -> OrderResponse:
     remarks=order.remarks,
     created_at=order.created_at.isoformat(),
     updated_at=order.updated_at.isoformat(),
+    ai_indicators=ai_indicators,
   )
 
 
@@ -159,29 +168,6 @@ async def _auto_generate_followup_actions_if_missing(
     )
 
 
-def _safe_float(value: str | int | float | None) -> float:
-  try:
-    return float(value or 0)
-  except (TypeError, ValueError):
-    return 0.0
-
-
-class PromiseCheckLine(BaseModel):
-  item_id: int
-  item_code: str
-  required_qty: float
-  available_qty: float
-  shortage_qty: float
-
-
-class PromiseCheckOut(BaseModel):
-  order_id: int
-  atp_ok: bool
-  ctp_ok: bool
-  reasons: list[str]
-  lines: list[PromiseCheckLine]
-
-
 class PromiseSummaryItem(BaseModel):
   order_id: int
   order_code: str
@@ -199,126 +185,6 @@ class PromiseSummaryOut(BaseModel):
   items: list[PromiseSummaryItem]
 
 
-async def _run_promise_check(
-  db: AsyncSession,
-  *,
-  tenant_id: int,
-  order: Order,
-) -> PromiseCheckOut:
-  resolved_order_id = order.id or 0
-  reasons: list[str] = []
-  lines: list[PromiseCheckLine] = []
-  atp_ok = True
-  ctp_ok = True
-
-  if not order.delivery_date:
-    ctp_ok = False
-    reasons.append("Delivery date is missing")
-  elif order.delivery_date < date.today():
-    ctp_ok = False
-    reasons.append("Delivery date is in the past")
-
-  if not order.quotation_id:
-    atp_ok = False
-    reasons.append("Order has no quotation linked for style/BOM resolution")
-    return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
-
-  quotation = await db.get(Quotation, order.quotation_id)
-  if not quotation or quotation.tenant_id != tenant_id or not quotation.style_id:
-    atp_ok = False
-    reasons.append("Order quotation/style is missing")
-    return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
-
-  order_qty = _safe_float(order.quantity)
-  if order_qty <= 0:
-    atp_ok = False
-    reasons.append("Order quantity must be positive")
-    return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
-
-  bom_result = await db.execute(
-    select(Bom)
-    .where(
-      Bom.tenant_id == tenant_id,
-      Bom.style_id == quotation.style_id,
-      Bom.status.in_(("APPROVED", "FROZEN")),
-    )
-    .order_by(Bom.version_no.desc())
-    .limit(1)
-  )
-  bom = bom_result.scalar_one_or_none()
-  if not bom:
-    atp_ok = False
-    reasons.append("No APPROVED/FROZEN BOM found for order style")
-    return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
-
-  bom_lines = (
-    await db.execute(
-      select(BomItem).where(
-        BomItem.tenant_id == tenant_id,
-        BomItem.bom_id == bom.id,
-        BomItem.item_id.isnot(None),
-      )
-    )
-  ).scalars().all()
-  if not bom_lines:
-    atp_ok = False
-    reasons.append("BOM has no inventory-linked items")
-    return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
-
-  item_ids = [line.item_id for line in bom_lines if line.item_id is not None]
-  items_result = (
-    await db.execute(select(Item).where(Item.tenant_id == tenant_id, Item.id.in_(item_ids)))
-  ).scalars().all()
-  items_by_id = {i.id: i for i in items_result}
-
-  mov_result = (
-    await db.execute(
-      select(StockMovement).where(
-        StockMovement.tenant_id == tenant_id,
-        StockMovement.item_id.in_(item_ids),
-      )
-    )
-  ).scalars().all()
-  in_qty_by_item: dict[int, float] = defaultdict(float)
-  out_qty_by_item: dict[int, float] = defaultdict(float)
-  for m in mov_result:
-    q = _safe_float(m.quantity)
-    mt = (m.movement_type or "").upper()
-    if mt == "IN":
-      in_qty_by_item[m.item_id] += q
-    elif mt == "OUT":
-      out_qty_by_item[m.item_id] += q
-
-  for line in bom_lines:
-    if line.item_id is None:
-      continue
-    item = items_by_id.get(line.item_id)
-    if not item:
-      continue
-    base = _safe_float(line.base_consumption)
-    wastage = _safe_float(line.wastage_pct) / 100.0
-    required_qty = order_qty * base * (1.0 + wastage)
-    in_qty = in_qty_by_item.get(line.item_id, 0.0)
-    out_qty = out_qty_by_item.get(line.item_id, 0.0)
-    available_qty = round(in_qty - out_qty, 4)
-    shortage_qty = round(max(0.0, required_qty - available_qty), 4)
-    if shortage_qty > 0:
-      atp_ok = False
-    lines.append(
-      PromiseCheckLine(
-        item_id=line.item_id,
-        item_code=item.item_code or str(line.item_id),
-        required_qty=round(required_qty, 4),
-        available_qty=available_qty,
-        shortage_qty=shortage_qty,
-      )
-    )
-
-  if not atp_ok:
-    reasons.append("Insufficient stock for one or more BOM items")
-  return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
-
-
 @router.get("", response_model=list[OrderResponse])
 async def list_orders(
   *,
@@ -326,6 +192,7 @@ async def list_orders(
   status_filter: str | None = Query(default=None, alias="status", description="Filter by status"),
   created_from: date | None = Query(default=None, description="Created at from (inclusive)"),
   created_to: date | None = Query(default=None, description="Created at to (inclusive)"),
+  ai_indicators: int = Query(default=0, ge=0, le=1, description="Include AI indicators when 1"),
   limit: int = Query(default=50, ge=1, le=500),
   offset: int = Query(default=0, ge=0),
   tenant: Tenant = Depends(require_tenant),
@@ -360,7 +227,33 @@ async def list_orders(
 
   result = await db.execute(stmt)
   rows = result.scalars().all()
-  return [_to_order_response(r) for r in rows]
+  layout_counts: dict[int, int] = {}
+  if ai_indicators and rows:
+    oids = [r.id for r in rows]
+    cnt_r = await db.execute(
+      select(SewingLineStyleConfig.order_id, func.count(SewingLineStyleConfig.id))
+      .where(
+        SewingLineStyleConfig.tenant_id == tenant.id,
+        SewingLineStyleConfig.order_id.in_(oids),
+      )
+      .group_by(SewingLineStyleConfig.order_id)
+    )
+    for oid, c in cnt_r.all():
+      if oid is not None:
+        layout_counts[int(oid)] = int(c)
+
+  return [
+    _to_order_response(
+      r,
+      ai_indicators=compute_order_ai_indicators(
+        r,
+        production_layout_row_count=layout_counts.get(r.id) if ai_indicators else None,
+      )
+      if ai_indicators
+      else None,
+    )
+    for r in rows
+  ]
 
 
 @router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
@@ -423,7 +316,7 @@ async def create_order(
     remarks=body.remarks,
   )
   if status_value == "IN_PROGRESS":
-    promise = await _run_promise_check(db, tenant_id=tenant.id, order=order)
+    promise = await run_order_promise_check(db, tenant_id=tenant.id, order=order)
     if not (promise.atp_ok and promise.ctp_ok):
       raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
@@ -481,7 +374,7 @@ async def get_orders_promise_summary(
   ctp_fail_count = 0
   items: list[PromiseSummaryItem] = []
   for order in orders:
-    check = await _run_promise_check(db, tenant_id=tenant.id, order=order)
+    check = await run_order_promise_check(db, tenant_id=tenant.id, order=order)
     is_blocked = not (check.atp_ok and check.ctp_ok)
     if is_blocked:
       blocked_count += 1
@@ -524,6 +417,7 @@ async def get_order_materials(
 @router.get("/{order_id}", response_model=OrderResponse)
 async def get_order(
   order_id: int,
+  ai_indicators: int = Query(default=0, ge=0, le=1, description="Include AI indicators when 1"),
   tenant: Tenant = Depends(require_tenant),
   user: User = Depends(get_current_user),
   db: AsyncSession = Depends(get_db),
@@ -535,7 +429,31 @@ async def get_order(
   if not order or order.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
-  return _to_order_response(order)
+  layout_count: int | None = None
+  if ai_indicators:
+    layout_count = int(
+      (
+        await db.execute(
+          select(func.count())
+          .select_from(SewingLineStyleConfig)
+          .where(
+            SewingLineStyleConfig.tenant_id == tenant.id,
+            SewingLineStyleConfig.order_id == order.id,
+          )
+        )
+      ).scalar_one()
+      or 0
+    )
+
+  return _to_order_response(
+    order,
+    ai_indicators=compute_order_ai_indicators(
+      order,
+      production_layout_row_count=layout_count if ai_indicators else None,
+    )
+    if ai_indicators
+    else None,
+  )
 
 
 @router.get("/{order_id}/promise-check", response_model=PromiseCheckOut)
@@ -550,7 +468,7 @@ async def get_order_promise_check(
   order = await db.get(Order, order_id)
   if not order or order.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
-  return await _run_promise_check(db, tenant_id=tenant.id, order=order)
+  return await run_order_promise_check(db, tenant_id=tenant.id, order=order)
 
 
 @router.patch("/{order_id}", response_model=OrderResponse)
@@ -601,7 +519,7 @@ async def update_order(
       entity_label="order",
     )
     if order.status == "IN_PROGRESS":
-      promise = await _run_promise_check(db, tenant_id=tenant.id, order=order)
+      promise = await run_order_promise_check(db, tenant_id=tenant.id, order=order)
       if not (promise.atp_ok and promise.ctp_ok):
         raise HTTPException(
           status_code=status.HTTP_400_BAD_REQUEST,
@@ -728,7 +646,7 @@ async def update_order_status(
     entity_label="order",
   )
   if order.status == "IN_PROGRESS":
-    promise = await _run_promise_check(db, tenant_id=tenant.id, order=order)
+    promise = await run_order_promise_check(db, tenant_id=tenant.id, order=order)
     if not (promise.atp_ok and promise.ctp_ok):
       raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,

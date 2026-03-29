@@ -10,44 +10,46 @@ import {
   type PaymentRunResponse,
   type ProformaInvoiceRow,
   type PurchaseOrderResponse,
+  type VendorAiAuditEntry,
   type VendorCreate,
   type VendorResponse,
   type VendorUpdate,
   type VoucherResponse,
 } from "@/api/client";
+import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel";
+import { useVendorAi } from "@/hooks/useVendorAi";
+import type { ConflictResolutionChoice, FieldApplyState } from "@/types/extraction";
+import {
+  buildVendorEnrichApplyStates,
+  buildVendorFieldApplyStates,
+  formatExtractedValue,
+} from "@/utils/extractionHelpers";
+import { logApiError } from "@/utils/logApiError";
+import {
+  emptyVendorCreate,
+  vendorCreateToAiFieldCurrent,
+  vendorResponseToSnapshot,
+  vendorResponseToVendorUpdate,
+  vendorSnapshotKeysToUpdate,
+  vendorSnapshotToAiFieldCurrent,
+  type VendorFormSnapshot,
+} from "./vendorFormShared";
+import { VendorAiPanel } from "./VendorAiPanel";
 
-type DrawerTab = "profile" | "commercial" | "banking" | "accounting" | "payments" | "activity" | "edit";
+type DrawerTab = "profile" | "commercial" | "banking" | "accounting" | "payments" | "activity" | "ai" | "edit";
 
 interface VendorDetailDrawerProps {
   open: boolean;
   mode: "view" | "create";
   vendor: VendorResponse | null;
   onClose: () => void;
-  onCreate: (data: VendorCreate) => Promise<void>;
+  onCreate: (data: VendorCreate) => Promise<number | void>;
   onUpdate: (id: number, data: VendorUpdate) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
   onSuccess?: () => void;
 }
 
-const emptyCreate: VendorCreate = {
-  vendor_code: "",
-  name: "",
-  contact_person: null,
-  email: null,
-  phone: null,
-  address: null,
-  is_active: true,
-  default_currency: "USD",
-  payment_terms_days: null,
-  vendor_type: "foreign",
-  country: null,
-  city: null,
-  tax_id: null,
-  bank_name: null,
-  bank_account_no: null,
-  swift_code: null,
-  credit_limit: null,
-};
+const emptyCreate: VendorCreate = emptyVendorCreate();
 
 export function VendorDetailDrawer({
   open,
@@ -73,6 +75,11 @@ export function VendorDetailDrawer({
   const [paymentVouchers, setPaymentVouchers] = useState<VoucherResponse[]>([]);
   const [paymentRuns, setPaymentRuns] = useState<PaymentRunResponse[]>([]);
 
+  const vendorAi = useVendorAi();
+  const [vendorExtractRows, setVendorExtractRows] = useState<FieldApplyState[]>([]);
+  const [vendorEnrichRows, setVendorEnrichRows] = useState<FieldApplyState[]>([]);
+  const [vendorAiAuditItems, setVendorAiAuditItems] = useState<VendorAiAuditEntry[]>([]);
+
   useEffect(() => {
     if (!open) {
       setTab("profile");
@@ -80,26 +87,7 @@ export function VendorDetailDrawer({
       setEditForm({});
       setError("");
     } else if (vendor) {
-      setEditForm({
-        vendor_code: vendor.vendor_code,
-        name: vendor.name,
-        contact_person: vendor.contact_person ?? undefined,
-        email: vendor.email ?? undefined,
-        phone: vendor.phone ?? undefined,
-        address: vendor.address ?? undefined,
-        is_active: vendor.is_active,
-        ledger_id: vendor.ledger_id ?? undefined,
-        default_currency: vendor.default_currency ?? undefined,
-        payment_terms_days: vendor.payment_terms_days ?? undefined,
-        vendor_type: vendor.vendor_type ?? undefined,
-        country: vendor.country ?? undefined,
-        city: vendor.city ?? undefined,
-        tax_id: vendor.tax_id ?? undefined,
-        bank_name: vendor.bank_name ?? undefined,
-        bank_account_no: vendor.bank_account_no ?? undefined,
-        swift_code: vendor.swift_code ?? undefined,
-        credit_limit: vendor.credit_limit ?? undefined,
-      });
+      setEditForm(vendorResponseToVendorUpdate(vendor));
     }
   }, [open, vendor]);
 
@@ -206,13 +194,511 @@ export function VendorDetailDrawer({
     return ids.size;
   }, [btbLcs]);
 
+  const mergedVendorForAi = useMemo((): VendorResponse | null => {
+    if (!vendor || mode === "create") return null;
+    return { ...vendor, ...editForm } as VendorResponse;
+  }, [vendor, editForm, mode]);
+
+  const aiFieldCurrent = useMemo(() => {
+    if (mode === "create") return vendorCreateToAiFieldCurrent(createForm);
+    if (!mergedVendorForAi) return {};
+    return vendorSnapshotToAiFieldCurrent(vendorResponseToSnapshot(mergedVendorForAi));
+  }, [mode, createForm, mergedVendorForAi]);
+
+  const formSnapshotForAi = useMemo(
+    () => ({ ...aiFieldCurrent }) as Record<string, unknown>,
+    [aiFieldCurrent],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      vendorAi.clear();
+      setVendorExtractRows([]);
+      setVendorEnrichRows([]);
+      setVendorAiAuditItems([]);
+      return;
+    }
+    vendorAi.clear();
+    setVendorExtractRows([]);
+    setVendorEnrichRows([]);
+    setVendorAiAuditItems([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when drawer target changes; vendorAi instance methods are stable enough for this pattern
+  }, [open, vendor?.id, mode]);
+
+  useEffect(() => {
+    const res = vendorAi.extraction;
+    if (!res) {
+      setVendorExtractRows([]);
+      return;
+    }
+    const next = buildVendorFieldApplyStates(res, aiFieldCurrent);
+    setVendorExtractRows((prev) => {
+      const applied = new Set(prev.filter((r) => r.applied).map((r) => r.fieldKey));
+      const skipped = new Set(prev.filter((r) => r.skipped).map((r) => r.fieldKey));
+      return next.map((row) => ({
+        ...row,
+        applied: applied.has(row.fieldKey),
+        skipped: skipped.has(row.fieldKey),
+      }));
+    });
+  }, [vendorAi.extraction, aiFieldCurrent]);
+
+  useEffect(() => {
+    const res = vendorAi.enrich;
+    if (!res) {
+      setVendorEnrichRows([]);
+      return;
+    }
+    const next = buildVendorEnrichApplyStates(res, aiFieldCurrent);
+    setVendorEnrichRows((prev) => {
+      const applied = new Set(prev.filter((r) => r.applied).map((r) => r.fieldKey));
+      const skipped = new Set(prev.filter((r) => r.skipped).map((r) => r.fieldKey));
+      return next.map((row) => ({
+        ...row,
+        applied: applied.has(row.fieldKey),
+        skipped: skipped.has(row.fieldKey),
+      }));
+    });
+  }, [vendorAi.enrich, aiFieldCurrent]);
+
+  useEffect(() => {
+    if (!open || tab !== "ai" || !vendor) {
+      setVendorAiAuditItems([]);
+      return;
+    }
+    let cancelled = false;
+    void api.vendorAiAuditLog({ vendor_id: vendor.id, limit: 30 }).then((r) => {
+      if (!cancelled) setVendorAiAuditItems(r.items);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, tab, vendor]);
+
+  const applyVendorCreatePatch = (patch: Partial<Record<string, string>>) => {
+    const snap: Partial<VendorFormSnapshot> = {};
+    for (const [k, v] of Object.entries(patch)) {
+      if (v !== undefined) (snap as Record<string, string | null>)[k] = v;
+    }
+    setCreateForm((p) => ({ ...p, ...vendorSnapshotKeysToUpdate(snap) }));
+  };
+
+  const handleVendorClearImport = () => {
+    void vendorAi.discardAiResults();
+    setVendorExtractRows([]);
+    setVendorEnrichRows([]);
+  };
+
+  const handleApplyVendorExtractField = async (key: string) => {
+    const res = vendorAi.extraction;
+    if (!res?.fields[key]) return;
+    const ef = res.fields[key];
+    const v = formatExtractedValue(ef.value);
+    if (mode === "create") {
+      applyVendorCreatePatch({ [key]: v });
+      setVendorExtractRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+      );
+      const bid = vendorAi.extractionBatchId;
+      if (bid != null) {
+        try {
+          await vendorAi.markSuggestionDecisions(bid, [{ field_key: key, decision: "apply" }]);
+        } catch (e) {
+          logApiError("VendorDrawer.markAiExtract", e);
+        }
+      }
+      return;
+    }
+    if (!vendor) return;
+    const bid = vendorAi.extractionBatchId;
+    if (bid == null) {
+      setEditForm((prev) => ({ ...prev, ...vendorSnapshotKeysToUpdate({ [key]: v } as Partial<VendorFormSnapshot>) }));
+      setVendorExtractRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+      );
+      return;
+    }
+    setError("");
+    try {
+      const out = await vendorAi.applySuggestionsToVendor(
+        vendor.id,
+        bid,
+        [{ field_key: key, decision: "apply" }],
+        "overwrite",
+      );
+      if (out.conflicts.some((c) => c.field === key)) {
+        setError("Could not apply this field. Try again or edit manually.");
+        return;
+      }
+      setEditForm(vendorResponseToVendorUpdate(out.vendor));
+      setVendorExtractRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+      );
+      onSuccess?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Apply failed");
+    }
+  };
+
+  const handleApplyVendorEnrichField = async (key: string) => {
+    const res = vendorAi.enrich;
+    if (!res?.suggestions[key]) return;
+    const sug = res.suggestions[key];
+    const v = formatExtractedValue(sug.value);
+    if (mode === "create") {
+      applyVendorCreatePatch({ [key]: v });
+      setVendorEnrichRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+      );
+      const bid = vendorAi.enrichBatchId;
+      if (bid != null) {
+        try {
+          await vendorAi.markSuggestionDecisions(bid, [{ field_key: key, decision: "apply" }]);
+        } catch (e) {
+          logApiError("VendorDrawer.markAiEnrich", e);
+        }
+      }
+      return;
+    }
+    if (!vendor) return;
+    const bid = vendorAi.enrichBatchId;
+    if (bid == null) {
+      setEditForm((prev) => ({ ...prev, ...vendorSnapshotKeysToUpdate({ [key]: v } as Partial<VendorFormSnapshot>) }));
+      setVendorEnrichRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+      );
+      return;
+    }
+    setError("");
+    try {
+      const out = await vendorAi.applySuggestionsToVendor(
+        vendor.id,
+        bid,
+        [{ field_key: key, decision: "apply" }],
+        "overwrite",
+      );
+      if (out.conflicts.some((c) => c.field === key)) {
+        setError("Could not apply this field. Try again or edit manually.");
+        return;
+      }
+      setEditForm(vendorResponseToVendorUpdate(out.vendor));
+      setVendorEnrichRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false } : r)),
+      );
+      onSuccess?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Apply failed");
+    }
+  };
+
+  const handleApplyAllHighVendorExtract = async () => {
+    const res = vendorAi.extraction;
+    if (!res) return;
+    const toApply = vendorExtractRows.filter(
+      (r) => !r.applied && !r.skipped && r.confidenceLevel === "high" && !r.hasConflict,
+    );
+    if (toApply.length === 0) return;
+    if (mode === "create") {
+      const patch: Partial<Record<string, string>> = {};
+      for (const row of toApply) {
+        const ef = res.fields[row.fieldKey];
+        if (!ef) continue;
+        patch[row.fieldKey] = formatExtractedValue(ef.value);
+      }
+      applyVendorCreatePatch(patch);
+      setVendorExtractRows((rs) =>
+        rs.map((r) =>
+          toApply.some((t) => t.fieldKey === r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+        ),
+      );
+      const bid = vendorAi.extractionBatchId;
+      if (bid != null) {
+        try {
+          await vendorAi.markSuggestionDecisions(
+            bid,
+            toApply.map((row) => ({ field_key: row.fieldKey, decision: "apply" as const })),
+          );
+        } catch (e) {
+          logApiError("VendorDrawer.markAiExtractBulk", e);
+        }
+      }
+      return;
+    }
+    if (!vendor) return;
+    const bid = vendorAi.extractionBatchId;
+    if (bid == null) {
+      const patch: Partial<VendorFormSnapshot> = {};
+      for (const row of toApply) {
+        const ef = res.fields[row.fieldKey];
+        if (!ef) continue;
+        (patch as Record<string, string | null>)[row.fieldKey] = formatExtractedValue(ef.value);
+      }
+      setEditForm((prev) => ({ ...prev, ...vendorSnapshotKeysToUpdate(patch) }));
+      setVendorExtractRows((rs) =>
+        rs.map((r) =>
+          toApply.some((t) => t.fieldKey === r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+        ),
+      );
+      return;
+    }
+    setError("");
+    try {
+      const out = await vendorAi.applySuggestionsToVendor(
+        vendor.id,
+        bid,
+        toApply.map((row) => ({ field_key: row.fieldKey, decision: "apply" as const })),
+        "skip_if_different",
+      );
+      setEditForm(vendorResponseToVendorUpdate(out.vendor));
+      const appliedSet = new Set(out.applied_fields);
+      setVendorExtractRows((rs) =>
+        rs.map((r) =>
+          appliedSet.has(r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+        ),
+      );
+      if (out.conflicts.length > 0) {
+        setError(
+          `${out.conflicts.length} field(s) skipped because saved values changed. Review conflicts and apply individually if needed.`,
+        );
+      }
+      onSuccess?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Apply failed");
+    }
+  };
+
+  const handleApplyAllHighVendorEnrich = async () => {
+    const res = vendorAi.enrich;
+    if (!res) return;
+    const toApply = vendorEnrichRows.filter(
+      (r) => !r.applied && !r.skipped && r.confidenceLevel === "high" && !r.hasConflict,
+    );
+    if (toApply.length === 0) return;
+    if (mode === "create") {
+      const patch: Partial<Record<string, string>> = {};
+      for (const row of toApply) {
+        const sug = res.suggestions[row.fieldKey];
+        if (!sug) continue;
+        patch[row.fieldKey] = formatExtractedValue(sug.value);
+      }
+      applyVendorCreatePatch(patch);
+      setVendorEnrichRows((rs) =>
+        rs.map((r) =>
+          toApply.some((t) => t.fieldKey === r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+        ),
+      );
+      const bid = vendorAi.enrichBatchId;
+      if (bid != null) {
+        try {
+          await vendorAi.markSuggestionDecisions(
+            bid,
+            toApply.map((row) => ({ field_key: row.fieldKey, decision: "apply" as const })),
+          );
+        } catch (e) {
+          logApiError("VendorDrawer.markAiEnrichBulk", e);
+        }
+      }
+      return;
+    }
+    if (!vendor) return;
+    const bid = vendorAi.enrichBatchId;
+    if (bid == null) {
+      const patch: Partial<VendorFormSnapshot> = {};
+      for (const row of toApply) {
+        const sug = res.suggestions[row.fieldKey];
+        if (!sug) continue;
+        (patch as Record<string, string | null>)[row.fieldKey] = formatExtractedValue(sug.value);
+      }
+      setEditForm((prev) => ({ ...prev, ...vendorSnapshotKeysToUpdate(patch) }));
+      setVendorEnrichRows((rs) =>
+        rs.map((r) =>
+          toApply.some((t) => t.fieldKey === r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+        ),
+      );
+      return;
+    }
+    setError("");
+    try {
+      const out = await vendorAi.applySuggestionsToVendor(
+        vendor.id,
+        bid,
+        toApply.map((row) => ({ field_key: row.fieldKey, decision: "apply" as const })),
+        "skip_if_different",
+      );
+      setEditForm(vendorResponseToVendorUpdate(out.vendor));
+      const appliedSet = new Set(out.applied_fields);
+      setVendorEnrichRows((rs) =>
+        rs.map((r) =>
+          appliedSet.has(r.fieldKey) ? { ...r, applied: true, hasConflict: false } : r,
+        ),
+      );
+      if (out.conflicts.length > 0) {
+        setError(
+          `${out.conflicts.length} field(s) skipped because saved values changed. Review conflicts and apply individually if needed.`,
+        );
+      }
+      onSuccess?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Apply failed");
+    }
+  };
+
+  const handleSkipVendorExtractField = (key: string) => {
+    if (vendorAi.extractionBatchId != null) {
+      void vendorAi.markSuggestionDecisions(vendorAi.extractionBatchId, [{ field_key: key, decision: "skip" }]);
+    }
+    setVendorExtractRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
+  };
+
+  const handleSkipVendorEnrichField = (key: string) => {
+    if (vendorAi.enrichBatchId != null) {
+      void vendorAi.markSuggestionDecisions(vendorAi.enrichBatchId, [{ field_key: key, decision: "skip" }]);
+    }
+    setVendorEnrichRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
+  };
+
+  const handleResolveVendorExtractConflict = async (key: string, choice: ConflictResolutionChoice) => {
+    if (choice === "keep") {
+      if (vendorAi.extractionBatchId != null) {
+        void vendorAi.markSuggestionDecisions(vendorAi.extractionBatchId, [
+          { field_key: key, decision: "reject" },
+        ]);
+      }
+      setVendorExtractRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
+      return;
+    }
+    const res = vendorAi.extraction;
+    if (!res?.fields[key]) return;
+    const ef = res.fields[key];
+    const v = formatExtractedValue(ef.value);
+    if (mode === "create") {
+      applyVendorCreatePatch({ [key]: v });
+      setVendorExtractRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+      );
+      const bid = vendorAi.extractionBatchId;
+      if (bid != null) {
+        try {
+          await vendorAi.markSuggestionDecisions(bid, [{ field_key: key, decision: "apply" }]);
+        } catch (e) {
+          logApiError("VendorDrawer.markAiExtract", e);
+        }
+      }
+      return;
+    }
+    if (!vendor) return;
+    const bid = vendorAi.extractionBatchId;
+    if (bid == null) {
+      setEditForm((prev) => ({ ...prev, ...vendorSnapshotKeysToUpdate({ [key]: v } as Partial<VendorFormSnapshot>) }));
+      setVendorExtractRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+      );
+      return;
+    }
+    setError("");
+    try {
+      const out = await vendorAi.applySuggestionsToVendor(
+        vendor.id,
+        bid,
+        [{ field_key: key, decision: "apply" }],
+        "overwrite",
+      );
+      if (out.conflicts.some((c) => c.field === key)) {
+        setError("Could not apply this field. Try again or edit manually.");
+        return;
+      }
+      setEditForm(vendorResponseToVendorUpdate(out.vendor));
+      setVendorExtractRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+      );
+      onSuccess?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Apply failed");
+    }
+  };
+
+  const handleResolveVendorEnrichConflict = async (key: string, choice: ConflictResolutionChoice) => {
+    if (choice === "keep") {
+      if (vendorAi.enrichBatchId != null) {
+        void vendorAi.markSuggestionDecisions(vendorAi.enrichBatchId, [{ field_key: key, decision: "reject" }]);
+      }
+      setVendorEnrichRows((rs) => rs.map((r) => (r.fieldKey === key ? { ...r, skipped: true } : r)));
+      return;
+    }
+    const res = vendorAi.enrich;
+    if (!res?.suggestions[key]) return;
+    const sug = res.suggestions[key];
+    const v = formatExtractedValue(sug.value);
+    if (mode === "create") {
+      applyVendorCreatePatch({ [key]: v });
+      setVendorEnrichRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+      );
+      const bid = vendorAi.enrichBatchId;
+      if (bid != null) {
+        try {
+          await vendorAi.markSuggestionDecisions(bid, [{ field_key: key, decision: "apply" }]);
+        } catch (e) {
+          logApiError("VendorDrawer.markAiEnrich", e);
+        }
+      }
+      return;
+    }
+    if (!vendor) return;
+    const bid = vendorAi.enrichBatchId;
+    if (bid == null) {
+      setEditForm((prev) => ({ ...prev, ...vendorSnapshotKeysToUpdate({ [key]: v } as Partial<VendorFormSnapshot>) }));
+      setVendorEnrichRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+      );
+      return;
+    }
+    setError("");
+    try {
+      const out = await vendorAi.applySuggestionsToVendor(
+        vendor.id,
+        bid,
+        [{ field_key: key, decision: "apply" }],
+        "overwrite",
+      );
+      if (out.conflicts.some((c) => c.field === key)) {
+        setError("Could not apply this field. Try again or edit manually.");
+        return;
+      }
+      setEditForm(vendorResponseToVendorUpdate(out.vendor));
+      setVendorEnrichRows((rs) =>
+        rs.map((r) => (r.fieldKey === key ? { ...r, applied: true, hasConflict: false, skipped: false } : r)),
+      );
+      onSuccess?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Apply failed");
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSaving(true);
     try {
-      await onCreate(createForm);
+      const newId = await onCreate(createForm);
+      if (typeof newId === "number") {
+        const finalizeIds = [
+          ...new Set(
+            [vendorAi.extractionBatchId, vendorAi.enrichBatchId].filter((x): x is number => x != null),
+          ),
+        ];
+        for (const batchId of finalizeIds) {
+          try {
+            await vendorAi.finalizeSuggestionBatchAfterCreate(newId, batchId);
+          } catch (err) {
+            logApiError("VendorDrawer.finalizeAi", err);
+          }
+        }
+      }
       setCreateForm(emptyCreate);
+      vendorAi.clear();
+      setVendorExtractRows([]);
+      setVendorEnrichRows([]);
       onClose();
       onSuccess?.();
     } catch (e) {
@@ -281,7 +767,18 @@ export function VendorDetailDrawer({
 
         {!isCreate && vendor && (
           <div className="flex border-b border-border px-2 gap-1 shrink-0">
-            {(["profile", "commercial", "banking", "accounting", "payments", "activity", "edit"] as const).map((t) => (
+            {(
+              [
+                "profile",
+                "commercial",
+                "banking",
+                "accounting",
+                "payments",
+                "activity",
+                "ai",
+                "edit",
+              ] as const
+            ).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -300,7 +797,9 @@ export function VendorDetailDrawer({
                           ? "Payments"
                           : t === "activity"
                             ? "Activity"
-                            : "Edit"}
+                            : t === "ai"
+                              ? "AI"
+                              : "Edit"}
               </button>
             ))}
           </div>
@@ -421,6 +920,58 @@ export function VendorDetailDrawer({
                     onChange={(e) => setCreateForm((p) => ({ ...p, city: e.target.value || null }))}
                   />
                 </div>
+              </div>
+              <div className="border-t border-border pt-3 space-y-3">
+                <p className="text-xs font-semibold text-text-primary uppercase">Supplier AI</p>
+                <VendorAiPanel
+                  ai={vendorAi}
+                  mode="create"
+                  formSnapshot={formSnapshotForAi}
+                />
+                {vendorAi.extraction && vendorAi.extraction.duplicate_warnings.length > 0 ? (
+                  <div className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm">
+                    <p className="font-medium text-text-primary">Possible duplicate vendors</p>
+                    <ul className="text-text-secondary mt-1 list-inside list-disc">
+                      {vendorAi.extraction.duplicate_warnings.map((d) => (
+                        <li key={d.field + "-" + d.existing_id}>
+                          {`${d.field}: similar to "${d.existing_value}" (ID ${d.existing_id})`}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {vendorExtractRows.length > 0 && vendorAi.extraction ? (
+                  <AutofillReviewPanel
+                    title="Review extracted fields"
+                    fields={vendorExtractRows}
+                    onApply={(k) => void handleApplyVendorExtractField(k)}
+                    onApplyAllHigh={() => void handleApplyAllHighVendorExtract()}
+                    onSkip={handleSkipVendorExtractField}
+                    onResolveConflict={(k, c) => void handleResolveVendorExtractConflict(k, c)}
+                    persistNote="Merges into this form; after you create the vendor, accepted fields are finalized on the server (audited)."
+                  />
+                ) : null}
+                {vendorEnrichRows.length > 0 && vendorAi.enrich ? (
+                  <AutofillReviewPanel
+                    title="Review enrichment suggestions"
+                    fields={vendorEnrichRows}
+                    valueColumnLabel="AI suggested"
+                    onApply={(k) => void handleApplyVendorEnrichField(k)}
+                    onApplyAllHigh={() => void handleApplyAllHighVendorEnrich()}
+                    onSkip={handleSkipVendorEnrichField}
+                    onResolveConflict={(k, c) => void handleResolveVendorEnrichConflict(k, c)}
+                    persistNote="Same as extract: merge here, then finalize-after-create records what you accepted."
+                  />
+                ) : null}
+                {vendorAi.extraction || vendorAi.enrich ? (
+                  <button
+                    type="button"
+                    onClick={handleVendorClearImport}
+                    className="text-xs font-medium text-status-danger-foreground hover:underline"
+                  >
+                    Clear AI results and discard open batches
+                  </button>
+                ) : null}
               </div>
               <label className="flex items-center gap-2 text-sm text-text-secondary">
                 <input
@@ -758,6 +1309,192 @@ export function VendorDetailDrawer({
                     ))}
                   </ul>
                 )}
+              </div>
+            ) : tab === "ai" ? (
+              <div className="space-y-3 text-sm text-text-secondary">
+                <VendorAiPanel
+                  ai={vendorAi}
+                  mode="edit"
+                  vendorId={vendor.id}
+                  formSnapshot={formSnapshotForAi}
+                />
+                {vendorAi.extraction && vendorAi.extraction.duplicate_warnings.length > 0 ? (
+                  <div className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm">
+                    <p className="font-medium text-text-primary">Possible duplicate vendors</p>
+                    <ul className="text-text-secondary mt-1 list-inside list-disc">
+                      {vendorAi.extraction.duplicate_warnings.map((d) => (
+                        <li key={d.field + "-" + d.existing_id}>
+                          {`${d.field}: similar to "${d.existing_value}" (ID ${d.existing_id})`}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {vendorExtractRows.length > 0 && vendorAi.extraction ? (
+                  <AutofillReviewPanel
+                    title="Review extracted fields"
+                    fields={vendorExtractRows}
+                    onApply={(k) => void handleApplyVendorExtractField(k)}
+                    onApplyAllHigh={() => void handleApplyAllHighVendorExtract()}
+                    onSkip={handleSkipVendorExtractField}
+                    onResolveConflict={(k, c) => void handleResolveVendorExtractConflict(k, c)}
+                    persistNote="Apply updates this vendor with audit. Use skip/reject to record decisions without changing the master."
+                  />
+                ) : null}
+                {vendorEnrichRows.length > 0 && vendorAi.enrich ? (
+                  <AutofillReviewPanel
+                    title="Review enrichment suggestions"
+                    fields={vendorEnrichRows}
+                    valueColumnLabel="AI suggested"
+                    onApply={(k) => void handleApplyVendorEnrichField(k)}
+                    onApplyAllHigh={() => void handleApplyAllHighVendorEnrich()}
+                    onSkip={handleSkipVendorEnrichField}
+                    onResolveConflict={(k, c) => void handleResolveVendorEnrichConflict(k, c)}
+                    persistNote="Same as extract: server apply with audit when a suggestion batch is open."
+                  />
+                ) : null}
+                {vendorAi.validate ? (
+                  <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-2">
+                    <p className="text-xs font-semibold text-text-primary uppercase">Profile readiness</p>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <p className="text-text-muted">Completeness</p>
+                        <p className="font-medium text-text-primary">{vendorAi.validate.completeness_score}%</p>
+                      </div>
+                      <div>
+                        <p className="text-text-muted">Banking</p>
+                        <p className="font-medium text-text-primary">{vendorAi.validate.banking_score}%</p>
+                      </div>
+                      <div>
+                        <p className="text-text-muted">Compliance</p>
+                        <p className="font-medium text-text-primary">{vendorAi.validate.compliance_score}%</p>
+                      </div>
+                    </div>
+                    {vendorAi.validate.issues.length > 0 ? (
+                      <ul className="max-h-40 overflow-y-auto text-xs space-y-1 list-inside list-disc">
+                        {vendorAi.validate.issues.map((issue, idx) => (
+                          <li key={idx}>
+                            <span className="font-medium">{issue.severity}:</span> {issue.message}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-text-muted">No blocking issues flagged.</p>
+                    )}
+                  </div>
+                ) : null}
+                {vendorAi.dedupe ? (
+                  <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-2">
+                    <p className="text-xs font-semibold text-text-primary uppercase">Duplicate risk</p>
+                    {vendorAi.dedupe.matches.length === 0 ? (
+                      <p className="text-xs text-text-muted">No close matches in this tenant.</p>
+                    ) : (
+                      <ul className="text-xs space-y-1">
+                        {vendorAi.dedupe.matches.map((m) => (
+                          <li key={m.vendor_id} className="rounded border border-border/60 px-2 py-1">
+                            <span className="font-medium">{m.vendor_code}</span> — {m.name}{" "}
+                            <span className="text-text-muted">(score {m.score})</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {vendorAi.dedupe.warnings.length > 0 ? (
+                      <ul className="text-xs text-status-warning-foreground list-inside list-disc">
+                        {vendorAi.dedupe.warnings.map((w, i) => (
+                          <li key={i}>{w}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
+                {vendorAi.summary ? (
+                  <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-2">
+                    <p className="text-xs font-semibold text-text-primary uppercase">Supplier summary</p>
+                    <p className="text-xs text-text-secondary whitespace-pre-wrap">{vendorAi.summary.summary_text}</p>
+                    {vendorAi.summary.key_facts.length > 0 ? (
+                      <div>
+                        <p className="text-xs font-medium text-text-muted mb-1">Key facts</p>
+                        <ul className="text-xs list-inside list-disc">
+                          {vendorAi.summary.key_facts.map((f, i) => (
+                            <li key={i}>{f}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    {vendorAi.summary.risk_indicators.length > 0 ? (
+                      <div>
+                        <p className="text-xs font-medium text-status-warning-foreground mb-1">Risks</p>
+                        <ul className="text-xs list-inside list-disc text-status-warning-foreground">
+                          {vendorAi.summary.risk_indicators.map((f, i) => (
+                            <li key={i}>{f}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    <p className="text-xs text-text-muted">Grade: {vendorAi.summary.profile_grade}</p>
+                  </div>
+                ) : null}
+                {vendorAi.nextActions ? (
+                  <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-2">
+                    <p className="text-xs font-semibold text-text-primary uppercase">Next actions</p>
+                    <ul className="text-xs space-y-2">
+                      {vendorAi.nextActions.actions.map((a, i) => (
+                        <li key={i} className="rounded border border-border/60 p-2">
+                          <p className="font-medium text-text-primary">{a.title}</p>
+                          <p className="text-text-secondary">{a.description}</p>
+                          <p className="text-text-muted mt-1">
+                            {a.target_module} · priority {a.priority}
+                          </p>
+                          {a.target_url ? (
+                            <a
+                              href={a.target_url}
+                              className="text-xs text-brand-primary hover:underline"
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Open link
+                            </a>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {vendorAi.lastApplyConflicts.length > 0 ? (
+                  <div className="rounded-lg border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-xs">
+                    <p className="font-medium text-text-primary">Apply conflicts</p>
+                    <ul className="mt-1 list-inside list-disc">
+                      {vendorAi.lastApplyConflicts.map((c, i) => (
+                        <li key={i}>
+                          {c.field}: current &quot;{c.current}&quot; vs suggested &quot;{c.suggested}&quot;
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <div className="rounded-lg border border-border bg-surface-subtle p-3">
+                  <p className="text-xs font-semibold text-text-primary uppercase mb-2">Recent AI activity</p>
+                  {vendorAiAuditItems.length === 0 ? (
+                    <p className="text-xs text-text-muted">No entries yet for this vendor.</p>
+                  ) : (
+                    <ul className="max-h-48 space-y-2 overflow-y-auto text-xs">
+                      {vendorAiAuditItems.map((entry) => (
+                        <li key={entry.id} className="border-b border-border/40 pb-2 last:border-0">
+                          <p className="font-medium text-text-primary">
+                            {entry.action}{" "}
+                            <span className="font-normal text-text-muted">
+                              {entry.created_at ? new Date(entry.created_at).toLocaleString() : ""}
+                            </span>
+                          </p>
+                          {entry.summary ? <p className="text-text-secondary">{entry.summary}</p> : null}
+                          {entry.event_label ? (
+                            <p className="text-text-muted text-[10px] uppercase">{entry.event_label}</p>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             ) : (
               <form onSubmit={handleUpdate} className="space-y-3">

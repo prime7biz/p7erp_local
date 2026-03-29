@@ -40,6 +40,7 @@ export function QuotationsPage() {
           status: statusFilter || undefined,
           limit: pageSize,
           offset: (page - 1) * pageSize,
+          ai_indicators: 1,
         }),
         api.listCustomers(),
       ]);
@@ -246,6 +247,7 @@ export function QuotationsPage() {
                 <th className="py-2.5 px-4 text-right min-w-[90px] whitespace-nowrap">Amount</th>
                 <th className="py-2.5 px-4 text-right w-20 whitespace-nowrap">Profit %</th>
                 <th className="py-2.5 px-4 min-w-[140px] whitespace-nowrap">Status</th>
+                <th className="py-2.5 px-4 w-20 whitespace-nowrap text-center">C-ready</th>
                 <th className="py-2.5 px-4 w-24 whitespace-nowrap">Created</th>
                 <th className="py-2.5 px-4 text-right w-24 whitespace-nowrap">Actions</th>
               </tr>
@@ -335,6 +337,24 @@ export function QuotationsPage() {
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="py-2.5 px-4 text-center whitespace-nowrap">
+                      {q.ai_indicators ? (
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                            q.ai_indicators.costing_readiness_score >= 80
+                              ? "bg-status-success-subtle text-status-success-foreground"
+                              : q.ai_indicators.costing_readiness_score >= 50
+                                ? "bg-status-warning-subtle text-status-warning-foreground"
+                                : "bg-status-danger-subtle text-status-danger-foreground"
+                          }`}
+                          title={q.ai_indicators.flags.length > 0 ? q.ai_indicators.flags.join(", ") : undefined}
+                        >
+                          {q.ai_indicators.costing_readiness_score}%
+                        </span>
+                      ) : (
+                        <span className="text-text-muted text-xs">—</span>
+                      )}
                     </td>
                     <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={new Date(q.created_at).toLocaleDateString()}>
                       {new Date(q.created_at).toLocaleDateString()}

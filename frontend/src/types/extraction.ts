@@ -6,6 +6,8 @@ export interface ExtractedFieldValue<T = string | number | null> {
   value: T;
   confidence: number;
   source_text?: string | null;
+  /** Backend attribution: uploaded_document | website | ai_inference | … */
+  source?: string | null;
 }
 
 export interface DuplicateWarning {
@@ -22,6 +24,9 @@ export interface CustomerExtractionResponse {
   warnings: string[];
   duplicate_warnings: DuplicateWarning[];
 }
+
+/** Supplier/vendor master extraction — same shape as customer extraction. */
+export type VendorExtractionResponse = CustomerExtractionResponse;
 
 export interface InquiryItemExtractedRow {
   item_name: string;

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.ai_tool.schemas import AiIntent
+
+SafetyClass = Literal["READ_ONLY", "DRAFT_ONLY", "COMMIT_REQUIRED"]
 from app.modules.ai_tool.query_parser import parse_search_query
 from app.modules.ai_tool.tools import (
     get_dashboard_summary,
@@ -23,6 +25,8 @@ from app.modules.ai_tool.tools import (
     suggest_orders_with_shortage,
     suggest_vendor_for_item,
 )
+from app.modules.ai_tool.analysis.registry import detect_analysis_type, run_analysis
+from app.modules.ai_tool.retrieval.unstructured_search import search_unstructured_context
 from app.modules.ai_tool.tools.calendar_tools import (
     calendar_impact_tool,
     calendar_manage_tool,
@@ -40,6 +44,7 @@ class ToolDefinition:
     permission_key: str
     requires_confirmation: bool
     is_read_only: bool
+    safety_class: SafetyClass
     handler: ToolHandler
 
 
@@ -116,6 +121,44 @@ async def _calendar_manage_handler(db: AsyncSession, tenant_id: int, prompt: str
     return await calendar_manage_tool(db, tenant_id, prompt)
 
 
+async def _analyze_structured_metrics_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
+    mtype = detect_analysis_type(prompt)
+    text = prompt.lower()
+    include_sem = any(k in text for k in ("note", "remark", "comment", "context", "unstructured"))
+    out = await run_analysis(
+        db,
+        tenant_id=tenant_id,
+        metric_type=mtype,
+        parameters={},
+        include_semantic_context=include_sem,
+        semantic_query=prompt if include_sem else None,
+    )
+    summary = str(out.get("commentary") or f"Completed {mtype} analysis.")
+    return {"summary": summary, "data": out}
+
+
+async def _search_unstructured_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
+    text = prompt.lower()
+    domain = "merch"
+    if "policy" in text or " hr" in text or text.strip().startswith("hr "):
+        domain = "hr"
+    if "shipment" in text or "follow-up" in text or "follow up" in text or "logistics" in text:
+        domain = "logistics"
+    if "sop" in text or "procedure" in text or "manual" in text:
+        domain = "knowledge"
+    out = await search_unstructured_context(
+        db,
+        tenant_id=tenant_id,
+        query=prompt,
+        domain=domain,
+        filters=None,
+        top_k=5,
+        user=None,
+    )
+    summary = f"Retrieved {out.get('total_found', 0)} sources via {out.get('retrieval_method')}."
+    return {"summary": summary, "data": out}
+
+
 REGISTRY: dict[str, ToolDefinition] = {
     "get_dashboard_summary": ToolDefinition(
         name="get_dashboard_summary",
@@ -124,6 +167,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.dashboard.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_dashboard_handler,
     ),
     "get_pending_approvals": ToolDefinition(
@@ -133,6 +177,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.approvals.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_approvals_handler,
     ),
     "search_pending_approvals": ToolDefinition(
@@ -142,6 +187,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.approvals.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_approvals_search_handler,
     ),
     "search_sales_orders": ToolDefinition(
@@ -151,6 +197,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.orders.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_orders_handler,
     ),
     "get_inventory_snapshot": ToolDefinition(
@@ -160,6 +207,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.inventory.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_inventory_handler,
     ),
     "search_inventory_shortages": ToolDefinition(
@@ -169,6 +217,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.inventory.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_inventory_shortages_handler,
     ),
     "get_production_summary": ToolDefinition(
@@ -178,6 +227,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.production.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_production_handler,
     ),
     "search_production_issues": ToolDefinition(
@@ -187,6 +237,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.production.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_production_issues_handler,
     ),
     "search_repeated_late_vendors": ToolDefinition(
@@ -196,6 +247,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.inventory.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_vendors_handler,
     ),
     "get_financial_summary": ToolDefinition(
@@ -205,6 +257,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.finance.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_finance_handler,
     ),
     "suggest_bom_from_similar_style": ToolDefinition(
@@ -214,6 +267,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.inventory.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_suggest_bom_handler,
     ),
     "suggest_items_for_bom_line": ToolDefinition(
@@ -223,6 +277,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.inventory.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_suggest_items_bom_handler,
     ),
     "suggest_vendor_for_item": ToolDefinition(
@@ -232,6 +287,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.inventory.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_suggest_vendor_handler,
     ),
     "suggest_orders_with_shortage": ToolDefinition(
@@ -241,6 +297,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.inventory.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_orders_shortage_handler,
     ),
     "calendar_summary": ToolDefinition(
@@ -250,6 +307,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.production.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_calendar_summary_handler,
     ),
     "calendar_impact": ToolDefinition(
@@ -259,6 +317,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.production.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="READ_ONLY",
         handler=_calendar_impact_handler,
     ),
     "calendar_manage": ToolDefinition(
@@ -268,7 +327,28 @@ REGISTRY: dict[str, ToolDefinition] = {
         permission_key="ai.tools.production.read",
         requires_confirmation=False,
         is_read_only=True,
+        safety_class="DRAFT_ONLY",
         handler=_calendar_manage_handler,
+    ),
+    "search_unstructured_context": ToolDefinition(
+        name="search_unstructured_context",
+        source_area="knowledge",
+        allowed_intents={"search_query", "help_request", "semantic_search"},
+        permission_key="ai.tools.dashboard.read",
+        requires_confirmation=False,
+        is_read_only=True,
+        safety_class="READ_ONLY",
+        handler=_search_unstructured_handler,
+    ),
+    "analyze_structured_metrics": ToolDefinition(
+        name="analyze_structured_metrics",
+        source_area="analytics",
+        allowed_intents={"analysis_request"},
+        permission_key="ai.tools.dashboard.read",
+        requires_confirmation=False,
+        is_read_only=True,
+        safety_class="READ_ONLY",
+        handler=_analyze_structured_metrics_handler,
     ),
 }
 
@@ -309,6 +389,24 @@ def select_tools(intent: AiIntent, prompt: str) -> list[ToolDefinition]:
     cal_pick = _factory_calendar_tools(intent, prompt)
     if cal_pick is not None:
         return cal_pick
+    if intent == "semantic_search":
+        return [REGISTRY["search_unstructured_context"]]
+    if intent == "analysis_request":
+        return [REGISTRY["analyze_structured_metrics"]]
+    if intent in {"search_query", "help_request", "semantic_search"} and any(
+        k in text
+        for k in (
+            "unstructured",
+            "merch note",
+            "follow-up note",
+            "follow up note",
+            "qa remark",
+            "policy text",
+            "shipment log",
+            "semantic search",
+        )
+    ):
+        return [REGISTRY["search_unstructured_context"]]
     parsed = parse_search_query(prompt)
     if intent == "search_query":
         if parsed.ambiguous:

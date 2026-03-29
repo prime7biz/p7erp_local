@@ -8,8 +8,8 @@ settings = get_settings()
 # SQLAlchemy async needs postgresql+asyncpg
 db_url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-_pool_size = int(os.environ.get("DB_POOL_SIZE", "10"))
-_max_overflow = int(os.environ.get("DB_MAX_OVERFLOW", "20"))
+_pool_size = int(os.environ.get("DB_POOL_SIZE", "20"))
+_max_overflow = int(os.environ.get("DB_MAX_OVERFLOW", "30"))
 _pool_timeout = int(os.environ.get("DB_POOL_TIMEOUT", "10"))
 _pool_recycle = int(os.environ.get("DB_POOL_RECYCLE", "1800"))
 
@@ -37,10 +37,17 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncSession:
+    """Yield a DB session; commit only when the handler made changes.
+
+    Skipping commit on read-only requests avoids an extra round-trip per GET.
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
+            if session.new or session.dirty or session.deleted:
+                await session.commit()
+            else:
+                await session.rollback()
         except Exception:
             await session.rollback()
             raise

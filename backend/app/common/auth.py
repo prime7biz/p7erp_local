@@ -57,7 +57,6 @@ def decode_access_token(token: str) -> dict:
 
 _bearer = HTTPBearer()
 
-
 async def get_current_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
@@ -95,4 +94,5 @@ async def get_current_user_optional(
     except (JWTError, ValueError):
         return None
     result = await db.execute(select(User).where(User.id == user_id, User.is_active.is_(True)))
-    return result.scalar_one_or_none()
+    user = result.scalar_one_or_none()
+    return user

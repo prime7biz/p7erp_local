@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-p7erp}
@@ -23,6 +23,32 @@ services:
       timeout: 3s
       retries: 5
 
+  ollama:
+    image: ollama/ollama:latest
+    restart: always
+    volumes:
+      - ollama_data:/root/.ollama
+    expose:
+      - "11434"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  ollama-init:
+    image: ollama/ollama:latest
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["ollama", "pull", "llama3"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    volumes:
+      - ollama_data:/root/.ollama
+
   backend:
     build:
       context: ./backend
@@ -35,14 +61,28 @@ services:
       TENANT_STRATEGY: ${TENANT_STRATEGY:-header}
       CORS_ORIGINS: ${CORS_ORIGINS}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash-lite}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       GEMINI_ENABLED: ${GEMINI_ENABLED:-true}
       AI_MONTHLY_BUDGET_LIMIT: ${AI_MONTHLY_BUDGET_LIMIT:-0}
+      OLLAMA_ENABLED: ${OLLAMA_ENABLED:-true}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3}
+      PAID_LLM_PROVIDER: ${PAID_LLM_PROVIDER:-}
+      PAID_LLM_API_KEY: ${PAID_LLM_API_KEY:-}
+      PAID_LLM_MODEL: ${PAID_LLM_MODEL:-}
+      MCP_ENABLED: ${MCP_ENABLED:-true}
+      MCP_COMMIT_BYPASS: ${MCP_COMMIT_BYPASS:-false}
+      MCP_HUMAN_APPROVAL_SECRET: ${MCP_HUMAN_APPROVAL_SECRET}
+      AI_CONFIRMATION_TOKEN_PEPPER: ${AI_CONFIRMATION_TOKEN_PEPPER}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
     expose:
       - "8000"
     volumes:
@@ -64,3 +104,4 @@ services:
 volumes:
   postgres_data:
   backend_media:
+  ollama_data:

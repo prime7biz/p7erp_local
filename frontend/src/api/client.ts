@@ -1,4 +1,9 @@
-import type { CustomerExtractionResponse, InquiryExtractionResponse } from "../types/extraction";
+import type {
+  CustomerExtractionResponse,
+  InquiryExtractionResponse,
+  VendorExtractionResponse,
+} from "../types/extraction";
+import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -1005,11 +1010,14 @@ function handleSessionExpiredUnauthorized(sentAuthorization: boolean): void {
 export class ApiError extends Error {
   status: number;
   requestId: string | null;
-  constructor(message: string, status: number, requestId: string | null = null) {
+  /** Machine-readable code when API returns `{ detail: { code, message } }`. */
+  code: string | null;
+  constructor(message: string, status: number, requestId: string | null = null, code: string | null = null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.requestId = requestId;
+    this.code = code;
   }
 }
 
@@ -1061,11 +1069,12 @@ async function request<T>(
   if (!res.ok) {
     if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const raw = err as { detail?: string | { msg?: string }[]; message?: string };
-    const d = raw.detail;
-    const message = typeof d === "string" ? d : Array.isArray(d) && d[0]?.msg ? d[0].msg : raw.message ?? "Request failed";
+    const raw = err as { detail?: unknown; message?: string };
+    const parsed = parseFastApiErrorDetail(raw.detail);
+    const fallback = typeof raw.message === "string" ? raw.message : null;
+    const message = parsed.message !== "Request failed" ? parsed.message : fallback ?? "Request failed";
     const requestId = res.headers.get("X-Request-Id");
-    throw new ApiError(message, res.status, requestId);
+    throw new ApiError(message, res.status, requestId, parsed.code);
   }
   if (res.status === 204) {
     return undefined as T;
@@ -1092,11 +1101,12 @@ async function requestWithTotal<T>(
   if (!res.ok) {
     if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const raw = err as { detail?: string | { msg?: string }[]; message?: string };
-    const d = raw.detail;
-    const message = typeof d === "string" ? d : Array.isArray(d) && d[0]?.msg ? d[0].msg : raw.message ?? "Request failed";
+    const raw = err as { detail?: unknown; message?: string };
+    const parsed = parseFastApiErrorDetail(raw.detail);
+    const fallback = typeof raw.message === "string" ? raw.message : null;
+    const message = parsed.message !== "Request failed" ? parsed.message : fallback ?? "Request failed";
     const requestId = res.headers.get("X-Request-Id");
-    throw new ApiError(message, res.status, requestId);
+    throw new ApiError(message, res.status, requestId, parsed.code);
   }
   if (res.status === 204) {
     return { rows: [] as T[], total: 0 };
@@ -1223,6 +1233,12 @@ export interface AiToolInvocationResult {
   error_category?: string | null;
 }
 
+export interface AiEscalationPayload {
+  status: "escalate";
+  tool_required: string;
+  reason: string;
+}
+
 export interface AiChatResponse {
   session: AiSessionResponse;
   user_message: AiMessageResponse;
@@ -1232,6 +1248,98 @@ export interface AiChatResponse {
   request_id: string;
   tool_results: AiToolInvocationResult[];
   blocked: boolean;
+  escalation?: AiEscalationPayload | null;
+}
+
+/** Phase-2: stored on assistant `content_json.provenance` */
+export interface AiSourceCitation {
+  source_type?: string;
+  source_ref?: string;
+  module?: string;
+  snippet?: string;
+  similarity_score?: number | null;
+}
+
+export interface AiProvenanceToolTraceEntry {
+  tool_name: string;
+  status: string;
+  latency_ms?: number;
+  source_area?: string;
+}
+
+export interface AiResponseProvenance {
+  answer?: string;
+  confidence?: number;
+  confidence_label?: string;
+  grounding?: string;
+  sources?: AiSourceCitation[] | null;
+  warnings?: string[] | null;
+  assumptions?: string[] | null;
+  recommended_actions?: string[] | null;
+  tool_trace?: AiProvenanceToolTraceEntry[] | null;
+  routes_used?: string[] | null;
+  model_used?: string | null;
+  total_latency_ms?: number | null;
+  data_freshness?: string | null;
+}
+
+export interface AiTraceSpan {
+  name: string;
+  start_ms: number;
+  end_ms: number;
+  status: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AiFeedbackSubmitBody {
+  message_id?: number | null;
+  trace_id?: string | null;
+  rating: number;
+  correction_text?: string | null;
+  feedback_category?: string | null;
+  flagged_for_review?: boolean;
+  detected_intent?: string | null;
+  route_used?: string | null;
+  tools_used?: string[] | null;
+  retrieval_method?: string | null;
+  model_used?: string | null;
+  confidence?: number | null;
+}
+
+export interface AiFeedbackResponse {
+  id: number;
+  tenant_id: number;
+  user_id: number;
+  message_id: number | null;
+  trace_id: string | null;
+  rating: number;
+  feedback_category: string | null;
+  flagged_for_review: boolean;
+  created_at: string;
+}
+
+export interface AiApprovalArtifactResponse {
+  id: number;
+  tenant_id: number;
+  artifact_code: string;
+  artifact_type: string;
+  source_tool: string;
+  source_module: string;
+  status: string;
+  original_input_json?: Record<string, unknown> | null;
+  generated_payload_json?: Record<string, unknown> | null;
+  diff_json?: Record<string, unknown> | null;
+  committed_payload_json?: Record<string, unknown> | null;
+  commit_reference?: string | null;
+  reviewer_comments?: string | null;
+  created_at: string;
+  expires_at?: string | null;
+}
+
+export interface AiApprovalArtifactCommitResult {
+  artifact: AiApprovalArtifactResponse;
+  erp_result?: Record<string, unknown> | null;
+  error?: string | null;
 }
 
 export interface AiQuickAction {
@@ -1568,6 +1676,19 @@ export const api = {
       body: JSON.stringify({ prompt }),
     });
   },
+  async aiApproveEscalation(
+    sessionId: number,
+    data: { message_id: number; tool_required: string; approved?: boolean },
+  ): Promise<AiChatResponse> {
+    return request<AiChatResponse>(`/api/v1/ai-tool/sessions/${sessionId}/approve-escalation`, {
+      method: "POST",
+      body: JSON.stringify({
+        message_id: data.message_id,
+        tool_required: data.tool_required,
+        approved: data.approved ?? true,
+      }),
+    });
+  },
   async aiQuickActions(): Promise<AiQuickActionsResponse> {
     return request<AiQuickActionsResponse>("/api/v1/ai-tool/quick-actions");
   },
@@ -1658,6 +1779,46 @@ export const api = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<{ items: AiWeeklyReportItem[] }>(`/api/v1/ai-tool/weekly-reports${suffix}`);
   },
+  async aiSubmitFeedback(body: AiFeedbackSubmitBody): Promise<AiFeedbackResponse> {
+    return request<AiFeedbackResponse>("/api/v1/ai-tool/feedback", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async aiListArtifacts(params?: { status?: string; limit?: number }): Promise<AiApprovalArtifactResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<AiApprovalArtifactResponse[]>(`/api/v1/ai-tool/artifacts${suffix}`);
+  },
+  async aiGetArtifact(artifactId: number): Promise<AiApprovalArtifactResponse> {
+    return request<AiApprovalArtifactResponse>(`/api/v1/ai-tool/artifacts/${artifactId}`);
+  },
+  async aiApproveArtifact(artifactId: number, data?: { comments?: string | null }): Promise<AiApprovalArtifactResponse> {
+    return request<AiApprovalArtifactResponse>(`/api/v1/ai-tool/artifacts/${artifactId}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ comments: data?.comments ?? null }),
+    });
+  },
+  async aiRejectArtifact(artifactId: number, data?: { comments?: string | null }): Promise<AiApprovalArtifactResponse> {
+    return request<AiApprovalArtifactResponse>(`/api/v1/ai-tool/artifacts/${artifactId}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ comments: data?.comments ?? null }),
+    });
+  },
+  async aiCommitArtifact(artifactId: number): Promise<AiApprovalArtifactCommitResult> {
+    return request<AiApprovalArtifactCommitResult>(`/api/v1/ai-tool/artifacts/${artifactId}/commit`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  },
+  async aiRollbackArtifact(artifactId: number, data: { reason: string }): Promise<AiApprovalArtifactResponse> {
+    return request<AiApprovalArtifactResponse>(`/api/v1/ai-tool/artifacts/${artifactId}/rollback`, {
+      method: "POST",
+      body: JSON.stringify({ reason: data.reason }),
+    });
+  },
   // Settings module
   async getSettingsConfig(): Promise<SettingsConfigResponse> {
     return request<SettingsConfigResponse>("/api/v1/settings/config");
@@ -1708,6 +1869,11 @@ export const api = {
     customer_type?: string;
     page?: number;
     page_size?: number;
+    include_ai_fields?: boolean;
+    stale_only?: boolean;
+    incomplete_only?: boolean;
+    high_duplicate_risk_only?: boolean;
+    stale_days?: number;
   }): Promise<CustomerListPageResponse> {
     const q = new URLSearchParams();
     if (params?.q) q.set("q", params.q);
@@ -1716,8 +1882,580 @@ export const api = {
     if (params?.customer_type) q.set("customer_type", params.customer_type);
     if (params?.page != null) q.set("page", String(params.page));
     if (params?.page_size != null) q.set("page_size", String(params.page_size));
+    if (params?.include_ai_fields) q.set("include_ai_fields", "true");
+    if (params?.stale_only) q.set("stale_only", "true");
+    if (params?.incomplete_only) q.set("incomplete_only", "true");
+    if (params?.high_duplicate_risk_only) q.set("high_duplicate_risk_only", "true");
+    if (params?.stale_days != null) q.set("stale_days", String(params.stale_days));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<CustomerListPageResponse>(`/api/v1/customers/paginated${suffix}`);
+  },
+  async getCustomerFacets(): Promise<CustomerFacetsResponse> {
+    return request<CustomerFacetsResponse>("/api/v1/customers/facets");
+  },
+  async getCustomerRelated(customerId: number, limit?: number): Promise<CustomerRelatedResponse> {
+    const q = new URLSearchParams();
+    if (limit != null) q.set("limit", String(limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<CustomerRelatedResponse>(`/api/v1/customers/${customerId}/related${suffix}`);
+  },
+  async getCustomerHealth(customerId: number): Promise<CustomerHealthResponse> {
+    return request<CustomerHealthResponse>(`/api/v1/customers/${customerId}/health`);
+  },
+  async customerAiExtract(file: File, customerId?: number): Promise<CustomerAiExtractWrapResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (customerId != null) fd.append("customer_id", String(customerId));
+    return request<CustomerAiExtractWrapResponse>("/api/v1/customers/ai/extract", {
+      method: "POST",
+      body: fd,
+    });
+  },
+  async customerAiEnrich(body: {
+    customer_id?: number | null;
+    website?: string | null;
+    domain?: string | null;
+    email?: string | null;
+    company_name?: string | null;
+    fields?: Record<string, string | null>;
+  }): Promise<CustomerAiEnrichResponse> {
+    return request<CustomerAiEnrichResponse>("/api/v1/customers/ai/enrich", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async customerAiValidate(body: {
+    fields: Record<string, unknown>;
+    customer_id?: number | null;
+  }): Promise<CustomerAiValidateResponse> {
+    return request<CustomerAiValidateResponse>("/api/v1/customers/ai/validate", {
+      method: "POST",
+      body: JSON.stringify({
+        fields: body.fields,
+        customer_id: body.customer_id ?? undefined,
+      }),
+    });
+  },
+  async customerAiDedupe(body: {
+    fields: Record<string, unknown>;
+    exclude_customer_id?: number | null;
+  }): Promise<CustomerAiDedupeResponse> {
+    return request<CustomerAiDedupeResponse>("/api/v1/customers/ai/dedupe", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async customerAiSummary(customerId: number): Promise<CustomerAiSummaryResponse> {
+    return request<CustomerAiSummaryResponse>("/api/v1/customers/ai/summary", {
+      method: "POST",
+      body: JSON.stringify({ customer_id: customerId }),
+    });
+  },
+  async customerAiNextActions(customerId: number): Promise<CustomerAiNextActionsResponse> {
+    return request<CustomerAiNextActionsResponse>("/api/v1/customers/ai/next-actions", {
+      method: "POST",
+      body: JSON.stringify({ customer_id: customerId }),
+    });
+  },
+  async customerAiNlSearch(q: string): Promise<CustomerAiNlSearchResponse> {
+    const qs = new URLSearchParams({ q });
+    return request<CustomerAiNlSearchResponse>(`/api/v1/customers/ai/nl-search?${qs.toString()}`);
+  },
+  async customerAiAuditLog(params?: { customer_id?: number; limit?: number }): Promise<CustomerAiAuditListResponse> {
+    const q = new URLSearchParams();
+    if (params?.customer_id != null) q.set("customer_id", String(params.customer_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<CustomerAiAuditListResponse>(`/api/v1/customers/ai/audit-log${suffix}`);
+  },
+  async customerAiMarkSuggestionDecisions(body: CustomerAiMarkDecisionsRequest): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/customers/ai/suggestion-batch/mark-decisions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async customerAiApplySuggestions(body: CustomerAiApplySuggestionsRequest): Promise<CustomerAiApplySuggestionsResponse> {
+    return request<CustomerAiApplySuggestionsResponse>("/api/v1/customers/ai/suggestion-batch/apply-suggestions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async customerAiDiscardSuggestionBatch(body: { batch_id: number }): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/customers/ai/suggestion-batch/discard", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async customerAiLinkSuggestionBatch(body: { batch_id: number; customer_id: number }): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/customers/ai/suggestion-batch/link-customer", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async customerAiFinalizeSuggestionBatchAfterCreate(
+    body: CustomerAiFinalizeAfterCreateRequest,
+  ): Promise<CustomerAiFinalizeAfterCreateResponse> {
+    return request<CustomerAiFinalizeAfterCreateResponse>(
+      "/api/v1/customers/ai/suggestion-batch/finalize-after-create",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+  },
+  async inquiryAiExtract(file: File, inquiryId?: number): Promise<InquiryAiExtractWrapResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (inquiryId != null) fd.append("inquiry_id", String(inquiryId));
+    return request<InquiryAiExtractWrapResponse>("/api/v1/inquiries/ai/extract", {
+      method: "POST",
+      body: fd,
+    });
+  },
+  async inquiryAiEnrich(body: {
+    inquiry_id?: number | null;
+    website?: string | null;
+    domain?: string | null;
+    email?: string | null;
+    company_name?: string | null;
+    fields?: Record<string, string | null>;
+  }): Promise<InquiryAiEnrichResponse> {
+    return request<InquiryAiEnrichResponse>("/api/v1/inquiries/ai/enrich", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async inquiryAiValidate(body: {
+    fields: Record<string, unknown>;
+    inquiry_id?: number | null;
+  }): Promise<InquiryAiValidateResponse> {
+    return request<InquiryAiValidateResponse>("/api/v1/inquiries/ai/validate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async inquiryAiDedupe(body: {
+    fields: Record<string, unknown>;
+    exclude_inquiry_id?: number | null;
+  }): Promise<InquiryAiDedupeResponse> {
+    return request<InquiryAiDedupeResponse>("/api/v1/inquiries/ai/dedupe", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async inquiryAiSummary(inquiryId: number): Promise<InquiryAiSummaryResponse> {
+    return request<InquiryAiSummaryResponse>("/api/v1/inquiries/ai/summary", {
+      method: "POST",
+      body: JSON.stringify({ inquiry_id: inquiryId }),
+    });
+  },
+  async inquiryAiNextActions(inquiryId: number): Promise<InquiryAiNextActionsResponse> {
+    return request<InquiryAiNextActionsResponse>("/api/v1/inquiries/ai/next-actions", {
+      method: "POST",
+      body: JSON.stringify({ inquiry_id: inquiryId }),
+    });
+  },
+  async inquiryAiAuditLog(params?: { inquiry_id?: number; limit?: number }): Promise<InquiryAiAuditListResponse> {
+    const q = new URLSearchParams();
+    if (params?.inquiry_id != null) q.set("inquiry_id", String(params.inquiry_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<InquiryAiAuditListResponse>(`/api/v1/inquiries/ai/audit-log${suffix}`);
+  },
+  async inquiryAiMarkSuggestionDecisions(body: InquiryAiMarkDecisionsRequest): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/inquiries/ai/suggestion-batch/mark-decisions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async inquiryAiApplySuggestions(body: InquiryAiApplySuggestionsRequest): Promise<InquiryAiApplySuggestionsResponse> {
+    return request<InquiryAiApplySuggestionsResponse>("/api/v1/inquiries/ai/suggestion-batch/apply-suggestions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async inquiryAiDiscardSuggestionBatch(body: { batch_id: number }): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/inquiries/ai/suggestion-batch/discard", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async inquiryAiLinkSuggestionBatch(body: { batch_id: number; inquiry_id: number }): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/inquiries/ai/suggestion-batch/link-inquiry", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async inquiryAiFinalizeSuggestionBatchAfterCreate(
+    body: InquiryAiFinalizeAfterCreateRequest,
+  ): Promise<InquiryAiFinalizeAfterCreateResponse> {
+    return request<InquiryAiFinalizeAfterCreateResponse>(
+      "/api/v1/inquiries/ai/suggestion-batch/finalize-after-create",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+  },
+
+  // ---------- Quotation AI ----------
+
+  async quotationAiEnrich(body: {
+    quotation_id?: number;
+    website?: string;
+    domain?: string;
+    email?: string;
+    company_name?: string;
+    fields?: Record<string, string | null>;
+  }): Promise<QuotationAiEnrichResponse> {
+    return request<QuotationAiEnrichResponse>("/api/v1/quotations/ai/enrich", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationAiValidate(body: {
+    fields: Record<string, unknown>;
+    quotation_id?: number;
+  }): Promise<QuotationAiValidateResponse> {
+    return request<QuotationAiValidateResponse>("/api/v1/quotations/ai/validate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationAiDedupe(body: {
+    fields: Record<string, unknown>;
+    exclude_quotation_id?: number;
+  }): Promise<QuotationAiDedupeResponse> {
+    return request<QuotationAiDedupeResponse>("/api/v1/quotations/ai/dedupe", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationAiSummary(quotationId: number): Promise<QuotationAiSummaryResponse> {
+    return request<QuotationAiSummaryResponse>("/api/v1/quotations/ai/summary", {
+      method: "POST",
+      body: JSON.stringify({ quotation_id: quotationId }),
+    });
+  },
+  async quotationAiNextActions(quotationId: number): Promise<QuotationAiNextActionsResponse> {
+    return request<QuotationAiNextActionsResponse>("/api/v1/quotations/ai/next-actions", {
+      method: "POST",
+      body: JSON.stringify({ quotation_id: quotationId }),
+    });
+  },
+  async quotationAiAuditLog(params?: { quotation_id?: number; limit?: number }): Promise<QuotationAiAuditListResponse> {
+    const parts: string[] = [];
+    if (params?.quotation_id != null) parts.push(`quotation_id=${params.quotation_id}`);
+    if (params?.limit != null) parts.push(`limit=${params.limit}`);
+    const suffix = parts.length ? `?${parts.join("&")}` : "";
+    return request<QuotationAiAuditListResponse>(`/api/v1/quotations/ai/audit-log${suffix}`);
+  },
+  async quotationAiMarkSuggestionDecisions(body: QuotationAiMarkDecisionsRequest): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/quotations/ai/suggestion-batch/mark-decisions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationAiApplySuggestions(body: QuotationAiApplySuggestionsRequest): Promise<QuotationAiApplySuggestionsResponse> {
+    return request<QuotationAiApplySuggestionsResponse>("/api/v1/quotations/ai/suggestion-batch/apply-suggestions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationAiDiscardSuggestionBatch(body: { batch_id: number }): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/quotations/ai/suggestion-batch/discard", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationAiLinkSuggestionBatch(body: { batch_id: number; quotation_id: number }): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/quotations/ai/suggestion-batch/link-quotation", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationAiFinalizeSuggestionBatchAfterCreate(
+    body: QuotationAiFinalizeAfterCreateRequest,
+  ): Promise<QuotationAiFinalizeAfterCreateResponse> {
+    return request<QuotationAiFinalizeAfterCreateResponse>(
+      "/api/v1/quotations/ai/suggestion-batch/finalize-after-create",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+  },
+
+  // ---------- Order AI ----------
+  async orderAiExtract(file: File, orderId?: number): Promise<OrderAiExtractWrapResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (orderId != null) fd.append("order_id", String(orderId));
+    return request<OrderAiExtractWrapResponse>("/api/v1/orders/ai/extract", {
+      method: "POST",
+      body: fd,
+    });
+  },
+  async orderAiEnrich(body: {
+    order_id?: number | null;
+    website?: string | null;
+    domain?: string | null;
+    email?: string | null;
+    company_name?: string | null;
+    fields?: Record<string, string | null>;
+  }): Promise<OrderAiEnrichResponse> {
+    return request<OrderAiEnrichResponse>("/api/v1/orders/ai/enrich", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiValidate(body: {
+    fields: Record<string, unknown>;
+    order_id?: number | null;
+  }): Promise<OrderAiValidateResponse> {
+    return request<OrderAiValidateResponse>("/api/v1/orders/ai/validate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiValidateExecution(body: {
+    fields: Record<string, unknown>;
+    order_id?: number | null;
+    include_promise_snapshot?: boolean;
+  }): Promise<OrderAiValidateExecutionResponse> {
+    return request<OrderAiValidateExecutionResponse>("/api/v1/orders/ai/validate-execution", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiPlanningRiskCheck(body: { order_id: number }): Promise<OrderAiPlanningRiskCheckResponse> {
+    return request<OrderAiPlanningRiskCheckResponse>("/api/v1/orders/ai/planning-risk-check", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiAtpCtpSummary(body: { order_id: number }): Promise<OrderAiAtpCtpSummaryResponse> {
+    return request<OrderAiAtpCtpSummaryResponse>("/api/v1/orders/ai/atp-ctp-summary", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiDedupe(body: {
+    fields: Record<string, unknown>;
+    exclude_order_id?: number | null;
+  }): Promise<OrderAiDedupeResponse> {
+    return request<OrderAiDedupeResponse>("/api/v1/orders/ai/dedupe", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiSummary(orderId: number): Promise<OrderAiSummaryResponse> {
+    return request<OrderAiSummaryResponse>("/api/v1/orders/ai/summary", {
+      method: "POST",
+      body: JSON.stringify({ order_id: orderId }),
+    });
+  },
+  async orderAiNextActions(orderId: number, includePlanningContext?: boolean): Promise<OrderAiNextActionsResponse> {
+    return request<OrderAiNextActionsResponse>("/api/v1/orders/ai/next-actions", {
+      method: "POST",
+      body: JSON.stringify({ order_id: orderId, include_planning_context: Boolean(includePlanningContext) }),
+    });
+  },
+  async orderAiAuditLog(params?: {
+    order_id?: number;
+    limit?: number;
+    surface?: "all" | "planning";
+  }): Promise<OrderAiAuditListResponse> {
+    const q = new URLSearchParams();
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.surface) q.set("surface", params.surface);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<OrderAiAuditListResponse>(`/api/v1/orders/ai/audit-log${suffix}`);
+  },
+  async orderAiPlanningAuditLog(params?: { order_id?: number; limit?: number }): Promise<OrderAiAuditListResponse> {
+    const q = new URLSearchParams();
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<OrderAiAuditListResponse>(`/api/v1/orders/ai/planning-audit-log${suffix}`);
+  },
+  async orderAiSimulationAuditLog(params?: { order_id?: number; limit?: number }): Promise<OrderAiAuditListResponse> {
+    const q = new URLSearchParams();
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<OrderAiAuditListResponse>(`/api/v1/orders/ai/simulation-audit-log${suffix}`);
+  },
+  async orderAiCapacityBottleneckScan(body: { order_id: number }): Promise<OrderAiCapacityBottleneckScanResponse> {
+    return request<OrderAiCapacityBottleneckScanResponse>("/api/v1/orders/ai/capacity-bottleneck-scan", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiWhatIfSimulation(body: {
+    order_id: number;
+    scenario_label?: string | null;
+    delivery_date_shift_days?: number;
+    quantity_scale_pct?: number | null;
+    capacity_load_pct?: number | null;
+    material_assumption?: "as_is" | "strict" | "relaxed";
+  }): Promise<OrderAiWhatIfSimulationResponse> {
+    return request<OrderAiWhatIfSimulationResponse>("/api/v1/orders/ai/what-if-simulation", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiPromiseSensitivityCheck(body: {
+    order_id: number;
+    delivery_offsets_days?: number[];
+  }): Promise<OrderAiPromiseSensitivityCheckResponse> {
+    return request<OrderAiPromiseSensitivityCheckResponse>("/api/v1/orders/ai/promise-sensitivity-check", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiExecutionPlanningSummary(body: { order_id: number }): Promise<OrderAiExecutionPlanningSummaryResponse> {
+    return request<OrderAiExecutionPlanningSummaryResponse>("/api/v1/orders/ai/planning-summary", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiMarkSuggestionDecisions(body: OrderAiMarkDecisionsRequest): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/orders/ai/suggestion-batch/mark-decisions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiApplySuggestions(body: OrderAiApplySuggestionsRequest): Promise<OrderAiApplySuggestionsResponse> {
+    return request<OrderAiApplySuggestionsResponse>("/api/v1/orders/ai/suggestion-batch/apply-suggestions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiDiscardSuggestionBatch(body: { batch_id: number }): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/orders/ai/suggestion-batch/discard", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiLinkSuggestionBatch(body: { batch_id: number; order_id: number }): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/orders/ai/suggestion-batch/link-order", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async orderAiFinalizeSuggestionBatchAfterCreate(
+    body: OrderAiFinalizeAfterCreateRequest,
+  ): Promise<OrderAiFinalizeAfterCreateResponse> {
+    return request<OrderAiFinalizeAfterCreateResponse>(
+      "/api/v1/orders/ai/suggestion-batch/finalize-after-create",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+  },
+
+  async vendorAiExtract(file: File, vendorId?: number): Promise<VendorAiExtractWrapResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (vendorId != null) fd.append("vendor_id", String(vendorId));
+    return request<VendorAiExtractWrapResponse>("/api/v1/inventory/vendors/ai/extract", {
+      method: "POST",
+      body: fd,
+    });
+  },
+  async vendorAiEnrich(body: {
+    vendor_id?: number | null;
+    website?: string | null;
+    domain?: string | null;
+    email?: string | null;
+    company_name?: string | null;
+    fields?: Record<string, string | null>;
+  }): Promise<VendorAiEnrichResponse> {
+    return request<VendorAiEnrichResponse>("/api/v1/inventory/vendors/ai/enrich", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async vendorAiValidate(body: {
+    fields: Record<string, unknown>;
+    vendor_id?: number | null;
+  }): Promise<VendorAiValidateResponse> {
+    return request<VendorAiValidateResponse>("/api/v1/inventory/vendors/ai/validate", {
+      method: "POST",
+      body: JSON.stringify({
+        fields: body.fields,
+        vendor_id: body.vendor_id ?? undefined,
+      }),
+    });
+  },
+  async vendorAiDedupe(body: {
+    fields: Record<string, unknown>;
+    exclude_vendor_id?: number | null;
+  }): Promise<VendorAiDedupeResponse> {
+    return request<VendorAiDedupeResponse>("/api/v1/inventory/vendors/ai/dedupe", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async vendorAiSummary(vendorId: number): Promise<VendorAiSummaryResponse> {
+    return request<VendorAiSummaryResponse>("/api/v1/inventory/vendors/ai/summary", {
+      method: "POST",
+      body: JSON.stringify({ vendor_id: vendorId }),
+    });
+  },
+  async vendorAiNextActions(vendorId: number): Promise<VendorAiNextActionsResponse> {
+    return request<VendorAiNextActionsResponse>("/api/v1/inventory/vendors/ai/next-actions", {
+      method: "POST",
+      body: JSON.stringify({ vendor_id: vendorId }),
+    });
+  },
+  async vendorAiAuditLog(params?: { vendor_id?: number; limit?: number }): Promise<VendorAiAuditListResponse> {
+    const q = new URLSearchParams();
+    if (params?.vendor_id != null) q.set("vendor_id", String(params.vendor_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<VendorAiAuditListResponse>(`/api/v1/inventory/vendors/ai/audit-log${suffix}`);
+  },
+  async vendorAiMarkSuggestionDecisions(body: VendorAiMarkDecisionsRequest): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/inventory/vendors/ai/suggestion-batch/mark-decisions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async vendorAiApplySuggestions(body: VendorAiApplySuggestionsRequest): Promise<VendorAiApplySuggestionsResponse> {
+    return request<VendorAiApplySuggestionsResponse>(
+      "/api/v1/inventory/vendors/ai/suggestion-batch/apply-suggestions",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+  },
+  async vendorAiDiscardSuggestionBatch(body: { batch_id: number }): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/inventory/vendors/ai/suggestion-batch/discard", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async vendorAiLinkSuggestionBatch(body: { batch_id: number; vendor_id: number }): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/inventory/vendors/ai/suggestion-batch/link-vendor", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async vendorAiFinalizeSuggestionBatchAfterCreate(
+    body: VendorAiFinalizeAfterCreateRequest,
+  ): Promise<VendorAiFinalizeAfterCreateResponse> {
+    return request<VendorAiFinalizeAfterCreateResponse>(
+      "/api/v1/inventory/vendors/ai/suggestion-batch/finalize-after-create",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
   },
   async uploadCustomerLogo(file: File): Promise<CustomerLogoUploadResponse> {
     const form = new FormData();
@@ -2576,6 +3314,8 @@ export const api = {
     created_to?: string;
     limit?: number;
     offset?: number;
+    /** 1 = include rules-based AI indicators per row (no LLM). */
+    ai_indicators?: 0 | 1;
   }): Promise<InquiryResponse[]> {
     const q = new URLSearchParams();
     if (params?.search) q.set("search", params.search);
@@ -2585,6 +3325,7 @@ export const api = {
     if (params?.created_to) q.set("created_to", params.created_to);
     if (params?.limit != null) q.set("limit", String(params.limit));
     if (params?.offset != null) q.set("offset", String(params.offset));
+    if (params?.ai_indicators === 1) q.set("ai_indicators", "1");
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<InquiryResponse[]>(`/api/v1/inquiries${suffix}`);
   },
@@ -2612,6 +3353,7 @@ export const api = {
     department?: string;
     created_from?: string;
     created_to?: string;
+    ai_indicators?: number;
     limit?: number;
     offset?: number;
   }): Promise<QuotationResponse[]> {
@@ -2621,6 +3363,7 @@ export const api = {
     if (params?.department) q.set("department", params.department);
     if (params?.created_from) q.set("created_from", params.created_from);
     if (params?.created_to) q.set("created_to", params.created_to);
+    if (params?.ai_indicators != null) q.set("ai_indicators", String(params.ai_indicators));
     if (params?.limit != null) q.set("limit", String(params.limit));
     if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
@@ -2656,6 +3399,7 @@ export const api = {
     status?: string;
     created_from?: string;
     created_to?: string;
+    ai_indicators?: number;
     limit?: number;
     offset?: number;
   }): Promise<OrderResponse[]> {
@@ -2664,13 +3408,17 @@ export const api = {
     if (params?.status) q.set("status", params.status);
     if (params?.created_from) q.set("created_from", params.created_from);
     if (params?.created_to) q.set("created_to", params.created_to);
+    if (params?.ai_indicators != null) q.set("ai_indicators", String(params.ai_indicators));
     if (params?.limit != null) q.set("limit", String(params.limit));
     if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<OrderResponse[]>(`/api/v1/orders${suffix}`);
   },
-  async getOrder(id: number): Promise<OrderResponse> {
-    return request<OrderResponse>(`/api/v1/orders/${id}`);
+  async getOrder(id: number, params?: { ai_indicators?: number }): Promise<OrderResponse> {
+    const q = new URLSearchParams();
+    if (params?.ai_indicators != null) q.set("ai_indicators", String(params.ai_indicators));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<OrderResponse>(`/api/v1/orders/${id}${suffix}`);
   },
   /** Same data as GET /merch/orders/{id}/material-requirement (PrimeX-style path). */
   async getOrderMaterials(orderId: number): Promise<MaterialRequirementResponse> {
@@ -2814,6 +3562,21 @@ export const api = {
       return request<PaginatedRows<InventoryItemResponse>>(`/api/v1/inventory/items?${q.toString()}`);
     });
   },
+  /** Single page of items (use for list UIs; avoids downloading the full catalog). */
+  async listInventoryItemsPaginated(params?: {
+    category_id?: number;
+    subcategory_id?: number;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedRows<InventoryItemResponse>> {
+    const q = new URLSearchParams();
+    if (params?.category_id != null) q.set("category_id", String(params.category_id));
+    if (params?.subcategory_id != null) q.set("subcategory_id", String(params.subcategory_id));
+    if (params?.page != null) q.set("page", String(params.page));
+    if (params?.page_size != null) q.set("page_size", String(params.page_size));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<PaginatedRows<InventoryItemResponse>>(`/api/v1/inventory/items${suffix}`);
+  },
   async createInventoryItem(data: InventoryItemCreate): Promise<InventoryItemResponse> {
     return request<InventoryItemResponse>("/api/v1/inventory/items", {
       method: "POST",
@@ -2867,6 +3630,28 @@ export const api = {
       q.set("page_size", String(pageSize));
       return request<PaginatedRows<VendorResponse>>(`/api/v1/inventory/vendors?${q.toString()}`);
     });
+  },
+  async listVendorsPaginated(params?: {
+    search?: string;
+    is_active?: boolean;
+    vendor_type?: string;
+    currency?: string;
+    ledger_id?: number;
+    has_ledger?: boolean;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedRows<VendorResponse>> {
+    const q = new URLSearchParams();
+    if (params?.search) q.set("search", params.search);
+    if (params?.is_active !== undefined) q.set("is_active", String(params.is_active));
+    if (params?.vendor_type) q.set("vendor_type", params.vendor_type);
+    if (params?.currency) q.set("currency", params.currency);
+    if (params?.ledger_id != null) q.set("ledger_id", String(params.ledger_id));
+    if (params?.has_ledger !== undefined) q.set("has_ledger", String(params.has_ledger));
+    if (params?.page != null) q.set("page", String(params.page));
+    if (params?.page_size != null) q.set("page_size", String(params.page_size));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<PaginatedRows<VendorResponse>>(`/api/v1/inventory/vendors${suffix}`);
   },
   async getVendor(id: number): Promise<VendorResponse> {
     return request<VendorResponse>(`/api/v1/inventory/vendors/${id}`);
@@ -2924,6 +3709,24 @@ export const api = {
       return request<PaginatedRows<PurchaseOrderResponse>>(`/api/v1/inventory/purchase-orders?${q.toString()}`);
     }, 100);
   },
+  async listPurchaseOrdersPaginated(params?: {
+    status_filter?: string;
+    date_from?: string;
+    date_to?: string;
+    source_bom_id?: number;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedRows<PurchaseOrderResponse>> {
+    const q = new URLSearchParams();
+    if (params?.status_filter) q.set("status_filter", params.status_filter);
+    if (params?.date_from) q.set("date_from", params.date_from);
+    if (params?.date_to) q.set("date_to", params.date_to);
+    if (params?.source_bom_id != null) q.set("source_bom_id", String(params.source_bom_id));
+    if (params?.page != null) q.set("page", String(params.page));
+    if (params?.page_size != null) q.set("page_size", String(params.page_size));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<PaginatedRows<PurchaseOrderResponse>>(`/api/v1/inventory/purchase-orders${suffix}`);
+  },
   async createPurchaseOrder(data: PurchaseOrderCreate): Promise<PurchaseOrderResponse> {
     return request<PurchaseOrderResponse>("/api/v1/inventory/purchase-orders", {
       method: "POST",
@@ -2949,6 +3752,22 @@ export const api = {
       q.set("page_size", String(pageSize));
       return request<PaginatedRows<GoodsReceivingResponse>>(`/api/v1/inventory/goods-receiving?${q.toString()}`);
     }, 100);
+  },
+  async listGoodsReceivingPaginated(params?: {
+    status_filter?: string;
+    date_from?: string;
+    date_to?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedRows<GoodsReceivingResponse>> {
+    const q = new URLSearchParams();
+    if (params?.status_filter) q.set("status_filter", params.status_filter);
+    if (params?.date_from) q.set("date_from", params.date_from);
+    if (params?.date_to) q.set("date_to", params.date_to);
+    if (params?.page != null) q.set("page", String(params.page));
+    if (params?.page_size != null) q.set("page_size", String(params.page_size));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<PaginatedRows<GoodsReceivingResponse>>(`/api/v1/inventory/goods-receiving${suffix}`);
   },
   async createGoodsReceiving(data: GoodsReceivingCreate): Promise<GoodsReceivingResponse> {
     return request<GoodsReceivingResponse>("/api/v1/inventory/goods-receiving", {
@@ -6351,6 +7170,821 @@ export interface CustomerResponse {
   same_as_billing: boolean;
   created_at: string;
   updated_at: string;
+  profile_completeness?: number | null;
+  last_activity_at?: string | null;
+  duplicate_risk_score?: number | null;
+  days_since_activity?: number | null;
+}
+
+export interface CustomerFacetsResponse {
+  countries: string[];
+  customer_types: string[];
+  statuses: string[];
+}
+
+export interface CustomerRelatedRecordItem {
+  id: number;
+  code: string;
+  status: string;
+  updated_at: string;
+}
+
+export interface CustomerRelatedResponse {
+  orders: CustomerRelatedRecordItem[];
+  inquiries: CustomerRelatedRecordItem[];
+  quotations: CustomerRelatedRecordItem[];
+}
+
+export interface CustomerHealthResponse {
+  customer_id: number;
+  profile_completeness: number;
+  is_active: boolean;
+  orders_count: number;
+  inquiries_count: number;
+  quotations_count: number;
+  outstanding_receivable_count: number;
+  last_activity_at: string | null;
+  duplicate_risk_score: number;
+}
+
+export interface CustomerAiExtractWrapResponse {
+  extraction: CustomerExtractionResponse;
+  model_hint: string;
+  request_id?: string | null;
+  suggestion_batch_id?: number | null;
+}
+
+export interface CustomerAiFieldSuggestion {
+  value: string | null;
+  confidence: number;
+  source: string;
+  rationale?: string | null;
+}
+
+export interface CustomerAiEnrichResponse {
+  suggestions: Record<string, CustomerAiFieldSuggestion>;
+  warnings: string[];
+  suggestion_batch_id?: number | null;
+}
+
+export interface CustomerAiValidateIssue {
+  field: string;
+  severity: string;
+  message: string;
+  suggestion?: string | null;
+}
+
+export interface CustomerAiValidateResponse {
+  issues: CustomerAiValidateIssue[];
+  completeness_score: number;
+  normalized_fields: Record<string, string | null>;
+  suggestion_batch_id?: number | null;
+}
+
+export interface CustomerAiDedupeMatch {
+  customer_id: number;
+  customer_code: string;
+  name: string;
+  score: number;
+  matched_on: string[];
+}
+
+export interface CustomerAiDedupeResponse {
+  matches: CustomerAiDedupeMatch[];
+  warnings: string[];
+  suggestion_batch_id?: number | null;
+}
+
+export interface CustomerAiSummaryResponse {
+  summary_text: string;
+  key_facts: string[];
+  risk_indicators: string[];
+  profile_grade: string;
+  suggestion_batch_id?: number | null;
+}
+
+export interface CustomerAiNextActionItem {
+  action_type: string;
+  title: string;
+  description: string;
+  priority: number;
+  target_module: string;
+  target_url?: string | null;
+}
+
+export interface CustomerAiNextActionsResponse {
+  actions: CustomerAiNextActionItem[];
+  suggestion_batch_id?: number | null;
+}
+
+export interface CustomerAiNlSearchResponse {
+  interpreted_filters: Record<string, string | null>;
+  keyword: string | null;
+  explanation: string | null;
+}
+
+export interface CustomerAiAuditEntry {
+  id: number;
+  action: string;
+  created_at: string;
+  model_used?: string | null;
+  latency_ms?: number | null;
+  result?: string | null;
+  error_category?: string | null;
+  customer_id?: number | null;
+  summary?: string | null;
+  suggestion_batch_id?: number | null;
+  actor_username?: string | null;
+  event_label?: string | null;
+  issue_count?: number | null;
+  match_count?: number | null;
+  key_facts_count?: number | null;
+  action_count?: number | null;
+  applied_field_count?: number | null;
+}
+
+export interface CustomerAiAuditListResponse {
+  items: CustomerAiAuditEntry[];
+}
+
+export type CustomerAiSuggestionDecision = "apply" | "reject" | "skip";
+
+export interface CustomerAiMarkDecisionsRequest {
+  batch_id: number;
+  decisions: Array<{ field_key: string; decision: CustomerAiSuggestionDecision }>;
+}
+
+export interface CustomerAiApplySuggestionsRequest {
+  batch_id: number;
+  customer_id: number;
+  items: Array<{ field_key: string; decision: CustomerAiSuggestionDecision }>;
+  conflict_mode?: "overwrite" | "skip_if_different";
+}
+
+export interface CustomerAiApplyConflict {
+  field: string;
+  current: string;
+  suggested: string;
+}
+
+export interface CustomerAiApplySuggestionsResponse {
+  customer: CustomerResponse;
+  applied_fields: string[];
+  skipped_fields: string[];
+  rejected_fields: string[];
+  conflicts: CustomerAiApplyConflict[];
+}
+
+export interface CustomerAiFinalizeAfterCreateRequest {
+  batch_id: number;
+  customer_id: number;
+}
+
+export interface CustomerAiFinalizeAfterCreateResponse {
+  applied_fields: string[];
+  diff_summary: Array<Record<string, string>>;
+}
+
+export interface InquiryAiIndicatorsOut {
+  completeness_score: number;
+  quotation_readiness_score: number;
+  flags: string[];
+}
+
+export interface InquiryAiExtractWrapResponse {
+  extraction: InquiryExtractionResponse;
+  model_hint: string;
+  request_id?: string | null;
+  suggestion_batch_id?: number | null;
+}
+
+export interface InquiryAiFieldSuggestion {
+  value: string | null;
+  confidence: number;
+  source: string;
+  rationale?: string | null;
+}
+
+export interface InquiryAiEnrichResponse {
+  suggestions: Record<string, InquiryAiFieldSuggestion>;
+  warnings: string[];
+  suggestion_batch_id?: number | null;
+}
+
+export interface InquiryAiValidateIssue {
+  field: string;
+  severity: string;
+  message: string;
+  suggestion?: string | null;
+}
+
+export interface InquiryAiValidateResponse {
+  issues: InquiryAiValidateIssue[];
+  completeness_score: number;
+  quotation_readiness_score: number;
+  commercial_risk_score: number;
+  normalized_fields: Record<string, string | null>;
+  suggestion_batch_id?: number | null;
+}
+
+export interface InquiryAiDedupeMatch {
+  inquiry_id: number;
+  inquiry_code: string;
+  customer_id: number;
+  score: number;
+  matched_on: string[];
+}
+
+export interface InquiryAiDedupeResponse {
+  matches: InquiryAiDedupeMatch[];
+  warnings: string[];
+  suggestion_batch_id?: number | null;
+}
+
+export interface InquiryAiSummaryResponse {
+  summary_text: string;
+  key_facts: string[];
+  risk_indicators: string[];
+  profile_grade: string;
+  suggestion_batch_id?: number | null;
+}
+
+export interface InquiryAiNextActionItem {
+  action_type: string;
+  title: string;
+  description: string;
+  priority: number;
+  target_module: string;
+  target_url?: string | null;
+}
+
+export interface InquiryAiNextActionsResponse {
+  actions: InquiryAiNextActionItem[];
+  suggestion_batch_id?: number | null;
+}
+
+export interface InquiryAiAuditEntry {
+  id: number;
+  action: string;
+  created_at: string;
+  model_used?: string | null;
+  latency_ms?: number | null;
+  result?: string | null;
+  error_category?: string | null;
+  inquiry_id?: number | null;
+  summary?: string | null;
+  suggestion_batch_id?: number | null;
+  actor_username?: string | null;
+  event_label?: string | null;
+  issue_count?: number | null;
+  match_count?: number | null;
+  key_facts_count?: number | null;
+  action_count?: number | null;
+  applied_field_count?: number | null;
+}
+
+export interface InquiryAiAuditListResponse {
+  items: InquiryAiAuditEntry[];
+}
+
+export type InquiryAiSuggestionDecision = "apply" | "reject" | "skip";
+
+export interface InquiryAiMarkDecisionsRequest {
+  batch_id: number;
+  decisions: Array<{ field_key: string; decision: InquiryAiSuggestionDecision }>;
+}
+
+export interface InquiryAiApplySuggestionsRequest {
+  batch_id: number;
+  inquiry_id: number;
+  items: Array<{ field_key: string; decision: InquiryAiSuggestionDecision }>;
+  conflict_mode?: "overwrite" | "skip_if_different";
+}
+
+export interface InquiryAiApplyConflict {
+  field: string;
+  current: string;
+  suggested: string;
+}
+
+/** Narrow inquiry shape returned after AI apply (matches backend InquiryAiInquiryOut). */
+export interface InquiryAiInquiryOut {
+  id: number;
+  tenant_id: number;
+  customer_id: number;
+  inquiry_code: string;
+  style_ref: string | null;
+  style_id: number | null;
+  customer_intermediary_id: number | null;
+  season: string | null;
+  department: string | null;
+  quantity: number | null;
+  target_price: string | null;
+  target_price_currency: string | null;
+  currency: string | null;
+  exchange_rate: string | null;
+  expected_delivery_date: string | null;
+  shipping_term: string | null;
+  commission_mode: string | null;
+  commission_type: string | null;
+  commission_value: number | null;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InquiryAiApplySuggestionsResponse {
+  inquiry: InquiryAiInquiryOut;
+  applied_fields: string[];
+  skipped_fields: string[];
+  rejected_fields: string[];
+  conflicts: InquiryAiApplyConflict[];
+}
+
+export interface InquiryAiFinalizeAfterCreateRequest {
+  batch_id: number;
+  inquiry_id: number;
+}
+
+export interface InquiryAiFinalizeAfterCreateResponse {
+  applied_fields: string[];
+  diff_summary: Array<Record<string, string>>;
+}
+
+// ---------- Quotation AI types ----------
+
+export interface QuotationAiIndicatorsOut {
+  completeness_score: number;
+  costing_readiness_score: number;
+  flags: string[];
+}
+
+export interface QuotationAiFieldSuggestion {
+  value: string | null;
+  confidence: number;
+  source: string;
+  rationale: string | null;
+}
+
+export interface QuotationAiEnrichResponse {
+  suggestions: Record<string, QuotationAiFieldSuggestion>;
+  warnings: string[];
+  suggestion_batch_id: number | null;
+}
+
+export interface QuotationAiValidateIssue {
+  field: string;
+  severity: string;
+  message: string;
+  suggestion: string | null;
+}
+
+export interface QuotationAiValidateResponse {
+  issues: QuotationAiValidateIssue[];
+  completeness_score: number;
+  costing_readiness_score: number;
+  commercial_risk_score: number;
+  normalized_fields: Record<string, string | null>;
+  suggestion_batch_id: number | null;
+}
+
+export interface QuotationAiDedupeMatch {
+  quotation_id: number;
+  quotation_code: string;
+  customer_id: number;
+  score: number;
+  matched_on: string[];
+}
+
+export interface QuotationAiDedupeResponse {
+  matches: QuotationAiDedupeMatch[];
+  warnings: string[];
+  suggestion_batch_id: number | null;
+}
+
+export interface QuotationAiSummaryResponse {
+  summary_text: string;
+  key_facts: string[];
+  risk_indicators: string[];
+  profile_grade: string;
+  suggestion_batch_id: number | null;
+}
+
+export interface QuotationAiNextActionItem {
+  action_type: string;
+  title: string;
+  description: string;
+  priority: number;
+  target_module: string;
+  target_url: string | null;
+}
+
+export interface QuotationAiNextActionsResponse {
+  actions: QuotationAiNextActionItem[];
+  suggestion_batch_id: number | null;
+}
+
+export interface QuotationAiAuditEntry {
+  id: number;
+  action: string;
+  created_at: string;
+  model_used: string | null;
+  latency_ms: number | null;
+  result: string | null;
+  error_category: string | null;
+  quotation_id: number | null;
+  summary: string | null;
+  suggestion_batch_id: number | null;
+  actor_username: string | null;
+  event_label: string | null;
+  issue_count: number | null;
+  match_count: number | null;
+  key_facts_count: number | null;
+  action_count: number | null;
+  applied_field_count: number | null;
+}
+
+export interface QuotationAiAuditListResponse {
+  items: QuotationAiAuditEntry[];
+}
+
+export interface QuotationAiMarkDecisionsRequest {
+  batch_id: number;
+  decisions: Array<{ field_key: string; decision: "apply" | "reject" | "skip" }>;
+}
+
+export interface QuotationAiApplyConflict {
+  field: string;
+  current: string;
+  suggested: string;
+}
+
+export interface QuotationAiQuotationOut {
+  id: number;
+  tenant_id: number;
+  customer_id: number;
+  inquiry_id: number | null;
+  quotation_code: string;
+  style_ref: string | null;
+  style_id: number | null;
+  customer_intermediary_id: number | null;
+  department: string | null;
+  projected_quantity: number | null;
+  projected_delivery_date: string | null;
+  quotation_date: string | null;
+  target_price: string | null;
+  target_price_currency: string | null;
+  exchange_rate: string | null;
+  shipping_term: string | null;
+  commission_mode: string | null;
+  commission_type: string | null;
+  commission_value: number | null;
+  currency: string | null;
+  valid_until: string | null;
+  notes: string | null;
+  status: string;
+  version_no: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuotationAiApplySuggestionsRequest {
+  batch_id: number;
+  quotation_id: number;
+  items: Array<{ field_key: string; decision: "apply" | "reject" | "skip" }>;
+  conflict_mode: "overwrite" | "skip_if_different";
+}
+
+export interface QuotationAiApplySuggestionsResponse {
+  quotation: QuotationAiQuotationOut;
+  applied_fields: string[];
+  skipped_fields: string[];
+  rejected_fields: string[];
+  conflicts: QuotationAiApplyConflict[];
+}
+
+export interface QuotationAiFinalizeAfterCreateRequest {
+  batch_id: number;
+  quotation_id: number;
+}
+
+export interface QuotationAiFinalizeAfterCreateResponse {
+  applied_fields: string[];
+  diff_summary: Array<Record<string, string>>;
+}
+
+// ---------- Order AI types ----------
+
+export interface OrderAiIndicatorsOut {
+  completeness_score: number;
+  execution_readiness_score: number;
+  material_readiness_score: number;
+  planning_confidence_score: number;
+  promise_date_risk_score: number;
+  duplicate_risk_score: number;
+  missing_dependency_count: number;
+  urgent_planning_flag: boolean;
+  flags: string[];
+  capacity_bottleneck_flag?: boolean;
+  bottleneck_severity_score?: number;
+  promise_sensitivity_score?: number;
+}
+
+export interface OrderExtractionField {
+  value: unknown;
+  confidence: number;
+  source_text?: string | null;
+  source: string;
+}
+
+export interface OrderExtractionResponse {
+  success: boolean;
+  document_type: string;
+  fields: Record<string, OrderExtractionField>;
+  unmapped_text: string[];
+  warnings: string[];
+}
+
+export interface OrderAiExtractWrapResponse {
+  extraction: OrderExtractionResponse;
+  model_hint: string;
+  request_id: string | null;
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiFieldSuggestion {
+  value: string | null;
+  confidence: number;
+  source: string;
+  rationale: string | null;
+}
+
+export interface OrderAiEnrichResponse {
+  suggestions: Record<string, OrderAiFieldSuggestion>;
+  warnings: string[];
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiValidateIssue {
+  field: string;
+  severity: string;
+  message: string;
+  suggestion: string | null;
+}
+
+export interface OrderAiValidateResponse {
+  issues: OrderAiValidateIssue[];
+  completeness_score: number;
+  execution_readiness_score: number;
+  commercial_risk_score: number;
+  normalized_fields: Record<string, string | null>;
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiPromiseLineOut {
+  item_id: number;
+  item_code: string;
+  required_qty: number;
+  available_qty: number;
+  shortage_qty: number;
+}
+
+export interface OrderAiPromiseCheckOut {
+  order_id: number;
+  atp_ok: boolean;
+  ctp_ok: boolean;
+  reasons: string[];
+  lines: OrderAiPromiseLineOut[];
+}
+
+export interface OrderAiValidateExecutionResponse {
+  issues: OrderAiValidateIssue[];
+  completeness_score: number;
+  execution_readiness_score: number;
+  material_readiness_score: number;
+  planning_confidence_score: number;
+  promise_date_risk_score: number;
+  missing_prerequisites: string[];
+  normalized_fields: Record<string, string | null>;
+  promise_check: OrderAiPromiseCheckOut | null;
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiPlanningRiskFactor {
+  code: string;
+  severity: "info" | "warning" | "error";
+  message: string;
+  details: Record<string, unknown>;
+}
+
+export interface OrderAiPlanningRiskCheckResponse {
+  order_id: number;
+  risk_band: "low" | "medium" | "high";
+  risk_score: number;
+  material_readiness_score: number;
+  planning_confidence_score: number;
+  promise_date_risk_score: number;
+  missing_prerequisites: string[];
+  factors: OrderAiPlanningRiskFactor[];
+  promise_check: OrderAiPromiseCheckOut;
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiAtpCtpSummaryResponse {
+  order_id: number;
+  atp_ok: boolean;
+  ctp_ok: boolean;
+  reasons: string[];
+  shortage_line_count: number;
+  max_shortage_qty: number;
+  summary_text: string;
+  lines: OrderAiPromiseLineOut[];
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiBottleneckOverlapOut {
+  line_id: number;
+  this_config_id: number;
+  peer_config_id: number;
+  peer_order_id: number | null;
+  window_start: string;
+  window_end: string;
+  peer_window_start: string;
+  peer_window_end: string;
+  severity_hint: "info" | "warning" | "error";
+  message: string;
+}
+
+export interface OrderAiCapacityBottleneckScanResponse {
+  order_id: number;
+  config_count: number;
+  distinct_lines: number;
+  overlap_hits: number;
+  severity_score: number;
+  bottlenecks: OrderAiBottleneckOverlapOut[];
+  limitations: string[];
+  explainability_notes: string[];
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiWhatIfSimulationResponse {
+  order_id: number;
+  scenario_label: string | null;
+  assumptions: string[];
+  baseline_promise: OrderAiPromiseCheckOut;
+  simulated_promise: OrderAiPromiseCheckOut;
+  bottleneck_severity_baseline: number;
+  bottleneck_severity_adjusted: number;
+  scenario_readiness_score: number;
+  advisory_notes: string[];
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiPromiseSensitivityPointOut {
+  offset_days: number;
+  effective_delivery_date: string | null;
+  atp_ok: boolean;
+  ctp_ok: boolean;
+  reason_count: number;
+}
+
+export interface OrderAiPromiseSensitivityCheckResponse {
+  order_id: number;
+  points: OrderAiPromiseSensitivityPointOut[];
+  sensitivity_score: number;
+  explainability_notes: string[];
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiExecutionPlanningSummaryResponse {
+  order_id: number;
+  headline: string;
+  bullets: string[];
+  bottleneck_severity_score: number;
+  scenario_readiness_proxy: number;
+  promise_sensitivity_score: number;
+  recommended_review_path: string[];
+  next_step_hints: string[];
+  limitations: string[];
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiDedupeMatch {
+  order_id: number;
+  order_code: string;
+  customer_id: number;
+  score: number;
+  matched_on: string[];
+}
+
+export interface OrderAiDedupeResponse {
+  matches: OrderAiDedupeMatch[];
+  warnings: string[];
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiSummaryResponse {
+  summary_text: string;
+  key_facts: string[];
+  risk_indicators: string[];
+  profile_grade: string;
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiNextActionItem {
+  action_type: string;
+  title: string;
+  description: string;
+  priority: number;
+  target_module: string;
+  target_url: string | null;
+}
+
+export interface OrderAiNextActionsResponse {
+  actions: OrderAiNextActionItem[];
+  suggestion_batch_id: number | null;
+}
+
+export interface OrderAiAuditEntry {
+  id: number;
+  action: string;
+  created_at: string;
+  model_used: string | null;
+  latency_ms: number | null;
+  result: string | null;
+  error_category: string | null;
+  order_id: number | null;
+  summary: string | null;
+  suggestion_batch_id: number | null;
+  actor_username: string | null;
+  event_label: string | null;
+  issue_count: number | null;
+  match_count: number | null;
+  key_facts_count: number | null;
+  action_count: number | null;
+  applied_field_count: number | null;
+}
+
+export interface OrderAiAuditListResponse {
+  items: OrderAiAuditEntry[];
+}
+
+export interface OrderAiMarkDecisionsRequest {
+  batch_id: number;
+  decisions: Array<{ field_key: string; decision: "apply" | "reject" | "skip" }>;
+}
+
+export interface OrderAiApplyConflict {
+  field: string;
+  current: string;
+  suggested: string;
+}
+
+export interface OrderAiOrderOut {
+  id: number;
+  tenant_id: number;
+  customer_id: number;
+  quotation_id: number | null;
+  order_code: string;
+  style_ref: string | null;
+  customer_intermediary_id: number | null;
+  shipping_term: string | null;
+  commission_mode: string | null;
+  commission_type: string | null;
+  commission_value: number | null;
+  order_date: string | null;
+  delivery_date: string | null;
+  quantity: number | null;
+  status: string;
+  remarks: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrderAiApplySuggestionsRequest {
+  batch_id: number;
+  order_id: number;
+  items: Array<{ field_key: string; decision: "apply" | "reject" | "skip" }>;
+  conflict_mode: "overwrite" | "skip_if_different";
+}
+
+export interface OrderAiApplySuggestionsResponse {
+  order: OrderAiOrderOut;
+  applied_fields: string[];
+  skipped_fields: string[];
+  rejected_fields: string[];
+  conflicts: OrderAiApplyConflict[];
+}
+
+export interface OrderAiFinalizeAfterCreateRequest {
+  batch_id: number;
+  order_id: number;
+}
+
+export interface OrderAiFinalizeAfterCreateResponse {
+  applied_fields: string[];
+  diff_summary: Array<Record<string, string>>;
 }
 
 export interface CustomerCreate {
@@ -6539,6 +8173,7 @@ export interface InquiryResponse {
   items: InquiryItemResponse[];
   created_at: string;
   updated_at: string;
+  ai_indicators?: InquiryAiIndicatorsOut | null;
 }
 
 export interface InquiryItemResponse {
@@ -6633,6 +8268,7 @@ export interface QuotationResponse {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  ai_indicators?: QuotationAiIndicatorsOut | null;
 }
 
 // Costing masters
@@ -6805,6 +8441,27 @@ export interface VendorResponse {
   bank_account_no: string | null;
   swift_code: string | null;
   credit_limit: number | null;
+  legal_name?: string | null;
+  trade_name?: string | null;
+  website?: string | null;
+  mobile?: string | null;
+  designation?: string | null;
+  address_line1?: string | null;
+  state_or_region?: string | null;
+  postal_code?: string | null;
+  registration_number?: string | null;
+  bank_account_title?: string | null;
+  iban?: string | null;
+  payment_terms?: string | null;
+  incoterms?: string | null;
+  shipping_terms?: string | null;
+  lead_time_notes?: string | null;
+  compliance_status?: string | null;
+  compliance_reference_numbers?: string | null;
+  certifications_summary?: string | null;
+  onboarding_status?: string | null;
+  remarks?: string | null;
+  internal_notes?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -6828,6 +8485,27 @@ export interface VendorCreate {
   bank_account_no?: string | null;
   swift_code?: string | null;
   credit_limit?: number | null;
+  legal_name?: string | null;
+  trade_name?: string | null;
+  website?: string | null;
+  mobile?: string | null;
+  designation?: string | null;
+  address_line1?: string | null;
+  state_or_region?: string | null;
+  postal_code?: string | null;
+  registration_number?: string | null;
+  bank_account_title?: string | null;
+  iban?: string | null;
+  payment_terms?: string | null;
+  incoterms?: string | null;
+  shipping_terms?: string | null;
+  lead_time_notes?: string | null;
+  compliance_status?: string | null;
+  compliance_reference_numbers?: string | null;
+  certifications_summary?: string | null;
+  onboarding_status?: string | null;
+  remarks?: string | null;
+  internal_notes?: string | null;
 }
 
 export interface VendorUpdate {
@@ -6849,6 +8527,27 @@ export interface VendorUpdate {
   bank_account_no?: string | null;
   swift_code?: string | null;
   credit_limit?: number | null;
+  legal_name?: string | null;
+  trade_name?: string | null;
+  website?: string | null;
+  mobile?: string | null;
+  designation?: string | null;
+  address_line1?: string | null;
+  state_or_region?: string | null;
+  postal_code?: string | null;
+  registration_number?: string | null;
+  bank_account_title?: string | null;
+  iban?: string | null;
+  payment_terms?: string | null;
+  incoterms?: string | null;
+  shipping_terms?: string | null;
+  lead_time_notes?: string | null;
+  compliance_status?: string | null;
+  compliance_reference_numbers?: string | null;
+  certifications_summary?: string | null;
+  onboarding_status?: string | null;
+  remarks?: string | null;
+  internal_notes?: string | null;
 }
 
 export interface PurchaseOrderCreate {
@@ -6941,6 +8640,125 @@ export interface StockValuationRow {
   on_hand_qty: number;
   unit_cost: number;
   line_value: number;
+}
+
+export interface VendorAiExtractWrapResponse {
+  extraction: VendorExtractionResponse;
+  model_hint: string;
+  request_id?: string | null;
+  suggestion_batch_id?: number | null;
+}
+
+export interface VendorAiFieldSuggestion {
+  value: string | null;
+  confidence: number;
+  source: string;
+  rationale?: string | null;
+}
+
+export interface VendorAiEnrichResponse {
+  suggestions: Record<string, VendorAiFieldSuggestion>;
+  warnings: string[];
+  suggestion_batch_id?: number | null;
+}
+
+export interface VendorAiValidateIssue {
+  field: string;
+  severity: string;
+  message: string;
+  suggestion?: string | null;
+}
+
+export interface VendorAiValidateResponse {
+  issues: VendorAiValidateIssue[];
+  completeness_score: number;
+  banking_score: number;
+  compliance_score: number;
+  normalized_fields: Record<string, string | null>;
+  suggestion_batch_id?: number | null;
+}
+
+export interface VendorAiDedupeMatch {
+  vendor_id: number;
+  vendor_code: string;
+  name: string;
+  score: number;
+  matched_on: string[];
+}
+
+export interface VendorAiDedupeResponse {
+  matches: VendorAiDedupeMatch[];
+  warnings: string[];
+  suggestion_batch_id?: number | null;
+}
+
+export interface VendorAiSummaryResponse {
+  summary_text: string;
+  key_facts: string[];
+  risk_indicators: string[];
+  profile_grade: string;
+  suggestion_batch_id?: number | null;
+}
+
+export interface VendorAiNextActionsResponse {
+  actions: CustomerAiNextActionItem[];
+  suggestion_batch_id?: number | null;
+}
+
+export interface VendorAiAuditEntry {
+  id: number;
+  action: string;
+  created_at: string;
+  model_used?: string | null;
+  latency_ms?: number | null;
+  result?: string | null;
+  error_category?: string | null;
+  vendor_id?: number | null;
+  summary?: string | null;
+  suggestion_batch_id?: number | null;
+  actor_username?: string | null;
+  event_label?: string | null;
+  issue_count?: number | null;
+  match_count?: number | null;
+  key_facts_count?: number | null;
+  action_count?: number | null;
+  applied_field_count?: number | null;
+}
+
+export interface VendorAiAuditListResponse {
+  items: VendorAiAuditEntry[];
+}
+
+export type VendorAiSuggestionDecision = "apply" | "reject" | "skip";
+
+export interface VendorAiMarkDecisionsRequest {
+  batch_id: number;
+  decisions: Array<{ field_key: string; decision: VendorAiSuggestionDecision }>;
+}
+
+export interface VendorAiApplySuggestionsRequest {
+  batch_id: number;
+  vendor_id: number;
+  items: Array<{ field_key: string; decision: VendorAiSuggestionDecision }>;
+  conflict_mode?: "overwrite" | "skip_if_different";
+}
+
+export interface VendorAiApplySuggestionsResponse {
+  vendor: VendorResponse;
+  applied_fields: string[];
+  skipped_fields: string[];
+  rejected_fields: string[];
+  conflicts: CustomerAiApplyConflict[];
+}
+
+export interface VendorAiFinalizeAfterCreateRequest {
+  batch_id: number;
+  vendor_id: number;
+}
+
+export interface VendorAiFinalizeAfterCreateResponse {
+  applied_fields: string[];
+  diff_summary: Array<Record<string, string>>;
 }
 
 export interface StockValuationResponse {
@@ -8087,6 +9905,7 @@ export interface OrderResponse {
   remarks: string | null;
   created_at: string;
   updated_at: string;
+  ai_indicators?: OrderAiIndicatorsOut | null;
 }
 
 export interface OrderCreate {

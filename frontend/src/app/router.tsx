@@ -19,6 +19,7 @@ import { ErpComparisonPage } from "@/pages/public/ErpComparisonPage";
 import { ResourcesPage } from "@/pages/public/ResourcesPage";
 import { SupportPage } from "@/pages/public/SupportPage";
 import { VerifyProformaPage } from "@/pages/VerifyProformaPage";
+import { GlobalAiChatWidget } from "@/components/GlobalAiChatWidget";
 
 const AppProtectedRouter = lazy(() =>
   import("@/app/AppProtectedRouter").then((mod) => ({ default: mod.AppProtectedRouter })),
@@ -84,6 +85,7 @@ export function AppRouter() {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <GlobalAiChatWidget />
     </>
   );
 }

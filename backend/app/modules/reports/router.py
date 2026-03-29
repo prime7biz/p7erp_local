@@ -56,6 +56,7 @@ async def tenant_overview(
 @router.get("/customer-performance")
 async def customer_performance(
     limit: int = Query(5000, ge=1, le=10000, description="Max customers in response (Finding #3)"),
+    offset: int = Query(0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

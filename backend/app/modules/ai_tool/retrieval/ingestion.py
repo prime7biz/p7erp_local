@@ -69,3 +69,49 @@ class SimpleTextChunkingAdapter(BaseDocumentIngestionAdapter):
             )
             cursor += size
         return chunks
+
+
+class EmbeddingChunkingAdapter(BaseDocumentIngestionAdapter):
+    """Overlap-aware chunks for vector embedding (CPU)."""
+
+    CHUNK_SIZE = 400
+    CHUNK_OVERLAP = 80
+
+    def chunk(self, body: str) -> list[dict]:
+        chunks: list[dict] = []
+        current_heading: str | None = None
+        paragraphs: list[tuple[str | None, str]] = []
+        for block in body.split("\n\n"):
+            stripped = block.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("#") and len(stripped) < 200:
+                current_heading = stripped.lstrip("#").strip()
+                continue
+            paragraphs.append((current_heading, stripped))
+        blob = "\n\n".join(p[1] for p in paragraphs) if paragraphs else ""
+        normalized = " ".join(blob.split())
+        if not normalized:
+            return []
+        cursor = 0
+        while cursor < len(normalized):
+            end = min(cursor + self.CHUNK_SIZE, len(normalized))
+            part = normalized[cursor:end]
+            dot = part.rfind(". ")
+            if dot > self.CHUNK_SIZE // 2 and end < len(normalized):
+                part = part[: dot + 1]
+                end = cursor + len(part)
+            part = part.strip()
+            if part:
+                chunks.append(
+                    {
+                        "heading": paragraphs[0][0] if paragraphs else None,
+                        "content_text": part,
+                        "metadata_json": {},
+                        "token_count": max(1, len(part) // 4),
+                    }
+                )
+            if end >= len(normalized):
+                break
+            cursor = max(cursor + 1, end - self.CHUNK_OVERLAP)
+        return chunks

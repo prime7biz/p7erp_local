@@ -94,9 +94,45 @@ class CustomerResponse(BaseModel):
     same_as_billing: bool
     created_at: str
     updated_at: str
+    # Optional list/AI enrichments (set by /customers/paginated when include_ai_fields=true)
+    profile_completeness: int | None = None
+    last_activity_at: str | None = None
+    duplicate_risk_score: float | None = None
+    days_since_activity: int | None = None
 
     class Config:
         from_attributes = True
+
+
+class CustomerFacetsResponse(BaseModel):
+    countries: list[str]
+    customer_types: list[str]
+    statuses: list[str]
+
+
+class CustomerRelatedRecordItem(BaseModel):
+    id: int
+    code: str
+    status: str
+    updated_at: str
+
+
+class CustomerRelatedResponse(BaseModel):
+    orders: list[CustomerRelatedRecordItem]
+    inquiries: list[CustomerRelatedRecordItem]
+    quotations: list[CustomerRelatedRecordItem]
+
+
+class CustomerHealthResponse(BaseModel):
+    customer_id: int
+    profile_completeness: int
+    is_active: bool
+    orders_count: int
+    inquiries_count: int
+    quotations_count: int
+    outstanding_receivable_count: int
+    last_activity_at: str | None = None
+    duplicate_risk_score: float
 
 
 class CustomerListPageResponse(BaseModel):

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { api, type QuotationOtherCostLine } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
@@ -17,6 +17,9 @@ import { MarginPricingCard } from "./sidebar/MarginPricingCard";
 import { CostBreakdownCard } from "./sidebar/CostBreakdownCard";
 import { calculateQuotationTotals } from "./mappers/calculateQuotationTotals";
 import { applyOtherCostCalculation, formatMoney, toSafeNumber } from "./mappers/quotationNumeric";
+import { useQuotationAi } from "@/hooks/useQuotationAi";
+import { QuotationAiPanel } from "@/components/quotations/QuotationAiPanel";
+import { QuotationAiAuditHistory } from "@/components/quotations/QuotationAiAuditHistory";
 
 function QuotationRowActions({
   rowKey,
@@ -139,6 +142,28 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
   const [sizeRatioCollapsed, setSizeRatioCollapsed] = useState(false);
   const [openRowActions, setOpenRowActions] = useState<string | null>(null);
   const [creatingOrder, setCreatingOrder] = useState(false);
+  const quotationAi = useQuotationAi();
+
+  const aiFormSnapshot = useMemo(() => {
+    if (!quotation) return {};
+    return {
+      customer_id: String(quotation.customer_id ?? ""),
+      style_ref: quotation.style_ref ?? "",
+      style_id: quotation.style_id != null ? String(quotation.style_id) : "",
+      department: quotation.department ?? "",
+      projected_quantity: quotation.projected_quantity != null ? String(quotation.projected_quantity) : "",
+      target_price: quotation.target_price ?? "",
+      target_price_currency: quotation.target_price_currency ?? "",
+      exchange_rate: quotation.exchange_rate ?? "",
+      currency: quotation.currency ?? "",
+      shipping_term: quotation.shipping_term ?? "",
+      commission_mode: quotation.commission_mode ?? "",
+      commission_type: quotation.commission_type ?? "",
+      commission_value: quotation.commission_value != null ? String(quotation.commission_value) : "",
+      valid_until: quotation.valid_until ?? "",
+      notes: quotation.notes ?? "",
+    };
+  }, [quotation]);
 
   useEffect(() => {
     if (!openRowActions) return;
@@ -1596,6 +1621,16 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               />
             </section>
           ) : null}
+          {!isPrintMode && (
+            <>
+              <QuotationAiPanel
+                ai={quotationAi}
+                quotationId={quotation.id}
+                formSnapshot={aiFormSnapshot}
+              />
+              {quotation.id ? <QuotationAiAuditHistory quotationId={quotation.id} /> : null}
+            </>
+          )}
         </aside>
       </div>
     </div>

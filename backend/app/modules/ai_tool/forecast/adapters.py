@@ -40,11 +40,33 @@ def _linear_slope(values: list[float]) -> float:
     return (n * sum_xy - sum_x * sum_y) / denom
 
 
+def _sklearn_linear_project(values: list[float], periods: int) -> list[float] | None:
+    """Optional sklearn projection when dependencies are installed (Phase 3 upgrade)."""
+    if periods <= 0 or len(values) < 2:
+        return None
+    try:
+        import numpy as np
+        from sklearn.linear_model import LinearRegression
+    except ImportError:
+        return None
+    x = np.arange(len(values), dtype=float).reshape(-1, 1)
+    y = np.array(values, dtype=float)
+    model = LinearRegression().fit(x, y)
+    out: list[float] = []
+    for i in range(len(values), len(values) + periods):
+        pred = float(model.predict(np.array([[float(i)]]))[0])
+        out.append(round(pred, 2))
+    return out
+
+
 def _project_series(values: list[float], periods: int) -> list[float]:
     if periods <= 0:
         return []
     if not values:
         return [0.0 for _ in range(periods)]
+    sk = _sklearn_linear_project(values, periods)
+    if sk is not None:
+        return sk
     avg = _moving_average(values, window=3)
     slope = _linear_slope(values)
     last = values[-1]

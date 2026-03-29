@@ -5,6 +5,8 @@ import {
   type VendorResponse,
   type VendorUpdate,
 } from "@/api/client";
+
+const PAGE_SIZE = 50;
 import {
   VendorKpiCards,
   VendorFilterBar,
@@ -28,41 +30,65 @@ export function VendorsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<"view" | "create">("view");
   const [selectedVendor, setSelectedVendor] = useState<VendorResponse | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, activeOnly, vendorType, currency, hasLedger]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const list = await api.listVendors({
+      const res = await api.listVendorsPaginated({
         search: search.trim() || undefined,
         is_active: activeOnly,
         vendor_type: vendorType || undefined,
         currency: currency || undefined,
         has_ledger: hasLedger,
+        page,
+        page_size: PAGE_SIZE,
       });
-      setItems(list);
+      setItems(res.items);
+      setTotal(res.total);
+      setTotalPages(res.total_pages);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load vendors");
     } finally {
       setLoading(false);
     }
-  }, [search, activeOnly, vendorType, currency, hasLedger]);
+  }, [search, activeOnly, vendorType, currency, hasLedger, page]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (!drawerOpen || !selectedVendor) return;
+    const updated = items.find((v) => v.id === selectedVendor.id);
+    if (updated && updated !== selectedVendor) setSelectedVendor(updated);
+  }, [items, drawerOpen, selectedVendor]);
+
   const kpis = useMemo(() => {
-    const total = items.length;
     const active = items.filter((v) => v.is_active).length;
-    const inactive = total - active;
+    const inactive = items.length - active;
     const ledgerLinked = items.filter((v) => v.ledger_id != null).length;
     const foreignCurrency = items.filter((v) => {
       const cur = (v.default_currency || "").toUpperCase();
       return cur !== "" && cur !== "BDT";
     }).length;
     return { total, active, inactive, ledgerLinked, foreignCurrency };
-  }, [items]);
+  }, [items, total]);
+
+  const visiblePageNumbers = useMemo(() => {
+    const start = Math.max(1, page - 2);
+    const end = Math.min(totalPages, page + 2);
+    const pages: number[] = [];
+    for (let i = start; i <= end; i += 1) pages.push(i);
+    return pages;
+  }, [page, totalPages]);
 
   const handleAddVendor = () => {
     setDrawerMode("create");
@@ -77,8 +103,9 @@ export function VendorsPage() {
   };
 
   const handleCreate = async (data: VendorCreate) => {
-    await api.createVendor(data);
+    const created = await api.createVendor(data);
     await load();
+    return created.id;
   };
 
   const handleUpdate = async (id: number, data: VendorUpdate) => {
@@ -109,13 +136,21 @@ export function VendorsPage() {
         </div>
       )}
 
-      <VendorKpiCards
-        total={kpis.total}
-        active={kpis.active}
-        inactive={kpis.inactive}
-        ledgerLinked={kpis.ledgerLinked}
-        foreignCurrency={kpis.foreignCurrency}
-      />
+      <div className="space-y-2">
+        <VendorKpiCards
+          total={kpis.total}
+          active={kpis.active}
+          inactive={kpis.inactive}
+          ledgerLinked={kpis.ledgerLinked}
+          foreignCurrency={kpis.foreignCurrency}
+        />
+        {totalPages > 1 ? (
+          <p className="text-xs text-text-muted">
+            Active, inactive, ledger, and currency figures above reflect vendors on the current page only. Total is for all
+            matching vendors.
+          </p>
+        ) : null}
+      </div>
 
       <div className="rounded-xl border border-border bg-surface-raised p-3">
         <VendorFilterBar
@@ -145,6 +180,46 @@ export function VendorsPage() {
         ) : (
           <VendorCards items={items} onCardClick={handleVendorClick} />
         )}
+        {!loading && total > 0 ? (
+          <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-text-muted sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Showing {total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1} to {Math.min(page * PAGE_SIZE, total)} of {total}{" "}
+              vendors
+            </span>
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              {visiblePageNumbers.map((pageNo) => (
+                <button
+                  key={pageNo}
+                  type="button"
+                  onClick={() => setPage(pageNo)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                    pageNo === page
+                      ? "bg-brand-primary text-brand-primary-foreground"
+                      : "border border-border-strong text-text-secondary hover:bg-surface-subtle"
+                  }`}
+                >
+                  {pageNo}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={page >= totalPages}
+                className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <VendorDetailDrawer

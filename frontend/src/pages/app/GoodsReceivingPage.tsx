@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api,
   type GoodsReceivingCreate,
@@ -24,7 +24,10 @@ export function GoodsReceivingPage() {
   const [rows, setRows] = useState<GoodsReceivingResponse[]>([]);
   const [pos, setPos] = useState<PurchaseOrderResponse[]>([]);
   const [error, setError] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return (new URLSearchParams(window.location.search).get("status") || "").toUpperCase();
+  });
   const [form, setForm] = useState<GoodsReceivingCreate>({
     purchase_order_id: null,
     status: "DRAFT",
@@ -33,6 +36,10 @@ export function GoodsReceivingPage() {
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [apMessage, setApMessage] = useState("");
+  const [grPage, setGrPage] = useState(1);
+  const [grTotalPages, setGrTotalPages] = useState(1);
+  const [grTotal, setGrTotal] = useState(0);
+  const GR_PAGE_SIZE = 25;
 
   useEffect(() => {
     const close = () => setOpenActionsId(null);
@@ -44,24 +51,40 @@ export function GoodsReceivingPage() {
     setError("");
     setLoading(true);
     try {
-      const [grn, po] = await Promise.all([api.listGoodsReceiving(), api.listPurchaseOrders()]);
-      setRows(grn);
-      setPos(po);
+      const [grRes, poRes] = await Promise.all([
+        api.listGoodsReceivingPaginated({
+          status_filter: statusFilter.trim() || undefined,
+          page: grPage,
+          page_size: GR_PAGE_SIZE,
+        }),
+        api.listPurchaseOrdersPaginated({ page: 1, page_size: 500 }),
+      ]);
+      setRows(grRes.items);
+      setGrTotalPages(grRes.total_pages);
+      setGrTotal(grRes.total);
+      setPos(poRes.items);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load GRN");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter, grPage]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const status = (params.get("status") || "").toUpperCase();
-    if (status) setStatusFilter(status);
     void load();
   }, [load]);
 
-  const filteredRows = statusFilter ? rows.filter((r) => (r.status || "").toUpperCase() === statusFilter) : rows;
+  useEffect(() => {
+    setGrPage(1);
+  }, [statusFilter]);
+
+  const visibleGrPages = useMemo(() => {
+    const start = Math.max(1, grPage - 2);
+    const end = Math.min(grTotalPages, grPage + 2);
+    const pages: number[] = [];
+    for (let i = start; i <= end; i += 1) pages.push(i);
+    return pages;
+  }, [grPage, grTotalPages]);
 
   const receiveGrn = useCallback(
     async (id: number) => {
@@ -162,10 +185,14 @@ export function GoodsReceivingPage() {
 
       {loading ? (
         <InventoryTableSkeleton rows={8} cols={5} />
-      ) : !filteredRows.length ? (
+      ) : !rows.length ? (
         <InventoryEmptyState
-          title={rows.length ? "No GRNs match this status" : "No goods receiving notes yet"}
-          description={rows.length ? "Clear the status filter to see all GRNs." : "Create a GRN from an approved purchase order above."}
+          title={statusFilter.trim() ? "No GRNs match this status" : "No goods receiving notes yet"}
+          description={
+            statusFilter.trim()
+              ? "Clear the status filter to see all GRNs."
+              : "Create a GRN from an approved purchase order above."
+          }
         />
       ) : (
         <div className={`rounded-xl border border-border bg-surface-raised ${inventoryScrollTableClass}`}>
@@ -180,7 +207,7 @@ export function GoodsReceivingPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredRows.map((row) => (
+              {rows.map((row) => (
                 <tr key={row.id}>
                   <td className="px-3 py-3 text-sm font-medium">{row.grn_code}</td>
                   <td className="px-3 py-3 text-sm">{row.purchase_order_id ? `#${row.purchase_order_id}` : "—"}</td>
@@ -247,6 +274,45 @@ export function GoodsReceivingPage() {
           </table>
         </div>
       )}
+      {!loading && rows.length > 0 && grTotalPages > 1 ? (
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-raised px-4 py-3 text-sm text-text-muted sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            Page {grPage} of {grTotalPages} ({grTotal} total)
+          </span>
+          <div className="flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setGrPage((p) => Math.max(1, p - 1))}
+              disabled={grPage <= 1}
+              className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+            {visibleGrPages.map((pageNo) => (
+              <button
+                key={pageNo}
+                type="button"
+                onClick={() => setGrPage(pageNo)}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                  pageNo === grPage
+                    ? "bg-brand-primary text-brand-primary-foreground"
+                    : "border border-border-strong text-text-secondary hover:bg-surface-subtle"
+                }`}
+              >
+                {pageNo}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setGrPage((p) => p + 1)}
+              disabled={grPage >= grTotalPages}
+              className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -64,13 +64,24 @@ async def _insert_audit_row(
     try:
         async with AsyncSessionLocal() as db:
             tenant_id: int | None = tenant_id_hdr
-            if user_id is not None:
+            # When X-Tenant-Id is present, use it (API routes already enforce user↔tenant match).
+            # Only hit the DB when the header is missing but we have a user id.
+            if user_id is not None and tenant_id is None:
                 result = await db.execute(select(User.tenant_id).where(User.id == user_id))
                 tid = result.scalar_one_or_none()
                 if tid is not None:
-                    if tenant_id is not None and tenant_id != tid:
-                        return
                     tenant_id = tid
+            elif user_id is not None and tenant_id is not None:
+                result = await db.execute(select(User.tenant_id).where(User.id == user_id))
+                tid = result.scalar_one_or_none()
+                if tid is not None and tid != tenant_id:
+                    logger.warning(
+                        "Audit skip: X-Tenant-Id=%s does not match user tenant=%s for user_id=%s",
+                        tenant_id,
+                        tid,
+                        user_id,
+                    )
+                    return
             if tenant_id is None or user_id is None:
                 return
             row = AuditLog(

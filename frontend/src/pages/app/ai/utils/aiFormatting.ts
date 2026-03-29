@@ -1,4 +1,4 @@
-import type { AiMessageResponse } from "@/api/client";
+import type { AiMessageResponse, AiResponseProvenance, AiTraceSpan } from "@/api/client";
 import type { AiAssistantMessageMeta } from "@/pages/app/ai/types";
 
 export function formatRelative(iso: string | null): string {
@@ -12,4 +12,17 @@ export function readMessageMeta(message: AiMessageResponse): AiAssistantMessageM
   const raw = message.content_json;
   if (!raw || typeof raw !== "object") return {};
   return raw as AiAssistantMessageMeta;
+}
+
+export function readProvenance(message: AiMessageResponse): AiResponseProvenance | null {
+  const meta = readMessageMeta(message);
+  const p = meta.provenance;
+  if (!p || typeof p !== "object") return null;
+  return p as AiResponseProvenance;
+}
+
+export function readTraceSpans(message: AiMessageResponse): AiTraceSpan[] {
+  const meta = readMessageMeta(message);
+  const s = meta.trace_spans;
+  return Array.isArray(s) ? s : [];
 }

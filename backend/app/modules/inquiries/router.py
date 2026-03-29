@@ -23,7 +23,10 @@ from app.models import (
   Tenant,
   User,
 )
+from app.modules.inquiries.inquiry_ai_router import router as inquiry_ai_subrouter
+from app.modules.inquiries.inquiry_ai_service import compute_inquiry_ai_indicators
 from app.modules.inquiries.schemas import (
+  InquiryAiIndicatorsOut,
   InquiryCreate,
   InquiryItemCreate,
   InquiryItemResponse,
@@ -33,6 +36,7 @@ from app.modules.inquiries.schemas import (
 
 
 router = APIRouter(prefix="/inquiries", tags=["inquiries"])
+router.include_router(inquiry_ai_subrouter, prefix="/ai")
 
 
 async def _next_inquiry_code(db: AsyncSession, tenant_id: int) -> str:
@@ -145,6 +149,7 @@ def _serialize_inquiry(
   items: list[InquiryItemResponse] | None = None,
   style: GarmentStyle | None = None,
   converted_quotation_id: int | None = None,
+  ai_indicators: InquiryAiIndicatorsOut | None = None,
 ) -> InquiryResponse:
   commission_value = float(inquiry.commission_value) if inquiry.commission_value is not None else None
   return InquiryResponse(
@@ -181,6 +186,7 @@ def _serialize_inquiry(
     items=items or [],
     created_at=inquiry.created_at.isoformat(),
     updated_at=inquiry.updated_at.isoformat(),
+    ai_indicators=ai_indicators,
   )
 
 
@@ -226,6 +232,12 @@ async def list_inquiries(
   created_to: date | None = Query(default=None, description="Created at to (inclusive)"),
   limit: int = Query(default=50, ge=1, le=500),
   offset: int = Query(default=0, ge=0),
+  ai_indicators: int = Query(
+    default=0,
+    ge=0,
+    le=1,
+    description="When 1, include rules-based AI indicators (no LLM) on each row.",
+  ),
   tenant: Tenant = Depends(require_tenant),
   user: User = Depends(get_current_user),
   db: AsyncSession = Depends(get_db),
@@ -280,6 +292,7 @@ async def list_inquiries(
       item_map.get(r.id, []),
       style_map.get(r.style_id or -1),
       converted_map.get(r.id),
+      compute_inquiry_ai_indicators(r) if ai_indicators else None,
     )
     for r in rows
   ]

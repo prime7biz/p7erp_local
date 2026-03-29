@@ -46,9 +46,13 @@ from app.modules.quotations.schemas import (
     QuotationSizeRatioLine,
     QuotationUpdate,
 )
+from app.modules.quotations.quotation_ai_router import router as quotation_ai_subrouter
+from app.modules.quotations.quotation_ai_service import compute_quotation_ai_indicators
+from app.modules.quotations.quotation_ai_schemas import QuotationAiIndicatorsOut
 
 
 router = APIRouter(prefix="/quotations", tags=["quotations"])
+router.include_router(quotation_ai_subrouter, prefix="/ai")
 
 
 async def _next_quotation_code(db: AsyncSession, tenant_id: int) -> str:
@@ -64,6 +68,7 @@ async def _next_quotation_code(db: AsyncSession, tenant_id: int) -> str:
 def _to_quotation_response(
   quotation: Quotation,
   converted_order_id: int | None = None,
+  ai_indicators: QuotationAiIndicatorsOut | None = None,
 ) -> QuotationResponse:
   commission_value = (
     float(quotation.commission_value) if quotation.commission_value is not None else None
@@ -105,6 +110,7 @@ def _to_quotation_response(
     notes=quotation.notes,
     created_at=quotation.created_at.isoformat(),
     updated_at=quotation.updated_at.isoformat(),
+    ai_indicators=ai_indicators,
   )
 
 
@@ -156,6 +162,7 @@ async def list_quotations(
   department: str | None = Query(default=None, description="Reserved for future department filter"),
   created_from: date | None = Query(default=None, description="Created at from (inclusive)"),
   created_to: date | None = Query(default=None, description="Created at to (inclusive)"),
+  ai_indicators: int = Query(default=0, ge=0, le=1, description="Include AI indicators when 1"),
   limit: int = Query(default=50, ge=1, le=500),
   offset: int = Query(default=0, ge=0),
   tenant: Tenant = Depends(require_tenant),
@@ -196,7 +203,14 @@ async def list_quotations(
   converted_map = await _get_converted_order_map(
     db, tenant_id=tenant.id, quotation_ids=[r.id for r in rows]
   )
-  return [_to_quotation_response(r, converted_map.get(r.id)) for r in rows]
+  return [
+    _to_quotation_response(
+      r,
+      converted_map.get(r.id),
+      ai_indicators=compute_quotation_ai_indicators(r) if ai_indicators else None,
+    )
+    for r in rows
+  ]
 
 
 class InquiryToQuotationBody(BaseModel):

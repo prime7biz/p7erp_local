@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { getToken, getTenantId } from "@/api/client";
 import type { TenantType } from "@/api/client";
@@ -544,7 +544,7 @@ export function Layout() {
 
   if (loading) return <div className="p-6">Loading...</div>;
   if (error) return <div className="p-6 text-status-danger">{error}</div>;
-  if (!me) return <div className="p-6">Loading session...</div>;
+  if (!me) return <Navigate to="/login" replace />;
 
   const displayName = me.first_name ? `${me.first_name} ${me.last_name ?? ""}`.trim() : me.username;
 

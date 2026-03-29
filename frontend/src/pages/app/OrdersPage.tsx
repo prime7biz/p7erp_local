@@ -41,6 +41,7 @@ export function OrdersPage() {
         api.listOrders({
           search,
           status: statusFilter || undefined,
+          ai_indicators: 1,
           limit: pageSize,
           offset: (page - 1) * pageSize,
         }),
@@ -250,7 +251,7 @@ export function OrdersPage() {
           <div className="p-12 text-center text-text-muted">No orders yet.</div>
         ) : (
           <div className="overflow-x-auto">
-          <table className="min-w-[1180px] w-full text-sm">
+          <table className="min-w-[1280px] w-full text-sm">
             <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
               <tr>
                 <th className="py-2.5 px-4 w-24 whitespace-nowrap">Code</th>
@@ -262,6 +263,9 @@ export function OrdersPage() {
                 <th className="py-2.5 px-4 min-w-[120px] whitespace-nowrap">Commission</th>
                 <th className="py-2.5 px-4 w-28 whitespace-nowrap">Delivery date</th>
                 <th className="py-2.5 px-4 text-right w-20 whitespace-nowrap">Qty</th>
+                <th className="py-2.5 px-4 w-[100px] whitespace-nowrap" title="Execution readiness / completeness (AI)">
+                  Exec AI
+                </th>
                 <th className="py-2.5 px-4 w-24 whitespace-nowrap">Status</th>
                 <th className="py-2.5 px-4 text-right w-24 whitespace-nowrap">Actions</th>
               </tr>
@@ -334,6 +338,46 @@ export function OrdersPage() {
                   </td>
                   <td className="py-2.5 px-4 text-right text-text-secondary whitespace-nowrap">
                     {o.quantity != null ? o.quantity.toLocaleString() : "—"}
+                  </td>
+                  <td className="py-2.5 px-4 text-xs text-text-secondary whitespace-nowrap align-top">
+                    {o.ai_indicators ? (
+                      <span
+                        className="inline-block max-w-[7.5rem] leading-tight"
+                        title={
+                          o.ai_indicators.flags?.length
+                            ? o.ai_indicators.flags.join(", ")
+                            : "Execution readiness / completeness"
+                        }
+                      >
+                        E {o.ai_indicators.execution_readiness_score}% · C{" "}
+                        {o.ai_indicators.completeness_score}%
+                        <span className="block text-text-muted">
+                          M {o.ai_indicators.material_readiness_score}% · P{" "}
+                          {o.ai_indicators.promise_date_risk_score}%
+                        </span>
+                        {o.ai_indicators.missing_dependency_count > 0 ? (
+                          <span className="block text-text-muted">
+                            Missing deps: {o.ai_indicators.missing_dependency_count}
+                          </span>
+                        ) : null}
+                        {o.ai_indicators.urgent_planning_flag ? (
+                          <span className="block text-status-warning-foreground font-medium">Urgent planning</span>
+                        ) : null}
+                        {o.ai_indicators.duplicate_risk_score >= 40 ? (
+                          <span className="block text-status-warning-foreground font-medium">Dup risk</span>
+                        ) : null}
+                        {o.ai_indicators.capacity_bottleneck_flag ? (
+                          <span className="block text-status-warning-foreground font-medium">Line load hint</span>
+                        ) : null}
+                        {o.ai_indicators.promise_sensitivity_score != null ? (
+                          <span className="block text-text-muted">
+                            Promise sens. {o.ai_indicators.promise_sensitivity_score}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(o.status)}`}>

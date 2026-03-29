@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.models import Tenant, User
 
+# AI permission matrix: use `app.modules.ai_tool.policy_eval.evaluate_ai_policy` /
+# `evaluate_ai_safety_for_user` (kept out of this module to avoid import cycles).
 
 _AI_ALLOWED_ROLES = {"admin", "manager", "owner", "super_admin", "superadmin", "analyst", "operator", "supervisor"}
 

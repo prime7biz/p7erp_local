@@ -40,6 +40,7 @@ export function InquiriesPage() {
           department: departmentFilter || undefined,
           limit: pageSize,
           offset: (page - 1) * pageSize,
+          ai_indicators: 1,
         }),
         api.listCustomers(),
       ]);
@@ -139,6 +140,9 @@ export function InquiriesPage() {
                   <th className="py-2.5 px-4 w-20 whitespace-nowrap">Shipping</th>
                   <th className="py-2.5 px-4 text-right w-20 whitespace-nowrap">Qty</th>
                   <th className="py-2.5 px-4 min-w-[140px] whitespace-nowrap">Status</th>
+                  <th className="py-2.5 px-4 w-28 whitespace-nowrap text-center" title="Rules-based quotation readiness (no LLM)">
+                    Q-ready
+                  </th>
                   <th className="py-2.5 px-4 text-right w-24 whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
@@ -197,6 +201,24 @@ export function InquiriesPage() {
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="py-2.5 px-4 text-center text-xs text-text-secondary whitespace-nowrap">
+                      {inq.ai_indicators ? (
+                        <span
+                          title={
+                            inq.ai_indicators.flags.length
+                              ? `Flags: ${inq.ai_indicators.flags.join(", ")}`
+                              : "No blocking flags"
+                          }
+                        >
+                          {inq.ai_indicators.quotation_readiness_score}%
+                          {inq.ai_indicators.flags.length > 0 ? (
+                            <span className="ml-1 text-status-warning-foreground">!</span>
+                          ) : null}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="py-2.5 px-4 text-right whitespace-nowrap">
                       <div className="relative inline-block text-left">

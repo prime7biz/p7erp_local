@@ -52,6 +52,10 @@ export function InventoryItemsPage() {
   const [openUnitActionsId, setOpenUnitActionsId] = useState<number | null>(null);
   const [openWarehouseActionsId, setOpenWarehouseActionsId] = useState<number | null>(null);
   const [openItemActionsId, setOpenItemActionsId] = useState<number | null>(null);
+  const ITEM_PAGE_SIZE = 50;
+  const [itemPage, setItemPage] = useState(1);
+  const [itemTotalPages, setItemTotalPages] = useState(1);
+  const [itemTotal, setItemTotal] = useState(0);
   const [itemModalMode, setItemModalMode] = useState<"view" | "edit">("view");
   const [unitModalMode, setUnitModalMode] = useState<"view" | "edit">("view");
   const [warehouseModalMode, setWarehouseModalMode] = useState<"view" | "edit">("view");
@@ -94,20 +98,22 @@ export function InventoryItemsPage() {
     setLoading(true);
     setError("");
     try {
-      const [cat, sub, uni, wh, sg, itm] = await Promise.all([
+      const [cat, sub, uni, wh, sg, itmPage] = await Promise.all([
         api.listInventoryItemCategories(),
         api.listInventoryItemSubcategories(),
         api.listInventoryItemUnits(),
         api.listWarehouses(),
         api.listStockGroups(),
-        api.listInventoryItems(),
+        api.listInventoryItemsPaginated({ page: itemPage, page_size: ITEM_PAGE_SIZE }),
       ]);
       setCategories(cat);
       setSubcategories(sub);
       setUnits(uni);
       setWarehouses(wh);
       setStockGroups(sg);
-      setItems(itm);
+      setItems(itmPage.items);
+      setItemTotalPages(itmPage.total_pages);
+      setItemTotal(itmPage.total);
       const firstCategory = cat[0];
       const firstUnit = uni[0];
       if (firstCategory) {
@@ -122,11 +128,15 @@ export function InventoryItemsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [itemPage]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setItemPage(1);
+  }, [itemSearch]);
 
   useEffect(() => {
     const raw = searchParams.get("tab");
@@ -191,6 +201,14 @@ export function InventoryItemsPage() {
     document.addEventListener("click", closeActions);
     return () => document.removeEventListener("click", closeActions);
   }, []);
+
+  const visibleItemPages = useMemo(() => {
+    const start = Math.max(1, itemPage - 2);
+    const end = Math.min(itemTotalPages, itemPage + 2);
+    const pages: number[] = [];
+    for (let i = start; i <= end; i += 1) pages.push(i);
+    return pages;
+  }, [itemPage, itemTotalPages]);
 
   const filteredItems = useMemo(() => {
     const q = itemSearch.trim().toLowerCase();
@@ -983,7 +1001,12 @@ export function InventoryItemsPage() {
 
           <Card>
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-base">All Items</CardTitle>
+              <div>
+                <CardTitle className="text-base">All Items</CardTitle>
+                <p className="mt-1 text-xs text-text-muted">
+                  Search filters items on the current page. Use pagination to browse the full catalog.
+                </p>
+              </div>
               <input
                 className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm sm:w-64 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
                 placeholder="Search by code or name…"
@@ -1095,6 +1118,47 @@ export function InventoryItemsPage() {
                   </tbody>
                 </table>
               </div>
+              {itemTotalPages > 1 ? (
+                <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-text-muted sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    Showing {itemTotal === 0 ? 0 : (itemPage - 1) * ITEM_PAGE_SIZE + 1} to{" "}
+                    {Math.min(itemPage * ITEM_PAGE_SIZE, itemTotal)} of {itemTotal} items (page {itemPage} of{" "}
+                    {itemTotalPages})
+                  </span>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setItemPage((p) => Math.max(1, p - 1))}
+                      disabled={itemPage <= 1}
+                      className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    {visibleItemPages.map((pageNo) => (
+                      <button
+                        key={pageNo}
+                        type="button"
+                        onClick={() => setItemPage(pageNo)}
+                        className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                          pageNo === itemPage
+                            ? "bg-brand-primary text-brand-primary-foreground"
+                            : "border border-border-strong text-text-secondary hover:bg-surface-subtle"
+                        }`}
+                      >
+                        {pageNo}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setItemPage((p) => p + 1)}
+                      disabled={itemPage >= itemTotalPages}
+                      className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </>

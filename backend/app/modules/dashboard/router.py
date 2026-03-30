@@ -428,3 +428,34 @@ async def revenue_trend(
     total = round(sum(v["revenue"] for v in months), 2)
     return {"months": months, "totalRevenue": total}
 
+
+@router.get("/ai/executive-brief")
+async def dashboard_executive_ai_brief(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Phase 18: read-only executive snapshot (risk signals + heuristic opportunities)."""
+    if user.tenant_id != tenant.id:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+
+    from app.modules.ai_tool.audit import log_ai_event
+    from app.modules.dashboard.executive_ai_brief_service import build_executive_brief
+    from app.modules.erp_ai_phases.feature_flags import require_phase
+
+    require_phase("executive_ai_dashboard", tenant=tenant)
+    payload = await build_executive_brief(db, tenant_id=tenant.id)
+    await log_ai_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="EXECUTIVE_AI_BRIEF",
+        resource="dashboard",
+        details_json={"risk_count": len(payload.get("risk_signals") or [])},
+        reason_code="PHASE18_READ_ONLY",
+    )
+    await db.commit()
+    return payload
+

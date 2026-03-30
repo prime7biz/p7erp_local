@@ -285,6 +285,9 @@ class AiAutomationRule(Base):
     requires_confirmation: Mapped[bool] = mapped_column(default=True, nullable=False)
     permission_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     policy_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Phase 20 governance evaluator: JSON condition vs proposal payload (optional per rule).
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    condition_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, date
 
 from sqlalchemy import (
+    JSON,
     String,
     Text,
     Date,
@@ -179,6 +180,8 @@ class Order(Base):
         String(32), nullable=False, default="DRAFT", index=True
     )
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Frozen quotation commercial header values at order conversion (audit / alignment; not auto-synced).
+    commercial_snapshot_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

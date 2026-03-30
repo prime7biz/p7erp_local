@@ -19,6 +19,11 @@ import { calculateQuotationTotals } from "./mappers/calculateQuotationTotals";
 import { applyOtherCostCalculation, formatMoney, toSafeNumber } from "./mappers/quotationNumeric";
 import { useQuotationAi } from "@/hooks/useQuotationAi";
 import { QuotationAiPanel } from "@/components/quotations/QuotationAiPanel";
+import { QuotationCostingIntelligencePanel } from "@/components/quotations/QuotationCostingIntelligencePanel";
+import { QuotationCostingSuggestionsPanel } from "@/components/quotations/QuotationCostingSuggestionsPanel";
+import { QuotationCostBenchmarkPanel } from "@/components/quotations/QuotationCostBenchmarkPanel";
+import { ChangeRequestPanel } from "@/components/orders/ChangeRequestPanel";
+import { QUOTATION_PROTECTED_FIELD_DEFS } from "@/lib/commercialChangeFields";
 import { QuotationAiAuditHistory } from "@/components/quotations/QuotationAiAuditHistory";
 
 function QuotationRowActions({
@@ -136,6 +141,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
     approveQuotation,
     duplicateAsNewVersion,
     navigate,
+    reloadQuotationDetail,
   } = useQuotationWorkspaceController(id);
   const location = useLocation();
   const isPrintMode = new URLSearchParams(location.search).get("print") === "1";
@@ -549,8 +555,11 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </div>
+                  <div className="sm:col-span-2 -mt-1 border-t border-border-subtle pt-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">Currencies and FX</div>
+                  </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-text-secondary">Target price</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Buyer target (reference)</label>
                     <div className="flex gap-1">
                       <input
                         type="text"
@@ -607,7 +616,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-text-secondary">Exchange rate</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Exchange rate (header FX)</label>
                     <div className="flex gap-2">
                       <input
                         type="number"
@@ -630,9 +639,12 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                         {rateSource === "live" ? "Live rate loaded." : "Fallback rate loaded."}
                       </p>
                     )}
+                    <p className="mt-1 text-xs text-text-muted">
+                      Used when buyer target currency and document currency differ. Line materials may use separate FX in the table below.
+                    </p>
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-text-secondary">Currency</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Document / quote currency</label>
                     <select
                       value={quotation.currency ?? "USD"}
                       onChange={(e) => updateQuotationHeader({ currency: e.target.value || null })}
@@ -644,9 +656,18 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                         </option>
                       ))}
                     </select>
+                    <p className="mt-1 text-xs text-text-muted">
+                      Reporting / book currency (numéraire):{" "}
+                      <span className="font-medium text-text-secondary">
+                        {quotation.commercial_book_currency ?? quotation.currency ?? "—"}
+                      </span>
+                      . Costing line rollups use document currency; tenant override{" "}
+                      <code className="rounded bg-surface-subtle px-0.5">feature_flags.commercial_book_currency</code>{" "}
+                      can fix a single reporting code across documents.
+                    </p>
                   </div>
                   <div>
-                    <label className="mb-0.5 block font-medium text-text-secondary">Profit margin (%)</label>
+                    <label className="mb-0.5 block font-medium text-text-secondary">Markup on factory cost (%)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -808,7 +829,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       <th className="px-2 py-2 text-right">Cons. (Yds)</th>
                       <th className="px-2 py-2 text-right">Unit Price</th>
                       <th className="px-2 py-2 text-left">Curr</th>
-                      <th className="px-2 py-2 text-right">Rate</th>
+                      <th className="px-2 py-2 text-right">FX rate</th>
                       <th className="px-2 py-2 text-right">Subtotal</th>
                       <th className="px-2 py-2 text-right">% Total</th>
                       <th className="px-2 py-2 text-right">Actions</th>
@@ -1484,6 +1505,15 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           </CollapsibleSection>
 
           <CollapsibleSection title="Final Commercial Breakdown" defaultOpen={!isPrintMode}>
+            <div
+              className="mb-3 rounded-lg border border-status-warning/30 bg-status-warning-subtle/40 p-3 text-xs text-text-secondary"
+              role="note"
+            >
+              <span className="font-semibold text-text-primary">Protected commercial rollup: </span>
+              FOB cost, quoted price, margin %, and FX-derived totals are controlled fields. Edit underlying costing
+              lines; when the quotation is locked, use change requests. AI costing / benchmark panels are advisory unless
+              you explicitly apply reviewed suggestions.
+            </div>
             <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
               <div className="rounded-xl border border-border bg-surface-subtle p-3">
                 <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">FOB Cost</div>
@@ -1623,10 +1653,43 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           ) : null}
           {!isPrintMode && (
             <>
+              {quotation.id ? (
+                <ChangeRequestPanel
+                  entityType="quotation"
+                  entityId={quotation.id}
+                  entityStatus={quotation.status}
+                  fieldDefs={QUOTATION_PROTECTED_FIELD_DEFS}
+                  record={{
+                    target_price: quotation.target_price,
+                    target_price_currency: quotation.target_price_currency,
+                    exchange_rate: quotation.exchange_rate,
+                    quoted_price: quotation.quoted_price,
+                    currency: quotation.currency,
+                    total_amount: quotation.total_amount,
+                    shipping_term: quotation.shipping_term,
+                    commission_mode: quotation.commission_mode,
+                    commission_type: quotation.commission_type,
+                    commission_value: quotation.commission_value,
+                    projected_quantity: quotation.projected_quantity,
+                    projected_delivery_date: quotation.projected_delivery_date,
+                    valid_until: quotation.valid_until,
+                  }}
+                />
+              ) : null}
+              <QuotationCostingIntelligencePanel quotation={quotation} />
+              <QuotationCostingSuggestionsPanel
+                quotation={quotation}
+                mode={showEditableHeader ? "edit" : "view"}
+                onAfterApply={() => void reloadQuotationDetail()}
+              />
+              <QuotationCostBenchmarkPanel quotation={quotation} />
               <QuotationAiPanel
                 ai={quotationAi}
                 quotationId={quotation.id}
                 formSnapshot={aiFormSnapshot}
+                mode={showEditableHeader ? "edit" : "view"}
+                quotationStatus={quotation.status}
+                onAfterApply={() => void reloadQuotationDetail()}
               />
               {quotation.id ? <QuotationAiAuditHistory quotationId={quotation.id} /> : null}
             </>

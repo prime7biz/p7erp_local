@@ -6,7 +6,7 @@ import html
 import json
 import re
 import time
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from sqlalchemy import or_, select
@@ -44,9 +44,24 @@ from app.modules.master_data_ai.audit_labels import quotation_ai_event_label
 from app.modules.master_data_ai.gateway import invoke_structured_llm
 from app.modules.master_data_ai.request_context import get_master_data_ai_request_id
 from app.modules.master_data_ai.sanitization import sanitize_untrusted_text
+from app.modules.quotations import quotation_costing_intelligence_config as costing_cfg
+from app.modules.quotations.quotation_costing_feature import is_quotation_costing_phase1_enabled
+from app.modules.quotations.quotation_costing_intelligence import build_costing_intelligence_bundle
 
 
-def compute_quotation_ai_indicators(q: Quotation) -> QuotationAiIndicatorsOut:
+def compute_quotation_ai_indicators(
+    q: Quotation,
+    *,
+    tenant: Any | None = None,
+    signal_scope: Literal["header_only", "full_costing"] | None = None,
+    material_lines: list[dict] | None = None,
+    manufacturing_lines: list[dict] | None = None,
+    other_cost_lines: list[dict] | None = None,
+    size_ratio_lines: list[dict] | None = None,
+) -> QuotationAiIndicatorsOut:
+    scope: Literal["header_only", "full_costing"] = (
+        signal_scope if signal_scope in ("header_only", "full_costing") else "full_costing"
+    )
     flags: list[str] = []
     if not q.style_id and not (q.style_ref or "").strip():
         flags.append("missing_style")
@@ -74,7 +89,9 @@ def compute_quotation_ai_indicators(q: Quotation) -> QuotationAiIndicatorsOut:
         ]
         if x
     )
-    completeness = int(round(100 * header_filled / 5))
+    completeness = int(
+        round(100 * header_filled / max(costing_cfg.HEADER_COMPLETENESS_FIELD_COUNT, 1))
+    )
     costing_checks = [
         q.style_id is not None or bool((q.style_ref or "").strip()),
         q.projected_quantity is not None and q.projected_quantity > 0,
@@ -82,11 +99,59 @@ def compute_quotation_ai_indicators(q: Quotation) -> QuotationAiIndicatorsOut:
         bool((q.material_cost or "").strip()) or bool((q.manufacturing_cost or "").strip()),
         bool((q.currency or "").strip()),
     ]
-    costing_readiness = int(round(100 * sum(1 for x in costing_checks if x) / max(len(costing_checks), 1)))
+    costing_readiness = int(
+        round(
+            100
+            * sum(1 for x in costing_checks if x)
+            / max(costing_cfg.COSTING_READINESS_CHECK_COUNT, 1)
+        )
+    )
+    if not is_quotation_costing_phase1_enabled(tenant=tenant):
+        return QuotationAiIndicatorsOut(
+            completeness_score=completeness,
+            costing_readiness_score=costing_readiness,
+            flags=flags[:12],
+            costing_phase1_enabled=False,
+            signal_scope="header_only",
+            confidence_basis="partial",
+            source_mode="deterministic_only",
+            reason_codes=[],
+            limited_confidence=True,
+            cost_completeness_score=0,
+            costing_confidence_score=0,
+            anomaly_severity="none",
+            margin_pressure="low",
+            fx_sensitivity=False,
+            missing_prerequisite_count=0,
+            urgent_costing_review=False,
+            costing_flags=[],
+        )
+    bundle = build_costing_intelligence_bundle(
+        q,
+        material_lines=material_lines or [],
+        manufacturing_lines=manufacturing_lines or [],
+        other_cost_lines=other_cost_lines or [],
+        size_ratio_lines=size_ratio_lines or [],
+        signal_scope=scope,
+    )
     return QuotationAiIndicatorsOut(
         completeness_score=completeness,
         costing_readiness_score=costing_readiness,
         flags=flags[:12],
+        costing_phase1_enabled=True,
+        signal_scope=bundle["signal_scope"],
+        confidence_basis=bundle["confidence_basis"],
+        source_mode=bundle["source_mode"],
+        reason_codes=list(bundle.get("reason_codes") or [])[:24],
+        limited_confidence=bool(bundle.get("limited_confidence")),
+        cost_completeness_score=bundle["cost_completeness_score"],
+        costing_confidence_score=bundle["costing_confidence_score"],
+        anomaly_severity=bundle["anomaly_severity"],
+        margin_pressure=bundle["margin_pressure"],
+        fx_sensitivity=bundle["fx_sensitivity"],
+        missing_prerequisite_count=bundle["missing_prerequisite_count"],
+        urgent_costing_review=bundle["urgent_costing_review"],
+        costing_flags=bundle["costing_flags"][:12],
     )
 
 

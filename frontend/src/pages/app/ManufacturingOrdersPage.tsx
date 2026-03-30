@@ -7,6 +7,9 @@ import {
   InventoryErrorPanel,
   InventoryKpiStripSkeleton,
 } from "@/components/inventory/InventoryListStates";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { useListPagination } from "@/hooks/useListPagination";
 
 function statusBadgeClass(status: string) {
   switch (status) {
@@ -29,7 +32,9 @@ function statusBadgeClass(status: string) {
 }
 
 export function ManufacturingOrdersPage() {
+  const { page, setPage, pageSize, setPageSize, offset, limit, allowedSizes } = useListPagination();
   const [orders, setOrders] = useState<Awaited<ReturnType<typeof api.listManufacturingOrders>>>([]);
+  const [ordersTotal, setOrdersTotal] = useState(0);
   const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [stagesByOrder, setStagesByOrder] = useState<Record<number, ManufacturingStageResponse[]>>({});
   const [error, setError] = useState("");
@@ -39,50 +44,61 @@ export function ManufacturingOrdersPage() {
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const loadKpiAndMasters = useCallback(async () => {
+    const [itmPage, overview, pendingCrRows, stockSample] = await Promise.all([
+      api.listInventoryItemsPaginated({ page: 1, page_size: 500 }),
+      api.getInventoryReconciliationOverview(),
+      api.listConsumptionChangeRequests({ status_filter: "PENDING" }),
+      api.getStockSummary({ limit: 500, offset: 0 }),
+    ]);
+    setItems(itmPage.items);
+    const nextKpi = {
+      openPo: overview.purchase_orders_open,
+      openGrn: overview.goods_receiving_open,
+      pendingCr: pendingCrRows.length,
+      lowStock: stockSample.filter((r) => r.on_hand_qty > 0 && r.on_hand_qty <= 5).length,
+    };
+    const prevRaw = localStorage.getItem("p7_inventory_kpi_snapshot");
+    if (prevRaw) {
+      try {
+        setPrevKpi(JSON.parse(prevRaw) as { openPo: number; openGrn: number; pendingCr: number; lowStock: number });
+      } catch {
+        setPrevKpi(null);
+      }
+    }
+    setKpi(nextKpi);
+    localStorage.setItem("p7_inventory_kpi_snapshot", JSON.stringify(nextKpi));
+    const firstItem = itmPage.items[0];
+    if (firstItem) {
+      setForm((prev) => (!prev.finished_item_id ? { ...prev, finished_item_id: firstItem.id } : prev));
+    }
+  }, []);
+
+  const loadOrdersPage = useCallback(async () => {
     setError("");
     setLoading(true);
     try {
-      const [rows, itm] = await Promise.all([api.listManufacturingOrders(), api.listInventoryItems()]);
-      const [overview, pendingCrRows, stockRows] = await Promise.all([
-        api.getInventoryReconciliationOverview(),
-        api.listConsumptionChangeRequests({ status_filter: "PENDING" }),
-        api.getStockSummary(),
-      ]);
-      setOrders(rows);
-      setItems(itm);
-      const nextKpi = {
-        openPo: overview.purchase_orders_open,
-        openGrn: overview.goods_receiving_open,
-        pendingCr: pendingCrRows.length,
-        lowStock: stockRows.filter((r) => r.on_hand_qty > 0 && r.on_hand_qty <= 5).length,
-      };
-      const prevRaw = localStorage.getItem("p7_inventory_kpi_snapshot");
-      if (prevRaw) {
-        try {
-          setPrevKpi(JSON.parse(prevRaw) as { openPo: number; openGrn: number; pendingCr: number; lowStock: number });
-        } catch {
-          setPrevKpi(null);
-        }
-      }
-      setKpi(nextKpi);
-      localStorage.setItem("p7_inventory_kpi_snapshot", JSON.stringify(nextKpi));
-      const firstItem = itm[0];
-      if (firstItem) {
-        setForm((prev) => (!prev.finished_item_id ? { ...prev, finished_item_id: firstItem.id } : prev));
-      }
-      const stagePairs = await Promise.all(rows.slice(0, 20).map(async (row) => [row.id, await api.getManufacturingStages(row.id)] as const));
+      const moRes = await api.listManufacturingOrdersWithTotal({ limit, offset });
+      setOrders(moRes.rows);
+      setOrdersTotal(moRes.total ?? moRes.rows.length);
+      const stagePairs = await Promise.all(
+        moRes.rows.map(async (row) => [row.id, await api.getManufacturingStages(row.id)] as const),
+      );
       setStagesByOrder(Object.fromEntries(stagePairs));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load manufacturing data");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [limit, offset]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadKpiAndMasters();
+  }, [loadKpiAndMasters]);
+
+  useEffect(() => {
+    void loadOrdersPage();
+  }, [loadOrdersPage]);
 
   useEffect(() => {
     const close = () => setOpenActionsId(null);
@@ -104,7 +120,8 @@ export function ManufacturingOrdersPage() {
     try {
       await api.createManufacturingOrder(form);
       setForm({ finished_item_id: items[0]?.id ?? 0, planned_quantity: "0", notes: "" });
-      await load();
+      await loadKpiAndMasters();
+      await loadOrdersPage();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create manufacturing order");
     }
@@ -116,7 +133,8 @@ export function ManufacturingOrdersPage() {
       if (kind === "hold") await api.holdManufacturingOrder(id);
       if (kind === "resume") await api.resumeManufacturingOrder(id);
       if (kind === "complete") await api.completeManufacturingOrder(id);
-      await load();
+      await loadKpiAndMasters();
+      await loadOrdersPage();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed action");
     }
@@ -127,7 +145,8 @@ export function ManufacturingOrdersPage() {
       if (kind === "start") await api.startManufacturingStage(stageId);
       if (kind === "complete") await api.completeManufacturingStage(stageId);
       if (kind === "skip") await api.skipManufacturingStage(stageId);
-      await load();
+      await loadKpiAndMasters();
+      await loadOrdersPage();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed stage action");
     }
@@ -135,12 +154,28 @@ export function ManufacturingOrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Manufacturing Orders</h1>
-        <p className="text-sm text-text-muted">Manage stage-by-stage production progress with safe controls.</p>
-      </div>
+      <AppPageHeader
+        title="Manufacturing Orders"
+        description="Production execution · Stage progress tied to inventory KPIs (open PO/GRN, consumption changes, low stock). Use Planning for pipeline readiness."
+        actions={
+          <Link
+            to="/app/manufacturing/planning"
+            className="rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
+          >
+            Production planning
+          </Link>
+        }
+      />
 
-      {error ? <InventoryErrorPanel message={error} onRetry={() => void load()} /> : null}
+      {error ? (
+        <InventoryErrorPanel
+          message={error}
+          onRetry={() => {
+            void loadKpiAndMasters();
+            void loadOrdersPage();
+          }}
+        />
+      ) : null}
 
       {loading ? (
         <>
@@ -213,7 +248,7 @@ export function ManufacturingOrdersPage() {
       </div>
       )}
 
-      {!loading && orders.length === 0 ? (
+      {!loading && ordersTotal === 0 ? (
         <InventoryEmptyState title="No manufacturing orders yet" description="Create a manufacturing order above to start production." />
       ) : null}
 
@@ -354,6 +389,19 @@ export function ManufacturingOrdersPage() {
           </div>
         );
       })}
+      {!loading && ordersTotal > 0 ? (
+        <DataTablePagination
+          page={page}
+          pageSize={pageSize}
+          total={ordersTotal}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          allowedSizes={allowedSizes}
+        />
+      ) : null}
+      <p className="text-xs text-text-muted">
+        Finished-item dropdown loads up to 500 inventory items. KPI “Low stock” is estimated from the first 500 stock-summary rows.
+      </p>
     </div>
   );
 }

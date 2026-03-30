@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +42,9 @@ from app.modules.production.schemas import (
     SewingLineStyleConfigCreate,
     SewingLineStyleConfigMove,
 )
+from app.modules.ai_tool.audit import log_ai_event
+from app.modules.erp_ai_phases.feature_flags import require_phase
+from app.modules.production.planning_advisory_service import build_capacity_and_sequencing_advisory
 from app.modules.production.settings_router import _get_or_create_settings
 from app.modules.production.suggest_service import suggest_assignments
 
@@ -403,6 +407,39 @@ async def ai_efficiency_forecast(
     """30-day hourly production aggregates + Gemini narrative for next-week focus."""
     _ensure(user, tenant)
     return await build_efficiency_forecast(db, tenant.id)
+
+
+class PlanningAdvisoryWindowBody(BaseModel):
+    from_date: date
+    to_date: date
+
+
+@router.post("/planning/advisory/capacity-sequencing")
+async def planning_advisory_capacity_sequencing(
+    body: PlanningAdvisoryWindowBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Phase 14: deterministic advisory capacity proxy vs sequencing hints (no mutations)."""
+    _ensure(user, tenant)
+    require_phase("production_planning_ai_enhanced", tenant=tenant)
+    if body.to_date < body.from_date:
+        raise HTTPException(status_code=400, detail="to_date must be >= from_date")
+    payload = await build_capacity_and_sequencing_advisory(
+        db, tenant_id=tenant.id, from_date=body.from_date, to_date=body.to_date
+    )
+    await log_ai_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="PRODUCTION_PLANNING_ADVISORY",
+        resource="capacity_sequencing",
+        details_json={"window": payload.get("window")},
+        reason_code="PHASE14_ADVISORY",
+    )
+    await db.commit()
+    return payload
 
 
 @router.get("/planning/ai/settings", response_model=AiPlanningSettingsResponse)

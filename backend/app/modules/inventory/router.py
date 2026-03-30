@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import date, datetime
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import Date as SQLDate
 from sqlalchemy import case, cast, delete, desc, func, or_, select
@@ -2199,15 +2199,47 @@ async def receive_goods(
 
 @router.get("/stock-summary", response_model=list[StockSummaryRow])
 async def stock_summary(
+    response: Response,
     limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, description="Filter by item code or name (contains, case-insensitive)"),
+    warehouse_id: int | None = Query(default=None, description="Filter to one warehouse"),
+    hide_zero: bool = Query(default=False, description="Exclude rows where on-hand qty is 0"),
+    sort: str = Query(default="item", description="item | warehouse | in | out | on_hand"),
+    sort_dir: str = Query(default="asc", description="asc | desc"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    rows = await _stock_summary_rows(db, tenant.id)
-    return rows[offset:offset + limit]
+    rows = list(await _stock_summary_rows(db, tenant.id))
+    q = (search or "").strip().lower()
+    if q:
+        rows = [r for r in rows if q in (r.item_code or "").lower() or q in (r.item_name or "").lower()]
+    if warehouse_id is not None:
+        rows = [r for r in rows if r.warehouse_id == warehouse_id]
+    if hide_zero:
+        rows = [r for r in rows if r.on_hand_qty != 0]
+
+    sort_key = (sort or "item").lower()
+    ascending = (sort_dir or "asc").lower() != "desc"
+    reverse = not ascending
+
+    def sort_tuple(r: StockSummaryRow) -> tuple:
+        if sort_key == "warehouse":
+            return (r.warehouse_name or "", r.item_code)
+        if sort_key == "in":
+            return (r.in_qty, r.item_code, r.warehouse_name or "")
+        if sort_key == "out":
+            return (r.out_qty, r.item_code, r.warehouse_name or "")
+        if sort_key == "on_hand":
+            return (r.on_hand_qty, r.item_code, r.warehouse_name or "")
+        return (r.item_code, r.item_name, r.warehouse_name or "")
+
+    rows.sort(key=sort_tuple, reverse=reverse)
+    total = len(rows)
+    response.headers["X-Total-Count"] = str(total)
+    return rows[offset : offset + limit]
 
 
 @router.get("/stock-valuation", response_model=StockValuationOut)
@@ -3158,6 +3190,7 @@ STAGES = [
 
 @router.get("/manufacturing-orders", response_model=list[ManufacturingOrderOut])
 async def list_manufacturing_orders(
+    response: Response,
     limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
@@ -3165,6 +3198,15 @@ async def list_manufacturing_orders(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    total = int(
+        (
+            await db.execute(
+                select(func.count()).select_from(ManufacturingOrder).where(ManufacturingOrder.tenant_id == tenant.id)
+            )
+        ).scalar()
+        or 0,
+    )
+    response.headers["X-Total-Count"] = str(total)
     result = await db.execute(
         select(ManufacturingOrder)
         .where(ManufacturingOrder.tenant_id == tenant.id)

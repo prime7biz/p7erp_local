@@ -36,6 +36,7 @@ import {
   Settings,
 } from "lucide-react";
 import { GlobalCustomerMapCard } from "@/components/dashboard/GlobalCustomerMapCard";
+import { ErpAiPhasesDashboardSection } from "@/components/erp-ai/ErpAiPhasesDashboardSection";
 
 const bdt = new Intl.NumberFormat("en-BD");
 const PIE_COLORS = ["#3B82F6", "#F97316", "#10B981", "#8B5CF6", "#F59E0B", "#EF4444", "#06B6D4"];
@@ -164,16 +165,28 @@ export function Dashboard() {
   const [promiseRefreshing, setPromiseRefreshing] = useState(false);
   const [promiseLastUpdated, setPromiseLastUpdated] = useState<Date | null>(null);
   const [promiseCopyStatus, setPromiseCopyStatus] = useState<"" | "copied" | "failed">("");
+  const [commercialPendingCount, setCommercialPendingCount] = useState<number | null>(null);
 
   const fetchPromiseSummary = useCallback(() => {
     setPromiseRefreshing(true);
-    api
-      .getOrderPromiseSummary({ statuses: promiseStatusesFilter, limit: 25 })
-      .then((value) => {
-        setPromiseSummary(value);
-        setPromiseLastUpdated(new Date());
+    Promise.allSettled([
+      api.getOrderPromiseSummary({ statuses: promiseStatusesFilter, limit: 25 }),
+      api.getCommercialChangePendingSummary(),
+    ])
+      .then((results) => {
+        if (results[0].status === "fulfilled") {
+          setPromiseSummary(results[0].value);
+          setPromiseLastUpdated(new Date());
+        } else {
+          logApiError("Dashboard.promiseSummary", results[0].reason);
+        }
+        if (results[1].status === "fulfilled") {
+          setCommercialPendingCount(results[1].value.pending_approval_count);
+        } else {
+          setCommercialPendingCount(null);
+          logApiError("Dashboard.commercialPending", results[1].reason);
+        }
       })
-      .catch((err) => logApiError("Dashboard.promiseSummary", err))
       .finally(() => setPromiseRefreshing(false));
   }, [promiseStatusesFilter]);
 
@@ -590,6 +603,23 @@ export function Dashboard() {
                   <p className={`mt-2 text-2xl font-bold ${stat.tone}`}>{bdt.format(stat.value)}</p>
                 </Link>
               ))}
+            </div>
+            <div className="mt-3 rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-text-primary">Pending commercial change approvals</h3>
+                <Link
+                  to="/app/orders"
+                  className="text-[11px] font-semibold text-brand-primary hover:text-brand-primary/90 hover:underline underline-offset-2 flex items-center gap-0.5"
+                >
+                  Open orders <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+              <p className="mt-1 text-2xl font-bold text-text-primary">
+                {commercialPendingCount == null ? "—" : commercialPendingCount}
+              </p>
+              <p className="mt-1 text-xs text-text-muted">
+                Locked orders/quotations need an approved request before sensitive commercial fields change.
+              </p>
             </div>
             <div className="mt-3 rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
@@ -1034,6 +1064,7 @@ export function Dashboard() {
                 <p className="text-[10px] text-text-muted mt-2">Generated: {new Date(aiBriefUpdated).toLocaleString()}</p>
               )}
             </div>
+            <ErpAiPhasesDashboardSection />
           </section>
 
           {insights.length > 0 && (

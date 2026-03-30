@@ -1,8 +1,28 @@
 import os
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Session
 from app.config import get_settings
+
+# get_db() skips commit on read-only requests. After flush(), new/dirty/deleted are
+# cleared even though the transaction still holds uncommitted writes — track those paths.
+_P7_NEEDS_COMMIT = "_p7_needs_commit"
+
+
+@event.listens_for(Session, "after_flush")
+def _p7_after_flush(session: Session, _flush_context) -> None:
+    session.info[_P7_NEEDS_COMMIT] = True
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _p7_do_orm_execute(orm_execute_state) -> None:
+    if (
+        orm_execute_state.is_insert
+        or orm_execute_state.is_update
+        or orm_execute_state.is_delete
+    ):
+        orm_execute_state.session.info[_P7_NEEDS_COMMIT] = True
 
 settings = get_settings()
 # SQLAlchemy async needs postgresql+asyncpg
@@ -44,7 +64,12 @@ async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            if session.new or session.dirty or session.deleted:
+            if (
+                session.new
+                or session.dirty
+                or session.deleted
+                or session.info.get(_P7_NEEDS_COMMIT)
+            ):
                 await session.commit()
             else:
                 await session.rollback()

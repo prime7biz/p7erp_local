@@ -292,6 +292,42 @@ async def test_apply_updates_department(db_session_integration):
 
 
 @pytest.mark.asyncio
+async def test_apply_locked_quotation_currency_requires_change_request(db_session_integration):
+    db = db_session_integration
+    tenant, user, _c, _s, quotation = await _seed_tenant_user_quotation(db)
+    quotation.status = "APPROVED"
+    await db.flush()
+    suggestions = {
+        "currency": {"value": "EUR", "confidence": 0.95, "source": "test", "rationale": None},
+    }
+    bid = await qt_batches.create_batch_from_enrich(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        quotation_id=quotation.id,
+        suggestions=suggestions,
+        request_id="en",
+        model_name="test-model",
+        source_type="inference",
+    )
+    await db.flush()
+    out = await qt_batches.apply_suggestions_to_quotation(
+        db,
+        tenant=tenant,
+        user_id=user.id,
+        batch_id=bid,
+        quotation_id=quotation.id,
+        actions=[("currency", "apply")],
+        conflict_mode="overwrite",
+    )
+    assert out["requires_change_request"]
+    assert any(x["field_key"] == "currency" for x in out["requires_change_request"])
+    assert "currency" not in out["applied_fields"]
+    await db.refresh(quotation)
+    assert quotation.currency == "USD"
+
+
+@pytest.mark.asyncio
 async def test_validate_persists_trace_batch(db_session_integration):
     db = db_session_integration
     tenant, user, _c, _s, quotation = await _seed_tenant_user_quotation(db)

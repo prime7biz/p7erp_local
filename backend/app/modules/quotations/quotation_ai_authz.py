@@ -20,6 +20,7 @@ QuotationAiCapability = Literal[
     "audit",
     "apply_suggestions",
     "discard_suggestions",
+    "costing_intelligence",
 ]
 
 _CAP_PERMISSION_KEY: dict[QuotationAiCapability, str] = {
@@ -32,6 +33,7 @@ _CAP_PERMISSION_KEY: dict[QuotationAiCapability, str] = {
     "audit": "quotations.ai.audit",
     "apply_suggestions": "quotations.ai.apply_suggestions",
     "discard_suggestions": "quotations.ai.discard_suggestions",
+    "costing_intelligence": "quotations.ai.costing_intelligence",
 }
 
 _ROLE_ALLOW_ALL = {

@@ -1,6 +1,8 @@
 import { Sparkles, Loader2 } from "lucide-react";
 import type { useQuotationAi } from "@/hooks/useQuotationAi";
 import { cn } from "@/lib/utils";
+import { isQuotationCommercialLocked } from "@/lib/commercialChangeFields";
+import { logApiError } from "@/utils/logApiError";
 
 type AiHook = ReturnType<typeof useQuotationAi>;
 
@@ -11,6 +13,9 @@ type Props = {
   quotationId?: number;
   formSnapshot: Record<string, unknown>;
   hiddenActions?: Array<"summary" | "next">;
+  mode?: "edit" | "view";
+  quotationStatus?: string;
+  onAfterApply?: () => void;
 };
 
 function Btn({
@@ -41,8 +46,12 @@ export function QuotationAiPanel({
   quotationId,
   formSnapshot,
   hiddenActions,
+  mode = "edit",
+  quotationStatus = "",
+  onAfterApply,
 }: Props) {
   const busy = ai.status === "processing";
+  const commerciallyLocked = isQuotationCommercialLocked(quotationStatus);
   const phaseLabel =
     ai.status === "processing"
       ? "Analyzing..."
@@ -62,6 +71,20 @@ export function QuotationAiPanel({
     Object.entries(formSnapshot).map(([k, v]) => [k, v == null ? null : String(v)]),
   ) as Record<string, string | null>;
 
+  const applyHighConfidenceEnrich = async () => {
+    if (!quotationId || ai.enrichBatchId == null || !ai.enrich) return;
+    const items = Object.entries(ai.enrich.suggestions)
+      .filter(([, s]) => (s.confidence ?? 0) >= 0.85)
+      .map(([field_key]) => ({ field_key, decision: "apply" as const }));
+    if (items.length === 0) return;
+    try {
+      await ai.applySuggestionsToQuotation(quotationId, ai.enrichBatchId, items, "skip_if_different");
+      onAfterApply?.();
+    } catch (e) {
+      logApiError("QuotationAiPanel.applyHighConfidenceEnrich", e);
+    }
+  };
+
   return (
     <aside className={cn("rounded-xl border border-border bg-surface-raised p-4 space-y-3", className)}>
       <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
@@ -73,6 +96,12 @@ export function QuotationAiPanel({
       <p className="text-xs text-text-muted">
         AI suggests header fields only. Costing lines (materials, manufacturing, other costs) are never modified by AI.
       </p>
+      {commerciallyLocked ? (
+        <div className="rounded-lg border border-status-warning/25 bg-status-warning-subtle/40 px-2 py-1.5 text-xs text-status-warning-foreground">
+          This quotation is commercially locked. AI cannot apply protected commercial fields (currency, FX, prices,
+          commission, dates, etc.); use a commercial change request for those.
+        </div>
+      ) : null}
       <div className="grid gap-2 sm:grid-cols-2">
         <Btn
           disabled={busy}
@@ -108,6 +137,22 @@ export function QuotationAiPanel({
           </Btn>
         ) : null}
       </div>
+      {ai.enrich && Object.keys(ai.enrich.suggestions).length > 0 ? (
+        <div className="rounded-lg border border-border-subtle p-2 text-xs space-y-1 max-h-40 overflow-y-auto">
+          <div className="font-semibold text-text-primary">Enrich suggestions</div>
+          {Object.entries(ai.enrich.suggestions).map(([k, s]) => (
+            <div key={k} className="text-text-secondary">
+              <span className="font-medium text-text-primary">{k}</span>: {s.value ?? "—"}{" "}
+              <span className="text-text-muted">({Math.round((s.confidence ?? 0) * 100)}%)</span>
+            </div>
+          ))}
+          {mode === "edit" && quotationId && ai.enrichBatchId != null ? (
+            <Btn disabled={busy} onClick={() => void applyHighConfidenceEnrich()}>
+              Apply enrich ≥85% (skip if different)
+            </Btn>
+          ) : null}
+        </div>
+      ) : null}
       {hasAiPayload ? (
         <button
           type="button"
@@ -121,6 +166,26 @@ export function QuotationAiPanel({
       {ai.error ? (
         <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-2 py-1.5 text-xs text-status-danger-foreground">
           {ai.error}
+        </div>
+      ) : null}
+      {ai.lastApplyConflicts.length > 0 ? (
+        <div className="rounded-lg border border-status-warning/30 bg-status-warning-subtle/30 p-2 text-xs space-y-0.5">
+          <div className="font-semibold text-text-primary">Apply skipped (conflict)</div>
+          {ai.lastApplyConflicts.slice(0, 6).map((c, i) => (
+            <div key={i} className="text-text-secondary">
+              {c.field}: current “{c.current}” vs suggested “{c.suggested}”
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {ai.lastApplyRequiresChangeRequest.length > 0 ? (
+        <div className="rounded-lg border border-status-warning/30 bg-status-warning-subtle/30 p-2 text-xs space-y-0.5">
+          <div className="font-semibold text-text-primary">Requires commercial change request</div>
+          {ai.lastApplyRequiresChangeRequest.slice(0, 8).map((r, i) => (
+            <div key={i} className="text-text-secondary">
+              <span className="font-medium text-text-primary">{r.field_key}</span>: {r.message}
+            </div>
+          ))}
         </div>
       ) : null}
       {ai.validate ? (

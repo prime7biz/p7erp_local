@@ -6075,3 +6075,31 @@ async def bill_wise_aging_report(
         "buckets": {k: round(v, 2) for k, v in buckets.items()},
         "rows": party_rows,
     }
+
+
+@router.get("/ai/readonly-insights")
+async def finance_ai_readonly_insights(
+    months_back: int = Query(default=6, ge=1, le=24),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Phase 17: read-only voucher activity series and simple anomaly hints."""
+    _ensure_tenant(user, tenant)
+    from app.modules.ai_tool.audit import log_ai_event
+    from app.modules.erp_ai_phases.feature_flags import require_phase
+    from app.modules.finance.finance_ai_readonly_service import build_finance_readonly_insights
+
+    require_phase("finance_ai_readonly", tenant=tenant)
+    payload = await build_finance_readonly_insights(db, tenant_id=tenant.id, months_back=months_back)
+    await log_ai_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="FINANCE_AI_READONLY_INSIGHTS",
+        resource="voucher_series",
+        details_json={"periods": len(payload.get("posted_voucher_series") or [])},
+        reason_code="PHASE17_READ_ONLY",
+    )
+    await db.commit()
+    return payload

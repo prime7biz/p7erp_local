@@ -100,7 +100,17 @@ class InquiryResponse(BaseModel):
   created_at: str
   updated_at: str
   ai_indicators: InquiryAiIndicatorsOut | None = None
+  # Populated on paginated list joins for UI (optional).
+  customer_name: str | None = None
 
   class Config:
     from_attributes = True
+
+
+class InquiryListPageResponse(BaseModel):
+  items: list[InquiryResponse]
+  total: int
+  page: int
+  page_size: int
+  total_pages: int
 

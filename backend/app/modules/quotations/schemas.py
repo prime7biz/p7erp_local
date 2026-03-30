@@ -52,6 +52,11 @@ class QuotationResponse(BaseModel):
   commission_value: float | None = None
   department: str | None = None
   projected_quantity: int | None = None
+  quotation_date: date | None = None
+  projected_delivery_date: date | None = None
+  target_price: str | None = None
+  target_price_currency: str | None = None
+  exchange_rate: str | None = None
   currency: str | None
   total_amount: str | None
   material_cost: str | None = None
@@ -71,9 +76,21 @@ class QuotationResponse(BaseModel):
   created_at: str
   updated_at: str
   ai_indicators: Any | None = None
+  commercial_book_currency: str | None = None
+  # Populated on paginated list joins for UI (optional).
+  customer_name: str | None = None
+  inquiry_code: str | None = None
 
   class Config:
     from_attributes = True
+
+
+class QuotationListPageResponse(BaseModel):
+  items: list[QuotationResponse]
+  total: int
+  page: int
+  page_size: int
+  total_pages: int
 
 
 # ----- Costing line items (PrimeX parity) -----
@@ -183,6 +200,8 @@ class QuotationDetailResponse(BaseModel):
   manufacturing: list[QuotationManufacturingLine] = []
   other_costs: list[QuotationOtherCostLine] = []
   size_ratios: list[QuotationSizeRatioLine] = []
+  commercial_book_currency: str | None = None
+  ai_indicators: Any | None = None
 
   class Config:
     from_attributes = True

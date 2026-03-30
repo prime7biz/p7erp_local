@@ -41,6 +41,9 @@ export function useQuotationAi() {
   const [lastApplyConflicts, setLastApplyConflicts] = useState<
     Array<{ field: string; current: string; suggested: string }>
   >([]);
+  const [lastApplyRequiresChangeRequest, setLastApplyRequiresChangeRequest] = useState<
+    Array<{ field_key: string; message: string }>
+  >([]);
 
   const inflight = useRef(false);
 
@@ -60,6 +63,7 @@ export function useQuotationAi() {
     setEnrichBatchId(null);
     setTraceBatchIds([]);
     setLastApplyConflicts([]);
+    setLastApplyRequiresChangeRequest([]);
   }, []);
 
   const discardAiResults = useCallback(async () => {
@@ -83,6 +87,7 @@ export function useQuotationAi() {
     setEnrichBatchId(null);
     setTraceBatchIds([]);
     setLastApplyConflicts([]);
+    setLastApplyRequiresChangeRequest([]);
     setError(null);
     setStatus("idle");
   }, [enrichBatchId, traceBatchIds]);
@@ -229,6 +234,7 @@ export function useQuotationAi() {
         conflict_mode: conflictMode,
       });
       setLastApplyConflicts(res.conflicts ?? []);
+      setLastApplyRequiresChangeRequest(res.requires_change_request ?? []);
       return res;
     },
     [],
@@ -252,6 +258,7 @@ export function useQuotationAi() {
     enrichBatchId,
     traceBatchIds,
     lastApplyConflicts,
+    lastApplyRequiresChangeRequest,
     clear,
     discardAiResults,
     markSuggestionDecisions,

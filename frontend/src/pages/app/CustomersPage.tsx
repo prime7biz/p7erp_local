@@ -3,6 +3,25 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, type CustomerResponse } from "@/api/client";
 import { useCustomerAi } from "@/hooks/useCustomerAi";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { useListPagination } from "@/hooks/useListPagination";
+import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
+import {
+  listPageErrorClass,
+  listPageFilterPanelClass,
+  listPageKpiCardClass,
+  listPageKpiLabelClass,
+  listPageRootClass,
+  listPageTableCardClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableThClass,
+  listTableThRightClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -49,7 +68,7 @@ function DupRiskCell({ score }: { score?: number | null }) {
 }
 
 export function CustomersPage() {
-  const PAGE_SIZE = 10;
+  const { pageSize, setPageSize } = useListPagination();
   const queryClient = useQueryClient();
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
@@ -82,7 +101,7 @@ export function CustomersPage() {
       countryFilter,
       typeFilter,
       page,
-      PAGE_SIZE,
+      pageSize,
       staleOnly,
       incompleteOnly,
       highDupeOnly,
@@ -94,7 +113,7 @@ export function CustomersPage() {
         country: countryFilter === FILTER_ALL ? undefined : countryFilter,
         customer_type: typeFilter === FILTER_ALL ? undefined : typeFilter,
         page,
-        page_size: PAGE_SIZE,
+        page_size: pageSize,
         include_ai_fields: true,
         stale_only: staleOnly,
         incomplete_only: incompleteOnly,
@@ -104,7 +123,6 @@ export function CustomersPage() {
 
   const customers: CustomerResponse[] = data?.items ?? [];
   const total = data?.total ?? 0;
-  const totalPages = data?.total_pages ?? 1;
   const activeCount = data?.active_count ?? 0;
   const inactiveCount = data?.inactive_count ?? 0;
   const recentCount = data?.recent_count ?? 0;
@@ -124,14 +142,6 @@ export function CustomersPage() {
       recent: recentCount,
     };
   }, [activeCount, inactiveCount, recentCount, total]);
-
-  const visiblePageNumbers = useMemo(() => {
-    const start = Math.max(1, page - 2);
-    const end = Math.min(totalPages, page + 2);
-    const pages: number[] = [];
-    for (let i = start; i <= end; i += 1) pages.push(i);
-    return pages;
-  }, [page, totalPages]);
 
   const setFilterParam = useCallback(
     (key: string, value: string) => {
@@ -224,7 +234,7 @@ export function CustomersPage() {
     Array.from({ length: 6 }).map((_, idx) => (
       <tr key={idx} className="animate-pulse">
         {Array.from({ length: colCount }).map((__, c) => (
-          <td key={c} className="px-4 py-4">
+          <td key={c} className={listTableTdClass}>
             <div className="h-3.5 w-24 rounded bg-surface-subtle" />
           </td>
         ))}
@@ -232,24 +242,23 @@ export function CustomersPage() {
     ));
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">Merchandising / Customers</div>
-          <h1 className="mt-1 text-3xl font-bold text-text-primary">Customers</h1>
-          <p className="mt-1 text-sm text-text-muted">Manage and monitor your global customer base.</p>
-        </div>
-        <Link
-          to="/app/customers/new"
-          className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          New customer
-        </Link>
-      </div>
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Customers"
+        description="Merchandising · Manage and monitor your global customer base. Filters and KPIs are loaded from the server."
+        actions={
+          <Link
+            to="/app/customers/new"
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            New customer
+          </Link>
+        }
+      />
 
       {error && (
-        <div className="rounded-xl border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
+        <div className={listPageErrorClass}>
           <div className="flex items-center justify-between gap-2">
             <span>{error}</span>
             <button
@@ -267,25 +276,25 @@ export function CustomersPage() {
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-border bg-surface-raised p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">Total Customers</div>
+        <div className={listPageKpiCardClass}>
+          <div className={listPageKpiLabelClass}>Total Customers</div>
           <div className="mt-2 text-2xl font-bold text-text-primary">{kpis.total}</div>
         </div>
-        <div className="rounded-xl border border-border bg-surface-raised p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">Active</div>
+        <div className={listPageKpiCardClass}>
+          <div className={listPageKpiLabelClass}>Active</div>
           <div className="mt-2 text-2xl font-bold text-status-success">{kpis.active}</div>
         </div>
-        <div className="rounded-xl border border-border bg-surface-raised p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">Inactive</div>
+        <div className={listPageKpiCardClass}>
+          <div className={listPageKpiLabelClass}>Inactive</div>
           <div className="mt-2 text-2xl font-bold text-text-muted">{kpis.inactive}</div>
         </div>
-        <div className="rounded-xl border border-border bg-surface-raised p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">Added (30 Days)</div>
+        <div className={listPageKpiCardClass}>
+          <div className={listPageKpiLabelClass}>Added (30 Days)</div>
           <div className="mt-2 text-2xl font-bold text-brand-primary">{kpis.recent}</div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
+      <div className={listPageFilterPanelClass}>
         <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
           <span className="font-semibold text-text-secondary">AI quick filters</span>
           <button
@@ -406,28 +415,28 @@ export function CustomersPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
+      <div className={listPageTableCardClass}>
         {loading ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead className="bg-surface-subtle">
+          <ResponsiveTableContainer>
+            <table className={listTableBaseClass}>
+              <thead className={listTableTheadClass}>
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Customer</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Country</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Primary Contact</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Profile</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Activity</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Dup risk</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Updated</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-text-muted">Actions</th>
+                  <th className={listTableThClass}>Customer</th>
+                  <th className={listTableThClass}>ID</th>
+                  <th className={listTableThClass}>Country</th>
+                  <th className={listTableThClass}>Primary Contact</th>
+                  <th className={listTableThClass}>Type</th>
+                  <th className={listTableThClass}>Profile</th>
+                  <th className={listTableThClass}>Activity</th>
+                  <th className={listTableThClass}>Dup risk</th>
+                  <th className={listTableThClass}>Status</th>
+                  <th className={listTableThClass}>Updated</th>
+                  <th className={listTableThRightClass}>Actions</th>
                 </tr>
               </thead>
               <tbody>{renderSkeletonRows()}</tbody>
             </table>
-          </div>
+          </ResponsiveTableContainer>
         ) : customers.length === 0 ? (
           <div className="p-12 text-center">
             <Users className="mx-auto mb-3 h-12 w-12 text-border-strong" />
@@ -452,24 +461,24 @@ export function CustomersPage() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead className="bg-surface-subtle">
+            <ResponsiveTableContainer>
+              <table className={listTableBaseClass}>
+                <thead className={listTableTheadClass}>
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Customer</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Country</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Primary Contact</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Profile</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Activity</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Dup risk</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-text-muted">Updated</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-text-muted">Actions</th>
+                    <th className={listTableThClass}>Customer</th>
+                    <th className={listTableThClass}>ID</th>
+                    <th className={listTableThClass}>Country</th>
+                    <th className={listTableThClass}>Primary Contact</th>
+                    <th className={listTableThClass}>Type</th>
+                    <th className={listTableThClass}>Profile</th>
+                    <th className={listTableThClass}>Activity</th>
+                    <th className={listTableThClass}>Dup risk</th>
+                    <th className={listTableThClass}>Status</th>
+                    <th className={listTableThClass}>Updated</th>
+                    <th className={listTableThRightClass}>Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border-subtle">
+                <tbody>
                   {customers.map((customer) => {
                     const status = (customer.status || "active").toLowerCase();
                     const statusClasses =
@@ -490,22 +499,22 @@ export function CustomersPage() {
                       );
 
                     return (
-                      <tr key={customer.id} className="hover:bg-surface-subtle/80">
-                        <td className="px-4 py-3">
+                      <tr key={customer.id} className={listTableTrClass}>
+                        <td className={listTableTdClass}>
                           <Link to={`/app/customers/${customer.id}`} className="inline-flex items-center gap-1 font-semibold text-text-primary hover:text-brand-primary">
                             {customer.name}
                             <ExternalLink className="h-3.5 w-3.5" />
                           </Link>
                           <div className="text-xs text-text-muted">{customer.trade_name ?? customer.legal_entity_name ?? "—"}</div>
                         </td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">{customer.customer_code}</td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">{customer.billing_country ?? customer.country ?? "—"}</td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">
+                        <td className={listTableTdClass}>{customer.customer_code}</td>
+                        <td className={listTableTdClass}>{customer.billing_country ?? customer.country ?? "—"}</td>
+                        <td className={listTableTdClass}>
                           <div>{customer.primary_contact_name ?? "—"}</div>
                           <div className="text-xs text-text-muted">{customer.contact_email ?? customer.email ?? "No email"}</div>
                         </td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">{customer.customer_type ?? "—"}</td>
-                        <td className="px-4 py-3 text-sm">
+                        <td className={listTableTdClass}>{customer.customer_type ?? "—"}</td>
+                        <td className={listTableTdClass}>
                           {pct != null ? (
                             <span
                               className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -522,17 +531,17 @@ export function CustomersPage() {
                             "—"
                           )}
                         </td>
-                        <td className="px-4 py-3 text-sm">{staleBadge}</td>
-                        <td className="px-4 py-3 text-sm">
+                        <td className={listTableTdClass}>{staleBadge}</td>
+                        <td className={listTableTdClass}>
                           <DupRiskCell score={customer.duplicate_risk_score} />
                         </td>
-                        <td className="px-4 py-3">
+                        <td className={listTableTdClass}>
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${statusClasses}`}>
                             {status}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">{formatDate(customer.updated_at)}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td className={listTableTdClass}>{formatDate(customer.updated_at)}</td>
+                        <td className={cn(listTableTdClass, "text-right")}>
                           <div className="relative inline-block text-left">
                             <button
                               type="button"
@@ -583,48 +592,23 @@ export function CustomersPage() {
                   })}
                 </tbody>
               </table>
-            </div>
-            <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-text-muted sm:flex-row sm:items-center sm:justify-between">
-              <span>
-                Showing {total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1} to {Math.min(page * PAGE_SIZE, total)} of {total} customers
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setPageParam(page - 1)}
-                  disabled={page <= 1}
-                  className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                {visiblePageNumbers.map((pageNo) => (
-                  <button
-                    key={pageNo}
-                    type="button"
-                    onClick={() => setPageParam(pageNo)}
-                    className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
-                      pageNo === page
-                        ? "bg-brand-primary text-brand-primary-foreground"
-                        : "border border-border-strong text-text-secondary hover:bg-surface-subtle"
-                    }`}
-                  >
-                    {pageNo}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setPageParam(page + 1)}
-                  disabled={page >= totalPages}
-                  className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-              <Link to="/app/customers/new" className="inline-flex items-center gap-1 font-semibold text-brand-primary hover:underline">
+            </ResponsiveTableContainer>
+            <div className="flex flex-col gap-2 border-t border-border px-4 py-2 sm:flex-row sm:items-center sm:justify-end">
+              <Link to="/app/customers/new" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-primary hover:underline">
                 Add another
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
             </div>
+            <DataTablePagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={(p) => setPageParam(p)}
+              onPageSizeChange={(s) => {
+                setPageSize(s);
+                setPageParam(1);
+              }}
+            />
           </>
         )}
       </div>

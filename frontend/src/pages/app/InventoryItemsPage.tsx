@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
   type InventoryItemCreate,
@@ -18,6 +18,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, Layers, FolderTree, Plus, X, Scale, Building2 } from "lucide-react";
 import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { DataTablePagination } from "@/components/app/DataTablePagination";
+import {
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThClass,
+  listTableThRightClass,
+  listTableTheadClass,
+  listTableTrClass,
+  listPageToolbarInputClass,
+} from "@/components/app/listPageLayout";
+import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
+import { useListPagination } from "@/hooks/useListPagination";
+import { cn } from "@/lib/utils";
 
 type TabId = "masters" | "units" | "warehouses" | "items";
 
@@ -52,9 +67,8 @@ export function InventoryItemsPage() {
   const [openUnitActionsId, setOpenUnitActionsId] = useState<number | null>(null);
   const [openWarehouseActionsId, setOpenWarehouseActionsId] = useState<number | null>(null);
   const [openItemActionsId, setOpenItemActionsId] = useState<number | null>(null);
-  const ITEM_PAGE_SIZE = 50;
+  const { pageSize, setPageSize } = useListPagination();
   const [itemPage, setItemPage] = useState(1);
-  const [itemTotalPages, setItemTotalPages] = useState(1);
   const [itemTotal, setItemTotal] = useState(0);
   const [itemModalMode, setItemModalMode] = useState<"view" | "edit">("view");
   const [unitModalMode, setUnitModalMode] = useState<"view" | "edit">("view");
@@ -104,7 +118,7 @@ export function InventoryItemsPage() {
         api.listInventoryItemUnits(),
         api.listWarehouses(),
         api.listStockGroups(),
-        api.listInventoryItemsPaginated({ page: itemPage, page_size: ITEM_PAGE_SIZE }),
+        api.listInventoryItemsPaginated({ page: itemPage, page_size: pageSize }),
       ]);
       setCategories(cat);
       setSubcategories(sub);
@@ -112,7 +126,6 @@ export function InventoryItemsPage() {
       setWarehouses(wh);
       setStockGroups(sg);
       setItems(itmPage.items);
-      setItemTotalPages(itmPage.total_pages);
       setItemTotal(itmPage.total);
       const firstCategory = cat[0];
       const firstUnit = uni[0];
@@ -128,7 +141,7 @@ export function InventoryItemsPage() {
     } finally {
       setLoading(false);
     }
-  }, [itemPage]);
+  }, [itemPage, pageSize]);
 
   useEffect(() => {
     void load();
@@ -136,7 +149,7 @@ export function InventoryItemsPage() {
 
   useEffect(() => {
     setItemPage(1);
-  }, [itemSearch]);
+  }, [itemSearch, pageSize]);
 
   useEffect(() => {
     const raw = searchParams.get("tab");
@@ -201,14 +214,6 @@ export function InventoryItemsPage() {
     document.addEventListener("click", closeActions);
     return () => document.removeEventListener("click", closeActions);
   }, []);
-
-  const visibleItemPages = useMemo(() => {
-    const start = Math.max(1, itemPage - 2);
-    const end = Math.min(itemTotalPages, itemPage + 2);
-    const pages: number[] = [];
-    for (let i = start; i <= end; i += 1) pages.push(i);
-    return pages;
-  }, [itemPage, itemTotalPages]);
 
   const filteredItems = useMemo(() => {
     const q = itemSearch.trim().toLowerCase();
@@ -472,34 +477,45 @@ export function InventoryItemsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-text-primary">Stock Master</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Manage categories, subcategories, units, and inventory items.
-          </p>
-          <p className="mt-1 text-xs text-text-muted">
-            Tip: the menu links for Units and Warehouses open this same Stock Master page. Use the tabs to switch quickly.
-          </p>
-        </div>
-        <div className="flex rounded-xl border border-border bg-surface-raised p-1 shadow-sm">
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === id
-                  ? "bg-brand-primary text-brand-primary-foreground shadow-sm"
-                  : "border-border text-text-secondary hover:bg-surface-subtle"
-              }`}
+      <AppPageHeader
+        title="Stock Master"
+        description="Inventory · Categories, units, warehouses, and items used by procurement, receiving, costing, and production. Menu shortcuts for Units/Warehouses land on this page—use tabs to switch."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/app/purchase-orders"
+              className="rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
             >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+              Purchase orders
+            </Link>
+            <Link
+              to="/app/inventory/goods-receiving"
+              className="rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
+            >
+              Receiving
+            </Link>
+          </div>
+        }
+        belowTitle={
+          <div className="flex flex-wrap rounded-xl border border-border bg-surface-raised p-1 shadow-sm">
+            {tabs.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === id
+                    ? "bg-brand-primary text-brand-primary-foreground shadow-sm"
+                    : "border-border text-text-secondary hover:bg-surface-subtle"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       {error && (
         <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
@@ -1008,47 +1024,31 @@ export function InventoryItemsPage() {
                 </p>
               </div>
               <input
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm sm:w-64 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                className={cn(listPageToolbarInputClass, "sm:w-64")}
                 placeholder="Search by code or name…"
                 value={itemSearch}
                 onChange={(e) => setItemSearch(e.target.value)}
               />
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead className="border-b border-border bg-surface-subtle text-left text-text-muted">
+              <ResponsiveTableContainer>
+                <table className={cn(listTableBaseClass, "min-w-full")}>
+                  <thead className={listTableTheadClass}>
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
-                        Code
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
-                        Name
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
-                        Category
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
-                        Unit
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
-                        Def. WH
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
-                        Stock group
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-text-muted">
-                        Default Cost
-                      </th>
-                      <th className="w-24 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-text-muted">
-                        Actions
-                      </th>
+                      <th className={listTableThClass}>Code</th>
+                      <th className={listTableThClass}>Name</th>
+                      <th className={listTableThClass}>Category</th>
+                      <th className={listTableThClass}>Unit</th>
+                      <th className={listTableThClass}>Def. WH</th>
+                      <th className={listTableThClass}>Stock group</th>
+                      <th className={listTableThRightClass}>Default Cost</th>
+                      <th className={cn(listTableThRightClass, "w-24")}>Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border-subtle">
+                  <tbody>
                     {filteredItems.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-4 py-10 text-center text-sm text-text-muted">
+                        <td colSpan={8} className={cn(listTableTdClass, "py-10 text-center")}>
                           {items.length === 0
                             ? "No items yet. Add one using the form above."
                             : "No items match your search."}
@@ -1067,24 +1067,24 @@ export function InventoryItemsPage() {
                             openItemModal(row, "view");
                           }
                         }}
-                        className="cursor-pointer hover:bg-surface-subtle/50"
+                        className={cn(listTableTrClass, "cursor-pointer")}
                       >
-                        <td className="px-4 py-3 text-sm font-medium text-text-primary">{row.item_code}</td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">{row.name}</td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">
+                        <td className={listTableTdPrimaryClass}>{row.item_code}</td>
+                        <td className={listTableTdClass}>{row.name}</td>
+                        <td className={listTableTdClass}>
                           {categoryMap.get(row.category_id) ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">{unitMap.get(row.unit_id) ?? "—"}</td>
-                        <td className="px-4 py-3 text-sm text-text-secondary">
+                        <td className={listTableTdClass}>{unitMap.get(row.unit_id) ?? "—"}</td>
+                        <td className={listTableTdClass}>
                           {row.default_warehouse_id != null
                             ? warehouseCodeById.get(row.default_warehouse_id) ?? `#${row.default_warehouse_id}`
                             : "—"}
                         </td>
-                        <td className="max-w-[140px] truncate px-4 py-3 text-sm text-text-secondary" title={row.stock_group_id != null ? stockGroupLabelById.get(row.stock_group_id) : ""}>
+                        <td className={cn(listTableTdClass, "max-w-[140px] truncate")} title={row.stock_group_id != null ? stockGroupLabelById.get(row.stock_group_id) : ""}>
                           {row.stock_group_id != null ? stockGroupLabelById.get(row.stock_group_id) ?? `#${row.stock_group_id}` : "—"}
                         </td>
-                        <td className="px-4 py-3 text-right text-sm text-text-secondary">{row.default_cost}</td>
-                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <td className={cn(listTableTdClass, "text-right")}>{row.default_cost}</td>
+                        <td className={cn(listTableTdClass, "text-right")} onClick={(e) => e.stopPropagation()}>
                           <div className="relative inline-block text-left">
                             <button
                               type="button"
@@ -1117,47 +1117,18 @@ export function InventoryItemsPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
-              {itemTotalPages > 1 ? (
-                <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-text-muted sm:flex-row sm:items-center sm:justify-between">
-                  <span>
-                    Showing {itemTotal === 0 ? 0 : (itemPage - 1) * ITEM_PAGE_SIZE + 1} to{" "}
-                    {Math.min(itemPage * ITEM_PAGE_SIZE, itemTotal)} of {itemTotal} items (page {itemPage} of{" "}
-                    {itemTotalPages})
-                  </span>
-                  <div className="flex flex-wrap items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setItemPage((p) => Math.max(1, p - 1))}
-                      disabled={itemPage <= 1}
-                      className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Previous
-                    </button>
-                    {visibleItemPages.map((pageNo) => (
-                      <button
-                        key={pageNo}
-                        type="button"
-                        onClick={() => setItemPage(pageNo)}
-                        className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
-                          pageNo === itemPage
-                            ? "bg-brand-primary text-brand-primary-foreground"
-                            : "border border-border-strong text-text-secondary hover:bg-surface-subtle"
-                        }`}
-                      >
-                        {pageNo}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setItemPage((p) => p + 1)}
-                      disabled={itemPage >= itemTotalPages}
-                      className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
+              </ResponsiveTableContainer>
+              {itemTotal > 0 ? (
+                <DataTablePagination
+                  page={itemPage}
+                  pageSize={pageSize}
+                  total={itemTotal}
+                  onPageChange={setItemPage}
+                  onPageSizeChange={(s) => {
+                    setPageSize(s);
+                    setItemPage(1);
+                  }}
+                />
               ) : null}
             </CardContent>
           </Card>

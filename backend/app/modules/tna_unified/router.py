@@ -2,6 +2,10 @@ from datetime import date, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, status
+
+from app.modules.ai_tool.audit import log_ai_event
+from app.modules.erp_ai_phases.feature_flags import require_phase
+from app.modules.tna_unified.followup_ai_service import build_followup_insights
 from pydantic import BaseModel
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -355,3 +359,27 @@ async def get_unified_summary(
         merch_count=merch_count,
         manufacturing_count=manufacturing_count,
     )
+
+
+@router.get("/ai/followup-insights")
+async def tna_followup_ai_insights(
+    order_id: int | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Phase 15: advisory delay risk and ownership gaps (no mutations)."""
+    _ensure_tenant(user, tenant)
+    require_phase("tna_followup_ai", tenant=tenant)
+    payload = await build_followup_insights(db, tenant_id=tenant.id, order_id=order_id)
+    await log_ai_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="TNA_FOLLOWUP_AI_INSIGHTS",
+        resource="tna_followup",
+        details_json={"delay_risk_score": payload.get("delay_risk_score")},
+        reason_code="PHASE15_ADVISORY",
+    )
+    await db.commit()
+    return payload

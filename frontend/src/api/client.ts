@@ -2186,6 +2186,104 @@ export const api = {
     );
   },
 
+  async quotationCostingCompletenessCheck(
+    body: { quotation_id: number },
+  ): Promise<QuotationCostingAiCompletenessResponse> {
+    return request<QuotationCostingAiCompletenessResponse>("/api/v1/quotations/ai/cost-completeness-check", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationCostingAnomalyScan(body: { quotation_id: number }): Promise<QuotationCostingAiAnomalyScanResponse> {
+    return request<QuotationCostingAiAnomalyScanResponse>("/api/v1/quotations/ai/costing-anomaly-scan", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationCostingMarginRisk(body: { quotation_id: number }): Promise<QuotationCostingAiMarginRiskResponse> {
+    return request<QuotationCostingAiMarginRiskResponse>("/api/v1/quotations/ai/margin-risk-explanation", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationCostingFxSensitivity(body: { quotation_id: number }): Promise<QuotationCostingAiFxSensitivityResponse> {
+    return request<QuotationCostingAiFxSensitivityResponse>("/api/v1/quotations/ai/fx-sensitivity-summary", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationCostingSummary(body: { quotation_id: number }): Promise<QuotationCostingAiCostingSummaryResponse> {
+    return request<QuotationCostingAiCostingSummaryResponse>("/api/v1/quotations/ai/costing-summary", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationCostingNextActions(body: { quotation_id: number }): Promise<QuotationCostingAiNextActionsResponse> {
+    return request<QuotationCostingAiNextActionsResponse>("/api/v1/quotations/ai/costing-next-actions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationCostingAuditLog(params?: { quotation_id?: number; limit?: number }): Promise<QuotationAiAuditListResponse> {
+    const q = new URLSearchParams();
+    if (params?.quotation_id != null) q.set("quotation_id", String(params.quotation_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<QuotationAiAuditListResponse>(`/api/v1/quotations/ai/costing-audit-log${suffix}`);
+  },
+
+  async quotationCostingSuggestionsGenerate(body: { quotation_id: number }): Promise<QuotationCostingSuggestionBatchOut> {
+    return request<QuotationCostingSuggestionBatchOut>("/api/v1/quotations/ai/costing-suggestions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationCostingSuggestionsGet(batchId: number): Promise<QuotationCostingSuggestionBatchOut> {
+    return request<QuotationCostingSuggestionBatchOut>(`/api/v1/quotations/ai/costing-suggestions/${batchId}`);
+  },
+  async quotationCostingSuggestionsMarkDecisions(body: {
+    batch_id: number;
+    decisions: Array<{ item_id: number; decision: "apply" | "reject" | "skip" }>;
+  }): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/quotations/ai/costing-suggestions/mark-decisions", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationCostingSuggestionsApply(body: {
+    quotation_id: number;
+    batch_id: number;
+    items: Array<{ item_id: number; decision: "apply" | "reject" | "skip" }>;
+  }): Promise<QuotationCostingSuggestionApplyResponse> {
+    return request<QuotationCostingSuggestionApplyResponse>("/api/v1/quotations/ai/costing-suggestions/apply", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationCostingSuggestionsDiscard(body: { batch_id: number }): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>("/api/v1/quotations/ai/costing-suggestions/discard", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationCostBenchmark(body: {
+    quotation_id: number;
+    same_customer_only?: boolean;
+    months_back?: number;
+  }): Promise<CostBenchmarkResponse> {
+    return request<CostBenchmarkResponse>("/api/v1/quotations/ai/cost-benchmark", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async quotationCostBenchmarkHistory(params?: { quotation_id?: number; limit?: number }): Promise<CostBenchmarkHistoryResponse> {
+    const q = new URLSearchParams();
+    if (params?.quotation_id != null) q.set("quotation_id", String(params.quotation_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<CostBenchmarkHistoryResponse>(`/api/v1/quotations/ai/cost-benchmark-history${suffix}`);
+  },
+
   // ---------- Order AI ----------
   async orderAiExtract(file: File, orderId?: number): Promise<OrderAiExtractWrapResponse> {
     const fd = new FormData();
@@ -3329,6 +3427,28 @@ export const api = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<InquiryResponse[]>(`/api/v1/inquiries${suffix}`);
   },
+  async listInquiriesPaginated(params?: {
+    search?: string;
+    status?: string;
+    department?: string;
+    created_from?: string;
+    created_to?: string;
+    ai_indicators?: 0 | 1;
+    page?: number;
+    page_size?: number;
+  }): Promise<InquiryListPageResponse> {
+    const q = new URLSearchParams();
+    if (params?.search) q.set("search", params.search);
+    if (params?.status) q.set("status", params.status);
+    if (params?.department) q.set("department", params.department);
+    if (params?.created_from) q.set("created_from", params.created_from);
+    if (params?.created_to) q.set("created_to", params.created_to);
+    if (params?.ai_indicators === 1) q.set("ai_indicators", "1");
+    if (params?.page != null) q.set("page", String(params.page));
+    if (params?.page_size != null) q.set("page_size", String(params.page_size));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<InquiryListPageResponse>(`/api/v1/inquiries/paginated${suffix}`);
+  },
   async getInquiry(id: number): Promise<InquiryResponse> {
     return request<InquiryResponse>(`/api/v1/inquiries/${id}`);
   },
@@ -3354,6 +3474,7 @@ export const api = {
     created_from?: string;
     created_to?: string;
     ai_indicators?: number;
+    benchmark_hint?: number;
     limit?: number;
     offset?: number;
   }): Promise<QuotationResponse[]> {
@@ -3364,14 +3485,40 @@ export const api = {
     if (params?.created_from) q.set("created_from", params.created_from);
     if (params?.created_to) q.set("created_to", params.created_to);
     if (params?.ai_indicators != null) q.set("ai_indicators", String(params.ai_indicators));
+    if (params?.benchmark_hint != null) q.set("benchmark_hint", String(params.benchmark_hint));
     if (params?.limit != null) q.set("limit", String(params.limit));
     if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<QuotationResponse[]>(`/api/v1/quotations${suffix}`);
   },
-  async getQuotation(id: number): Promise<QuotationDetailResponse> {
-    // Backend returns full detail (header + costing breakdown)
-    return request<QuotationDetailResponse>(`/api/v1/quotations/${id}`);
+  async listQuotationsPaginated(params?: {
+    search?: string;
+    status?: string;
+    department?: string;
+    created_from?: string;
+    created_to?: string;
+    ai_indicators?: number;
+    benchmark_hint?: number;
+    page?: number;
+    page_size?: number;
+  }): Promise<QuotationListPageResponse> {
+    const q = new URLSearchParams();
+    if (params?.search) q.set("search", params.search);
+    if (params?.status) q.set("status", params.status);
+    if (params?.department) q.set("department", params.department);
+    if (params?.created_from) q.set("created_from", params.created_from);
+    if (params?.created_to) q.set("created_to", params.created_to);
+    if (params?.ai_indicators != null) q.set("ai_indicators", String(params.ai_indicators));
+    if (params?.benchmark_hint != null) q.set("benchmark_hint", String(params.benchmark_hint));
+    if (params?.page != null) q.set("page", String(params.page));
+    if (params?.page_size != null) q.set("page_size", String(params.page_size));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<QuotationListPageResponse>(`/api/v1/quotations/paginated${suffix}`);
+  },
+  async getQuotation(id: number, params?: { ai_indicators?: 0 | 1 }): Promise<QuotationDetailResponse> {
+    const q =
+      params?.ai_indicators === 1 ? `?ai_indicators=${params.ai_indicators}` : "";
+    return request<QuotationDetailResponse>(`/api/v1/quotations/${id}${q}`);
   },
   async createQuotation(data: QuotationCreate): Promise<QuotationResponse> {
     return request<QuotationResponse>("/api/v1/quotations", {
@@ -3414,6 +3561,26 @@ export const api = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<OrderResponse[]>(`/api/v1/orders${suffix}`);
   },
+  async listOrdersPaginated(params?: {
+    search?: string;
+    status?: string;
+    created_from?: string;
+    created_to?: string;
+    ai_indicators?: number;
+    page?: number;
+    page_size?: number;
+  }): Promise<OrderListPageResponse> {
+    const q = new URLSearchParams();
+    if (params?.search) q.set("search", params.search);
+    if (params?.status) q.set("status", params.status);
+    if (params?.created_from) q.set("created_from", params.created_from);
+    if (params?.created_to) q.set("created_to", params.created_to);
+    if (params?.ai_indicators != null) q.set("ai_indicators", String(params.ai_indicators));
+    if (params?.page != null) q.set("page", String(params.page));
+    if (params?.page_size != null) q.set("page_size", String(params.page_size));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<OrderListPageResponse>(`/api/v1/orders/paginated${suffix}`);
+  },
   async getOrder(id: number, params?: { ai_indicators?: number }): Promise<OrderResponse> {
     const q = new URLSearchParams();
     if (params?.ai_indicators != null) q.set("ai_indicators", String(params.ai_indicators));
@@ -3426,6 +3593,9 @@ export const api = {
   },
   async getOrderPromiseCheck(id: number): Promise<OrderPromiseCheckResponse> {
     return request<OrderPromiseCheckResponse>(`/api/v1/orders/${id}/promise-check`);
+  },
+  async getOrderCommercialAlignment(orderId: number): Promise<OrderCommercialAlignmentResponse> {
+    return request<OrderCommercialAlignmentResponse>(`/api/v1/orders/${orderId}/commercial-alignment`);
   },
   async getOrderPromiseSummary(params?: { statuses?: string; limit?: number }): Promise<OrderPromiseSummaryResponse> {
     const q = new URLSearchParams();
@@ -3468,6 +3638,75 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     });
+  },
+  async getOrderPlanningGrounding(orderId: number): Promise<PlanningGroundingSnapshot> {
+    return request<PlanningGroundingSnapshot>(`/api/v1/orders/${orderId}/planning-grounding`);
+  },
+  async getOrdersPlanningGroundingSummary(orderIds: number[]): Promise<PlanningGroundingSummaryRow[]> {
+    if (!orderIds.length) return [];
+    const q = new URLSearchParams();
+    q.set("order_ids", orderIds.join(","));
+    return request<PlanningGroundingSummaryRow[]>(`/api/v1/orders/planning-grounding-summary?${q.toString()}`);
+  },
+  async listOrderChangeRequests(
+    orderId: number,
+    params?: { status?: string; limit?: number; offset?: number }
+  ): Promise<CommercialChangeRequestOut[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<CommercialChangeRequestOut[]>(`/api/v1/orders/${orderId}/change-requests${suffix}`);
+  },
+  async listQuotationChangeRequests(
+    quotationId: number,
+    params?: { status?: string; limit?: number; offset?: number }
+  ): Promise<CommercialChangeRequestOut[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<CommercialChangeRequestOut[]>(
+      `/api/v1/quotations/${quotationId}/change-requests${suffix}`
+    );
+  },
+  async getCommercialChangeRequest(id: number): Promise<CommercialChangeRequestOut> {
+    return request<CommercialChangeRequestOut>(`/api/v1/change-requests/${id}`);
+  },
+  async createCommercialChangeRequest(data: CommercialChangeRequestCreate): Promise<CommercialChangeRequestOut> {
+    return request<CommercialChangeRequestOut>("/api/v1/change-requests", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async approveCommercialChangeRequest(id: number, note?: string): Promise<CommercialChangeRequestOut> {
+    return request<CommercialChangeRequestOut>(`/api/v1/change-requests/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ note: note ?? null }),
+    });
+  },
+  async rejectCommercialChangeRequest(id: number, note?: string): Promise<CommercialChangeRequestOut> {
+    return request<CommercialChangeRequestOut>(`/api/v1/change-requests/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ note: note ?? null }),
+    });
+  },
+  async applyCommercialChangeRequest(id: number): Promise<CommercialChangeRequestOut> {
+    return request<CommercialChangeRequestOut>(`/api/v1/change-requests/${id}/apply`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  },
+  async cancelCommercialChangeRequest(id: number): Promise<CommercialChangeRequestOut> {
+    return request<CommercialChangeRequestOut>(`/api/v1/change-requests/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  },
+  async getCommercialChangePendingSummary(): Promise<CommercialChangePendingSummary> {
+    return request<CommercialChangePendingSummary>("/api/v1/change-requests/pending-summary");
   },
   async convertInquiryToQuotation(
     id: number,
@@ -3792,8 +4031,32 @@ export const api = {
       body: JSON.stringify({ ids }),
     });
   },
-  async getStockSummary(): Promise<StockSummaryRow[]> {
-    return request<StockSummaryRow[]>("/api/v1/inventory/stock-summary");
+  async getStockSummary(params?: { limit?: number; offset?: number }): Promise<StockSummaryRow[]> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<StockSummaryRow[]>(`/api/v1/inventory/stock-summary${suffix}`);
+  },
+  async getStockSummaryWithTotal(params?: {
+    limit?: number;
+    offset?: number;
+    search?: string;
+    warehouse_id?: number;
+    hide_zero?: boolean;
+    sort?: "item" | "warehouse" | "in" | "out" | "on_hand";
+    sort_dir?: "asc" | "desc";
+  }): Promise<ListWithTotal<StockSummaryRow>> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
+    if (params?.warehouse_id != null) q.set("warehouse_id", String(params.warehouse_id));
+    if (params?.hide_zero) q.set("hide_zero", "true");
+    if (params?.sort) q.set("sort", params.sort);
+    if (params?.sort_dir) q.set("sort_dir", params.sort_dir);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return requestWithTotal<StockSummaryRow>(`/api/v1/inventory/stock-summary${suffix}`);
   },
   async getStockValuation(params?: { as_of_date?: string }): Promise<StockValuationResponse> {
     const q = new URLSearchParams();
@@ -3963,8 +4226,19 @@ export const api = {
   async approveProcessOrder(id: number): Promise<ProcessOrderResponse> {
     return request<ProcessOrderResponse>(`/api/v1/inventory/process-orders/${id}/approve`, { method: "POST" });
   },
-  async listManufacturingOrders(): Promise<ManufacturingOrderResponse[]> {
-    return request<ManufacturingOrderResponse[]>("/api/v1/inventory/manufacturing-orders");
+  async listManufacturingOrders(params?: { limit?: number; offset?: number }): Promise<ManufacturingOrderResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<ManufacturingOrderResponse[]>(`/api/v1/inventory/manufacturing-orders${suffix}`);
+  },
+  async listManufacturingOrdersWithTotal(params?: { limit?: number; offset?: number }): Promise<ListWithTotal<ManufacturingOrderResponse>> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return requestWithTotal<ManufacturingOrderResponse>(`/api/v1/inventory/manufacturing-orders${suffix}`);
   },
   async getManufacturingOrder(id: number): Promise<ManufacturingOrderResponse> {
     return request<ManufacturingOrderResponse>(`/api/v1/inventory/manufacturing-orders/${id}`);
@@ -4378,6 +4652,7 @@ export const api = {
     active_for_orders?: boolean;
     priority?: string;
     risk_level?: string;
+    style_ids?: number[];
     limit?: number;
     offset?: number;
   }): Promise<StyleResponse[]> {
@@ -4391,6 +4666,9 @@ export const api = {
     if (params?.active_for_orders != null) q.set("active_for_orders", String(params.active_for_orders));
     if (params?.priority) q.set("priority", params.priority);
     if (params?.risk_level) q.set("risk_level", params.risk_level);
+    if (params?.style_ids?.length) {
+      for (const id of params.style_ids) q.append("style_ids", String(id));
+    }
     if (params?.limit != null) q.set("limit", String(params.limit));
     if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
@@ -4407,6 +4685,7 @@ export const api = {
     active_for_orders?: boolean;
     priority?: string;
     risk_level?: string;
+    style_ids?: number[];
     limit?: number;
     offset?: number;
   }): Promise<ListWithTotal<StyleResponse>> {
@@ -4420,6 +4699,9 @@ export const api = {
     if (params?.active_for_orders != null) q.set("active_for_orders", String(params.active_for_orders));
     if (params?.priority) q.set("priority", params.priority);
     if (params?.risk_level) q.set("risk_level", params.risk_level);
+    if (params?.style_ids?.length) {
+      for (const id of params.style_ids) q.append("style_ids", String(id));
+    }
     if (params?.limit != null) q.set("limit", String(params.limit));
     if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
@@ -4457,14 +4739,72 @@ export const api = {
     lifecycle_stage?: string;
     critical_only?: boolean;
     saved_view?: string;
+    style_ids?: number[];
+    report_limit?: number;
+    report_offset?: number;
+    status?: string;
+    buyer_customer_id?: number;
+    season?: string;
+    department?: string;
+    active_for_orders?: boolean;
+    priority?: string;
+    risk_level?: string;
   }): Promise<StyleReportRow[]> {
     const q = new URLSearchParams();
     if (params?.search) q.set("search", params.search);
     if (params?.lifecycle_stage) q.set("lifecycle_stage", params.lifecycle_stage);
     if (params?.critical_only != null) q.set("critical_only", String(params.critical_only));
     if (params?.saved_view) q.set("saved_view", params.saved_view);
+    if (params?.style_ids?.length) {
+      for (const id of params.style_ids) q.append("style_ids", String(id));
+    }
+    if (params?.report_limit != null) q.set("report_limit", String(params.report_limit));
+    if (params?.report_offset != null) q.set("report_offset", String(params.report_offset));
+    if (params?.status) q.set("status", params.status);
+    if (params?.buyer_customer_id != null) q.set("buyer_customer_id", String(params.buyer_customer_id));
+    if (params?.season) q.set("season", params.season);
+    if (params?.department) q.set("department", params.department);
+    if (params?.active_for_orders != null) q.set("active_for_orders", String(params.active_for_orders));
+    if (params?.priority) q.set("priority", params.priority);
+    if (params?.risk_level) q.set("risk_level", params.risk_level);
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<StyleReportRow[]>(`/api/v1/merch/styles/summary-report${suffix}`);
+  },
+  async listStyleSummaryReportWithTotal(params?: {
+    search?: string;
+    lifecycle_stage?: string;
+    critical_only?: boolean;
+    saved_view?: string;
+    style_ids?: number[];
+    report_limit?: number;
+    report_offset?: number;
+    status?: string;
+    buyer_customer_id?: number;
+    season?: string;
+    department?: string;
+    active_for_orders?: boolean;
+    priority?: string;
+    risk_level?: string;
+  }): Promise<ListWithTotal<StyleReportRow>> {
+    const q = new URLSearchParams();
+    if (params?.search) q.set("search", params.search);
+    if (params?.lifecycle_stage) q.set("lifecycle_stage", params.lifecycle_stage);
+    if (params?.critical_only != null) q.set("critical_only", String(params.critical_only));
+    if (params?.saved_view) q.set("saved_view", params.saved_view);
+    if (params?.style_ids?.length) {
+      for (const id of params.style_ids) q.append("style_ids", String(id));
+    }
+    if (params?.report_limit != null) q.set("report_limit", String(params.report_limit));
+    if (params?.report_offset != null) q.set("report_offset", String(params.report_offset));
+    if (params?.status) q.set("status", params.status);
+    if (params?.buyer_customer_id != null) q.set("buyer_customer_id", String(params.buyer_customer_id));
+    if (params?.season) q.set("season", params.season);
+    if (params?.department) q.set("department", params.department);
+    if (params?.active_for_orders != null) q.set("active_for_orders", String(params.active_for_orders));
+    if (params?.priority) q.set("priority", params.priority);
+    if (params?.risk_level) q.set("risk_level", params.risk_level);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return requestWithTotal<StyleReportRow>(`/api/v1/merch/styles/summary-report${suffix}`);
   },
   async listStyleComponents(styleId: number): Promise<StyleComponentResponse[]> {
     return request<StyleComponentResponse[]>(`/api/v1/merch/styles/${styleId}/components`);
@@ -4599,16 +4939,24 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  async listConsumptionPlans(params?: { order_id?: number }): Promise<ConsumptionPlanResponse[]> {
+  async listConsumptionPlans(params?: { order_id?: number; limit?: number; offset?: number }): Promise<ConsumptionPlanResponse[]> {
     const q = new URLSearchParams();
     if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     const res = await requestWithTotal<ConsumptionPlanResponse>(`/api/v1/merch/consumption-plans${suffix}`);
     return res.rows;
   },
-  async listConsumptionPlansWithTotal(params?: { order_id?: number }): Promise<ListWithTotal<ConsumptionPlanResponse>> {
+  async listConsumptionPlansWithTotal(params?: {
+    order_id?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<ListWithTotal<ConsumptionPlanResponse>> {
     const q = new URLSearchParams();
     if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return requestWithTotal<ConsumptionPlanResponse>(`/api/v1/merch/consumption-plans${suffix}`);
   },
@@ -5203,6 +5551,78 @@ export const api = {
   },
   async getDashboardRevenueTrend(): Promise<DashboardRevenueTrend> {
     return request<DashboardRevenueTrend>("/api/v1/dashboard/revenue-trend");
+  },
+  /** Phase 18 — read-only executive brief (requires EXECUTIVE_AI_DASHBOARD_ENABLED + tenant flag). */
+  async getExecutiveAiBrief(): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/dashboard/ai/executive-brief");
+  },
+  /** Phase 17 — voucher activity series (requires FINANCE_AI_READONLY_ENABLED + tenant flag). */
+  async getFinanceAiReadonlyInsights(monthsBack?: number): Promise<Record<string, unknown>> {
+    const q = monthsBack != null ? `?months_back=${monthsBack}` : "";
+    return request<Record<string, unknown>>(`/api/v1/finance/ai/readonly-insights${q}`);
+  },
+  /** Phase 14 — planning capacity/sequencing advisory (POST, requires PRODUCTION_PLANNING_AI_ENHANCED_ENABLED). */
+  async postProductionPlanningAdvisory(body: {
+    from_date: string;
+    to_date: string;
+  }): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/production/planning/advisory/capacity-sequencing", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  /** Phase 15 — TNA follow-up insights (requires TNA_FOLLOWUP_AI_ENABLED + tenant flag). */
+  async getTnaFollowupAiInsights(orderId?: number): Promise<Record<string, unknown>> {
+    const q = orderId != null ? `?order_id=${orderId}` : "";
+    return request<Record<string, unknown>>(`/api/v1/tna-unified/ai/followup-insights${q}`);
+  },
+  /** Phase 16 — document vs ERP field compare (no writes). */
+  async postDocumentAiValidate(body: {
+    entity_type: string;
+    entity_id: number;
+    extracted_fields: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/erp-ai/document/validate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  /** Phase 19 — whitelisted read-only intents only. */
+  async postErpAiCopilotSafeQuery(body: { intent: string }): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/erp-ai/copilot/safe-query", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  /** Phase 20 — propose a rule-based automation (approval required; no execution in this endpoint). */
+  async postErpAiGovernanceProposal(body: {
+    rule_code: string;
+    payload_json?: Record<string, unknown> | null;
+    idempotency_key?: string | null;
+  }): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/erp-ai/governance/proposals", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async postErpAiGovernanceApprove(proposalId: number): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>(`/api/v1/erp-ai/governance/proposals/${proposalId}/approve`, {
+      method: "POST",
+    });
+  },
+  async postErpAiGovernanceReject(
+    proposalId: number,
+    body?: { reason?: string | null }
+  ): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>(`/api/v1/erp-ai/governance/proposals/${proposalId}/reject`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    });
+  },
+  async postErpAiGovernanceRollback(proposalId: number): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>(`/api/v1/erp-ai/governance/proposals/${proposalId}/rollback`, {
+      method: "POST",
+    });
   },
   async getTenantOverview(): Promise<TenantOverviewReport> {
     return request<TenantOverviewReport>("/api/v1/reports/tenant-overview");
@@ -5819,11 +6239,15 @@ export const api = {
     status?: string;
     direction?: string;
     vendor_id?: number;
+    limit?: number;
+    offset?: number;
   }): Promise<ProformaInvoiceRow[]> {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
     if (params?.direction) q.set("direction", params.direction);
     if (params?.vendor_id != null) q.set("vendor_id", String(params.vendor_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<ProformaInvoiceRow[]>(`/api/v1/commercial/proforma-invoices${suffix}`);
   },
@@ -7518,6 +7942,173 @@ export interface QuotationAiIndicatorsOut {
   completeness_score: number;
   costing_readiness_score: number;
   flags: string[];
+  costing_phase1_enabled?: boolean;
+  signal_scope?: "header_only" | "full_costing";
+  confidence_basis?: "partial" | "full";
+  source_mode?: "deterministic_only";
+  reason_codes?: string[];
+  limited_confidence?: boolean;
+  cost_completeness_score?: number;
+  costing_confidence_score?: number;
+  anomaly_severity?: "none" | "low" | "medium" | "high";
+  margin_pressure?: "low" | "medium" | "high";
+  fx_sensitivity?: boolean;
+  missing_prerequisite_count?: number;
+  urgent_costing_review?: boolean;
+  costing_flags?: string[];
+  cost_benchmark_enabled?: boolean;
+  cost_benchmark_label?: string | null;
+}
+
+export interface QuotationCostingAiSignalMeta {
+  signal_scope: "header_only" | "full_costing";
+  confidence_basis: "partial" | "full";
+  source_mode: "deterministic_only";
+  reason_codes: string[];
+  limited_confidence: boolean;
+}
+
+export interface QuotationCostingIntelItem {
+  reason_code: string;
+  code: string;
+  severity: string;
+  message: string;
+}
+
+export interface QuotationCostingAiCompletenessResponse extends QuotationCostingAiSignalMeta {
+  advisory_notice: string;
+  quotation_id: number;
+  cost_completeness_score: number;
+  costing_confidence_score: number;
+  items: QuotationCostingIntelItem[];
+  line_counts: Record<string, number>;
+}
+
+export interface QuotationCostingAiAnomalyScanResponse extends QuotationCostingAiSignalMeta {
+  advisory_notice: string;
+  quotation_id: number;
+  anomaly_severity: "none" | "low" | "medium" | "high";
+  items: QuotationCostingIntelItem[];
+}
+
+export interface QuotationCostingAiMarginRiskResponse extends QuotationCostingAiSignalMeta {
+  advisory_notice: string;
+  quotation_id: number;
+  margin_pressure: "low" | "medium" | "high";
+  context: Record<string, unknown>;
+}
+
+export interface QuotationCostingAiFxSensitivityResponse extends QuotationCostingAiSignalMeta {
+  advisory_notice: string;
+  quotation_id: number;
+  fx_sensitivity: boolean;
+  context: Record<string, unknown>;
+}
+
+export interface QuotationCostingAiCostingSummaryResponse extends QuotationCostingAiSignalMeta {
+  advisory_notice: string;
+  quotation_id: number;
+  summary_lines: string[];
+  scores: Record<string, unknown>;
+}
+
+export interface QuotationCostingNextActionItem {
+  title: string;
+  description: string;
+  category: string;
+}
+
+export interface QuotationCostingAiNextActionsResponse extends QuotationCostingAiSignalMeta {
+  advisory_notice: string;
+  quotation_id: number;
+  actions: QuotationCostingNextActionItem[];
+}
+
+export interface QuotationCostingSuggestionItemOut {
+  id: number;
+  ordinal: number;
+  cost_category: "material" | "manufacturing" | "other_cost";
+  target_line_id: number | null;
+  suggestion_type: string;
+  field_changes_json: Record<string, unknown>;
+  confidence: number | null;
+  reason_code: string | null;
+  explanation: string | null;
+  source_mode: string;
+  disposition: string;
+  before_snapshot_json?: Record<string, unknown> | null;
+}
+
+export interface QuotationCostingSuggestionBatchOut {
+  id: number;
+  tenant_id: number;
+  quotation_id: number | null;
+  action_type: string;
+  status: string;
+  meta_json?: Record<string, unknown> | null;
+  created_at: string | null;
+  updated_at: string | null;
+  expires_at: string | null;
+  items: QuotationCostingSuggestionItemOut[];
+}
+
+export interface QuotationCostingSuggestionApplyResponse {
+  quotation_id: number;
+  batch_id: number;
+  applied_item_ids: number[];
+  skipped_item_ids: number[];
+  rejected_item_ids: number[];
+  blocked_items: Array<Record<string, unknown>>;
+  requires_revision: boolean;
+}
+
+export interface BenchmarkRange {
+  min: number | null;
+  max: number | null;
+  avg: number | null;
+  p25: number | null;
+  p75: number | null;
+}
+
+export interface BenchmarkMetricOut {
+  metric_key: string;
+  benchmark_range: BenchmarkRange;
+  current_value: number | null;
+  deviation_percent: number | null;
+  /** 0–1 peer-sample strength for this metric */
+  confidence: number;
+  classification: string;
+  reason_code: string | null;
+  explanation: string | null;
+}
+
+export interface CostBenchmarkResponse {
+  advisory_notice: string;
+  quotation_id: number;
+  insufficient_data: boolean;
+  similar_quotation_count: number;
+  overall_classification: string;
+  /** 0–1 aggregate benchmark confidence */
+  overall_confidence: number;
+  metrics: BenchmarkMetricOut[];
+  summary: string;
+  next_actions: string[];
+  source_mode: string;
+  reason_codes: string[];
+}
+
+export interface CostBenchmarkHistoryEntry {
+  id: number;
+  created_at: string | null;
+  action: string;
+  quotation_id: number | null;
+  summary: string | null;
+  overall_classification: string | null;
+  overall_confidence: number | null;
+}
+
+export interface CostBenchmarkHistoryResponse {
+  items: CostBenchmarkHistoryEntry[];
 }
 
 export interface QuotationAiFieldSuggestion {
@@ -7662,6 +8253,7 @@ export interface QuotationAiApplySuggestionsResponse {
   skipped_fields: string[];
   rejected_fields: string[];
   conflicts: QuotationAiApplyConflict[];
+  requires_change_request?: Array<{ field_key: string; message: string }>;
 }
 
 export interface QuotationAiFinalizeAfterCreateRequest {
@@ -8174,6 +8766,15 @@ export interface InquiryResponse {
   created_at: string;
   updated_at: string;
   ai_indicators?: InquiryAiIndicatorsOut | null;
+  customer_name?: string | null;
+}
+
+export interface InquiryListPageResponse {
+  items: InquiryResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
 export interface InquiryItemResponse {
@@ -8251,6 +8852,11 @@ export interface QuotationResponse {
   commission_value?: string | null;
   department?: string | null;
   projected_quantity?: number | null;
+  quotation_date?: string | null;
+  projected_delivery_date?: string | null;
+  target_price?: string | null;
+  target_price_currency?: string | null;
+  exchange_rate?: string | null;
   currency: string | null;
   total_amount: string | null;
   material_cost?: string | null;
@@ -8269,6 +8875,17 @@ export interface QuotationResponse {
   created_at: string;
   updated_at: string;
   ai_indicators?: QuotationAiIndicatorsOut | null;
+  commercial_book_currency?: string | null;
+  customer_name?: string | null;
+  inquiry_code?: string | null;
+}
+
+export interface QuotationListPageResponse {
+  items: QuotationResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
 // Costing masters
@@ -9812,6 +10429,8 @@ export interface QuotationDetailResponse {
   manufacturing: QuotationManufacturingLine[];
   other_costs: QuotationOtherCostLine[];
   size_ratios: QuotationSizeRatioLine[];
+  commercial_book_currency?: string | null;
+  ai_indicators?: QuotationAiIndicatorsOut | null;
 }
 
 // Body for full quotation update (PUT)
@@ -9906,6 +10525,29 @@ export interface OrderResponse {
   created_at: string;
   updated_at: string;
   ai_indicators?: OrderAiIndicatorsOut | null;
+  commercial_snapshot?: Record<string, unknown> | null;
+  commercial_book_currency?: string | null;
+  customer_name?: string | null;
+  quotation_code?: string | null;
+}
+
+export interface OrderListPageResponse {
+  items: OrderResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface OrderCommercialAlignmentResponse {
+  commercial_book_currency: string | null;
+  costing_numeraire_description: string;
+  frozen_at_conversion: Record<string, unknown> | null;
+  live_quotation: Record<string, unknown> | null;
+  order_execution: Record<string, unknown>;
+  discrepancies: Array<{ code: string; message: string }>;
+  quotation_commercially_locked: boolean;
+  quotation_status: string | null;
 }
 
 export interface OrderCreate {
@@ -9976,6 +10618,67 @@ export interface OrderPromiseSummaryOut {
 }
 
 export type OrderPromiseSummaryResponse = OrderPromiseSummaryOut;
+
+export interface PlanningGroundingSignal {
+  code: string;
+  status: string;
+  confidence: string;
+  value: unknown;
+  explanation: string;
+  source: string;
+}
+
+export interface PlanningGroundingSnapshot {
+  order_id: number;
+  computed_at: string;
+  overall_readiness: string;
+  signals: PlanningGroundingSignal[];
+  dependency_completeness: Record<string, boolean>;
+  assumptions: string[];
+  limitations: string[];
+}
+
+export interface PlanningGroundingSummaryRow {
+  order_id: number;
+  overall_readiness: string;
+  pending_change_requests: number;
+}
+
+export interface CommercialChangeRequestOut {
+  id: number;
+  tenant_id: number;
+  entity_type: string;
+  entity_id: number;
+  field_key: string;
+  old_value: string | null;
+  new_value: string | null;
+  reason: string;
+  source: string;
+  source_ref: string | null;
+  status: string;
+  proposed_by: number | null;
+  proposed_at: string;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  applied_by: number | null;
+  applied_at: string | null;
+  request_id: string | null;
+}
+
+export interface CommercialChangeRequestCreate {
+  entity_type: "order" | "quotation";
+  entity_id: number;
+  field_key: string;
+  new_value: unknown;
+  reason: string;
+  source?: "manual" | "ai_suggestion" | "system";
+  source_ref?: string | null;
+}
+
+export interface CommercialChangePendingSummary {
+  pending_approval_count: number;
+}
 
 export interface OrderAmendmentResponse {
   id: number;

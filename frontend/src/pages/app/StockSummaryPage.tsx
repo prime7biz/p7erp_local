@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type StockSummaryRow, type WarehouseResponse } from "@/api/client";
+import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { useListPagination } from "@/hooks/useListPagination";
 import {
   InventoryEmptyState,
   InventoryErrorPanel,
@@ -28,6 +29,7 @@ function downloadCsv(filename: string, csv: string) {
 
 export function StockSummaryPage() {
   const [rows, setRows] = useState<StockSummaryRow[]>([]);
+  const [total, setTotal] = useState(0);
   const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
   const [search, setSearch] = useState("");
   const [warehouseId, setWarehouseId] = useState<number | "">("");
@@ -36,87 +38,53 @@ export function StockSummaryPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const [exporting, setExporting] = useState(false);
+  const { page, setPage, pageSize, setPageSize, offset, limit, allowedSizes } = useListPagination();
   const { isNarrow, view, setView, showCards } = useListViewPreference();
+
+  const loadWarehouses = useCallback(async () => {
+    try {
+      const wh = await api.listWarehouses();
+      setWarehouses(wh);
+    } catch {
+      setWarehouses([]);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setError("");
     setLoading(true);
     try {
-      const [sum, wh] = await Promise.all([api.getStockSummary(), api.listWarehouses()]);
-      setRows(sum);
-      setWarehouses(wh);
+      const res = await api.getStockSummaryWithTotal({
+        limit,
+        offset,
+        search: search.trim() || undefined,
+        warehouse_id: warehouseId === "" ? undefined : warehouseId,
+        hide_zero: hideZero,
+        sort: sortKey,
+        sort_dir: sortDir,
+      });
+      setRows(res.rows);
+      setTotal(res.total ?? res.rows.length);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load stock summary");
+      setRows([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [limit, offset, search, warehouseId, hideZero, sortKey, sortDir]);
+
+  useEffect(() => {
+    void loadWarehouses();
+  }, [loadWarehouses]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const filtered = useMemo(() => {
-    let list = rows;
-    const q = search.trim().toLowerCase();
-    if (q) {
-      list = list.filter((r) => r.item_code.toLowerCase().includes(q) || r.item_name.toLowerCase().includes(q));
-    }
-    if (warehouseId !== "") {
-      list = list.filter((r) => r.warehouse_id === warehouseId);
-    }
-    if (hideZero) {
-      list = list.filter((r) => r.on_hand_qty !== 0);
-    }
-    const dir = sortDir === "asc" ? 1 : -1;
-    const sorted = [...list].sort((a, b) => {
-      let cmp = 0;
-      switch (sortKey) {
-        case "item":
-          cmp = `${a.item_code} ${a.item_name}`.localeCompare(`${b.item_code} ${b.item_name}`);
-          break;
-        case "warehouse":
-          cmp = (a.warehouse_name ?? "").localeCompare(b.warehouse_name ?? "");
-          break;
-        case "in":
-          cmp = a.in_qty - b.in_qty;
-          break;
-        case "out":
-          cmp = a.out_qty - b.out_qty;
-          break;
-        case "on_hand":
-          cmp = a.on_hand_qty - b.on_hand_qty;
-          break;
-        default:
-          cmp = 0;
-      }
-      return cmp * dir;
-    });
-    return sorted;
-  }, [rows, search, warehouseId, hideZero, sortKey, sortDir]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [search, warehouseId, hideZero, sortKey, sortDir, pageSize]);
-
-  const totalFiltered = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
-
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
-
-  const paginated = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
-
-  const rangeLabel =
-    totalFiltered === 0 ? "0" : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, totalFiltered)}`;
-
   const toggleSort = (key: SortKey) => {
+    setPage(1);
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
@@ -125,15 +93,37 @@ export function StockSummaryPage() {
     }
   };
 
-  const exportCsv = () => {
+  const exportCsv = async () => {
+    setExporting(true);
     const headers = ["item_code", "item_name", "warehouse", "in_qty", "out_qty", "on_hand_qty"];
     const lines = [headers.join(",")];
-    for (const r of filtered) {
-      const name = `"${r.item_name.replaceAll('"', '""')}"`;
-      const wh = `"${(r.warehouse_name ?? "").replaceAll('"', '""')}"`;
-      lines.push([r.item_code, name, wh, String(r.in_qty), String(r.out_qty), String(r.on_hand_qty)].join(","));
+    const chunk = 500;
+    let off = 0;
+    try {
+      for (let i = 0; i < 40; i += 1) {
+        const res = await api.getStockSummaryWithTotal({
+          limit: chunk,
+          offset: off,
+          search: search.trim() || undefined,
+          warehouse_id: warehouseId === "" ? undefined : warehouseId,
+          hide_zero: hideZero,
+          sort: sortKey,
+          sort_dir: sortDir,
+        });
+        for (const r of res.rows) {
+          const name = `"${r.item_name.replaceAll('"', '""')}"`;
+          const wh = `"${(r.warehouse_name ?? "").replaceAll('"', '""')}"`;
+          lines.push([r.item_code, name, wh, String(r.in_qty), String(r.out_qty), String(r.on_hand_qty)].join(","));
+        }
+        if (res.rows.length < chunk) break;
+        off += chunk;
+      }
+      downloadCsv(`stock_summary_${new Date().toISOString().slice(0, 10)}.csv`, lines.join("\n"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExporting(false);
     }
-    downloadCsv(`stock_summary_${new Date().toISOString().slice(0, 10)}.csv`, lines.join("\n"));
   };
 
   const sortIndicator = (key: SortKey) => (sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : "");
@@ -143,7 +133,7 @@ export function StockSummaryPage() {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Stock Summary</h1>
-          <p className="text-sm text-text-muted">Live stock on hand by item and warehouse.</p>
+          <p className="text-sm text-text-muted">Live stock on hand by item and warehouse (server-paged).</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           {isNarrow ? <InventoryListViewToggle value={view} onChange={setView} /> : null}
@@ -151,12 +141,18 @@ export function StockSummaryPage() {
             className={`min-w-0 flex-1 rounded border border-border px-3 py-2 text-sm sm:min-w-[200px] ${touchFieldClass}`}
             placeholder="Search item code or name…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setPage(1);
+              setSearch(e.target.value);
+            }}
           />
           <select
             className={`w-full rounded border border-border px-3 py-2 text-sm sm:w-auto ${touchFieldClass}`}
             value={warehouseId === "" ? "" : warehouseId}
-            onChange={(e) => setWarehouseId(e.target.value ? Number(e.target.value) : "")}
+            onChange={(e) => {
+              setPage(1);
+              setWarehouseId(e.target.value ? Number(e.target.value) : "");
+            }}
           >
             <option value="">All warehouses</option>
             {warehouses.map((w) => (
@@ -166,45 +162,44 @@ export function StockSummaryPage() {
             ))}
           </select>
           <label className="flex items-center gap-2 text-sm text-text-secondary">
-            <input type="checkbox" checked={hideZero} onChange={(e) => setHideZero(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={hideZero}
+              onChange={(e) => {
+                setPage(1);
+                setHideZero(e.target.checked);
+              }}
+            />
             Hide zero on-hand
-          </label>
-          <label className="flex flex-wrap items-center gap-2 text-sm text-text-secondary">
-            Rows per page
-            <select
-              className={`rounded border border-border px-2 py-1 text-sm ${touchFieldClass}`}
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-            >
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
           </label>
           <button
             type="button"
-            className={`rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle ${touchFieldClass}`}
-            onClick={exportCsv}
+            disabled={exporting}
+            className={`rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-50 ${touchFieldClass}`}
+            onClick={() => void exportCsv()}
           >
-            Export CSV
+            {exporting ? "Exporting…" : "Export CSV"}
           </button>
         </div>
       </div>
+      <p className="text-xs text-text-muted">
+        Filters and sorting run on the server. Export walks pages (up to ~20k rows) with the same filters.
+      </p>
       {error ? <InventoryErrorPanel message={error} onRetry={() => void load()} /> : null}
       {loading ? (
         <InventoryTableSkeleton rows={10} cols={5} />
-      ) : !filtered.length ? (
+      ) : !rows.length ? (
         <InventoryEmptyState
-          title={rows.length ? "No rows match your filters" : "No stock data yet"}
+          title={total > 0 ? "No rows on this page" : "No stock data yet"}
           description={
-            rows.length
-              ? "Try clearing search, choosing “All warehouses”, or unchecking “Hide zero on-hand”."
-              : "Receive or adjust stock to see balances here."
+            total > 0
+              ? "Try another page."
+              : "Receive or adjust stock to see balances here, or clear filters if nothing matches."
           }
         />
       ) : showCards ? (
         <div className="space-y-3">
-          {paginated.map((row) => (
+          {rows.map((row) => (
             <div
               key={`${row.item_id}-${row.warehouse_id ?? 0}`}
               className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm"
@@ -263,7 +258,7 @@ export function StockSummaryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {paginated.map((row) => (
+              {rows.map((row) => (
                 <tr key={`${row.item_id}-${row.warehouse_id ?? 0}`}>
                   <td className="px-3 py-2 text-sm">
                     {row.item_code} - {row.item_name}
@@ -278,36 +273,16 @@ export function StockSummaryPage() {
           </table>
         </div>
       )}
-      {!loading && totalFiltered > 0 && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-text-muted">
-            Showing <span className="font-medium text-text-secondary">{rangeLabel}</span> of{" "}
-            <span className="font-medium text-text-secondary">{totalFiltered}</span> row{totalFiltered === 1 ? "" : "s"} · Page {page} of {totalPages}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-[44px] min-w-[100px] touch-manipulation sm:min-h-9"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-[44px] min-w-[100px] touch-manipulation sm:min-h-9"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      {!loading && total > 0 ? (
+        <DataTablePagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          allowedSizes={allowedSizes}
+        />
+      ) : null}
       <p className="text-xs text-text-muted">
         Tip: FIFO valuation and group/warehouse summaries:{" "}
         <Link className="text-status-info hover:underline" to="/app/inventory/stock-inventory-summary">

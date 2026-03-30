@@ -31,7 +31,7 @@ export function GlobalAiChatWidget() {
     <>
       {/* FAB only when closed; when open it overlapped Send and duplicated header close. */}
       {!widgetOpen ? (
-        <div className="fixed bottom-6 right-6 z-[80]">
+        <div className="fixed bottom-6 right-6 z-[90]">
           <button
             type="button"
             onClick={toggleWidget}
@@ -44,7 +44,7 @@ export function GlobalAiChatWidget() {
       ) : null}
 
       <div
-        className={`fixed inset-y-0 right-0 z-[75] w-full max-w-[430px] transform border-l border-border bg-surface-base shadow-2xl transition-transform duration-300 ease-out ${
+        className={`fixed inset-y-0 right-0 z-[85] w-full max-w-[430px] transform border-l border-border bg-surface-base shadow-2xl transition-transform duration-300 ease-out ${
           widgetOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >

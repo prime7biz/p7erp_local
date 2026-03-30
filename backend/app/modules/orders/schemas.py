@@ -54,9 +54,36 @@ class OrderResponse(BaseModel):
   created_at: str
   updated_at: str
   ai_indicators: Any | None = None
+  # Frozen quotation commercial header at conversion (nullable for legacy orders).
+  commercial_snapshot: dict[str, Any] | None = None
+  commercial_book_currency: str | None = None
+  # Populated on paginated list / joins for UI (optional).
+  customer_name: str | None = None
+  quotation_code: str | None = None
 
   class Config:
     from_attributes = True
+
+
+class OrderListPageResponse(BaseModel):
+  items: list[OrderResponse]
+  total: int
+  page: int
+  page_size: int
+  total_pages: int
+
+
+class OrderCommercialAlignmentOut(BaseModel):
+  """Read-only quotation↔order commercial comparison for governance UI."""
+
+  commercial_book_currency: str | None = None
+  costing_numeraire_description: str = ""
+  frozen_at_conversion: dict[str, Any] | None = None
+  live_quotation: dict[str, Any] | None = None
+  order_execution: dict[str, Any] = Field(default_factory=dict)
+  discrepancies: list[dict[str, str]] = Field(default_factory=list)
+  quotation_commercially_locked: bool = False
+  quotation_status: str | None = None
 
 
 class PromiseCheckLine(BaseModel):

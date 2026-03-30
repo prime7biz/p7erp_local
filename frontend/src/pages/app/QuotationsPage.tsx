@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  api,
-  type QuotationResponse,
-  type CustomerResponse,
-  type InquiryResponse,
-} from "@/api/client";
+import { api, type QuotationResponse } from "@/api/client";
+import { useListPagination } from "@/hooks/useListPagination";
+import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import { QuotationStatusBadge } from "./quotations/QuotationStatusBadge";
 import { QuotationListSkeleton } from "./quotations/QuotationListSkeleton";
 import {
@@ -15,6 +13,33 @@ import {
   QUOTATION_STATUS_FILTER_OPTIONS,
 } from "@/features/merch/workflow";
 import { SecureImage } from "@/components/SecureImage";
+import { formatMoney, toSafeNumber } from "@/features/quotations/workspace/mappers/quotationNumeric";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import {
+  listPageChipActiveClass,
+  listPageChipInactiveClass,
+  listPageChipRowClass,
+  listPageEmptyClass,
+  listPageErrorClass,
+  listPageFilterBarClass,
+  listPageKpiCardClass,
+  listPageKpiGridClass3,
+  listPageKpiLabelClass,
+  listPageRootClass,
+  listPageTableCardClass,
+  listPageToolbarButtonClass,
+  listPageToolbarInputClass,
+  listPageToolbarSelectClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThCenterClass,
+  listTableThClass,
+  listTableThRightClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import { cn } from "@/lib/utils";
 
 export function QuotationsPage() {
   const navigate = useNavigate();
@@ -22,30 +47,27 @@ export function QuotationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
-  const [inquiries, setInquiries] = useState<InquiryResponse[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
-  const [page, setPage] = useState(1);
+  const { page, setPage, pageSize, setPageSize } = useListPagination();
+  const [listTotal, setListTotal] = useState(0);
   const [quickFilter, setQuickFilter] = useState<"all" | "has_inquiry" | "has_style_image" | "ready_to_convert">("all");
-  const pageSize = 20;
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const [quotes, custs] = await Promise.all([
-        api.listQuotations({
-          search,
-          status: statusFilter || undefined,
-          limit: pageSize,
-          offset: (page - 1) * pageSize,
-          ai_indicators: 1,
-        }),
-        api.listCustomers(),
-      ]);
-      setItems(quotes);
-      setCustomers(custs);
+      const res = await api.listQuotationsPaginated({
+        search: search || undefined,
+        status: statusFilter || undefined,
+        page,
+        page_size: pageSize,
+        ai_indicators: 1,
+        benchmark_hint: 1,
+      });
+      setItems(res.items);
+      setListTotal(res.total);
+      if (res.page !== page) setPage(res.page);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load quotations");
     } finally {
@@ -62,33 +84,16 @@ export function QuotationsPage() {
     return items;
   }, [items, quickFilter]);
 
-  const customerName = (id: number) =>
-    customers.find((c) => c.id === id)?.name ?? `#${id}`;
+  const displayCustomerName = (q: QuotationResponse) =>
+    q.customer_name?.trim() ? q.customer_name : `#${q.customer_id}`;
 
-  const inquiryCode = (id: number | null) =>
-    id == null ? "—" : inquiries.find((i) => i.id === id)?.inquiry_code ?? `#${id}`;
-
-  const formatAmount = (amount: unknown) => {
-    const parsed = Number(amount);
-    return Number.isFinite(parsed) ? parsed.toFixed(2) : "—";
-  };
+  const displayInquiryCode = (q: QuotationResponse) =>
+    q.inquiry_id == null ? "—" : q.inquiry_code?.trim() ? q.inquiry_code : `#${q.inquiry_id}`;
 
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, page]);
-
-  useEffect(() => {
-    const loadInquiries = async () => {
-      try {
-        const data = await api.listInquiries({ limit: 200, offset: 0 });
-        setInquiries(data);
-      } catch {
-        // ignore
-      }
-    };
-    loadInquiries();
-  }, []);
+  }, [search, statusFilter, page, pageSize]);
 
   const openCreate = () => {
     navigate("/app/quotations/new");
@@ -98,61 +103,11 @@ export function QuotationsPage() {
   const pendingCount = filteredItems.filter((q) => ["DRAFT", "NEW", "SUBMITTED"].includes(q.status)).length;
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Quotations</h1>
-          <p className="text-text-muted text-sm mt-0.5">
-            Track price quotations generated from inquiries and convert them into sales orders.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            type="text"
-            placeholder="Search by code…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="w-full sm:w-48 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="w-full sm:w-40 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
-          >
-            <option value="">All statuses</option>
-            {QUOTATION_STATUS_FILTER_OPTIONS.map((statusValue) => (
-              <option key={statusValue} value={statusValue}>
-                {humanizeStatus(statusValue)}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => {
-              setSearch("");
-              setStatusFilter("");
-              setQuickFilter("all");
-              setPage(1);
-            }}
-            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
-          >
-            Clear filters
-          </button>
-          <button
-            type="button"
-            onClick={load}
-            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
-          >
-            Refresh
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Quotations"
+        description="Costing & commercial · Track quotations from inquiry through approval; list rows include server AI indicators and benchmark hints where enabled."
+        actions={
           <button
             type="button"
             onClick={openCreate}
@@ -160,10 +115,56 @@ export function QuotationsPage() {
           >
             New quotation
           </button>
-        </div>
-      </header>
+        }
+      />
+      <div className={listPageFilterBarClass}>
+        <input
+          type="text"
+          placeholder="Search by code…"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          className={listPageToolbarInputClass}
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
+          className={listPageToolbarSelectClass}
+        >
+          <option value="">All statuses</option>
+          {QUOTATION_STATUS_FILTER_OPTIONS.map((statusValue) => (
+            <option key={statusValue} value={statusValue}>
+              {humanizeStatus(statusValue)}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => {
+            setSearch("");
+            setStatusFilter("");
+            setQuickFilter("all");
+            setPage(1);
+          }}
+          className={listPageToolbarButtonClass}
+        >
+          Clear filters
+        </button>
+        <button
+          type="button"
+          onClick={load}
+          className={listPageToolbarButtonClass}
+        >
+          Refresh
+        </button>
+      </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className={listPageChipRowClass}>
         {[
           { key: "all", label: "All" },
           { key: "has_inquiry", label: "Has inquiry" },
@@ -174,41 +175,39 @@ export function QuotationsPage() {
             key={chip.key}
             type="button"
             onClick={() => setQuickFilter(chip.key as typeof quickFilter)}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-              quickFilter === chip.key ? "border-brand-primary bg-brand-primary/10 text-brand-primary" : "border-border text-text-secondary"
-            }`}
+            className={quickFilter === chip.key ? listPageChipActiveClass : listPageChipInactiveClass}
           >
             {chip.label}
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-border bg-surface-raised p-3">
-          <div className="text-xs uppercase tracking-wide text-text-muted">Total on page</div>
-          <div className="text-xl font-bold text-text-primary">{filteredItems.length}</div>
+      <div className={listPageKpiGridClass3}>
+        <div className={listPageKpiCardClass}>
+          <div className={listPageKpiLabelClass}>Total on page</div>
+          <div className="mt-2 text-xl font-bold text-text-primary">{filteredItems.length}</div>
         </div>
-        <div className="rounded-xl border border-border bg-surface-raised p-3">
-          <div className="text-xs uppercase tracking-wide text-text-muted">Approved</div>
-          <div className="text-xl font-bold text-status-success-foreground">{approvedCount}</div>
+        <div className={listPageKpiCardClass}>
+          <div className={listPageKpiLabelClass}>Approved</div>
+          <div className="mt-2 text-xl font-bold text-status-success-foreground">{approvedCount}</div>
         </div>
-        <div className="rounded-xl border border-border bg-surface-raised p-3">
-          <div className="text-xs uppercase tracking-wide text-text-muted">Needs action</div>
-          <div className="text-xl font-bold text-status-warning-foreground">{pendingCount}</div>
+        <div className={listPageKpiCardClass}>
+          <div className={listPageKpiLabelClass}>Needs action</div>
+          <div className="mt-2 text-xl font-bold text-status-warning-foreground">{pendingCount}</div>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
+        <div className={listPageErrorClass}>
           {error}
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
+      <div className={listPageTableCardClass}>
         {loading ? (
           <QuotationListSkeleton />
         ) : filteredItems.length === 0 ? (
-          <div className="p-12 text-center text-text-muted space-y-3">
+          <div className={cn(listPageEmptyClass, "space-y-3")}>
             <div>No quotations found for current filters.</div>
             <div className="flex justify-center gap-2">
               <button
@@ -232,33 +231,31 @@ export function QuotationsPage() {
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-          <table className="min-w-[1120px] w-full text-sm">
-            <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
+          <>
+          <ResponsiveTableContainer>
+          <table className={cn(listTableBaseClass, "min-w-[1120px]")}>
+            <thead className={listTableTheadClass}>
               <tr>
-                <th className="py-2.5 px-4 w-24 whitespace-nowrap">Code</th>
-                <th className="py-2.5 px-4 min-w-[120px]">Customer</th>
-                <th className="py-2.5 px-4 w-24 whitespace-nowrap">Inquiry</th>
-                <th className="py-2.5 px-4 min-w-[140px]">Style</th>
-                <th className="py-2.5 px-4 min-w-[100px] whitespace-nowrap">Intermediary</th>
-                <th className="py-2.5 px-4 w-20 whitespace-nowrap">Shipping</th>
-                <th className="py-2.5 px-4 min-w-[120px] whitespace-nowrap">Commission</th>
-                <th className="py-2.5 px-4 text-right w-20 whitespace-nowrap">Qty</th>
-                <th className="py-2.5 px-4 text-right min-w-[90px] whitespace-nowrap">Amount</th>
-                <th className="py-2.5 px-4 text-right w-20 whitespace-nowrap">Profit %</th>
-                <th className="py-2.5 px-4 min-w-[140px] whitespace-nowrap">Status</th>
-                <th className="py-2.5 px-4 w-20 whitespace-nowrap text-center">C-ready</th>
-                <th className="py-2.5 px-4 w-24 whitespace-nowrap">Created</th>
-                <th className="py-2.5 px-4 text-right w-24 whitespace-nowrap">Actions</th>
+                <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Code</th>
+                <th className={cn(listTableThClass, "min-w-[120px]")}>Customer</th>
+                <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Inquiry</th>
+                <th className={cn(listTableThClass, "min-w-[140px]")}>Style</th>
+                <th className={cn(listTableThClass, "min-w-[100px] whitespace-nowrap")}>Intermediary</th>
+                <th className={cn(listTableThClass, "w-20 whitespace-nowrap")}>Shipping</th>
+                <th className={cn(listTableThClass, "min-w-[120px] whitespace-nowrap")}>Commission</th>
+                <th className={cn(listTableThRightClass, "w-20 whitespace-nowrap")}>Qty</th>
+                <th className={cn(listTableThRightClass, "min-w-[90px] whitespace-nowrap")}>Offer total</th>
+                <th className={cn(listTableThRightClass, "w-28 whitespace-nowrap")}>vs inquiry target</th>
+                <th className={cn(listTableThClass, "min-w-[140px] whitespace-nowrap")}>Status</th>
+                <th className={cn(listTableThCenterClass, "min-w-[5.5rem] whitespace-nowrap")}>C-ready</th>
+                <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Created</th>
+                <th className={cn(listTableThRightClass, "w-24 whitespace-nowrap")}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredItems.map((q) => {
-                const inq = q.inquiry_id
-                  ? inquiries.find((i) => i.id === q.inquiry_id) ?? null
-                  : null;
-                const qty = inq?.quantity ?? null;
-                const target = inq?.target_price ? Number(inq.target_price) : null;
+                const qty = q.projected_quantity ?? null;
+                const target = q.target_price ? Number(q.target_price) : null;
                 const quoted = q.total_amount ? Number(q.total_amount) : null;
                 let profitPct: string | null = null;
                 const workflowAction = getQuotationWorkflowAction(q.status);
@@ -277,8 +274,8 @@ export function QuotationsPage() {
                   }
                 }
                 return (
-                  <tr key={q.id} className="border-b border-border-subtle last:border-0 hover:bg-surface-subtle/70">
-                    <td className="py-2.5 px-4 font-medium text-text-primary whitespace-nowrap overflow-hidden text-ellipsis" title={q.quotation_code}>
+                  <tr key={q.id} className={listTableTrClass}>
+                    <td className={cn(listTableTdPrimaryClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={q.quotation_code}>
                       <Link
                         to={`/app/quotations/${q.id}`}
                         className="text-status-info hover:underline"
@@ -286,49 +283,62 @@ export function QuotationsPage() {
                         {q.quotation_code}
                       </Link>
                     </td>
-                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={customerName(q.customer_id)}>
-                      {customerName(q.customer_id)}
+                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={displayCustomerName(q)}>
+                      {displayCustomerName(q)}
                     </td>
-                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={inquiryCode(q.inquiry_id)}>
-                      {inquiryCode(q.inquiry_id)}
+                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={displayInquiryCode(q)}>
+                      {displayInquiryCode(q)}
                     </td>
-                    <td className="py-2.5 px-4">
+                    <td className={listTableTdClass}>
                       <div className="flex items-center gap-2 min-w-0">
                         {q.style_image_url ? (
                           <SecureImage
                             url={q.style_image_url}
                             alt={q.style_name ?? q.style_ref ?? "Style"}
-                            className="h-8 w-8 shrink-0 rounded object-cover border border-border"
+                            className="h-9 w-9 shrink-0 rounded object-cover border border-border"
                           />
                         ) : (
-                          <div className="h-8 w-8 shrink-0 rounded bg-surface-subtle border border-border" />
+                          <div className="h-9 w-9 shrink-0 rounded bg-surface-subtle border border-border" />
                         )}
-                        <span className="text-text-secondary truncate block min-w-0" title={q.style_name ?? q.style_ref ?? undefined}>
-                          {q.style_name ?? q.style_ref ?? "—"}
-                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div
+                            className="font-medium text-text-primary truncate text-sm"
+                            title={q.style_name ?? q.style_ref ?? undefined}
+                          >
+                            {q.style_name ?? q.style_ref ?? "—"}
+                          </div>
+                          <div
+                            className="text-xs text-text-muted whitespace-nowrap truncate"
+                            title={
+                              q.style_ref && q.style_name && q.style_ref !== q.style_name ? q.style_ref : undefined
+                            }
+                          >
+                            {q.style_ref && q.style_name && q.style_ref !== q.style_name ? q.style_ref : "—"}
+                          </div>
+                        </div>
                       </div>
                     </td>
-                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={q.intermediary_name ?? undefined}>
+                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={q.intermediary_name ?? undefined}>
                       {q.intermediary_name ?? "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={q.shipping_term ?? undefined}>
+                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={q.shipping_term ?? undefined}>
                       {q.shipping_term ?? "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={q.commission_mode || q.commission_type || q.commission_value ? `${q.commission_mode ?? "-"} / ${q.commission_type ?? "-"} / ${q.commission_value ?? "-"}` : undefined}>
+                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={q.commission_mode || q.commission_type || q.commission_value ? `${q.commission_mode ?? "-"} / ${q.commission_type ?? "-"} / ${q.commission_value ?? "-"}` : undefined}>
                       {q.commission_mode || q.commission_type || q.commission_value
                         ? `${q.commission_mode ?? "-"} / ${q.commission_type ?? "-"} / ${q.commission_value ?? "-"}`
                         : "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-right text-text-secondary whitespace-nowrap">
+                    <td className={cn(listTableTdClass, "text-right whitespace-nowrap")}>
                       {qty != null ? qty.toLocaleString() : "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-right text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={`${formatAmount(q.total_amount)} ${q.currency ?? ""}`.trim()}>
-                      {formatAmount(q.total_amount)} {q.currency ?? ""}
+                    <td className={cn(listTableTdClass, "text-right whitespace-nowrap overflow-hidden text-ellipsis")} title={`${formatMoney(toSafeNumber(q.total_amount))} ${q.currency ?? ""}`.trim()}>
+                      {formatMoney(toSafeNumber(q.total_amount))} {q.currency ?? ""}
                     </td>
-                    <td className="py-2.5 px-4 text-right text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={profitPct ?? undefined}>
+                    <td className={cn(listTableTdClass, "text-right whitespace-nowrap overflow-hidden text-ellipsis")} title={profitPct ?? undefined}>
                       {profitPct ?? "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-text-secondary overflow-hidden text-ellipsis" title={[q.status, q.is_converted_to_order ? "Converted to order" : null].filter(Boolean).join(" · ")}>
+                    <td className={cn(listTableTdClass, "overflow-hidden text-ellipsis")} title={[q.status, q.is_converted_to_order ? "Converted to order" : null].filter(Boolean).join(" · ")}>
                       <div className="flex items-center gap-1.5 flex-wrap whitespace-nowrap min-w-0">
                         <QuotationStatusBadge status={q.status} />
                         {q.is_converted_to_order && (
@@ -338,28 +348,57 @@ export function QuotationsPage() {
                         )}
                       </div>
                     </td>
-                    <td className="py-2.5 px-4 text-center whitespace-nowrap">
-                      {q.ai_indicators ? (
-                        <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                            q.ai_indicators.costing_readiness_score >= 80
-                              ? "bg-status-success-subtle text-status-success-foreground"
-                              : q.ai_indicators.costing_readiness_score >= 50
-                                ? "bg-status-warning-subtle text-status-warning-foreground"
-                                : "bg-status-danger-subtle text-status-danger-foreground"
-                          }`}
-                          title={q.ai_indicators.flags.length > 0 ? q.ai_indicators.flags.join(", ") : undefined}
-                        >
-                          {q.ai_indicators.costing_readiness_score}%
-                        </span>
-                      ) : (
-                        <span className="text-text-muted text-xs">—</span>
+                    <td className={cn(listTableTdClass, "text-center text-xs whitespace-nowrap")}>
+                      {q.ai_indicators ? (() => {
+                        const ai = q.ai_indicators;
+                        const titleParts = [
+                          ai.flags.length ? `Flags: ${ai.flags.join(", ")}` : "",
+                          ai.cost_completeness_score != null ? `Cost completeness: ${ai.cost_completeness_score}%` : "",
+                          ai.costing_phase1_enabled === false ? "Costing Phase 1 disabled" : "",
+                          ai.signal_scope === "header_only" ? "Indicators use header only (open detail for lines)" : "",
+                          ai.limited_confidence || ai.confidence_basis === "partial" ? "Limited / partial confidence" : "",
+                          ai.urgent_costing_review ? "Urgent costing review" : "",
+                          ai.fx_sensitivity ? "FX sensitivity" : "",
+                          ai.anomaly_severity && ai.anomaly_severity !== "none"
+                            ? `Anomaly: ${ai.anomaly_severity}`
+                            : "",
+                          ai.cost_benchmark_enabled && ai.cost_benchmark_label
+                            ? `Benchmark: ${ai.cost_benchmark_label}`
+                            : "",
+                        ].filter(Boolean);
+                        const warn =
+                          ai.urgent_costing_review ||
+                          ai.flags.length > 0 ||
+                          ai.limited_confidence ||
+                          ai.confidence_basis === "partial" ||
+                          (ai.anomaly_severity != null && ai.anomaly_severity !== "none");
+                        return (
+                          <span title={titleParts.length ? titleParts.join(" · ") : "Costing readiness"}>
+                            <span
+                              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                                ai.costing_readiness_score >= 80
+                                  ? "bg-status-success-subtle text-status-success-foreground"
+                                  : ai.costing_readiness_score >= 50
+                                    ? "bg-status-warning-subtle text-status-warning-foreground"
+                                    : "bg-status-danger-subtle text-status-danger-foreground"
+                              }`}
+                            >
+                              {ai.costing_readiness_score}%
+                            </span>
+                            {ai.cost_completeness_score != null ? (
+                              <span className="text-text-muted"> · C:{ai.cost_completeness_score}%</span>
+                            ) : null}
+                            {warn ? <span className="ml-0.5 text-status-warning-foreground">!</span> : null}
+                          </span>
+                        );
+                      })() : (
+                        "—"
                       )}
                     </td>
-                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={new Date(q.created_at).toLocaleDateString()}>
+                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={new Date(q.created_at).toLocaleDateString()}>
                       {new Date(q.created_at).toLocaleDateString()}
                     </td>
-                    <td className="py-2.5 px-4 text-right whitespace-nowrap">
+                    <td className={cn(listTableTdClass, "text-right whitespace-nowrap")}>
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
@@ -477,28 +516,16 @@ export function QuotationsPage() {
               })}
             </tbody>
           </table>
-          </div>
+          </ResponsiveTableContainer>
+          <DataTablePagination
+            page={page}
+            pageSize={pageSize}
+            total={listTotal}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-text-muted">
-        <button
-          type="button"
-          disabled={page === 1}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          className="rounded-lg border border-border-strong px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Previous
-        </button>
-        <span>Page {page}</span>
-        <button
-          type="button"
-          disabled={items.length < pageSize}
-          onClick={() => setPage((p) => p + 1)}
-          className="rounded-lg border border-border-strong px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Next
-        </button>
       </div>
     </div>
   );

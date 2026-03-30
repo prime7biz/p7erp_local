@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   api,
@@ -144,7 +144,7 @@ export function useQuotationWorkspaceController(id?: string) {
           setInquiry(null);
           setIsEditing(true);
         } else if (id) {
-          const q = await api.getQuotation(Number(id));
+          const q = await api.getQuotation(Number(id), { ai_indicators: 1 });
           setQuotation(q);
           setMaterials(q.materials ?? []);
           setManufacturing(q.manufacturing ?? []);
@@ -196,6 +196,26 @@ export function useQuotationWorkspaceController(id?: string) {
     };
     loadPreviousVersion();
   }, [isNew, quotation]);
+
+  const reloadQuotationDetail = useCallback(async () => {
+    if (isNew || !id) return;
+    try {
+      const q = await api.getQuotation(Number(id), { ai_indicators: 1 });
+      setQuotation(q);
+      setMaterials(q.materials ?? []);
+      setManufacturing(q.manufacturing ?? []);
+      setOtherCosts(q.other_costs ?? []);
+      setSizeRatios(q.size_ratios ?? []);
+      const [cust, inq] = await Promise.all([
+        api.getCustomer(q.customer_id),
+        q.inquiry_id ? api.getInquiry(q.inquiry_id) : Promise.resolve(null),
+      ]);
+      setCustomer(cust);
+      setInquiry(inq);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to reload quotation");
+    }
+  }, [id, isNew]);
 
   const totals = useMemo(
     () => calculateQuotationTotals(materials, manufacturing, otherCosts),
@@ -628,5 +648,6 @@ export function useQuotationWorkspaceController(id?: string) {
     approveQuotation,
     duplicateAsNewVersion,
     navigate,
+    reloadQuotationDetail,
   };
 }

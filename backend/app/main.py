@@ -21,6 +21,7 @@ from app.modules.reports.router import router as reports_router
 from app.modules.inquiries.router import router as inquiries_router
 from app.modules.quotations.router import router as quotations_router
 from app.modules.orders.router import router as orders_router
+from app.modules.orders.change_request_router import router as commercial_change_requests_router
 from app.modules.costing.router import router as costing_router
 from app.modules.currency.router import router as currency_router
 from app.modules.merch.routers import router as merch_router
@@ -41,6 +42,7 @@ from app.modules.commercial.router import router as commercial_router
 from app.modules.parties.router import router as parties_router
 from app.modules.ai_tool.router import router as ai_tool_router
 from app.modules.ai_extract.router import router as ai_extract_router
+from app.modules.erp_ai_phases.router import router as erp_ai_phases_router
 from app.modules.tna_unified.router import router as tna_unified_router
 from app.modules.trade_case.router import router as trade_case_router
 from app.modules.logistics.router import router as logistics_router
@@ -215,6 +217,7 @@ app.include_router(reports_router, prefix=settings.api_v1_prefix)
 app.include_router(inquiries_router, prefix=settings.api_v1_prefix)
 app.include_router(quotations_router, prefix=settings.api_v1_prefix)
 app.include_router(orders_router, prefix=settings.api_v1_prefix)
+app.include_router(commercial_change_requests_router, prefix=settings.api_v1_prefix)
 app.include_router(costing_router, prefix=settings.api_v1_prefix)
 app.include_router(currency_router, prefix=settings.api_v1_prefix)
 app.include_router(merch_router, prefix=settings.api_v1_prefix)
@@ -235,6 +238,7 @@ app.include_router(commercial_router, prefix=settings.api_v1_prefix)
 app.include_router(parties_router, prefix=settings.api_v1_prefix)
 app.include_router(ai_tool_router, prefix=settings.api_v1_prefix)
 app.include_router(ai_extract_router, prefix=settings.api_v1_prefix)
+app.include_router(erp_ai_phases_router, prefix=settings.api_v1_prefix)
 app.include_router(tna_unified_router, prefix=settings.api_v1_prefix)
 app.include_router(trade_case_router, prefix=settings.api_v1_prefix)
 app.include_router(logistics_router, prefix=settings.api_v1_prefix)

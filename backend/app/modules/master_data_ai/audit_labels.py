@@ -162,6 +162,28 @@ def quotation_ai_event_label(action: str, dj: dict[str, Any]) -> str:
         return "Quotation enrich run"
     if action in ("QUOTATION_AI_EXTRACT", "QUOTATION_AI_EXTRACT_DOCUMENT"):
         return "Quotation document extract run"
+    if action == "QUOTATION_COSTING_COMPLETENESS_CHECK":
+        return "Costing completeness check (read-only)"
+    if action == "QUOTATION_COSTING_ANOMALY_SCAN":
+        return "Costing anomaly scan (read-only)"
+    if action == "QUOTATION_COSTING_MARGIN_RISK":
+        return "Margin risk explanation (read-only)"
+    if action == "QUOTATION_COSTING_FX_SENSITIVITY":
+        return "FX sensitivity summary (read-only)"
+    if action == "QUOTATION_COSTING_SUMMARY":
+        return "Costing summary (read-only)"
+    if action == "QUOTATION_COSTING_NEXT_ACTIONS":
+        return "Costing next actions (read-only)"
+    if action == "QUOTATION_COSTING_SUGGESTIONS_GENERATE":
+        return "Costing line suggestions generated (review mode)"
+    if action == "QUOTATION_COSTING_SUGGESTIONS_MARKED":
+        return "Costing suggestion decisions marked"
+    if action == "QUOTATION_COSTING_SUGGESTIONS_APPLY":
+        return "Costing suggestions applied to lines"
+    if action == "QUOTATION_COSTING_SUGGESTIONS_DISCARD":
+        return "Costing suggestion batch discarded"
+    if action == "QUOTATION_COST_BENCHMARK":
+        return "Cost benchmark vs history (advisory)"
     return action.replace("_", " ").title()
 
 

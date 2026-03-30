@@ -210,13 +210,13 @@ export function BomBuilderPage() {
     try {
       const [styleList, itemRows, vendorRows] = await Promise.all([
         api.listStylesWithTotal({ limit: 500 }),
-        api.listInventoryItems(),
-        api.listVendors(),
+        api.listInventoryItemsPaginated({ page: 1, page_size: 500 }),
+        api.listVendorsPaginated({ page: 1, page_size: 500 }),
       ]);
       setStyles(styleList.rows);
       setStylesTotal(styleList.total);
-      setInventoryItems(itemRows);
-      setVendors(vendorRows);
+      setInventoryItems(itemRows.items);
+      setVendors(vendorRows.items);
 
       if (initialStyleIdRef.current && styleList.rows.some((s) => s.id === initialStyleIdRef.current)) {
         setStyleId(initialStyleIdRef.current);
@@ -278,7 +278,7 @@ export function BomBuilderPage() {
     try {
       const [allOrders, allPlansWithTotal, pendingCR] = await Promise.all([
         api.listOrders({ limit: 200 }),
-        api.listConsumptionPlansWithTotal(),
+        api.listConsumptionPlansWithTotal({ limit: 500, offset: 0 }),
         api.listConsumptionChangeRequests({ status_filter: "PENDING" }),
       ]);
       const allPlans = allPlansWithTotal.rows;

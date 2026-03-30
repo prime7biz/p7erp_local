@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   api,
   type InventoryItemResponse,
@@ -13,13 +14,28 @@ import {
   InventoryErrorPanel,
   InventoryTableSkeleton,
 } from "@/components/inventory/InventoryListStates";
-import {
-  InventoryListViewToggle,
-  inventoryScrollTableClass,
-  touchFieldClass,
-} from "@/components/inventory/InventoryMobileList";
+import { InventoryListViewToggle, touchFieldClass } from "@/components/inventory/InventoryMobileList";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
 import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { DataTablePagination } from "@/components/app/DataTablePagination";
+import {
+  listPageFilterBarClass,
+  listPageFilterPanelClass,
+  listPageKpiCardClass,
+  listPageRootClass,
+  listPageTableCardClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThClass,
+  listTableThRightClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
+import { useListPagination } from "@/hooks/useListPagination";
+import { cn } from "@/lib/utils";
 
 export function PurchaseOrdersPage() {
   const [orders, setOrders] = useState<PurchaseOrderResponse[]>([]);
@@ -44,10 +60,9 @@ export function PurchaseOrdersPage() {
   const [line, setLine] = useState<PurchaseOrderItemCreate>({ item_id: 0, warehouse_id: null, quantity: "0", unit_price: "0" });
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const { pageSize, setPageSize } = useListPagination();
   const [poPage, setPoPage] = useState(1);
-  const [poTotalPages, setPoTotalPages] = useState(1);
   const [poTotal, setPoTotal] = useState(0);
-  const PO_PAGE_SIZE = 25;
   const { isNarrow, view, setView, showCards } = useListViewPreference();
 
   const itemName = useMemo(() => new Map(items.map((i) => [i.id, i.name])), [items]);
@@ -66,14 +81,13 @@ export function PurchaseOrdersPage() {
         api.listPurchaseOrdersPaginated({
           status_filter: statusFilter.trim() || undefined,
           page: poPage,
-          page_size: PO_PAGE_SIZE,
+          page_size: pageSize,
         }),
         api.listInventoryItemsPaginated({ page: 1, page_size: 500 }),
         api.listWarehouses(),
         api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }),
       ]);
       setOrders(poRes.items);
-      setPoTotalPages(poRes.total_pages);
       setPoTotal(poRes.total);
       const itm = itmRes.items;
       setItems(itm);
@@ -95,11 +109,11 @@ export function PurchaseOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, poPage]);
+  }, [statusFilter, poPage, pageSize]);
 
   useEffect(() => {
     setPoPage(1);
-  }, [statusFilter]);
+  }, [statusFilter, pageSize]);
 
   const patchPoStatus = useCallback(
     async (id: number, nextStatus: string) => {
@@ -119,13 +133,6 @@ export function PurchaseOrdersPage() {
     void load();
   }, [load]);
 
-  const visiblePoPages = useMemo(() => {
-    const start = Math.max(1, poPage - 2);
-    const end = Math.min(poTotalPages, poPage + 2);
-    const pages: number[] = [];
-    for (let i = start; i <= end; i += 1) pages.push(i);
-    return pages;
-  }, [poPage, poTotalPages]);
   const selectedVendor = useMemo(
     () => vendors.find((v) => v.id === (form.vendor_id ?? -1)) ?? null,
     [vendors, form.vendor_id]
@@ -136,14 +143,29 @@ export function PurchaseOrdersPage() {
   );
 
   return (
-    <div className="min-w-0 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">Purchase Orders</h1>
-        <p className="text-sm text-text-muted">Create POs and move them through approval status.</p>
-        <p className="text-xs text-text-muted mt-1">Fields marked with ** are mandatory.</p>
-      </div>
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Purchase Orders"
+        description="Procurement · Create POs and move them through approval. Link vendors from the supplier master; receive into stock via Goods Receiving. Fields marked with ** are mandatory."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/app/vendors"
+              className="rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
+            >
+              Vendors
+            </Link>
+            <Link
+              to="/app/inventory/goods-receiving"
+              className="rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
+            >
+              Goods receiving
+            </Link>
+          </div>
+        }
+      />
       {error ? <InventoryErrorPanel message={error} onRetry={() => void load()} /> : null}
-      <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-raised p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className={cn(listPageFilterBarClass, "sm:justify-between")}>
         {isNarrow ? <InventoryListViewToggle value={view} onChange={setView} /> : null}
         <label className="flex flex-1 flex-wrap items-center gap-2 text-xs font-semibold text-text-secondary">
           Status Filter
@@ -194,7 +216,7 @@ export function PurchaseOrdersPage() {
             setError(err instanceof Error ? err.message : "Failed to create purchase order");
           }
         }}
-        className="rounded-xl border border-border bg-surface-raised p-4 space-y-3"
+        className={listPageFilterPanelClass}
       >
         <h2 className="text-sm font-semibold text-text-primary">New Purchase Order</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -316,10 +338,12 @@ export function PurchaseOrdersPage() {
               : "Create a purchase order using the form above."
           }
         />
-      ) : showCards ? (
+      ) : (
+        <>
+        {showCards ? (
         <div className="space-y-3">
           {orders.map((row) => (
-            <div key={row.id} className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+            <div key={row.id} className={listPageKpiCardClass}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-text-primary">{row.po_code}</div>
@@ -413,31 +437,32 @@ export function PurchaseOrdersPage() {
           ))}
         </div>
       ) : (
-        <div className={`rounded-xl border border-border bg-surface-raised ${inventoryScrollTableClass}`}>
-          <table className="min-w-[880px] w-full">
-            <thead className="bg-surface-subtle">
+        <div className={listPageTableCardClass}>
+          <ResponsiveTableContainer>
+            <table className={cn(listTableBaseClass, "min-w-[880px]")}>
+              <thead className={listTableTheadClass}>
               <tr>
-                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">PO Code</th>
-                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Supplier</th>
-                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Vendor</th>
-                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Currency</th>
-                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Status</th>
-                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Items</th>
-                <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">Actions</th>
+                <th className={listTableThClass}>PO Code</th>
+                <th className={listTableThClass}>Supplier</th>
+                <th className={listTableThClass}>Vendor</th>
+                <th className={listTableThClass}>Currency</th>
+                <th className={listTableThClass}>Status</th>
+                <th className={listTableThClass}>Items</th>
+                <th className={listTableThRightClass}>Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody>
               {orders.map((row) => (
-                <tr key={row.id}>
-                  <td className="px-3 py-2 text-sm font-medium">{row.po_code}</td>
-                  <td className="px-3 py-2 text-sm">{row.supplier_name}</td>
-                  <td className="px-3 py-2 text-sm">{row.vendor_id ? `#${row.vendor_id}` : "—"}</td>
-                  <td className="px-3 py-2 text-sm">{row.currency || "—"}</td>
-                  <td className="px-3 py-2 text-sm">{row.status}</td>
-                  <td className="px-3 py-2 text-xs text-text-secondary">
+                <tr key={row.id} className={listTableTrClass}>
+                  <td className={listTableTdPrimaryClass}>{row.po_code}</td>
+                  <td className={cn(listTableTdClass, "text-text-primary")}>{row.supplier_name}</td>
+                  <td className={listTableTdClass}>{row.vendor_id ? `#${row.vendor_id}` : "—"}</td>
+                  <td className={listTableTdClass}>{row.currency || "—"}</td>
+                  <td className={listTableTdClass}>{row.status}</td>
+                  <td className={cn(listTableTdClass, "text-xs")}>
                     {row.items.map((ln) => `${itemName.get(ln.item_id) || `#${ln.item_id}`} (${ln.quantity})`).join(", ")}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className={cn(listTableTdClass, "text-right")}>
                     {(() => {
                       const st = (row.status || "").toUpperCase();
                       const canApprove = st === "DRAFT";
@@ -517,47 +542,37 @@ export function PurchaseOrdersPage() {
               ))}
             </tbody>
           </table>
+          </ResponsiveTableContainer>
+          {!loading && poTotal > 0 ? (
+            <DataTablePagination
+              page={poPage}
+              pageSize={pageSize}
+              total={poTotal}
+              onPageChange={setPoPage}
+              onPageSizeChange={(s) => {
+                setPageSize(s);
+                setPoPage(1);
+              }}
+            />
+          ) : null}
         </div>
       )}
-      {!loading && orders.length > 0 && poTotalPages > 1 ? (
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-raised px-4 py-3 text-sm text-text-muted sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            Page {poPage} of {poTotalPages} ({poTotal} total)
-          </span>
-          <div className="flex flex-wrap items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setPoPage((p) => Math.max(1, p - 1))}
-              disabled={poPage <= 1}
-              className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Previous
-            </button>
-            {visiblePoPages.map((pageNo) => (
-              <button
-                key={pageNo}
-                type="button"
-                onClick={() => setPoPage(pageNo)}
-                className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
-                  pageNo === poPage
-                    ? "bg-brand-primary text-brand-primary-foreground"
-                    : "border border-border-strong text-text-secondary hover:bg-surface-subtle"
-                }`}
-              >
-                {pageNo}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setPoPage((p) => p + 1)}
-              disabled={poPage >= poTotalPages}
-              className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
+      {!loading && poTotal > 0 && showCards ? (
+        <div className={listPageTableCardClass}>
+          <DataTablePagination
+            page={poPage}
+            pageSize={pageSize}
+            total={poTotal}
+            onPageChange={setPoPage}
+            onPageSizeChange={(s) => {
+              setPageSize(s);
+              setPoPage(1);
+            }}
+          />
         </div>
       ) : null}
+        </>
+      )}
     </div>
   );
 }

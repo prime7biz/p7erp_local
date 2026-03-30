@@ -15,7 +15,7 @@ from io import BytesIO
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import and_, delete, false, func, or_, select
+from sqlalchemy import and_, case, delete, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -496,26 +496,24 @@ async def _build_style_summary(
     )
 
 
-@router.get("/styles")
-async def list_styles(
-    response: Response,
-    search: str | None = Query(default=None),
-    status_filter: str | None = Query(default=None, alias="status"),
-    buyer_customer_id: int | None = Query(default=None),
-    season: str | None = Query(default=None),
-    department: str | None = Query(default=None),
-    lifecycle_stage: str | None = Query(default=None),
-    active_for_orders: bool | None = Query(default=None),
-    priority: str | None = Query(default=None),
-    risk_level: str | None = Query(default=None),
-    limit: int = Query(default=200, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-    tenant: Tenant = Depends(require_tenant),
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+def _garment_style_list_base_stmt(
+    tenant_id: int,
+    *,
+    search: str | None = None,
+    status_filter: str | None = None,
+    buyer_customer_id: int | None = None,
+    season: str | None = None,
+    department: str | None = None,
+    lifecycle_stage: str | None = None,
+    active_for_orders: bool | None = None,
+    priority: str | None = None,
+    risk_level: str | None = None,
+    style_ids: list[int] | None = None,
 ):
-    _ensure_tenant(user, tenant)
-    stmt = select(GarmentStyle).where(GarmentStyle.tenant_id == tenant.id)
+    """Shared SQL filters for garment style list and summary-report (parity with GET /styles)."""
+    stmt = select(GarmentStyle).where(GarmentStyle.tenant_id == tenant_id)
+    if style_ids:
+        stmt = stmt.where(GarmentStyle.id.in_(style_ids))
     if search:
         pattern = f"%{search.strip().lower()}%"
         stmt = stmt.where(
@@ -544,9 +542,127 @@ async def list_styles(
     normalized_risk = _normalize_optional_choice(risk_level, STYLE_RISK_VALUES, "risk_level")
     if normalized_risk:
         stmt = stmt.where(GarmentStyle.risk_level == normalized_risk)
+    return stmt
+
+
+async def _style_report_rows_for_styles(
+    db: AsyncSession,
+    tenant_id: int,
+    styles: list[GarmentStyle],
+    *,
+    critical_only: bool,
+    normalized_saved_view: str,
+) -> list[StyleReportRow]:
+    rows: list[StyleReportRow] = []
+    if not styles:
+        return rows
+    sid_list = [s.id for s in styles]
+    inquiry_counts: dict[int, int] = {}
+    quotation_counts: dict[int, int] = {}
+    for sid, cnt in (
+        await db.execute(
+            select(Inquiry.style_id, func.count(Inquiry.id))
+            .where(Inquiry.tenant_id == tenant_id, Inquiry.style_id.in_(sid_list))
+            .group_by(Inquiry.style_id)
+        )
+    ).all():
+        inquiry_counts[int(sid)] = int(cnt)
+    for sid, cnt in (
+        await db.execute(
+            select(Quotation.style_id, func.count(Quotation.id))
+            .where(Quotation.tenant_id == tenant_id, Quotation.style_id.in_(sid_list))
+            .group_by(Quotation.style_id)
+        )
+    ).all():
+        quotation_counts[int(sid)] = int(cnt)
+    order_ids_by_style = await _resolve_style_order_ids_batch(db, tenant_id, styles)
+    for style in styles:
+        summary = await _build_style_summary(
+            db,
+            tenant_id,
+            style,
+            inquiry_count=inquiry_counts.get(style.id, 0),
+            quotation_count=quotation_counts.get(style.id, 0),
+            order_ids=order_ids_by_style.get(style.id, []),
+        )
+        is_payment_overdue = _to_decimal(summary.due_amount) > Decimal("0")
+        has_overdue_milestone = summary.overdue_followup_actions > 0
+        if critical_only and not (has_overdue_milestone or is_payment_overdue):
+            continue
+        if normalized_saved_view == "critical_styles" and not (has_overdue_milestone or is_payment_overdue):
+            continue
+        if normalized_saved_view == "shipment_due_week":
+            if summary.next_due_at is None:
+                continue
+            days_to_due = (summary.next_due_at - date.today()).days
+            if days_to_due < 0 or days_to_due > 7:
+                continue
+        if normalized_saved_view == "payment_overdue" and not is_payment_overdue:
+            continue
+        rows.append(
+            StyleReportRow(
+                style_id=style.id,
+                style_code=style.style_code,
+                style_name=style.name,
+                lifecycle_stage=style.lifecycle_stage,
+                priority=style.priority,
+                risk_level=style.risk_level,
+                open_followup_actions=summary.open_followup_actions,
+                overdue_followup_actions=summary.overdue_followup_actions,
+                invoice_amount=summary.invoice_amount,
+                received_amount=summary.received_amount,
+                due_amount=summary.due_amount,
+                last_event_at=summary.last_event_at,
+                next_due_at=summary.next_due_at,
+            )
+        )
+    return rows
+
+
+@router.get("/styles")
+async def list_styles(
+    response: Response,
+    search: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    buyer_customer_id: int | None = Query(default=None),
+    season: str | None = Query(default=None),
+    department: str | None = Query(default=None),
+    lifecycle_stage: str | None = Query(default=None),
+    active_for_orders: bool | None = Query(default=None),
+    priority: str | None = Query(default=None),
+    risk_level: str | None = Query(default=None),
+    style_ids: list[int] | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    stmt = _garment_style_list_base_stmt(
+        tenant.id,
+        search=search,
+        status_filter=status_filter,
+        buyer_customer_id=buyer_customer_id,
+        season=season,
+        department=department,
+        lifecycle_stage=lifecycle_stage,
+        active_for_orders=active_for_orders,
+        priority=priority,
+        risk_level=risk_level,
+        style_ids=style_ids,
+    )
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = int((await db.execute(count_stmt)).scalar() or 0)
-    result = await db.execute(stmt.order_by(GarmentStyle.updated_at.desc(), GarmentStyle.id.desc()).offset(offset).limit(limit))
+    if style_ids:
+        order_expr = case(
+            *[(GarmentStyle.id == sid, pos) for pos, sid in enumerate(style_ids)],
+            else_=len(style_ids),
+        )
+        stmt_ordered = stmt.order_by(order_expr.asc())
+    else:
+        stmt_ordered = stmt.order_by(GarmentStyle.updated_at.desc(), GarmentStyle.id.desc())
+    result = await db.execute(stmt_ordered.offset(offset).limit(limit))
     rows = result.scalars().all()
     response.headers["X-Total-Count"] = str(total)
     return rows
@@ -630,92 +746,85 @@ async def create_style(
 
 @router.get("/styles/summary-report", response_model=list[StyleReportRow])
 async def list_style_summary_report(
+    response: Response,
     search: str | None = Query(default=None),
     lifecycle_stage: str | None = Query(default=None),
     critical_only: bool = Query(default=False),
     saved_view: str | None = Query(default=None),
+    style_ids: list[int] | None = Query(default=None),
+    report_limit: int | None = Query(default=None, ge=1, le=MAX_PAGE_SIZE),
+    report_offset: int = Query(default=0, ge=0),
+    status_filter: str | None = Query(default=None, alias="status"),
+    buyer_customer_id: int | None = Query(default=None),
+    season: str | None = Query(default=None),
+    department: str | None = Query(default=None),
+    active_for_orders: bool | None = Query(default=None),
+    priority: str | None = Query(default=None),
+    risk_level: str | None = Query(default=None),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    stmt = select(GarmentStyle).where(GarmentStyle.tenant_id == tenant.id)
-    if search:
-        pattern = f"%{search.strip().lower()}%"
-        stmt = stmt.where(
-            or_(
-                func.lower(GarmentStyle.style_code).like(pattern),
-                func.lower(GarmentStyle.name).like(pattern),
-                func.lower(func.coalesce(GarmentStyle.buyer_style_ref, "")).like(pattern),
-            )
-        )
-    if lifecycle_stage:
-        stmt = stmt.where(GarmentStyle.lifecycle_stage == _normalize_style_stage(lifecycle_stage))
-    styles = list((await db.execute(stmt.order_by(GarmentStyle.updated_at.desc()))).scalars().all())
-    rows: list[StyleReportRow] = []
+    stmt = _garment_style_list_base_stmt(
+        tenant.id,
+        search=search,
+        status_filter=status_filter,
+        buyer_customer_id=buyer_customer_id,
+        season=season,
+        department=department,
+        lifecycle_stage=lifecycle_stage,
+        active_for_orders=active_for_orders,
+        priority=priority,
+        risk_level=risk_level,
+        style_ids=style_ids,
+    )
     normalized_saved_view = (saved_view or "").strip().lower()
-    inquiry_counts: dict[int, int] = {}
-    quotation_counts: dict[int, int] = {}
-    order_ids_by_style: dict[int, list[int]] = {}
-    if styles:
-        sid_list = [s.id for s in styles]
-        for sid, cnt in (
-            await db.execute(
-                select(Inquiry.style_id, func.count(Inquiry.id))
-                .where(Inquiry.tenant_id == tenant.id, Inquiry.style_id.in_(sid_list))
-                .group_by(Inquiry.style_id)
+    needs_post_summary_filter = (
+        critical_only
+        or normalized_saved_view == "critical_styles"
+        or normalized_saved_view == "shipment_due_week"
+        or normalized_saved_view == "payment_overdue"
+    )
+
+    def _ordered_stmt(base):
+        if style_ids:
+            order_expr = case(
+                *[(GarmentStyle.id == sid, pos) for pos, sid in enumerate(style_ids)],
+                else_=len(style_ids),
             )
-        ).all():
-            inquiry_counts[int(sid)] = int(cnt)
-        for sid, cnt in (
-            await db.execute(
-                select(Quotation.style_id, func.count(Quotation.id))
-                .where(Quotation.tenant_id == tenant.id, Quotation.style_id.in_(sid_list))
-                .group_by(Quotation.style_id)
-            )
-        ).all():
-            quotation_counts[int(sid)] = int(cnt)
-        order_ids_by_style = await _resolve_style_order_ids_batch(db, tenant.id, styles)
-    for style in styles:
-        summary = await _build_style_summary(
+            return base.order_by(order_expr.asc())
+        return base.order_by(GarmentStyle.updated_at.desc(), GarmentStyle.id.desc())
+
+    # Fast path: SQL-level paging; summaries only for the current page (no critical/saved-view filters).
+    if not needs_post_summary_filter and report_limit is not None:
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = int((await db.execute(count_stmt)).scalar() or 0)
+        result = await db.execute(_ordered_stmt(stmt).offset(report_offset).limit(report_limit))
+        page_styles = list(result.scalars().all())
+        rows = await _style_report_rows_for_styles(
             db,
             tenant.id,
-            style,
-            inquiry_count=inquiry_counts.get(style.id, 0),
-            quotation_count=quotation_counts.get(style.id, 0),
-            order_ids=order_ids_by_style.get(style.id, []),
+            page_styles,
+            critical_only=False,
+            normalized_saved_view="",
         )
-        is_payment_overdue = _to_decimal(summary.due_amount) > Decimal("0")
-        has_overdue_milestone = summary.overdue_followup_actions > 0
-        if critical_only and not (has_overdue_milestone or is_payment_overdue):
-            continue
-        if normalized_saved_view == "critical_styles" and not (has_overdue_milestone or is_payment_overdue):
-            continue
-        if normalized_saved_view == "shipment_due_week":
-            if summary.next_due_at is None:
-                continue
-            days_to_due = (summary.next_due_at - date.today()).days
-            if days_to_due < 0 or days_to_due > 7:
-                continue
-        if normalized_saved_view == "payment_overdue" and not is_payment_overdue:
-            continue
-        rows.append(
-            StyleReportRow(
-                style_id=style.id,
-                style_code=style.style_code,
-                style_name=style.name,
-                lifecycle_stage=style.lifecycle_stage,
-                priority=style.priority,
-                risk_level=style.risk_level,
-                open_followup_actions=summary.open_followup_actions,
-                overdue_followup_actions=summary.overdue_followup_actions,
-                invoice_amount=summary.invoice_amount,
-                received_amount=summary.received_amount,
-                due_amount=summary.due_amount,
-                last_event_at=summary.last_event_at,
-                next_due_at=summary.next_due_at,
-            )
-        )
+        response.headers["X-Total-Count"] = str(total)
+        return rows
+
+    # Complex path: filter after building summaries; optional slice at end.
+    styles = list((await db.execute(_ordered_stmt(stmt))).scalars().all())
+    rows = await _style_report_rows_for_styles(
+        db,
+        tenant.id,
+        styles,
+        critical_only=critical_only,
+        normalized_saved_view=normalized_saved_view,
+    )
+    total_count = len(rows)
+    if report_limit is not None:
+        rows = rows[report_offset : report_offset + report_limit]
+    response.headers["X-Total-Count"] = str(total_count)
     return rows
 
 

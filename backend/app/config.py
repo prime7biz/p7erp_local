@@ -74,6 +74,22 @@ class Settings(BaseSettings):
     forecast_sync_max_horizon_days: int = 90
     forecast_sync_timeout_seconds: int = 30
 
+    # Quotation read-only costing intelligence Phase 1 (deterministic). Set false for global kill-switch.
+    quotation_ai_costing_phase1_enabled: bool = True
+    # Quotation costing AI Phase 2 (review-mode line suggestions + apply). Off by default.
+    quotation_ai_costing_phase2_enabled: bool = False
+    # Cost benchmarking (Phase 13): advisory comparison vs historical quotations. Off by default.
+    quotation_ai_cost_benchmark_enabled: bool = False
+
+    # Phases 14–20: ERP AI evolution (advisory / read-only by default; enable per environment).
+    production_planning_ai_enhanced_enabled: bool = False
+    tna_followup_ai_enabled: bool = False
+    document_ai_validation_enabled: bool = False
+    finance_ai_readonly_enabled: bool = False
+    executive_ai_dashboard_enabled: bool = False
+    ai_copilot_readonly_enabled: bool = False
+    ai_controlled_automation_enabled: bool = False
+
     # Platform admin (super admin panel): JWT lifetime and local backup directory
     platform_admin_jwt_expire_minutes: int = 480
     backup_dir: str = "./backups"

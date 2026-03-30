@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   api,
   type VendorCreate,
   type VendorResponse,
   type VendorUpdate,
 } from "@/api/client";
-
-const PAGE_SIZE = 50;
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { useListPagination } from "@/hooks/useListPagination";
+import { DataTablePagination } from "@/components/app/DataTablePagination";
 import {
   VendorKpiCards,
   VendorFilterBar,
@@ -14,6 +16,13 @@ import {
   VendorCards,
   VendorDetailDrawer,
 } from "@/pages/app/components/vendors";
+import {
+  listPageErrorClass,
+  listPagePanelClass,
+  listPageRootClass,
+  listPageTableCardClass,
+} from "@/components/app/listPageLayout";
+import { cn } from "@/lib/utils";
 
 type ViewMode = "table" | "cards";
 
@@ -30,13 +39,14 @@ export function VendorsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<"view" | "create">("view");
   const [selectedVendor, setSelectedVendor] = useState<VendorResponse | null>(null);
+  const { pageSize, setPageSize } = useListPagination();
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     setPage(1);
-  }, [search, activeOnly, vendorType, currency, hasLedger]);
+  }, [search, activeOnly, vendorType, currency, hasLedger, pageSize]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,7 +59,7 @@ export function VendorsPage() {
         currency: currency || undefined,
         has_ledger: hasLedger,
         page,
-        page_size: PAGE_SIZE,
+        page_size: pageSize,
       });
       setItems(res.items);
       setTotal(res.total);
@@ -59,7 +69,7 @@ export function VendorsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, activeOnly, vendorType, currency, hasLedger, page]);
+  }, [search, activeOnly, vendorType, currency, hasLedger, page, pageSize]);
 
   useEffect(() => {
     load();
@@ -81,14 +91,6 @@ export function VendorsPage() {
     }).length;
     return { total, active, inactive, ledgerLinked, foreignCurrency };
   }, [items, total]);
-
-  const visiblePageNumbers = useMemo(() => {
-    const start = Math.max(1, page - 2);
-    const end = Math.min(totalPages, page + 2);
-    const pages: number[] = [];
-    for (let i = start; i <= end; i += 1) pages.push(i);
-    return pages;
-  }, [page, totalPages]);
 
   const handleAddVendor = () => {
     setDrawerMode("create");
@@ -119,18 +121,24 @@ export function VendorsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary">Vendors</h1>
-        <p className="text-sm text-text-muted mt-0.5">
-          Manage supplier/vendor master. Use vendors when creating purchase orders for a consistent supplier list.
-        </p>
-      </header>
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Vendors"
+        description="Sourcing / procurement · Supplier master. Link purchase orders and receiving to these vendors for consistent operational data."
+        actions={
+          <Link
+            to="/app/purchase-orders"
+            className="rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
+          >
+            Purchase orders
+          </Link>
+        }
+      />
 
       {error && (
-        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground flex items-center justify-between">
+        <div className={cn(listPageErrorClass, "flex items-center justify-between")}>
           <span>{error}</span>
-          <button type="button" onClick={() => setError("")} className="text-status-danger-foreground hover:text-status-danger-foreground">
+          <button type="button" onClick={() => setError("")} className="text-status-danger-foreground hover:opacity-90">
             Dismiss
           </button>
         </div>
@@ -152,7 +160,7 @@ export function VendorsPage() {
         ) : null}
       </div>
 
-      <div className="rounded-xl border border-border bg-surface-raised p-3">
+      <div className={listPagePanelClass}>
         <VendorFilterBar
           search={search}
           onSearchChange={setSearch}
@@ -172,7 +180,7 @@ export function VendorsPage() {
         />
       </div>
 
-      <div className="rounded-xl border border-border bg-surface-raised overflow-hidden shadow-sm">
+      <div className={listPageTableCardClass}>
         {loading ? (
           <div className="px-4 py-12 text-center text-text-muted text-sm">Loading vendors…</div>
         ) : viewMode === "table" ? (
@@ -181,44 +189,16 @@ export function VendorsPage() {
           <VendorCards items={items} onCardClick={handleVendorClick} />
         )}
         {!loading && total > 0 ? (
-          <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-text-muted sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              Showing {total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1} to {Math.min(page * PAGE_SIZE, total)} of {total}{" "}
-              vendors
-            </span>
-            <div className="flex flex-wrap items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Previous
-              </button>
-              {visiblePageNumbers.map((pageNo) => (
-                <button
-                  key={pageNo}
-                  type="button"
-                  onClick={() => setPage(pageNo)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
-                    pageNo === page
-                      ? "bg-brand-primary text-brand-primary-foreground"
-                      : "border border-border-strong text-text-secondary hover:bg-surface-subtle"
-                  }`}
-                >
-                  {pageNo}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setPage((p) => p + 1)}
-                disabled={page >= totalPages}
-                className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          <DataTablePagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={setPage}
+            onPageSizeChange={(s) => {
+              setPageSize(s);
+              setPage(1);
+            }}
+          />
         ) : null}
       </div>
 

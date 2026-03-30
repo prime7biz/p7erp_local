@@ -12,6 +12,7 @@ import { useAIPlanningInsights } from "@/hooks/useAIPlanningInsights";
 import { useProductionPipeline, type PipelineViewMode } from "@/hooks/useProductionPipeline";
 import type { CustomerApprovalChain, MaterialReadinessChain, PipelineOrderRow } from "@/types/productionPlanning";
 import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -248,12 +249,10 @@ export function ProductionPlanningPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Production Planning</h1>
-        <p className="text-sm text-text-muted">
-          Style-first pipeline, Gemini AI insights, MRP, and manufacturing plan history.
-        </p>
-      </div>
+      <AppPageHeader
+        title="Production Planning"
+        description="Manufacturing · Style-first pipeline, Gemini AI insights, MRP, and plan history. Suggestions are advisory; capacity and allocations still require human confirmation in ERP workflows."
+      />
 
       <div className="flex flex-wrap gap-2 border-b border-border pb-2">
         {(

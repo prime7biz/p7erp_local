@@ -8,9 +8,12 @@ import {
   type CustomerResponse,
 } from "@/api/client";
 import { CustomerAiInsights } from "@/components/customers/CustomerAiInsights";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LinkedRecordsSection } from "@/components/app/LinkedRecordsSection";
+import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
 import { useCustomerAi } from "@/hooks/useCustomerAi";
 import { logApiError } from "@/utils/logApiError";
-import { ArrowLeft, Building2, Mail, MapPin, Pencil, Phone, UserRound } from "lucide-react";
+import { Building2, Mail, MapPin, Pencil, Phone, UserRound } from "lucide-react";
 
 function formatDateTime(value: string): string {
   const d = new Date(value);
@@ -150,45 +153,64 @@ export function CustomerDetailPage() {
   const inquiries = related?.inquiries ?? [];
   const quotations = related?.quotations ?? [];
 
+  const workflowItems = [
+    {
+      label: "Inquiries",
+      value: inquiries.length,
+      to: inquiries.length ? `/app/inquiries?q=${encodeURIComponent(customer.name)}` : undefined,
+    },
+    {
+      label: "Quotations",
+      value: quotations.length,
+      to: quotations.length ? `/app/quotations?q=${encodeURIComponent(customer.customer_code || customer.name)}` : undefined,
+    },
+    {
+      label: "Orders",
+      value: orders.length,
+      to: orders.length ? `/app/orders?q=${encodeURIComponent(customer.customer_code || customer.name)}` : undefined,
+    },
+    {
+      label: "Profile",
+      value: health?.profile_completeness != null ? `${Math.round(health.profile_completeness)}%` : "—",
+      hint: "Server-computed completeness",
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <Link to="/app/customers" className="inline-flex items-center gap-1 text-sm font-medium text-text-secondary hover:text-brand-primary">
-            <ArrowLeft className="h-4 w-4" />
-            Back to customers
-          </Link>
-          <h1 className="mt-2 text-3xl font-bold text-text-primary">{customer.name}</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            {customer.customer_code} · {customer.customer_type ?? "Unspecified type"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => window.open(`/app/customers/${customer.id}/print`, "_blank", "noopener,noreferrer")}
-            className="inline-flex items-center gap-1 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
-          >
-            Print / Save PDF
-          </button>
-          <Link
-            to={`/app/customers/${customer.id}/edit`}
-            className="inline-flex items-center gap-1 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-            Edit customer
-          </Link>
-          <span
-            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${
-              (customer.status || "active").toLowerCase() === "active"
-                ? "bg-status-success-subtle text-status-success-foreground"
-                : "bg-surface-subtle text-text-secondary"
-            }`}
-          >
-            {customer.status || "active"}
-          </span>
-        </div>
-      </div>
+      <AppPageHeader
+        backTo={{ label: "Back to customers", to: "/app/customers" }}
+        title={customer.name}
+        description={`${customer.customer_code} · ${customer.customer_type ?? "Unspecified type"}`}
+        belowTitle={<WorkflowSummaryStrip items={workflowItems} />}
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => window.open(`/app/customers/${customer.id}/print`, "_blank", "noopener,noreferrer")}
+              className="inline-flex items-center gap-1 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
+            >
+              Print / Save PDF
+            </button>
+            <Link
+              to={`/app/customers/${customer.id}/edit`}
+              className="inline-flex items-center gap-1 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit customer
+            </Link>
+            <span
+              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                (customer.status || "active").toLowerCase() === "active"
+                  ? "bg-status-success-subtle text-status-success-foreground"
+                  : "bg-surface-subtle text-text-secondary"
+              }`}
+            >
+              {customer.status || "active"}
+            </span>
+          </>
+        }
+      />
 
       <CustomerAiInsights
         customerId={customer.id}
@@ -288,55 +310,37 @@ export function CustomerDetailPage() {
         </section>
       </div>
 
-      {orders.length > 0 || inquiries.length > 0 || quotations.length > 0 ? (
-        <section className="rounded-xl border border-border bg-surface-raised p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-status-warning">Related Records</h2>
-          <div className="grid gap-4 lg:grid-cols-3">
-            {orders.length > 0 ? (
-              <div>
-                <div className="text-xs text-text-muted mb-1">Orders ({orders.length})</div>
-                <ul className="space-y-1">
-                  {orders.slice(0, 8).map((o) => (
-                    <li key={o.id}>
-                      <Link to={`/app/orders/${o.id}`} className="text-sm text-brand-primary hover:underline">
-                        {o.code} — {o.status}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {inquiries.length > 0 ? (
-              <div>
-                <div className="text-xs text-text-muted mb-1">Inquiries ({inquiries.length})</div>
-                <ul className="space-y-1">
-                  {inquiries.slice(0, 8).map((i) => (
-                    <li key={i.id}>
-                      <Link to={`/app/inquiries/${i.id}`} className="text-sm text-brand-primary hover:underline">
-                        {i.code} — {i.status}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {quotations.length > 0 ? (
-              <div>
-                <div className="text-xs text-text-muted mb-1">Quotations ({quotations.length})</div>
-                <ul className="space-y-1">
-                  {quotations.slice(0, 8).map((q) => (
-                    <li key={q.id}>
-                      <Link to={`/app/quotations/${q.id}`} className="text-sm text-brand-primary hover:underline">
-                        {q.code} — {q.status}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
+      <LinkedRecordsSection
+        columns={[
+          {
+            title: "Orders",
+            rows: orders.map((o) => ({
+              id: o.id,
+              label: o.code,
+              sub: o.status,
+              to: `/app/orders/${o.id}`,
+            })),
+          },
+          {
+            title: "Inquiries",
+            rows: inquiries.map((i) => ({
+              id: i.id,
+              label: i.code,
+              sub: i.status,
+              to: `/app/inquiries/${i.id}`,
+            })),
+          },
+          {
+            title: "Quotations",
+            rows: quotations.map((q) => ({
+              id: q.id,
+              label: q.code,
+              sub: q.status,
+              to: `/app/quotations/${q.id}`,
+            })),
+          },
+        ]}
+      />
 
       {recvAging && recvAging.rows?.length ? (
         <section className="rounded-xl border border-border bg-surface-raised p-5">

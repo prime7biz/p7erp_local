@@ -13,6 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.models import Customer, CustomerIntermediary, GarmentStyle, Quotation, Tenant
+from app.modules.orders.commercial_fields import (
+  QUOTATION_PROTECTED_COMMERCIAL_FIELDS,
+  is_quotation_commercial_locked,
+)
 from app.models.quotation_ai_suggestion import QuotationAiSuggestionBatch, QuotationAiSuggestionItem
 from app.modules.ai_tool.audit import log_ai_event
 from app.modules.master_data_ai.request_context import get_master_data_ai_request_id
@@ -708,6 +712,7 @@ async def apply_suggestions_to_quotation(
     skipped: list[str] = []
     rejected: list[str] = []
     conflicts: list[dict[str, str]] = []
+    requires_change_request: list[dict[str, str]] = []
 
     for field_key_raw, act in actions:
         nk = normalize_suggestion_field_key(field_key_raw) or field_key_raw
@@ -729,6 +734,15 @@ async def apply_suggestions_to_quotation(
             skipped.append(nk)
             continue
         if nk in PROTECTED_FIELDS:
+            skipped.append(nk)
+            continue
+        if is_quotation_commercial_locked(quotation.status) and nk in QUOTATION_PROTECTED_COMMERCIAL_FIELDS:
+            requires_change_request.append(
+                {
+                    "field_key": nk,
+                    "message": "Quotation is commercially locked; use a commercial change request to update this field.",
+                }
+            )
             skipped.append(nk)
             continue
         sug = (it.suggested_value or "").strip()
@@ -773,6 +787,7 @@ async def apply_suggestions_to_quotation(
             "applied_fields": applied[:50],
             "conflicts": conflicts[:20],
             "after_snapshot": {k: (v[:200] if v else "") for k, v in list(after_snap.items())[:20]},
+            "requires_change_request_count": len(requires_change_request),
         },
         request_id=get_master_data_ai_request_id(),
         prompt_category="quotation_ai",
@@ -785,4 +800,5 @@ async def apply_suggestions_to_quotation(
         "skipped_fields": skipped,
         "rejected_fields": rejected,
         "conflicts": conflicts,
+        "requires_change_request": requires_change_request,
     }

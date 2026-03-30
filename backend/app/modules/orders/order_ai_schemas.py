@@ -204,12 +204,18 @@ class OrderAiApplyConflict(BaseModel):
     suggested: str = ""
 
 
+class OrderAiRequiresChangeRequestItem(BaseModel):
+    field_key: str
+    message: str = ""
+
+
 class OrderAiApplySuggestionsResponse(BaseModel):
     order: OrderAiOrderOut
     applied_fields: list[str] = Field(default_factory=list)
     skipped_fields: list[str] = Field(default_factory=list)
     rejected_fields: list[str] = Field(default_factory=list)
     conflicts: list[OrderAiApplyConflict] = Field(default_factory=list)
+    requires_change_request: list[OrderAiRequiresChangeRequestItem] = Field(default_factory=list)
 
 
 class OrderAiDiscardBatchRequest(BaseModel):

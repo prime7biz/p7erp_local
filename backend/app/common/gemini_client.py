@@ -93,7 +93,10 @@ def _raw_generate_text_sync(
                 logger.exception("Gemini generate_content failed (model=%s)", model_name)
                 return None, model_name, None, None, None
         if last_err is not None:
-            logger.exception("Gemini generate_content failed after trying all fallback models")
+            logger.error(
+                "Gemini generate_content failed after trying all fallback models",
+                exc_info=last_err,
+            )
         return None, model_candidates[0] if model_candidates else None, None, None, None
     except Exception:
         model_name = model_candidates[0] if model_candidates else None
@@ -190,7 +193,10 @@ def _raw_multimodal_sync(
                 logger.exception("Gemini multimodal generate_content failed (model=%s)", model_name)
                 return None, model_name, None, None, None
         if last_err is not None:
-            logger.exception("Gemini multimodal generate_content failed after trying fallback models")
+            logger.error(
+                "Gemini multimodal generate_content failed after trying fallback models",
+                exc_info=last_err,
+            )
         return None, model_candidates[0] if model_candidates else None, None, None, None
     except Exception:
         model_name = model_candidates[0] if model_candidates else None

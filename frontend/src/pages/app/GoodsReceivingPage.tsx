@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   api,
   type GoodsReceivingCreate,
@@ -10,8 +11,24 @@ import {
   InventoryErrorPanel,
   InventoryTableSkeleton,
 } from "@/components/inventory/InventoryListStates";
-import { inventoryScrollTableClass } from "@/components/inventory/InventoryMobileList";
 import { logApiError } from "@/utils/logApiError";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { DataTablePagination } from "@/components/app/DataTablePagination";
+import {
+  listPageFilterPanelClass,
+  listPageRootClass,
+  listPageTableCardClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThClass,
+  listTableThRightClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
+import { useListPagination } from "@/hooks/useListPagination";
+import { cn } from "@/lib/utils";
 
 /** Phase 3.4: ~44px min touch targets for warehouse floor / mobile use */
 const touchField = "min-h-[44px] w-full rounded border border-border px-3 py-3 text-base sm:text-sm touch-manipulation";
@@ -36,10 +53,9 @@ export function GoodsReceivingPage() {
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [apMessage, setApMessage] = useState("");
+  const { pageSize, setPageSize } = useListPagination();
   const [grPage, setGrPage] = useState(1);
-  const [grTotalPages, setGrTotalPages] = useState(1);
   const [grTotal, setGrTotal] = useState(0);
-  const GR_PAGE_SIZE = 25;
 
   useEffect(() => {
     const close = () => setOpenActionsId(null);
@@ -55,12 +71,11 @@ export function GoodsReceivingPage() {
         api.listGoodsReceivingPaginated({
           status_filter: statusFilter.trim() || undefined,
           page: grPage,
-          page_size: GR_PAGE_SIZE,
+          page_size: pageSize,
         }),
         api.listPurchaseOrdersPaginated({ page: 1, page_size: 500 }),
       ]);
       setRows(grRes.items);
-      setGrTotalPages(grRes.total_pages);
       setGrTotal(grRes.total);
       setPos(poRes.items);
     } catch (e) {
@@ -68,7 +83,7 @@ export function GoodsReceivingPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, grPage]);
+  }, [statusFilter, grPage, pageSize]);
 
   useEffect(() => {
     void load();
@@ -76,15 +91,7 @@ export function GoodsReceivingPage() {
 
   useEffect(() => {
     setGrPage(1);
-  }, [statusFilter]);
-
-  const visibleGrPages = useMemo(() => {
-    const start = Math.max(1, grPage - 2);
-    const end = Math.min(grTotalPages, grPage + 2);
-    const pages: number[] = [];
-    for (let i = start; i <= end; i += 1) pages.push(i);
-    return pages;
-  }, [grPage, grTotalPages]);
+  }, [statusFilter, pageSize]);
 
   const receiveGrn = useCallback(
     async (id: number) => {
@@ -117,17 +124,24 @@ export function GoodsReceivingPage() {
   );
 
   return (
-    <div className="min-w-0 space-y-6 touch-manipulation">
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">Goods Receiving (GRN)</h1>
-        <p className="text-sm text-text-muted">Receive materials from approved purchase orders into stock.</p>
-        <p className="mt-1 text-xs text-text-muted">Controls use larger tap targets on phones and tablets.</p>
-      </div>
+    <div className={cn(listPageRootClass, "touch-manipulation")}>
+      <AppPageHeader
+        title="Goods Receiving (GRN)"
+        description="Inventory · Receive materials from purchase orders into stock. Larger tap targets for warehouse floor use."
+        actions={
+          <Link
+            to="/app/purchase-orders"
+            className="rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle min-h-[44px] inline-flex items-center"
+          >
+            Purchase orders
+          </Link>
+        }
+      />
       {error ? <InventoryErrorPanel message={error} onRetry={() => void load()} /> : null}
       {apMessage ? (
         <div className="rounded-lg border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{apMessage}</div>
       ) : null}
-      <div className="rounded-xl border border-border bg-surface-raised p-3 sm:p-4">
+      <div className={listPageFilterPanelClass}>
         <label className="mb-2 block text-xs font-semibold text-text-secondary">Status filter</label>
         <input
           className={touchField}
@@ -151,7 +165,7 @@ export function GoodsReceivingPage() {
             setError(err instanceof Error ? err.message : "Failed to create GRN");
           }
         }}
-        className="grid grid-cols-1 gap-3 rounded-xl border border-border bg-surface-raised p-4 md:grid-cols-4 md:gap-2"
+        className="grid grid-cols-1 gap-3 rounded-xl border border-border bg-surface-raised p-4 shadow-sm md:grid-cols-4 md:gap-2"
       >
         <select
           className={touchField}
@@ -195,25 +209,26 @@ export function GoodsReceivingPage() {
           }
         />
       ) : (
-        <div className={`rounded-xl border border-border bg-surface-raised ${inventoryScrollTableClass}`}>
-          <table className="min-w-[640px] w-full">
-            <thead className="bg-surface-subtle">
+        <div className={listPageTableCardClass}>
+          <ResponsiveTableContainer>
+            <table className={cn(listTableBaseClass, "min-w-[640px]")}>
+              <thead className={listTableTheadClass}>
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-text-muted">GRN Code</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-text-muted">PO</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-text-muted">Status</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-text-muted">Date</th>
-                <th className="px-3 py-3 text-right text-xs font-medium uppercase text-text-muted">Actions</th>
+                <th className={listTableThClass}>GRN Code</th>
+                <th className={listTableThClass}>PO</th>
+                <th className={listTableThClass}>Status</th>
+                <th className={listTableThClass}>Date</th>
+                <th className={listTableThRightClass}>Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody>
               {rows.map((row) => (
-                <tr key={row.id}>
-                  <td className="px-3 py-3 text-sm font-medium">{row.grn_code}</td>
-                  <td className="px-3 py-3 text-sm">{row.purchase_order_id ? `#${row.purchase_order_id}` : "—"}</td>
-                  <td className="px-3 py-3 text-sm">{row.status}</td>
-                  <td className="px-3 py-3 text-sm">{row.received_date ? new Date(row.received_date).toLocaleDateString() : "—"}</td>
-                  <td className="px-3 py-3 text-right">
+                <tr key={row.id} className={listTableTrClass}>
+                  <td className={listTableTdPrimaryClass}>{row.grn_code}</td>
+                  <td className={cn(listTableTdClass, "text-text-primary")}>{row.purchase_order_id ? `#${row.purchase_order_id}` : "—"}</td>
+                  <td className={listTableTdClass}>{row.status}</td>
+                  <td className={listTableTdClass}>{row.received_date ? new Date(row.received_date).toLocaleDateString() : "—"}</td>
+                  <td className={cn(listTableTdClass, "text-right")}>
                     <div className="relative inline-block text-left">
                       <button
                         type="button"
@@ -272,47 +287,21 @@ export function GoodsReceivingPage() {
               ))}
             </tbody>
           </table>
+          </ResponsiveTableContainer>
+          {!loading && grTotal > 0 ? (
+            <DataTablePagination
+              page={grPage}
+              pageSize={pageSize}
+              total={grTotal}
+              onPageChange={setGrPage}
+              onPageSizeChange={(s) => {
+                setPageSize(s);
+                setGrPage(1);
+              }}
+            />
+          ) : null}
         </div>
       )}
-      {!loading && rows.length > 0 && grTotalPages > 1 ? (
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-raised px-4 py-3 text-sm text-text-muted sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            Page {grPage} of {grTotalPages} ({grTotal} total)
-          </span>
-          <div className="flex flex-wrap items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setGrPage((p) => Math.max(1, p - 1))}
-              disabled={grPage <= 1}
-              className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Previous
-            </button>
-            {visibleGrPages.map((pageNo) => (
-              <button
-                key={pageNo}
-                type="button"
-                onClick={() => setGrPage(pageNo)}
-                className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
-                  pageNo === grPage
-                    ? "bg-brand-primary text-brand-primary-foreground"
-                    : "border border-border-strong text-text-secondary hover:bg-surface-subtle"
-                }`}
-              >
-                {pageNo}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setGrPage((p) => p + 1)}
-              disabled={grPage >= grTotalPages}
-              className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

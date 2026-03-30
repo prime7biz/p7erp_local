@@ -6,6 +6,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.pagination import clamp_page_size, safe_page, total_pages
 from app.common.codegen import next_tenant_code
 from app.common.db_errors import flush_handling_duplicate_document_code
 from app.common.tenant import require_tenant
@@ -30,6 +31,7 @@ from app.modules.inquiries.schemas import (
   InquiryCreate,
   InquiryItemCreate,
   InquiryItemResponse,
+  InquiryListPageResponse,
   InquiryResponse,
   InquiryUpdate,
 )
@@ -150,6 +152,7 @@ def _serialize_inquiry(
   style: GarmentStyle | None = None,
   converted_quotation_id: int | None = None,
   ai_indicators: InquiryAiIndicatorsOut | None = None,
+  customer_name: str | None = None,
 ) -> InquiryResponse:
   commission_value = float(inquiry.commission_value) if inquiry.commission_value is not None else None
   return InquiryResponse(
@@ -187,6 +190,7 @@ def _serialize_inquiry(
     created_at=inquiry.created_at.isoformat(),
     updated_at=inquiry.updated_at.isoformat(),
     ai_indicators=ai_indicators,
+    customer_name=customer_name,
   )
 
 
@@ -296,6 +300,101 @@ async def list_inquiries(
     )
     for r in rows
   ]
+
+
+@router.get("/paginated", response_model=InquiryListPageResponse)
+async def list_inquiries_paginated(
+  *,
+  search: str | None = Query(default=None, description="Search by code, style, season, department"),
+  status_filter: str | None = Query(default=None, alias="status", description="Filter by status"),
+  department: str | None = Query(default=None, description="Filter by department"),
+  created_from: date | None = Query(default=None, description="Created at from (inclusive)"),
+  created_to: date | None = Query(default=None, description="Created at to (inclusive)"),
+  ai_indicators: int = Query(
+    default=0,
+    ge=0,
+    le=1,
+    description="When 1, include rules-based AI indicators (no LLM) on each row.",
+  ),
+  page: int = Query(default=1, ge=1),
+  page_size: int = Query(default=10, ge=1, le=500),
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  if user.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+
+  ps = clamp_page_size(page_size)
+
+  def _apply_filters(stmt):
+    s = stmt.where(Inquiry.tenant_id == tenant.id)
+    if search:
+      pattern = f"%{search.lower()}%"
+      s = s.where(
+        or_(
+          func.lower(Inquiry.inquiry_code).like(pattern),
+          func.lower(Inquiry.style_ref).like(pattern),
+          func.lower(Inquiry.season).like(pattern),
+          func.lower(Inquiry.department).like(pattern),
+        )
+      )
+    if status_filter:
+      s = s.where(Inquiry.status == status_filter)
+    if department:
+      s = s.where(Inquiry.department == department)
+    if created_from:
+      start_dt = datetime.combine(created_from, time.min)
+      s = s.where(Inquiry.created_at >= start_dt)
+    if created_to:
+      end_dt = datetime.combine(created_to, time.max)
+      s = s.where(Inquiry.created_at <= end_dt)
+    return s
+
+  count_stmt = _apply_filters(select(func.count()).select_from(Inquiry))
+  total = int((await db.execute(count_stmt)).scalar_one() or 0)
+  tp = total_pages(total, ps)
+  pg = safe_page(page, total, ps)
+  offset = (pg - 1) * ps
+
+  list_stmt = (
+    _apply_filters(
+      select(Inquiry, Customer.name)
+      .outerjoin(Customer, (Customer.id == Inquiry.customer_id) & (Customer.tenant_id == tenant.id))
+    )
+    .order_by(Inquiry.created_at.desc())
+    .limit(ps)
+    .offset(offset)
+  )
+  result = await db.execute(list_stmt)
+  row_tuples = result.all()
+  inquiries_only = [r for r, _ in row_tuples]
+  item_map = await _get_items_by_inquiry_id(
+    db, tenant_id=tenant.id, inquiry_ids=[r.id for r in inquiries_only]
+  )
+  style_map = await _get_styles_by_id(
+    db,
+    tenant_id=tenant.id,
+    style_ids=[r.style_id for r in inquiries_only if r.style_id is not None],
+  )
+  converted_map = await _get_converted_quotation_map(
+    db, tenant_id=tenant.id, inquiry_ids=[r.id for r in inquiries_only]
+  )
+
+  items: list[InquiryResponse] = []
+  for inq, cust_name in row_tuples:
+    items.append(
+      _serialize_inquiry(
+        inq,
+        item_map.get(inq.id, []),
+        style_map.get(inq.style_id or -1),
+        converted_map.get(inq.id),
+        compute_inquiry_ai_indicators(inq) if ai_indicators else None,
+        customer_name=cust_name,
+      )
+    )
+
+  return InquiryListPageResponse(items=items, total=total, page=pg, page_size=ps, total_pages=tp)
 
 
 @router.post("", response_model=InquiryResponse, status_code=status.HTTP_201_CREATED)

@@ -17,6 +17,10 @@ from app.models.order_ai_suggestion import OrderAiSuggestionBatch, OrderAiSugges
 from app.modules.ai_extract.schemas import OrderExtractionResponse
 from app.modules.ai_tool.audit import log_ai_event
 from app.modules.master_data_ai.request_context import get_master_data_ai_request_id
+from app.modules.orders.commercial_fields import (
+    ORDER_PROTECTED_COMMERCIAL_FIELDS,
+    is_order_commercial_locked,
+)
 
 TRUNC_VALUE = 2048
 TRUNC_SNAP = 1024
@@ -753,6 +757,7 @@ async def apply_suggestions_to_order(
     skipped: list[str] = []
     rejected: list[str] = []
     conflicts: list[dict[str, str]] = []
+    requires_change_request: list[dict[str, str]] = []
 
     for field_key_raw, act in actions:
         nk = normalize_suggestion_field_key(field_key_raw) or field_key_raw
@@ -774,6 +779,15 @@ async def apply_suggestions_to_order(
             skipped.append(nk)
             continue
         if nk in PROTECTED_FIELDS:
+            skipped.append(nk)
+            continue
+        if is_order_commercial_locked(order_row.status) and nk in ORDER_PROTECTED_COMMERCIAL_FIELDS:
+            requires_change_request.append(
+                {
+                    "field_key": nk,
+                    "message": "Order is commercially locked; use a commercial change request to update this field.",
+                }
+            )
             skipped.append(nk)
             continue
         sug = (it.suggested_value or "").strip()
@@ -830,4 +844,5 @@ async def apply_suggestions_to_order(
         "skipped_fields": skipped,
         "rejected_fields": rejected,
         "conflicts": conflicts,
+        "requires_change_request": requires_change_request,
     }

@@ -1,12 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, type CustomerResponse, type InquiryResponse } from "@/api/client";
+import { api, type InquiryResponse } from "@/api/client";
+import { useListPagination } from "@/hooks/useListPagination";
+import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import {
   canConvertInquiryToQuotation,
   humanizeStatus,
   INQUIRY_STATUS_FILTER_OPTIONS,
 } from "@/features/merch/workflow";
 import { SecureImage } from "@/components/SecureImage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import {
+  listPageErrorClass,
+  listPageFilterBarClass,
+  listPageEmptyClass,
+  listPageLoadingClass,
+  listPageRootClass,
+  listPageTableCardClass,
+  listPageToolbarInputClass,
+  listPageToolbarSelectClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThCenterClass,
+  listTableThClass,
+  listTableThRightClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import { cn } from "@/lib/utils";
 
 const statusClass = (status: string) => {
   const value = status.toUpperCase();
@@ -20,32 +43,29 @@ export function InquiriesPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<InquiryResponse[]>([]);
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [departmentFilter, setDepartmentFilter] = useState<string>("");
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const { page, setPage, pageSize, setPageSize } = useListPagination();
+  const [listTotal, setListTotal] = useState(0);
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const [inqs, custs] = await Promise.all([
-        api.listInquiries({
-          search,
-          status: statusFilter || undefined,
-          department: departmentFilter || undefined,
-          limit: pageSize,
-          offset: (page - 1) * pageSize,
-          ai_indicators: 1,
-        }),
-        api.listCustomers(),
-      ]);
-      setItems(inqs);
-      setCustomers(custs);
+      const res = await api.listInquiriesPaginated({
+        search: search || undefined,
+        status: statusFilter || undefined,
+        department: departmentFilter || undefined,
+        page,
+        page_size: pageSize,
+        ai_indicators: 1,
+      });
+      setItems(res.items);
+      setListTotal(res.total);
+      if (res.page !== page) setPage(res.page);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load inquiries");
     } finally {
@@ -55,58 +75,20 @@ export function InquiriesPage() {
 
   const filteredItems = useMemo(() => items, [items]);
 
-  const customerName = (id: number) =>
-    customers.find((c) => c.id === id)?.name ?? `#${id}`;
+  const displayCustomerName = (row: InquiryResponse) =>
+    row.customer_name?.trim() ? row.customer_name : `#${row.customer_id}`;
 
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, departmentFilter, page]);
+  }, [search, statusFilter, departmentFilter, page, pageSize]);
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Inquiries</h1>
-          <p className="text-text-muted text-sm mt-0.5">
-            Manage buyer inquiries before they become quotations and confirmed orders.
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-          <input
-            type="text"
-            placeholder="Search by code..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:w-48 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full sm:w-40 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
-          >
-            <option value="">All statuses</option>
-            {INQUIRY_STATUS_FILTER_OPTIONS.map((statusValue) => (
-              <option key={statusValue} value={statusValue}>
-                {humanizeStatus(statusValue)}
-              </option>
-            ))}
-          </select>
-          <select
-            value={departmentFilter}
-            onChange={(e) => setDepartmentFilter(e.target.value)}
-            className="w-full sm:w-40 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
-          >
-            <option value="">All departments</option>
-            <option value="Infant">Infant</option>
-            <option value="Kids">Kids</option>
-            <option value="Boys">Boys</option>
-            <option value="Girls">Girls</option>
-            <option value="Men">Men</option>
-            <option value="Ladies">Ladies</option>
-            <option value="Knit">Knit</option>
-            <option value="Fleece">Fleece</option>
-          </select>
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Inquiries"
+        description="Merchandising intake · Complete buyer requirements, then convert to quotation. List data and AI indicators come from the API."
+        actions={
           <button
             type="button"
             onClick={() => navigate("/app/inquiries/new")}
@@ -114,51 +96,100 @@ export function InquiriesPage() {
           >
             New Inquiry
           </button>
-        </div>
-      </header>
+        }
+      />
+      <div className={listPageFilterBarClass}>
+        <input
+          type="text"
+          placeholder="Search by code..."
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          className={listPageToolbarInputClass}
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
+          className={listPageToolbarSelectClass}
+        >
+          <option value="">All statuses</option>
+          {INQUIRY_STATUS_FILTER_OPTIONS.map((statusValue) => (
+            <option key={statusValue} value={statusValue}>
+              {humanizeStatus(statusValue)}
+            </option>
+          ))}
+        </select>
+        <select
+          value={departmentFilter}
+          onChange={(e) => {
+            setDepartmentFilter(e.target.value);
+            setPage(1);
+          }}
+          className={listPageToolbarSelectClass}
+        >
+          <option value="">All departments</option>
+          <option value="Infant">Infant</option>
+          <option value="Kids">Kids</option>
+          <option value="Boys">Boys</option>
+          <option value="Girls">Girls</option>
+          <option value="Men">Men</option>
+          <option value="Ladies">Ladies</option>
+          <option value="Knit">Knit</option>
+          <option value="Fleece">Fleece</option>
+        </select>
+      </div>
 
       {error && (
-        <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
+        <div className={listPageErrorClass}>
           {error}
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
+      <div className={listPageTableCardClass}>
         {loading ? (
-          <div className="p-12 text-center text-text-muted">Loading inquiries...</div>
+          <div className={listPageLoadingClass}>Loading inquiries...</div>
         ) : items.length === 0 ? (
-          <div className="p-12 text-center text-text-muted">No inquiries yet.</div>
+          <div className={listPageEmptyClass}>No inquiries yet.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-[1100px] w-full text-sm">
-              <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
+          <>
+          <ResponsiveTableContainer>
+            <table className={cn(listTableBaseClass, "min-w-[1100px]")}>
+              <thead className={listTableTheadClass}>
                 <tr>
-                  <th className="py-2.5 px-4 w-24 whitespace-nowrap">Code</th>
-                  <th className="py-2.5 px-4 min-w-[120px]">Customer</th>
-                  <th className="py-2.5 px-4 min-w-[160px]">Style</th>
-                  <th className="py-2.5 px-4 min-w-[100px] whitespace-nowrap">Intermediary</th>
-                  <th className="py-2.5 px-4 w-20 whitespace-nowrap">Shipping</th>
-                  <th className="py-2.5 px-4 text-right w-20 whitespace-nowrap">Qty</th>
-                  <th className="py-2.5 px-4 min-w-[140px] whitespace-nowrap">Status</th>
-                  <th className="py-2.5 px-4 w-28 whitespace-nowrap text-center" title="Rules-based quotation readiness (no LLM)">
+                  <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Code</th>
+                  <th className={cn(listTableThClass, "min-w-[120px]")}>Customer</th>
+                  <th className={cn(listTableThClass, "min-w-[160px]")}>Style</th>
+                  <th className={cn(listTableThClass, "min-w-[100px] whitespace-nowrap")}>Intermediary</th>
+                  <th className={cn(listTableThClass, "w-20 whitespace-nowrap")}>Shipping</th>
+                  <th className={cn(listTableThRightClass, "w-20 whitespace-nowrap")}>Qty</th>
+                  <th className={cn(listTableThClass, "min-w-[140px] whitespace-nowrap")}>Status</th>
+                  <th
+                    className={cn(listTableThCenterClass, "w-28 whitespace-nowrap")}
+                    title="Rules-based quotation readiness (no LLM)"
+                  >
                     Q-ready
                   </th>
-                  <th className="py-2.5 px-4 text-right w-24 whitespace-nowrap">Actions</th>
+                  <th className={cn(listTableThRightClass, "w-24 whitespace-nowrap")}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredItems.map((inq) => {
                   return (
-                  <tr key={inq.id} className="border-b border-border-subtle last:border-0 hover:bg-surface-subtle/70">
-                    <td className="py-2.5 px-4 font-medium text-text-primary whitespace-nowrap">
+                  <tr key={inq.id} className={listTableTrClass}>
+                    <td className={cn(listTableTdPrimaryClass, "whitespace-nowrap")}>
                       <Link to={`/app/inquiries/${inq.id}`} className="text-status-info hover:underline">
                         {inq.inquiry_code}
                       </Link>
                     </td>
-                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={customerName(inq.customer_id)}>
-                      {customerName(inq.customer_id)}
+                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={displayCustomerName(inq)}>
+                      {displayCustomerName(inq)}
                     </td>
-                    <td className="py-2.5 px-4">
+                    <td className={listTableTdClass}>
                       <div className="flex items-center gap-2 min-w-0">
                         {inq.style_image_url ? (
                           <SecureImage
@@ -170,7 +201,7 @@ export function InquiriesPage() {
                           <div className="h-9 w-9 shrink-0 rounded bg-surface-subtle border border-border" />
                         )}
                         <div className="min-w-0 flex-1">
-                          <div className="font-medium text-text-primary truncate" title={inq.style_name ?? inq.style_ref ?? undefined}>
+                          <div className="truncate text-sm font-medium text-text-primary" title={inq.style_name ?? inq.style_ref ?? undefined}>
                             {inq.style_name ?? inq.style_ref ?? "—"}
                           </div>
                           <div className="text-xs text-text-muted whitespace-nowrap truncate" title={inq.style_ref && inq.style_name && inq.style_ref !== inq.style_name ? inq.style_ref : inq.department ?? undefined}>
@@ -181,16 +212,16 @@ export function InquiriesPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={inq.intermediary_name ?? undefined}>
+                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={inq.intermediary_name ?? undefined}>
                       {inq.intermediary_name ?? "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={inq.shipping_term ?? undefined}>
+                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={inq.shipping_term ?? undefined}>
                       {inq.shipping_term ?? "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-right text-text-secondary whitespace-nowrap">
+                    <td className={cn(listTableTdClass, "text-right whitespace-nowrap")}>
                       {inq.quantity != null ? inq.quantity.toLocaleString() : "—"}
                     </td>
-                    <td className="py-2.5 px-4 text-text-secondary overflow-hidden text-ellipsis" title={[inq.status, inq.is_converted_to_quotation ? "Converted to quotation" : null].filter(Boolean).join(" · ")}>
+                    <td className={cn(listTableTdClass, "overflow-hidden text-ellipsis")} title={[inq.status, inq.is_converted_to_quotation ? "Converted to quotation" : null].filter(Boolean).join(" · ")}>
                       <div className="flex items-center gap-1.5 flex-wrap whitespace-nowrap min-w-0">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(inq.status)}`}>
                           {inq.status}
@@ -202,7 +233,7 @@ export function InquiriesPage() {
                         )}
                       </div>
                     </td>
-                    <td className="py-2.5 px-4 text-center text-xs text-text-secondary whitespace-nowrap">
+                    <td className={cn(listTableTdClass, "text-center text-xs whitespace-nowrap")}>
                       {inq.ai_indicators ? (
                         <span
                           title={
@@ -220,7 +251,7 @@ export function InquiriesPage() {
                         "—"
                       )}
                     </td>
-                    <td className="py-2.5 px-4 text-right whitespace-nowrap">
+                    <td className={cn(listTableTdClass, "text-right whitespace-nowrap")}>
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
@@ -310,28 +341,16 @@ export function InquiriesPage() {
                 })}
               </tbody>
             </table>
-          </div>
+          </ResponsiveTableContainer>
+          <DataTablePagination
+            page={page}
+            pageSize={pageSize}
+            total={listTotal}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-text-muted">
-        <button
-          type="button"
-          disabled={page === 1}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          className="rounded-lg border border-border-strong px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Previous
-        </button>
-        <span>Page {page}</span>
-        <button
-          type="button"
-          disabled={items.length < pageSize}
-          onClick={() => setPage((p) => p + 1)}
-          className="rounded-lg border border-border-strong px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Next
-        </button>
       </div>
     </div>
   );

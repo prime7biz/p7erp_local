@@ -19,6 +19,7 @@ Use this file and `.cursor/rules/` when working on this repo (e.g. on another ma
 
 - **Plans and parity:** `docs/REFERENCE_PARITY.md`, `docs/PROJECT_PLAN.md`, `docs/IMPLEMENTATION_ROADMAP.md`, `docs/session_plan_legacy.md`.
 - **Inventory roadmap:** `docs/INVENTORY_MODULE_ADVANCEMENT_PLAN.md` – navigation fixes, backend robustness, transfers/adjustments, UX polish.
+- **ERP UI wiring (shared headers + cross-module links):** `docs/ERP_UI_WIRING_PROGRAM.md`; shared components `frontend/src/components/app/` (`AppPageHeader`, `WorkflowSummaryStrip`, `LinkedRecordsSection`). Customer related-records isolation: `docker compose exec backend pytest tests/test_customer_module_wiring_integration.py -q`.
 - **Inventory mobile lists:** `frontend/src/hooks/useInventoryListView.ts`, `frontend/src/components/inventory/InventoryMobileList.tsx` — narrow-only Table vs Cards, horizontal scroll for wide tables.
 - **API load logging (audit):** `frontend/src/utils/logApiError.ts` — use instead of empty `.catch` handlers; see `docs/PRE_PRODUCTION_AUDIT.md` Finding #5.
 - **List pagination / caps (audit):** `backend/app/common/pagination.py` (`MAX_PAGE_SIZE` = 500). Heavy lists use paginated endpoints or `limit`/`offset`; optional `BOOTSTRAP_REGISTRATION_KEY` gates first-user register (Finding #4).

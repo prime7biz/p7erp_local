@@ -11,10 +11,16 @@ import {
 } from "@/api/client";
 import { OrderAiPanel } from "@/components/orders/OrderAiPanel";
 import { OrderAiAuditHistory } from "@/components/orders/OrderAiAuditHistory";
+import { PlanningGroundingCard } from "@/components/orders/PlanningGroundingCard";
+import { CommercialAlignmentCard } from "@/components/orders/CommercialAlignmentCard";
+import { ChangeRequestPanel } from "@/components/orders/ChangeRequestPanel";
+import { ORDER_PROTECTED_FIELD_DEFS } from "@/lib/commercialChangeFields";
 import { getOrderStatusChoices } from "@/features/merch/workflow";
 import { useOrderAi } from "@/hooks/useOrderAi";
 import { logApiError } from "@/utils/logApiError";
 import { useSecureImage } from "@/hooks/useSecureImage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
 
 export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -114,52 +120,42 @@ export function OrderDetailPage() {
     );
   }
 
+  const execHint = item.ai_indicators
+    ? `Readiness ${item.ai_indicators.execution_readiness_score}% · Material ${item.ai_indicators.material_readiness_score}% · Plan ${item.ai_indicators.planning_confidence_score}%`
+    : "Operational metrics from API when available";
+
   return (
     <div className="p-6 space-y-6">
-      <nav className="flex flex-wrap items-center gap-1 text-xs text-text-muted">
-        {customer ? (
-          <>
-            <Link to={`/app/customers/${customer.id}`} className="text-brand-primary hover:underline">{customer.name}</Link>
-            <span>›</span>
-          </>
-        ) : null}
-        {quotation ? (
-          <>
-            <Link to={`/app/quotations/${quotation.id}`} className="text-brand-primary hover:underline">{quotation.quotation_code}</Link>
-            <span>›</span>
-          </>
-        ) : null}
-        <span className="font-medium text-text-primary">{item.order_code}</span>
-      </nav>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">
-            Order {item.order_code}
-          </h1>
-          <p className="text-text-muted text-sm mt-0.5">
-            {customer?.name ?? `Customer #${item.customer_id}`} ·{" "}
-            {item.status}
-            {item.ai_indicators ? (
-              <span className="block sm:inline sm:ml-1 text-xs mt-1 sm:mt-0">
-                · Exec readiness {item.ai_indicators.execution_readiness_score}% · Completeness{" "}
-                {item.ai_indicators.completeness_score}%
-                {" · Material "}
-                {item.ai_indicators.material_readiness_score}%
-                {" · Plan confidence "}
-                {item.ai_indicators.planning_confidence_score}%
-                {" · Promise risk "}
-                {item.ai_indicators.promise_date_risk_score}%
-                {item.ai_indicators.duplicate_risk_score >= 35 ? (
-                  <span className="text-status-warning-foreground font-medium">
-                    {" "}
-                    · Possible duplicate risk
-                  </span>
-                ) : null}
-              </span>
-            ) : null}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <AppPageHeader
+        backTo={{ label: "Back to orders", to: "/app/orders" }}
+        title={`Order ${item.order_code}`}
+        description={`${customer?.name ?? `Customer #${item.customer_id}`} · Status ${item.status}. ${execHint}${
+          item.ai_indicators && item.ai_indicators.duplicate_risk_score >= 35 ? " · Possible duplicate risk." : ""
+        }`}
+        belowTitle={
+          <WorkflowSummaryStrip
+            items={[
+              {
+                label: "Customer",
+                value: customer?.name ?? `#${item.customer_id}`,
+                to: customer ? `/app/customers/${customer.id}` : undefined,
+              },
+              {
+                label: "Quotation",
+                value: quotation?.quotation_code ?? "—",
+                to: quotation ? `/app/quotations/${quotation.id}` : undefined,
+              },
+              {
+                label: "Production",
+                value: "Planning",
+                to: "/app/manufacturing/planning",
+                hint: "Order pipeline and readiness",
+              },
+            ]}
+          />
+        }
+      />
+      <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={async () => {
@@ -219,7 +215,6 @@ export function OrderDetailPage() {
           >
             Back to list
           </button>
-        </div>
       </div>
 
       <section className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
@@ -298,6 +293,11 @@ export function OrderDetailPage() {
               {item.commission_mode || item.commission_type || item.commission_value
                 ? `${item.commission_mode ?? "-"} / ${item.commission_type ?? "-"} / ${item.commission_value ?? "-"}`
                 : "—"}
+            </div>
+            <div>
+              <span className="font-medium">Reporting / book currency:</span>{" "}
+              {item.commercial_book_currency ?? "—"}{" "}
+              <span className="text-xs text-text-muted">(see Commercial alignment for quotation context)</span>
             </div>
             {styleImageUrl && (
               <img
@@ -417,6 +417,24 @@ export function OrderDetailPage() {
           </div>
         )}
       </div>
+
+      <CommercialAlignmentCard orderId={item.id} quotationId={item.quotation_id} />
+      <PlanningGroundingCard orderId={item.id} />
+
+      <ChangeRequestPanel
+        entityType="order"
+        entityId={item.id}
+        entityStatus={item.status}
+        fieldDefs={ORDER_PROTECTED_FIELD_DEFS}
+        record={{
+          delivery_date: item.delivery_date,
+          quantity: item.quantity,
+          commission_mode: item.commission_mode,
+          commission_type: item.commission_type,
+          commission_value: item.commission_value,
+          shipping_term: item.shipping_term,
+        }}
+      />
 
       <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-2">
         <h2 className="text-sm font-semibold text-text-primary">Order AI</h2>

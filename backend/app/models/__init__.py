@@ -27,7 +27,13 @@ from app.models.customer_ai_suggestion import CustomerAiSuggestionBatch, Custome
 from app.models.vendor_ai_suggestion import VendorAiSuggestionBatch, VendorAiSuggestionItem
 from app.models.inquiry_ai_suggestion import InquiryAiSuggestionBatch, InquiryAiSuggestionItem
 from app.models.quotation_ai_suggestion import QuotationAiSuggestionBatch, QuotationAiSuggestionItem
+from app.models.quotation_costing_suggestion import (
+    QuotationCostingSuggestionBatch,
+    QuotationCostingSuggestionItem,
+)
+from app.models.ai_controlled_action import AiControlledActionProposal
 from app.models.order_ai_suggestion import OrderAiSuggestionBatch, OrderAiSuggestionItem
+from app.models.commercial_change_request import CommercialChangeRequest
 from app.models.codegen import TenantCodeCounter
 from app.models.merch import (
     Inquiry,
@@ -301,8 +307,12 @@ __all__ = [
     "InquiryAiSuggestionItem",
     "QuotationAiSuggestionBatch",
     "QuotationAiSuggestionItem",
+    "QuotationCostingSuggestionBatch",
+    "QuotationCostingSuggestionItem",
+    "AiControlledActionProposal",
     "OrderAiSuggestionBatch",
     "OrderAiSuggestionItem",
+    "CommercialChangeRequest",
     "TenantCodeCounter",
     "Inquiry",
     "InquiryItem",

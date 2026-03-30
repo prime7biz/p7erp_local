@@ -90,3 +90,9 @@ Finance parity implemented. See:
 - `docs/FINANCE_OPERATIONS_SOP.md` – operations procedures
 - `docs/FINANCE_UAT_CLOSURE_REPORT.md` – engineering readiness closure
 - `docs/FINANCE_CHAT_HANDOFF_2026-03-11.md` – handoff to continue in a new chat
+
+---
+
+## 8. ERP UI wiring (cross-module consistency)
+
+Shared operational headers and handoff links across Customer → Inquiry → Quotation → Order → Planning → Procurement → Inventory are documented in **`docs/ERP_UI_WIRING_PROGRAM.md`**. Structured ERP AI phases (14–20) are surfaced on the **Dashboard** beside the legacy AI brief.

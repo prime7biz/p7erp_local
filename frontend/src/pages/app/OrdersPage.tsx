@@ -6,7 +6,11 @@ import {
   type OrderCreate,
   type CustomerResponse,
   type QuotationResponse,
+  type PlanningGroundingSummaryRow,
 } from "@/api/client";
+import { useListPagination } from "@/hooks/useListPagination";
+import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import {
   COMMISSION_MODE_OPTIONS,
   COMMISSION_TYPE_OPTIONS,
@@ -15,6 +19,33 @@ import {
 } from "@/lib/commercialTerms";
 import { getOrderStatusChoices } from "@/features/merch/workflow";
 import { SecureImage } from "@/components/SecureImage";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import {
+  listPageChipActiveClass,
+  listPageChipInactiveClass,
+  listPageChipRowClass,
+  listPageEmptyClass,
+  listPageErrorClass,
+  listPageFilterBarClass,
+  listPageKpiCardClass,
+  listPageKpiGridClass,
+  listPageKpiLabelClass,
+  listPageLoadingClass,
+  listPageRootClass,
+  listPageTableCardClass,
+  listPageToolbarButtonClass,
+  listPageToolbarInputClass,
+  listPageToolbarSelectClass,
+  listTableBaseClass,
+  listTableTdClass,
+  listTableTdPrimaryClass,
+  listTableThClass,
+  listTableThCenterClass,
+  listTableThRightClass,
+  listTableTheadClass,
+  listTableTrClass,
+} from "@/components/app/listPageLayout";
+import { cn } from "@/lib/utils";
 
 export function OrdersPage() {
   const navigate = useNavigate();
@@ -30,25 +61,34 @@ export function OrdersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [quotations, setQuotations] = useState<QuotationResponse[]>([]);
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const { page, setPage, pageSize, setPageSize } = useListPagination();
+  const [listTotal, setListTotal] = useState(0);
+  const [groundingByOrderId, setGroundingByOrderId] = useState<Record<number, PlanningGroundingSummaryRow>>({});
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const [orders, custs] = await Promise.all([
-        api.listOrders({
-          search,
-          status: statusFilter || undefined,
-          ai_indicators: 1,
-          limit: pageSize,
-          offset: (page - 1) * pageSize,
-        }),
-        api.listCustomers(),
-      ]);
-      setItems(orders);
-      setCustomers(custs);
+      const res = await api.listOrdersPaginated({
+        search: search || undefined,
+        status: statusFilter || undefined,
+        ai_indicators: 1,
+        page,
+        page_size: pageSize,
+      });
+      setItems(res.items);
+      setListTotal(res.total);
+      if (res.page !== page) setPage(res.page);
+      let gmap: Record<number, PlanningGroundingSummaryRow> = {};
+      if (res.items.length) {
+        try {
+          const summary = await api.getOrdersPlanningGroundingSummary(res.items.map((x) => x.id));
+          gmap = Object.fromEntries(summary.map((s) => [s.order_id, s]));
+        } catch {
+          gmap = {};
+        }
+      }
+      setGroundingByOrderId(gmap);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load orders");
     } finally {
@@ -64,36 +104,49 @@ export function OrdersPage() {
     return items;
   }, [items, quickFilter]);
 
-  const customerName = (id: number) =>
-    customers.find((c) => c.id === id)?.name ?? `#${id}`;
+  const displayCustomerName = (o: OrderResponse) =>
+    o.customer_name?.trim() ? o.customer_name : `#${o.customer_id}`;
 
-  const quotationCode = (id: number | null) =>
-    id == null ? "—" : quotations.find((q) => q.id === id)?.quotation_code ?? `#${id}`;
-
-  const quotationLookup = useMemo(
-    () => new Map<number, QuotationResponse>(quotations.map((q) => [q.id, q])),
-    [quotations]
-  );
+  const displayQuotationCode = (o: OrderResponse) =>
+    o.quotation_id == null ? "—" : o.quotation_code?.trim() ? o.quotation_code : `#${o.quotation_id}`;
 
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, page]);
+  }, [search, statusFilter, page, pageSize]);
 
   useEffect(() => {
-    const loadQuotations = async () => {
+    if (!modalOpen || !editing) return;
+    let cancelled = false;
+    (async () => {
       try {
-        const data = await api.listQuotations({ limit: 200, offset: 0 });
-        setQuotations(data);
+        const [custRes, quotRes] = await Promise.all([
+          api.listCustomersPaginated({ page: 1, page_size: 500 }),
+          api.listQuotationsPaginated({ page: 1, page_size: 200 }),
+        ]);
+        if (!cancelled) {
+          setCustomers(custRes.items);
+          setQuotations(quotRes.items);
+        }
       } catch {
-        // ignore
+        /* ignore */
       }
+    })();
+    return () => {
+      cancelled = true;
     };
-    loadQuotations();
-  }, []);
+  }, [modalOpen, editing]);
 
   const openCreate = () => {
     navigate("/app/orders/new");
+  };
+
+  const groundingPillClass = (overall: string) => {
+    const o = (overall || "").toLowerCase();
+    if (o === "ready") return "bg-status-success-subtle text-status-success-foreground";
+    if (o === "at_risk") return "bg-status-warning-subtle text-status-warning-foreground";
+    if (o === "blocked") return "bg-status-danger-subtle text-status-danger-foreground";
+    return "bg-surface-subtle text-text-muted";
   };
 
   const statusClass = (statusValue: string) => {
@@ -135,71 +188,69 @@ export function OrdersPage() {
   const completedCount = filteredItems.filter((row) => row.status === "COMPLETED").length;
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">Orders</h1>
-          <p className="text-text-muted text-sm mt-0.5">
-            Manage final sales orders with clear workflow, conversion links, and delivery tracking.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            type="text"
-            placeholder="Search by code…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="w-full sm:w-48 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="w-full sm:w-40 rounded-lg border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-primary"
-          >
-            <option value="">All statuses</option>
-            <option value="DRAFT">Draft</option>
-            <option value="NEW">New</option>
-            <option value="CONFIRMED">Confirmed</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Orders"
+        description="Execution hub · Sales orders with quotation linkage, planning grounding hints, and commercial controls. Open a row for change requests and alignment cards."
+        actions={
           <button
             type="button"
-            onClick={() => {
-              setSearch("");
-              setStatusFilter("");
-              setQuickFilter("all");
-              setPage(1);
-            }}
-            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
+            onClick={openCreate}
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
           >
-            Clear filters
+            New order
           </button>
-          <button
-            type="button"
-            onClick={load}
-            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
-          >
-            Refresh
-          </button>
-        </div>
+        }
+      />
+      <div className={listPageFilterBarClass}>
+        <input
+          type="text"
+          placeholder="Search by code…"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          className={listPageToolbarInputClass}
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
+          className={listPageToolbarSelectClass}
+        >
+          <option value="">All statuses</option>
+          <option value="DRAFT">Draft</option>
+          <option value="NEW">New</option>
+          <option value="CONFIRMED">Confirmed</option>
+          <option value="IN_PROGRESS">In Progress</option>
+          <option value="COMPLETED">Completed</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
         <button
           type="button"
-          onClick={openCreate}
-          className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+          onClick={() => {
+            setSearch("");
+            setStatusFilter("");
+            setQuickFilter("all");
+            setPage(1);
+          }}
+          className={listPageToolbarButtonClass}
         >
-          New order
+          Clear filters
         </button>
-      </header>
+        <button
+          type="button"
+          onClick={load}
+          className={listPageToolbarButtonClass}
+        >
+          Refresh
+        </button>
+      </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className={listPageChipRowClass}>
         {[
           { key: "all", label: "All" },
           { key: "linked_quotation", label: "Linked quotation" },
@@ -210,82 +261,95 @@ export function OrdersPage() {
             key={chip.key}
             type="button"
             onClick={() => setQuickFilter(chip.key as typeof quickFilter)}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-              quickFilter === chip.key ? "border-brand-primary bg-brand-primary/10 text-brand-primary" : "border-border text-text-secondary"
-            }`}
+            className={quickFilter === chip.key ? listPageChipActiveClass : listPageChipInactiveClass}
           >
             {chip.label}
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-border bg-surface-raised p-3">
-          <div className="text-xs uppercase tracking-wide text-text-muted">Total on page</div>
-          <div className="text-xl font-bold text-text-primary">{filteredItems.length}</div>
+      <div className={listPageKpiGridClass}>
+        <div className={listPageKpiCardClass}>
+          <div className={listPageKpiLabelClass}>Total on page</div>
+          <div className="mt-2 text-xl font-bold text-text-primary">{filteredItems.length}</div>
         </div>
-        <div className="rounded-xl border border-border bg-surface-raised p-3">
-          <div className="text-xs uppercase tracking-wide text-text-muted">Draft</div>
-          <div className="text-xl font-bold text-status-neutral-foreground">{draftCount}</div>
+        <div className={listPageKpiCardClass}>
+          <div className={listPageKpiLabelClass}>Draft</div>
+          <div className="mt-2 text-xl font-bold text-status-neutral-foreground">{draftCount}</div>
         </div>
-        <div className="rounded-xl border border-border bg-surface-raised p-3">
-          <div className="text-xs uppercase tracking-wide text-text-muted">Active</div>
-          <div className="text-xl font-bold text-status-info-foreground">{activeCount}</div>
+        <div className={listPageKpiCardClass}>
+          <div className={listPageKpiLabelClass}>Active</div>
+          <div className="mt-2 text-xl font-bold text-status-info-foreground">{activeCount}</div>
         </div>
-        <div className="rounded-xl border border-border bg-surface-raised p-3">
-          <div className="text-xs uppercase tracking-wide text-text-muted">Completed</div>
-          <div className="text-xl font-bold text-status-success-foreground">{completedCount}</div>
+        <div className={listPageKpiCardClass}>
+          <div className={listPageKpiLabelClass}>Completed</div>
+          <div className="mt-2 text-xl font-bold text-status-success-foreground">{completedCount}</div>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">
+        <div className={listPageErrorClass}>
           {error}
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-surface-raised overflow-x-auto">
+      <div className={listPageTableCardClass}>
         {loading ? (
-          <div className="p-12 text-center text-text-muted">Loading orders…</div>
+          <div className={listPageLoadingClass}>Loading orders…</div>
         ) : filteredItems.length === 0 ? (
-          <div className="p-12 text-center text-text-muted">No orders yet.</div>
+          <div className={listPageEmptyClass}>No orders yet.</div>
         ) : (
-          <div className="overflow-x-auto">
-          <table className="min-w-[1280px] w-full text-sm">
-            <thead className="bg-surface-subtle border-b border-border text-left text-text-muted">
+          <>
+          <ResponsiveTableContainer>
+          <table className={cn(listTableBaseClass, "min-w-[1420px]")}>
+            <thead className={listTableTheadClass}>
               <tr>
-                <th className="py-2.5 px-4 w-24 whitespace-nowrap">Code</th>
-                <th className="py-2.5 px-4 min-w-[120px]">Customer</th>
-                <th className="py-2.5 px-4 w-24 whitespace-nowrap">Quotation</th>
-                <th className="py-2.5 px-4 min-w-[140px]">Style</th>
-                <th className="py-2.5 px-4 min-w-[100px] whitespace-nowrap">Intermediary</th>
-                <th className="py-2.5 px-4 w-20 whitespace-nowrap">Shipping</th>
-                <th className="py-2.5 px-4 min-w-[120px] whitespace-nowrap">Commission</th>
-                <th className="py-2.5 px-4 w-28 whitespace-nowrap">Delivery date</th>
-                <th className="py-2.5 px-4 text-right w-20 whitespace-nowrap">Qty</th>
-                <th className="py-2.5 px-4 w-[100px] whitespace-nowrap" title="Execution readiness / completeness (AI)">
+                <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Code</th>
+                <th className={cn(listTableThClass, "min-w-[120px]")}>Customer</th>
+                <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Quotation</th>
+                <th className={cn(listTableThClass, "min-w-[140px]")}>Style</th>
+                <th className={cn(listTableThClass, "min-w-[100px] whitespace-nowrap")}>Intermediary</th>
+                <th className={cn(listTableThClass, "w-20 whitespace-nowrap")}>Shipping</th>
+                <th className={cn(listTableThClass, "min-w-[120px] whitespace-nowrap")}>Commission</th>
+                <th className={cn(listTableThClass, "w-28 whitespace-nowrap")}>Delivery date</th>
+                <th className={cn(listTableThRightClass, "w-20 whitespace-nowrap")}>Qty</th>
+                <th
+                  className={cn(listTableThClass, "w-[100px] whitespace-nowrap")}
+                  title="Execution readiness / completeness (AI)"
+                >
                   Exec AI
                 </th>
-                <th className="py-2.5 px-4 w-24 whitespace-nowrap">Status</th>
-                <th className="py-2.5 px-4 text-right w-24 whitespace-nowrap">Actions</th>
+                <th
+                  className={cn(listTableThClass, "w-[88px] whitespace-nowrap")}
+                  title="Deterministic planning grounding"
+                >
+                  Grounding
+                </th>
+                <th
+                  className={cn(listTableThCenterClass, "w-14 whitespace-nowrap")}
+                  title="Pending commercial change requests"
+                >
+                  CR
+                </th>
+                <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Status</th>
+                <th className={cn(listTableThRightClass, "w-24 whitespace-nowrap")}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredItems.map((o) => {
-                const linkedQuotation =
-                  o.quotation_id != null ? quotationLookup.get(o.quotation_id) ?? null : null;
-                const styleName = o.style_name ?? linkedQuotation?.style_name ?? null;
-                const styleRef = o.style_ref ?? linkedQuotation?.style_ref ?? null;
-                const styleImageForRow = o.style_image_url ?? linkedQuotation?.style_image_url ?? null;
-                const intermediaryName = o.intermediary_name ?? linkedQuotation?.intermediary_name ?? null;
-                const shippingTerm = o.shipping_term ?? linkedQuotation?.shipping_term ?? null;
-                const commissionMode = o.commission_mode ?? linkedQuotation?.commission_mode ?? null;
-                const commissionType = o.commission_type ?? linkedQuotation?.commission_type ?? null;
-                const commissionValue = o.commission_value ?? linkedQuotation?.commission_value ?? null;
+                const styleName = o.style_name ?? null;
+                const styleRef = o.style_ref ?? null;
+                const styleImageForRow = o.style_image_url ?? null;
+                const intermediaryName = o.intermediary_name ?? null;
+                const shippingTerm = o.shipping_term ?? null;
+                const commissionMode = o.commission_mode ?? null;
+                const commissionType = o.commission_type ?? null;
+                const commissionValue = o.commission_value ?? null;
+                const g = groundingByOrderId[o.id];
 
                 return (
-                <tr key={o.id} className="border-b border-border-subtle last:border-0 hover:bg-surface-subtle/70">
-                  <td className="py-2.5 px-4 font-medium text-text-primary whitespace-nowrap">
+                <tr key={o.id} className={listTableTrClass}>
+                  <td className={cn(listTableTdPrimaryClass, "whitespace-nowrap")}>
                     <Link
                       to={`/app/orders/${o.id}`}
                       className="text-status-info hover:underline"
@@ -293,25 +357,25 @@ export function OrdersPage() {
                       {o.order_code}
                     </Link>
                   </td>
-                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={customerName(o.customer_id)}>
-                    {customerName(o.customer_id)}
+                  <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={displayCustomerName(o)}>
+                    {displayCustomerName(o)}
                   </td>
-                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={quotationCode(o.quotation_id)}>
-                    {quotationCode(o.quotation_id)}
+                  <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={displayQuotationCode(o)}>
+                    {displayQuotationCode(o)}
                   </td>
-                  <td className="py-2.5 px-4">
+                  <td className={listTableTdClass}>
                     <div className="flex items-center gap-2 min-w-0">
                       {styleImageForRow ? (
                         <SecureImage
                           url={styleImageForRow}
                           alt={styleName ?? styleRef ?? "Style"}
-                          className="h-8 w-8 shrink-0 rounded object-cover border border-border"
+                          className="h-9 w-9 shrink-0 rounded object-cover border border-border"
                         />
                       ) : (
-                        <div className="h-8 w-8 shrink-0 rounded bg-surface-subtle border border-border" />
+                        <div className="h-9 w-9 shrink-0 rounded bg-surface-subtle border border-border" />
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="text-text-secondary truncate" title={styleName ?? styleRef ?? undefined}>
+                        <div className="truncate text-sm font-medium text-text-primary" title={styleName ?? styleRef ?? undefined}>
                           {styleName ?? styleRef ?? "—"}
                         </div>
                         {styleName && styleRef && styleName !== styleRef && (
@@ -322,69 +386,80 @@ export function OrdersPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={intermediaryName ?? undefined}>
+                  <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={intermediaryName ?? undefined}>
                     {intermediaryName ?? "—"}
                   </td>
-                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={shippingTerm ?? undefined}>
+                  <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={shippingTerm ?? undefined}>
                     {shippingTerm ?? "—"}
                   </td>
-                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={commissionMode || commissionType || commissionValue ? `${commissionMode ?? "-"} / ${commissionType ?? "-"} / ${commissionValue ?? "-"}` : undefined}>
+                  <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={commissionMode || commissionType || commissionValue ? `${commissionMode ?? "-"} / ${commissionType ?? "-"} / ${commissionValue ?? "-"}` : undefined}>
                     {commissionMode || commissionType || commissionValue
                       ? `${commissionMode ?? "-"} / ${commissionType ?? "-"} / ${commissionValue ?? "-"}`
                       : "—"}
                   </td>
-                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap overflow-hidden text-ellipsis" title={o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : undefined}>
+                  <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : undefined}>
                     {o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : "—"}
                   </td>
-                  <td className="py-2.5 px-4 text-right text-text-secondary whitespace-nowrap">
+                  <td className={cn(listTableTdClass, "text-right whitespace-nowrap")}>
                     {o.quantity != null ? o.quantity.toLocaleString() : "—"}
                   </td>
-                  <td className="py-2.5 px-4 text-xs text-text-secondary whitespace-nowrap align-top">
-                    {o.ai_indicators ? (
-                      <span
-                        className="inline-block max-w-[7.5rem] leading-tight"
-                        title={
-                          o.ai_indicators.flags?.length
-                            ? o.ai_indicators.flags.join(", ")
-                            : "Execution readiness / completeness"
-                        }
-                      >
-                        E {o.ai_indicators.execution_readiness_score}% · C{" "}
-                        {o.ai_indicators.completeness_score}%
-                        <span className="block text-text-muted">
-                          M {o.ai_indicators.material_readiness_score}% · P{" "}
-                          {o.ai_indicators.promise_date_risk_score}%
+                  <td className={cn(listTableTdClass, "whitespace-nowrap text-xs")}>
+                    {o.ai_indicators ? (() => {
+                      const ai = o.ai_indicators;
+                      const warn =
+                        ai.urgent_planning_flag ||
+                        ai.duplicate_risk_score >= 40 ||
+                        ai.capacity_bottleneck_flag ||
+                        ai.missing_dependency_count > 0;
+                      const titleParts = [
+                        ai.flags?.length ? `Flags: ${ai.flags.join(", ")}` : "",
+                        `Material ${ai.material_readiness_score}% · Promise risk ${ai.promise_date_risk_score}%`,
+                        ai.missing_dependency_count > 0 ? `Missing deps: ${ai.missing_dependency_count}` : "",
+                        ai.urgent_planning_flag ? "Urgent planning" : "",
+                        ai.duplicate_risk_score >= 40 ? "Duplicate risk" : "",
+                        ai.capacity_bottleneck_flag ? "Line load hint" : "",
+                        ai.promise_sensitivity_score != null ? `Promise sensitivity: ${ai.promise_sensitivity_score}` : "",
+                      ].filter(Boolean);
+                      return (
+                        <span title={titleParts.length ? titleParts.join(" · ") : "Execution readiness"}>
+                          E {ai.execution_readiness_score}% · C {ai.completeness_score}%
+                          {warn ? <span className="ml-0.5 text-status-warning-foreground">!</span> : null}
                         </span>
-                        {o.ai_indicators.missing_dependency_count > 0 ? (
-                          <span className="block text-text-muted">
-                            Missing deps: {o.ai_indicators.missing_dependency_count}
-                          </span>
-                        ) : null}
-                        {o.ai_indicators.urgent_planning_flag ? (
-                          <span className="block text-status-warning-foreground font-medium">Urgent planning</span>
-                        ) : null}
-                        {o.ai_indicators.duplicate_risk_score >= 40 ? (
-                          <span className="block text-status-warning-foreground font-medium">Dup risk</span>
-                        ) : null}
-                        {o.ai_indicators.capacity_bottleneck_flag ? (
-                          <span className="block text-status-warning-foreground font-medium">Line load hint</span>
-                        ) : null}
-                        {o.ai_indicators.promise_sensitivity_score != null ? (
-                          <span className="block text-text-muted">
-                            Promise sens. {o.ai_indicators.promise_sensitivity_score}
-                          </span>
-                        ) : null}
+                      );
+                    })() : (
+                      "—"
+                    )}
+                  </td>
+                  <td className={cn(listTableTdClass, "whitespace-nowrap text-xs")}>
+                    {g ? (
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${groundingPillClass(g.overall_readiness)}`}
+                        title={g.overall_readiness}
+                      >
+                        {g.overall_readiness.replace(/_/g, " ")}
+                      </span>
+                    ) : (
+                      <span className="text-text-muted">—</span>
+                    )}
+                  </td>
+                  <td className={cn(listTableTdClass, "text-center text-xs whitespace-nowrap")}>
+                    {g && g.pending_change_requests > 0 ? (
+                      <span
+                        className="inline-flex min-w-[1.25rem] justify-center rounded-full bg-status-warning-subtle px-1.5 py-0.5 text-[10px] font-bold text-status-warning-foreground"
+                        title="Pending commercial change requests"
+                      >
+                        {g.pending_change_requests}
                       </span>
                     ) : (
                       "—"
                     )}
                   </td>
-                  <td className="py-2.5 px-4 text-text-secondary whitespace-nowrap">
+                  <td className={cn(listTableTdClass, "whitespace-nowrap")}>
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(o.status)}`}>
                       {o.status}
                     </span>
                   </td>
-                  <td className="py-2.5 px-4 text-right whitespace-nowrap">
+                  <td className={cn(listTableTdClass, "text-right whitespace-nowrap")}>
                     <div className="relative inline-block text-left">
                       <button
                         type="button"
@@ -462,28 +537,16 @@ export function OrdersPage() {
               })}
             </tbody>
           </table>
-          </div>
+          </ResponsiveTableContainer>
+          <DataTablePagination
+            page={page}
+            pageSize={pageSize}
+            total={listTotal}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-text-muted">
-        <button
-          type="button"
-          disabled={page === 1}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          className="rounded-lg border border-border-strong px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Previous
-        </button>
-        <span>Page {page}</span>
-        <button
-          type="button"
-          disabled={items.length < pageSize}
-          onClick={() => setPage((p) => p + 1)}
-          className="rounded-lg border border-border-strong px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Next
-        </button>
       </div>
 
       {modalOpen && editing && (

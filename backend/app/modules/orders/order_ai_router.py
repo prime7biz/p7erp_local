@@ -35,6 +35,7 @@ from app.modules.orders.order_ai_schemas import (
     OrderAiFinalizeAfterCreateResponse,
     OrderAiLinkBatchRequest,
     OrderAiMarkDecisionsRequest,
+    OrderAiRequiresChangeRequestItem,
     OrderAiNextActionsRequest,
     OrderAiNextActionsResponse,
     OrderAiOrderOut,
@@ -374,6 +375,13 @@ async def order_ai_suggestion_apply(
                 suggested=c.get("suggested") or "",
             )
             for c in raw["conflicts"]
+        ],
+        requires_change_request=[
+            OrderAiRequiresChangeRequestItem(
+                field_key=x.get("field_key") or "",
+                message=x.get("message") or "",
+            )
+            for x in (raw.get("requires_change_request") or [])
         ],
     )
 

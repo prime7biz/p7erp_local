@@ -70,8 +70,8 @@ export function DocumentFlowPage() {
         api.listOrders({ limit: 500, offset: 0 }),
         api.listQuotations({ limit: 500, offset: 0 }),
         api.listInquiries({ limit: 500, offset: 0 }),
-        api.listProformaInvoices(),
-        api.listCustomers(),
+        api.listProformaInvoices({ limit: 500, offset: 0 }),
+        api.listCustomersPaginated({ page: 1, page_size: 500 }).then((r) => r.items),
         api.listTradeCases({ limit: 500 }),
         api.getTradeCaseDocumentCounts().catch(() => ({ documents: {}, shipments: {} })),
       ]);

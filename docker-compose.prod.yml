@@ -55,6 +55,7 @@ services:
       dockerfile: Dockerfile
     restart: always
     environment:
+      APP_ENV: ${APP_ENV:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER:-p7erp}:${POSTGRES_PASSWORD:-p7erp}@postgres:5432/${POSTGRES_DB:-p7erp}
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET}
@@ -67,12 +68,17 @@ services:
       OLLAMA_ENABLED: ${OLLAMA_ENABLED:-true}
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3}
+      VLLM_ENABLED: ${VLLM_ENABLED:-false}
+      VLLM_URL: ${VLLM_URL:-http://vllm:8000}
+      VLLM_MODEL: ${VLLM_MODEL:-meta-llama/Meta-Llama-3-8B-Instruct}
+      VLLM_MAX_TOKENS: ${VLLM_MAX_TOKENS:-1024}
       PAID_LLM_PROVIDER: ${PAID_LLM_PROVIDER:-}
       PAID_LLM_API_KEY: ${PAID_LLM_API_KEY:-}
       PAID_LLM_MODEL: ${PAID_LLM_MODEL:-}
-      MCP_ENABLED: ${MCP_ENABLED:-false}
+      MCP_ENABLED: ${MCP_ENABLED:-true}
+      MCP_REQUIRE_AUTH: ${MCP_REQUIRE_AUTH:-true}
       MCP_COMMIT_BYPASS: ${MCP_COMMIT_BYPASS:-false}
-      MCP_HUMAN_APPROVAL_SECRET: ${MCP_HUMAN_APPROVAL_SECRET}
+      MCP_HUMAN_APPROVAL_SECRET: ${MCP_HUMAN_APPROVAL_SECRET:?MCP_HUMAN_APPROVAL_SECRET must be set for production MCP approvals}
       AI_CONFIRMATION_TOKEN_PEPPER: ${AI_CONFIRMATION_TOKEN_PEPPER}
     depends_on:
       postgres:

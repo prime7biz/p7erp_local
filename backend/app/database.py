@@ -1,13 +1,28 @@
 import os
+import re
 
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Session
+from sqlalchemy.sql.dml import Delete, Insert, Update
+from sqlalchemy.sql.elements import TextClause
 from app.config import get_settings
 
 # get_db() skips commit on read-only requests. After flush(), new/dirty/deleted are
 # cleared even though the transaction still holds uncommitted writes — track those paths.
 _P7_NEEDS_COMMIT = "_p7_needs_commit"
+_P7_TEXT_WRITE_RE = re.compile(
+    r"^\s*(?:(?:--[^\n]*(?:\n|$))|(?:/\*.*?\*/\s*))*\s*(INSERT|UPDATE|DELETE|MERGE|REPLACE)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _p7_statement_needs_commit(statement: object) -> bool:
+    if isinstance(statement, (Insert, Update, Delete)):
+        return True
+    if isinstance(statement, TextClause):
+        return bool(_P7_TEXT_WRITE_RE.match(statement.text or ""))
+    return False
 
 
 @event.listens_for(Session, "after_flush")
@@ -21,6 +36,7 @@ def _p7_do_orm_execute(orm_execute_state) -> None:
         orm_execute_state.is_insert
         or orm_execute_state.is_update
         or orm_execute_state.is_delete
+        or _p7_statement_needs_commit(orm_execute_state.statement)
     ):
         orm_execute_state.session.info[_P7_NEEDS_COMMIT] = True
 

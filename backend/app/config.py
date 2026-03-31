@@ -50,12 +50,12 @@ class Settings(BaseSettings):
     paid_llm_provider: str = ""
     paid_llm_api_key: str = ""
     paid_llm_model: str = ""
-    # Mounted in-process with FastAPI (opt-in: avoids prod boot failure when secret unset; set MCP_ENABLED=true explicitly)
+    # Mounted in-process with FastAPI. Docker compose enables MCP explicitly for dev/prod; code default stays safe.
     mcp_enabled: bool = False
     # Require JWT auth + tenant binding on HTTP /mcp endpoint (default True for production safety)
     mcp_require_auth: bool = True
-    # Tier-1 vLLM (OpenAI-compatible). Preferred over Ollama when enabled and URL set.
-    vllm_enabled: bool = True
+    # Optional vLLM override. Keep off by default because Ollama is the standard local model in this repo.
+    vllm_enabled: bool = False
     vllm_url: str = "http://vllm:8000"
     vllm_model: str = "meta-llama/Meta-Llama-3-8B-Instruct"
     vllm_max_tokens: int = 1024

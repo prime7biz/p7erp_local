@@ -8,7 +8,10 @@ from datetime import date, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.codegen import next_tenant_code
+from app.modules.finance.voucher_controls import (
+    allocate_series_voucher_number,
+    finalize_posted_voucher_metadata,
+)
 from app.models import (
     AccountingPeriod,
     CoAConfig,
@@ -121,13 +124,14 @@ async def _post_balanced_voucher(
         _to_float as fin_float,
     )
 
-    voucher_number = await next_tenant_code(
+    voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
         db,
-        model=Voucher,
         tenant_id=tenant_id,
-        prefix="VCH-",
-        width=4,
+        voucher_date=voucher_date,
+        voucher_type="JOURNAL",
+        branch_code="MAIN",
     )
+    ref_key = f"{source_system}:{source_id}:{action}"[:128]
     vrow = Voucher(
         tenant_id=tenant_id,
         voucher_number=voucher_number,
@@ -136,6 +140,13 @@ async def _post_balanced_voucher(
         status="POSTED",
         description=description[:512],
         reference=reference[:64],
+        branch_code="MAIN",
+        fiscal_year=fy,
+        series_sequence=series_seq,
+        number_series_key=series_key,
+        source_module="INVENTORY_GL",
+        source_module_ref=ref_key,
+        allow_manual_edit=False,
         currency="BDT",
         base_currency="BDT",
         exchange_rate="1",
@@ -167,6 +178,7 @@ async def _post_balanced_voucher(
 
     lines_result = await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == vrow.id))
     line_rows = list(lines_result.scalars().all())
+    await finalize_posted_voucher_metadata(db, tenant_id, vrow, line_rows, strict_duplicate_check=True)
     locked = await _lock_chart_accounts_for_subset(db, tenant_id, (line.account_id for line in line_rows))
     for vl in line_rows:
         account = locked.get(vl.account_id)

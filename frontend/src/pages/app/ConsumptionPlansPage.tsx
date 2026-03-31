@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { logApiError } from "@/utils/logApiError";
-import { api, type ConsumptionPlanDetailResponse, type ConsumptionPlanResponse, type OrderResponse } from "@/api/client";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchOrderPage, hydrateOrder } from "@/lib/remoteSelectFetchers";
+import { api, type ConsumptionPlanDetailResponse, type ConsumptionPlanResponse } from "@/api/client";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { useListPagination } from "@/hooks/useListPagination";
 
@@ -8,21 +10,11 @@ export function ConsumptionPlansPage() {
   const { page, setPage, pageSize, setPageSize, offset, limit, allowedSizes } = useListPagination();
   const [plans, setPlans] = useState<ConsumptionPlanResponse[]>([]);
   const [plansTotal, setPlansTotal] = useState(0);
-  const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [selected, setSelected] = useState<ConsumptionPlanDetailResponse | null>(null);
   const [orderId, setOrderId] = useState<number>(0);
   const [requiredQty, setRequiredQty] = useState("0");
   const [error, setError] = useState("");
   const [loadingPlans, setLoadingPlans] = useState(true);
-
-  const loadOrders = useCallback(async () => {
-    try {
-      const o = await api.listOrders({ limit: 500, offset: 0 });
-      setOrders(o);
-    } catch {
-      setOrders([]);
-    }
-  }, []);
 
   const loadPlansPage = useCallback(async () => {
     setLoadingPlans(true);
@@ -40,10 +32,6 @@ export function ConsumptionPlansPage() {
   }, [limit, offset]);
 
   useEffect(() => {
-    void loadOrders();
-  }, [loadOrders]);
-
-  useEffect(() => {
     void loadPlansPage();
   }, [loadPlansPage]);
 
@@ -57,14 +45,16 @@ export function ConsumptionPlansPage() {
           <p className="text-sm text-text-muted mt-0.5">Plan required materials by order.</p>
         </div>
         <div className="flex gap-2">
-          <select value={orderId || ""} onChange={(e) => setOrderId(Number(e.target.value) || 0)} className="rounded border border-border px-3 py-2 text-sm">
-            <option value="">Select order…</option>
-            {orders.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.order_code}
-              </option>
-            ))}
-          </select>
+          <div className="min-w-[220px] flex-1">
+            <RemoteSearchSelect
+              value={orderId || ""}
+              onChange={(id) => setOrderId(id === "" ? 0 : Number(id))}
+              placeholder="Search order code or style…"
+              fetchPage={fetchOrderPage}
+              hydrateById={hydrateOrder}
+              pageSize={30}
+            />
+          </div>
           <button
             onClick={async () => {
               if (!orderId) return;

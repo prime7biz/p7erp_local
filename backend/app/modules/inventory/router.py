@@ -371,6 +371,141 @@ async def _stock_summary_rows(db: AsyncSession, tenant_id: int) -> list[StockSum
     return rows
 
 
+async def _stock_summary_page_sql(
+    db: AsyncSession,
+    tenant_id: int,
+    *,
+    search: str | None,
+    warehouse_id: int | None,
+    hide_zero: bool,
+    sort_key: str,
+    sort_ascending: bool,
+    limit: int,
+    offset: int,
+) -> tuple[list[StockSummaryRow], int]:
+    """
+    DB-efficient stock summary: aggregate in SQL, apply filters/sort/pagination in SQL.
+
+    Keeps parity with the legacy in-memory path used by `_stock_summary_rows` + `stock_summary`:
+    - movement_type IN vs not-IN for in/out totals
+    - search: substring match on item_code or name (case-insensitive)
+    - hide_zero: exclude rows where round(on_hand, 3) == 0
+    - sort keys match the previous Python sort_tuple ordering
+
+    Other endpoints still use `_stock_summary_rows` (full tenant scan) until a later pass.
+    """
+    qty_col = cast(StockMovement.quantity, Numeric)
+    in_agg = func.coalesce(
+        func.sum(case((StockMovement.movement_type == "IN", qty_col), else_=0)),
+        0,
+    )
+    out_agg = func.coalesce(
+        func.sum(case((StockMovement.movement_type != "IN", qty_col), else_=0)),
+        0,
+    )
+    agg = (
+        select(
+            StockMovement.item_id.label("item_id"),
+            StockMovement.warehouse_id.label("warehouse_id"),
+            in_agg.label("in_qty"),
+            out_agg.label("out_qty"),
+        )
+        .where(StockMovement.tenant_id == tenant_id)
+        .group_by(StockMovement.item_id, StockMovement.warehouse_id)
+    ).subquery()
+
+    on_hand_expr = cast(agg.c.in_qty - agg.c.out_qty, Numeric)
+    on_hand_rounded = func.round(on_hand_expr, 3)
+
+    wh_name_coalesced = func.coalesce(Warehouse.name, "")
+
+    base = (
+        select(
+            agg.c.item_id,
+            Item.item_code,
+            Item.name.label("item_name"),
+            agg.c.warehouse_id,
+            Warehouse.name.label("warehouse_name"),
+            agg.c.in_qty,
+            agg.c.out_qty,
+            on_hand_rounded.label("on_hand_rounded"),
+        )
+        .select_from(
+            agg.join(Item, Item.id == agg.c.item_id).outerjoin(
+                Warehouse,
+                (Warehouse.id == agg.c.warehouse_id) & (Warehouse.tenant_id == tenant_id),
+            )
+        )
+        .where(Item.tenant_id == tenant_id)
+    )
+
+    q = (search or "").strip().lower()
+    if q:
+        pat = f"%{q}%"
+        base = base.where(
+            or_(
+                func.lower(Item.item_code).like(pat),
+                func.lower(Item.name).like(pat),
+            )
+        )
+    if warehouse_id is not None:
+        base = base.where(agg.c.warehouse_id == warehouse_id)
+    if hide_zero:
+        base = base.where(on_hand_rounded != 0)
+
+    count_stmt = select(func.count()).select_from(base.subquery())
+    total = int((await db.execute(count_stmt)).scalar() or 0)
+
+    sk = (sort_key or "item").lower()
+
+    def _ord(col):
+        return col.asc() if sort_ascending else col.desc()
+
+    wh_sort = wh_name_coalesced.nulls_last()
+
+    if sk == "warehouse":
+        order_cols = (_ord(wh_sort), _ord(Item.item_code))
+    elif sk == "in":
+        order_cols = (_ord(agg.c.in_qty), _ord(Item.item_code), _ord(wh_sort))
+    elif sk == "out":
+        order_cols = (_ord(agg.c.out_qty), _ord(Item.item_code), _ord(wh_sort))
+    elif sk == "on_hand":
+        order_cols = (_ord(on_hand_rounded), _ord(Item.item_code), _ord(wh_sort))
+    else:
+        order_cols = (_ord(Item.item_code), _ord(Item.name), _ord(wh_sort))
+
+    page_stmt = base.order_by(*order_cols).limit(limit).offset(offset)
+    result = await db.execute(page_stmt)
+    out: list[StockSummaryRow] = []
+    for row in result.all():
+        (
+            item_id,
+            item_code,
+            item_name,
+            wh_id,
+            wh_name,
+            in_qty_raw,
+            out_qty_raw,
+            on_hand_r,
+        ) = row
+        in_qty = round(float(in_qty_raw or 0), 3)
+        out_qty = round(float(out_qty_raw or 0), 3)
+        on_hand_qty = round(float(on_hand_r or 0), 3)
+        out.append(
+            StockSummaryRow(
+                item_id=int(item_id),
+                item_code=item_code or "",
+                item_name=item_name or "",
+                warehouse_id=int(wh_id) if wh_id is not None else None,
+                warehouse_name=wh_name,
+                in_qty=in_qty,
+                out_qty=out_qty,
+                on_hand_qty=on_hand_qty,
+            )
+        )
+    return out, total
+
+
 async def _fifo_layer_qty_value_map(
     db: AsyncSession, tenant_id: int, as_of_date: date | None = None
 ) -> dict[tuple[int, int | None], tuple[float, float]]:
@@ -1298,6 +1433,10 @@ async def delete_item_unit(
 async def list_items(
     category_id: int | None = Query(default=None),
     subcategory_id: int | None = Query(default=None),
+    search: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on item code or name (for typeahead selectors)",
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=500),
     tenant: Tenant = Depends(require_tenant),
@@ -1311,6 +1450,14 @@ async def list_items(
         filters.append(Item.category_id == category_id)
     if subcategory_id is not None:
         filters.append(Item.subcategory_id == subcategory_id)
+    if search and search.strip():
+        pat = f"%{search.strip().lower()}%"
+        filters.append(
+            or_(
+                func.lower(Item.item_code).like(pat),
+                func.lower(Item.name).like(pat),
+            )
+        )
     total = int((await db.execute(select(func.count(Item.id)).where(*filters))).scalar() or 0)
     tp = total_pages(total, ps)
     sp = safe_page(page, total, ps)
@@ -1326,6 +1473,20 @@ async def list_items(
         page_size=ps,
         total_pages=tp,
     )
+
+
+@router.get("/items/{item_id}", response_model=ItemOut)
+async def get_item(
+    item_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(Item, item_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return row
 
 
 @router.post("/items", response_model=ItemOut)
@@ -2212,34 +2373,21 @@ async def stock_summary(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    rows = list(await _stock_summary_rows(db, tenant.id))
-    q = (search or "").strip().lower()
-    if q:
-        rows = [r for r in rows if q in (r.item_code or "").lower() or q in (r.item_name or "").lower()]
-    if warehouse_id is not None:
-        rows = [r for r in rows if r.warehouse_id == warehouse_id]
-    if hide_zero:
-        rows = [r for r in rows if r.on_hand_qty != 0]
-
     sort_key = (sort or "item").lower()
     ascending = (sort_dir or "asc").lower() != "desc"
-    reverse = not ascending
-
-    def sort_tuple(r: StockSummaryRow) -> tuple:
-        if sort_key == "warehouse":
-            return (r.warehouse_name or "", r.item_code)
-        if sort_key == "in":
-            return (r.in_qty, r.item_code, r.warehouse_name or "")
-        if sort_key == "out":
-            return (r.out_qty, r.item_code, r.warehouse_name or "")
-        if sort_key == "on_hand":
-            return (r.on_hand_qty, r.item_code, r.warehouse_name or "")
-        return (r.item_code, r.item_name, r.warehouse_name or "")
-
-    rows.sort(key=sort_tuple, reverse=reverse)
-    total = len(rows)
+    rows, total = await _stock_summary_page_sql(
+        db,
+        tenant.id,
+        search=search,
+        warehouse_id=warehouse_id,
+        hide_zero=hide_zero,
+        sort_key=sort_key,
+        sort_ascending=ascending,
+        limit=limit,
+        offset=offset,
+    )
     response.headers["X-Total-Count"] = str(total)
-    return rows[offset : offset + limit]
+    return rows
 
 
 @router.get("/stock-valuation", response_model=StockValuationOut)

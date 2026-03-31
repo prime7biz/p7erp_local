@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.codegen import next_tenant_code
+from app.modules.finance.voucher_controls import allocate_series_voucher_number
 from app.models import AccountGroup, ChartOfAccount, CostCenter, Tenant, User, Voucher, VoucherLine, WipJournal
 
 
@@ -52,12 +52,12 @@ async def create_draft_voucher_for_wip_journal(
     base_currency = _normalize_currency("BDT", default="BDT")
     exchange_rate_value, rate_source, fetched_at = await _lookup_exchange_rate(db, tenant.id, txn_currency, base_currency)
 
-    voucher_number = await next_tenant_code(
+    voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
         db,
-        model=Voucher,
         tenant_id=tenant.id,
-        prefix="VCH-",
-        width=4,
+        voucher_date=wip.journal_date,
+        voucher_type=vtype,
+        branch_code="MAIN",
     )
     row = Voucher(
         tenant_id=tenant.id,
@@ -67,6 +67,13 @@ async def create_draft_voucher_for_wip_journal(
         status="DRAFT",
         description=desc,
         reference=ref,
+        branch_code="MAIN",
+        fiscal_year=fy,
+        series_sequence=series_seq,
+        number_series_key=series_key,
+        source_module="WIP",
+        source_module_ref=f"wip_journal:{wip.id}",
+        allow_manual_edit=False,
         currency=txn_currency,
         base_currency=base_currency,
         exchange_rate=str(round(exchange_rate_value or 1.0, 8)),

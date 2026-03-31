@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type InventoryItemResponse, type ManufacturingOrderCreate, type ManufacturingStageResponse } from "@/api/client";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
+import { api, type ManufacturingOrderCreate, type ManufacturingStageResponse } from "@/api/client";
 import {
   InventoryCardListSkeleton,
   InventoryEmptyState,
@@ -35,7 +37,8 @@ export function ManufacturingOrdersPage() {
   const { page, setPage, pageSize, setPageSize, offset, limit, allowedSizes } = useListPagination();
   const [orders, setOrders] = useState<Awaited<ReturnType<typeof api.listManufacturingOrders>>>([]);
   const [ordersTotal, setOrdersTotal] = useState(0);
-  const [items, setItems] = useState<InventoryItemResponse[]>([]);
+  const [finishedItemLabels, setFinishedItemLabels] = useState<Record<number, string>>({});
+  const fetchedItemLabelsRef = useRef<Set<number>>(new Set());
   const [stagesByOrder, setStagesByOrder] = useState<Record<number, ManufacturingStageResponse[]>>({});
   const [error, setError] = useState("");
   const [kpi, setKpi] = useState({ openPo: 0, openGrn: 0, pendingCr: 0, lowStock: 0 });
@@ -45,13 +48,17 @@ export function ManufacturingOrdersPage() {
   const [loading, setLoading] = useState(true);
 
   const loadKpiAndMasters = useCallback(async () => {
-    const [itmPage, overview, pendingCrRows, stockSample] = await Promise.all([
-      api.listInventoryItemsPaginated({ page: 1, page_size: 500 }),
+    const [overview, pendingCrRows, stockRes] = await Promise.all([
       api.getInventoryReconciliationOverview(),
       api.listConsumptionChangeRequests({ status_filter: "PENDING" }),
-      api.getStockSummary({ limit: 500, offset: 0 }),
+      api.getStockSummaryWithTotal({
+        limit: 500,
+        offset: 0,
+        sort: "on_hand",
+        sort_dir: "asc",
+      }),
     ]);
-    setItems(itmPage.items);
+    const stockSample = stockRes.rows;
     const nextKpi = {
       openPo: overview.purchase_orders_open,
       openGrn: overview.goods_receiving_open,
@@ -68,10 +75,6 @@ export function ManufacturingOrdersPage() {
     }
     setKpi(nextKpi);
     localStorage.setItem("p7_inventory_kpi_snapshot", JSON.stringify(nextKpi));
-    const firstItem = itmPage.items[0];
-    if (firstItem) {
-      setForm((prev) => (!prev.finished_item_id ? { ...prev, finished_item_id: firstItem.id } : prev));
-    }
   }, []);
 
   const loadOrdersPage = useCallback(async () => {
@@ -100,13 +103,37 @@ export function ManufacturingOrdersPage() {
     void loadOrdersPage();
   }, [loadOrdersPage]);
 
+  /** Resolve finished-item names for the current MO list page (small N per page). */
+  useEffect(() => {
+    if (!orders.length) return;
+    const ids = [...new Set(orders.map((o) => o.finished_item_id))];
+    const missing = ids.filter((id) => id && !fetchedItemLabelsRef.current.has(id));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      missing.map(async (id) => {
+        try {
+          const it = await api.getInventoryItem(id);
+          if (cancelled) return;
+          fetchedItemLabelsRef.current.add(id);
+          setFinishedItemLabels((prev) => (prev[id] ? prev : { ...prev, [id]: it.name }));
+        } catch {
+          /* ignore */
+        }
+      }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [orders]);
+
   useEffect(() => {
     const close = () => setOpenActionsId(null);
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, []);
 
-  const itemName = useMemo(() => new Map(items.map((i) => [i.id, i.name])), [items]);
+  const itemName = (id: number) => finishedItemLabels[id];
   const trend = (key: keyof typeof kpi) => {
     if (!prevKpi) return "";
     if (kpi[key] > prevKpi[key]) return "↑";
@@ -119,7 +146,7 @@ export function ManufacturingOrdersPage() {
     if (!form.finished_item_id) return;
     try {
       await api.createManufacturingOrder(form);
-      setForm({ finished_item_id: items[0]?.id ?? 0, planned_quantity: "0", notes: "" });
+      setForm({ finished_item_id: 0, planned_quantity: "0", notes: "" });
       await loadKpiAndMasters();
       await loadOrdersPage();
     } catch (e) {
@@ -215,17 +242,18 @@ export function ManufacturingOrdersPage() {
       <div className="rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="mb-3 text-sm font-semibold text-text-secondary">Create Manufacturing Order</h2>
         <form className="grid grid-cols-1 gap-3 md:grid-cols-4" onSubmit={create}>
-          <select
-            className="rounded border px-3 py-2 text-sm"
-            value={String(form.finished_item_id)}
-            onChange={(e) => setForm((prev) => ({ ...prev, finished_item_id: Number(e.target.value) }))}
-          >
-            {items.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.name}
-              </option>
-            ))}
-          </select>
+          <RemoteSearchSelect
+            className="md:col-span-1"
+            value={form.finished_item_id || ""}
+            onChange={(id) =>
+              setForm((prev) => ({ ...prev, finished_item_id: id === "" ? 0 : Number(id) }))
+            }
+            placeholder="Search finished item (code or name)…"
+            fetchPage={fetchInventoryItemPage}
+            hydrateById={hydrateInventoryItem}
+            pageSize={40}
+            allowClear
+          />
           <input
             className="rounded border px-3 py-2 text-sm"
             placeholder="Planned quantity"
@@ -261,7 +289,7 @@ export function ManufacturingOrdersPage() {
               <div>
                 <h3 className="font-semibold text-text-primary">{order.mo_number}</h3>
                 <p className="text-xs text-text-muted">
-                  {itemName.get(order.finished_item_id) ?? order.finished_item_id} | Planned: {order.planned_quantity}
+                  {itemName(order.finished_item_id) ?? order.finished_item_id} | Planned: {order.planned_quantity}
                 </p>
                 <div className="mt-1">
                   <span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(order.status)}`}>{order.status}</span>
@@ -400,7 +428,7 @@ export function ManufacturingOrdersPage() {
         />
       ) : null}
       <p className="text-xs text-text-muted">
-        Finished-item dropdown loads up to 500 inventory items. KPI “Low stock” is estimated from the first 500 stock-summary rows.
+        Finished item: type to search the full catalog. KPI “Low stock” is a sample from the first page of stock summary (by on-hand sort).
       </p>
     </div>
   );

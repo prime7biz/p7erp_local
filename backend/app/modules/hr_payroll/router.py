@@ -737,6 +737,8 @@ async def post_run(
     if not payable_acc or payable_acc.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Payroll payable account not found")
 
+    from app.modules.finance.voucher_controls import finalize_posted_voucher_metadata, fiscal_year_calendar
+
     voucher = Voucher(
         tenant_id=tenant.id,
         voucher_number=f"PR{run.id:05d}",
@@ -745,6 +747,11 @@ async def post_run(
         status="POSTED",
         description=f"Payroll posting for run {run.run_code}",
         reference=f"PAYROLL_RUN_{run.id}",
+        branch_code="MAIN",
+        fiscal_year=fiscal_year_calendar(period.payment_date),
+        source_module="PAYROLL",
+        source_module_ref=f"run:{run.id}",
+        allow_manual_edit=False,
         created_by=user.id,
     )
     db.add(voucher)
@@ -770,6 +777,9 @@ async def post_run(
             notes="Payroll payable",
         )
     )
+    await db.flush()
+    vlines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all())
+    await finalize_posted_voucher_metadata(db, tenant.id, voucher, vlines, strict_duplicate_check=True)
 
     posting = PayrollPosting(
         tenant_id=tenant.id,

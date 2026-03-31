@@ -3805,16 +3805,22 @@ export const api = {
   async listInventoryItemsPaginated(params?: {
     category_id?: number;
     subcategory_id?: number;
+    /** Substring match on code or name (server-side). */
+    search?: string;
     page?: number;
     page_size?: number;
   }): Promise<PaginatedRows<InventoryItemResponse>> {
     const q = new URLSearchParams();
     if (params?.category_id != null) q.set("category_id", String(params.category_id));
     if (params?.subcategory_id != null) q.set("subcategory_id", String(params.subcategory_id));
+    if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
     if (params?.page != null) q.set("page", String(params.page));
     if (params?.page_size != null) q.set("page_size", String(params.page_size));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<PaginatedRows<InventoryItemResponse>>(`/api/v1/inventory/items${suffix}`);
+  },
+  async getInventoryItem(id: number): Promise<InventoryItemResponse> {
+    return request<InventoryItemResponse>(`/api/v1/inventory/items/${id}`);
   },
   async createInventoryItem(data: InventoryItemCreate): Promise<InventoryItemResponse> {
     return request<InventoryItemResponse>("/api/v1/inventory/items", {
@@ -4939,6 +4945,9 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  /**
+   * Returns rows only (`X-Total-Count` is ignored). For paginated UIs use `listConsumptionPlansWithTotal`.
+   */
   async listConsumptionPlans(params?: { order_id?: number; limit?: number; offset?: number }): Promise<ConsumptionPlanResponse[]> {
     const q = new URLSearchParams();
     if (params?.order_id != null) q.set("order_id", String(params.order_id));
@@ -5685,6 +5694,23 @@ export const api = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<ChartOfAccountResponse[]>(`/api/v1/finance/chart-of-accounts${suffix}`);
   },
+  async listChartOfAccountsWithTotal(params?: {
+    active_only?: boolean;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ListWithTotal<ChartOfAccountResponse>> {
+    const q = new URLSearchParams();
+    if (params?.active_only === false) q.set("active_only", "false");
+    if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return requestWithTotal<ChartOfAccountResponse>(`/api/v1/finance/chart-of-accounts${suffix}`);
+  },
+  async getChartOfAccount(id: number): Promise<ChartOfAccountResponse> {
+    return request<ChartOfAccountResponse>(`/api/v1/finance/chart-of-accounts/${id}`);
+  },
   async createChartOfAccount(data: ChartOfAccountCreate): Promise<ChartOfAccountResponse> {
     return request<ChartOfAccountResponse>("/api/v1/finance/chart-of-accounts", {
       method: "POST",
@@ -5726,6 +5752,26 @@ export const api = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<VoucherResponse[]>(`/api/v1/finance/vouchers${suffix}`);
   },
+  async listVouchersWithTotal(params?: {
+    status_filter?: string;
+    from_date?: string;
+    to_date?: string;
+    search?: string;
+    voucher_id?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<ListWithTotal<VoucherResponse>> {
+    const q = new URLSearchParams();
+    if (params?.status_filter) q.set("status_filter", params.status_filter);
+    if (params?.from_date) q.set("from_date", params.from_date);
+    if (params?.to_date) q.set("to_date", params.to_date);
+    if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
+    if (params?.voucher_id != null) q.set("voucher_id", String(params.voucher_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return requestWithTotal<VoucherResponse>(`/api/v1/finance/vouchers${suffix}`);
+  },
   async createVoucher(data: VoucherCreate): Promise<VoucherResponse> {
     return request<VoucherResponse>("/api/v1/finance/vouchers", {
       method: "POST",
@@ -5755,8 +5801,26 @@ export const api = {
   async postVoucher(id: number): Promise<VoucherResponse> {
     return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/post`, { method: "POST" });
   },
-  async reverseVoucher(id: number): Promise<VoucherResponse> {
-    return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/reverse`, { method: "POST" });
+  async reverseVoucher(id: number, body: { reason: string }): Promise<VoucherResponse> {
+    return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/reverse`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async duplicateVoucherRiskCheck(body: {
+    voucher_date: string;
+    reference?: string | null;
+    voucher_type?: string | null;
+    lines: VoucherLineCreate[];
+  }): Promise<{
+    duplicate_risk_hash: string;
+    similar_posted_voucher_ids: number[];
+    risk_level: "high" | "none";
+  }> {
+    return request(`/api/v1/finance/vouchers/duplicate-risk-check`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   },
   async cancelVoucherPosting(id: number): Promise<VoucherResponse> {
     return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/cancel-posting`, { method: "POST" });
@@ -5977,6 +6041,23 @@ export const api = {
     if (params?.active_only === false) q.set("active_only", "false");
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<CostCenterResponse[]>(`/api/v1/finance/cost-centers${suffix}`);
+  },
+  async listCostCentersWithTotal(params?: {
+    active_only?: boolean;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ListWithTotal<CostCenterResponse>> {
+    const q = new URLSearchParams();
+    if (params?.active_only === false) q.set("active_only", "false");
+    if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return requestWithTotal<CostCenterResponse>(`/api/v1/finance/cost-centers${suffix}`);
+  },
+  async getCostCenter(id: number): Promise<CostCenterResponse> {
+    return request<CostCenterResponse>(`/api/v1/finance/cost-centers/${id}`);
   },
   async createCostCenter(data: CostCenterCreate): Promise<CostCenterResponse> {
     return request<CostCenterResponse>("/api/v1/finance/cost-centers", {
@@ -11808,6 +11889,9 @@ export interface VoucherCreate {
   voucher_date: string;
   description?: string;
   reference?: string;
+  branch_code?: string | null;
+  instrument_reference?: string | null;
+  bank_reconciliation_id?: number | null;
   currency?: string;
   base_currency?: string;
   exchange_rate?: string | null;
@@ -11822,6 +11906,9 @@ export interface VoucherUpdate {
   voucher_date: string;
   description?: string;
   reference?: string;
+  branch_code?: string | null;
+  instrument_reference?: string | null;
+  bank_reconciliation_id?: number | null;
   currency?: string;
   base_currency?: string;
   exchange_rate?: string | null;
@@ -11843,6 +11930,22 @@ export interface VoucherResponse {
   status: string;
   description: string | null;
   reference: string | null;
+  branch_code?: string | null;
+  fiscal_year?: number | null;
+  series_sequence?: number | null;
+  number_series_key?: string | null;
+  source_module?: string | null;
+  source_module_ref?: string | null;
+  allow_manual_edit?: boolean;
+  reverses_voucher_id?: number | null;
+  reversed_by_voucher_id?: number | null;
+  reversal_reason?: string | null;
+  reversal_recorded_at?: string | null;
+  reversal_recorded_by_user_id?: number | null;
+  posted_snapshot?: Record<string, unknown> | null;
+  instrument_reference?: string | null;
+  duplicate_risk_hash?: string | null;
+  bank_reconciliation_id?: number | null;
   currency: string;
   base_currency: string;
   exchange_rate: string;
@@ -11858,6 +11961,7 @@ export interface VoucherResponse {
   created_at: string;
   updated_at: string;
   lines: VoucherLineResponse[];
+  control_warnings?: string[] | null;
 }
 
 export interface DayBookResponse {

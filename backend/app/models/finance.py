@@ -122,7 +122,7 @@ class Voucher(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    voucher_number: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    voucher_number: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     voucher_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     voucher_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
@@ -145,6 +145,32 @@ class Voucher(Base):
     )
     mfg_work_order_id: Mapped[int | None] = mapped_column(
         ForeignKey("mfg_work_orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Series / control (branch + fiscal year + type; calendar FY until tenant FY config exists)
+    branch_code: Mapped[str] = mapped_column(String(32), nullable=False, default="MAIN", index=True)
+    fiscal_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    series_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    number_series_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    # Source: MANUAL, INVENTORY_GL, PAYROLL, WIP, LC_COMMERCIAL, PAYMENT_RUN, REVERSAL, etc.
+    source_module: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    source_module_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    allow_manual_edit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    reverses_voucher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    reversed_by_voucher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    reversal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reversal_recorded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reversal_recorded_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    posted_snapshot_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    instrument_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    duplicate_risk_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    bank_reconciliation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("bank_reconciliations.id", ondelete="SET NULL"), nullable=True, index=True
     )
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)

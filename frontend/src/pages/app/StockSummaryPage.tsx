@@ -14,6 +14,7 @@ import {
   touchFieldClass,
 } from "@/components/inventory/InventoryMobileList";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
+import { exportPagedCsv } from "@/lib/exportPagedCsv";
 
 type SortKey = "item" | "warehouse" | "in" | "out" | "on_hand";
 
@@ -39,6 +40,7 @@ export function StockSummaryPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const { page, setPage, pageSize, setPageSize, offset, limit, allowedSizes } = useListPagination();
   const { isNarrow, view, setView, showCards } = useListViewPreference();
 
@@ -95,30 +97,40 @@ export function StockSummaryPage() {
 
   const exportCsv = async () => {
     setExporting(true);
-    const headers = ["item_code", "item_name", "warehouse", "in_qty", "out_qty", "on_hand_qty"];
-    const lines = [headers.join(",")];
-    const chunk = 500;
-    let off = 0;
+    setExportNotice(null);
+    setError("");
     try {
-      for (let i = 0; i < 40; i += 1) {
-        const res = await api.getStockSummaryWithTotal({
-          limit: chunk,
-          offset: off,
-          search: search.trim() || undefined,
-          warehouse_id: warehouseId === "" ? undefined : warehouseId,
-          hide_zero: hideZero,
-          sort: sortKey,
-          sort_dir: sortDir,
-        });
-        for (const r of res.rows) {
-          const name = `"${r.item_name.replaceAll('"', '""')}"`;
-          const wh = `"${(r.warehouse_name ?? "").replaceAll('"', '""')}"`;
-          lines.push([r.item_code, name, wh, String(r.in_qty), String(r.out_qty), String(r.on_hand_qty)].join(","));
-        }
-        if (res.rows.length < chunk) break;
-        off += chunk;
-      }
-      downloadCsv(`stock_summary_${new Date().toISOString().slice(0, 10)}.csv`, lines.join("\n"));
+      const outcome = await exportPagedCsv<StockSummaryRow>({
+        fetchPage: async (offset, limit) => {
+          const res = await api.getStockSummaryWithTotal({
+            limit,
+            offset,
+            search: search.trim() || undefined,
+            warehouse_id: warehouseId === "" ? undefined : warehouseId,
+            hide_zero: hideZero,
+            sort: sortKey,
+            sort_dir: sortDir,
+          });
+          return { rows: res.rows, total: res.total ?? null };
+        },
+        chunkSize: 500,
+        maxRows: 20_000,
+        maxIterations: 50,
+        headers: ["item_code", "item_name", "warehouse", "in_qty", "out_qty", "on_hand_qty"],
+        rowToCells: (r) => [
+          r.item_code,
+          r.item_name,
+          r.warehouse_name ?? "",
+          String(r.in_qty),
+          String(r.out_qty),
+          String(r.on_hand_qty),
+        ],
+      });
+      downloadCsv(`stock_summary_${new Date().toISOString().slice(0, 10)}.csv`, outcome.csv);
+      const parts: string[] = [];
+      if (outcome.truncated && outcome.truncationReason) parts.push(outcome.truncationReason);
+      if (outcome.warnings.length) parts.push(...outcome.warnings);
+      setExportNotice(parts.length ? parts.join(" ") : null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export failed");
     } finally {
@@ -183,8 +195,13 @@ export function StockSummaryPage() {
         </div>
       </div>
       <p className="text-xs text-text-muted">
-        Filters and sorting run on the server. Export walks pages (up to ~20k rows) with the same filters.
+        Filters and sorting run on the server. Export walks pages (same filters) with safety caps (20k rows / 50 steps).
       </p>
+      {exportNotice ? (
+        <div className="rounded-lg border border-status-warning/30 bg-status-warning-subtle px-3 py-2 text-sm text-status-warning-foreground">
+          {exportNotice}
+        </div>
+      ) : null}
       {error ? <InventoryErrorPanel message={error} onRetry={() => void load()} /> : null}
       {loading ? (
         <InventoryTableSkeleton rows={10} cols={5} />

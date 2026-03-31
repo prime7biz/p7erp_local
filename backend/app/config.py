@@ -50,8 +50,8 @@ class Settings(BaseSettings):
     paid_llm_provider: str = ""
     paid_llm_api_key: str = ""
     paid_llm_model: str = ""
-    # Mounted in-process with FastAPI
-    mcp_enabled: bool = True
+    # Mounted in-process with FastAPI (opt-in: avoids prod boot failure when secret unset; set MCP_ENABLED=true explicitly)
+    mcp_enabled: bool = False
     # Require JWT auth + tenant binding on HTTP /mcp endpoint (default True for production safety)
     mcp_require_auth: bool = True
     # Tier-1 vLLM (OpenAI-compatible). Preferred over Ollama when enabled and URL set.
@@ -111,9 +111,11 @@ def get_settings() -> Settings:
             raise RuntimeError(
                 "AI_CONFIRMATION_TOKEN_PEPPER must be set to a strong value in non-development environments."
             )
-        if not settings.mcp_commit_bypass and not (settings.mcp_human_approval_secret or "").strip():
+        if settings.mcp_enabled and not settings.mcp_commit_bypass and not (
+            settings.mcp_human_approval_secret or ""
+        ).strip():
             raise RuntimeError(
-                "In non-development environments, set MCP_HUMAN_APPROVAL_SECRET when MCP_COMMIT_BYPASS is false, "
-                "or set MCP_COMMIT_BYPASS=true only for controlled demos."
+                "When MCP is enabled in non-development environments, set MCP_HUMAN_APPROVAL_SECRET when "
+                "MCP_COMMIT_BYPASS is false, or set MCP_COMMIT_BYPASS=true only for controlled demos."
             )
     return settings

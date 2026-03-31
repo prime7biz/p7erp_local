@@ -1,13 +1,30 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import {
   api,
+  type BtbLcRow,
   type ChartOfAccountResponse,
-  type CostCenterResponse,
+  type TradeCaseRow,
   type VoucherCreate,
   type VoucherLineCreate,
   type VoucherResponse,
 } from "@/api/client";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
+import { useListPagination } from "@/hooks/useListPagination";
+import {
+  fetchBtbLcPage,
+  fetchChartAccountPage,
+  fetchCostCenterPage,
+  fetchTradeCasePage,
+  hydrateBtbLc,
+  hydrateChartAccount,
+  hydrateCostCenter,
+  hydrateTradeCase,
+} from "@/lib/remoteSelectFetchers";
+import { logApiError } from "@/utils/logApiError";
 
 const STATUSES = ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED", "CANCELLED", "REVERSED"];
 const ACTION_TO_STATUS: Record<string, string> = {
@@ -29,7 +46,11 @@ const ACTION_LABEL: Record<string, string> = {
   set_draft: "Set Draft",
   cancel: "Cancel",
   reverse: "Reverse",
+  cancel_posting: "Cancel posting",
 };
+
+/** Workflow actions where we ask for a mandatory reason (UX); backend persistence TBD. */
+const ACTIONS_NEEDING_REASON = new Set(["reject", "cancel", "reverse", "cancel_posting"]);
 const CTL =
   "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
 
@@ -42,24 +63,33 @@ function makeLine(accountId: number, currency: string, exchangeRate: string, ent
 }
 
 export function VouchersPage() {
-  const [searchParams] = useSearchParams();
+  const { page, setPage, pageSize, setPageSize, offset, limit, allowedSizes } = useListPagination();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const voucherIdFromUrl = searchParams.get("voucher_id");
-  const voucherIdFilter = voucherIdFromUrl ? Number(voucherIdFromUrl) : undefined;
+  const voucherIdFilter =
+    voucherIdFromUrl != null && voucherIdFromUrl !== "" && Number.isFinite(Number(voucherIdFromUrl))
+      ? Number(voucherIdFromUrl)
+      : undefined;
 
-  const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
-  const [costCenters, setCostCenters] = useState<CostCenterResponse[]>([]);
+  const loadedActionsRef = useRef<Set<number>>(new Set());
   const [voucherTypes, setVoucherTypes] = useState<string[]>([]);
   const [rows, setRows] = useState<VoucherResponse[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
   const [availableActionMap, setAvailableActionMap] = useState<Record<number, string[]>>({});
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [accountBillWiseMap, setAccountBillWiseMap] = useState<Record<number, boolean>>({});
+  const billWiseFetchedRef = useRef<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [editingVoucherId, setEditingVoucherId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [pendingWorkflowAction, setPendingWorkflowAction] = useState<{ voucherId: number; action: string } | null>(null);
+  const [periodLock, setPeriodLock] = useState<{ locked: boolean; reason?: string; period_name?: string } | null>(null);
 
   // Multi-currency
   const [multiCurrency, setMultiCurrency] = useState(false);
@@ -73,77 +103,105 @@ export function VouchersPage() {
     currency: "BDT",
     base_currency: "BDT",
     exchange_rate: "1",
+    exchange_rate_source: undefined,
     trade_case_id: undefined,
     btb_lc_id: undefined,
     lines: [makeLine(0, "BDT", "1", "DEBIT")],
   });
 
-  async function load() {
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, voucherIdFilter, setPage]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.getVoucherTypesMeta().then((types) => {
+      if (!cancelled) setVoucherTypes(types);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const loadList = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setOpenActionsId(null);
+    loadedActionsRef.current.clear();
+    setAvailableActionMap({});
     try {
-      const [a, c, v, types] = await Promise.all([
-        api.listChartOfAccounts({ active_only: true }),
-        api.listCostCenters({ active_only: true }),
-        api.listVouchers(statusFilter ? { status_filter: statusFilter } : undefined),
-        api.getVoucherTypesMeta(),
-      ]);
-      setAccounts(a);
-      setCostCenters(c);
-      setRows(v);
-      setVoucherTypes(types);
-      const actionPairs = await Promise.all(
-        v.map(async (row) => {
-          try {
-            const meta = await api.getVoucherAvailableActions(row.id);
-            return [row.id, meta.actions] as [number, string[]];
-          } catch {
-            return [row.id, []] as [number, string[]];
-          }
-        }),
-      );
-      const map: Record<number, string[]> = {};
-      for (const [id, actions] of actionPairs) map[id] = actions;
-      setAvailableActionMap(map);
-      const firstAccountId = a[0]?.id ?? 0;
-      setForm((prev) => {
-        if (prev.lines[0]?.account_id) return prev;
-        const currentLine = prev.lines[0] ?? makeLine(firstAccountId, prev.currency ?? "BDT", prev.exchange_rate ?? "1", "DEBIT");
-        return {
-          ...prev,
-          voucher_type: types.includes(prev.voucher_type) ? prev.voucher_type : (types[0] ?? "JOURNAL"),
-          lines: [{ ...currentLine, account_id: firstAccountId }],
-        };
+      const vRes = await api.listVouchersWithTotal({
+        status_filter: statusFilter || undefined,
+        search: debouncedSearch || undefined,
+        voucher_id: voucherIdFilter,
+        limit,
+        offset,
       });
+      setRows(vRes.rows);
+      setTotalRows(vRes.total ?? vRes.rows.length);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [debouncedSearch, limit, offset, statusFilter, voucherIdFilter]);
 
   useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+    void loadList();
+  }, [loadList]);
+
+  useEffect(() => {
+    if (openActionsId == null) return;
+    const vid = openActionsId;
+    if (loadedActionsRef.current.has(vid)) return;
+    loadedActionsRef.current.add(vid);
+    void api
+      .getVoucherAvailableActions(vid)
+      .then((m) => setAvailableActionMap((p) => ({ ...p, [vid]: m.actions })))
+      .catch(() => setAvailableActionMap((p) => ({ ...p, [vid]: [] })));
+  }, [openActionsId]);
+
+  useEffect(() => {
+    if (!showCreate) return;
+    const ids = new Set(form.lines.map((l) => l.account_id).filter((id) => id > 0));
+    for (const id of ids) {
+      if (billWiseFetchedRef.current.has(id)) continue;
+      billWiseFetchedRef.current.add(id);
+      void api
+        .getChartOfAccount(id)
+        .then((a) => setAccountBillWiseMap((m) => ({ ...m, [id]: Boolean(a.enable_bill_wise) })))
+        .catch(() => {});
+    }
+  }, [showCreate, form.lines]);
+
+  useEffect(() => {
+    if (!showCreate || !form.voucher_date) {
+      setPeriodLock(null);
+      return;
+    }
+    let cancelled = false;
+    void api
+      .checkAccountingPeriodLock(form.voucher_date)
+      .then((r) => {
+        if (!cancelled) setPeriodLock(r);
+      })
+      .catch((e) => {
+        logApiError("VouchersPage.checkAccountingPeriodLock", e);
+        if (!cancelled) setPeriodLock(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showCreate, form.voucher_date]);
 
   const debitTotal = useMemo(() => rowAmount(form.lines, "DEBIT"), [form.lines]);
   const creditTotal = useMemo(() => rowAmount(form.lines, "CREDIT"), [form.lines]);
   const isBalanced = Math.abs(debitTotal - creditTotal) < 0.001;
-
-  const filteredRows = useMemo(() => {
-    if (Number.isFinite(voucherIdFilter)) return rows.filter((r) => r.id === voucherIdFilter);
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        r.voucher_number.toLowerCase().includes(q) ||
-        r.voucher_type.toLowerCase().includes(q) ||
-        (r.reference ?? "").toLowerCase().includes(q) ||
-        (r.description ?? "").toLowerCase().includes(q) ||
-        r.status.toLowerCase().includes(q),
-    );
-  }, [rows, search, voucherIdFilter]);
 
   function setLine(idx: number, patch: Partial<VoucherLineCreate>) {
     setForm((prev) => ({
@@ -155,7 +213,7 @@ export function VouchersPage() {
   function addLine(entryType: "DEBIT" | "CREDIT" = "DEBIT") {
     setForm((prev) => ({
       ...prev,
-      lines: [...prev.lines, makeLine(accounts[0]?.id ?? 0, prev.currency ?? "BDT", prev.exchange_rate ?? "1", entryType)],
+      lines: [...prev.lines, makeLine(0, prev.currency ?? "BDT", prev.exchange_rate ?? "1", entryType)],
     }));
   }
 
@@ -182,7 +240,7 @@ export function VouchersPage() {
     const amount = Math.abs(diff).toFixed(2);
     setForm((prev) => ({
       ...prev,
-      lines: [...prev.lines, { ...makeLine(accounts[0]?.id ?? 0, prev.currency ?? "BDT", prev.exchange_rate ?? "1", entryType), amount, notes: "Auto balance line" }],
+      lines: [...prev.lines, { ...makeLine(0, prev.currency ?? "BDT", prev.exchange_rate ?? "1", entryType), amount, notes: "Auto balance line" }],
     }));
     setSuccess("Auto-balance line added.");
   }
@@ -206,6 +264,8 @@ export function VouchersPage() {
     setEditingVoucherId(null);
     setMultiCurrency(false);
     setLiveRateStatus("idle");
+    billWiseFetchedRef.current.clear();
+    setAccountBillWiseMap({});
     setForm({
       voucher_type: voucherTypes[0] ?? "JOURNAL",
       voucher_date: new Date().toISOString().slice(0, 10),
@@ -214,9 +274,10 @@ export function VouchersPage() {
       currency: "BDT",
       base_currency: "BDT",
       exchange_rate: "1",
+      exchange_rate_source: undefined,
       trade_case_id: undefined,
       btb_lc_id: undefined,
-      lines: [makeLine(accounts[0]?.id ?? 0, "BDT", "1", "DEBIT")],
+      lines: [makeLine(0, "BDT", "1", "DEBIT")],
     });
   }
 
@@ -229,7 +290,11 @@ export function VouchersPage() {
       const res = await fetch(`https://open.er-api.com/v6/latest/${cur}`);
       const json = await res.json();
       if (json.result === "success" && json.rates?.[base]) {
-        setForm((p) => ({ ...p, exchange_rate: String(json.rates[base]), exchange_rate_source: `open.er-api.com ${new Date().toISOString().slice(0, 10)}` }));
+        setForm((p) => ({
+          ...p,
+          exchange_rate: String(json.rates[base]),
+          exchange_rate_source: `open.er-api.com ${new Date().toISOString().slice(0, 10)}`,
+        }));
         setLiveRateStatus("fetched");
       } else {
         setLiveRateStatus("error");
@@ -257,13 +322,17 @@ export function VouchersPage() {
           lines: form.lines,
         });
       } else {
-        voucher = await api.createVoucher(form);
+        const createPayload: VoucherCreate = {
+          ...form,
+          exchange_rate_source: multiCurrency ? form.exchange_rate_source ?? "system" : undefined,
+        };
+        voucher = await api.createVoucher(createPayload);
       }
       if (quickSubmit) await api.updateVoucherStatus(voucher.id, "SUBMITTED");
       setSuccess(quickSubmit ? "Voucher saved and submitted." : editingVoucherId ? "Voucher updated." : "Voucher created.");
       resetForm();
       setShowCreate(false);
-      await load();
+      await loadList();
     } catch (e) {
       setError((e as Error).message);
     }
@@ -274,25 +343,50 @@ export function VouchersPage() {
     await submitVoucher(false);
   }
 
-  async function takeAction(voucherId: number, action: string) {
-    setError(null);
-    setSuccess(null);
-    try {
-      if (action === "post") await api.postVoucher(voucherId);
-      else if (action === "reverse") await api.reverseVoucher(voucherId);
-      else {
-        const nextStatus = ACTION_TO_STATUS[action];
-        if (!nextStatus) throw new Error(`Unsupported action: ${action}`);
-        await api.updateVoucherStatus(voucherId, nextStatus);
+  const runListWorkflowAction = useCallback(
+    async (voucherId: number, action: string, reason: string) => {
+      setError(null);
+      setSuccess(null);
+      try {
+        if (action === "post") {
+          const v = await api.postVoucher(voucherId);
+          if (v.control_warnings?.length) {
+            setSuccess(`Posted. Review: ${v.control_warnings.join(" ")}`);
+            setOpenActionsId(null);
+            await loadList();
+            return;
+          }
+        } else if (action === "reverse") {
+          await api.reverseVoucher(voucherId, { reason: reason.trim() || "Reversal" });
+        }
+        else if (action === "cancel_posting") await api.cancelVoucherPosting(voucherId);
+        else {
+          const nextStatus = ACTION_TO_STATUS[action];
+          if (!nextStatus) throw new Error(`Unsupported action: ${action}`);
+          await api.updateVoucherStatus(voucherId, nextStatus);
+        }
+        const label = ACTION_LABEL[action] ?? action;
+        setSuccess(reason.trim() ? `Action complete: ${label} — ${reason.trim()}` : `Action complete: ${label}`);
+        setOpenActionsId(null);
+        await loadList();
+      } catch (e) {
+        setError((e as Error).message);
       }
-      setSuccess(`Action complete: ${ACTION_LABEL[action] ?? action}`);
-      await load();
-    } catch (e) {
-      setError((e as Error).message);
+    },
+    [loadList],
+  );
+
+  function takeAction(voucherId: number, action: string) {
+    if (ACTIONS_NEEDING_REASON.has(action)) {
+      setPendingWorkflowAction({ voucherId, action });
+      return;
     }
+    void runListWorkflowAction(voucherId, action, "");
   }
 
-  function startEdit(voucher: VoucherResponse) {
+  const startEdit = useCallback((voucher: VoucherResponse) => {
+    billWiseFetchedRef.current.clear();
+    setAccountBillWiseMap({});
     setEditingVoucherId(voucher.id);
     const isMc = voucher.currency !== voucher.base_currency;
     setMultiCurrency(isMc);
@@ -305,6 +399,7 @@ export function VouchersPage() {
       currency: voucher.currency,
       base_currency: voucher.base_currency,
       exchange_rate: voucher.exchange_rate,
+      exchange_rate_source: voucher.exchange_rate_source ?? undefined,
       trade_case_id: voucher.trade_case_id,
       btb_lc_id: voucher.btb_lc_id,
       lines: voucher.lines.map((line) => ({
@@ -321,14 +416,42 @@ export function VouchersPage() {
       })),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }
+  }, []);
+
+  const editIdFromUrl = searchParams.get("edit");
+  useEffect(() => {
+    if (!editIdFromUrl) return;
+    const id = Number(editIdFromUrl);
+    if (!Number.isFinite(id) || id <= 0) return;
+    let cancelled = false;
+    void api
+      .getVoucher(id)
+      .then((v) => {
+        if (cancelled) return;
+        startEdit(v);
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete("edit");
+            return next;
+          },
+          { replace: true },
+        );
+      })
+      .catch((e) => {
+        logApiError("VouchersPage.openEditFromUrl", e);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editIdFromUrl, setSearchParams, startEdit]);
 
   async function handleDelete(voucherId: number) {
     if (!window.confirm("Delete this voucher? This cannot be undone.")) return;
     try {
       await api.deleteVoucher(voucherId);
       setSuccess("Voucher deleted.");
-      await load();
+      await loadList();
     } catch (e) {
       setError((e as Error).message);
     }
@@ -338,20 +461,36 @@ export function VouchersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Vouchers</h1>
-          <p className="mt-1 text-sm text-text-muted">Create, manage and track accounting vouchers with multi-currency, cost center and digital verification.</p>
-        </div>
-        <button
-          type="button"
-          className="rounded-lg bg-brand-primary px-5 py-2.5 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
-          onClick={() => { resetForm(); setShowCreate(true); }}
-        >
-          + New Voucher
-        </button>
-      </div>
+      <AppPageHeader
+        title="Vouchers"
+        description="Create, manage and track accounting vouchers with multi-currency, cost centers, bill-wise accounts, and digital verification."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/app/accounts/reports/voucher-analytics"
+              className="rounded-lg border border-border-strong px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
+            >
+              Analytics
+            </Link>
+            <Link
+              to="/app/accounts/vouchers/approval-queue"
+              className="rounded-lg border border-border-strong px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
+            >
+              Approval queue
+            </Link>
+            <button
+              type="button"
+              className="rounded-lg bg-brand-primary px-5 py-2.5 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+              onClick={() => {
+                resetForm();
+                setShowCreate(true);
+              }}
+            >
+              + New Voucher
+            </button>
+          </div>
+        }
+      />
 
       {error ? <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
       {success ? <div className="rounded-lg border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
@@ -367,6 +506,16 @@ export function VouchersPage() {
                 Cancel
               </button>
             </div>
+
+            {periodLock?.locked ? (
+              <div className="mb-4 rounded-lg border border-status-warning/30 bg-status-warning-subtle px-3 py-2 text-sm text-status-warning-foreground">
+                <strong>Accounting period:</strong> {periodLock.reason ?? "This date cannot be posted."} Posting will fail until the period is open or the date is changed.
+              </div>
+            ) : periodLock && !periodLock.locked && periodLock.period_name ? (
+              <div className="mb-4 rounded-lg border border-status-success/20 bg-status-success-subtle px-3 py-2 text-xs text-status-success-foreground">
+                Open accounting period: <strong>{periodLock.period_name}</strong>
+              </div>
+            ) : null}
 
             <div className="grid gap-4 md:grid-cols-3">
               <div>
@@ -388,14 +537,34 @@ export function VouchersPage() {
                 <label className="mb-1 block text-xs font-medium text-text-secondary">Narration <span className="text-status-danger-foreground">*</span></label>
                 <input className={CTL} placeholder="Enter narration (required for audit)" value={form.description ?? ""} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} required />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="md:col-span-3 grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-text-secondary">Trade Case</label>
-                  <input type="number" className={CTL} placeholder="ID" value={form.trade_case_id ?? ""} onChange={(e) => setForm((p) => ({ ...p, trade_case_id: e.target.value ? Number(e.target.value) : undefined }))} />
+                  <label className="mb-1 block text-xs font-medium text-text-secondary">Trade case (optional)</label>
+                  <RemoteSearchSelect<TradeCaseRow>
+                    className={CTL}
+                    placeholder="Search reference, stage…"
+                    value={form.trade_case_id && form.trade_case_id > 0 ? form.trade_case_id : ""}
+                    onChange={(next) =>
+                      setForm((p) => ({ ...p, trade_case_id: typeof next === "number" && next > 0 ? next : undefined }))
+                    }
+                    fetchPage={fetchTradeCasePage}
+                    hydrateById={hydrateTradeCase}
+                    allowClear
+                  />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-text-secondary">BTB LC</label>
-                  <input type="number" className={CTL} placeholder="ID" value={form.btb_lc_id ?? ""} onChange={(e) => setForm((p) => ({ ...p, btb_lc_id: e.target.value ? Number(e.target.value) : undefined }))} />
+                  <label className="mb-1 block text-xs font-medium text-text-secondary">BTB LC (optional)</label>
+                  <RemoteSearchSelect<BtbLcRow>
+                    className={CTL}
+                    placeholder="Search LC ref / number…"
+                    value={form.btb_lc_id && form.btb_lc_id > 0 ? form.btb_lc_id : ""}
+                    onChange={(next) =>
+                      setForm((p) => ({ ...p, btb_lc_id: typeof next === "number" && next > 0 ? next : undefined }))
+                    }
+                    fetchPage={fetchBtbLcPage}
+                    hydrateById={hydrateBtbLc}
+                    allowClear
+                  />
                 </div>
               </div>
             </div>
@@ -413,7 +582,13 @@ export function VouchersPage() {
                   onChange={(e) => {
                     setMultiCurrency(e.target.checked);
                     if (!e.target.checked) {
-                      setForm((p) => ({ ...p, currency: "BDT", base_currency: "BDT", exchange_rate: "1" }));
+                      setForm((p) => ({
+                        ...p,
+                        currency: "BDT",
+                        base_currency: "BDT",
+                        exchange_rate: "1",
+                        exchange_rate_source: undefined,
+                      }));
                       setLiveRateStatus("idle");
                     }
                   }}
@@ -454,7 +629,10 @@ export function VouchersPage() {
                       step="0.000001"
                       className={CTL}
                       value={form.exchange_rate ?? "1"}
-                      onChange={(e) => { setForm((p) => ({ ...p, exchange_rate: e.target.value })); setLiveRateStatus("idle"); }}
+                      onChange={(e) => {
+                        setForm((p) => ({ ...p, exchange_rate: e.target.value, exchange_rate_source: "manual" }));
+                        setLiveRateStatus("idle");
+                      }}
                     />
                     <button
                       type="button"
@@ -511,20 +689,36 @@ export function VouchersPage() {
                   {form.lines.map((line, idx) => (
                     <tr key={idx} className="border-t border-border">
                       <td className="px-3 py-2 text-center text-text-muted">{idx + 1}</td>
-                      <td className="px-3 py-2">
-                        <select className={CTL} value={line.account_id} onChange={(e) => setLine(idx, { account_id: Number(e.target.value) })}>
-                          <option value={0} disabled>Select account</option>
-                          {accounts.map((a) => <option key={a.id} value={a.id}>{a.account_number} — {a.name}{a.enable_bill_wise ? " [Bill-Wise]" : ""}</option>)}
-                        </select>
-                        {line.account_id > 0 && accounts.find((a) => a.id === line.account_id)?.enable_bill_wise ? (
+                      <td className="px-3 py-2 min-w-[14rem]">
+                        <RemoteSearchSelect<ChartOfAccountResponse>
+                          className={CTL}
+                          placeholder="Search account number or name…"
+                          value={line.account_id > 0 ? line.account_id : ""}
+                          onChange={(next, opt) => {
+                            const id = typeof next === "number" && next > 0 ? next : 0;
+                            setLine(idx, { account_id: id });
+                            const meta = opt?.meta;
+                            if (meta && id > 0) {
+                              setAccountBillWiseMap((m) => ({ ...m, [id]: Boolean(meta.enable_bill_wise) }));
+                            }
+                          }}
+                          fetchPage={fetchChartAccountPage}
+                          hydrateById={hydrateChartAccount}
+                        />
+                        {line.account_id > 0 && accountBillWiseMap[line.account_id] ? (
                           <span className="mt-0.5 inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">Bill-Wise Enabled</span>
                         ) : null}
                       </td>
-                      <td className="px-3 py-2">
-                        <select className={CTL} value={line.cost_center_id ?? ""} onChange={(e) => setLine(idx, { cost_center_id: e.target.value ? Number(e.target.value) : null })}>
-                          <option value="">None</option>
-                          {costCenters.map((c) => <option key={c.id} value={c.id}>{c.center_code} — {c.name}</option>)}
-                        </select>
+                      <td className="px-3 py-2 min-w-[12rem]">
+                        <RemoteSearchSelect
+                          className={CTL}
+                          placeholder="Search cost center (optional)…"
+                          value={line.cost_center_id ?? ""}
+                          onChange={(next) => setLine(idx, { cost_center_id: next === "" ? null : Number(next) })}
+                          fetchPage={fetchCostCenterPage}
+                          hydrateById={hydrateCostCenter}
+                          allowClear
+                        />
                       </td>
                       <td className="px-3 py-2">
                         <input className={`${CTL} text-right`} type="number" min="0" step="0.01" placeholder="0.00" value={line.entry_type === "DEBIT" ? line.amount : ""} onChange={(e) => setLineSideAmount(idx, "DEBIT", e.target.value)} />
@@ -549,7 +743,7 @@ export function VouchersPage() {
           </div>
 
           {/* Card: Totals & Actions */}
-          <div className="rounded-xl border border-border bg-surface-raised p-5">
+          <div className="sticky bottom-0 z-20 rounded-xl border border-border bg-surface-raised p-5 shadow-lg md:static md:shadow-none">
             <div className="grid gap-4 md:grid-cols-4 items-center">
               <div className="text-sm">Debit Total: <span className="font-semibold text-text-primary">{debitTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
               <div className="text-sm">Credit Total: <span className="font-semibold text-text-primary">{creditTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
@@ -608,10 +802,10 @@ export function VouchersPage() {
             <tbody>
               {loading ? (
                 <tr><td className="px-3 py-5 text-text-muted" colSpan={10}>Loading vouchers...</td></tr>
-              ) : filteredRows.length === 0 ? (
+              ) : rows.length === 0 ? (
                 <tr><td className="px-3 py-5 text-text-muted" colSpan={10}>No vouchers found.</td></tr>
               ) : (
-                filteredRows.map((row) => {
+                rows.map((row) => {
                   const amount = row.lines.filter((l) => l.entry_type === "DEBIT").reduce((s, l) => s + Number(l.amount || 0), 0);
                   return (
                     <tr
@@ -659,7 +853,35 @@ export function VouchersPage() {
             </tbody>
           </table>
         </div>
+        {!loading && totalRows > 0 ? (
+          <DataTablePagination
+            page={page}
+            pageSize={pageSize}
+            total={totalRows}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            allowedSizes={allowedSizes}
+          />
+        ) : null}
       </div>
+
+      <VoucherActionReasonModal
+        open={pendingWorkflowAction != null}
+        title={
+          pendingWorkflowAction
+            ? `Confirm ${ACTION_LABEL[pendingWorkflowAction.action] ?? pendingWorkflowAction.action}`
+            : "Confirm"
+        }
+        description="A short reason helps your team during review. Full audit storage in the database is planned (see docs/voucher_backend_gaps.md)."
+        confirmLabel={pendingWorkflowAction ? ACTION_LABEL[pendingWorkflowAction.action] ?? "Confirm" : "Confirm"}
+        onClose={() => setPendingWorkflowAction(null)}
+        onConfirm={(reason) => {
+          if (!pendingWorkflowAction) return;
+          const { voucherId, action } = pendingWorkflowAction;
+          setPendingWorkflowAction(null);
+          void runListWorkflowAction(voucherId, action, reason);
+        }}
+      />
     </div>
   );
 }

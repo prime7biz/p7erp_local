@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
+from app.modules.finance.voucher_controls import allocate_series_voucher_number
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import Tenant, User
@@ -324,12 +325,12 @@ async def _create_lcj_voucher(
         )
     await _validate_posting_account(db, tenant_id, debit_account_id)
     await _validate_posting_account(db, tenant_id, credit_account_id)
-    voucher_number = await next_tenant_code(
+    voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
         db,
-        model=Voucher,
         tenant_id=tenant_id,
-        prefix="VCH-",
-        width=4,
+        voucher_date=voucher_date,
+        voucher_type="LCJ",
+        branch_code="MAIN",
     )
     voucher = Voucher(
         tenant_id=tenant_id,
@@ -340,6 +341,13 @@ async def _create_lcj_voucher(
         description=description,
         reference=reference,
         btb_lc_id=btb_lc_id,
+        branch_code="MAIN",
+        fiscal_year=fy,
+        series_sequence=series_seq,
+        number_series_key=series_key,
+        source_module="LC_COMMERCIAL",
+        source_module_ref=f"btb_lc:{btb_lc_id}" if btb_lc_id else None,
+        allow_manual_edit=False,
         created_by=user_id,
     )
     db.add(voucher)

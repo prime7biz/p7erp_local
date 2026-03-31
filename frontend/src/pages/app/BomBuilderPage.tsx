@@ -2,13 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { logApiError } from "@/utils/logApiError";
 import { BomLineRow } from "@/components/merch/BomLineRow";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import {
+  fetchInventoryItemPage,
+  fetchVendorPage,
+  hydrateInventoryItem,
+  hydrateVendor,
+} from "@/lib/remoteSelectFetchers";
 import {
   api,
   type BomResponse,
   type BomDetailResponse,
   type StyleResponse,
   type InventoryItemResponse,
-  type VendorResponse,
   type ConsumptionPlanResponse,
   type OrderResponse,
   type WastageReportRowResponse,
@@ -46,9 +52,9 @@ export function BomBuilderPage() {
   const [activeTab, setActiveTab] = useState<BomCommandTab>("bom_lines");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [inventoryItems, setInventoryItems] = useState<InventoryItemResponse[]>([]);
-  const [vendors, setVendors] = useState<VendorResponse[]>([]);
   const [orders, setOrders] = useState<OrderResponse[]>([]);
+  /** Resolved inventory rows for BOM lines (default_cost / display); loaded per BOM, not full catalog. */
+  const [itemDetailById, setItemDetailById] = useState<Map<number, InventoryItemResponse>>(() => new Map());
   const [consumptionPlans, setConsumptionPlans] = useState<ConsumptionPlanResponse[]>([]);
   const [consumptionPlansTotal, setConsumptionPlansTotal] = useState<number | null>(null);
   const [consumptionRows, setConsumptionRows] = useState<ConsumptionOrderSummaryRow[]>([]);
@@ -180,11 +186,48 @@ export function BomBuilderPage() {
     );
   }, [styles, styleQuery]);
 
-  const itemMap = useMemo(() => {
-    const map = new Map<number, InventoryItemResponse>();
-    for (const item of inventoryItems) map.set(item.id, item);
-    return map;
-  }, [inventoryItems]);
+  /** When line item_id links change under the same BOM id, refetch costs for the grid. */
+  const bomItemsLinkSignature = useMemo(
+    () =>
+      selectedBom
+        ? selectedBom.items
+            .map((l) => `${l.id}:${l.item_id ?? ""}`)
+            .sort()
+            .join("|")
+        : "",
+    [selectedBom],
+  );
+
+  useEffect(() => {
+    if (!selectedBom) return;
+    const ids = [
+      ...new Set(selectedBom.items.map((l) => l.item_id).filter((x): x is number => x != null)),
+    ];
+    if (ids.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      ids.map(async (id) => {
+        try {
+          const it = await api.getInventoryItem(id);
+          return [id, it] as const;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((pairs) => {
+      if (cancelled) return;
+      setItemDetailById((prev) => {
+        const next = new Map(prev);
+        for (const p of pairs) {
+          if (p) next.set(p[0], p[1]);
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedBom, bomItemsLinkSignature]);
 
   const selectedStyle = useMemo(() => {
     const selectedStyleId = selectedBom?.bom.style_id ?? styleId;
@@ -208,15 +251,9 @@ export function BomBuilderPage() {
 
   const loadStylesAndMasters = useCallback(async () => {
     try {
-      const [styleList, itemRows, vendorRows] = await Promise.all([
-        api.listStylesWithTotal({ limit: 500 }),
-        api.listInventoryItemsPaginated({ page: 1, page_size: 500 }),
-        api.listVendorsPaginated({ page: 1, page_size: 500 }),
-      ]);
+      const styleList = await api.listStylesWithTotal({ limit: 500 });
       setStyles(styleList.rows);
       setStylesTotal(styleList.total);
-      setInventoryItems(itemRows.items);
-      setVendors(vendorRows.items);
 
       if (initialStyleIdRef.current && styleList.rows.some((s) => s.id === initialStyleIdRef.current)) {
         setStyleId(initialStyleIdRef.current);
@@ -614,18 +651,14 @@ export function BomBuilderPage() {
                     <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
                       <div className="xl:col-span-2">
                         <label className="mb-0.5 block text-xs font-medium text-text-muted">Item (inventory)</label>
-                        <select
+                        <RemoteSearchSelect
                           value={selectedItemId}
-                          onChange={(e) => setSelectedItemId(e.target.value === "" ? "" : Number(e.target.value))}
-                          className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
-                        >
-                          <option value="">Select inventory item…</option>
-                          {inventoryItems.map((it) => (
-                            <option key={it.id} value={it.id}>
-                              {it.item_code} · {it.name}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(id) => setSelectedItemId(id)}
+                          placeholder="Search code or name…"
+                          fetchPage={fetchInventoryItemPage}
+                          hydrateById={hydrateInventoryItem}
+                          pageSize={40}
+                        />
                       </div>
                       <div className="xl:col-span-2">
                         <label className="mb-0.5 block text-xs font-medium text-text-muted">Description (optional override)</label>
@@ -712,18 +745,14 @@ export function BomBuilderPage() {
                       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
                         <div className="xl:col-span-2">
                           <label className="mb-0.5 block text-xs font-medium text-text-muted">Item (inventory)</label>
-                          <select
+                          <RemoteSearchSelect
                             value={editSelectedItemId}
-                            onChange={(e) => setEditSelectedItemId(e.target.value === "" ? "" : Number(e.target.value))}
-                            className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
-                          >
-                            <option value="">Free text only</option>
-                            {inventoryItems.map((it) => (
-                              <option key={it.id} value={it.id}>
-                                {it.item_code} · {it.name}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(id) => setEditSelectedItemId(id)}
+                            placeholder="Search or clear for free text…"
+                            fetchPage={fetchInventoryItemPage}
+                            hydrateById={hydrateInventoryItem}
+                            pageSize={40}
+                          />
                         </div>
                         <div className="xl:col-span-2">
                           <label className="mb-0.5 block text-xs font-medium text-text-muted">Description</label>
@@ -811,7 +840,7 @@ export function BomBuilderPage() {
                         <tbody>
                           {selectedBom.items.map((line) => {
                             const requiredQty = computeRequiredQty(line);
-                            const linkedItem = line.item_id != null ? itemMap.get(line.item_id) : undefined;
+                            const linkedItem = line.item_id != null ? itemDetailById.get(line.item_id) : undefined;
                             const unitCost = parseNumber(linkedItem?.default_cost || "0");
                             const estCost = requiredQty * unitCost;
                             return (
@@ -867,18 +896,14 @@ export function BomBuilderPage() {
                       </div>
                       <div>
                         <label className="mb-0.5 block text-xs font-medium text-text-muted">Vendor (optional)</label>
-                        <select
+                        <RemoteSearchSelect
                           value={poVendorId}
-                          onChange={(e) => setPoVendorId(e.target.value === "" ? "" : Number(e.target.value))}
-                          className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
-                        >
-                          <option value="">No vendor selected</option>
-                          {vendors.map((vendor) => (
-                            <option key={vendor.id} value={vendor.id}>
-                              {vendor.vendor_code} · {vendor.name}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(id) => setPoVendorId(id)}
+                          placeholder="Search vendor code or name…"
+                          fetchPage={fetchVendorPage}
+                          hydrateById={hydrateVendor}
+                          pageSize={40}
+                        />
                       </div>
                       <div>
                         <label className="mb-0.5 block text-xs font-medium text-text-muted">Supplier name fallback</label>
@@ -949,7 +974,7 @@ export function BomBuilderPage() {
                           <tbody>
                             {bomItemsWithInventory.map((line) => {
                               const requiredQty = computeRequiredQty(line);
-                              const linkedItem = line.item_id != null ? itemMap.get(line.item_id) : undefined;
+                              const linkedItem = line.item_id != null ? itemDetailById.get(line.item_id) : undefined;
                               const unitCost = parseNumber(linkedItem?.default_cost || "0");
                               return (
                                 <tr key={line.id} className="border-b border-border-subtle last:border-0">

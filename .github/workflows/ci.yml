@@ -146,6 +146,18 @@ jobs:
 
       - name: Validate docker-compose.yml
         run: docker compose -f docker-compose.yml config > /dev/null
+        env:
+          VITE_API_BASE_URL: http://localhost:8000
+          VITE_ALLOWED_HOSTS: localhost,127.0.0.1
+          MCP_HUMAN_APPROVAL_SECRET: dummy_secret_for_ci
+          AI_CONFIRMATION_TOKEN_PEPPER: dummy_pepper_for_ci
 
       - name: Validate docker-compose.prod.yml
         run: docker compose -f docker-compose.prod.yml config > /dev/null
+        env:
+          JWT_SECRET: dummy_jwt_secret_for_ci
+          MCP_HUMAN_APPROVAL_SECRET: dummy_secret_for_ci
+          AI_CONFIRMATION_TOKEN_PEPPER: dummy_pepper_for_ci
+          CORS_ORIGINS: http://localhost
+          BACKEND_IMAGE: dummy_image
+          FRONTEND_IMAGE: dummy_image

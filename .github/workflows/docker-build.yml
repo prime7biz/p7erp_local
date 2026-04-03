@@ -1,9 +1,9 @@
 # Build and push application images to Docker Hub.
 #
-# Repo secrets (Settings → Secrets and variables → Actions):
-#   DOCKERHUB_USERNAME – Docker Hub username or organization name (also used as image namespace)
-#   DOCKERHUB_TOKEN    – Docker Hub access token (recommended; not your account password)
-#   VITE_API_BASE_URL  – Passed as build-arg to frontend images (same as deploy workflow)
+# Repo secrets (Settings → Secrets and variables → Actions → Repository secrets):
+#   DOCKERHUB_TOKEN   – Docker Hub access token (required; if blank, login fails with "Username and password required")
+#   VITE_API_BASE_URL – Passed as build-arg to frontend images (same as deploy workflow)
+# Docker Hub namespace is fixed to prime7biz (matches deploy-admin.yml).
 #
 # Triggers: pushes to main/dev/develop, version tags v*, and manual workflow_dispatch.
 
@@ -35,14 +35,14 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: prime7biz
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata (backend)
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/p7erp-backend
+          images: prime7biz/p7erp-backend
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -53,7 +53,7 @@ jobs:
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/p7erp-frontend
+          images: prime7biz/p7erp-frontend
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -64,7 +64,7 @@ jobs:
         id: meta-frontend-admin
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/p7erp-frontend-admin
+          images: prime7biz/p7erp-frontend-admin
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}

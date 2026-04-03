@@ -4,6 +4,8 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     restart: always
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-p7erp}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-p7erp}
@@ -19,6 +21,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: always
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -101,6 +105,19 @@ services:
       - backend
     ports:
       - "5173:80"
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/primeadmin/.docker/config.json:/config.json
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_LABEL_ENABLE=false
+    command: --include-stopped --revive-stopped --interval 300
 
 volumes:
   postgres_data:

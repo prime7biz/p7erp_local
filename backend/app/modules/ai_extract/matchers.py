@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +29,14 @@ def _score_match(query: str, name: str, code: str | None = None, ref: str | None
     if name_l.startswith(q[: min(4, len(q))]) if len(q) >= 4 else False:
         return 0.72
     return 0.65
+
+
+def _max_score(score_or_scores: float | Iterable[float]) -> float:
+    """Accept a single score or an iterable of scores safely."""
+    if isinstance(score_or_scores, (int, float)):
+        return float(score_or_scores)
+    scores = [float(score) for score in score_or_scores]
+    return max(scores) if scores else 0.0
 
 
 async def match_customers(
@@ -103,7 +113,7 @@ async def match_styles(
     rows = result.scalars().all()
     scored: list[tuple[float, GarmentStyle]] = []
     for s in rows:
-        score = max(
+        score = _max_score(
             _score_match(t, s.name, s.style_code, s.buyer_style_ref),
         )
         if score > 0:

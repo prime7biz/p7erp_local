@@ -20,6 +20,7 @@ from app.models.tenant import TenantType
 from app.models.user import Role
 from app.models.inquiry_ai_suggestion import InquiryAiSuggestionBatch, InquiryAiSuggestionItem
 from app.modules.ai_extract.schemas import ExtractedField, InquiryExtractionResponse
+from app.modules.ai_extract.matchers import match_styles
 from app.modules.inquiries import inquiry_ai_batches as iq_batches
 from app.modules.inquiries.inquiry_ai_authz import require_inquiry_ai_capability
 from app.modules.inquiries.inquiry_ai_schemas import InquiryAiDedupeRequest, InquiryAiValidateRequest
@@ -259,6 +260,16 @@ async def test_apply_updates_season(db_session_integration):
     assert "season" in out["applied_fields"]
     await db.refresh(inquiry)
     assert inquiry.season == "FW27"
+
+
+@pytest.mark.asyncio
+async def test_match_styles_accepts_single_score_value(db_session_integration):
+    db = db_session_integration
+    tenant, _user, _customer, style, _inquiry = await _seed_tenant_user_inquiry(db)
+    rows = await match_styles(db, tenant.id, style.style_code)
+    assert rows
+    assert rows[0]["id"] == style.id
+    assert rows[0]["score"] > 0
 
 
 @pytest.mark.asyncio

@@ -1,15 +1,12 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.config import get_settings
-from app.database import get_db
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
 from app.modules.tenant.router import router as tenant_router
@@ -248,6 +245,8 @@ app.include_router(tenant_support_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/health")
-async def health(db: AsyncSession = Depends(get_db)):
-    await db.execute(text("SELECT 1"))
-    return {"status": "ok", "db": "ok"}
+async def health():
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }

@@ -5,6 +5,7 @@
 #   VITE_API_BASE_URL – Passed as build-arg to frontend images (same as deploy workflow)
 # Docker Hub namespace is fixed to prime7biz (matches deploy-admin.yml).
 #
+# Tags: :latest on main and on v* tag pushes; :v* on tag pushes; branch name on dev/develop (no :latest).
 # Triggers: pushes to main/dev/develop, version tags v*, and manual workflow_dispatch.
 
 name: Docker Hub Build
@@ -44,10 +45,9 @@ jobs:
         with:
           images: prime7biz/p7erp-backend
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+            type=ref,event=tag
+            type=ref,event=branch,enable=${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
       - name: Extract metadata (frontend)
         id: meta-frontend
@@ -55,10 +55,9 @@ jobs:
         with:
           images: prime7biz/p7erp-frontend
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+            type=ref,event=tag
+            type=ref,event=branch,enable=${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
       - name: Extract metadata (frontend-admin)
         id: meta-frontend-admin
@@ -66,10 +65,9 @@ jobs:
         with:
           images: prime7biz/p7erp-frontend-admin
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+            type=ref,event=tag
+            type=ref,event=branch,enable=${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
       - name: Build and push backend
         uses: docker/build-push-action@v5

@@ -92,8 +92,8 @@ services:
       ollama:
         condition: service_healthy
       # Backend must not wait for ollama-init (large model pull); otherwise API is down for a long time.
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
     volumes:
       - backend_media:/app/media
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4

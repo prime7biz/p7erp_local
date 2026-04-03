@@ -1,3 +1,4 @@
+# Semantic versioning: push v* tags for releases; images tagged :latest and :${{ github.ref_name }}.
 name: Build and Push Admin UI
 
 on:
@@ -25,19 +26,11 @@ jobs:
           username: prime7biz
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: prime7biz/prime7-admin
-          tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
-            type=ref,event=tag
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: ./frontend-admin
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            prime7biz/p7erp-frontend-admin:latest
+            prime7biz/p7erp-frontend-admin:${{ github.ref_name }}

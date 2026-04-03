@@ -1,0 +1,47 @@
+# Docker build context exclusions (aligned with .gitignore where useful).
+# Required for faster / smaller sends to the daemon when context is repo root.
+
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.venv/
+venv/
+env/
+
+# Build / dist
+dist/
+build/
+*.egg-info/
+*.egg
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs / debug
+*.log
+debug-*.log
+
+# Runtime uploads (tenant/user content)
+backend/media/
+backups/
+
+# Secrets / local env (never bake into images)
+.env
+.env.local
+.env.*.local
+
+# Database / local data
+*.db
+*.sqlite3
+
+# Git metadata (smaller context when building from repo root)
+.git/

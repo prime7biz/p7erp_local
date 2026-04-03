@@ -6,6 +6,7 @@ import type {
 import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+export const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev";
 
 export type TenantType = "manufacturer" | "buying_house" | "both";
 export type CommissionMode = "INCLUDE" | "EXCLUDE";
@@ -37,8 +38,25 @@ export interface ActiveAnnouncementItem {
   type: string;
 }
 
+export interface PlatformHealthResponse {
+  status: string;
+  environment: string;
+  version: string;
+  components: {
+    api: string;
+    database: string;
+    redis: string;
+  };
+  latency_ms: number;
+  timestamp: string;
+}
+
 export async function getActiveAnnouncements(): Promise<{ items: ActiveAnnouncementItem[] }> {
   return request<{ items: ActiveAnnouncementItem[] }>("/api/v1/announcements/active");
+}
+
+export async function getPlatformHealth(): Promise<PlatformHealthResponse> {
+  return requestPublic<PlatformHealthResponse>("/health");
 }
 
 /** Platform (P7) support — tenant portal tickets to the operations team. */

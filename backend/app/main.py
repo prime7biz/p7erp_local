@@ -1,10 +1,13 @@
 import asyncio
 import logging
+import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.config import get_settings
 from app.modules.audit.router import router as audit_router
@@ -246,7 +249,45 @@ app.include_router(tenant_support_router, prefix=settings.api_v1_prefix)
 
 @app.get("/health")
 async def health():
+    started_at = time.perf_counter()
+    overall_status = "healthy"
+    components: dict[str, str] = {"api": "healthy"}
+
+    try:
+        from app.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            await db.execute(text("SELECT 1"))
+        components["database"] = "healthy"
+    except Exception:
+        components["database"] = "unhealthy"
+        overall_status = "degraded"
+
+    redis_url = (settings.redis_url or "").strip()
+    if redis_url:
+        try:
+            from app.common.redis_client import get_redis
+
+            redis_client = get_redis()
+            if redis_client is None:
+                raise RuntimeError("Redis client is not initialized")
+            pong = await redis_client.ping()
+            if pong:
+                components["redis"] = "healthy"
+            else:
+                components["redis"] = "unhealthy"
+                overall_status = "degraded"
+        except Exception:
+            components["redis"] = "unhealthy"
+            overall_status = "degraded"
+    else:
+        components["redis"] = "disabled"
+
     return {
-        "status": "healthy",
+        "status": overall_status,
+        "environment": settings.app_env,
+        "version": os.getenv("APP_VERSION", "dev"),
+        "components": components,
+        "latency_ms": round((time.perf_counter() - started_at) * 1000, 2),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }

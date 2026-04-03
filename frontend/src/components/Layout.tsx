@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { getToken, getTenantId } from "@/api/client";
+import { APP_VERSION, getActiveAnnouncements, getPlatformHealth, getToken, getTenantId } from "@/api/client";
+import type { PlatformHealthResponse } from "@/api/client";
 import type { TenantType } from "@/api/client";
 import {
   isNavItemVisibleForTenant,
@@ -12,7 +13,6 @@ import {
 } from "@/app/sidebarConfig";
 import { useProductionOptionalUnits } from "@/hooks/useProductionOptionalUnits";
 import { prefetchSidebarRoute, prefetchTopSearchRoutes } from "@/app/prefetchRoutes";
-import { getActiveAnnouncements } from "@/api/client";
 import { AppBottomNav } from "@/components/navigation/AppBottomNav";
 import {
   Bell,
@@ -490,21 +490,61 @@ function TopHeader({
 
 function AppFooter() {
   const [now, setNow] = useState(new Date());
+  const [health, setHealth] = useState<PlatformHealthResponse | null>(null);
+  const [healthError, setHealthError] = useState(false);
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const fetchHealth = async () => {
+      try {
+        const next = await getPlatformHealth();
+        if (!cancelled) {
+          setHealth(next);
+          setHealthError(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setHealthError(true);
+        }
+      }
+    };
+    void fetchHealth();
+    const timer = window.setInterval(() => {
+      void fetchHealth();
+    }, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const systemStatusLabel = healthError ? "offline" : health?.status === "healthy" ? "healthy" : "degraded";
+  const systemStatusClass =
+    systemStatusLabel === "healthy"
+      ? "text-status-success"
+      : systemStatusLabel === "degraded"
+        ? "text-amber-600"
+        : "text-status-danger";
+  const dbStatus = health?.components.database ?? "unknown";
+  const redisStatus = health?.components.redis ?? "unknown";
+
   return (
-    <footer className="h-11 border-t border-border bg-surface-subtle px-4 md:px-6 flex items-center justify-between text-xs text-text-muted">
-      <div className="flex items-center gap-4">
-        <span>
-          System Status: <span className="text-status-success font-semibold">99.9%</span>
-        </span>
-        <span className="hidden md:inline">Enterprise-grade security enabled</span>
+    <footer className="h-11 border-t border-border bg-surface-subtle px-4 md:px-6 pr-28 flex items-center gap-6 text-xs text-text-muted">
+      <div className="font-medium text-text-secondary shrink-0">
+        Prime7 ERP · {now.toLocaleDateString()} {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
       </div>
-      <div className="text-right">
-        <span className="font-medium text-text-secondary">Prime7 ERP</span> · {now.toLocaleDateString()} {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+      <div className="shrink-0">
+        System Health: <span className={`font-semibold ${systemStatusClass}`}>{systemStatusLabel}</span>
+      </div>
+      <div className="hidden xl:flex items-center gap-3 truncate">
+        <span>DB: {dbStatus}</span>
+        <span>Redis: {redisStatus}</span>
+        <span>Env: {health?.environment ?? "unknown"}</span>
+        <span>Version: {health?.version || APP_VERSION}</span>
       </div>
     </footer>
   );

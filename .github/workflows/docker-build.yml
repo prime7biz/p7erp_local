@@ -63,6 +63,7 @@ jobs:
             prime7biz/p7erp-frontend:${{ github.ref_name }}
           build-args: |
             VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
+            VITE_APP_VERSION=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

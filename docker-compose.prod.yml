@@ -60,6 +60,7 @@ services:
     restart: always
     environment:
       APP_ENV: ${APP_ENV:-production}
+      APP_VERSION: ${APP_VERSION:-dev}
       DATABASE_URL: postgresql://${POSTGRES_USER:-p7erp}:${POSTGRES_PASSWORD:-p7erp}@postgres:5432/${POSTGRES_DB:-p7erp}
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET}

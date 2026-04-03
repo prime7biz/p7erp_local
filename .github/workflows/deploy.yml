@@ -52,6 +52,7 @@ jobs:
             prime7biz/p7erp-frontend:${{ github.ref_name }}
           build-args: |
             VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
+            VITE_APP_VERSION=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -74,9 +75,10 @@ jobs:
             git pull origin main
             touch .env
             # Clear old pins, then set explicit images (ref is the v* tag for this job, never :latest).
-            sed -i '/^BACKEND_IMAGE=/d;/^FRONTEND_IMAGE=/d' .env
+            sed -i '/^BACKEND_IMAGE=/d;/^FRONTEND_IMAGE=/d;/^APP_VERSION=/d' .env
             echo "BACKEND_IMAGE=prime7biz/p7erp-backend:${{ github.ref_name }}" >> .env
             echo "FRONTEND_IMAGE=prime7biz/p7erp-frontend:${{ github.ref_name }}" >> .env
+            echo "APP_VERSION=${{ github.ref_name }}" >> .env
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
             docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head

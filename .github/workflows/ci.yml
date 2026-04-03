@@ -145,7 +145,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Validate docker-compose.yml
-        run: docker compose config -f docker-compose.yml > /dev/null
+        run: docker compose -f docker-compose.yml config > /dev/null
 
       - name: Validate docker-compose.prod.yml
-        run: docker compose config -f docker-compose.prod.yml > /dev/null
+        run: docker compose -f docker-compose.prod.yml config > /dev/null

@@ -23,7 +23,7 @@ from app.modules.customers import customer_ai_batches as cai_batches
 from app.modules.customers.customer_ai_authz import require_customer_ai_capability
 from app.modules.customers.customer_ai_schemas import CustomerAiDedupeRequest, CustomerAiValidateRequest
 from app.modules.customers.customer_ai_service import ai_dedupe, ai_validate
-from app.modules.ai_extract.schemas import CustomerExtractionField, CustomerExtractionResponse
+from app.modules.ai_extract.schemas import CustomerExtractionResponse, ExtractedField
 
 
 async def _seed_tenant_user_customer(db):
@@ -76,7 +76,7 @@ async def test_tenant_isolation_batch_load(db_session_integration):
         success=True,
         document_type="pdf",
         fields={
-            "contactEmail": CustomerExtractionField(value="x@y.com", confidence=0.9, source="doc"),
+            "contactEmail": ExtractedField(value="x@y.com", confidence=0.9, source="doc"),
         },
         unmapped_text=[],
         warnings=[],
@@ -105,7 +105,7 @@ async def test_discard_blocks_apply(db_session_integration):
         success=True,
         document_type="pdf",
         fields={
-            "contactEmail": CustomerExtractionField(value="new@example.com", confidence=0.9, source="doc"),
+            "contactEmail": ExtractedField(value="new@example.com", confidence=0.9, source="doc"),
         },
         unmapped_text=[],
         warnings=[],
@@ -276,7 +276,7 @@ async def test_finalize_after_create_writes_audit(db_session_integration):
         success=True,
         document_type="pdf",
         fields={
-            "contactEmail": CustomerExtractionField(value="f@example.com", confidence=0.9, source="doc"),
+            "contactEmail": ExtractedField(value="f@example.com", confidence=0.9, source="doc"),
         },
         unmapped_text=[],
         warnings=[],

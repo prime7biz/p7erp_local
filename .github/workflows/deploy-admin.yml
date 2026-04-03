@@ -17,7 +17,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: prime7biz
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push Docker image
@@ -25,4 +25,4 @@ jobs:
         with:
           context: ./frontend-admin
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/prime7-admin:latest
+          tags: prime7biz/prime7-admin:latest

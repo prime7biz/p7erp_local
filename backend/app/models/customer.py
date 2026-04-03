@@ -39,6 +39,7 @@ class Customer(Base):
     shipping_postal_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     shipping_country: Mapped[str | None] = mapped_column(String(64), nullable=True)
     same_as_billing: Mapped[bool] = mapped_column(nullable=False, default=True)
+    preferred_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False

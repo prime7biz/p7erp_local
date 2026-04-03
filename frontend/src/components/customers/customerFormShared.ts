@@ -25,6 +25,8 @@ export type CustomerFormState = {
   shippingCity: string;
   shippingPostalCode: string;
   shippingCountry: string;
+  /** ISO currency code for quotations (e.g. USD) */
+  preferredCurrency: string;
 };
 
 export const INITIAL_CUSTOMER_FORM: CustomerFormState = {
@@ -50,6 +52,7 @@ export const INITIAL_CUSTOMER_FORM: CustomerFormState = {
   shippingCity: "",
   shippingPostalCode: "",
   shippingCountry: "United States",
+  preferredCurrency: "USD",
 };
 
 export const CUSTOMER_FORM_BASE_INPUT =
@@ -107,6 +110,7 @@ export function customerFromApiToFormState(customer: CustomerResponse): Customer
     shippingCity: customer.shipping_city ?? "",
     shippingPostalCode: customer.shipping_postal_code ?? "",
     shippingCountry: customer.shipping_country ?? "",
+    preferredCurrency: customer.preferred_currency?.trim() || "USD",
   };
 }
 
@@ -143,6 +147,7 @@ export function buildCustomerCreatePayload(
     same_as_billing: form.sameAsBilling,
     address: form.billingAddressLine1.trim(),
     country: form.billingCountry.trim(),
+    preferred_currency: normalizeOptional(form.preferredCurrency) ?? "USD",
   };
 }
 
@@ -178,5 +183,6 @@ export function buildCustomerUpdatePayload(
     same_as_billing: form.sameAsBilling,
     address: form.billingAddressLine1.trim(),
     country: form.billingCountry.trim(),
+    preferred_currency: normalizeOptional(form.preferredCurrency) ?? "USD",
   };
 }

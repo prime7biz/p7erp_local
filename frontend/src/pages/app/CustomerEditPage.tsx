@@ -96,6 +96,18 @@ export function CustomerEditPage() {
   const [reviewRows, setReviewRows] = useState<FieldApplyState[]>([]);
   const [enrichReviewRows, setEnrichReviewRows] = useState<FieldApplyState[]>([]);
   const [aiUndoStack, setAiUndoStack] = useState<CustomerFormState[]>([]);
+  const [currencyOptions, setCurrencyOptions] = useState<{ code: string; name: string }[]>([]);
+
+  useEffect(() => {
+    void api
+      .listCurrencies()
+      .then((rows) =>
+        setCurrencyOptions(
+          rows.filter((c) => c.is_active).map((c) => ({ code: c.code, name: c.name })),
+        ),
+      )
+      .catch(() => setCurrencyOptions([]));
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -697,6 +709,7 @@ export function CustomerEditPage() {
             className="space-y-6"
           >
             <CustomerFormFields
+              currencyOptions={currencyOptions}
               form={form}
               patchForm={patchForm}
               setForm={(u) => setForm((prev) => (prev ? (typeof u === "function" ? u(prev) : u) : prev))}

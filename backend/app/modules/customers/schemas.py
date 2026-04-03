@@ -29,6 +29,7 @@ class CustomerCreate(BaseModel):
     shipping_postal_code: str | None = Field(None, max_length=32)
     shipping_country: str | None = Field(None, max_length=64)
     same_as_billing: bool = True
+    preferred_currency: str | None = Field(None, max_length=10)
 
 
 class CustomerUpdate(BaseModel):
@@ -59,6 +60,7 @@ class CustomerUpdate(BaseModel):
     shipping_postal_code: str | None = Field(None, max_length=32)
     shipping_country: str | None = Field(None, max_length=64)
     same_as_billing: bool | None = None
+    preferred_currency: str | None = Field(None, max_length=10)
 
 
 class CustomerResponse(BaseModel):
@@ -92,6 +94,7 @@ class CustomerResponse(BaseModel):
     shipping_postal_code: str | None
     shipping_country: str | None
     same_as_billing: bool
+    preferred_currency: str | None = None
     created_at: str
     updated_at: str
     # Optional list/AI enrichments (set by /customers/paginated when include_ai_fields=true)

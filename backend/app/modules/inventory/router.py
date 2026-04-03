@@ -571,11 +571,48 @@ async def _ensure_stock_group_for_item(db: AsyncSession, tenant_id: int, stock_g
         raise HTTPException(status_code=400, detail="Invalid stock group for this tenant")
 
 
+def _optional_master_code(v: object | None) -> str | None:
+    if v is None:
+        return None
+    s = str(v).strip()
+    return s if s else None
+
+
+async def _ensure_item_category_for_tenant(db: AsyncSession, tenant_id: int, category_id: int) -> ItemCategory:
+    c = await db.get(ItemCategory, category_id)
+    if not c or c.tenant_id != tenant_id:
+        raise HTTPException(status_code=400, detail="Invalid category for this tenant")
+    return c
+
+
+async def _ensure_item_subcategory_for_category(
+    db: AsyncSession, tenant_id: int, category_id: int, subcategory_id: int | None
+) -> None:
+    if subcategory_id is None:
+        return
+    sc = await db.get(ItemSubcategory, subcategory_id)
+    if not sc or sc.tenant_id != tenant_id:
+        raise HTTPException(status_code=400, detail="Invalid subcategory for this tenant")
+    if sc.category_id != category_id:
+        raise HTTPException(status_code=400, detail="Subcategory does not belong to the selected category")
+
+
+async def _ensure_item_unit_for_tenant(db: AsyncSession, tenant_id: int, unit_id: int) -> None:
+    u = await db.get(ItemUnit, unit_id)
+    if not u or u.tenant_id != tenant_id:
+        raise HTTPException(status_code=400, detail="Invalid unit for this tenant")
+
+
 class ItemCategoryBody(BaseModel):
-    category_code: str
+    category_code: str | None = None
     name: str
     description: str | None = None
     is_active: bool = True
+
+    @field_validator("category_code", mode="before")
+    @classmethod
+    def _strip_blank_category_code(cls, v: object) -> str | None:
+        return _optional_master_code(v)
 
 
 class ItemCategoryOut(BaseModel):
@@ -590,12 +627,23 @@ class ItemCategoryOut(BaseModel):
         from_attributes = True
 
 
+class ItemCategoryUpdateBody(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
+
+
 class ItemSubcategoryBody(BaseModel):
     category_id: int
-    subcategory_code: str
+    subcategory_code: str | None = None
     name: str
     description: str | None = None
     is_active: bool = True
+
+    @field_validator("subcategory_code", mode="before")
+    @classmethod
+    def _strip_blank_subcat_code(cls, v: object) -> str | None:
+        return _optional_master_code(v)
 
 
 class ItemSubcategoryOut(BaseModel):
@@ -611,11 +659,23 @@ class ItemSubcategoryOut(BaseModel):
         from_attributes = True
 
 
+class ItemSubcategoryUpdateBody(BaseModel):
+    category_id: int | None = None
+    name: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
+
+
 class ItemUnitBody(BaseModel):
-    unit_code: str
+    unit_code: str | None = None
     name: str
     description: str | None = None
     is_active: bool = True
+
+    @field_validator("unit_code", mode="before")
+    @classmethod
+    def _strip_blank_unit_code(cls, v: object) -> str | None:
+        return _optional_master_code(v)
 
 
 class ItemUnitOut(BaseModel):
@@ -630,8 +690,14 @@ class ItemUnitOut(BaseModel):
         from_attributes = True
 
 
+class ItemUnitUpdateBody(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
+
+
 class ItemBody(BaseModel):
-    item_code: str
+    item_code: str | None = None
     name: str
     description: str | None = None
     category_id: int
@@ -641,6 +707,11 @@ class ItemBody(BaseModel):
     stock_group_id: int | None = None
     default_cost: str = "0"
     is_active: bool = True
+
+    @field_validator("item_code", mode="before")
+    @classmethod
+    def _strip_blank_item_code(cls, v: object) -> str | None:
+        return _optional_master_code(v)
 
 
 class ItemOut(BaseModel):
@@ -686,11 +757,34 @@ class ItemOut(BaseModel):
         from_attributes = True
 
 
-class WarehouseBody(BaseModel):
-    warehouse_code: str
+class ItemUpdateBody(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    category_id: int | None = None
+    subcategory_id: int | None = None
+    unit_id: int | None = None
+    default_warehouse_id: int | None = None
+    stock_group_id: int | None = None
+    default_cost: str | None = None
+    is_active: bool | None = None
+
+
+class WarehouseCreateBody(BaseModel):
+    warehouse_code: str | None = None
     name: str
     address: str | None = None
     is_active: bool = True
+
+    @field_validator("warehouse_code", mode="before")
+    @classmethod
+    def _strip_wh_code(cls, v: object) -> str | None:
+        return _optional_master_code(v)
+
+
+class WarehouseUpdateBody(BaseModel):
+    name: str | None = None
+    address: str | None = None
+    is_active: bool | None = None
 
 
 class WarehouseOut(BaseModel):
@@ -705,8 +799,7 @@ class WarehouseOut(BaseModel):
         from_attributes = True
 
 
-class StockGroupBody(BaseModel):
-    group_code: str
+class StockGroupMutableFields(BaseModel):
     name: str
     parent_id: int | None = None
     is_active: bool = True
@@ -715,6 +808,19 @@ class StockGroupBody(BaseModel):
     cogs_account_id: int | None = None
     adjustment_account_id: int | None = None
     grni_account_id: int | None = None
+
+
+class StockGroupCreateBody(StockGroupMutableFields):
+    group_code: str | None = None
+
+    @field_validator("group_code", mode="before")
+    @classmethod
+    def _strip_blank_group_code(cls, v: object) -> str | None:
+        return _optional_master_code(v)
+
+
+class StockGroupUpdateBody(StockGroupMutableFields):
+    """PATCH body; codes are immutable (see group row, not editable)."""
 
 
 class StockGroupOut(BaseModel):
@@ -1231,18 +1337,26 @@ class GatePassOut(BaseModel):
 
 @router.get("/item-categories", response_model=list[ItemCategoryOut])
 async def list_item_categories(
+    search: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on category code or name",
+    ),
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    result = await db.execute(
-        select(ItemCategory)
-        .where(ItemCategory.tenant_id == tenant.id)
-        .order_by(ItemCategory.category_code)
-        .limit(limit)
-    )
+    stmt = select(ItemCategory).where(ItemCategory.tenant_id == tenant.id)
+    if search and search.strip():
+        pat = f"%{search.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(ItemCategory.category_code).like(pat),
+                func.lower(ItemCategory.name).like(pat),
+            )
+        )
+    result = await db.execute(stmt.order_by(ItemCategory.category_code).limit(limit))
     return list(result.scalars().all())
 
 
@@ -1254,9 +1368,15 @@ async def create_item_category(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = ItemCategory(tenant_id=tenant.id, **body.model_dump())
+    data = body.model_dump()
+    code = data.pop("category_code", None)
+    if not code:
+        code = await next_tenant_code(
+            db, model=ItemCategory, tenant_id=tenant.id, prefix="CAT-", width=4
+        )
+    row = ItemCategory(tenant_id=tenant.id, category_code=code, **data)
     db.add(row)
-    await db.commit()
+    await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     return row
 
@@ -1264,7 +1384,7 @@ async def create_item_category(
 @router.patch("/item-categories/{category_id}", response_model=ItemCategoryOut)
 async def update_item_category(
     category_id: int,
-    body: ItemCategoryBody,
+    body: ItemCategoryUpdateBody,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1273,7 +1393,10 @@ async def update_item_category(
     row = await db.get(ItemCategory, category_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Category not found")
-    for key, value in body.model_dump().items():
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    for key, value in updates.items():
         setattr(row, key, value)
     await db.commit()
     await db.refresh(row)
@@ -1300,16 +1423,28 @@ async def delete_item_category(
 @router.get("/item-subcategories", response_model=list[ItemSubcategoryOut])
 async def list_item_subcategories(
     category_id: int | None = Query(default=None),
+    search: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on subcategory code or name",
+    ),
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    stmt = select(ItemSubcategory).where(ItemSubcategory.tenant_id == tenant.id).order_by(ItemSubcategory.subcategory_code)
+    stmt = select(ItemSubcategory).where(ItemSubcategory.tenant_id == tenant.id)
     if category_id is not None:
         stmt = stmt.where(ItemSubcategory.category_id == category_id)
-    result = await db.execute(stmt.limit(limit))
+    if search and search.strip():
+        pat = f"%{search.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(ItemSubcategory.subcategory_code).like(pat),
+                func.lower(ItemSubcategory.name).like(pat),
+            )
+        )
+    result = await db.execute(stmt.order_by(ItemSubcategory.subcategory_code).limit(limit))
     return list(result.scalars().all())
 
 
@@ -1321,9 +1456,16 @@ async def create_item_subcategory(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = ItemSubcategory(tenant_id=tenant.id, **body.model_dump())
+    await _ensure_item_category_for_tenant(db, tenant.id, body.category_id)
+    data = body.model_dump()
+    code = data.pop("subcategory_code", None)
+    if not code:
+        code = await next_tenant_code(
+            db, model=ItemSubcategory, tenant_id=tenant.id, prefix="SUBCAT-", width=4
+        )
+    row = ItemSubcategory(tenant_id=tenant.id, subcategory_code=code, **data)
     db.add(row)
-    await db.commit()
+    await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     return row
 
@@ -1331,7 +1473,7 @@ async def create_item_subcategory(
 @router.patch("/item-subcategories/{subcategory_id}", response_model=ItemSubcategoryOut)
 async def update_item_subcategory(
     subcategory_id: int,
-    body: ItemSubcategoryBody,
+    body: ItemSubcategoryUpdateBody,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1340,7 +1482,12 @@ async def update_item_subcategory(
     row = await db.get(ItemSubcategory, subcategory_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Subcategory not found")
-    for key, value in body.model_dump().items():
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    if "category_id" in updates:
+        await _ensure_item_category_for_tenant(db, tenant.id, updates["category_id"])
+    for key, value in updates.items():
         setattr(row, key, value)
     await db.commit()
     await db.refresh(row)
@@ -1366,15 +1513,26 @@ async def delete_item_subcategory(
 
 @router.get("/item-units", response_model=list[ItemUnitOut])
 async def list_item_units(
+    search: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on unit code or name",
+    ),
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    result = await db.execute(
-        select(ItemUnit).where(ItemUnit.tenant_id == tenant.id).order_by(ItemUnit.unit_code).limit(limit)
-    )
+    stmt = select(ItemUnit).where(ItemUnit.tenant_id == tenant.id)
+    if search and search.strip():
+        pat = f"%{search.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(ItemUnit.unit_code).like(pat),
+                func.lower(ItemUnit.name).like(pat),
+            )
+        )
+    result = await db.execute(stmt.order_by(ItemUnit.unit_code).limit(limit))
     return list(result.scalars().all())
 
 
@@ -1386,9 +1544,15 @@ async def create_item_unit(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = ItemUnit(tenant_id=tenant.id, **body.model_dump())
+    data = body.model_dump()
+    code = data.pop("unit_code", None)
+    if not code:
+        code = await next_tenant_code(
+            db, model=ItemUnit, tenant_id=tenant.id, prefix="UOM-", width=4
+        )
+    row = ItemUnit(tenant_id=tenant.id, unit_code=code, **data)
     db.add(row)
-    await db.commit()
+    await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     return row
 
@@ -1396,7 +1560,7 @@ async def create_item_unit(
 @router.patch("/item-units/{unit_id}", response_model=ItemUnitOut)
 async def update_item_unit(
     unit_id: int,
-    body: ItemUnitBody,
+    body: ItemUnitUpdateBody,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1405,7 +1569,10 @@ async def update_item_unit(
     row = await db.get(ItemUnit, unit_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Unit not found")
-    for key, value in body.model_dump().items():
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    for key, value in updates.items():
         setattr(row, key, value)
     await db.commit()
     await db.refresh(row)
@@ -1497,11 +1664,20 @@ async def create_item(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _ensure_item_category_for_tenant(db, tenant.id, body.category_id)
+    await _ensure_item_subcategory_for_category(db, tenant.id, body.category_id, body.subcategory_id)
+    await _ensure_item_unit_for_tenant(db, tenant.id, body.unit_id)
     await _ensure_item_default_warehouse(db, tenant.id, body.default_warehouse_id)
     await _ensure_stock_group_for_item(db, tenant.id, body.stock_group_id)
-    row = Item(tenant_id=tenant.id, **body.model_dump())
+    data = body.model_dump()
+    code = data.pop("item_code", None)
+    if not code:
+        code = await next_tenant_code(
+            db, model=Item, tenant_id=tenant.id, prefix="ITEM-", width=6
+        )
+    row = Item(tenant_id=tenant.id, item_code=code, **data)
     db.add(row)
-    await db.commit()
+    await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     return row
 
@@ -1509,7 +1685,7 @@ async def create_item(
 @router.patch("/items/{item_id}", response_model=ItemOut)
 async def update_item(
     item_id: int,
-    body: ItemBody,
+    body: ItemUpdateBody,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1518,9 +1694,24 @@ async def update_item(
     row = await db.get(Item, item_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Item not found")
-    await _ensure_item_default_warehouse(db, tenant.id, body.default_warehouse_id)
-    await _ensure_stock_group_for_item(db, tenant.id, body.stock_group_id)
-    for key, value in body.model_dump().items():
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    cat_id = updates.get("category_id", row.category_id)
+    if "category_id" in updates:
+        await _ensure_item_category_for_tenant(db, tenant.id, cat_id)
+    sub_id = updates.get("subcategory_id", row.subcategory_id)
+    if "subcategory_id" in updates or "category_id" in updates:
+        await _ensure_item_subcategory_for_category(db, tenant.id, cat_id, sub_id)
+    if "unit_id" in updates:
+        await _ensure_item_unit_for_tenant(db, tenant.id, updates["unit_id"])
+    wh = updates.get("default_warehouse_id", row.default_warehouse_id)
+    if "default_warehouse_id" in updates:
+        await _ensure_item_default_warehouse(db, tenant.id, wh)
+    sg = updates.get("stock_group_id", row.stock_group_id)
+    if "stock_group_id" in updates:
+        await _ensure_stock_group_for_item(db, tenant.id, sg)
+    for key, value in updates.items():
         setattr(row, key, value)
     await db.commit()
     await db.refresh(row)
@@ -1563,13 +1754,19 @@ async def list_warehouses(
 
 @router.post("/warehouses", response_model=WarehouseOut)
 async def create_warehouse(
-    body: WarehouseBody,
+    body: WarehouseCreateBody,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = Warehouse(tenant_id=tenant.id, **body.model_dump())
+    data = body.model_dump()
+    code = data.pop("warehouse_code", None)
+    if not code:
+        code = await next_tenant_code(
+            db, model=Warehouse, tenant_id=tenant.id, prefix="WH-", width=4
+        )
+    row = Warehouse(tenant_id=tenant.id, warehouse_code=code, **data)
     db.add(row)
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
@@ -1579,7 +1776,7 @@ async def create_warehouse(
 @router.patch("/warehouses/{warehouse_id}", response_model=WarehouseOut)
 async def update_warehouse(
     warehouse_id: int,
-    body: WarehouseBody,
+    body: WarehouseUpdateBody,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1588,7 +1785,10 @@ async def update_warehouse(
     row = await db.get(Warehouse, warehouse_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Warehouse not found")
-    for key, value in body.model_dump().items():
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    for key, value in updates.items():
         setattr(row, key, value)
     await db.commit()
     await db.refresh(row)
@@ -1629,7 +1829,7 @@ async def list_stock_groups(
     return list(result.scalars().all())
 
 
-async def _validate_stock_group_body(db: AsyncSession, tenant: Tenant, body: StockGroupBody) -> None:
+async def _validate_stock_group_body(db: AsyncSession, tenant: Tenant, body: StockGroupMutableFields) -> None:
     if body.parent_id is not None:
         parent = await db.get(StockGroup, body.parent_id)
         if not parent or parent.tenant_id != tenant.id:
@@ -1646,14 +1846,20 @@ async def _validate_stock_group_body(db: AsyncSession, tenant: Tenant, body: Sto
 
 @router.post("/stock-groups", response_model=StockGroupOut)
 async def create_stock_group(
-    body: StockGroupBody,
+    body: StockGroupCreateBody,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
     await _validate_stock_group_body(db, tenant, body)
-    row = StockGroup(tenant_id=tenant.id, **body.model_dump())
+    data = body.model_dump()
+    code = data.pop("group_code", None)
+    if not code:
+        code = await next_tenant_code(
+            db, model=StockGroup, tenant_id=tenant.id, prefix="GRP-", width=4
+        )
+    row = StockGroup(tenant_id=tenant.id, group_code=code, **data)
     db.add(row)
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
@@ -1663,7 +1869,7 @@ async def create_stock_group(
 @router.patch("/stock-groups/{group_id}", response_model=StockGroupOut)
 async def update_stock_group(
     group_id: int,
-    body: StockGroupBody,
+    body: StockGroupUpdateBody,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

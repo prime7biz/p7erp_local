@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import type { FieldConfidence } from "@/types/extraction";
 
 export type CustomerFormFieldsProps = {
+  /** Active currency codes from costing master (fallback to USD-only if empty) */
+  currencyOptions?: { code: string; name: string }[];
   form: CustomerFormState;
   patchForm: (p: Partial<CustomerFormState>) => void;
   setForm: (update: SetStateAction<CustomerFormState>) => void;
@@ -29,6 +31,7 @@ export type CustomerFormFieldsProps = {
 };
 
 export function CustomerFormFields({
+  currencyOptions = [],
   form,
   patchForm,
   setForm,
@@ -41,6 +44,11 @@ export function CustomerFormFields({
   logoUploading,
   onLogoPick,
 }: CustomerFormFieldsProps) {
+  const currencySelectOptions =
+    currencyOptions.length > 0
+      ? currencyOptions
+      : [{ code: "USD", name: "US Dollar" }, { code: "EUR", name: "Euro" }, { code: "BDT", name: "Bangladesh Taka" }];
+
   return (
     <>
       <section className="rounded-xl border border-border bg-surface-raised p-5">
@@ -112,6 +120,22 @@ export function CustomerFormFields({
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-secondary">Preferred quotation currency</label>
+            <select
+              value={form.preferredCurrency}
+              onChange={(e) => patchForm({ preferredCurrency: e.target.value })}
+              className={CUSTOMER_FORM_BASE_INPUT}
+            >
+              {currencySelectOptions.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code}
+                  {c.name ? ` — ${c.name}` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-text-muted">Used as default document currency on new quotations.</p>
           </div>
           <div className="md:col-span-2">
             <label className="mb-1 block text-sm font-medium text-text-secondary">Company Logo (Optional)</label>

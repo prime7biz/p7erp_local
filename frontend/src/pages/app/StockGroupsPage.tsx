@@ -1,8 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type ChartOfAccountResponse, type StockGroupCreate, type StockGroupResponse } from "@/api/client";
+import {
+  api,
+  type ChartOfAccountResponse,
+  type StockGroupCreate,
+  type StockGroupResponse,
+  type StockGroupUpdate,
+} from "@/api/client";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FolderTree, Plus, X, Search } from "lucide-react";
+import { erpControlFocusClass } from "@/components/app/listPageLayout";
+import { cn } from "@/lib/utils";
 
 type TreeNode = StockGroupResponse & { children: TreeNode[] };
 
@@ -49,7 +58,6 @@ function flattenTreeWithMeta(
 }
 
 const emptyGroupForm: StockGroupCreate = {
-  group_code: "",
   name: "",
   parent_id: null,
   is_active: true,
@@ -71,7 +79,7 @@ function CoaSelect(props: {
     <div>
       <label className="mb-1 block text-xs font-medium text-text-muted">{props.label}</label>
       <select
-        className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
+        className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
         value={props.value ?? ""}
         disabled={props.disabled}
         onChange={(e) => props.onChange(e.target.value ? Number(e.target.value) : null)}
@@ -89,14 +97,14 @@ function CoaSelect(props: {
   );
 }
 
-export function StockGroupsPage() {
+export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
   const [items, setItems] = useState<StockGroupResponse[]>([]);
   const [coaRows, setCoaRows] = useState<ChartOfAccountResponse[]>([]);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<StockGroupCreate>({ ...emptyGroupForm });
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<StockGroupResponse | null>(null);
-  const [editForm, setEditForm] = useState<StockGroupCreate | null>(null);
+  const [editForm, setEditForm] = useState<StockGroupUpdate | null>(null);
   const [groupModalMode, setGroupModalMode] = useState<"view" | "edit">("view");
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
 
@@ -141,20 +149,21 @@ export function StockGroupsPage() {
     return () => document.removeEventListener("click", closeActions);
   }, []);
 
+  const rowToUpdate = (row: StockGroupResponse): StockGroupUpdate => ({
+    name: row.name,
+    parent_id: row.parent_id,
+    is_active: row.is_active,
+    inventory_account_id: row.inventory_account_id ?? null,
+    wip_account_id: row.wip_account_id ?? null,
+    cogs_account_id: row.cogs_account_id ?? null,
+    adjustment_account_id: row.adjustment_account_id ?? null,
+    grni_account_id: row.grni_account_id ?? null,
+  });
+
   const openGroupModal = (row: StockGroupResponse, mode: "view" | "edit") => {
     setEditing(row);
     setGroupModalMode(mode);
-    setEditForm({
-      group_code: row.group_code,
-      name: row.name,
-      parent_id: row.parent_id,
-      is_active: row.is_active,
-      inventory_account_id: row.inventory_account_id ?? null,
-      wip_account_id: row.wip_account_id ?? null,
-      cogs_account_id: row.cogs_account_id ?? null,
-      adjustment_account_id: row.adjustment_account_id ?? null,
-      grni_account_id: row.grni_account_id ?? null,
-    });
+    setEditForm(rowToUpdate(row));
   };
 
   const closeEdit = () => {
@@ -166,18 +175,7 @@ export function StockGroupsPage() {
   const backToGroupView = () => {
     if (!editing) return;
     setGroupModalMode("view");
-    const row = editing;
-    setEditForm({
-      group_code: row.group_code,
-      name: row.name,
-      parent_id: row.parent_id,
-      is_active: row.is_active,
-      inventory_account_id: row.inventory_account_id ?? null,
-      wip_account_id: row.wip_account_id ?? null,
-      cogs_account_id: row.cogs_account_id ?? null,
-      adjustment_account_id: row.adjustment_account_id ?? null,
-      grni_account_id: row.grni_account_id ?? null,
-    });
+    setEditForm(rowToUpdate(editing));
   };
 
   const saveEdit = async (e: React.FormEvent) => {
@@ -209,14 +207,16 @@ export function StockGroupsPage() {
     }
   };
 
+  const headerBlock = embedded ? null : (
+    <AppPageHeader
+      title="Stock Groups"
+      description="Maintain stock group hierarchy for reporting. Root rows are groups; children are subgroups."
+    />
+  );
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-text-primary">Stock Groups</h1>
-        <p className="mt-1 text-sm text-text-muted">
-          Maintain stock group hierarchy for reporting. Groups can have a parent for tree structure.
-        </p>
-      </div>
+      {headerBlock}
 
       {error && (
         <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
@@ -242,21 +242,14 @@ export function StockGroupsPage() {
             className="grid grid-cols-1 gap-3 md:grid-cols-4 md:gap-4"
           >
             <input
-              className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
-              placeholder="Group code *"
-              value={form.group_code}
-              onChange={(e) => setForm((p) => ({ ...p, group_code: e.target.value }))}
-              required
-            />
-            <input
-              className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+              className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0"
               placeholder="Group name *"
               value={form.name}
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
               required
             />
             <select
-              className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+              className="rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0"
               value={form.parent_id ?? ""}
               onChange={(e) =>
                 setForm((p) => ({ ...p, parent_id: e.target.value ? Number(e.target.value) : null }))
@@ -269,6 +262,15 @@ export function StockGroupsPage() {
                 </option>
               ))}
             </select>
+            <label className="flex items-center gap-2 text-sm text-text-secondary md:col-span-4">
+              <input
+                type="checkbox"
+                className="rounded border-border-strong"
+                checked={form.is_active}
+                onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
+              />
+              Active
+            </label>
             <div className="md:col-span-4">
               <p className="mb-2 text-xs font-medium text-text-muted">GL mapping (optional — falls back to tenant CoA inventory defaults)</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -328,7 +330,7 @@ export function StockGroupsPage() {
                 placeholder="Search by code or name"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-lg border border-border-strong bg-surface-raised py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring"
+                className="w-full rounded-lg border border-border-strong bg-surface-raised py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-primary focus:outline-none focus:ring-0"
               />
             </div>
           </div>
@@ -344,6 +346,9 @@ export function StockGroupsPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                     Name
                   </th>
+                  <th className="w-20 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
+                    Active
+                  </th>
                   <th className="w-16 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                     Level
                   </th>
@@ -355,10 +360,10 @@ export function StockGroupsPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border-subtle">
                 {orderedRows.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-sm text-text-muted">
+                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-text-muted">
                       No stock groups yet. Add one using the form above.
                     </td>
                   </tr>
@@ -384,6 +389,9 @@ export function StockGroupsPage() {
                       {row.group_code}
                     </td>
                     <td className="px-4 py-3 text-sm text-text-secondary">{row.name}</td>
+                    <td className="px-4 py-3 text-sm text-text-secondary">
+                      {row.is_active ? "Yes" : "No"}
+                    </td>
                     <td className="px-4 py-3 text-sm text-text-secondary">{row.level}</td>
                     <td className="max-w-[280px] truncate px-4 py-3 text-sm text-text-secondary" title={row.path}>
                       {row.path || "—"}
@@ -448,17 +456,29 @@ export function StockGroupsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Code</label>
                   <input
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring read-only:bg-surface-subtle"
-                    value={editForm.group_code}
-                    readOnly={groupModalMode === "view"}
-                    onChange={(e) => setEditForm((p) => p && { ...p, group_code: e.target.value })}
-                    required
+                    className={cn(
+                      "w-full rounded-lg border border-border-strong px-3 py-2 text-sm read-only:bg-surface-subtle",
+                      erpControlFocusClass,
+                    )}
+                    value={editing.group_code}
+                    readOnly
+                    title="Codes are assigned when the group is created and cannot be changed."
                   />
                 </div>
+                <label className="flex items-center gap-2 text-sm text-text-secondary">
+                  <input
+                    type="checkbox"
+                    className="rounded border-border-strong disabled:opacity-60"
+                    checked={editForm.is_active}
+                    disabled={groupModalMode === "view"}
+                    onChange={(e) => setEditForm((p) => p && { ...p, is_active: e.target.checked })}
+                  />
+                  Active
+                </label>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Name</label>
                   <input
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring read-only:bg-surface-subtle"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0 read-only:bg-surface-subtle"
                     value={editForm.name}
                     readOnly={groupModalMode === "view"}
                     onChange={(e) => setEditForm((p) => p && { ...p, name: e.target.value })}
@@ -468,7 +488,7 @@ export function StockGroupsPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text-muted">Parent</label>
                   <select
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
+                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:opacity-80"
                     value={editForm.parent_id ?? ""}
                     disabled={groupModalMode === "view"}
                     onChange={(e) =>

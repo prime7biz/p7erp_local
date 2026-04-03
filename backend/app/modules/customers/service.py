@@ -70,6 +70,7 @@ def customer_to_response(customer: Customer) -> CustomerResponse:
         shipping_postal_code=customer.shipping_postal_code,
         shipping_country=customer.shipping_country,
         same_as_billing=customer.same_as_billing,
+        preferred_currency=customer.preferred_currency,
         created_at=customer.created_at.isoformat(),
         updated_at=customer.updated_at.isoformat(),
     )
@@ -727,6 +728,7 @@ async def create_customer(db: AsyncSession, tenant: Tenant, body: CustomerCreate
         shipping_postal_code=shipping_postal_code,
         shipping_country=shipping_country,
         same_as_billing=same_as_billing,
+        preferred_currency=clean_optional(body.preferred_currency),
     )
     db.add(customer)
     await db.flush()
@@ -809,6 +811,8 @@ async def update_customer(
             customer.shipping_city = customer.billing_city
             customer.shipping_postal_code = customer.billing_postal_code
             customer.shipping_country = customer.billing_country
+    if body.preferred_currency is not None:
+        customer.preferred_currency = clean_optional(body.preferred_currency)
 
     if customer.legal_entity_name is None and customer.name:
         customer.legal_entity_name = customer.name

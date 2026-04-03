@@ -101,8 +101,8 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
-      ollama-init:
-        condition: service_completed_successfully
+      # Do not wait for ollama-init (model pull). That download can take many minutes and would
+      # keep the API down, causing 502 from the frontend nginx proxy on /api/*. AI works after pull.
     healthcheck:
       test:
         [

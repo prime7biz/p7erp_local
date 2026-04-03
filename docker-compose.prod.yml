@@ -1,3 +1,5 @@
+# Production compose pulls prebuilt images from Docker Hub.
+# Set BACKEND_IMAGE and FRONTEND_IMAGE in the repo root `.env`.
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -50,9 +52,7 @@ services:
       - ollama_data:/root/.ollama
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ${BACKEND_IMAGE:-your-dockerhub-user/p7erp-backend:latest}
     restart: always
     environment:
       APP_ENV: ${APP_ENV:-production}
@@ -87,8 +87,7 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
-      ollama-init:
-        condition: service_completed_successfully
+      # Backend must not wait for ollama-init (large model pull); otherwise API is down for a long time.
     expose:
       - "8000"
     volumes:
@@ -96,11 +95,7 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.prod
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    image: ${FRONTEND_IMAGE:-your-dockerhub-user/p7erp-frontend:latest}
     restart: always
     depends_on:
       - backend

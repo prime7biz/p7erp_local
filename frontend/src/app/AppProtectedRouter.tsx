@@ -560,9 +560,9 @@ export function AppProtectedRouter() {
         <Route path="inventory/items" element={<InventoryItemsPage />} />
         <Route path="inventory/categories" element={<Navigate to="/app/inventory?tab=masters" replace />} />
         <Route path="inventory/subcategories" element={<Navigate to="/app/inventory?tab=masters" replace />} />
-        <Route path="inventory/units" element={<Navigate to="/app/inventory" replace />} />
+        <Route path="inventory/units" element={<Navigate to="/app/inventory?tab=units" replace />} />
         <Route path="inventory/vendors" element={<VendorsPage />} />
-        <Route path="inventory/warehouses" element={<Navigate to="/app/inventory" replace />} />
+        <Route path="inventory/warehouses" element={<Navigate to="/app/inventory?tab=warehouses" replace />} />
         <Route path="inventory/stock-groups" element={<StockGroupsPage />} />
         <Route path="inventory/stock-dashboard" element={<StockDashboardPage />} />
         <Route path="inventory/stock-valuation" element={<StockValuationPage />} />

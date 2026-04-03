@@ -12,9 +12,13 @@ import type { InquiryExtractionResponse } from "@/types/extraction";
 import { logApiError } from "@/utils/logApiError";
 
 export type InquiryAiJobStatus = "idle" | "processing" | "success" | "partial" | "failed";
+const MAX_INQUIRY_AI_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 function friendlyAiError(e: unknown, fallback: string): string {
   if (e instanceof ApiError) {
+    if (e.status === 413) {
+      return "Document is too large. Please use a file up to 10 MB.";
+    }
     if (e.status === 429) {
       return "Too many AI requests in a short window. Please wait a moment and try again.";
     }
@@ -109,6 +113,12 @@ export function useInquiryAi() {
       return withGate(async () => {
         setError(null);
         setStatus("processing");
+        if (file.size > MAX_INQUIRY_AI_UPLOAD_BYTES) {
+          setStatus("failed");
+          setError("Document is too large. Please use a file up to 10 MB.");
+          setExtractionBatchId(null);
+          return;
+        }
         try {
           const wrap = await api.inquiryAiExtract(file, inquiryId);
           setExtraction(wrap.extraction);

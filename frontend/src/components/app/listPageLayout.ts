@@ -19,12 +19,19 @@ export const listPagePanelClass =
   "rounded-xl border border-border bg-surface-raised p-3 shadow-sm";
 
 /** Primary search input in the list toolbar */
+/**
+ * Single focus stroke: border turns brand; ring off so there is no second outline.
+ * (Keep as one literal string so Tailwind JIT includes utilities.)
+ */
+export const erpControlFocusClass =
+  "focus:border-brand-primary focus:outline-none focus:ring-0";
+
 export const listPageToolbarInputClass =
-  "w-full min-w-[12rem] flex-1 rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring";
+  "w-full min-w-[12rem] flex-1 rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-0";
 
 /** Status / facet select in the list toolbar */
 export const listPageToolbarSelectClass =
-  "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring sm:w-40";
+  "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-0 sm:w-40";
 
 /** Secondary button in the list toolbar (Clear, Refresh) */
 export const listPageToolbarButtonClass =

@@ -27,7 +27,9 @@ from app.models import (
     GarmentStyle,
     Inquiry,
   InquiryEvent,
-  Order,
+    Item,
+    ItemUnit,
+    Order,
     Quotation,
     QuotationManufacturing,
     QuotationMaterial,
@@ -64,12 +66,15 @@ from app.modules.quotations.quotation_commercial_money import (
   MoneyParseError,
   collect_rollup_money_errors,
   cost_line_arrays_present_in_request,
+  line_fx_to_quotation_multiplier,
   manufacturing_row_is_persisted_for_rollup,
   material_row_is_persisted_for_rollup,
   normalize_currency_code,
+  other_cost_rollup_amount_string,
   other_cost_row_is_persisted_for_rollup,
   parse_money_decimal,
   validate_header_fx_rules,
+  validate_line_fx_rules,
 )
 
 
@@ -1070,6 +1075,46 @@ async def full_update_quotation(
     for i, row in enumerate(body.materials):
       if row.category_id is None and row.item_id is None and not (row.description or "").strip():
         continue
+      if row.category_id is not None and row.item_id is None:
+        raise HTTPException(
+          status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+          detail={
+            "code": "MATERIAL_ITEM_REQUIRED",
+            "message": (
+              f"Material line {i + 1}: select an inventory item when a category is chosen."
+            ),
+          },
+        )
+      effective_unit = (row.unit or "").strip()
+      if row.item_id is not None:
+        inv_item = await db.get(Item, row.item_id)
+        if not inv_item or inv_item.tenant_id != tenant.id:
+          raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+              "code": "MATERIAL_INVALID_ITEM",
+              "message": f"Material line {i + 1}: item not found for this tenant.",
+            },
+          )
+        uom = await db.get(ItemUnit, inv_item.unit_id)
+        if not uom or uom.tenant_id != tenant.id:
+          raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+              "code": "MATERIAL_INVALID_UNIT",
+              "message": f"Material line {i + 1}: item has no valid unit of measure.",
+            },
+          )
+        if not effective_unit:
+          effective_unit = (uom.name or uom.unit_code or "").strip()
+        if not effective_unit:
+          raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+              "code": "MATERIAL_UOM_REQUIRED",
+              "message": f"Material line {i + 1}: unit of measure is required.",
+            },
+          )
       db.add(QuotationMaterial(
         tenant_id=tenant.id,
         quotation_id=quotation_id,
@@ -1077,7 +1122,7 @@ async def full_update_quotation(
         category_id=row.category_id,
         item_id=row.item_id,
         description=row.description,
-        unit=row.unit,
+        unit=effective_unit or (row.unit or ""),
         consumption_per_dozen=row.consumption_per_dozen or "0",
         unit_price=row.unit_price or "0",
         amount_per_dozen=row.amount_per_dozen or "0",
@@ -1169,6 +1214,7 @@ async def full_update_quotation(
     mat_total = Decimal("0")
     mfg_total = Decimal("0")
     other_total = Decimal("0")
+    doc_cur = quotation.currency
     if body.materials:
       for row in body.materials:
         if not material_row_is_persisted_for_rollup(row):
@@ -1178,15 +1224,31 @@ async def full_update_quotation(
       for row in body.manufacturing:
         if not manufacturing_row_is_persisted_for_rollup(row):
           continue
-        mfg_total += parse_money_decimal(row.total_order_cost, field="manufacturing[].total_order_cost")
+        line_amt = parse_money_decimal(row.total_order_cost, field="manufacturing[].total_order_cost")
+        fx = line_fx_to_quotation_multiplier(
+          document_currency=doc_cur,
+          line_currency=row.currency,
+          exchange_rate=row.exchange_rate,
+        )
+        mfg_total += line_amt * fx
     if body.other_costs:
       for row in body.other_costs:
         if not other_cost_row_is_persisted_for_rollup(row):
           continue
-        other_total += parse_money_decimal(
-          row.calculated_amount or row.total_amount,
-          field="other_costs[].amount",
-        )
+        amt_src = other_cost_rollup_amount_string(row)
+        if amt_src is None:
+          continue
+        raw = parse_money_decimal(amt_src, field="other_costs[].amount")
+        cost_type = (getattr(row, "cost_type", None) or "fixed") or "fixed"
+        if str(cost_type).strip().lower() == "percentage":
+          other_total += raw
+        else:
+          fx = line_fx_to_quotation_multiplier(
+            document_currency=doc_cur,
+            line_currency=row.currency,
+            exchange_rate=row.exchange_rate,
+          )
+          other_total += raw * fx
     total_cost = mat_total + mfg_total + other_total
     qty = Decimal(str(quotation.projected_quantity or 0))
     cost_per_piece = (total_cost / qty).quantize(FOUR_DP, rounding=ROUND_HALF_UP) if qty > 0 else Decimal("0")
@@ -1228,13 +1290,20 @@ async def full_update_quotation(
     target_price_currency=quotation.target_price_currency,
     exchange_rate=quotation.exchange_rate,
   )
-  if fx_errs:
+  line_fx_errs = validate_line_fx_rules(
+    document_currency=quotation.currency,
+    materials=body.materials,
+    manufacturing=body.manufacturing,
+    other_costs=body.other_costs,
+  )
+  combined_fx_errs = [*fx_errs, *line_fx_errs]
+  if combined_fx_errs:
     raise HTTPException(
       status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
       detail={
         "code": "QUOTATION_FX_VALIDATION",
-        "message": fx_errs[0],
-        "errors": fx_errs,
+        "message": combined_fx_errs[0],
+        "errors": combined_fx_errs,
       },
     )
 

@@ -74,6 +74,7 @@ export function CustomerCreatePage() {
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [currencyOptions, setCurrencyOptions] = useState<{ code: string; name: string }[]>([]);
   const logoFileInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
   const companyLogoDisplayUrl = useSecureImage(form.companyLogoUrl);
@@ -92,6 +93,17 @@ export function CustomerCreatePage() {
   const [autofilled, setAutofilled] = useState<Partial<Record<string, FieldConfidence>>>({});
   const [reviewRows, setReviewRows] = useState<FieldApplyState[]>([]);
   const [enrichReviewRows, setEnrichReviewRows] = useState<FieldApplyState[]>([]);
+
+  useEffect(() => {
+    void api
+      .listCurrencies()
+      .then((rows) =>
+        setCurrencyOptions(
+          rows.filter((c) => c.is_active).map((c) => ({ code: c.code, name: c.name })),
+        ),
+      )
+      .catch(() => setCurrencyOptions([]));
+  }, []);
 
   useEffect(() => {
     const res = customerAi.extraction;
@@ -558,6 +570,7 @@ export function CustomerCreatePage() {
         className="space-y-6"
       >
         <CustomerFormFields
+          currencyOptions={currencyOptions}
           form={form}
           patchForm={patchForm}
           setForm={setForm}

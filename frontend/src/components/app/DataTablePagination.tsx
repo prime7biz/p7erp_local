@@ -28,7 +28,7 @@ export function DataTablePagination({
   hasNextPage = false,
   onPageChange,
   onPageSizeChange,
-  allowedSizes = [10, 20, 50],
+  allowedSizes = [10, 20, 50, 100],
   className = "",
 }: DataTablePaginationProps) {
   const unknownTotal = total < 0;

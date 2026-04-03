@@ -15,6 +15,7 @@ from sqlalchemy import (
     Integer,
     Boolean,
     ForeignKey,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +25,9 @@ from app.database import Base
 class ItemCategory(Base):
     """Item category for inventory/costing (e.g. Fabric, Trim)."""
     __tablename__ = "item_categories"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "category_code", name="uq_item_categories_tenant_category_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -47,6 +51,9 @@ class ItemCategory(Base):
 class ItemSubcategory(Base):
     """Optional item subcategory under an item category."""
     __tablename__ = "item_subcategories"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "subcategory_code", name="uq_item_subcategories_tenant_subcategory_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -73,6 +80,7 @@ class ItemSubcategory(Base):
 class ItemUnit(Base):
     """Unit of measure (Yard, Kg, Pcs, etc.)."""
     __tablename__ = "item_units"
+    __table_args__ = (UniqueConstraint("tenant_id", "unit_code", name="uq_item_units_tenant_unit_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -96,6 +104,7 @@ class ItemUnit(Base):
 class Item(Base):
     """Inventory item for material costing (linked to categories/units)."""
     __tablename__ = "items"
+    __table_args__ = (UniqueConstraint("tenant_id", "item_code", name="uq_items_tenant_item_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(

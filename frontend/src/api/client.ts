@@ -3724,9 +3724,10 @@ export const api = {
   async listItemUnits(): Promise<ItemUnitResponse[]> {
     return request<ItemUnitResponse[]>("/api/v1/costing/item-units");
   },
-  async listCostingItems(params?: { category_id?: number }): Promise<CostingItemResponse[]> {
+  async listCostingItems(params?: { category_id?: number; search?: string }): Promise<CostingItemResponse[]> {
     const q = new URLSearchParams();
     if (params?.category_id != null) q.set("category_id", String(params.category_id));
+    if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<CostingItemResponse[]>(`/api/v1/costing/items${suffix}`);
   },
@@ -3734,8 +3735,12 @@ export const api = {
     return request<CurrencyMasterResponse[]>("/api/v1/costing/currencies");
   },
   // Inventory module (legacy parity wave)
-  async listInventoryItemCategories(): Promise<ItemCategoryResponse[]> {
-    return request<ItemCategoryResponse[]>("/api/v1/inventory/item-categories");
+  async listInventoryItemCategories(params?: { search?: string; limit?: number }): Promise<ItemCategoryResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<ItemCategoryResponse[]>(`/api/v1/inventory/item-categories${suffix}`);
   },
   async createInventoryItemCategory(data: ItemCategoryCreate): Promise<ItemCategoryResponse> {
     return request<ItemCategoryResponse>("/api/v1/inventory/item-categories", {
@@ -3743,7 +3748,7 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  async updateInventoryItemCategory(id: number, data: ItemCategoryCreate): Promise<ItemCategoryResponse> {
+  async updateInventoryItemCategory(id: number, data: ItemCategoryUpdate): Promise<ItemCategoryResponse> {
     return request<ItemCategoryResponse>(`/api/v1/inventory/item-categories/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -3752,9 +3757,15 @@ export const api = {
   async deleteInventoryItemCategory(id: number): Promise<void> {
     return request<void>(`/api/v1/inventory/item-categories/${id}`, { method: "DELETE" });
   },
-  async listInventoryItemSubcategories(params?: { category_id?: number }): Promise<ItemSubcategoryResponse[]> {
+  async listInventoryItemSubcategories(params?: {
+    category_id?: number;
+    search?: string;
+    limit?: number;
+  }): Promise<ItemSubcategoryResponse[]> {
     const q = new URLSearchParams();
     if (params?.category_id != null) q.set("category_id", String(params.category_id));
+    if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
+    if (params?.limit != null) q.set("limit", String(params.limit));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<ItemSubcategoryResponse[]>(`/api/v1/inventory/item-subcategories${suffix}`);
   },
@@ -3764,7 +3775,7 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  async updateInventoryItemSubcategory(id: number, data: ItemSubcategoryCreate): Promise<ItemSubcategoryResponse> {
+  async updateInventoryItemSubcategory(id: number, data: ItemSubcategoryUpdate): Promise<ItemSubcategoryResponse> {
     return request<ItemSubcategoryResponse>(`/api/v1/inventory/item-subcategories/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -3773,8 +3784,12 @@ export const api = {
   async deleteInventoryItemSubcategory(id: number): Promise<void> {
     return request<void>(`/api/v1/inventory/item-subcategories/${id}`, { method: "DELETE" });
   },
-  async listInventoryItemUnits(): Promise<ItemUnitResponse[]> {
-    return request<ItemUnitResponse[]>("/api/v1/inventory/item-units");
+  async listInventoryItemUnits(params?: { search?: string; limit?: number }): Promise<ItemUnitResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.search != null && params.search.trim() !== "") q.set("search", params.search.trim());
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<ItemUnitResponse[]>(`/api/v1/inventory/item-units${suffix}`);
   },
   async createInventoryItemUnit(data: ItemUnitCreate): Promise<ItemUnitResponse> {
     return request<ItemUnitResponse>("/api/v1/inventory/item-units", {
@@ -3782,7 +3797,7 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  async updateInventoryItemUnit(id: number, data: ItemUnitCreate): Promise<ItemUnitResponse> {
+  async updateInventoryItemUnit(id: number, data: ItemUnitUpdate): Promise<ItemUnitResponse> {
     return request<ItemUnitResponse>(`/api/v1/inventory/item-units/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -3828,7 +3843,7 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  async updateInventoryItem(id: number, data: InventoryItemCreate): Promise<InventoryItemResponse> {
+  async updateInventoryItem(id: number, data: InventoryItemUpdate): Promise<InventoryItemResponse> {
     return request<InventoryItemResponse>(`/api/v1/inventory/items/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -3846,7 +3861,7 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  async updateWarehouse(id: number, data: WarehouseCreate): Promise<WarehouseResponse> {
+  async updateWarehouse(id: number, data: WarehouseUpdate): Promise<WarehouseResponse> {
     return request<WarehouseResponse>(`/api/v1/inventory/warehouses/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -3925,7 +3940,7 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  async updateStockGroup(id: number, data: StockGroupCreate): Promise<StockGroupResponse> {
+  async updateStockGroup(id: number, data: StockGroupUpdate): Promise<StockGroupResponse> {
     return request<StockGroupResponse>(`/api/v1/inventory/stock-groups/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -6364,11 +6379,15 @@ export const api = {
     status?: string;
     master_contract_id?: number;
     vendor_id?: number;
+    limit?: number;
+    offset?: number;
   }): Promise<BtbLcRow[]> {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
     if (params?.master_contract_id != null) q.set("master_contract_id", String(params.master_contract_id));
     if (params?.vendor_id != null) q.set("vendor_id", String(params.vendor_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<BtbLcRow[]>(`/api/v1/commercial/btb-lcs${suffix}`);
   },
@@ -7673,6 +7692,8 @@ export interface CustomerResponse {
   shipping_postal_code: string | null;
   shipping_country: string | null;
   same_as_billing: boolean;
+  /** Default quotation currency; may be absent on older API responses */
+  preferred_currency?: string | null;
   created_at: string;
   updated_at: string;
   profile_completeness?: number | null;
@@ -8688,6 +8709,7 @@ export interface CustomerCreate {
   shipping_postal_code?: string;
   shipping_country?: string;
   same_as_billing?: boolean;
+  preferred_currency?: string;
 }
 
 export interface CustomerUpdate {
@@ -8718,6 +8740,7 @@ export interface CustomerUpdate {
   shipping_postal_code?: string;
   shipping_country?: string;
   same_as_billing?: boolean;
+  preferred_currency?: string;
 }
 
 export interface CustomerListPageResponse {
@@ -8980,8 +9003,15 @@ export interface ItemCategoryResponse {
 }
 
 export interface ItemCategoryCreate {
-  category_code: string;
+  /** Omit to auto-generate (e.g. CAT-0001). */
+  category_code?: string;
   name: string;
+  description?: string;
+  is_active?: boolean;
+}
+
+export interface ItemCategoryUpdate {
+  name?: string;
   description?: string;
   is_active?: boolean;
 }
@@ -8998,8 +9028,16 @@ export interface ItemSubcategoryResponse {
 
 export interface ItemSubcategoryCreate {
   category_id: number;
-  subcategory_code: string;
+  /** Omit to auto-generate (e.g. SUBCAT-0001). */
+  subcategory_code?: string;
   name: string;
+  description?: string;
+  is_active?: boolean;
+}
+
+export interface ItemSubcategoryUpdate {
+  category_id?: number;
+  name?: string;
   description?: string;
   is_active?: boolean;
 }
@@ -9014,8 +9052,15 @@ export interface ItemUnitResponse {
 }
 
 export interface ItemUnitCreate {
-  unit_code: string;
+  /** Omit to auto-generate (e.g. UOM-0001). */
+  unit_code?: string;
   name: string;
+  description?: string;
+  is_active?: boolean;
+}
+
+export interface ItemUnitUpdate {
+  name?: string;
   description?: string;
   is_active?: boolean;
 }
@@ -9028,6 +9073,10 @@ export interface CostingItemResponse {
   description: string | null;
   category_id: number;
   unit_id: number;
+  subcategory_id?: number | null;
+  stock_group_id?: number | null;
+  unit_code?: string | null;
+  unit_name?: string | null;
   default_cost: string;
   is_active: boolean;
 }
@@ -9048,12 +9097,26 @@ export interface InventoryItemResponse {
 }
 
 export interface InventoryItemCreate {
-  item_code: string;
+  /** Omit to auto-generate (e.g. ITEM-000001). */
+  item_code?: string;
   name: string;
   description?: string;
   category_id: number;
   subcategory_id?: number | null;
   unit_id: number;
+  default_warehouse_id?: number | null;
+  stock_group_id?: number | null;
+  default_cost?: string;
+  is_active?: boolean;
+}
+
+/** PATCH /inventory/items — codes are immutable after create. */
+export interface InventoryItemUpdate {
+  name?: string;
+  description?: string;
+  category_id?: number;
+  subcategory_id?: number | null;
+  unit_id?: number;
   default_warehouse_id?: number | null;
   stock_group_id?: number | null;
   default_cost?: string;
@@ -9070,9 +9133,16 @@ export interface WarehouseResponse {
 }
 
 export interface WarehouseCreate {
-  warehouse_code: string;
+  /** Omit to auto-generate (e.g. WH-0001). */
+  warehouse_code?: string;
   name: string;
   address?: string;
+  is_active?: boolean;
+}
+
+export interface WarehouseUpdate {
+  name?: string;
+  address?: string | null;
   is_active?: boolean;
 }
 
@@ -9091,7 +9161,20 @@ export interface StockGroupResponse {
 }
 
 export interface StockGroupCreate {
-  group_code: string;
+  /** Omit to auto-generate (e.g. GRP-0001). */
+  group_code?: string;
+  name: string;
+  parent_id?: number | null;
+  is_active?: boolean;
+  inventory_account_id?: number | null;
+  wip_account_id?: number | null;
+  cogs_account_id?: number | null;
+  adjustment_account_id?: number | null;
+  grni_account_id?: number | null;
+}
+
+/** PATCH /inventory/stock-groups — group_code is immutable. */
+export interface StockGroupUpdate {
   name: string;
   parent_id?: number | null;
   is_active?: boolean;

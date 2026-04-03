@@ -49,7 +49,8 @@ export default {
           "neutral-foreground": "#334155",
         },
         focus: {
-          ring: "#2563eb",
+          /** Match brand primary so focus rings are not a second (blue) color on orange UI */
+          ring: "hsl(24, 100%, 50%)",
         },
         orange: {
           950: "hsl(24, 90%, 15%)",

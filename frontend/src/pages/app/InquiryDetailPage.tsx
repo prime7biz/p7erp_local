@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, type InquiryResponse, type CustomerResponse } from "@/api/client";
 import { InquiryAiAuditHistory } from "@/components/inquiries/InquiryAiAuditHistory";
 import { InquiryAiPanel } from "@/components/inquiries/InquiryAiPanel";
+import { canConvertInquiryToQuotation } from "@/features/merch/workflow";
 import { useInquiryAi } from "@/hooks/useInquiryAi";
 import { useSecureImage } from "@/hooks/useSecureImage";
 
@@ -86,9 +87,14 @@ export function InquiryDetailPage() {
   if (!item.target_price) missingForQuotation.push("Target Price");
   if (!item.target_price_currency) missingForQuotation.push("Target Currency");
   if (!item.exchange_rate) missingForQuotation.push("Exchange Rate");
+  const canConvertToQuotation = canConvertInquiryToQuotation(item.status);
 
   const convertInquiry = async () => {
     if (!item) return;
+    if (!canConvertToQuotation) {
+      setError("Submit the inquiry before converting it to a quotation.");
+      return;
+    }
     setConverting(true);
     setError("");
     try {
@@ -135,6 +141,15 @@ export function InquiryDetailPage() {
               className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
             >
               Open quotation
+            </button>
+          ) : !canConvertToQuotation ? (
+            <button
+              type="button"
+              disabled
+              title="Submit the inquiry before converting it to a quotation."
+              className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-muted disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              Submit first
             </button>
           ) : (
             <button

@@ -8,6 +8,7 @@ import {
   type CustomerResponse,
   type InquiryResponse,
   type ItemCategoryResponse,
+  type ItemUnitResponse,
   type QuotationDetailResponse,
   type QuotationResponse,
   type QuotationManufacturingLine,
@@ -16,15 +17,17 @@ import {
   type QuotationSizeRatioLine,
   type StyleResponse,
 } from "@/api/client";
+import { canConvertInquiryToQuotation } from "@/features/merch/workflow";
 import { buildQuotationFullUpdatePayload } from "./mappers/buildQuotationFullUpdatePayload";
 import { calculateQuotationTotals } from "./mappers/calculateQuotationTotals";
+import { resolveRate } from "./mappers/currencyFx";
 import {
   applyOtherCostCalculation,
+  computeManufacturingLineAmounts,
   computeMaterialLineAmounts,
+  QUOTATION_MANUFACTURING_HOURS_PER_DAY,
   toSafeNumber,
 } from "./mappers/quotationNumeric";
-
-const MANUFACTURING_HOURS_PER_DAY = 8;
 
 export function useQuotationWorkspaceController(id?: string) {
   const navigate = useNavigate();
@@ -34,6 +37,7 @@ export function useQuotationWorkspaceController(id?: string) {
   const [inquiry, setInquiry] = useState<InquiryResponse | null>(null);
   const [categories, setCategories] = useState<ItemCategoryResponse[]>([]);
   const [items, setItems] = useState<CostingItemResponse[]>([]);
+  const [units, setUnits] = useState<ItemUnitResponse[]>([]);
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [inquiries, setInquiries] = useState<InquiryResponse[]>([]);
   const [styles, setStyles] = useState<StyleResponse[]>([]);
@@ -71,9 +75,11 @@ export function useQuotationWorkspaceController(id?: string) {
       setError("");
       setSuccess("");
       try {
-        const [cats, itemsRes, customersRes, inquiriesRes, linksRes, settings, stylesRes, currenciesRes] = await Promise.all([
+        const [cats, itemsRes, unitsRes, customersRes, inquiriesRes, linksRes, settings, stylesRes, currenciesRes] =
+          await Promise.all([
           api.listItemCategories(),
           api.listCostingItems(),
+          api.listItemUnits(),
           isNew ? api.listCustomers() : Promise.resolve([] as CustomerResponse[]),
           isNew ? api.listInquiries() : Promise.resolve([] as InquiryResponse[]),
           isNew ? api.listCustomerIntermediaryLinks() : Promise.resolve([] as CustomerIntermediaryLinkResponse[]),
@@ -83,6 +89,7 @@ export function useQuotationWorkspaceController(id?: string) {
         ]);
         setCategories(cats);
         setItems(itemsRes);
+        setUnits(unitsRes);
         setTenantDefaultCommissionMode(settings.default_commission_mode ?? "");
         setStyles(stylesRes);
         setCurrencies(currenciesRes.filter((currency) => currency.is_active));
@@ -217,9 +224,11 @@ export function useQuotationWorkspaceController(id?: string) {
     }
   }, [id, isNew]);
 
+  const quotationCurrency = quotation?.currency ?? "USD";
+
   const totals = useMemo(
-    () => calculateQuotationTotals(materials, manufacturing, otherCosts),
-    [materials, manufacturing, otherCosts]
+    () => calculateQuotationTotals(materials, manufacturing, otherCosts, quotationCurrency),
+    [materials, manufacturing, otherCosts, quotationCurrency],
   );
 
   const selectedStyle = useMemo(
@@ -231,37 +240,117 @@ export function useQuotationWorkspaceController(id?: string) {
     setQuotation((prev) => (prev ? { ...prev, ...patch } : null));
   };
 
-  const onMaterialChange = (index: number, patch: Partial<QuotationMaterialLine>) => {
-    setMaterials((rows) => {
-      const next = [...rows];
-      const row = { ...next[index], ...patch } as QuotationMaterialLine;
-      const calculated = computeMaterialLineAmounts(row, toSafeNumber(quotation?.projected_quantity));
-      row.amount_per_dozen = calculated.amount_per_dozen;
-      row.total_amount = calculated.total_amount;
-      next[index] = row;
-      return next;
-    });
-  };
+  const onMaterialChange = useCallback(
+    (index: number, patch: Partial<QuotationMaterialLine>) => {
+      setMaterials((rows) => {
+        const next = [...rows];
+        const row = { ...next[index], ...patch } as QuotationMaterialLine;
+        if ("item_id" in patch) {
+          if (patch.item_id) {
+            const selectedItem = items.find((i) => i.id === patch.item_id);
+            if (selectedItem) {
+              const u = units.find((x) => x.id === selectedItem.unit_id);
+              row.unit =
+                u?.name ??
+                u?.unit_code ??
+                selectedItem.unit_name ??
+                selectedItem.unit_code ??
+                row.unit ??
+                "";
+            }
+          } else {
+            row.unit = "";
+          }
+        }
+        const qc = quotation?.currency ?? "USD";
+        const calculated = computeMaterialLineAmounts(
+          row,
+          toSafeNumber(quotation?.projected_quantity),
+          qc,
+        );
+        row.amount_per_dozen = calculated.amount_per_dozen;
+        row.total_amount = calculated.total_amount;
+        row.base_amount = calculated.base_amount;
+        next[index] = row;
+        return next;
+      });
+    },
+    [items, units, quotation?.projected_quantity, quotation?.currency],
+  );
 
-  const onManufacturingChange = (index: number, patch: Partial<QuotationManufacturingLine>) => {
-    setManufacturing((rows) => {
-      const next = [...rows];
-      const row = { ...next[index], ...patch } as QuotationManufacturingLine;
-      if ("production_per_hour" in patch || "machines_required" in patch) {
-        const pph = toSafeNumber(row.production_per_hour);
-        const mach = Math.max(0, row.machines_required);
-        row.production_per_day = String(Math.round(pph * mach * MANUFACTURING_HOURS_PER_DAY));
-      }
-      next[index] = row;
-      return next;
-    });
-  };
+  useEffect(() => {
+    if (!quotation) return;
+    const qc = quotation.currency ?? "USD";
+    const pq = toSafeNumber(quotation.projected_quantity);
+    setMaterials((rows) =>
+      rows.map((row) => {
+        const c = computeMaterialLineAmounts(row, pq, qc);
+        return {
+          ...row,
+          amount_per_dozen: c.amount_per_dozen,
+          total_amount: c.total_amount,
+          base_amount: c.base_amount,
+        };
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- document currency / qty only; avoid full quotation (rollup header sync creates new refs)
+  }, [quotation?.currency, quotation?.projected_quantity]);
+
+  useEffect(() => {
+    if (!quotation) return;
+    const pq = toSafeNumber(quotation.projected_quantity);
+    setManufacturing((rows) =>
+      rows.map((row) => ({
+        ...row,
+        ...computeManufacturingLineAmounts(row, pq),
+      })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- qty + quotation identity; row inputs handled in onManufacturingChange
+  }, [quotation?.id, quotation?.projected_quantity]);
+
+  const refreshCostingMasters = useCallback(async () => {
+    const [cats, itemsRes, unitsRes] = await Promise.all([
+      api.listItemCategories(),
+      api.listCostingItems(),
+      api.listItemUnits(),
+    ]);
+    setCategories(cats);
+    setItems(itemsRes);
+    setUnits(unitsRes);
+  }, []);
+
+  const onManufacturingChange = useCallback(
+    (index: number, patch: Partial<QuotationManufacturingLine>) => {
+      setManufacturing((rows) => {
+        const next = [...rows];
+        let row = { ...next[index], ...patch } as QuotationManufacturingLine;
+        if ("production_per_hour" in patch || "machines_required" in patch) {
+          const pph = toSafeNumber(row.production_per_hour);
+          const mach = Math.max(0, row.machines_required);
+          row.production_per_day = String(
+            Math.round(pph * mach * QUOTATION_MANUFACTURING_HOURS_PER_DAY),
+          );
+        }
+        const pq = toSafeNumber(quotation?.projected_quantity);
+        const derived = computeManufacturingLineAmounts(row, pq);
+        row = { ...row, ...derived };
+        next[index] = row;
+        return next;
+      });
+    },
+    [quotation?.projected_quantity],
+  );
 
   const onOtherCostChange = (index: number, patch: Partial<QuotationOtherCostLine>) => {
     setOtherCosts((rows) => {
       const next = [...rows];
       let row = { ...next[index], ...patch } as QuotationOtherCostLine;
-      const { matTotal, mfgTotal } = calculateQuotationTotals(materials, manufacturing, []);
+      const { matTotal, mfgTotal } = calculateQuotationTotals(
+        materials,
+        manufacturing,
+        [],
+        quotationCurrency,
+      );
       row = applyOtherCostCalculation(row, matTotal + mfgTotal);
       next[index] = row;
       return next;
@@ -338,12 +427,14 @@ export function useQuotationWorkspaceController(id?: string) {
       allLinks.find((l) => l.customer_id === customerId) ??
       null;
     setCustomer(cust);
+    const prefCur = cust?.preferred_currency?.trim();
     updateQuotationHeader({
       customer_id: customerId,
       customer_intermediary_id: firstPrimaryLink?.id ?? null,
       commission_mode: tenantDefaultCommissionMode || null,
       commission_type: firstPrimaryLink?.commission_type ?? null,
       commission_value: firstPrimaryLink?.commission_value != null ? String(firstPrimaryLink.commission_value) : null,
+      ...(prefCur ? { currency: prefCur.toUpperCase() } : {}),
     });
   };
 
@@ -421,6 +512,23 @@ export function useQuotationWorkspaceController(id?: string) {
       setError("Please select a customer before saving.");
       return;
     }
+    for (let i = 0; i < materials.length; i++) {
+      const line = materials[i];
+      if (!line) continue;
+      if (line.category_id != null && line.item_id == null) {
+        setError(
+          `Material line ${i + 1}: select an inventory item when a category is chosen (or clear the category).`,
+        );
+        return;
+      }
+    }
+    const pq = toSafeNumber(quotation.projected_quantity);
+    if (pq <= 0 && materials.some((m) => m.category_id != null || m.item_id != null)) {
+      setError(
+        "Projected quantity is zero — material line totals will be zero. Set a quantity or remove material lines.",
+      );
+      return;
+    }
     setSaving(true);
     setError("");
     setSuccess("");
@@ -434,8 +542,14 @@ export function useQuotationWorkspaceController(id?: string) {
       });
       let targetId = quotation.id;
       if (isNew) {
-        if (quotation.inquiry_id) {
-          const base = await api.convertInquiryToQuotation(quotation.inquiry_id, {
+        const linkedInquiryId = quotation.inquiry_id;
+        const useConvertPath =
+          linkedInquiryId != null &&
+          inquiry != null &&
+          inquiry.id === linkedInquiryId &&
+          canConvertInquiryToQuotation(inquiry.status);
+        if (useConvertPath) {
+          const base = await api.convertInquiryToQuotation(linkedInquiryId, {
             profit_percentage: toSafeNumber(quotation.profit_percentage) || 15,
           });
           targetId = base.id;
@@ -507,29 +621,62 @@ export function useQuotationWorkspaceController(id?: string) {
     setFetchingRates(true);
     setError("");
     try {
-      const base = "USD";
-      const live = await api.getLiveRates(base);
-      setLiveRates(live.rates ?? {});
+      const live = await api.getLiveRates("USD");
+      const rates: Record<string, number> = { USD: 1, ...(live.rates ?? {}) };
+      setLiveRates(rates);
       setRateSource(live.live ? "live" : "fallback");
-      const targetCode = (quotation.target_price_currency ?? "USD").toUpperCase();
-      const bdtRate = live.rates?.BDT;
-      const targetRate = live.rates?.[targetCode];
-      if (bdtRate && targetRate) {
-        updateQuotationHeader({ exchange_rate: (bdtRate / targetRate).toFixed(4) });
+      const quotCurr = (quotation.currency ?? "USD").toUpperCase();
+      const bdtFx = resolveRate(quotCurr, "BDT", rates);
+      if (bdtFx > 0) {
+        updateQuotationHeader({ exchange_rate: bdtFx.toFixed(4) });
       }
-      setMaterials((rows) =>
-        rows.map((row) => {
-          const rowCurrency = (row.currency ?? "USD").toUpperCase();
-          if (rowCurrency === "BDT") {
-            const calculated = computeMaterialLineAmounts({ ...row, exchange_rate: "1", currency: rowCurrency }, toSafeNumber(quotation.projected_quantity));
-            return { ...row, exchange_rate: "1", amount_per_dozen: calculated.amount_per_dozen, total_amount: calculated.total_amount };
-          }
-          const rowTargetRate = live.rates?.[rowCurrency];
-          const exchange = rowTargetRate && bdtRate ? (bdtRate / rowTargetRate).toFixed(4) : row.exchange_rate;
-          const calculated = computeMaterialLineAmounts({ ...row, exchange_rate: exchange, currency: rowCurrency }, toSafeNumber(quotation.projected_quantity));
-          return { ...row, exchange_rate: exchange, amount_per_dozen: calculated.amount_per_dozen, total_amount: calculated.total_amount };
-        })
-      );
+      const pq = toSafeNumber(quotation.projected_quantity);
+
+      const syncMaterialRow = (row: QuotationMaterialLine): QuotationMaterialLine => {
+        const rowCurr = (row.currency ?? quotCurr).toUpperCase();
+        if (rowCurr === quotCurr) {
+          const calculated = computeMaterialLineAmounts(
+            { ...row, exchange_rate: "1", currency: rowCurr },
+            pq,
+            quotCurr,
+          );
+          return {
+            ...row,
+            exchange_rate: "1",
+            amount_per_dozen: calculated.amount_per_dozen,
+            total_amount: calculated.total_amount,
+            base_amount: calculated.base_amount,
+          };
+        }
+        const rate = resolveRate(rowCurr, quotCurr, rates);
+        const rateStr = rate > 0 ? rate.toFixed(6) : row.exchange_rate;
+        const calculated = computeMaterialLineAmounts(
+          { ...row, exchange_rate: rateStr, currency: row.currency },
+          pq,
+          quotCurr,
+        );
+        return {
+          ...row,
+          exchange_rate: rateStr,
+          amount_per_dozen: calculated.amount_per_dozen,
+          total_amount: calculated.total_amount,
+          base_amount: calculated.base_amount,
+        };
+      };
+
+      const syncFxRow = <T extends { currency?: string | null; exchange_rate?: string | null }>(row: T): T => {
+        const rowCurr = (row.currency ?? quotCurr).toUpperCase();
+        if (rowCurr === quotCurr) {
+          return { ...row, exchange_rate: "1" };
+        }
+        const rate = resolveRate(rowCurr, quotCurr, rates);
+        const rateStr = rate > 0 ? rate.toFixed(6) : row.exchange_rate;
+        return { ...row, exchange_rate: rateStr };
+      };
+
+      setMaterials((rows) => rows.map(syncMaterialRow));
+      setManufacturing((rows) => rows.map((r) => syncFxRow(r)));
+      setOtherCosts((rows) => rows.map((r) => syncFxRow(r)));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to refresh exchange rates");
     } finally {
@@ -594,6 +741,7 @@ export function useQuotationWorkspaceController(id?: string) {
     inquiry,
     categories,
     items,
+    units,
     customers,
     inquiries,
     styles,
@@ -649,5 +797,6 @@ export function useQuotationWorkspaceController(id?: string) {
     duplicateAsNewVersion,
     navigate,
     reloadQuotationDetail,
+    refreshCostingMasters,
   };
 }

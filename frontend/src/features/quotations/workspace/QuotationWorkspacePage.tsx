@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { api, type QuotationOtherCostLine } from "@/api/client";
+import {
+  api,
+  type InventoryItemResponse,
+  type QuotationManufacturingLine,
+  type QuotationOtherCostLine,
+} from "@/api/client";
+import { MasterQuickAddModal } from "@/components/app/MasterQuickAddModal";
 import { logApiError } from "@/utils/logApiError";
 import { SecureImage } from "@/components/SecureImage";
 import {
@@ -16,7 +22,12 @@ import { CostSummaryCard } from "./sidebar/CostSummaryCard";
 import { MarginPricingCard } from "./sidebar/MarginPricingCard";
 import { CostBreakdownCard } from "./sidebar/CostBreakdownCard";
 import { calculateQuotationTotals } from "./mappers/calculateQuotationTotals";
-import { applyOtherCostCalculation, formatMoney, toSafeNumber } from "./mappers/quotationNumeric";
+import {
+  applyOtherCostCalculation,
+  formatMoney,
+  lineFxToQuotation,
+  toSafeNumber,
+} from "./mappers/quotationNumeric";
 import { useQuotationAi } from "@/hooks/useQuotationAi";
 import { QuotationAiPanel } from "@/components/quotations/QuotationAiPanel";
 import { QuotationCostingIntelligencePanel } from "@/components/quotations/QuotationCostingIntelligencePanel";
@@ -37,17 +48,23 @@ function QuotationRowActions({
   setOpenKey: (k: string | null) => void;
   onDelete: () => void;
 }) {
+  const expanded = openKey === rowKey;
   return (
     <div className="relative inline-block text-left" data-quotation-row-actions>
       <button
         type="button"
-        onClick={() => setOpenKey(openKey === rowKey ? null : rowKey)}
+        aria-haspopup="menu"
+        aria-expanded={expanded}
+        onClick={() => setOpenKey(expanded ? null : rowKey)}
         className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
       >
         Actions
       </button>
-      {openKey === rowKey && (
-        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+      {expanded && (
+        <div
+          role="menu"
+          className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
+        >
           <button
             type="button"
             className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
@@ -77,6 +94,18 @@ const OTHER_COST_PRESETS: ReadonlyArray<{
   { cost_head: "Bank / LC charges", cost_type: "percentage", value: "1.5", based_on: "subtotal" },
 ];
 
+function commissionValueLabel(
+  commissionType: string | null | undefined,
+  commissionValue: unknown,
+): string {
+  const t = (commissionType ?? "").toLowerCase();
+  const n = toSafeNumber(commissionValue as number | string | null | undefined);
+  if (t.includes("percent") || t === "percentage" || t === "%") {
+    return `${n.toFixed(1)}%`;
+  }
+  return commissionValue != null && String(commissionValue).trim() !== "" ? String(commissionValue) : "—";
+}
+
 export function QuotationWorkspacePage({ id }: { id?: string }) {
   const {
     isNew,
@@ -85,6 +114,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
     inquiry,
     categories,
     items,
+    units,
     customers,
     inquiries,
     styles,
@@ -142,12 +172,17 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
     duplicateAsNewVersion,
     navigate,
     reloadQuotationDetail,
+    refreshCostingMasters,
   } = useQuotationWorkspaceController(id);
   const location = useLocation();
   const isPrintMode = new URLSearchParams(location.search).get("print") === "1";
   const [sizeRatioCollapsed, setSizeRatioCollapsed] = useState(false);
   const [openRowActions, setOpenRowActions] = useState<string | null>(null);
   const [creatingOrder, setCreatingOrder] = useState(false);
+  const [orderCreateError, setOrderCreateError] = useState("");
+  const [quickAdd, setQuickAdd] = useState<
+    { kind: "category" | "item"; rowIdx: number } | null
+  >(null);
   const quotationAi = useQuotationAi();
 
   const aiFormSnapshot = useMemo(() => {
@@ -182,7 +217,12 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
   }, [openRowActions]);
 
   const appendOtherCostPreset = (preset: (typeof OTHER_COST_PRESETS)[number]) => {
-    const { matTotal, mfgTotal } = calculateQuotationTotals(materials, manufacturing, []);
+    const { matTotal, mfgTotal } = calculateQuotationTotals(
+      materials,
+      manufacturing,
+      [],
+      quotation?.currency ?? "USD",
+    );
     const base = matTotal + mfgTotal;
     setOtherCosts((rows) => {
       const serial = rows.length + 1;
@@ -198,7 +238,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           calculated_amount: "0",
           notes: null,
           currency: quotation?.currency ?? "USD",
-          exchange_rate: quotation?.exchange_rate ?? "1",
+          exchange_rate: "1",
           base_amount: "0",
           local_amount: "0",
         },
@@ -227,6 +267,14 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
 
   const showEditableHeader = isNew || isEditing;
   const currencyOptions = currencies.length > 0 ? currencies.map((entry) => entry.code) : ["USD", "BDT", "EUR", "GBP", "JPY"];
+  const docCur = quotation.currency ?? "USD";
+  const mfgLineInQuotation = (m: QuotationManufacturingLine) =>
+    toSafeNumber(m.total_order_cost) * lineFxToQuotation(m, docCur);
+  const otherLineInQuotation = (c: QuotationOtherCostLine) => {
+    const raw = toSafeNumber(c.calculated_amount || c.total_amount);
+    if (c.cost_type === "percentage") return raw;
+    return raw * lineFxToQuotation(c, docCur);
+  };
   const findCategoryName = (value: number | null) =>
     value == null ? "" : categories.find((c) => c.id === value)?.name ?? "";
   const findItemName = (value: number | null) =>
@@ -285,12 +333,14 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                 if (creatingOrder) return;
                 setCreatingOrder(true);
                 try {
+                  setOrderCreateError("");
                   const order = await api.convertQuotationToOrder(quotation.id);
                   navigate(`/app/orders/${order.id}`);
                 } catch (e) {
                   logApiError("QuotationWorkspace.createOrder", e);
-                  const message = e instanceof Error ? e.message : "Failed to create order from quotation";
-                  window.alert(message);
+                  setOrderCreateError(
+                    e instanceof Error ? e.message : "Failed to create order from quotation",
+                  );
                 } finally {
                   setCreatingOrder(false);
                 }
@@ -370,10 +420,18 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
         </div>
       </header>
 
-      {(error || success) && (
+      {(error || success || orderCreateError) && (
         <div className="space-y-2">
           {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">{error}</div>}
           {success && <div className="rounded-lg border border-status-success/20 bg-status-success-subtle px-4 py-3 text-sm text-status-success-foreground">{success}</div>}
+          {orderCreateError && (
+            <div
+              className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground"
+              role="alert"
+            >
+              {orderCreateError}
+            </div>
+          )}
         </div>
       )}
 
@@ -554,6 +612,12 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       }
                       className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
+                    {toSafeNumber(quotation.projected_quantity) <= 0 && (
+                      <p className="mt-1 text-xs text-text-muted">
+                        Material subtotals and CM order totals use this quantity. Set it above zero for costing to show
+                        amounts.
+                      </p>
+                    )}
                   </div>
                   <div className="sm:col-span-2 -mt-1 border-t border-border-subtle pt-3">
                     <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">Currencies and FX</div>
@@ -640,7 +704,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       </p>
                     )}
                     <p className="mt-1 text-xs text-text-muted">
-                      Used when buyer target currency and document currency differ. Line materials may use separate FX in the table below.
+                      BDT per 1 unit of document / quote currency (for local books and line local amounts). “Sync rate” uses live USD cross-rates. Cost lines can use their own currency and FX below.
                     </p>
                   </div>
                   <div>
@@ -779,13 +843,17 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                 <div><span className="font-medium">Department:</span> {quotation.department ?? "—"}</div>
                 <div><span className="font-medium">Style:</span> {quotation.style_name ?? quotation.style_ref ?? "—"}</div>
                 <div><span className="font-medium">Shipping:</span> {quotation.shipping_term ?? "—"}</div>
-                <div><span className="font-medium">Commission:</span> {quotation.commission_mode ?? "-"} / {quotation.commission_type ?? "-"} / {quotation.commission_value ?? "-"}</div>
+                <div>
+                  <span className="font-medium">Commission:</span> {quotation.commission_mode ?? "-"} /{" "}
+                  {quotation.commission_type ?? "-"} /{" "}
+                  {commissionValueLabel(quotation.commission_type, quotation.commission_value)}
+                </div>
               </div>
             )}
           </CollapsibleSection>
 
           <CollapsibleSection
-            title="Fabric Costs / Materials"
+            title="Materials"
             actions={isEditing ? (
               <button
                 type="button"
@@ -797,13 +865,13 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       category_id: null,
                       item_id: null,
                       description: null,
-                      unit: "Yard",
+                      unit: "",
                       consumption_per_dozen: "0",
                       unit_price: "0",
                       amount_per_dozen: "0",
                       total_amount: "0",
                       currency: quotation.currency ?? "USD",
-                      exchange_rate: quotation.exchange_rate ?? "1",
+                      exchange_rate: "1",
                       base_amount: "0",
                       local_amount: "0",
                     },
@@ -811,7 +879,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                 }
                 className="no-print rounded-lg border border-border px-3 py-1 text-xs text-text-secondary bg-surface-raised"
               >
-                + Add Fabric
+                + Add Material
               </button>
             ) : null}
           >
@@ -820,19 +888,20 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
             ) : (
               <div className="relative max-h-[440px] overflow-auto rounded-lg border border-border-subtle">
                 <table className="min-w-[980px] w-full text-sm">
+                  <caption className="sr-only">Quotation material lines and costs</caption>
                   <thead className="sticky top-0 z-[1] border-b border-border bg-surface-subtle text-text-muted">
                     <tr>
-                      <th className="px-2 py-2 text-left">#</th>
-                      <th className="px-2 py-2 text-left">Fabric Type / Category</th>
-                      <th className="px-2 py-2 text-left">Item / Description</th>
-                      <th className="px-2 py-2 text-left">UOM</th>
-                      <th className="px-2 py-2 text-right">Cons. (Yds)</th>
-                      <th className="px-2 py-2 text-right">Unit Price</th>
-                      <th className="px-2 py-2 text-left">Curr</th>
-                      <th className="px-2 py-2 text-right">FX rate</th>
-                      <th className="px-2 py-2 text-right">Subtotal</th>
-                      <th className="px-2 py-2 text-right">% Total</th>
-                      <th className="px-2 py-2 text-right">Actions</th>
+                      <th scope="col" className="px-2 py-2 text-left">#</th>
+                      <th scope="col" className="px-2 py-2 text-left">Material Category</th>
+                      <th scope="col" className="px-2 py-2 text-left">Item / Description</th>
+                      <th scope="col" className="px-2 py-2 text-left">UOM</th>
+                      <th scope="col" className="px-2 py-2 text-right">Consumption</th>
+                      <th scope="col" className="px-2 py-2 text-right">Unit Price</th>
+                      <th scope="col" className="px-2 py-2 text-left">Curr</th>
+                      <th scope="col" className="px-2 py-2 text-right">FX rate</th>
+                      <th scope="col" className="px-2 py-2 text-right">Subtotal</th>
+                      <th scope="col" className="px-2 py-2 text-right">% Total</th>
+                      <th scope="col" className="px-2 py-2 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -841,16 +910,35 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                         <td className="px-2 py-1">{idx + 1}</td>
                         <td className="px-2 py-1">
                           {isEditing ? (
-                            <select
-                              value={m.category_id ?? ""}
-                              onChange={(e) => onMaterialChange(idx, { category_id: e.target.value ? Number(e.target.value) : null })}
-                              className="w-full rounded border border-border px-1 py-1 text-xs"
-                            >
-                              <option value="">—</option>
-                              {categories.map((c) => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
-                              ))}
-                            </select>
+                            <div className="flex gap-1">
+                              <select
+                                value={m.category_id ?? ""}
+                                onChange={(e) =>
+                                  onMaterialChange(idx, {
+                                    category_id: e.target.value ? Number(e.target.value) : null,
+                                    item_id: null,
+                                    unit: "",
+                                  })
+                                }
+                                className="min-w-0 flex-1 rounded border border-border px-1 py-1 text-xs"
+                                aria-label={`Material category row ${idx + 1}`}
+                              >
+                                <option value="">—</option>
+                                {categories.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-text-secondary hover:bg-surface-subtle"
+                                onClick={() => setQuickAdd({ kind: "category", rowIdx: idx })}
+                                title="Add category"
+                              >
+                                + Add
+                              </button>
+                            </div>
                           ) : (
                             findCategoryName(m.category_id ?? null) || "—"
                           )}
@@ -868,6 +956,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                                     description: it ? it.name : m.description,
                                   })
                                 }
+                                onRequestCreateNew={() => setQuickAdd({ kind: "item", rowIdx: idx })}
                               />
                               <input
                                 type="text"
@@ -886,8 +975,16 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                             <input
                               type="text"
                               value={m.unit ?? ""}
+                              readOnly={m.item_id != null}
+                              title={
+                                m.item_id != null
+                                  ? "UOM comes from the selected item"
+                                  : "Select an item to set UOM automatically"
+                              }
                               onChange={(e) => onMaterialChange(idx, { unit: e.target.value || null })}
-                              className="w-full rounded border border-border px-1 py-1 text-xs"
+                              className={`w-full rounded border border-border px-1 py-1 text-xs ${
+                                m.item_id != null ? "cursor-not-allowed bg-surface-subtle" : ""
+                              }`}
                             />
                           ) : (
                             m.unit ?? "—"
@@ -897,6 +994,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                           {isEditing ? (
                             <input
                               type="number"
+                              min={0}
                               step="0.0001"
                               value={m.consumption_per_dozen}
                               onChange={(e) => onMaterialChange(idx, { consumption_per_dozen: e.target.value || "0" })}
@@ -910,6 +1008,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                           {isEditing ? (
                             <input
                               type="number"
+                              min={0}
                               step="0.0001"
                               value={m.unit_price}
                               onChange={(e) => onMaterialChange(idx, { unit_price: e.target.value || "0" })}
@@ -940,6 +1039,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                           {isEditing ? (
                             <input
                               type="number"
+                              min={0}
                               step="0.0001"
                               value={m.exchange_rate}
                               onChange={(e) => onMaterialChange(idx, { exchange_rate: e.target.value || "1" })}
@@ -949,7 +1049,9 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                             m.exchange_rate
                           )}
                         </td>
-                        <td className="px-2 py-1 text-right font-medium">{m.total_amount}</td>
+                        <td className="px-2 py-1 text-right font-medium">
+                          {formatMoney(toSafeNumber(m.total_amount))}
+                        </td>
                         <td className="px-2 py-1 text-right text-text-muted">
                           {totals.matTotal > 0
                             ? `${((toSafeNumber(m.total_amount) / totals.matTotal) * 100).toFixed(1)}%`
@@ -958,7 +1060,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                         <td className="px-2 py-1 text-right">
                           {isEditing && (
                             <QuotationRowActions
-                              rowKey={`fabric-${idx}`}
+                              rowKey={`material-${idx}`}
                               openKey={openRowActions}
                               setOpenKey={setOpenRowActions}
                               onDelete={() => setMaterials((rows) => rows.filter((_, rowIndex) => rowIndex !== idx))}
@@ -971,7 +1073,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   <tfoot className="sticky bottom-0 bg-surface-raised">
                     <tr className="border-t border-border bg-surface-subtle">
                       <td colSpan={8} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
-                        Fabric Total Cost
+                        Material Total
                       </td>
                       <td className="px-2 py-2 text-right text-sm font-bold text-text-primary">
                         {formatMoney(totals.matTotal)} {quotation.currency ?? ""}
@@ -1005,7 +1107,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       cm_per_piece: "0",
                       total_order_cost: "0",
                       currency: quotation.currency ?? "USD",
-                      exchange_rate: quotation.exchange_rate ?? "1",
+                      exchange_rate: "1",
                       base_amount: "0",
                       local_amount: "0",
                     },
@@ -1021,7 +1123,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               <div className="text-xs text-text-muted">No manufacturing lines.</div>
             ) : (
               <div className="relative max-h-[420px] overflow-auto">
-                <table className="min-w-[900px] w-full text-sm">
+                <table className="min-w-[1020px] w-full text-sm">
                   <thead className="sticky top-0 z-[1] border-b border-border bg-surface-subtle text-text-muted">
                     <tr>
                       <th className="px-2 py-2 text-left">#</th>
@@ -1032,6 +1134,8 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       <th className="px-2 py-2 text-right">Cost/machine</th>
                       <th className="px-2 py-2 text-right">Total line</th>
                       <th className="px-2 py-2 text-right">CM/pc</th>
+                      <th className="px-2 py-2 text-left">Curr</th>
+                      <th className="px-2 py-2 text-right">FX rate</th>
                       <th className="px-2 py-2 text-right">Subtotal</th>
                       <th className="px-2 py-2 text-right">% Total</th>
                       <th className="px-2 py-2 text-right">Actions</th>
@@ -1104,10 +1208,40 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                         </td>
                         <td className="px-2 py-1 text-right">{m.total_line_cost}</td>
                         <td className="px-2 py-1 text-right">{m.cm_per_piece}</td>
+                        <td className="px-2 py-1">
+                          {isEditing ? (
+                            <select
+                              value={m.currency ?? docCur}
+                              onChange={(e) => onManufacturingChange(idx, { currency: e.target.value })}
+                              className="w-full min-w-[4.5rem] rounded border border-border px-1 py-1 text-xs"
+                            >
+                              {currencyOptions.map((code) => (
+                                <option key={code} value={code}>
+                                  {code}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-xs">{m.currency ?? docCur}</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.000001"
+                              value={m.exchange_rate}
+                              onChange={(e) => onManufacturingChange(idx, { exchange_rate: e.target.value || "1" })}
+                              className="w-24 rounded border border-border px-1 py-1 text-right text-xs"
+                            />
+                          ) : (
+                            m.exchange_rate
+                          )}
+                        </td>
                         <td className="px-2 py-1 text-right font-medium">{m.total_order_cost}</td>
                         <td className="px-2 py-1 text-right text-text-muted">
                           {totals.mfgTotal > 0
-                            ? `${((toSafeNumber(m.total_order_cost) / totals.mfgTotal) * 100).toFixed(1)}%`
+                            ? `${((mfgLineInQuotation(m) / totals.mfgTotal) * 100).toFixed(1)}%`
                             : "—"}
                         </td>
                         <td className="px-2 py-1 text-right">
@@ -1125,7 +1259,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   </tbody>
                   <tfoot className="sticky bottom-0 bg-surface-raised">
                     <tr className="border-t border-border bg-surface-subtle">
-                      <td colSpan={8} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
+                      <td colSpan={10} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
                         Labor / CM Total
                       </td>
                       <td className="px-2 py-2 text-right text-sm font-bold text-text-primary">
@@ -1158,7 +1292,12 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   <button
                     type="button"
                     onClick={() => {
-                      const { matTotal, mfgTotal } = calculateQuotationTotals(materials, manufacturing, []);
+                      const { matTotal, mfgTotal } = calculateQuotationTotals(
+                        materials,
+                        manufacturing,
+                        [],
+                        quotation?.currency ?? "USD",
+                      );
                       const base = matTotal + mfgTotal;
                       setOtherCosts((rows) => {
                         const blank: QuotationOtherCostLine = applyOtherCostCalculation(
@@ -1173,7 +1312,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                             calculated_amount: "0",
                             notes: null,
                             currency: quotation.currency ?? "USD",
-                            exchange_rate: quotation.exchange_rate ?? "1",
+                            exchange_rate: "1",
                             base_amount: "0",
                             local_amount: "0",
                           },
@@ -1194,7 +1333,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               <div className="text-xs text-text-muted">No other cost lines.</div>
             ) : (
               <div className="relative max-h-[420px] overflow-auto">
-                <table className="min-w-[980px] w-full text-sm">
+                <table className="min-w-[1100px] w-full text-sm">
                   <thead className="sticky top-0 z-[1] border-b border-border bg-surface-subtle text-text-muted">
                     <tr>
                       <th className="px-2 py-2 text-left">#</th>
@@ -1202,6 +1341,8 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                       <th className="px-2 py-2 text-left">Type</th>
                       <th className="px-2 py-2 text-right">Value</th>
                       <th className="px-2 py-2 text-left">Based on</th>
+                      <th className="px-2 py-2 text-left">Curr</th>
+                      <th className="px-2 py-2 text-right">FX rate</th>
                       <th className="px-2 py-2 text-right">Amount</th>
                       <th className="px-2 py-2 text-right">% Total</th>
                       <th className="px-2 py-2 text-left">Notes</th>
@@ -1251,10 +1392,40 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                           )}
                         </td>
                         <td className="px-2 py-1">{c.based_on}</td>
+                        <td className="px-2 py-1">
+                          {isEditing ? (
+                            <select
+                              value={c.currency ?? docCur}
+                              onChange={(e) => onOtherCostChange(idx, { currency: e.target.value })}
+                              className="w-full min-w-[4.5rem] rounded border border-border px-1 py-1 text-xs"
+                            >
+                              {currencyOptions.map((code) => (
+                                <option key={code} value={code}>
+                                  {code}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-xs">{c.currency ?? docCur}</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.000001"
+                              value={c.exchange_rate}
+                              onChange={(e) => onOtherCostChange(idx, { exchange_rate: e.target.value || "1" })}
+                              className="w-24 rounded border border-border px-1 py-1 text-right text-xs"
+                            />
+                          ) : (
+                            c.exchange_rate
+                          )}
+                        </td>
                         <td className="px-2 py-1 text-right font-medium">{c.calculated_amount || c.total_amount}</td>
                         <td className="px-2 py-1 text-right text-text-muted">
                           {totals.otherTotal > 0
-                            ? `${((toSafeNumber(c.calculated_amount || c.total_amount) / totals.otherTotal) * 100).toFixed(1)}%`
+                            ? `${((otherLineInQuotation(c) / totals.otherTotal) * 100).toFixed(1)}%`
                             : "—"}
                         </td>
                         <td className="px-2 py-1 align-top">
@@ -1285,7 +1456,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                   </tbody>
                   <tfoot className="sticky bottom-0 bg-surface-raised">
                     <tr className="border-t border-border bg-surface-subtle">
-                      <td colSpan={5} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
+                      <td colSpan={7} className="px-2 py-2 text-right text-sm font-semibold text-text-secondary">
                         Other Costs Total
                       </td>
                       <td className="px-2 py-2 text-right text-sm font-bold text-text-primary">
@@ -1529,7 +1700,9 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               </div>
               <div className="rounded-xl border border-border bg-surface-subtle p-3">
                 <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">Agency Commission</div>
-                <div className="text-xl font-bold text-text-primary">{toSafeNumber(quotation.commission_value).toFixed(1)}%</div>
+                <div className="text-xl font-bold text-text-primary">
+                  {commissionValueLabel(quotation.commission_type, quotation.commission_value)}
+                </div>
               </div>
               <div className="rounded-xl border border-border bg-surface-subtle p-3">
                 <div className="text-xs font-semibold uppercase tracking-wide text-text-muted">Final Quoted Price</div>
@@ -1558,7 +1731,11 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
                 <div><span className="font-semibold">FOB Cost:</span> {formatMoney(toSafeNumber(quotation.total_cost) || totals.total)}</div>
                 <div><span className="font-semibold">Final Quoted Price:</span> {formatMoney(toSafeNumber(quotation.quoted_price ?? quotation.total_amount))}</div>
                 <div><span className="font-semibold">Profit %:</span> {quotation.profit_percentage ?? "—"}</div>
-                <div><span className="font-semibold">Commission:</span> {quotation.commission_mode ?? "-"} / {quotation.commission_type ?? "-"} / {quotation.commission_value ?? "-"}</div>
+                <div>
+                  <span className="font-semibold">Commission:</span> {quotation.commission_mode ?? "-"} /{" "}
+                  {quotation.commission_type ?? "-"} /{" "}
+                  {commissionValueLabel(quotation.commission_type, quotation.commission_value)}
+                </div>
               </div>
             </div>
             <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -1696,6 +1873,41 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           )}
         </aside>
       </div>
+
+      {quickAdd ? (
+        <MasterQuickAddModal
+          open
+          onClose={() => setQuickAdd(null)}
+          masterType={quickAdd.kind}
+          defaultCategoryId={
+            quickAdd.kind === "item"
+              ? materials[quickAdd.rowIdx]?.category_id ?? undefined
+              : undefined
+          }
+          categories={categories}
+          units={units}
+          subcategories={[]}
+          onCreated={async (record) => {
+            await refreshCostingMasters();
+            const rowIdx = quickAdd.rowIdx;
+            if (quickAdd.kind === "category" && rowIdx != null) {
+              onMaterialChange(rowIdx, {
+                category_id: record.id,
+                item_id: null,
+                unit: "",
+              });
+            }
+            if (quickAdd.kind === "item" && rowIdx != null) {
+              const inv = record as InventoryItemResponse;
+              onMaterialChange(rowIdx, {
+                item_id: inv.id,
+                description: inv.name,
+              });
+            }
+            setQuickAdd(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

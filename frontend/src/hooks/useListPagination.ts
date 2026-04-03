@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY = "p7_list_page_size";
 
-const ALLOWED = [10, 20, 50] as const;
+const ALLOWED = [10, 20, 50, 100] as const;
 export type ListPageSize = (typeof ALLOWED)[number];
 
 function readStoredPageSize(): ListPageSize {
@@ -17,7 +17,7 @@ function readStoredPageSize(): ListPageSize {
 }
 
 /**
- * Shared list pagination: page, pageSize (10/20/50), persisted in localStorage.
+ * Shared list pagination: page, pageSize (10/20/50/100), persisted in localStorage.
  * Resets to page 1 when pageSize changes.
  */
 export function useListPagination() {

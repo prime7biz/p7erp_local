@@ -11,6 +11,9 @@ import {
   isPersistableMaterialRow,
   isPersistableOtherCostRow,
   isPersistableSizeRatioRow,
+  lineFxToQuotation,
+  resolveOtherCostAmount,
+  toSafeNumber,
 } from "./quotationNumeric";
 
 interface BuildPayloadInput {
@@ -21,6 +24,50 @@ interface BuildPayloadInput {
   sizeRatios: QuotationSizeRatioLine[];
 }
 
+/** BDT per 1 unit of document currency × line amount in document currency → local_amount on each line. */
+function enrichLinesWithLocalAmounts(
+  quotation: QuotationDetailResponse,
+  materials: QuotationMaterialLine[],
+  manufacturing: QuotationManufacturingLine[],
+  otherCosts: QuotationOtherCostLine[],
+): {
+  materials: QuotationMaterialLine[];
+  manufacturing: QuotationManufacturingLine[];
+  otherCosts: QuotationOtherCostLine[];
+} {
+  const q = quotation.currency ?? "USD";
+  const bdtPerQuot = Math.max(0, toSafeNumber(quotation.exchange_rate ?? "1") || 1);
+
+  const materialsOut = materials.map((row) => ({
+    ...row,
+    local_amount: (toSafeNumber(row.total_amount) * bdtPerQuot).toFixed(2),
+  }));
+
+  const manufacturingOut = manufacturing.map((row) => {
+    const inQuot = toSafeNumber(row.total_order_cost) * lineFxToQuotation(row, q);
+    return {
+      ...row,
+      local_amount: (inQuot * bdtPerQuot).toFixed(2),
+    };
+  });
+
+  const otherCostsOut = otherCosts.map((row) => {
+    const raw = resolveOtherCostAmount(row);
+    const inQuot =
+      row.cost_type === "percentage" ? raw : raw * lineFxToQuotation(row, q);
+    return {
+      ...row,
+      local_amount: (inQuot * bdtPerQuot).toFixed(2),
+    };
+  });
+
+  return {
+    materials: materialsOut,
+    manufacturing: manufacturingOut,
+    otherCosts: otherCostsOut,
+  };
+}
+
 export function buildQuotationFullUpdatePayload({
   quotation,
   materials,
@@ -28,7 +75,14 @@ export function buildQuotationFullUpdatePayload({
   otherCosts,
   sizeRatios,
 }: BuildPayloadInput): QuotationFullUpdate {
+  const { materials: mats, manufacturing: mfg, otherCosts: oc } = enrichLinesWithLocalAmounts(
+    quotation,
+    materials,
+    manufacturing,
+    otherCosts,
+  );
   return {
+    style_ref: quotation.style_ref,
     style_id: quotation.style_id,
     department: quotation.department,
     customer_intermediary_id: quotation.customer_intermediary_id,
@@ -51,9 +105,9 @@ export function buildQuotationFullUpdatePayload({
     pack_ratio: quotation.pack_ratio,
     pcs_per_carton: quotation.pcs_per_carton,
     notes: quotation.notes,
-    materials: materials.filter(isPersistableMaterialRow),
-    manufacturing: manufacturing.filter(isPersistableManufacturingRow),
-    other_costs: otherCosts.filter(isPersistableOtherCostRow),
+    materials: mats.filter(isPersistableMaterialRow),
+    manufacturing: mfg.filter(isPersistableManufacturingRow),
+    other_costs: oc.filter(isPersistableOtherCostRow),
     size_ratios: sizeRatios.filter(isPersistableSizeRatioRow),
   };
 }

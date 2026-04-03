@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.storage import _read_upload_with_limit
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import Tenant, User
@@ -42,6 +43,7 @@ router = APIRouter()
 
 _heavy_rl = Depends(rate_limit_dependency("heavy"))
 _read_rl = Depends(rate_limit_dependency("read"))
+_MAX_EXTRACT_BYTES = 10 * 1024 * 1024
 
 
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
@@ -61,7 +63,7 @@ async def inquiry_ai_extract(
 ):
     _ensure_tenant(user, tenant)
     await require_inquiry_ai_capability(db, user, "extract")
-    body = await file.read()
+    body = await _read_upload_with_limit(file, _MAX_EXTRACT_BYTES)
     if not body:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
     ct = file.content_type or "application/octet-stream"

@@ -10,7 +10,9 @@ from app.modules.quotations.quotation_commercial_money import (
   MoneyParseError,
   collect_rollup_money_errors,
   cost_line_arrays_present_in_request,
+  line_fx_to_quotation_multiplier,
   normalize_currency_code,
+  other_cost_rollup_amount_string,
   parse_money_decimal,
   validate_header_fx_rules,
 )
@@ -73,6 +75,30 @@ def test_collect_rollup_money_errors_skips_blank_rows() -> None:
 
   mats = [R(category_id=None, item_id=None, description="", total_amount="x")]
   assert collect_rollup_money_errors(materials=mats, manufacturing=None, other_costs=None) == []
+
+
+def test_line_fx_to_quotation_multiplier_same_currency() -> None:
+  assert line_fx_to_quotation_multiplier(
+    document_currency="USD",
+    line_currency="USD",
+    exchange_rate="99",
+  ) == Decimal("1")
+
+
+def test_line_fx_to_quotation_multiplier_cross_currency() -> None:
+  assert line_fx_to_quotation_multiplier(
+    document_currency="USD",
+    line_currency="EUR",
+    exchange_rate="1.1",
+  ) == Decimal("1.1")
+
+
+def test_other_cost_rollup_amount_string_prefers_zero_calculated() -> None:
+  class R:
+    calculated_amount = "0"
+    total_amount = "100"
+
+  assert other_cost_rollup_amount_string(R()) == "0"
 
 
 def test_collect_rollup_money_errors_detects_bad_amount() -> None:

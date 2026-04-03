@@ -4,9 +4,9 @@ List endpoints for item categories, item units, items, and currencies.
 Used by the quotation costing form.
 """
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.common.auth import get_current_user
 from app.common.pagination import DEFAULT_PAGE_SIZE, HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT, MAX_PAGE_SIZE
@@ -63,8 +63,20 @@ class ItemResponse(BaseModel):
     description: str | None
     category_id: int
     unit_id: int
+    subcategory_id: int | None = None
+    stock_group_id: int | None = None
+    unit_code: str | None = None
+    unit_name: str | None = None
     default_cost: str
     is_active: bool
+
+    @field_validator("default_cost", mode="before")
+    @classmethod
+    def _default_cost_as_str(cls, v: object) -> str:
+        if v is None:
+            return "0"
+        s = str(v).strip()
+        return s if s else "0"
 
     class Config:
         from_attributes = True
@@ -148,6 +160,10 @@ async def list_item_units(
 @router.get("/items", response_model=list[ItemResponse])
 async def list_items(
     category_id: int | None = Query(default=None, description="Filter by category"),
+    search: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on item code or name",
+    ),
     limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
@@ -157,28 +173,42 @@ async def list_items(
     """List items for the current tenant (for material dropdown in quotation)."""
     _ensure_tenant(user, tenant)
     stmt = (
-        select(Item)
+        select(Item, ItemUnit)
+        .join(ItemUnit, Item.unit_id == ItemUnit.id)
         .where(Item.tenant_id == tenant.id, Item.is_active.is_(True))
-        .order_by(Item.item_code)
     )
     if category_id is not None:
         stmt = stmt.where(Item.category_id == category_id)
-    result = await db.execute(stmt.offset(offset).limit(limit))
-    rows = result.scalars().all()
-    return [
-        ItemResponse(
-            id=r.id,
-            tenant_id=r.tenant_id,
-            item_code=r.item_code,
-            name=r.name,
-            description=r.description,
-            category_id=r.category_id,
-            unit_id=r.unit_id,
-            default_cost=r.default_cost,
-            is_active=r.is_active,
+    if search and search.strip():
+        pat = f"%{search.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(Item.item_code).like(pat),
+                func.lower(Item.name).like(pat),
+            )
         )
-        for r in rows
-    ]
+    stmt = stmt.order_by(Item.item_code).offset(offset).limit(limit)
+    result = await db.execute(stmt)
+    out: list[ItemResponse] = []
+    for item_row, u in result.all():
+        out.append(
+            ItemResponse(
+                id=item_row.id,
+                tenant_id=item_row.tenant_id,
+                item_code=item_row.item_code,
+                name=item_row.name,
+                description=item_row.description,
+                category_id=item_row.category_id,
+                unit_id=item_row.unit_id,
+                subcategory_id=item_row.subcategory_id,
+                stock_group_id=item_row.stock_group_id,
+                unit_code=u.unit_code,
+                unit_name=u.name,
+                default_cost=item_row.default_cost,
+                is_active=item_row.is_active,
+            )
+        )
+    return out
 
 
 # ----- Currencies -----

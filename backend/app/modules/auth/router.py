@@ -321,11 +321,14 @@ async def forgot_password(
         user.password_reset_token_hash = _hash_reset_token(reset_token)
         user.password_reset_expires_at = expires_at
         await db.flush()
-        await send_forgot_password_email(
-            to_email=user.email,
-            reset_token=reset_token,
-            recipient_name=user.first_name or user.username or user.email,
-        )
+        try:
+            await send_forgot_password_email(
+                to_email=user.email,
+                reset_token=reset_token,
+                recipient_name=user.first_name or user.username or user.email,
+            )
+        except Exception as exc:
+            logger.warning("Forgot password email failed for user_id=%s: %s", user.id, exc)
         await log_action(
             db,
             tenant_id=tenant.id,

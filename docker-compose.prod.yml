@@ -85,6 +85,14 @@ services:
       MCP_COMMIT_BYPASS: ${MCP_COMMIT_BYPASS:-false}
       MCP_HUMAN_APPROVAL_SECRET: ${MCP_HUMAN_APPROVAL_SECRET:?MCP_HUMAN_APPROVAL_SECRET must be set for production MCP approvals}
       AI_CONFIRMATION_TOKEN_PEPPER: ${AI_CONFIRMATION_TOKEN_PEPPER}
+      # Email / SMTP
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAILS_FROM_EMAIL: ${EMAILS_FROM_EMAIL:-}
+      EMAILS_FROM_NAME: ${EMAILS_FROM_NAME:-Prime7 ERP}
+      FRONTEND_URL: ${FRONTEND_URL:-https://prime7erp.com}
     depends_on:
       postgres:
         condition: service_healthy

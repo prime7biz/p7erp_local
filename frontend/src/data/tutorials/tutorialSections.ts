@@ -141,7 +141,7 @@ The **left sidebar** lists modules. This matches the live menu in the app (see *
 
 - Menu items may be **hidden** if your **tenant type** is manufacturer vs buying house, or if a **feature flag** (such as trade) is off for your tenant.`,
         tags: ["navigation", "sidebar", "menu"],
-        lastUpdated: "2026-04-04",
+        lastUpdated: "2026-04-06",
         relatedAppRoutes: ["/app/tutorials"],
         relatedArticleIds: ["gs-tenant-modes", "gs-row-actions"],
       },
@@ -1332,7 +1332,7 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 
 - Changes here can affect **who sees which sidebar items** and **feature flags** for the whole tenant.`,
         tags: ["settings", "users", "roles", "admin"],
-        lastUpdated: "2026-04-04",
+        lastUpdated: "2026-04-06",
         infographics: [
           {
             type: "highlight",

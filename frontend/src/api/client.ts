@@ -1077,10 +1077,10 @@ async function fetchAllPaginated<T>(
 
 async function request<T>(
   path: string,
-  options: RequestInit & { tenantId?: number | null } = {}
+  options: RequestInit & { tenantId?: number | null; omitTenantHeader?: boolean } = {}
 ): Promise<T> {
-  const { tenantId, ...init } = options;
-  const tid = tenantId ?? getTenantId();
+  const { tenantId, omitTenantHeader, ...init } = options;
+  const tid = omitTenantHeader ? null : (tenantId ?? getTenantId());
   const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
   const headers: Record<string, string> = {
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
@@ -1553,6 +1553,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
       tenantId: tenant_id ?? undefined,
+      /** Avoid sending a previous session's X-Tenant-Id while switching company codes. */
+      omitTenantHeader: true,
     });
     return res;
   },

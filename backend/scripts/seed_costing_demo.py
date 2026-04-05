@@ -1,12 +1,15 @@
 """
 Seed costing engine master data (item categories, item units, items, currencies)
 for use in quotation costing. Safe to run after migration 006.
-Currencies are global; item categories, units, and items are tenant-scoped (Lakhsma).
+Currencies are global; item categories, units, and items are tenant-scoped.
+
+Default tenant company code: LAKH806201 (override with LAKHSMA_INTERCONNECTED_DEMO_COMPANY_CODE).
 
 Run from backend dir:
   python scripts/seed_costing_demo.py
 """
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -19,14 +22,17 @@ if str(backend) not in sys.path:
 from app.database import AsyncSessionLocal
 from app.models import Currency, Item, ItemCategory, ItemUnit, Tenant
 
-LAKHSMA_CODE = "LAKHSMA4821"
+LAKHSMA_CODE = os.environ.get("LAKHSMA_INTERCONNECTED_DEMO_COMPANY_CODE", "LAKH806201").strip().upper()
 
 
 async def get_lakhsma_tenant(db):
     result = await db.execute(select(Tenant).where(Tenant.company_code == LAKHSMA_CODE))
     tenant = result.scalar_one_or_none()
     if not tenant:
-        raise RuntimeError("Lakhsma tenant not found. Run seed_lakhsma.py first.")
+        raise RuntimeError(
+            f"Tenant company_code={LAKHSMA_CODE!r} not found. "
+            "Create the tenant or set LAKHSMA_INTERCONNECTED_DEMO_COMPANY_CODE."
+        )
     return tenant
 
 

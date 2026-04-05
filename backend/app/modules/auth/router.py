@@ -329,13 +329,16 @@ async def forgot_password(
             )
         except Exception as exc:
             logger.warning("Forgot password email failed for user_id=%s: %s", user.id, exc)
-        await log_action(
-            db,
-            tenant_id=tenant.id,
-            user_id=user.id,
-            action="FORGOT_PASSWORD_REQUESTED",
-            resource="auth",
-        )
+        try:
+            await log_action(
+                db,
+                tenant_id=tenant.id,
+                user_id=user.id,
+                action="FORGOT_PASSWORD_REQUESTED",
+                resource="auth",
+            )
+        except Exception as exc:
+            logger.warning("Forgot password audit log failed for user_id=%s: %s", user.id, exc)
     return MessageResponse(message="If an account exists for this email, password reset instructions have been sent.")
 
 

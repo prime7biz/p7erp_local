@@ -71,3 +71,31 @@ async def test_forgot_password_returns_200_when_email_send_fails(db_session_inte
         assert "message" in data
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_returns_200_when_log_action_fails(db_session_integration, monkeypatch):
+    """Audit log_action failures must not surface as 500 to the client."""
+    db = db_session_integration
+    tenant, user = await _seed_tenant_user(db)
+    await db.commit()
+
+    async def _audit_boom(*_a, **_kw):
+        raise RuntimeError("audit insert failed (test)")
+
+    monkeypatch.setattr("app.modules.auth.router.log_action", _audit_boom)
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            r = await ac.post(
+                "/api/v1/auth/forgot-password",
+                json={"email": user.email, "company_code": tenant.company_code},
+            )
+        assert r.status_code == 200, r.text
+    finally:
+        app.dependency_overrides.pop(get_db, None)

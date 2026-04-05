@@ -152,6 +152,10 @@ export function SignUp() {
                 </div>
                 <p className="text-xs text-text-muted mt-2">Save this code — you&apos;ll need it to log in</p>
               </div>
+              <p className="text-xs text-text-secondary text-center mb-4">
+                When outbound email (SMTP) is configured on the server, a confirmation message is sent to{" "}
+                <span className="font-medium text-text-primary">{email}</span> with your company code and a sign-in link.
+              </p>
               <button
                 type="button"
                 onClick={goToApp}

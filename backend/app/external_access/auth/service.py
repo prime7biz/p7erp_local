@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import hash_password, verify_password
+from app.common.db_datetime import utc_now_naive
 from app.config import get_settings
 from app.models import (
     ExternalInvitation,
@@ -53,7 +52,7 @@ async def record_failed_login(db: AsyncSession, principal: ExternalPrincipal) ->
     settings = get_settings()
     principal.failed_login_count = (principal.failed_login_count or 0) + 1
     if principal.failed_login_count >= settings.external_login_max_attempts:
-        principal.locked_at = datetime.now(timezone.utc)
+        principal.locked_at = utc_now_naive()
     await db.flush()
 
 
@@ -111,7 +110,7 @@ async def authenticate_external(
         pass
 
     await clear_failed_login(db, principal)
-    principal.last_login_at = datetime.now(timezone.utc)
+    principal.last_login_at = utc_now_naive()
     await db.flush()
     return principal
 
@@ -151,7 +150,7 @@ async def accept_invitation(
     result = await db.execute(
         select(ExternalInvitation).where(
             ExternalInvitation.accepted_at.is_(None),
-            ExternalInvitation.expires_at > datetime.now(timezone.utc),
+            ExternalInvitation.expires_at > utc_now_naive(),
         )
     )
     invitations = result.scalars().all()
@@ -196,7 +195,7 @@ async def accept_invitation(
         is_active=True,
         invited_at=matched.created_at,
         invited_by_user_id=matched.invited_by_user_id,
-        accepted_at=datetime.now(timezone.utc),
+        accepted_at=utc_now_naive(),
         must_reset_password=False,
     )
     db.add(principal)
@@ -240,7 +239,7 @@ async def accept_invitation(
             )
         )
 
-    matched.accepted_at = datetime.now(timezone.utc)
+    matched.accepted_at = utc_now_naive()
     await db.flush()
 
     await log_external_action(

@@ -1,9 +1,10 @@
 import hashlib
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from jose import jwt
+from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy import func
 
@@ -14,7 +15,7 @@ from app.common.auth import (
     hash_password,
     verify_password,
 )
-from app.common.email_service import send_forgot_password_email
+from app.common.email_service import send_forgot_password_email, send_registration_confirmation_email
 from app.common.authz import ensure_user_is_tenant_admin
 from app.config import get_settings
 from app.database import get_db
@@ -22,12 +23,20 @@ from app.models import Tenant, User, Role
 from app.modules.auth.me_schema import MeResponse
 from app.modules.auth.legal_acceptance import CURRENT_LEGAL_ACCEPTANCE_VERSION
 from app.modules.audit.service import log_action
-from app.modules.auth.schemas import ForgotPasswordRequest, MessageResponse, RegisterRequest, TokenResponse, UserResponse
+from app.modules.auth.schemas import (
+    ForgotPasswordRequest,
+    MessageResponse,
+    RegisterRequest,
+    ResetPasswordRequest,
+    TokenResponse,
+    UserResponse,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 PASSWORD_RESET_EXPIRE_MINUTES = 60
 PASSWORD_RESET_TOKEN_USE = "password_reset"
+logger = logging.getLogger(__name__)
 
 
 def _is_dev_app_env(settings) -> bool:
@@ -48,6 +57,14 @@ def _create_password_reset_token(*, user: User, expires_at: datetime) -> str:
 
 def _hash_reset_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _decode_password_reset_token(token: str) -> dict:
+    settings = get_settings()
+    try:
+        return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token")
 
 
 async def _resolve_user_for_forgot_password(
@@ -268,6 +285,15 @@ async def register(
         )
     if is_bootstrap and clear_tenant_bootstrap_hash:
         tenant.bootstrap_token_hash = None
+    try:
+        await send_registration_confirmation_email(
+            to_email=user.email,
+            recipient_name=user.first_name or user.username,
+            tenant_name=tenant.name,
+            company_code=tenant.company_code,
+        )
+    except Exception as exc:
+        logger.warning("Registration confirmation email failed for user_id=%s: %s", user.id, exc)
     return UserResponse(
         id=user.id,
         tenant_id=user.tenant_id,
@@ -308,6 +334,50 @@ async def forgot_password(
             resource="auth",
         )
     return MessageResponse(message="If an account exists for this email, password reset instructions have been sent.")
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    body: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    token_plain = (body.token or "").strip()
+    payload = _decode_password_reset_token(token_plain)
+    if payload.get("use") != PASSWORD_RESET_TOKEN_USE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+    sub = payload.get("sub")
+    try:
+        user_id = int(sub) if sub is not None else 0
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+    tid_claim = payload.get("tenant_id")
+    user_result = await db.execute(select(User).where(User.id == user_id, User.is_active.is_(True)))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+    if tid_claim is not None and int(tid_claim) != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+    if not user.password_reset_token_hash or user.password_reset_expires_at is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+    if user.password_reset_expires_at < datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reset link expired")
+    if _hash_reset_token(token_plain) != user.password_reset_token_hash:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+    user.password_hash = await hash_password(body.new_password)
+    user.password_reset_token_hash = None
+    user.password_reset_expires_at = None
+    await db.flush()
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+    tenant = tenant_result.scalar_one_or_none()
+    if tenant:
+        await log_action(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            action="PASSWORD_RESET_COMPLETED",
+            resource="auth",
+        )
+    return MessageResponse(message="Password updated")
 
 
 @router.get("/me", response_model=MeResponse)

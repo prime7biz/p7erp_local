@@ -82,10 +82,15 @@ Prime7 ERP is **multi-tenant**: your company’s data is isolated. You sign in w
 ## If something fails
 
 - Double-check the company code and password.
-- Ask your administrator to confirm your user is active and assigned a role.`,
+- Ask your administrator to confirm your user is active and assigned a role.
+
+## Forgot your password?
+
+- On the login screen, use **Forgot password?** to open \`/forgot-password\`.
+- Enter your **company code** and **email**. If the account exists, you will receive an email with a link to \`/reset-password\` to choose a new password.`,
         tags: ["login", "company code", "password", "tenant"],
-        lastUpdated: "2026-04-04",
-        relatedAppRoutes: ["/login", "/app"],
+        lastUpdated: "2026-04-05",
+        relatedAppRoutes: ["/login", "/forgot-password", "/reset-password", "/app"],
         relatedArticleIds: ["gs-dashboard", "gs-sidebar", "gs-at-a-glance"],
       },
       {

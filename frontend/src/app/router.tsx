@@ -3,6 +3,8 @@ import { Navigate, Route, Routes, useLocation, useParams } from "react-router-do
 import { Landing } from "@/pages/Landing";
 import { Login } from "@/pages/Login";
 import { SignUp } from "@/pages/SignUp";
+import { ForgotPasswordPage } from "@/pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "@/pages/ResetPasswordPage";
 import { PublicLayout } from "@/components/public/PublicLayout";
 import { FeaturesPage } from "@/pages/public/FeaturesPage";
 import { PricingPage } from "@/pages/public/PricingPage";
@@ -148,6 +150,8 @@ export function AppRouter() {
         <Route path="/resources/:slug" element={<PublicLayout><ResourcesPage /></PublicLayout>} />
         <Route path="/support" element={<PublicLayout><SupportPage /></PublicLayout>} />
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/verify/proforma" element={<VerifyProformaPage />} />
         <Route

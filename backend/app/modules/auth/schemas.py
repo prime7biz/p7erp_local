@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, model_validator
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class LoginRequest(BaseModel):
@@ -64,3 +64,8 @@ class UserResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=10)
+    new_password: str = Field(min_length=8, max_length=128)

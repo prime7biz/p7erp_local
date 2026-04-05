@@ -180,7 +180,7 @@ export function Login() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label htmlFor="password" className="text-text-secondary text-sm font-medium">Password **</label>
-                  <Link to="#" className="text-xs text-brand-primary hover:text-brand-primary/80 font-medium">
+                  <Link to="/forgot-password" className="text-xs text-brand-primary hover:text-brand-primary/80 font-medium">
                     Forgot password?
                   </Link>
                 </div>

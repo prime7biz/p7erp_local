@@ -1575,6 +1575,21 @@ export const api = {
   }): Promise<unknown> {
     return request("/api/v1/auth/register", { method: "POST", body: JSON.stringify(data) });
   },
+  async forgotPassword(data: { email: string; company_code: string }): Promise<{ message: string }> {
+    return requestPublic<{ message: string }>("/api/v1/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({
+        email: data.email.trim(),
+        company_code: data.company_code.trim() || undefined,
+      }),
+    });
+  },
+  async resetPassword(data: { token: string; new_password: string }): Promise<{ message: string }> {
+    return requestPublic<{ message: string }>("/api/v1/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token: data.token.trim(), new_password: data.new_password }),
+    });
+  },
   async createTenant(data: {
     name: string;
     tenant_type: TenantType;

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select
@@ -11,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.common.auth import hash_password
+from app.common.db_datetime import utc_naive_plus
 from app.models import (
     ExternalAuditLog,
     ExternalCustomerAccess,
@@ -65,7 +65,7 @@ async def create_invitation(
 ) -> tuple[ExternalInvitation, str]:
     plain = secrets.token_urlsafe(48)
     token_hash = await hash_password(plain)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=14)
+    expires_at = utc_naive_plus(days=14)
     inv = ExternalInvitation(
         tenant_id=tenant.id,
         principal_type=principal_type,

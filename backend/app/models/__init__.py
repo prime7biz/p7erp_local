@@ -22,6 +22,16 @@ from app.models.platform_admin import (
 )
 from app.models.tenant import CommissionMode, Tenant, TenantType
 from app.models.user import User, Role
+from app.models.external_access import (
+    ExternalAuditLog,
+    ExternalCustomerAccess,
+    ExternalFinancierAccess,
+    ExternalInvitation,
+    ExternalNote,
+    ExternalPrincipal,
+    ExternalPrincipalRole,
+    ExternalRole,
+)
 from app.models.customer import Customer
 from app.models.customer_ai_suggestion import CustomerAiSuggestionBatch, CustomerAiSuggestionItem
 from app.models.vendor_ai_suggestion import VendorAiSuggestionBatch, VendorAiSuggestionItem
@@ -298,6 +308,14 @@ __all__ = [
     "CommissionMode",
     "User",
     "Role",
+    "ExternalRole",
+    "ExternalPrincipal",
+    "ExternalPrincipalRole",
+    "ExternalCustomerAccess",
+    "ExternalFinancierAccess",
+    "ExternalNote",
+    "ExternalAuditLog",
+    "ExternalInvitation",
     "Customer",
     "CustomerAiSuggestionBatch",
     "CustomerAiSuggestionItem",

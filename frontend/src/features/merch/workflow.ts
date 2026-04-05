@@ -67,6 +67,10 @@ export function getOrderStatusChoices(currentStatus: string | undefined): string
   return [current, ...next];
 }
 
+export function canSubmitInquiry(currentStatus: string | undefined): boolean {
+  return getNextStatuses(INQUIRY_TRANSITIONS, currentStatus, "DRAFT").includes("SUBMITTED");
+}
+
 export function canConvertInquiryToQuotation(currentStatus: string | undefined): boolean {
   return getNextStatuses(INQUIRY_TRANSITIONS, currentStatus, "DRAFT").includes("CONVERTED");
 }

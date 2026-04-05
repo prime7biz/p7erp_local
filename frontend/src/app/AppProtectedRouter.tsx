@@ -142,6 +142,18 @@ const BackupRestorePage = lazy(() =>
 const SettingsOverviewPage = lazy(() =>
   import("@/pages/settings/SettingsOverviewPage").then((m) => ({ default: m.SettingsOverviewPage })),
 );
+const ExternalAccessPage = lazy(() =>
+  import("@/pages/settings/external-access/ExternalAccessPage").then((m) => ({ default: m.ExternalAccessPage })),
+);
+const ExternalCustomerAccessPage = lazy(() =>
+  import("@/pages/settings/external-access/ExternalCustomerAccessPage").then((m) => ({ default: m.ExternalCustomerAccessPage })),
+);
+const ExternalFinancierAccessPage = lazy(() =>
+  import("@/pages/settings/external-access/ExternalFinancierAccessPage").then((m) => ({ default: m.ExternalFinancierAccessPage })),
+);
+const ExternalAccessAuditPage = lazy(() =>
+  import("@/pages/settings/external-access/ExternalAccessAuditPage").then((m) => ({ default: m.ExternalAccessAuditPage })),
+);
 const TutorialsPage = lazy(() => import("@/pages/app/tutorials/TutorialsPage").then((m) => ({ default: m.TutorialsPage })));
 const TutorialArticlePage = lazy(() =>
   import("@/pages/app/tutorials/TutorialArticlePage").then((m) => ({ default: m.TutorialArticlePage })),
@@ -746,6 +758,10 @@ export function AppProtectedRouter() {
           <Route path="pricing" element={<PricingSettingsPage />} />
           <Route path="activity-logs" element={<AuditPage />} />
           <Route path="cheque-templates" element={<ChequeTemplatesPage />} />
+          <Route path="external-access" element={<ExternalAccessPage />} />
+          <Route path="external-access/customers" element={<ExternalCustomerAccessPage />} />
+          <Route path="external-access/financiers" element={<ExternalFinancierAccessPage />} />
+          <Route path="external-access/audit" element={<ExternalAccessAuditPage />} />
         </Route>
         <Route path="tutorials" element={<TutorialsPage />} />
         <Route path="tutorials/:articleId" element={<TutorialArticlePage />} />

@@ -50,7 +50,11 @@ from app.modules.files.router import router as files_router
 from app.modules.admin.router import router as admin_router
 from app.modules.announcements.router import router as announcements_router
 from app.modules.support.router import router as tenant_support_router
+from app.external_access.auth.router import router as external_auth_router
+from app.external_access.customer_portal.router import router as external_customer_router
+from app.external_access.financier_portal.router import router as external_financier_router
 from app.modules.mcp_server import mount_mcp
+from app.common.external_audit_middleware import ExternalAuditMiddleware
 from app.common.request_logger import RequestLoggingMiddleware
 from app.common.rate_limiter import TenantRateLimitMiddleware
 
@@ -202,8 +206,14 @@ app.add_middleware(
     expose_headers=["X-Total-Count"],
 )
 app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(ExternalAuditMiddleware)
 app.add_middleware(TenantRateLimitMiddleware)
 mount_mcp(app)
+
+# External stakeholder portals (separate JWT namespace; not under /api/v1).
+app.include_router(external_auth_router, prefix="/api/external")
+app.include_router(external_customer_router, prefix="/api/external")
+app.include_router(external_financier_router, prefix="/api/external")
 
 app.include_router(files_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)

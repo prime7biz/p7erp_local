@@ -1,5 +1,14 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 
+/** Settings overview is `/app/settings` only — deeper paths must not highlight it. */
+function isSettingsNavActive(pathname: string, to: string) {
+  const norm = pathname.endsWith("/") && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  if (to === "/app/settings") {
+    return norm === "/app/settings";
+  }
+  return norm === to || norm.startsWith(`${to}/`);
+}
+
 const links = [
   { to: "/app/settings", label: "Overview" },
   { to: "/app/settings/config", label: "Configuration" },
@@ -10,6 +19,7 @@ const links = [
   { to: "/app/accounts/accounting-periods", label: "Accounting periods" },
   { to: "/app/settings/pricing", label: "Pricing" },
   { to: "/app/settings/audit", label: "Audit" },
+  { to: "/app/settings/external-access", label: "External access" },
   { to: "/app/settings/activity-logs", label: "Activity logs" },
   { to: "/app/settings/backup", label: "Backup & Restore" },
   { to: "/app/settings/cheque-templates", label: "Cheque templates" },
@@ -26,8 +36,8 @@ export function SettingsLayout() {
             key={to}
             to={to}
             style={{
-              color: location.pathname === to ? "#0f172a" : "#64748b",
-              fontWeight: location.pathname === to ? 600 : 400,
+              color: isSettingsNavActive(location.pathname, to) ? "#0f172a" : "#64748b",
+              fontWeight: isSettingsNavActive(location.pathname, to) ? 600 : 400,
               textDecoration: "none",
             }}
           >

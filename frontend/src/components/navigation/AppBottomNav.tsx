@@ -9,7 +9,7 @@ import {
   type TenantTypeFilter,
 } from "@/app/sidebarConfig";
 import { prefetchSidebarRoute } from "@/app/prefetchRoutes";
-import { X } from "lucide-react";
+import { Landmark, Settings, Users, X } from "lucide-react";
 
 function isVisible(tenantType: TenantType, filter?: TenantTypeFilter[]): boolean {
   if (!filter || filter.length === 0) return true;
@@ -162,6 +162,37 @@ export function AppBottomNav({
             </div>
 
             <div className="space-y-3 pb-4">
+              <section className="rounded-xl border border-border bg-surface-raised p-3">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Stakeholder portals</h3>
+                <div className="space-y-1">
+                  <Link
+                    to="/portal/customer/login"
+                    onClick={() => setIsMoreOpen(false)}
+                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
+                  >
+                    <Users className="h-4 w-4 text-text-muted" />
+                    Customer portal login
+                  </Link>
+                  <Link
+                    to="/portal/financier/login"
+                    onClick={() => setIsMoreOpen(false)}
+                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
+                  >
+                    <Landmark className="h-4 w-4 text-text-muted" />
+                    Financier portal login
+                  </Link>
+                  <Link
+                    to="/app/settings/external-access"
+                    onClick={() => setIsMoreOpen(false)}
+                    onMouseEnter={() => prefetchSidebarRoute("/app/settings/external-access")}
+                    onFocus={() => prefetchSidebarRoute("/app/settings/external-access")}
+                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
+                  >
+                    <Settings className="h-4 w-4 text-text-muted" />
+                    Manage external access
+                  </Link>
+                </div>
+              </section>
               {filteredSections.map((section) => {
                 const SectionIcon = section.icon;
                 return (

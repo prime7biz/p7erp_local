@@ -1,0 +1,44 @@
+---
+description: Keep in-app Help & Tutorials aligned with routes, UI, and workflows
+alwaysApply: false
+---
+
+# Help & Tutorials maintenance
+
+## Source of truth
+
+- Tutorial **content and structure** live under `frontend/src/data/tutorials/`.
+  - `tutorialSections.ts` — articles (Markdown bodies), tags, `lastUpdated`, **`relatedAppRoutes`** (must match real app paths such as `/app/orders`), optional **`summary`**, **`keywords`**, **`coverImage`**, **`images`**, **`infographics`**, **`featured`**, **`order`**.
+  - `types.ts` — article/section interfaces.
+  - `tutorialRegistry.ts` — helpers (`getArticleById`, `getArticlesForAppPath`, `getFeaturedArticles`, etc.).
+  - `tutorialArticleEnrich.ts` — derives `summary` / `sectionId` / `keywords` when omitted.
+- UI: `frontend/src/pages/app/tutorials/` (`TutorialsPage`, `TutorialArticlePage`, `TutorialMarkdown.tsx`, flow/images/callout components).
+- Screenshot assets: `frontend/public/tutorials/` (see `README.md` there). Use **local** paths only in content.
+
+## When to update (mandatory)
+
+Whenever you change any of the following, update Help & Tutorials in the **same change** (same PR) when the user-visible behavior or navigation changes:
+
+1. **Sidebar or routes** — edits to `frontend/src/app/sidebarConfig.tsx`, `AppProtectedRouter.tsx`, or redirects that rename/remove/move screens.
+2. **Workflow** — steps users take (e.g. inquiry → quotation → order, PO → GRN, voucher approval).
+3. **UI patterns** — documented conventions users rely on (e.g. combined **Actions** dropdown per table row).
+4. **Screen labels, form fields, or validation** that the guides mention explicitly (button names, required fields, banners).
+
+## What to change
+
+- Prefer **two layers** per major module: a short **overview** article plus **step-by-step** articles for common tasks (e.g. voucher entry, PO creation). Keep deep articles aligned with real button labels and validation messages on the page.
+- Edit or add **articles** in `tutorialSections.ts`; set **`relatedAppRoutes`** to the exact paths users open (prefixes allowed; use paths as in the sidebar `href`s). Reconcile **`relatedArticleIds`** so every id exists.
+- Add **`summary`** (or rely on `## Overview`) for cards and article headers; add **`keywords`** when search should match synonyms not in `tags`.
+- Use **`infographics`** (`flow` / `diagram` / `highlight`) and **`images`** / **`coverImage`** where a visual reduces confusion; keep **alt** and **caption** on every image.
+- Bump **`lastUpdated`** to the current date (`YYYY-MM-DD`) for every article you touch.
+- Remove or rewrite articles for **deprecated** features; do not leave obsolete steps.
+
+## How to verify
+
+- Open **Help & Tutorials** (`/app/tutorials`) and the affected article (`/app/tutorials/:id`).
+- Confirm “Related screens in the app” links reach the correct pages.
+- Confirm **featured** articles (if any) look correct in the hub strip and that **flow** diagram links navigate.
+
+## Optional discovery API
+
+- `getArticlesForAppPath(tutorialSections, pathname)` returns articles relevant to a route — suitable for future “Help for this page” entry points.

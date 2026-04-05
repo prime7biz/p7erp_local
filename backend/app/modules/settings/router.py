@@ -10,6 +10,7 @@ from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import AuditLog, CommissionMode, Role, Tenant, User
 from app.modules.audit.service import log_action
+from app.external_access.admin.router import router as external_access_admin_router
 from app.modules.settings.schemas import (
     BackupHistoryRow,
     BackupStatusResponse,
@@ -29,6 +30,7 @@ from app.modules.settings.schemas import (
 )
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+router.include_router(external_access_admin_router)
 
 
 def _ensure_user_tenant(user: User, tenant: Tenant) -> None:

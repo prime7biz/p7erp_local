@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+from datetime import date, datetime
+
+from pydantic import BaseModel
+
+
+class FinancierOrderBookRow(BaseModel):
+    id: int
+    order_code: str
+    buyer_name: str | None
+    status: str
+    quantity: int | None
+    planned_shipment: date | None
+    expected_delivery: date | None
+    execution_status: str | None = None
+
+
+class FinancierOrderBookResponse(BaseModel):
+    items: list[FinancierOrderBookRow]
+    total: int
+
+
+class FinancierPipelineSummary(BaseModel):
+    inquiries_open: int
+    inquiries_submitted: int
+    quotations_open: int
+    quotations_sent: int
+
+
+class FinancierGoodsMovementSummary(BaseModel):
+    movements_in_count: int
+    movements_out_count: int
+    movements_adjust_count: int
+    last_30_days_total: int
+
+
+class FinancierFinancialSummary(BaseModel):
+    voucher_count_90d: int
+    receivable_bills_open: int | None = None
+    payables_open: int | None = None
+    note: str | None = None
+
+
+class FinancierProjectionMonth(BaseModel):
+    month: str
+    projected_units: int
+
+
+class FinancierProjectionsResponse(BaseModel):
+    items: list[FinancierProjectionMonth]
+    meta: dict | None = None
+
+
+class FinancierAlertItem(BaseModel):
+    code: str
+    severity: str
+    title: str
+    detail: str
+
+
+class FinancierAlertsResponse(BaseModel):
+    items: list[FinancierAlertItem]
+
+
+class FinancierDashboardResponse(BaseModel):
+    active_order_lines: int
+    confirmed_style_orders: int
+    pipeline: FinancierPipelineSummary
+    goods: FinancierGoodsMovementSummary
+    shipments_due_this_month: int
+    alerts_count: int
+    projection_next_90_units: int | None = None
+
+
+class FinancierOrderDetail(BaseModel):
+    id: int
+    order_code: str
+    buyer_name: str | None
+    status: str
+    quantity: int | None
+    order_date: date | None
+    delivery_date: date | None
+    updated_at: datetime

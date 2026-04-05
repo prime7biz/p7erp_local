@@ -35,6 +35,13 @@ class RegisterRequest(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     bootstrap_key: str | None = None  # optional; first user: X-Bootstrap-Key / this must match env or tenant bootstrap hash (Finding #4)
+    accepted_legal_terms: bool = False
+    legal_acceptance_version: str | None = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+    company_code: str | None = None
 
 
 class TokenResponse(BaseModel):
@@ -53,3 +60,7 @@ class UserResponse(BaseModel):
     is_active: bool
 
     model_config = {"from_attributes": True}
+
+
+class MessageResponse(BaseModel):
+    message: str

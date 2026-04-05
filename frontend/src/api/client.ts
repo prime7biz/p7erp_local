@@ -3,6 +3,13 @@ import type {
   InquiryExtractionResponse,
   VendorExtractionResponse,
 } from "../types/extraction";
+import type {
+  ExternalAccessOverview,
+  ExternalAuditListResponse,
+  ExternalFeatureFlagsPatch,
+  ExternalInviteResponse,
+  ExternalPrincipalListResponse,
+} from "@/types/externalAccess";
 import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
@@ -1563,6 +1570,8 @@ export const api = {
     last_name?: string;
     /** When server sets BOOTSTRAP_REGISTRATION_KEY, first user must supply this (Finding #4). */
     bootstrap_key?: string;
+    accepted_legal_terms?: boolean;
+    legal_acceptance_version?: string;
   }): Promise<unknown> {
     return request("/api/v1/auth/register", { method: "POST", body: JSON.stringify(data) });
   },
@@ -1869,6 +1878,69 @@ export const api = {
   },
   async triggerBackupRestore(backupLogId: number): Promise<BackupStatusResponse> {
     return request<BackupStatusResponse>(`/api/v1/settings/backup/restore/${backupLogId}`, {
+      method: "POST",
+    });
+  },
+  async getExternalAccessOverview(): Promise<ExternalAccessOverview> {
+    return request<ExternalAccessOverview>("/api/v1/settings/external-access/overview");
+  },
+  async patchExternalAccessFeatureFlags(body: ExternalFeatureFlagsPatch): Promise<ExternalAccessOverview> {
+    return request<ExternalAccessOverview>("/api/v1/settings/external-access/feature-flags", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+  async listExternalCustomerPrincipals(params?: { limit?: number; offset?: number }): Promise<ExternalPrincipalListResponse> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString() ? `?${q.toString()}` : "";
+    return request<ExternalPrincipalListResponse>(`/api/v1/settings/external-access/customers${s}`);
+  },
+  async listExternalFinancierPrincipals(params?: { limit?: number; offset?: number }): Promise<ExternalPrincipalListResponse> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString() ? `?${q.toString()}` : "";
+    return request<ExternalPrincipalListResponse>(`/api/v1/settings/external-access/financiers${s}`);
+  },
+  async inviteExternalCustomer(body: {
+    email: string;
+    full_name: string;
+    role_codes: string[];
+    customer_ids: number[];
+  }): Promise<ExternalInviteResponse> {
+    return request<ExternalInviteResponse>("/api/v1/settings/external-access/customers/invite", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async inviteExternalFinancier(body: {
+    email: string;
+    full_name: string;
+    role_codes: string[];
+    access_scope?: string;
+    financier_party_id?: number | null;
+  }): Promise<ExternalInviteResponse> {
+    return request<ExternalInviteResponse>("/api/v1/settings/external-access/financiers/invite", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async listExternalAccessAudit(params?: { limit?: number; offset?: number }): Promise<ExternalAuditListResponse> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString() ? `?${q.toString()}` : "";
+    return request<ExternalAuditListResponse>(`/api/v1/settings/external-access/audit${s}`);
+  },
+  async deactivateExternalPrincipal(principalId: number): Promise<{ message: string }> {
+    return request<{ message: string }>(`/api/v1/settings/external-access/principals/${principalId}/deactivate`, {
+      method: "POST",
+    });
+  },
+  async reactivateExternalPrincipal(principalId: number): Promise<{ message: string }> {
+    return request<{ message: string }>(`/api/v1/settings/external-access/principals/${principalId}/reactivate`, {
       method: "POST",
     });
   },

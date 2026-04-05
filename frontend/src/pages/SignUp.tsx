@@ -15,7 +15,19 @@ import {
   CheckCircle,
   Copy,
   Phone,
+  FileCheck,
 } from "lucide-react";
+import { CURRENT_LEGAL_ACCEPTANCE_VERSION } from "@/data/legal/acceptance";
+
+const legalDocumentLinks = [
+  { to: "/legal/terms", label: "Terms" },
+  { to: "/legal/privacy", label: "Privacy" },
+  { to: "/legal/dpa", label: "DPA" },
+  { to: "/legal/ai-disclaimer", label: "AI disclaimer" },
+  { to: "/legal/sla", label: "SLA" },
+  { to: "/legal/security-compliance", label: "Security" },
+  { to: "/trust-center", label: "Trust Center" },
+] as const;
 
 export function SignUp() {
   const [companyName, setCompanyName] = useState("");
@@ -28,6 +40,7 @@ export function SignUp() {
   const [address, setAddress] = useState("");
   const [country, setCountry] = useState("");
   const [businessType, setBusinessType] = useState<TenantType>("both");
+  const [acceptedLegalTerms, setAcceptedLegalTerms] = useState(false);
   const [error, setError] = useState("");
   const [bootstrapKey, setBootstrapKey] = useState("");
   const [loading, setLoading] = useState(false);
@@ -45,6 +58,10 @@ export function SignUp() {
       setError("Please enter a valid phone number");
       return;
     }
+    if (!acceptedLegalTerms) {
+      setError("You must accept the legal terms, privacy policy, and related notices to register");
+      return;
+    }
     setLoading(true);
     try {
       const tenant = await api.createTenant({
@@ -58,6 +75,8 @@ export function SignUp() {
         password,
         first_name: firstName.trim() || undefined,
         last_name: lastName.trim() || undefined,
+        accepted_legal_terms: acceptedLegalTerms,
+        legal_acceptance_version: CURRENT_LEGAL_ACCEPTANCE_VERSION,
         ...(bootstrapKey.trim() ? { bootstrap_key: bootstrapKey.trim() } : {}),
       });
       const res = await api.login({
@@ -400,9 +419,59 @@ export function SignUp() {
                 </div>
               </div>
 
+              <div className="rounded-xl border border-border bg-surface-subtle/80 p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <FileCheck className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-text-primary">Legal acceptance required</p>
+                    <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                      Review these documents before creating the tenant admin account. Your acceptance is recorded for
+                      compliance and onboarding audit purposes.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {legalDocumentLinks.map((doc) => (
+                    <Link
+                      key={doc.to}
+                      to={doc.to}
+                      className="inline-flex items-center rounded-full border border-border bg-white px-3 py-1 text-xs font-medium text-text-secondary hover:border-primary/30 hover:text-primary transition-colors"
+                    >
+                      {doc.label}
+                    </Link>
+                  ))}
+                </div>
+
+                <label
+                  htmlFor="acceptedLegalTerms"
+                  className="flex items-start gap-3 rounded-lg border border-border bg-white px-4 py-3"
+                >
+                  <input
+                    id="acceptedLegalTerms"
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/20"
+                    checked={acceptedLegalTerms}
+                    onChange={(e) => setAcceptedLegalTerms(e.target.checked)}
+                    required
+                  />
+                  <span className="text-xs text-text-muted leading-relaxed">
+                    I confirm that I have read and accept the Prime7 ERP legal and trust documents linked above,
+                    including the Terms of Service, Privacy Policy, DPA, AI Usage Disclaimer, SLA, and Security &amp;
+                    Compliance information.
+                  </span>
+                </label>
+
+                <p className="text-[11px] text-text-muted">
+                  Acceptance version: <span className="font-mono">{CURRENT_LEGAL_ACCEPTANCE_VERSION}</span>
+                </p>
+              </div>
+
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !acceptedLegalTerms}
                 className="w-full py-3 rounded-md bg-primary hover:bg-primary/90 text-white font-medium disabled:opacity-60 disabled:cursor-not-allowed transition-colors mt-2"
               >
                 {loading ? "Creating Account..." : "Register Company"}

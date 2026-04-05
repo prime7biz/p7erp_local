@@ -143,14 +143,28 @@ export function SecurityPage() {
 
       <section className="py-16 lg:py-24 bg-surface-raised">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-text-secondary mb-6">Learn more about how we handle your data.</p>
-          <Link
-            to="/privacy"
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-6 py-3 text-brand-primary-foreground font-semibold hover:bg-brand-primary/90 transition-colors"
-          >
-            Privacy Policy
-            <ArrowRight className="w-4 h-4" />
-          </Link>
+          <p className="text-text-secondary mb-6">Legal, privacy, and enterprise-ready trust documentation.</p>
+          <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-3">
+            <Link
+              to="/trust-center"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-primary px-6 py-3 text-brand-primary-foreground font-semibold hover:bg-brand-primary/90 transition-colors"
+            >
+              Trust Center
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link
+              to="/legal/security-compliance"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface-raised px-6 py-3 text-text-primary font-semibold hover:bg-surface-subtle transition-colors"
+            >
+              Security &amp; Compliance
+            </Link>
+            <Link
+              to="/legal/privacy"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface-raised px-6 py-3 text-text-primary font-semibold hover:bg-surface-subtle transition-colors"
+            >
+              Privacy Policy
+            </Link>
+          </div>
         </div>
       </section>
     </>

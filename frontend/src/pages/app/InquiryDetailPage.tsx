@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, type InquiryResponse, type CustomerResponse } from "@/api/client";
 import { InquiryAiAuditHistory } from "@/components/inquiries/InquiryAiAuditHistory";
 import { InquiryAiPanel } from "@/components/inquiries/InquiryAiPanel";
-import { canConvertInquiryToQuotation } from "@/features/merch/workflow";
+import { canConvertInquiryToQuotation, canSubmitInquiry } from "@/features/merch/workflow";
 import { useInquiryAi } from "@/hooks/useInquiryAi";
 import { useSecureImage } from "@/hooks/useSecureImage";
 
@@ -15,6 +15,7 @@ export function InquiryDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [converting, setConverting] = useState(false);
+  const [submittingInquiry, setSubmittingInquiry] = useState(false);
   const styleImageUrl = useSecureImage(item?.style_image_url);
   const inquiryAi = useInquiryAi();
 
@@ -66,7 +67,7 @@ export function InquiryDetailPage() {
     return <div className="p-6 text-text-muted">Loading inquiry…</div>;
   }
 
-  if (error || !item) {
+  if (!item) {
     return (
       <div className="p-6 space-y-3">
         <div className="text-status-danger text-sm">{error || "Inquiry not found."}</div>
@@ -88,6 +89,22 @@ export function InquiryDetailPage() {
   if (!item.target_price_currency) missingForQuotation.push("Target Currency");
   if (!item.exchange_rate) missingForQuotation.push("Exchange Rate");
   const canConvertToQuotation = canConvertInquiryToQuotation(item.status);
+  const showSubmitInquiry = canSubmitInquiry(item.status);
+
+  const submitInquiry = async () => {
+    if (!item || !showSubmitInquiry) return;
+    setSubmittingInquiry(true);
+    setError("");
+    try {
+      const updated = await api.updateInquiryStatus(item.id, "SUBMITTED");
+      setItem(updated);
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to submit inquiry");
+    } finally {
+      setSubmittingInquiry(false);
+    }
+  };
 
   const convertInquiry = async () => {
     if (!item) return;
@@ -109,6 +126,11 @@ export function InquiryDetailPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {error ? (
+        <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
+          {error}
+        </div>
+      ) : null}
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">
@@ -142,16 +164,17 @@ export function InquiryDetailPage() {
             >
               Open quotation
             </button>
-          ) : !canConvertToQuotation ? (
+          ) : showSubmitInquiry ? (
             <button
               type="button"
-              disabled
-              title="Submit the inquiry before converting it to a quotation."
-              className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-muted disabled:cursor-not-allowed disabled:opacity-70"
+              onClick={() => void submitInquiry()}
+              disabled={submittingInquiry}
+              title="Mark this inquiry as submitted so it can be converted to a quotation."
+              className="rounded-lg bg-brand-primary px-3 py-1.5 text-sm font-semibold text-brand-primary-foreground disabled:opacity-60"
             >
-              Submit first
+              {submittingInquiry ? "Submitting…" : "Submit inquiry"}
             </button>
-          ) : (
+          ) : canConvertToQuotation ? (
             <button
               type="button"
               onClick={convertInquiry}
@@ -160,7 +183,7 @@ export function InquiryDetailPage() {
             >
               {converting ? "Converting..." : "Convert to quotation"}
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 

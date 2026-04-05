@@ -1,4 +1,9 @@
+import hashlib
+import secrets
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from jose import jwt
 from sqlalchemy import select
 from sqlalchemy import func
 
@@ -9,20 +14,87 @@ from app.common.auth import (
     hash_password,
     verify_password,
 )
+from app.common.email_service import send_forgot_password_email
 from app.common.authz import ensure_user_is_tenant_admin
 from app.config import get_settings
 from app.database import get_db
 from app.models import Tenant, User, Role
 from app.modules.auth.me_schema import MeResponse
+from app.modules.auth.legal_acceptance import CURRENT_LEGAL_ACCEPTANCE_VERSION
 from app.modules.audit.service import log_action
-from app.modules.auth.schemas import RegisterRequest, TokenResponse, UserResponse
+from app.modules.auth.schemas import ForgotPasswordRequest, MessageResponse, RegisterRequest, TokenResponse, UserResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+PASSWORD_RESET_EXPIRE_MINUTES = 60
+PASSWORD_RESET_TOKEN_USE = "password_reset"
 
 
 def _is_dev_app_env(settings) -> bool:
     return settings.app_env.lower() in {"dev", "development", "local", "test", "testing"}
+
+
+def _create_password_reset_token(*, user: User, expires_at: datetime) -> str:
+    settings = get_settings()
+    payload = {
+        "sub": str(user.id),
+        "tenant_id": user.tenant_id,
+        "use": PASSWORD_RESET_TOKEN_USE,
+        "jti": secrets.token_urlsafe(24),
+        "exp": expires_at,
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def _resolve_user_for_forgot_password(
+    db: AsyncSession,
+    *,
+    email: str,
+    company_code: str | None,
+) -> tuple[User | None, Tenant | None]:
+    normalized_email = email.strip().lower()
+    normalized_company_code = (company_code or "").strip().lower() or None
+
+    if normalized_company_code:
+        tenant_result = await db.execute(
+            select(Tenant).where(
+                func.lower(Tenant.company_code) == normalized_company_code,
+                Tenant.is_active.is_(True),
+                Tenant.deleted_at.is_(None),
+            ).limit(1)
+        )
+        tenant = tenant_result.scalar_one_or_none()
+        if not tenant:
+            return None, None
+        user_result = await db.execute(
+            select(User).where(
+                User.tenant_id == tenant.id,
+                User.is_active.is_(True),
+                func.lower(User.email) == normalized_email,
+            ).limit(1)
+        )
+        return user_result.scalar_one_or_none(), tenant
+
+    matches = await db.execute(
+        select(User, Tenant)
+        .join(Tenant, Tenant.id == User.tenant_id)
+        .where(
+            func.lower(User.email) == normalized_email,
+            User.is_active.is_(True),
+            Tenant.is_active.is_(True),
+            Tenant.deleted_at.is_(None),
+        )
+        .limit(2)
+    )
+    rows = matches.all()
+    if len(rows) != 1:
+        return None, None
+    user, tenant = rows[0]
+    return user, tenant
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -151,6 +223,11 @@ async def register(
                 detail="Authentication required for registration",
             )
         await ensure_user_is_tenant_admin(db, current_user, tenant.id)
+    if is_bootstrap and not body.accepted_legal_terms:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Legal terms acceptance is required to register this tenant",
+        )
 
     existing = await db.execute(
         select(User).where(User.tenant_id == body.tenant_id, User.email == body.email)
@@ -176,6 +253,19 @@ async def register(
     db.add(user)
     await db.flush()
     await db.refresh(user)
+    if is_bootstrap:
+        acceptance_version = (body.legal_acceptance_version or "").strip() or CURRENT_LEGAL_ACCEPTANCE_VERSION
+        tenant.legal_acceptance_version = acceptance_version
+        tenant.legal_accepted_at = datetime.now(UTC).replace(tzinfo=None)
+        tenant.legal_accepted_by_email = body.email
+        await log_action(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            action="TENANT_LEGAL_ACCEPTANCE",
+            resource="tenant",
+            details=f"{acceptance_version}::{body.email}",
+        )
     if is_bootstrap and clear_tenant_bootstrap_hash:
         tenant.bootstrap_token_hash = None
     return UserResponse(
@@ -187,6 +277,37 @@ async def register(
         last_name=user.last_name,
         is_active=user.is_active,
     )
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+async def forgot_password(
+    body: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    user, tenant = await _resolve_user_for_forgot_password(
+        db,
+        email=str(body.email),
+        company_code=body.company_code,
+    )
+    if user and tenant:
+        expires_at = datetime.utcnow() + timedelta(minutes=PASSWORD_RESET_EXPIRE_MINUTES)
+        reset_token = _create_password_reset_token(user=user, expires_at=expires_at)
+        user.password_reset_token_hash = _hash_reset_token(reset_token)
+        user.password_reset_expires_at = expires_at
+        await db.flush()
+        await send_forgot_password_email(
+            to_email=user.email,
+            reset_token=reset_token,
+            recipient_name=user.first_name or user.username or user.email,
+        )
+        await log_action(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            action="FORGOT_PASSWORD_REQUESTED",
+            resource="auth",
+        )
+    return MessageResponse(message="If an account exists for this email, password reset instructions have been sent.")
 
 
 @router.get("/me", response_model=MeResponse)

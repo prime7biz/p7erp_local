@@ -198,8 +198,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
       <footer className="bg-gradient-to-b from-surface-inverse to-surface-inverse/95 text-text-inverse">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8">
-            <div className="col-span-2 md:col-span-1">
+          <div className="grid grid-cols-2 gap-8 md:grid-cols-3 xl:grid-cols-7">
+            <div className="col-span-2 md:col-span-3 xl:col-span-2">
               <div className="mb-4">
                 <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-12 w-auto" />
               </div>
@@ -245,6 +245,17 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   <MapPin className="h-4 w-4 shrink-0 text-brand-primary" />
                   <span>Gulshan-2, Dhaka 1212, Bangladesh</span>
                 </div>
+              </div>
+              <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                <Link to="/signup" className="text-text-inverse hover:text-brand-primary transition-colors font-medium">
+                  Start Free Trial
+                </Link>
+                <Link to="/login" className="text-text-inverse hover:text-brand-primary transition-colors font-medium">
+                  Login
+                </Link>
+                <Link to="/contact" className="text-text-inverse hover:text-brand-primary transition-colors font-medium">
+                  Book a Demo
+                </Link>
               </div>
             </div>
             <div>
@@ -300,13 +311,53 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               </ul>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-brand-primary-foreground uppercase tracking-wider mb-4">Get Started</h3>
+              <h3 className="text-sm font-semibold text-brand-primary-foreground uppercase tracking-wider mb-4">Legal</h3>
               <ul className="space-y-2.5">
-                <li><Link to="/signup" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">Start Free Trial</Link></li>
-                <li><Link to="/login" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">Login</Link></li>
-                <li><Link to="/contact" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">Book a Demo</Link></li>
-                <li><Link to="/privacy" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">Privacy Policy</Link></li>
-                <li><Link to="/terms" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">Terms of Service</Link></li>
+                <li>
+                  <Link to="/legal/privacy" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">
+                    Privacy Policy
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/legal/terms" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">
+                    Terms of Service
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/legal/dpa" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">
+                    Data Processing Agreement
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/legal/ai-disclaimer" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">
+                    AI Usage Disclaimer
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-brand-primary-foreground uppercase tracking-wider mb-4">Trust</h3>
+              <ul className="space-y-2.5">
+                <li>
+                  <Link to="/trust-center" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">
+                    Trust Center
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/legal/security-compliance" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">
+                    Security &amp; Compliance
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/legal/sla" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">
+                    Service Level Agreement
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/security" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">
+                    Security overview
+                  </Link>
+                </li>
               </ul>
             </div>
           </div>
@@ -316,11 +367,50 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             <p className="text-sm text-text-muted">
               &copy; {new Date().getFullYear()} Prime7 ERP. All rights reserved.
             </p>
-            <div className="flex gap-6 text-sm text-text-muted">
-              <Link to="/privacy" className="hover:text-brand-primary transition-colors">Privacy</Link>
-              <Link to="/terms" className="hover:text-brand-primary transition-colors">Terms</Link>
-              <Link to="/security" className="hover:text-brand-primary transition-colors">Security</Link>
-            </div>
+            <nav
+              className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm text-text-muted max-w-3xl"
+              aria-label="Legal and trust"
+            >
+              <Link to="/legal/privacy" className="hover:text-brand-primary transition-colors">
+                Privacy
+              </Link>
+              <span className="text-text-muted/50 hidden sm:inline" aria-hidden>
+                ·
+              </span>
+              <Link to="/legal/terms" className="hover:text-brand-primary transition-colors">
+                Terms
+              </Link>
+              <span className="text-text-muted/50 hidden sm:inline" aria-hidden>
+                ·
+              </span>
+              <Link to="/legal/dpa" className="hover:text-brand-primary transition-colors">
+                DPA
+              </Link>
+              <span className="text-text-muted/50 hidden sm:inline" aria-hidden>
+                ·
+              </span>
+              <Link to="/legal/ai-disclaimer" className="hover:text-brand-primary transition-colors">
+                AI
+              </Link>
+              <span className="text-text-muted/50 hidden sm:inline" aria-hidden>
+                ·
+              </span>
+              <Link to="/legal/sla" className="hover:text-brand-primary transition-colors">
+                SLA
+              </Link>
+              <span className="text-text-muted/50 hidden sm:inline" aria-hidden>
+                ·
+              </span>
+              <Link to="/legal/security-compliance" className="hover:text-brand-primary transition-colors">
+                Security
+              </Link>
+              <span className="text-text-muted/50 hidden sm:inline" aria-hidden>
+                ·
+              </span>
+              <Link to="/trust-center" className="hover:text-brand-primary transition-colors">
+                Trust Center
+              </Link>
+            </nav>
           </div>
         </div>
       </footer>

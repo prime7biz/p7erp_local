@@ -20,11 +20,14 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
+  Landmark,
   LogOut,
   Plus,
   Search,
   Settings,
   User,
+  Users,
 } from "lucide-react";
 import type { MeResponse } from "@/api/client";
 
@@ -376,6 +379,70 @@ function Sidebar({
   );
 }
 
+/** Top bar links to stakeholder portal logins (separate from staff JWT). */
+function StakeholderPortalsMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="inline-flex items-center gap-1.5 h-8 px-2 md:px-3 rounded-md border border-border-strong text-sm text-text-secondary hover:bg-surface-subtle"
+        aria-expanded={open}
+        aria-haspopup="true"
+        title="Customer and financier portals"
+      >
+        <ExternalLink className="h-4 w-4" />
+        <span className="hidden md:inline">Portals</span>
+        <ChevronDown className="hidden md:inline h-4 w-4 shrink-0 text-text-muted" />
+      </button>
+      {open && (
+        <div className="absolute right-0 z-10 mt-1 w-60 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
+          <Link
+            to="/portal/customer/login"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-subtle"
+          >
+            <Users className="h-4 w-4 shrink-0 text-text-muted" />
+            Customer portal
+          </Link>
+          <Link
+            to="/portal/financier/login"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-subtle"
+          >
+            <Landmark className="h-4 w-4 shrink-0 text-text-muted" />
+            Financier portal
+          </Link>
+          <div className="my-1 border-t border-border-subtle" />
+          <Link
+            to="/app/settings/external-access"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-subtle"
+          >
+            <Settings className="h-4 w-4 shrink-0 text-text-muted" />
+            Manage external access
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TopHeader({
   me,
   displayName,
@@ -422,6 +489,7 @@ function TopHeader({
           <Plus className="h-4 w-4" />
           New
         </Link>
+        <StakeholderPortalsMenu />
         <button type="button" className="h-8 w-8 rounded-md hover:bg-surface-subtle text-text-secondary flex items-center justify-center">
           <Bell className="h-4 w-4" />
         </button>

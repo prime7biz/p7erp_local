@@ -214,7 +214,30 @@ export function Login() {
               </Link>
             </div>
 
-            <div className="text-center pt-2">
+              <div className="text-center pt-2 space-y-2">
+              <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-text-muted max-w-sm mx-auto">
+                <Link to="/legal/terms" className="hover:text-brand-primary transition-colors">
+                  Terms
+                </Link>
+                <Link to="/legal/privacy" className="hover:text-brand-primary transition-colors">
+                  Privacy
+                </Link>
+                <Link to="/legal/dpa" className="hover:text-brand-primary transition-colors">
+                  DPA
+                </Link>
+                <Link to="/legal/ai-disclaimer" className="hover:text-brand-primary transition-colors">
+                  AI
+                </Link>
+                <Link to="/legal/sla" className="hover:text-brand-primary transition-colors">
+                  SLA
+                </Link>
+                <Link to="/legal/security-compliance" className="hover:text-brand-primary transition-colors">
+                  Security
+                </Link>
+                <Link to="/trust-center" className="hover:text-brand-primary transition-colors">
+                  Trust
+                </Link>
+              </div>
               <Link
                 to="/"
                 className="text-sm text-text-muted hover:text-brand-primary transition-colors inline-flex items-center gap-1.5"

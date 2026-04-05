@@ -61,15 +61,57 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
       "ERP built for buying houses: order management, supplier coordination, LC tracking, and commercial operations.",
     keywords: "buying house ERP, sourcing software, apparel buying",
   },
+  "/legal/privacy": {
+    title: "Privacy Policy – Prime7 ERP",
+    description:
+      "Prime7 ERP privacy policy: data collection, AI processing, security, encryption, multi-tenant isolation, cross-border transfers, retention, and your rights.",
+    keywords: "privacy policy, data protection, GDPR, AI, ERP security",
+  },
+  "/legal/terms": {
+    title: "Terms of Service – Prime7 ERP",
+    description:
+      "Prime7 ERP terms of service: SaaS subscription, multi-tenant ERP, AI advisory features, data ownership, liability, and governing law.",
+    keywords: "terms of service, terms of use, SaaS agreement, ERP",
+  },
+  "/legal/dpa": {
+    title: "Data Processing Agreement – Prime7 ERP",
+    description:
+      "Prime7 ERP data processing agreement (DPA) with regional addenda: GDPR, US state privacy, Bangladesh, India, Africa, and Asia-Pacific.",
+    keywords: "DPA, data processing agreement, GDPR, SCC, subprocessors",
+  },
+  "/legal/ai-disclaimer": {
+    title: "AI Usage Disclaimer – Prime7 ERP",
+    description:
+      "Prime7 ERP AI disclaimer: advisory-only outputs, no warranty, no autonomous financial posting, and limitation of liability for AI use.",
+    keywords: "AI disclaimer, machine learning, ERP AI",
+  },
+  "/legal/sla": {
+    title: "Service Level Agreement – Prime7 ERP",
+    description:
+      "Prime7 ERP SLA summary: availability targets, support response goals, maintenance, exclusions, and service credit disclaimer for enterprise buyers.",
+    keywords: "SLA, uptime, service level, support, Prime7 ERP",
+  },
+  "/legal/security-compliance": {
+    title: "Security & Compliance – Prime7 ERP",
+    description:
+      "Prime7 ERP security and compliance overview: encryption, access control, tenant isolation, monitoring, and responsible disclosure—without false certification claims.",
+    keywords: "security, compliance, encryption, ERP security, data protection",
+  },
+  "/trust-center": {
+    title: "Trust Center – Prime7 ERP",
+    description:
+      "Prime7 ERP Trust Center: security, privacy, availability, AI responsibility, quick facts, FAQs, and links to legal documents for procurement teams.",
+    keywords: "trust center, security, privacy, ERP, compliance",
+  },
   "/privacy": {
     title: "Privacy Policy – Prime7 ERP",
-    description: "Prime7 ERP privacy policy. How we collect, use, and protect your data.",
-    keywords: "privacy policy, data protection",
+    description: "Redirect to the Prime7 ERP privacy policy.",
+    keywords: "privacy policy, Prime7 ERP",
   },
   "/terms": {
     title: "Terms of Service – Prime7 ERP",
-    description: "Prime7 ERP terms of service and use.",
-    keywords: "terms of service, terms of use",
+    description: "Redirect to the Prime7 ERP terms of service.",
+    keywords: "terms of service, Prime7 ERP",
   },
   "/how-it-works": {
     title: "How It Works – Prime7 ERP",

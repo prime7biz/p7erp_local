@@ -19,6 +19,7 @@ import {
   withLegacyOption,
 } from "@/lib/commercialTerms";
 import { InquiryCreateSidebar } from "@/features/inquiries/create/InquiryCreateSidebar";
+import { canSubmitInquiry } from "@/features/merch/workflow";
 import { cn } from "@/lib/utils";
 import type {
   ConflictResolutionChoice,
@@ -84,6 +85,7 @@ export function InquiryCreatePage() {
   const [currencies, setCurrencies] = useState<CurrencyMasterResponse[]>([]);
   const [tenantDefaultCommissionMode, setTenantDefaultCommissionMode] = useState<string>("");
   const [currentInquiryCode, setCurrentInquiryCode] = useState<string>("");
+  const [workflowStatus, setWorkflowStatus] = useState<string>("");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -163,6 +165,7 @@ export function InquiryCreatePage() {
         if (isEdit && id) {
           const inquiry = await api.getInquiry(Number(id));
           setCurrentInquiryCode(inquiry.inquiry_code);
+          setWorkflowStatus(inquiry.status ?? "");
           setForm({
             customer_id: inquiry.customer_id,
             style_id: inquiry.style_id ?? undefined,
@@ -739,6 +742,30 @@ export function InquiryCreatePage() {
     }
   };
 
+  const handleSaveAndSubmit = async () => {
+    if (!form.customer_id) {
+      setError("Please select a customer.");
+      return;
+    }
+    if (!form.style_id) {
+      setError("Style is required for new inquiry flow.");
+      return;
+    }
+    if (!isEdit || !id) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api.updateInquiry(Number(id), form);
+      await api.updateInquiryStatus(Number(id), "SUBMITTED");
+      setWorkflowStatus("SUBMITTED");
+      navigate(`/app/inquiries/${id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save and submit inquiry");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const syncLiveExchangeRate = async () => {
     setFetchingRates(true);
     setError("");
@@ -860,7 +887,7 @@ export function InquiryCreatePage() {
             <p className="text-xs text-text-muted mt-1">Inquiry code is auto generated when you save (e.g. INQ-0001).</p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => navigate(isEdit && id ? `/app/inquiries/${id}` : "/app/inquiries")}
@@ -872,10 +899,20 @@ export function InquiryCreatePage() {
             type="button"
             onClick={handleSave}
             disabled={saving || loading || creatingStyle}
-            className="rounded-lg bg-brand-primary px-4 py-1.5 text-sm font-semibold text-brand-primary-foreground disabled:opacity-60"
+            className="rounded-lg border border-border-strong px-4 py-1.5 text-sm font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
           >
-            {saving ? "Saving..." : "Save inquiry"}
+            {saving ? "Saving..." : isEdit ? "Save draft" : "Save inquiry"}
           </button>
+          {isEdit && id && canSubmitInquiry(workflowStatus) ? (
+            <button
+              type="button"
+              onClick={() => void handleSaveAndSubmit()}
+              disabled={saving || loading || creatingStyle}
+              className="rounded-lg bg-brand-primary px-4 py-1.5 text-sm font-semibold text-brand-primary-foreground disabled:opacity-60"
+            >
+              {saving ? "Saving…" : "Save & submit"}
+            </button>
+          ) : null}
         </div>
       </div>
 

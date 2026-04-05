@@ -78,6 +78,13 @@ body {
     break-inside: avoid;
   }
 
+  .legal-print-doc {
+    color: #0f172a !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
   .print-report table {
     width: 100%;
     border-collapse: collapse;

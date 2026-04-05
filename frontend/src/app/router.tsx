@@ -10,8 +10,14 @@ import { AboutPage } from "@/pages/public/AboutPage";
 import { ContactPage } from "@/pages/public/ContactPage";
 import { GarmentsErpPage } from "@/pages/public/GarmentsErpPage";
 import { BuyingHouseErpPage } from "@/pages/public/BuyingHouseErpPage";
-import { PrivacyPage } from "@/pages/public/PrivacyPage";
-import { TermsPage } from "@/pages/public/TermsPage";
+import { LegalLayout } from "@/components/legal/LegalLayout";
+import { TermsPage as LegalTermsPage } from "@/pages/legal/TermsPage";
+import { PrivacyPage as LegalPrivacyPage } from "@/pages/legal/PrivacyPage";
+import { DpaPage } from "@/pages/legal/DpaPage";
+import { AiDisclaimerPage } from "@/pages/legal/AiDisclaimerPage";
+import { SlaPage } from "@/pages/legal/SlaPage";
+import { SecurityCompliancePage } from "@/pages/legal/SecurityCompliancePage";
+import { TrustCenterPage } from "@/pages/legal/TrustCenterPage";
 import { HowItWorksPage } from "@/pages/public/HowItWorksPage";
 import { SecurityPage } from "@/pages/public/SecurityPage";
 import { ErpBangladeshPage } from "@/pages/public/ErpBangladeshPage";
@@ -20,9 +26,66 @@ import { ResourcesPage } from "@/pages/public/ResourcesPage";
 import { SupportPage } from "@/pages/public/SupportPage";
 import { VerifyProformaPage } from "@/pages/VerifyProformaPage";
 import { GlobalAiChatWidget } from "@/components/GlobalAiChatWidget";
+import { ExternalAccessGuard } from "@/components/external-access/ExternalAccessGuard";
 
 const AppProtectedRouter = lazy(() =>
   import("@/app/AppProtectedRouter").then((mod) => ({ default: mod.AppProtectedRouter })),
+);
+
+const CustomerLoginPage = lazy(() =>
+  import("@/pages/portal/customer/CustomerLoginPage").then((m) => ({ default: m.CustomerLoginPage })),
+);
+const CustomerPortalLayout = lazy(() =>
+  import("@/pages/portal/customer/CustomerPortalLayout").then((m) => ({ default: m.CustomerPortalLayout })),
+);
+const CustomerDashboardPage = lazy(() =>
+  import("@/pages/portal/customer/CustomerDashboardPage").then((m) => ({ default: m.CustomerDashboardPage })),
+);
+const CustomerOrdersPage = lazy(() =>
+  import("@/pages/portal/customer/CustomerOrdersPage").then((m) => ({ default: m.CustomerOrdersPage })),
+);
+const CustomerOrderDetailPage = lazy(() =>
+  import("@/pages/portal/customer/CustomerOrderDetailPage").then((m) => ({ default: m.CustomerOrderDetailPage })),
+);
+const CustomerApprovalsPage = lazy(() =>
+  import("@/pages/portal/customer/CustomerApprovalsPage").then((m) => ({ default: m.CustomerApprovalsPage })),
+);
+const CustomerShipmentsPage = lazy(() =>
+  import("@/pages/portal/customer/CustomerShipmentsPage").then((m) => ({ default: m.CustomerShipmentsPage })),
+);
+const CustomerNotesPage = lazy(() =>
+  import("@/pages/portal/customer/CustomerNotesPage").then((m) => ({ default: m.CustomerNotesPage })),
+);
+
+const FinancierLoginPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierLoginPage").then((m) => ({ default: m.FinancierLoginPage })),
+);
+const FinancierPortalLayout = lazy(() =>
+  import("@/pages/portal/financier/FinancierPortalLayout").then((m) => ({ default: m.FinancierPortalLayout })),
+);
+const FinancierDashboardPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierDashboardPage").then((m) => ({ default: m.FinancierDashboardPage })),
+);
+const FinancierOrderBookPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierOrderBookPage").then((m) => ({ default: m.FinancierOrderBookPage })),
+);
+const FinancierOrderDetailPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierOrderDetailPage").then((m) => ({ default: m.FinancierOrderDetailPage })),
+);
+const FinancierPipelinePage = lazy(() =>
+  import("@/pages/portal/financier/FinancierPipelinePage").then((m) => ({ default: m.FinancierPipelinePage })),
+);
+const FinancierGoodsMovementPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierGoodsMovementPage").then((m) => ({ default: m.FinancierGoodsMovementPage })),
+);
+const FinancierFinancialSummaryPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierFinancialSummaryPage").then((m) => ({ default: m.FinancierFinancialSummaryPage })),
+);
+const FinancierProjectionsPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierProjectionsPage").then((m) => ({ default: m.FinancierProjectionsPage })),
+);
+const FinancierAlertsPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierAlertsPage").then((m) => ({ default: m.FinancierAlertsPage })),
 );
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -47,6 +110,10 @@ function ScrollToTop() {
   return null;
 }
 
+const portalRouteFallback = (
+  <div className="min-h-[40vh] flex items-center justify-center text-sm text-text-muted">Loading portal…</div>
+);
+
 export function AppRouter() {
   return (
     <>
@@ -59,8 +126,18 @@ export function AppRouter() {
         <Route path="/contact" element={<PublicLayout><ContactPage /></PublicLayout>} />
         <Route path="/garments-erp" element={<PublicLayout><GarmentsErpPage /></PublicLayout>} />
         <Route path="/buying-house-erp" element={<PublicLayout><BuyingHouseErpPage /></PublicLayout>} />
-        <Route path="/privacy" element={<PublicLayout><PrivacyPage /></PublicLayout>} />
-        <Route path="/terms" element={<PublicLayout><TermsPage /></PublicLayout>} />
+        <Route path="/privacy" element={<Navigate to="/legal/privacy" replace />} />
+        <Route path="/terms" element={<Navigate to="/legal/terms" replace />} />
+        <Route path="/legal" element={<PublicLayout><LegalLayout /></PublicLayout>}>
+          <Route index element={<Navigate to="terms" replace />} />
+          <Route path="terms" element={<LegalTermsPage />} />
+          <Route path="privacy" element={<LegalPrivacyPage />} />
+          <Route path="dpa" element={<DpaPage />} />
+          <Route path="ai-disclaimer" element={<AiDisclaimerPage />} />
+          <Route path="sla" element={<SlaPage />} />
+          <Route path="security-compliance" element={<SecurityCompliancePage />} />
+        </Route>
+        <Route path="/trust-center" element={<PublicLayout><TrustCenterPage /></PublicLayout>} />
         <Route path="/how-it-works" element={<PublicLayout><HowItWorksPage /></PublicLayout>} />
         <Route path="/security" element={<PublicLayout><SecurityPage /></PublicLayout>} />
         <Route path="/erp-bangladesh" element={<PublicLayout><ErpBangladeshPage /></PublicLayout>} />
@@ -73,6 +150,58 @@ export function AppRouter() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/verify/proforma" element={<VerifyProformaPage />} />
+        <Route
+          path="/portal/customer/login"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <CustomerLoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/portal/customer"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <ExternalAccessGuard portal="customer">
+                <CustomerPortalLayout />
+              </ExternalAccessGuard>
+            </Suspense>
+          }
+        >
+          <Route index element={<CustomerDashboardPage />} />
+          <Route path="orders" element={<CustomerOrdersPage />} />
+          <Route path="orders/:orderId" element={<CustomerOrderDetailPage />} />
+          <Route path="approvals" element={<CustomerApprovalsPage />} />
+          <Route path="shipments" element={<CustomerShipmentsPage />} />
+          <Route path="notes" element={<CustomerNotesPage />} />
+        </Route>
+        <Route
+          path="/portal/financier/login"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <FinancierLoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/portal/financier"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <ExternalAccessGuard portal="financier">
+                <FinancierPortalLayout />
+              </ExternalAccessGuard>
+            </Suspense>
+          }
+        >
+          <Route index element={<FinancierDashboardPage />} />
+          <Route path="order-book" element={<FinancierOrderBookPage />} />
+          <Route path="orders/:orderId" element={<FinancierOrderDetailPage />} />
+          <Route path="pipeline" element={<FinancierPipelinePage />} />
+          <Route path="goods-movement" element={<FinancierGoodsMovementPage />} />
+          <Route path="financial-summary" element={<FinancierFinancialSummaryPage />} />
+          <Route path="projections" element={<FinancierProjectionsPage />} />
+          <Route path="alerts" element={<FinancierAlertsPage />} />
+        </Route>
         <Route
           path="/app/*"
           element={

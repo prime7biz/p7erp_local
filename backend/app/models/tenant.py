@@ -31,6 +31,10 @@ class Tenant(Base):
     logo: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     company_code: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True)
+    # First public signup records which legal/trust document bundle version the tenant accepted.
+    legal_acceptance_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    legal_accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    legal_accepted_by_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Bcrypt hash of a one-time setup token for POST /auth/register when tenant has zero users (Finding #4).
     # Cleared automatically after the first admin registers. Alternative: BOOTSTRAP_REGISTRATION_KEY in env.
     bootstrap_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)

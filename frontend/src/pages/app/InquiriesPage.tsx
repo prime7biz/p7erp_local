@@ -6,6 +6,7 @@ import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import {
   canConvertInquiryToQuotation,
+  canSubmitInquiry,
   humanizeStatus,
   INQUIRY_STATUS_FILTER_OPTIONS,
 } from "@/features/merch/workflow";
@@ -50,6 +51,7 @@ export function InquiriesPage() {
   const [departmentFilter, setDepartmentFilter] = useState<string>("");
   const { page, setPage, pageSize, setPageSize } = useListPagination();
   const [listTotal, setListTotal] = useState(0);
+  const [submittingInquiryId, setSubmittingInquiryId] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -261,7 +263,7 @@ export function InquiriesPage() {
                           Actions
                         </button>
                         {openActionsId === inq.id && (
-                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
+                          <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
                             <Link
                               to={`/app/inquiries/${inq.id}`}
                               onClick={() => setOpenActionsId(null)}
@@ -290,11 +292,29 @@ export function InquiriesPage() {
                               <div className="block rounded-md px-2 py-1.5 text-left text-xs text-text-muted">
                                 Already converted
                               </div>
-                            ) : !canConvertInquiryToQuotation(inq.status) ? (
-                              <div className="block rounded-md px-2 py-1.5 text-left text-xs text-text-muted">
-                                Submit first
-                              </div>
-                            ) : (
+                            ) : canSubmitInquiry(inq.status) ? (
+                              <button
+                                type="button"
+                                disabled={submittingInquiryId === inq.id}
+                                onClick={async () => {
+                                  try {
+                                    setError("");
+                                    setSubmittingInquiryId(inq.id);
+                                    await api.updateInquiryStatus(inq.id, "SUBMITTED");
+                                    setOpenActionsId(null);
+                                    await load();
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : "Submit inquiry failed");
+                                  } finally {
+                                    setSubmittingInquiryId(null);
+                                  }
+                                }}
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
+                              >
+                                {submittingInquiryId === inq.id ? "Submitting…" : "Submit inquiry"}
+                              </button>
+                            ) : null}
+                            {!inq.is_converted_to_quotation && canConvertInquiryToQuotation(inq.status) ? (
                               <button
                                 type="button"
                                 onClick={async () => {
@@ -314,7 +334,7 @@ export function InquiriesPage() {
                               >
                                 To quotation
                               </button>
-                            )}
+                            ) : null}
                             <button
                               type="button"
                               onClick={async () => {

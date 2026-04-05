@@ -8,6 +8,18 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    emails_from_email: str = ""
+    emails_from_name: str = "Prime7 ERP"
+    frontend_url: str = "https://prime7erp.com"
+    # External portal JWT (customer / financier); subject uses ext:{id} to avoid collision with internal user ids.
+    external_jwt_expire_minutes: int = 45
+    external_jwt_refresh_expire_days: int = 14
+    external_login_max_attempts: int = 8
+    external_login_lockout_minutes: int = 30
     tenant_strategy: str = "header"  # header | subdomain | path
     cors_origins: str = ""
     redis_url: str | None = None

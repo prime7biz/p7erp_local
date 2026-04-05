@@ -91,3 +91,7 @@ export const listTableTdPrimaryClass = "px-4 py-3 text-sm font-medium text-text-
 
 export const listTableTrClass =
   "border-b border-border-subtle last:border-0 hover:bg-surface-subtle/80";
+
+/** Aliases for portal / settings tables (same tokens as ERP list tables) */
+export const listTableHeadCellClass = listTableThClass;
+export const listTableRowClass = listTableTrClass;

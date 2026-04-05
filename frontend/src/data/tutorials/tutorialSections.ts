@@ -134,7 +134,7 @@ The **left sidebar** lists modules. This matches the live menu in the app (see *
 - Some sections (for example **Inventory**, **Manufacturing**, **HR**, **Finance**) show **subsection labels** such as “Procurement” or “Transactions” to group related pages.
 - When the sidebar is **collapsed** to icons, hover a section to open a **flyout menu** of its links.
 - At the bottom, **Help & Tutorials** opens this guide (\`/app/tutorials\`).
-- In the **top bar**, use **Portals** (link icon) for **Customer portal** and **Financier portal** sign-in pages — these are separate from staff login. **Manage external access** opens \`/app/settings/external-access\` (invites and feature flags).
+- In the **top bar**, use **Portals** (link icon) for **Customer portal** and **Financier portal** sign-in pages — these are separate from staff login. **Manage external access** opens \`/app/settings/external-access\` (feature flags, access lists, invite email automation).
 - Under **Settings** in the sidebar, **External access** goes to the same administration screen.
 
 ## Tips
@@ -1326,7 +1326,7 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 - **User Mgmt** — \`/app/settings/users\`
 - **Roles** — \`/app/settings/roles\`
 - **Tenant** — \`/app/settings/tenant\`
-- **External access** — \`/app/settings/external-access\` (feature flags, invites, audit). Customer and financier users sign in at \`/portal/customer/login\` and \`/portal/financier/login\` (separate from staff login). Staff can open those URLs from **Portals** in the app header.
+- **External access** — \`/app/settings/external-access\` (feature flags, invites, audit). Invites are sent by email with secure activation links (\`/portal/customer/accept-invite\`, \`/portal/financier/accept-invite\`), then users sign in at \`/portal/customer/login\` and \`/portal/financier/login\` (separate from staff login). Staff can open those URLs from **Portals** in the app header.
 
 ## Tips
 

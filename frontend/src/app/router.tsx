@@ -37,6 +37,9 @@ const AppProtectedRouter = lazy(() =>
 const CustomerLoginPage = lazy(() =>
   import("@/pages/portal/customer/CustomerLoginPage").then((m) => ({ default: m.CustomerLoginPage })),
 );
+const CustomerAcceptInvitePage = lazy(() =>
+  import("@/pages/portal/customer/CustomerAcceptInvitePage").then((m) => ({ default: m.CustomerAcceptInvitePage })),
+);
 const CustomerPortalLayout = lazy(() =>
   import("@/pages/portal/customer/CustomerPortalLayout").then((m) => ({ default: m.CustomerPortalLayout })),
 );
@@ -61,6 +64,9 @@ const CustomerNotesPage = lazy(() =>
 
 const FinancierLoginPage = lazy(() =>
   import("@/pages/portal/financier/FinancierLoginPage").then((m) => ({ default: m.FinancierLoginPage })),
+);
+const FinancierAcceptInvitePage = lazy(() =>
+  import("@/pages/portal/financier/FinancierAcceptInvitePage").then((m) => ({ default: m.FinancierAcceptInvitePage })),
 );
 const FinancierPortalLayout = lazy(() =>
   import("@/pages/portal/financier/FinancierPortalLayout").then((m) => ({ default: m.FinancierPortalLayout })),
@@ -163,6 +169,14 @@ export function AppRouter() {
           }
         />
         <Route
+          path="/portal/customer/accept-invite"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <CustomerAcceptInvitePage />
+            </Suspense>
+          }
+        />
+        <Route
           path="/portal/customer"
           element={
             <Suspense fallback={portalRouteFallback}>
@@ -184,6 +198,14 @@ export function AppRouter() {
           element={
             <Suspense fallback={portalRouteFallback}>
               <FinancierLoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/portal/financier/accept-invite"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <FinancierAcceptInvitePage />
             </Suspense>
           }
         />

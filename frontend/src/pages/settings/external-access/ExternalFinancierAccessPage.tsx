@@ -153,7 +153,9 @@ export function ExternalFinancierAccessPage() {
               role_codes: [roleCode],
               access_scope: scope,
             });
-            setTokenMsg(`Invite created. Token (copy now): ${res.invite_token}`);
+            if (res.invite_email_sent) setTokenMsg(res.message || `Invitation email sent to ${email}.`);
+            else if (res.invite_token) setTokenMsg(`Invitation created. Email failed, so share token manually: ${res.invite_token}`);
+            else setTokenMsg(res.message || "Invitation created.");
             await load();
           }}
         />

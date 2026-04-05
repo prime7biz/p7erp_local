@@ -53,7 +53,8 @@ export interface ExternalPrincipalAdminRow {
 export interface ExternalInviteResponse {
   invitation_id: number;
   expires_at: string;
-  invite_token: string;
+  invite_token?: string | null;
+  invite_email_sent?: boolean;
   message?: string;
 }
 

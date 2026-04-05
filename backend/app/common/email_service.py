@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 
 from app.config import get_settings
@@ -155,6 +157,93 @@ async def send_registration_confirmation_email(
             tenant_name=tenant_name.strip() or "your organization",
             company_code=company_code,
             login_url=login_url,
+        ),
+        subtype=MessageType.html,
+    )
+    fm = FastMail(get_mail_connection_config())
+    await fm.send_message(message)
+
+
+def _build_external_invitation_html(
+    *,
+    recipient_name: str,
+    tenant_name: str,
+    company_code: str | None,
+    principal_type: str,
+    accept_url: str,
+    expires_at_label: str,
+) -> str:
+    safe_name = recipient_name.strip() or "there"
+    safe_tenant = tenant_name.strip() or "your organization"
+    safe_company_code = (company_code or "").strip()
+    portal_label = "Customer Portal" if principal_type == "customer" else "Financier Portal"
+    cc_line = (
+        f'<p style="margin:0 0 16px;line-height:1.6;"><strong>Company code:</strong> {safe_company_code}</p>'
+        if safe_company_code
+        else ""
+    )
+    return f"""
+    <html>
+      <body style="margin:0;padding:0;background:#f5f7fb;font-family:Arial,sans-serif;color:#111827;">
+        <div style="max-width:600px;margin:0 auto;padding:32px 16px;">
+          <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;padding:32px;">
+            <h2 style="margin:0 0 16px;font-size:24px;color:#111827;">You are invited to Prime7 ERP {portal_label}</h2>
+            <p style="margin:0 0 16px;line-height:1.6;">Hello {safe_name},</p>
+            <p style="margin:0 0 16px;line-height:1.6;">
+              You have been invited to access <strong>{safe_tenant}</strong> via the {portal_label}.
+              Click the button below to create your password and activate your account.
+            </p>
+            {cc_line}
+            <p style="margin:0 0 16px;line-height:1.6;"><strong>Invitation expires:</strong> {expires_at_label} (UTC)</p>
+            <p style="margin:24px 0;">
+              <a
+                href="{accept_url}"
+                style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;"
+              >
+                Accept Invitation
+              </a>
+            </p>
+            <p style="margin:0 0 16px;line-height:1.6;">
+              If the button does not work, copy and paste this link into your browser:
+            </p>
+            <p style="margin:0 0 16px;line-height:1.6;word-break:break-all;">
+              <a href="{accept_url}" style="color:#2563eb;">{accept_url}</a>
+            </p>
+            <p style="margin:0;line-height:1.6;color:#6b7280;">
+              If you were not expecting this invitation, you can ignore this email.
+            </p>
+          </div>
+        </div>
+      </body>
+    </html>
+    """.strip()
+
+
+async def send_external_invitation_email(
+    *,
+    to_email: str,
+    recipient_name: str | None,
+    tenant_name: str,
+    company_code: str | None,
+    principal_type: str,
+    invite_token: str,
+    expires_at_label: str,
+) -> None:
+    settings = get_settings()
+    frontend_url = settings.frontend_url.rstrip("/") or "https://prime7erp.com"
+    accept_path = "/portal/customer/accept-invite" if principal_type == "customer" else "/portal/financier/accept-invite"
+    accept_url = f"{frontend_url}{accept_path}?token={quote(invite_token, safe='')}"
+    portal_label = "Customer Portal" if principal_type == "customer" else "Financier Portal"
+    message = MessageSchema(
+        subject=f"Prime7 ERP invitation: {portal_label}",
+        recipients=[to_email],
+        body=_build_external_invitation_html(
+            recipient_name=recipient_name or "",
+            tenant_name=tenant_name,
+            company_code=company_code,
+            principal_type=principal_type,
+            accept_url=accept_url,
+            expires_at_label=expires_at_label,
         ),
         subtype=MessageType.html,
     )

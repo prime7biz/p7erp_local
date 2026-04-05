@@ -87,7 +87,11 @@ async def test_invite_customer_principal_ok(db_session_integration):
             )
         assert r.status_code == 200, r.text
         data = r.json()
-        assert "invite_token" in data and len(data["invite_token"]) > 20
+        assert "invite_email_sent" in data
+        if data["invite_email_sent"]:
+            assert not data.get("invite_token")
+        else:
+            assert isinstance(data.get("invite_token"), str) and len(data["invite_token"]) > 20
     finally:
         app.dependency_overrides.pop(get_db, None)
         app.dependency_overrides.pop(get_current_user, None)
@@ -128,7 +132,11 @@ async def test_invite_financier_principal_ok(db_session_integration):
             )
         assert r.status_code == 200, r.text
         data = r.json()
-        assert "invite_token" in data and len(data["invite_token"]) > 20
+        assert "invite_email_sent" in data
+        if data["invite_email_sent"]:
+            assert not data.get("invite_token")
+        else:
+            assert isinstance(data.get("invite_token"), str) and len(data["invite_token"]) > 20
     finally:
         app.dependency_overrides.pop(get_db, None)
         app.dependency_overrides.pop(get_current_user, None)

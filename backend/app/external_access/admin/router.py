@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.authz import ensure_user_is_tenant_admin
+from app.common.email_service import send_external_invitation_email
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -59,11 +63,41 @@ from app.external_access.feature_flags import (
 )
 
 router = APIRouter(prefix="/external-access", tags=["settings-external-access"])
+logger = logging.getLogger(__name__)
 
 
 def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+
+
+async def _send_invite_email_with_fallback(
+    *,
+    tenant: Tenant,
+    principal_type: str,
+    email: str,
+    full_name: str,
+    token: str,
+    expires_at: datetime,
+) -> tuple[bool, str | None, str]:
+    try:
+        await send_external_invitation_email(
+            to_email=email,
+            recipient_name=full_name,
+            tenant_name=tenant.name,
+            company_code=tenant.company_code,
+            principal_type=principal_type,
+            invite_token=token,
+            expires_at_label=expires_at.strftime("%Y-%m-%d %H:%M"),
+        )
+    except Exception as exc:
+        logger.warning("External invite email send failed for %s (%s): %s", email, principal_type, exc)
+        return (
+            False,
+            token,
+            "Invitation created. SMTP email failed, so share the token manually.",
+        )
+    return True, None, "Invitation email sent."
 
 
 async def _overview_response(db: AsyncSession, tenant: Tenant) -> ExternalAccessOverviewResponse:
@@ -229,10 +263,20 @@ async def invite_customer_principal(
         resource="external_invitation",
         details=str(inv.id),
     )
+    invite_email_sent, invite_token, message = await _send_invite_email_with_fallback(
+        tenant=tenant,
+        principal_type=PRINCIPAL_CUSTOMER,
+        email=str(body.email),
+        full_name=body.full_name,
+        token=plain,
+        expires_at=inv.expires_at,
+    )
     return ExternalInviteResponse(
         invitation_id=inv.id,
         expires_at=inv.expires_at,
-        invite_token=plain,
+        invite_token=invite_token,
+        invite_email_sent=invite_email_sent,
+        message=message,
     )
 
 
@@ -276,10 +320,20 @@ async def invite_financier_principal(
         resource="external_invitation",
         details=str(inv.id),
     )
+    invite_email_sent, invite_token, message = await _send_invite_email_with_fallback(
+        tenant=tenant,
+        principal_type=PRINCIPAL_FINANCIER,
+        email=str(body.email),
+        full_name=body.full_name,
+        token=plain,
+        expires_at=inv.expires_at,
+    )
     return ExternalInviteResponse(
         invitation_id=inv.id,
         expires_at=inv.expires_at,
-        invite_token=plain,
+        invite_token=invite_token,
+        invite_email_sent=invite_email_sent,
+        message=message,
     )
 
 

@@ -64,8 +64,9 @@ class ExternalInviteFinancierRequest(BaseModel):
 class ExternalInviteResponse(BaseModel):
     invitation_id: int
     expires_at: datetime
-    invite_token: str
-    message: str = "Share this token with the invitee (integrate email in production)."
+    invite_token: str | None = None
+    invite_email_sent: bool = False
+    message: str = "Invitation created."
 
 
 class ExternalPrincipalPatchRequest(BaseModel):

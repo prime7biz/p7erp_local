@@ -147,6 +147,18 @@ export async function externalLogin(body: {
   });
 }
 
+export async function externalAcceptInvite(body: {
+  token: string;
+  full_name: string;
+  password: string;
+  phone?: string | null;
+}): Promise<ExternalTokenResponse> {
+  return extRequest<ExternalTokenResponse>("/auth/accept-invite", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export async function externalRefresh(refreshToken: string): Promise<ExternalTokenResponse> {
   return postRefreshTokens(refreshToken);
 }

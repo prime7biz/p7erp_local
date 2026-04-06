@@ -6,6 +6,8 @@ from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 
 from app.config import get_settings
 
+POSTMARK_HEADERS = {"X-PM-Message-Stream": "outbound"}
+
 
 def _require_email_settings() -> None:
     settings = get_settings()
@@ -91,6 +93,7 @@ async def send_forgot_password_email(
             reset_url=reset_url,
         ),
         subtype=MessageType.html,
+        headers=POSTMARK_HEADERS,
     )
     fm = FastMail(get_mail_connection_config())
     await fm.send_message(message)
@@ -159,6 +162,7 @@ async def send_registration_confirmation_email(
             login_url=login_url,
         ),
         subtype=MessageType.html,
+        headers=POSTMARK_HEADERS,
     )
     fm = FastMail(get_mail_connection_config())
     await fm.send_message(message)
@@ -246,6 +250,7 @@ async def send_external_invitation_email(
             expires_at_label=expires_at_label,
         ),
         subtype=MessageType.html,
+        headers=POSTMARK_HEADERS,
     )
     fm = FastMail(get_mail_connection_config())
     await fm.send_message(message)

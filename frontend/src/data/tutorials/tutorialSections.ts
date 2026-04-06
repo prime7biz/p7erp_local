@@ -1326,7 +1326,7 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 - **User Mgmt** — \`/app/settings/users\`
 - **Roles** — \`/app/settings/roles\`
 - **Tenant** — \`/app/settings/tenant\`
-- **External access** — \`/app/settings/external-access\` (feature flags, invites, audit). Invites are sent by email with secure activation links (\`/portal/customer/accept-invite\`, \`/portal/financier/accept-invite\`), then users sign in at \`/portal/customer/login\` and \`/portal/financier/login\` (separate from staff login). Staff can open those URLs from **Portals** in the app header.
+- **External access** — \`/app/settings/external-access\` (feature flags, invites, audit). Invites are sent by email with secure activation links (\`/portal/customer/accept-invite\`, \`/portal/financier/accept-invite\`), then users sign in at \`/portal/customer/login\` and \`/portal/financier/login\` (separate from staff login). **Forgot password** uses \`/portal/customer/forgot-password\` and \`/portal/financier/forgot-password\` (reset links open \`/portal/*/reset-password\`). Staff can open portal URLs from **Portals** in the app header.
 
 ## Tips
 

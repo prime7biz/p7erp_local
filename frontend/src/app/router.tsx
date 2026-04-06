@@ -40,6 +40,12 @@ const CustomerLoginPage = lazy(() =>
 const CustomerAcceptInvitePage = lazy(() =>
   import("@/pages/portal/customer/CustomerAcceptInvitePage").then((m) => ({ default: m.CustomerAcceptInvitePage })),
 );
+const CustomerForgotPasswordPage = lazy(() =>
+  import("@/pages/portal/customer/CustomerForgotPasswordPage").then((m) => ({ default: m.CustomerForgotPasswordPage })),
+);
+const CustomerResetPasswordPage = lazy(() =>
+  import("@/pages/portal/customer/CustomerResetPasswordPage").then((m) => ({ default: m.CustomerResetPasswordPage })),
+);
 const CustomerPortalLayout = lazy(() =>
   import("@/pages/portal/customer/CustomerPortalLayout").then((m) => ({ default: m.CustomerPortalLayout })),
 );
@@ -67,6 +73,12 @@ const FinancierLoginPage = lazy(() =>
 );
 const FinancierAcceptInvitePage = lazy(() =>
   import("@/pages/portal/financier/FinancierAcceptInvitePage").then((m) => ({ default: m.FinancierAcceptInvitePage })),
+);
+const FinancierForgotPasswordPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierForgotPasswordPage").then((m) => ({ default: m.FinancierForgotPasswordPage })),
+);
+const FinancierResetPasswordPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierResetPasswordPage").then((m) => ({ default: m.FinancierResetPasswordPage })),
 );
 const FinancierPortalLayout = lazy(() =>
   import("@/pages/portal/financier/FinancierPortalLayout").then((m) => ({ default: m.FinancierPortalLayout })),
@@ -177,6 +189,22 @@ export function AppRouter() {
           }
         />
         <Route
+          path="/portal/customer/forgot-password"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <CustomerForgotPasswordPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/portal/customer/reset-password"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <CustomerResetPasswordPage />
+            </Suspense>
+          }
+        />
+        <Route
           path="/portal/customer"
           element={
             <Suspense fallback={portalRouteFallback}>
@@ -206,6 +234,22 @@ export function AppRouter() {
           element={
             <Suspense fallback={portalRouteFallback}>
               <FinancierAcceptInvitePage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/portal/financier/forgot-password"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <FinancierForgotPasswordPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/portal/financier/reset-password"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <FinancierResetPasswordPage />
             </Suspense>
           }
         />

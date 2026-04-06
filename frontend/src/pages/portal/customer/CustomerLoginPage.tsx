@@ -81,7 +81,12 @@ export function CustomerLoginPage() {
             {loading ? "Signing in…" : "Sign in"}
           </Button>
         </form>
-        <p className="mt-6 text-center text-xs text-text-muted">
+        <p className="mt-4 text-center text-xs">
+          <Link to="/portal/customer/forgot-password" className="text-brand-primary hover:underline">
+            Forgot password?
+          </Link>
+        </p>
+        <p className="mt-4 text-center text-xs text-text-muted">
           <Link to="/login" className="text-brand-primary hover:underline">
             Staff login
           </Link>

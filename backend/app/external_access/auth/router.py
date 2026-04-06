@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.email_service import send_external_password_reset_email
 from app.config import get_settings
 from app.database import get_db
 from app.models import ExternalPrincipal, Tenant
@@ -44,6 +46,7 @@ from app.external_access.tokens import decode_external_refresh_token, get_curren
 from app.external_access.constants import JWT_CLAIM_PRINCIPAL_TYPE, JWT_CLAIM_TENANT, parse_external_subject
 
 router = APIRouter(prefix="/auth", tags=["external-auth"])
+logger = logging.getLogger(__name__)
 
 
 def _client_ip(request: Request) -> str | None:
@@ -183,6 +186,23 @@ async def external_request_password_reset(
             email=str(body.email),
             principal_type=body.principal_type,
         )
+    if reset_jwt and tenant:
+        try:
+            await send_external_password_reset_email(
+                to_email=str(body.email),
+                recipient_name=None,
+                tenant_name=tenant.name,
+                company_code=tenant.company_code,
+                principal_type=body.principal_type.strip().lower(),
+                reset_token=reset_jwt,
+            )
+        except Exception as exc:
+            logger.warning(
+                "External password reset email failed for %s (%s): %s",
+                body.email,
+                body.principal_type,
+                exc,
+            )
     # Always same message (no email enumeration)
     msg = "If an account exists for this email, password reset instructions have been sent."
     if (

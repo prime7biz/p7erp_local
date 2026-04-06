@@ -96,6 +96,8 @@ async def _resolve_user_for_forgot_password(
         )
         return user_result.scalar_one_or_none(), tenant
 
+    # Email-only: same address may exist in multiple tenants — pick the most recently active user
+    # (last_login DESC NULLS LAST, then highest id). JWT reset token still carries tenant_id for /reset-password.
     matches = await db.execute(
         select(User, Tenant)
         .join(Tenant, Tenant.id == User.tenant_id)
@@ -105,10 +107,11 @@ async def _resolve_user_for_forgot_password(
             Tenant.is_active.is_(True),
             Tenant.deleted_at.is_(None),
         )
-        .limit(2)
+        .order_by(User.last_login.desc().nulls_last(), User.id.desc())
+        .limit(5)
     )
     rows = matches.all()
-    if len(rows) != 1:
+    if not rows:
         return None, None
     user, tenant = rows[0]
     return user, tenant

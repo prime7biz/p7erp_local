@@ -60,6 +60,7 @@ from app.external_access.feature_flags import (
     is_financier_financial_summary_enabled,
     is_financier_portal_enabled,
     is_financier_projection_enabled,
+    require_portal_enabled,
 )
 
 router = APIRouter(prefix="/external-access", tags=["settings-external-access"])
@@ -236,6 +237,7 @@ async def invite_customer_principal(
 ):
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
+    require_portal_enabled(tenant=tenant, principal_type=PRINCIPAL_CUSTOMER)
 
     inv, plain = await create_invitation(
         db,
@@ -289,6 +291,7 @@ async def invite_financier_principal(
 ):
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
+    require_portal_enabled(tenant=tenant, principal_type=PRINCIPAL_FINANCIER)
 
     inv, plain = await create_invitation(
         db,

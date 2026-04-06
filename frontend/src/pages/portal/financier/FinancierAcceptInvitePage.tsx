@@ -1,6 +1,6 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { externalAcceptInvite, setExtAuth } from "@/api/externalClient";
+import { clearExtAuth, externalAcceptInvite, setExtAuth } from "@/api/externalClient";
 import { Button } from "@/components/ui/button";
 import { erpControlFocusClass } from "@/components/app/listPageLayout";
 
@@ -14,6 +14,15 @@ export function FinancierAcceptInvitePage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!success) return;
+    const t = window.setTimeout(() => {
+      navigate("/portal/financier", { replace: true });
+    }, 1800);
+    return () => window.clearTimeout(t);
+  }, [success, navigate]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -35,6 +44,7 @@ export function FinancierAcceptInvitePage() {
       return;
     }
 
+    clearExtAuth();
     setLoading(true);
     try {
       const res = await externalAcceptInvite({
@@ -44,7 +54,7 @@ export function FinancierAcceptInvitePage() {
         phone: phone.trim() || undefined,
       });
       setExtAuth(res.access_token, res.refresh_token, res.tenant_id, res.principal_type);
-      navigate("/portal/financier", { replace: true });
+      setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invitation acceptance failed");
     } finally {
@@ -58,55 +68,64 @@ export function FinancierAcceptInvitePage() {
         <img src="/images/logo.svg" alt="Prime7 ERP" className="mx-auto h-10 w-auto mb-6" />
         <h1 className="text-xl font-semibold text-text-primary text-center">Financier portal invitation</h1>
         <p className="text-sm text-text-muted text-center mt-1 mb-6">Set your password to activate access.</p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="text-xs font-medium text-text-muted">Full name</label>
-            <input
-              className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              autoComplete="name"
-            />
+        {success ? (
+          <div className="rounded-lg border border-status-success/25 bg-status-success-subtle px-4 py-4 text-sm text-text-primary">
+            <p className="font-medium">Account activated</p>
+            <p className="mt-2 text-text-muted">Opening your portal…</p>
           </div>
-          <div>
-            <label className="text-xs font-medium text-text-muted">Phone (optional)</label>
-            <input
-              className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              autoComplete="tel"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-text-muted">Password</label>
-            <input
-              type="password"
-              className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-text-muted">Confirm password</label>
-            <input
-              type="password"
-              className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              autoComplete="new-password"
-            />
-          </div>
-          {error ? <p className="text-sm text-status-danger-foreground">{error}</p> : null}
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Activating…" : "Activate account"}
-          </Button>
-        </form>
-        <p className="mt-6 text-center text-xs text-text-muted">
-          <Link to="/portal/financier/login" className="text-brand-primary hover:underline">
-            Go to financier login
-          </Link>
-        </p>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-text-muted">Full name</label>
+              <input
+                className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                autoComplete="name"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-text-muted">Phone (optional)</label>
+              <input
+                className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                autoComplete="tel"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-text-muted">Password</label>
+              <input
+                type="password"
+                className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-text-muted">Confirm password</label>
+              <input
+                type="password"
+                className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+            {error ? <p className="text-sm text-status-danger-foreground">{error}</p> : null}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Activating…" : "Activate account"}
+            </Button>
+          </form>
+        )}
+        {!success ? (
+          <p className="mt-6 text-center text-xs text-text-muted">
+            <Link to="/portal/financier/login" className="text-brand-primary hover:underline">
+              Go to financier login
+            </Link>
+          </p>
+        ) : null}
       </div>
     </div>
   );

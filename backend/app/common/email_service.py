@@ -254,3 +254,87 @@ async def send_external_invitation_email(
     )
     fm = FastMail(get_mail_connection_config())
     await fm.send_message(message)
+
+
+def _build_external_password_reset_html(
+    *,
+    recipient_name: str,
+    tenant_name: str,
+    company_code: str | None,
+    principal_type: str,
+    reset_url: str,
+) -> str:
+    safe_name = recipient_name.strip() or "there"
+    safe_tenant = tenant_name.strip() or "your organization"
+    safe_company_code = (company_code or "").strip()
+    portal_label = "Customer Portal" if principal_type == "customer" else "Financier Portal"
+    cc_line = (
+        f'<p style="margin:0 0 16px;line-height:1.6;"><strong>Company code:</strong> {safe_company_code}</p>'
+        if safe_company_code
+        else ""
+    )
+    return f"""
+    <html>
+      <body style="margin:0;padding:0;background:#f5f7fb;font-family:Arial,sans-serif;color:#111827;">
+        <div style="max-width:600px;margin:0 auto;padding:32px 16px;">
+          <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;padding:32px;">
+            <h2 style="margin:0 0 16px;font-size:24px;color:#111827;">Reset your {portal_label} password</h2>
+            <p style="margin:0 0 16px;line-height:1.6;">Hello {safe_name},</p>
+            <p style="margin:0 0 16px;line-height:1.6;">
+              We received a request to reset your password for <strong>{safe_tenant}</strong> on Prime7 ERP {portal_label}.
+              Use the button below to choose a new password. This link expires in 24 hours.
+            </p>
+            {cc_line}
+            <p style="margin:24px 0;">
+              <a
+                href="{reset_url}"
+                style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;"
+              >
+                Reset password
+              </a>
+            </p>
+            <p style="margin:0 0 16px;line-height:1.6;">
+              If the button does not work, copy and paste this link into your browser:
+            </p>
+            <p style="margin:0 0 16px;line-height:1.6;word-break:break-all;">
+              <a href="{reset_url}" style="color:#2563eb;">{reset_url}</a>
+            </p>
+            <p style="margin:0;line-height:1.6;color:#6b7280;">
+              If you did not request this, you can safely ignore this email.
+            </p>
+          </div>
+        </div>
+      </body>
+    </html>
+    """.strip()
+
+
+async def send_external_password_reset_email(
+    *,
+    to_email: str,
+    recipient_name: str | None,
+    tenant_name: str,
+    company_code: str | None,
+    principal_type: str,
+    reset_token: str,
+) -> None:
+    settings = get_settings()
+    frontend_url = settings.frontend_url.rstrip("/") or "https://prime7erp.com"
+    reset_path = "/portal/customer/reset-password" if principal_type == "customer" else "/portal/financier/reset-password"
+    reset_url = f"{frontend_url}{reset_path}?token={quote(reset_token, safe='')}"
+    portal_label = "Customer Portal" if principal_type == "customer" else "Financier Portal"
+    message = MessageSchema(
+        subject=f"Reset your Prime7 ERP {portal_label} password",
+        recipients=[to_email],
+        body=_build_external_password_reset_html(
+            recipient_name=recipient_name or "",
+            tenant_name=tenant_name,
+            company_code=company_code,
+            principal_type=principal_type,
+            reset_url=reset_url,
+        ),
+        subtype=MessageType.html,
+        headers=POSTMARK_HEADERS,
+    )
+    fm = FastMail(get_mail_connection_config())
+    await fm.send_message(message)

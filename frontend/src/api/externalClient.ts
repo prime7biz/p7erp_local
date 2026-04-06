@@ -92,6 +92,29 @@ async function postRefreshTokens(refreshToken: string): Promise<ExternalTokenRes
   return res.json() as Promise<ExternalTokenResponse>;
 }
 
+/** Public external auth calls: no Bearer / X-Tenant-Id (avoids stale session interfering with login, invite, reset). */
+async function extRequestPublic<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init.headers as Record<string, string>),
+  };
+  const res = await fetch(`${API_BASE}${EXTERNAL_PREFIX}${path}`, { ...init, headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    const raw = err as { detail?: unknown; message?: string };
+    const parsed = parseFastApiErrorDetail(raw.detail);
+    const message =
+      parsed.message !== "Request failed"
+        ? parsed.message
+        : typeof raw.message === "string"
+          ? raw.message
+          : "Request failed";
+    throw new ExternalApiError(message, res.status);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
 async function extRequest<T>(path: string, init: RequestInit = {}, authRetryAfterRefresh = false): Promise<T> {
   const tid = getExtTenantId();
   const headers: Record<string, string> = {
@@ -141,7 +164,7 @@ export async function externalLogin(body: {
   password: string;
   principal_type: ExternalPrincipalType;
 }): Promise<ExternalTokenResponse> {
-  return extRequest<ExternalTokenResponse>("/auth/login", {
+  return extRequestPublic<ExternalTokenResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -153,7 +176,27 @@ export async function externalAcceptInvite(body: {
   password: string;
   phone?: string | null;
 }): Promise<ExternalTokenResponse> {
-  return extRequest<ExternalTokenResponse>("/auth/accept-invite", {
+  return extRequestPublic<ExternalTokenResponse>("/auth/accept-invite", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export type ExternalMessageResponse = { message: string };
+
+export async function externalRequestPasswordReset(body: {
+  company_code: string;
+  email: string;
+  principal_type: ExternalPrincipalType;
+}): Promise<ExternalMessageResponse> {
+  return extRequestPublic<ExternalMessageResponse>("/auth/request-password-reset", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function externalResetPassword(body: { token: string; new_password: string }): Promise<ExternalMessageResponse> {
+  return extRequestPublic<ExternalMessageResponse>("/auth/reset-password", {
     method: "POST",
     body: JSON.stringify(body),
   });

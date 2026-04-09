@@ -15,6 +15,7 @@ from app.common.email_service import send_external_invitation_email
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
+    Customer,
     ExternalAuditLog,
     ExternalInvitation,
     ExternalPrincipal,
@@ -239,6 +240,24 @@ async def invite_customer_principal(
     await ensure_user_is_tenant_admin(db, user, tenant.id)
     require_portal_enabled(tenant=tenant, principal_type=PRINCIPAL_CUSTOMER)
 
+    for cid in body.customer_ids:
+        if cid < 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid customer ID: {cid}",
+            )
+        cr = await db.execute(
+            select(Customer.id).where(
+                Customer.id == cid,
+                Customer.tenant_id == tenant.id,
+            )
+        )
+        if cr.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Customer ID {cid} not found in your organization",
+            )
+
     inv, plain = await create_invitation(
         db,
         tenant=tenant,
@@ -292,6 +311,19 @@ async def invite_financier_principal(
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
     require_portal_enabled(tenant=tenant, principal_type=PRINCIPAL_FINANCIER)
+
+    if body.financier_party_id is not None:
+        pr = await db.execute(
+            select(ExternalPrincipal.id).where(
+                ExternalPrincipal.id == body.financier_party_id,
+                ExternalPrincipal.tenant_id == tenant.id,
+            )
+        )
+        if pr.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Financier party ID {body.financier_party_id} not found",
+            )
 
     inv, plain = await create_invitation(
         db,

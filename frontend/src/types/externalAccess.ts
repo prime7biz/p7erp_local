@@ -15,12 +15,16 @@ export interface ExternalMeResponse {
   tenant_id: number;
   tenant_name: string;
   company_code: string | null;
+  tenant_address?: string | null;
+  tenant_phone?: string | null;
   email: string;
   full_name: string;
   principal_type: ExternalPrincipalType;
   role_codes: string[];
   feature_flags?: Record<string, boolean | string | number | null> | null;
   must_reset_password: boolean;
+  /** Highest scope row on ExternalFinancierAccess (financier only). */
+  financier_access_scope?: string | null;
 }
 
 export interface ExternalAccessOverview {

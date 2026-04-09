@@ -134,7 +134,7 @@ The **left sidebar** lists modules. This matches the live menu in the app (see *
 - Some sections (for example **Inventory**, **Manufacturing**, **HR**, **Finance**) show **subsection labels** such as “Procurement” or “Transactions” to group related pages.
 - When the sidebar is **collapsed** to icons, hover a section to open a **flyout menu** of its links.
 - At the bottom, **Help & Tutorials** opens this guide (\`/app/tutorials\`).
-- In the **top bar**, use **Portals** (link icon) for **Customer portal** and **Financier portal** sign-in pages — these are separate from staff login. **Manage external access** opens \`/app/settings/external-access\` (feature flags, access lists, invite email automation).
+- In the **top bar**, use **Portals** (link icon) for **Customer portal** and **Financier portal** — they open the unified sign-in page (\`/login\`) with the correct portal role pre-selected (\`/login?role=customer\` or \`/login?role=financier\`). **Manage external access** opens \`/app/settings/external-access\` (feature flags, access lists, invite email automation).
 - Under **Settings** in the sidebar, **External access** goes to the same administration screen.
 
 ## Tips
@@ -294,7 +294,7 @@ Each step has its own list and detail screens under \`/app/customers\`, \`/app/i
 ## Related areas
 
 - **Garment Styles** — \`/app/merchandising/styles\`
-- **BOM Governance** — \`/app/bom\`
+- **BOM Builder** (order-driven BOM from orders; pipeline milestones shown when an order is selected) — \`/app/bom\`
 - **Consumption Plans** — \`/app/bom/orders\`
 - **Order Pipeline** / **Pipeline Analytics** — \`/app/merchandising/pipeline\`, \`/app/merchandising/pipeline-analytics\`
 - **Critical Alerts**, **Wastage**, **Consumption Recon** — merchandising operations views
@@ -304,7 +304,7 @@ Each step has its own list and detail screens under \`/app/customers\`, \`/app/i
 
 - Use **Actions** on each list row for view/edit/print where enabled.`,
         tags: ["inquiry", "quotation", "order", "customer", "merchandising"],
-        lastUpdated: "2026-04-04",
+        lastUpdated: "2026-04-07",
         featured: true,
         infographics: [
           {
@@ -1060,7 +1060,7 @@ Chart of accounts, groups, cost centers, currency, periods, advance options — 
 - **Vouchers** — \`/app/accounts/vouchers\`
 - **Voucher Print** — \`/app/accounts/vouchers/print\`
 - **Voucher Approvals** — \`/app/accounts/vouchers/approval-queue\`
-- **Bills** and **Purchase & AP** — \`/app/accounts/outstanding-bills\`, \`/app/accounts/purchase-workflow\`
+- **Bills**, **Vendor bills (GRN)**, and **Purchase & AP** — \`/app/accounts/outstanding-bills\`, \`/app/accounts/vendor-bills\`, \`/app/accounts/purchase-workflow\`
 
 ## Banking
 
@@ -1068,9 +1068,9 @@ Bank accounts, reconciliation, payment runs, advice, settlement audit — \`/app
 
 ## Reports and planning
 
-Financial statements, trial balance, day book, analytics, budgets, cash forecast, and related planning pages — see sidebar entries under **Reports** and **Planning**.`,
+Financial statements, trial balance, day book, analytics, budgets, cash forecast, **Loans & facilities**, **Business overview**, and related planning pages — see sidebar entries under **Reports** and **Planning**.`,
         tags: ["finance", "vouchers", "accounts", "banking"],
-        lastUpdated: "2026-04-04",
+        lastUpdated: "2026-04-07",
         infographics: [
           {
             type: "flow",
@@ -1082,13 +1082,42 @@ Financial statements, trial balance, day book, analytics, budgets, cash forecast
             ],
           },
         ],
-        relatedAppRoutes: ["/app/accounts", "/app/accounts/vouchers", "/app/banking/accounts"],
+        relatedAppRoutes: ["/app/accounts", "/app/accounts/vouchers", "/app/accounts/vendor-bills", "/app/banking/accounts"],
         relatedArticleIds: [
           "wf-approvals",
           "fin-voucher-entry",
           "fin-voucher-approval-queue",
           "fin-bills-ap",
+          "fin-loans-facilities",
         ],
+      },
+      {
+        id: "fin-loans-facilities",
+        title: "Loans & facilities (credit lines)",
+        content: `## Overview
+
+Manage bank / lender **facilities**, **drawdown utilizations**, repayment **schedules**, and tie disbursements to **vouchers**.
+
+## Where to open
+
+- **Finance → Planning → Loans & facilities → Facilities dashboard** — \`/app/finance/facilities/dashboard\`
+- **All facilities** — \`/app/finance/facilities\`
+- **Business overview** — \`/app/finance/business-overview\`
+
+## Typical flow
+
+1. Create a **draft facility** with type, sanction, and GL accounts.
+2. Add a **utilization** (principal, rate, tenure). Use the live **EMI preview** on the form.
+3. **Activate** the utilization to create a **disbursement draft voucher**; post it from **Vouchers** to record drawdown.
+4. Use **record payment** / schedule tools from the internal facility APIs as your team enables them; repayments also flow through **vouchers** when posted.`,
+        tags: ["finance", "facility", "loans", "emi"],
+        lastUpdated: "2026-04-06",
+        relatedAppRoutes: [
+          "/app/finance/facilities",
+          "/app/finance/facilities/dashboard",
+          "/app/finance/business-overview",
+        ],
+        relatedArticleIds: ["fin-overview", "fin-voucher-entry"],
       },
       {
         id: "fin-voucher-entry",
@@ -1220,12 +1249,14 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 
 - **Bills** — \`/app/accounts/outstanding-bills\`
 - **Purchase & AP** — \`/app/accounts/purchase-workflow\`
+- **Vendor bills (GRN)** — \`/app/accounts/vendor-bills\` (draft from GRN accepted qty, then post AP / clear GRNI)
 
 ## Typical flow
 
 1. Open **Outstanding bills** to see supplier invoices waiting for booking or payment.
 2. Use filters and row **Actions** to open a bill, allocate to accounts, or mark progress as the UI allows.
-3. Open **Purchase & AP** for the wider purchase-to-pay checklist (GRN linkage, approvals, payment batching — exact steps follow on-page labels).
+3. Open **Vendor bills (GRN)** when you want finance-owned bills tied to a received GRN (invoice ref + post).
+4. Open **Purchase & AP** for the wider purchase-to-pay checklist (GRN linkage, approvals, payment batching — exact steps follow on-page labels).
 
 ## Common mistakes
 
@@ -1240,8 +1271,8 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 
 - Inventory **Goods Receiving** often feeds quantities; finance screens finalize liability and payment.`,
         tags: ["AP", "bills", "payable", "supplier"],
-        lastUpdated: "2026-04-03",
-        relatedAppRoutes: ["/app/accounts/outstanding-bills", "/app/accounts/purchase-workflow"],
+        lastUpdated: "2026-04-07",
+        relatedAppRoutes: ["/app/accounts/outstanding-bills", "/app/accounts/vendor-bills", "/app/accounts/purchase-workflow"],
         relatedArticleIds: ["fin-overview", "inv-grn-deep"],
       },
     ],
@@ -1326,13 +1357,14 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 - **User Mgmt** — \`/app/settings/users\`
 - **Roles** — \`/app/settings/roles\`
 - **Tenant** — \`/app/settings/tenant\`
-- **External access** — \`/app/settings/external-access\` (feature flags, invites, audit). Invites are sent by email with secure activation links (\`/portal/customer/accept-invite\`, \`/portal/financier/accept-invite\`), then users sign in at \`/portal/customer/login\` and \`/portal/financier/login\` (separate from staff login). **Forgot password** uses \`/portal/customer/forgot-password\` and \`/portal/financier/forgot-password\` (reset links open \`/portal/*/reset-password\`). Staff can open portal URLs from **Portals** in the app header.
+- **External access** — \`/app/settings/external-access\` (feature flags, invites, audit). **Customer portal** invites: open **Invite customer**, pick the **customer** from the dropdown (email and name pre-fill from the customer master; you can edit), choose **portal role**, then create the invite. Invites are sent by email with secure activation links (\`/portal/customer/accept-invite\`, \`/portal/financier/accept-invite\`), then users sign in on the **unified login** page (\`/login\`) choosing **Customer portal** or **Financier portal** (bookmark \`/login?role=customer\` or \`/login?role=financier\`; older \`/portal/*/login\` URLs redirect there). **Staff invitations** use \`/accept-invite?token=…\`. **Forgot password** for portals: \`/forgot-password?role=customer\` or \`/forgot-password?role=financier\` (legacy \`/portal/*/forgot-password\` redirects). Reset links still open \`/portal/*/reset-password\`. Staff can open portal shortcuts from **Portals** in the app header.
+- **Financier portal (credit monitoring scope)** — after sign-in, the top nav can include lender-focused views such as **Credit lines** (\`/portal/financier/credit-lines\`), **Stock / collateral** (\`/portal/financier/stock-collateral\`), **BTB liabilities** (\`/portal/financier/btb-liabilities\`), **Inventory** (\`/portal/financier/inventory\` — valuation, category drill-down, item ledger with optional GL flags, accounting-style view), **Order finance** (\`/portal/financier/order-finance\`), **Raw materials** (\`/portal/financier/raw-materials\`), **Production** (\`/portal/financier/production\`), **Export finance** (\`/portal/financier/financial-visibility\`), **Business health** (\`/portal/financier/business-health\`), **AI confidence** (\`/portal/financier/ai-confidence\` — tenant dashboard with KPI widgets and advisory reports from live ERP data), plus **Alerts** and **Risk panel** (\`/portal/financier/risk-panel\`). Visibility depends on **financier access scope** and linked party / BTB data.
 
 ## Tips
 
 - Changes here can affect **who sees which sidebar items** and **feature flags** for the whole tenant.`,
         tags: ["settings", "users", "roles", "admin"],
-        lastUpdated: "2026-04-06",
+        lastUpdated: "2026-04-08",
         infographics: [
           {
             type: "highlight",
@@ -1350,6 +1382,21 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
           "/app/settings/external-access/customers",
           "/app/settings/external-access/financiers",
           "/app/settings/external-access/audit",
+          "/login",
+          "/forgot-password",
+          "/accept-invite",
+          "/portal/financier",
+          "/portal/financier/credit-lines",
+          "/portal/financier/stock-collateral",
+          "/portal/financier/btb-liabilities",
+          "/portal/financier/inventory",
+          "/portal/financier/order-finance",
+          "/portal/financier/raw-materials",
+          "/portal/financier/production",
+          "/portal/financier/financial-visibility",
+          "/portal/financier/business-health",
+          "/portal/financier/ai-confidence",
+          "/portal/financier/risk-panel",
         ],
         relatedArticleIds: ["gs-tenant-modes"],
       },

@@ -2,11 +2,12 @@ from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class LoginRequest(BaseModel):
-    """Reference-style: company_code + username + password. Also supports tenant_id + email."""
+    """company_code + email (preferred) or username + password. Optional login_as: staff | admin."""
     company_code: str | None = None  # Resolve tenant by company_code (case-insensitive)
     tenant_id: int | None = None
     username: str | None = None
     email: str | None = None  # plain str so 422 is avoided when only company_code + username + password sent
+    login_as: str | None = None  # staff | admin (customer/financier use /api/external/auth/login)
     password: str
 
     @model_validator(mode="before")
@@ -23,14 +24,26 @@ class LoginRequest(BaseModel):
         if not (self.company_code and self.company_code.strip()) and self.tenant_id is None:
             raise ValueError("Provide company_code or tenant_id")
         if not (self.username and self.username.strip()) and not (self.email and self.email.strip()):
-            raise ValueError("Provide username or email")
+            raise ValueError("Provide email or username")
         return self
+
+
+class ResolveTenantRequest(BaseModel):
+    company_code: str = Field(min_length=1, max_length=32)
+
+
+class ResolveTenantResponse(BaseModel):
+    tenant_id: int
+    tenant_name: str
+    company_code: str | None
+    logo_url: str | None = None
+    available_roles: list[str]
 
 
 class RegisterRequest(BaseModel):
     tenant_id: int
     email: EmailStr
-    username: str
+    username: str | None = None
     password: str
     first_name: str | None = None
     last_name: str | None = None
@@ -54,7 +67,7 @@ class UserResponse(BaseModel):
     id: int
     tenant_id: int
     email: str
-    username: str
+    username: str | None
     first_name: str | None
     last_name: str | None
     is_active: bool

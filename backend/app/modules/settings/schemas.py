@@ -75,7 +75,7 @@ class SettingsUserResponse(BaseModel):
     tenant_id: int
     role_id: int
     email: str
-    username: str
+    username: str | None
     first_name: str | None
     last_name: str | None
     is_active: bool
@@ -85,7 +85,7 @@ class SettingsUserResponse(BaseModel):
 class SettingsUserCreate(BaseModel):
     role_id: int
     email: str = Field(min_length=5, max_length=255)
-    username: str = Field(min_length=3, max_length=128)
+    username: str | None = Field(default=None, min_length=3, max_length=128)
     password: str = Field(min_length=6, max_length=128)
     first_name: str | None = Field(default=None, max_length=128)
     last_name: str | None = Field(default=None, max_length=128)

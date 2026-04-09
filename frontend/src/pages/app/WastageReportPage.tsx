@@ -251,6 +251,18 @@ export function WastageReportPage() {
           <p className="text-sm text-text-muted mt-0.5">
             Profitability control: planned vs actual consumption by order and item. Positive % = over BOM (wastage).
           </p>
+          <p className="mt-2 text-xs text-text-muted">
+            <strong>Material control:</strong> production material issues post ledger movements with{" "}
+            <code className="rounded bg-surface-subtle px-1">movement_kind = PROD_ISSUE</code> tied to order + BOM line. Use{" "}
+            <Link className="text-status-info hover:underline" to="/app/inventory/consumption-control">
+              Consumption control
+            </Link>{" "}
+            for PMI and BOM vs actual variance; full detail in{" "}
+            <Link className="text-status-info hover:underline" to="/app/inventory/stock-ledger">
+              Stock ledger
+            </Link>
+            .
+          </p>
         </div>
         <div className="flex items-center gap-3">
           {lastRefresh && <span className="text-sm text-text-muted">Last refresh: {lastRefresh}</span>}

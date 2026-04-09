@@ -1,0 +1,23 @@
+/* Modal shell for in-app document print preview */
+@media print {
+  #p7-doc-print-modal {
+    position: static !important;
+    inset: auto !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    background: white !important;
+    z-index: auto !important;
+  }
+
+  #p7-doc-print-modal .p7-doc-print-toolbar {
+    display: none !important;
+  }
+
+  #p7-doc-print-modal .p7-doc-print-scroll {
+    overflow: visible !important;
+    max-height: none !important;
+    background: white !important;
+    padding: 0 !important;
+  }
+}

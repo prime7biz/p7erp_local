@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -134,6 +134,15 @@ export function StockInventorySummaryPage() {
         </div>
       ) : null}
       {rebuildMsg ? <p className="text-sm text-text-secondary">{rebuildMsg}</p> : null}
+
+      <p className="text-xs text-text-muted">
+        <strong>Material control:</strong> FIFO layers are built from all posted movements, including production material issues (
+        <code className="rounded bg-surface-subtle px-1">PROD_ISSUE</code>) and consumption issues. For order-level BOM vs issued qty, use{" "}
+        <Link className="text-status-info hover:underline" to="/app/inventory/consumption-control">
+          Consumption control
+        </Link>{" "}
+        or the stock ledger with <code className="rounded bg-surface-subtle px-1">movement_kind</code> filters.
+      </p>
 
       <div className="flex flex-wrap gap-2">
         {(

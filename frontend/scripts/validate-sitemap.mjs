@@ -13,7 +13,7 @@ const SITEMAP_PATH = path.join(__dirname, "..", "public", "sitemap.xml");
 
 function readLocalSitemap() {
   if (!fs.existsSync(SITEMAP_PATH)) {
-    console.error("Missing public/sitemap.xml — run: npm run prebuild or node scripts/generate-sitemap.mjs");
+    console.error("Missing public/sitemap.xml — run: npm run prebuild or npx tsx scripts/generate-sitemap.ts");
     process.exit(1);
   }
   return fs.readFileSync(SITEMAP_PATH, "utf8");
@@ -44,7 +44,15 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`OK: ${locs.length} URLs, no /app/ entries.`);
+  const forbidden = ["/portal/", "/verify/proforma", "/forgot-password", "/reset-password", "/accept-invite"];
+  const bad = locs.filter((u) => forbidden.some((f) => u.includes(f)));
+  if (bad.length > 0) {
+    console.error("FAIL: noindex / private URLs must not appear in sitemap:");
+    bad.forEach((u) => console.error(`  ${u}`));
+    process.exit(1);
+  }
+
+  console.log(`OK: ${locs.length} URLs, no /app/ or private URLs.`);
 
   if (process.argv.includes("--fetch")) {
     const base = (process.env.SITEMAP_SITE_URL || "https://prime7erp.com").replace(/\/$/, "");

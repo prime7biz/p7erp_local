@@ -8,6 +8,7 @@ import secrets
 from collections import defaultdict
 from io import StringIO
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Iterable, Literal
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -19,6 +20,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.permissions import (
+    PERMISSION_FINANCE_AP_POSTING_APPROVE,
+    assert_delegate_manager_or_permission,
+    require_internal_permission,
+)
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
 from app.modules.finance.voucher_controls import (
@@ -31,7 +37,9 @@ from app.modules.finance.voucher_controls import (
 )
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
+from app.config import get_settings
 from app.database import get_db
+from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher
 from app.models import (
     AccountGroup,
     CoAConfig,
@@ -46,6 +54,8 @@ from app.models import (
     BudgetLine,
     BtbLc,
     ChartOfAccount,
+    FacilityUtilization,
+    RepaymentScheduleLine,
     CashForecastLine,
     CashForecastScenario,
     CostCenter,
@@ -62,10 +72,14 @@ from app.models import (
     PurchaseOrderItem,
     Quotation,
     Tenant,
+    TradeCase,
     User,
+    VendorBill,
+    VendorBillLine,
     Voucher,
     VoucherLine,
     VoucherType,
+    Vendor,
 )
 
 router = APIRouter(prefix="/finance", tags=["finance"])
@@ -289,6 +303,9 @@ class AccountGroupOut(AccountGroupBody):
     id: int
     tenant_id: int
     code: str
+    system_code: str | None = None
+    is_system: bool = False
+    is_protected: bool = False
 
     class Config:
         from_attributes = True
@@ -369,6 +386,11 @@ class ChartAccountOut(ChartAccountBody):
     balance: str
     enable_bill_wise: bool
     version: int
+    system_code: str | None = None
+    is_system: bool = False
+    is_protected: bool = False
+    usage_purpose: str | None = None
+    linked_module: str | None = None
 
     class Config:
         from_attributes = True
@@ -421,6 +443,7 @@ class VoucherBody(BaseModel):
     exchange_rate_fetched_at: datetime | None = None
     trade_case_id: int | None = None
     btb_lc_id: int | None = None
+    facility_utilization_id: int | None = None
     lines: list[VoucherLineBody]
 
 
@@ -435,6 +458,7 @@ class VoucherUpdateBody(BaseModel):
     currency: str = "BDT"
     base_currency: str = "BDT"
     exchange_rate: str | None = None
+    facility_utilization_id: int | None = None
     lines: list[VoucherLineBody]
 
 
@@ -494,6 +518,7 @@ class VoucherOut(BaseModel):
     signed_by_system: bool
     trade_case_id: int | None
     btb_lc_id: int | None
+    facility_utilization_id: int | None = None
     created_by: int | None
     created_at: datetime
     updated_at: datetime
@@ -914,6 +939,7 @@ def _voucher_to_out(
         signed_by_system=voucher.signed_by_system,
         trade_case_id=voucher.trade_case_id,
         btb_lc_id=voucher.btb_lc_id,
+        facility_utilization_id=getattr(voucher, "facility_utilization_id", None),
         created_by=voucher.created_by,
         created_at=voucher.created_at,
         updated_at=voucher.updated_at,
@@ -1278,6 +1304,15 @@ async def update_account_group(
     row = await db.get(AccountGroup, group_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Account group not found")
+    if row.is_protected:
+        allowed = {"name", "description", "reporting_code", "last_reviewed_at", "is_active"}
+        data = body.model_dump()
+        for key in allowed:
+            if key in data:
+                setattr(row, key, data[key])
+        await db.commit()
+        await db.refresh(row)
+        return row
     new_parent_id = body.parent_group_id if body.parent_group_id is not None else row.parent_group_id
     if new_parent_id is not None and await _account_group_parent_would_cycle(db, tenant.id, group_id, new_parent_id):
         raise HTTPException(
@@ -1304,6 +1339,8 @@ async def delete_account_group(
     row = await db.get(AccountGroup, group_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Account group not found")
+    if row.is_protected:
+        raise HTTPException(status_code=403, detail="Cannot delete a protected system account group")
     # Prevent delete if used as parent
     child = await db.execute(
         select(AccountGroup).where(
@@ -1328,42 +1365,76 @@ async def seed_account_groups(
     db: AsyncSession = Depends(get_db),
 ):
     """Seed default account groups if none exist. Idempotent."""
+    from app.modules.finance.system_coa_seeding_service import seed_tenant_system_coa
+
     _ensure_tenant(user, tenant)
     existing = await db.execute(select(AccountGroup).where(AccountGroup.tenant_id == tenant.id).limit(1))
-    if existing.scalars().first():
-        result = await db.execute(
-            select(AccountGroup).where(AccountGroup.tenant_id == tenant.id).order_by(AccountGroup.sort_order)
-        )
-        return list(result.scalars().all())
-    defaults = [
-        {"name": "Capital Account", "code": "CAPITAL", "nature": "Equity", "sort_order": 1},
-        {"name": "Loans (Liability)", "code": "LOANS_LIABILITY", "nature": "Liability", "sort_order": 3},
-        {"name": "Current Liabilities", "code": "CURRENT_LIABILITIES", "nature": "Liability", "sort_order": 6},
-        {"name": "Current Assets", "code": "CURRENT_ASSETS", "nature": "Asset", "sort_order": 9},
-        {"name": "Fixed Assets", "code": "FIXED_ASSETS", "nature": "Asset", "sort_order": 16},
-        {"name": "Investments", "code": "INVESTMENTS", "nature": "Asset", "sort_order": 17},
-        {"name": "Direct Expenses", "code": "DIRECT_EXPENSES", "nature": "Expense", "sort_order": 18, "affects_gross_profit": True},
-        {"name": "Indirect Expenses", "code": "INDIRECT_EXPENSES", "nature": "Expense", "sort_order": 20},
-        {"name": "Direct Income", "code": "DIRECT_INCOME", "nature": "Income", "sort_order": 21, "affects_gross_profit": True},
-        {"name": "Indirect Income", "code": "INDIRECT_INCOME", "nature": "Income", "sort_order": 23},
-    ]
-    for d in defaults:
-        row = AccountGroup(
-            tenant_id=tenant.id,
-            name=d["name"],
-            code=d["code"],
-            nature=d["nature"],
-            sort_order=d["sort_order"],
-            affects_gross_profit=d.get("affects_gross_profit", False),
-            is_bank_group=False,
-            is_active=True,
-        )
-        db.add(row)
+    if not existing.scalars().first():
+        defaults = [
+            {"name": "Capital Account", "code": "CAPITAL", "nature": "Equity", "sort_order": 1},
+            {"name": "Loans (Liability)", "code": "LOANS_LIABILITY", "nature": "Liability", "sort_order": 3},
+            {"name": "Current Liabilities", "code": "CURRENT_LIABILITIES", "nature": "Liability", "sort_order": 6},
+            {"name": "Current Assets", "code": "CURRENT_ASSETS", "nature": "Asset", "sort_order": 9},
+            {"name": "Fixed Assets", "code": "FIXED_ASSETS", "nature": "Asset", "sort_order": 16},
+            {"name": "Investments", "code": "INVESTMENTS", "nature": "Asset", "sort_order": 17},
+            {
+                "name": "Direct Expenses",
+                "code": "DIRECT_EXPENSES",
+                "nature": "Expense",
+                "sort_order": 18,
+                "affects_gross_profit": True,
+            },
+            {"name": "Indirect Expenses", "code": "INDIRECT_EXPENSES", "nature": "Expense", "sort_order": 20},
+            {
+                "name": "Direct Income",
+                "code": "DIRECT_INCOME",
+                "nature": "Income",
+                "sort_order": 21,
+                "affects_gross_profit": True,
+            },
+            {"name": "Indirect Income", "code": "INDIRECT_INCOME", "nature": "Income", "sort_order": 23},
+        ]
+        for d in defaults:
+            row = AccountGroup(
+                tenant_id=tenant.id,
+                name=d["name"],
+                code=d["code"],
+                nature=d["nature"],
+                sort_order=d["sort_order"],
+                affects_gross_profit=d.get("affects_gross_profit", False),
+                is_bank_group=False,
+                is_active=True,
+            )
+            db.add(row)
+        await db.commit()
+    await seed_tenant_system_coa(db, tenant.id)
     await db.commit()
     result = await db.execute(
         select(AccountGroup).where(AccountGroup.tenant_id == tenant.id).order_by(AccountGroup.sort_order)
     )
     return list(result.scalars().all())
+
+
+class SystemCoaSeedSummary(BaseModel):
+    tenant_id: int
+    created_groups: int
+    created_ledgers: int
+    created_mappings: int
+
+
+@router.post("/system-coa/seed", response_model=SystemCoaSeedSummary)
+async def seed_system_coa_for_tenant(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Idempotent: add missing system groups, ledgers, and accounting_system_mappings."""
+    from app.modules.finance.system_coa_seeding_service import seed_tenant_system_coa
+
+    _ensure_tenant(user, tenant)
+    summary = await seed_tenant_system_coa(db, tenant.id)
+    await db.commit()
+    return SystemCoaSeedSummary(**summary)
 
 
 @router.get("/chart-of-accounts", response_model=list[ChartAccountOut])
@@ -1476,6 +1547,24 @@ async def update_chart_account(
     row = await db.get(ChartOfAccount, account_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Ledger account not found")
+    if row.is_protected:
+        allowed = {
+            "name",
+            "description",
+            "is_active",
+            "reporting_code",
+            "display_order",
+            "last_reviewed_at",
+            "statistical_unit",
+            "statistical_formula",
+        }
+        data = body.model_dump(exclude={"account_number"})
+        for key in allowed:
+            if key in data:
+                setattr(row, key, data[key])
+        await db.commit()
+        await db.refresh(row)
+        return row
     group = await db.get(AccountGroup, body.group_id)
     if not group or group.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Account group not found")
@@ -1503,6 +1592,8 @@ async def delete_chart_account(
     row = await db.get(ChartOfAccount, account_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Ledger account not found")
+    if row.is_protected:
+        raise HTTPException(status_code=403, detail="Cannot delete a protected system ledger")
     use_count = (
         await db.execute(
             select(func.count()).select_from(VoucherLine).where(
@@ -2067,8 +2158,12 @@ async def create_voucher(
         btb_lc = await db.get(BtbLc, body.btb_lc_id)
         if not btb_lc or btb_lc.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail="BTB LC not found")
+    if body.facility_utilization_id is not None:
+        fu = await db.get(FacilityUtilization, body.facility_utilization_id)
+        if not fu or fu.tenant_id != tenant.id:
+            raise HTTPException(status_code=400, detail="Facility utilization not found")
     txn_currency = _normalize_currency(body.currency, default="BDT")
-    base_currency = _normalize_currency(body.base_currency, default="BDT")
+    base_currency = _normalize_currency(body.base_currency, default=getattr(tenant, "base_currency", None) or "BDT")
     rate_source = (body.exchange_rate_source or "system").strip() or "system"
     fetched_at = body.exchange_rate_fetched_at
     exchange_rate_value: float | None = None
@@ -2114,6 +2209,7 @@ async def create_voucher(
         exchange_rate_fetched_at=fetched_at,
         trade_case_id=body.trade_case_id,
         btb_lc_id=body.btb_lc_id,
+        facility_utilization_id=body.facility_utilization_id,
         created_by=user.id,
     )
     db.add(row)
@@ -2257,6 +2353,12 @@ async def update_voucher(
     row.exchange_rate = str(round(exchange_rate_value, 8))
     row.exchange_rate_source = rate_source
     row.exchange_rate_fetched_at = fetched_at
+    if "facility_utilization_id" in body.model_fields_set:
+        if body.facility_utilization_id is not None:
+            fu = await db.get(FacilityUtilization, body.facility_utilization_id)
+            if not fu or fu.tenant_id != tenant.id:
+                raise HTTPException(status_code=400, detail="Facility utilization not found")
+        row.facility_utilization_id = body.facility_utilization_id
 
     existing_lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all())
     for old_line in existing_lines:
@@ -2393,10 +2495,28 @@ async def update_voucher_status(
                 current_balance += amount if line.entry_type == "CREDIT" else -amount
             account.balance = str(round(current_balance, 4))
     row.status = next_status
+    if next_status == "POSTED":
+        from app.modules.facility.posting_hooks import process_facility_voucher_posted
+
+        await process_facility_voucher_posted(db, tenant.id, row, user.id)
     lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all())
     _apply_internal_signature(row, lines)
     await db.commit()
     await db.refresh(row)
+    if next_status == "POSTED" and (row.voucher_type or "").upper() == "RECEIPT":
+        from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+        oids: set[int] = set()
+        if row.order_id:
+            oids.add(int(row.order_id))
+        if row.trade_case_id:
+            tc = await db.get(TradeCase, row.trade_case_id)
+            if tc and tc.tenant_id == tenant.id and tc.order_id:
+                oids.add(int(tc.order_id))
+        for oid in oids:
+            await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=oid)
+        if oids:
+            await db.commit()
     return await _voucher_out(db, row, control_warnings=post_control_warnings or None)
 
 
@@ -3012,6 +3132,46 @@ async def generate_cash_forecast(
                 line.outflow = str(new_out)
                 line.net = str(round(_to_float(line.inflow) - new_out, 2))
             break
+    # Facility repayment obligations (EMI) by due month
+    util_rows = list(
+        (
+            await db.execute(
+                select(FacilityUtilization.id).where(
+                    FacilityUtilization.tenant_id == tenant.id,
+                    FacilityUtilization.status == "active",
+                )
+            )
+        ).all()
+    )
+    util_ids = [r[0] for r in util_rows]
+    if util_ids:
+        sched_lines = list(
+            (
+                await db.execute(
+                    select(RepaymentScheduleLine).where(
+                        RepaymentScheduleLine.tenant_id == tenant.id,
+                        RepaymentScheduleLine.facility_utilization_id.in_(util_ids),
+                        RepaymentScheduleLine.status.in_(("upcoming", "due", "overdue", "partially_paid")),
+                    )
+                )
+            ).scalars().all()
+        )
+        for sl in sched_lines:
+            dd = sl.due_date
+            emi_amt = _to_float(str(sl.emi_amount or 0))
+            if emi_amt <= 0:
+                continue
+            for idx in range(scenario.months):
+                month_date = _add_months(start, idx)
+                if month_date.year != dd.year or month_date.month != dd.month:
+                    continue
+                label = month_date.strftime("%b-%Y")
+                line = line_by_label.get(label)
+                if line:
+                    new_out = round(_to_float(line.outflow) + emi_amt, 2)
+                    line.outflow = str(new_out)
+                    line.net = str(round(_to_float(line.inflow) - new_out, 2))
+                break
     running2 = 0.0
     for ln in sorted(lines_list, key=lambda x: x.id):
         running2 = round(running2 + _to_float(ln.net), 2)
@@ -6411,3 +6571,304 @@ async def finance_ai_readonly_insights(
     )
     await db.commit()
     return payload
+
+
+@router.get("/business-overview")
+async def finance_business_overview(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_internal_permission("business_overview.dashboard.read")),
+):
+    if not get_settings().business_overview_enabled:
+        raise HTTPException(status_code=403, detail="Business overview disabled")
+    _ensure_tenant(user, tenant)
+    from app.modules.finance.business_overview_service import build_business_overview
+
+    return await build_business_overview(db, tenant_id=tenant.id)
+
+
+@router.get("/business-overview/health-score")
+async def finance_business_health_score(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_internal_permission("business_overview.dashboard.read")),
+):
+    if not get_settings().business_overview_enabled:
+        raise HTTPException(status_code=403, detail="Business overview disabled")
+    _ensure_tenant(user, tenant)
+    from app.modules.finance.health_score_service import build_health_score
+
+    return await build_health_score(db, tenant_id=tenant.id)
+
+
+@router.get("/business-overview/deterministic-summary")
+async def finance_business_overview_deterministic(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_internal_permission("business_overview.dashboard.read")),
+):
+    _ensure_tenant(user, tenant)
+    from app.modules.finance.business_overview_rules import deterministic_summary
+    from app.modules.finance.business_overview_service import build_business_overview
+
+    ov = await build_business_overview(db, tenant_id=tenant.id)
+    return deterministic_summary(ov)
+
+
+@router.get("/business-overview/ai-narrative")
+async def finance_business_overview_ai(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_internal_permission("business_overview.ai_insights.read")),
+):
+    if not get_settings().business_overview_enabled:
+        raise HTTPException(status_code=403, detail="Business overview disabled")
+    _ensure_tenant(user, tenant)
+    from app.modules.finance.business_overview_ai_service import build_business_overview_ai_narrative
+
+    return await build_business_overview_ai_narrative(db, tenant_id=tenant.id, user_id=user.id)
+
+
+# --- Vendor bills (AP) — drafts from GRN, Finance-owned booking ---
+
+
+@router.post("/vendor-bills/from-grn/{grn_id}", status_code=201)
+async def create_vendor_bill_draft_from_grn(
+    grn_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    grn = await db.get(GoodsReceiving, grn_id)
+    if not grn or grn.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="GRN not found")
+    if (grn.status or "").upper() != "RECEIVED":
+        raise HTTPException(status_code=400, detail="GRN must be received before creating vendor bill")
+    vid = getattr(grn, "vendor_id", None)
+    if not vid and grn.purchase_order_id:
+        po = await db.get(PurchaseOrder, grn.purchase_order_id)
+        if po:
+            vid = po.vendor_id
+    if not vid:
+        raise HTTPException(status_code=400, detail="GRN has no vendor; set vendor on GRN or use a PO-linked receipt")
+    v = await db.get(Vendor, vid)
+    if not v or v.tenant_id != tenant.id:
+        raise HTTPException(status_code=400, detail="Vendor not found")
+
+    bill_code = await next_tenant_code(db, model=VendorBill, tenant_id=tenant.id, prefix="VB-", width=4)
+    bill = VendorBill(
+        tenant_id=tenant.id,
+        bill_code=bill_code,
+        vendor_id=vid,
+        vendor_invoice_ref=None,
+        vendor_invoice_date=date.today(),
+        bill_date=grn.received_date or date.today(),
+        status="DRAFT",
+        goods_receiving_id=grn.id,
+        purchase_order_id=grn.purchase_order_id,
+        source_order_id=getattr(grn, "source_order_id", None),
+        is_non_po_receipt=(getattr(grn, "source_type", None) or "").upper() == "NON_PO",
+        created_by_user_id=user.id,
+    )
+    db.add(bill)
+    await db.flush()
+
+    gi_res = await db.execute(select(GoodsReceivingItem).where(GoodsReceivingItem.goods_receiving_id == grn.id))
+    run_total = 0.0
+    for gi in gi_res.scalars().all():
+        acc = getattr(gi, "accepted_qty", None) or getattr(gi, "quantity", None) or "0"
+        up = getattr(gi, "unit_price", None) or "0"
+        lt = f"{round(float(acc or 0) * float(up or 0), 4):.4f}"
+        run_total += float(acc or 0) * float(up or 0)
+        db.add(
+            VendorBillLine(
+                tenant_id=tenant.id,
+                vendor_bill_id=bill.id,
+                goods_receiving_item_id=gi.id,
+                purchase_order_line_id=getattr(gi, "purchase_order_line_id", None),
+                item_id=gi.item_id,
+                quantity=str(acc),
+                unit_price=str(up),
+                line_total=lt,
+            )
+        )
+    bill.subtotal_amount = f"{run_total:.4f}"
+    bill.total_amount = f"{run_total:.4f}"
+    await db.commit()
+    await db.refresh(bill)
+    return {"id": bill.id, "bill_code": bill.bill_code, "status": bill.status}
+
+
+@router.get("/vendor-bills")
+async def list_vendor_bills(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    _ensure_tenant(user, tenant)
+    r = await db.execute(
+        select(VendorBill)
+        .where(VendorBill.tenant_id == tenant.id)
+        .order_by(VendorBill.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    rows = list(r.scalars().all())
+    return [
+        {
+            "id": b.id,
+            "bill_code": b.bill_code,
+            "vendor_id": b.vendor_id,
+            "status": b.status,
+            "goods_receiving_id": b.goods_receiving_id,
+            "purchase_order_id": b.purchase_order_id,
+            "total_amount": b.total_amount,
+            "vendor_invoice_ref": b.vendor_invoice_ref,
+        }
+        for b in rows
+    ]
+
+
+@router.get("/vendor-bills/{bill_id}")
+async def get_vendor_bill(
+    bill_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    b = await db.get(VendorBill, bill_id)
+    if not b or b.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Vendor bill not found")
+    lr = await db.execute(select(VendorBillLine).where(VendorBillLine.vendor_bill_id == b.id))
+    lines = list(lr.scalars().all())
+    return {
+        "id": b.id,
+        "bill_code": b.bill_code,
+        "vendor_id": b.vendor_id,
+        "status": b.status,
+        "vendor_invoice_ref": b.vendor_invoice_ref,
+        "goods_receiving_id": b.goods_receiving_id,
+        "purchase_order_id": b.purchase_order_id,
+        "source_order_id": b.source_order_id,
+        "is_non_po_receipt": b.is_non_po_receipt,
+        "lines": [
+            {
+                "id": ln.id,
+                "item_id": ln.item_id,
+                "quantity": ln.quantity,
+                "unit_price": ln.unit_price,
+                "line_total": ln.line_total,
+                "goods_receiving_item_id": ln.goods_receiving_item_id,
+                "purchase_order_line_id": ln.purchase_order_line_id,
+            }
+            for ln in lines
+        ],
+    }
+
+
+class VendorBillPatchBody(BaseModel):
+    vendor_invoice_ref: str | None = None
+    status: str | None = None
+    notes: str | None = None
+
+
+@router.patch("/vendor-bills/{bill_id}")
+async def patch_vendor_bill(
+    bill_id: int,
+    body: VendorBillPatchBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    b = await db.get(VendorBill, bill_id)
+    if not b or b.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Vendor bill not found")
+    if (b.status or "").upper() == "POSTED":
+        raise HTTPException(status_code=400, detail="Posted vendor bill cannot be edited")
+    if body.vendor_invoice_ref is not None:
+        b.vendor_invoice_ref = body.vendor_invoice_ref.strip() or None
+    if body.notes is not None:
+        b.notes = body.notes
+    if body.status is not None:
+        st = body.status.strip().upper()
+        if st not in {"DRAFT", "APPROVED", "CANCELLED"}:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        b.status = st
+    await db.commit()
+    await db.refresh(b)
+    return {"id": b.id, "bill_code": b.bill_code, "status": b.status, "vendor_invoice_ref": b.vendor_invoice_ref}
+
+
+@router.post("/vendor-bills/{bill_id}/post")
+async def post_vendor_bill(
+    bill_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Book AP: clear GRNI (goods received not billed) and credit trade payables."""
+    _ensure_tenant(user, tenant)
+    await assert_delegate_manager_or_permission(
+        db, user, tenant.id, permission_key=PERMISSION_FINANCE_AP_POSTING_APPROVE
+    )
+    b = await db.get(VendorBill, bill_id)
+    if not b or b.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Vendor bill not found")
+    if b.voucher_id is not None:
+        raise HTTPException(status_code=400, detail="Vendor bill already posted")
+    st = (b.status or "").upper()
+    if st == "CANCELLED":
+        raise HTTPException(status_code=400, detail="Cancelled vendor bill cannot be posted")
+    if not (b.vendor_invoice_ref or "").strip():
+        raise HTTPException(status_code=400, detail="vendor_invoice_ref is required before posting")
+    lr = await db.execute(select(VendorBillLine).where(VendorBillLine.vendor_bill_id == b.id))
+    lines = list(lr.scalars().all())
+    if not lines:
+        raise HTTPException(status_code=400, detail="Vendor bill has no lines")
+    total = sum(float(str(ln.line_total or 0).replace(",", "") or 0) for ln in lines)
+    if total <= 0:
+        raise HTTPException(status_code=400, detail="Vendor bill total must be greater than zero")
+    amt = Decimal(str(round(total, 4)))
+
+    voucher = await create_system_voucher(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher_type="JOURNAL",
+        voucher_date=b.bill_date or date.today(),
+        lines=[
+            AutoPostingLine(
+                entry_type="DEBIT",
+                amount=amt,
+                system_code="GOODS_RECEIVED_NOT_BILLED_IMPORT",
+                notes="Clear GRNI / receipt clearing",
+            ),
+            AutoPostingLine(
+                entry_type="CREDIT",
+                amount=amt,
+                system_code="ACCOUNTS_PAYABLE_TRADE",
+                notes="Vendor bill payable",
+            ),
+        ],
+        description=f"Vendor bill {b.bill_code}",
+        reference=b.bill_code,
+        source_module="VENDOR_BILL",
+        source_module_ref=str(b.id),
+        auto_post=True,
+    )
+    b.voucher_id = voucher.id
+    b.status = "POSTED"
+    b.posted_at = datetime.utcnow()
+    b.approved_by_user_id = user.id
+    await db.commit()
+    await db.refresh(b)
+    return {"id": b.id, "bill_code": b.bill_code, "status": b.status, "voucher_id": b.voucher_id}

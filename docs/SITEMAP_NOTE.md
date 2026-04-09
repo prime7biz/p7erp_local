@@ -4,9 +4,10 @@ The frontend generates **`frontend/public/sitemap.xml`** at build time.
 
 ## How it works
 
-- **Script:** [`frontend/scripts/generate-sitemap.mjs`](../frontend/scripts/generate-sitemap.mjs) lists public routes (aligned with [`frontend/src/app/router.tsx`](../frontend/src/app/router.tsx)) and every `/resources/{slug}` from [`frontend/src/data/resourcesArticles.ts`](../frontend/src/data/resourcesArticles.ts).
-- **When:** `npm run build` runs `prebuild`, which executes the generator before `vite build`.
-- **Override base URL:** set `SITEMAP_SITE_URL` (default `https://prime7erp.com`) if you need a different absolute host for staging builds.
+- **Sitemap script:** [`frontend/scripts/generate-sitemap.ts`](../frontend/scripts/generate-sitemap.ts) lists paths from [`frontend/src/config/publicMarketingPaths.ts`](../frontend/src/config/publicMarketingPaths.ts) (keep aligned with [`frontend/src/app/router.tsx`](../frontend/src/app/router.tsx)) plus every `/resources/{slug}` from [`frontend/src/data/resourcesArticles.ts`](../frontend/src/data/resourcesArticles.ts). It sets **per-URL `lastmod`**, **`changefreq`**, and **`priority`** (articles use parsed publish dates; static pages use `SITEMAP_STATIC_LASTMOD` or the build date).
+- **Static HTML shells:** after `vite build`, [`frontend/scripts/inject-static-route-html.ts`](../frontend/scripts/inject-static-route-html.ts) writes `dist/<path>/index.html` for each **indexable** URL so Nginx can return correct `<title>` and meta on the first response without waiting for JavaScript.
+- **When:** `npm run build` runs `prebuild` (`tsx scripts/generate-sitemap.ts`), then `vite build`, then the inject script.
+- **Override base URL:** set `SITEMAP_SITE_URL` (default `https://prime7erp.com`) for sitemap locs and inject canonicals; match `VITE_SITE_URL` in production builds when possible.
 
 ## robots.txt
 

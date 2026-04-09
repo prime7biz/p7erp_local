@@ -7,6 +7,7 @@ from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import Tenant, Role, User
 from app.modules.audit.service import log_action
+from app.modules.finance.system_coa_seeding_service import seed_tenant_system_coa
 from app.modules.tenant.schemas import TenantCreate, TenantResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +52,8 @@ async def create_tenant(
         domain=domain,
         tenant_type=body.tenant_type,
         company_code=company_code,
+        phone=(body.phone or "").strip() or None,
+        address=(body.address or "").strip() or None,
     )
     db.add(tenant)
     await db.flush()
@@ -70,6 +73,7 @@ async def create_tenant(
     )
     db.add(user_role)
     await db.flush()
+    await seed_tenant_system_coa(db, tenant.id)
     await log_action(db, tenant_id=tenant.id, action="TENANT_CREATE", resource="tenant", details=tenant.company_code or tenant.name)
     await db.refresh(tenant)
     return TenantResponse(

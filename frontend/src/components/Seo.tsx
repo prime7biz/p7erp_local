@@ -2,20 +2,26 @@ import { useLocation } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { getSeoForPath } from "@/config/seo";
 import { getArticleBySlug } from "@/data/resourcesArticles";
+import { resourceArticleDateToIsoDate, resourceArticleDateToIsoDateTime } from "@/utils/resourceArticleDates";
+import { breadcrumbJsonLd } from "@/utils/seoBreadcrumbs";
+import { getRobotsMetaContent } from "@/utils/seoRobots";
 
 /** Base URL for canonical and Open Graph. Set via VITE_SITE_URL or default for production. */
 const raw = typeof import.meta.env?.VITE_SITE_URL === "string" ? import.meta.env.VITE_SITE_URL : "";
 const SITE_URL = raw ? raw.replace(/\/$/, "") : "https://prime7erp.com";
 
+const ORG_ID = `${SITE_URL}/#organization`;
+
 /** Default share image for Open Graph / Twitter (public/images/og-default.png). */
 const DEFAULT_OG_IMAGE = `${SITE_URL}/images/og-default.png`;
 
-/** JSON-LD for the landing page: Organization + SoftwareApplication. */
+/** JSON-LD for the landing page: Organization + SoftwareApplication + WebSite. */
 const LANDING_JSON_LD = {
   "@context": "https://schema.org",
   "@graph": [
     {
       "@type": "Organization",
+      "@id": ORG_ID,
       name: "Prime7 ERP",
       description:
         "AI-powered cloud ERP for garment manufacturers and buying houses. Merchandising, production, inventory, LC management, accounting, and HR in one platform.",
@@ -35,6 +41,14 @@ const LANDING_JSON_LD = {
         priceCurrency: "USD",
         description: "Free trial available",
       },
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      name: "Prime7 ERP",
+      url: SITE_URL,
+      inLanguage: "en",
+      publisher: { "@id": ORG_ID },
     },
   ],
 };
@@ -73,36 +87,49 @@ export function Seo() {
   const articleSlug = articleMatch?.[1];
   const article = articleSlug ? getArticleBySlug(articleSlug) : null;
   const canonicalUrl = `${SITE_URL}${pathname === "/" ? "" : pathname}`;
-  const isApp = pathname.startsWith("/app");
+  const robotsContent = getRobotsMetaContent(pathname);
+  const crumbs = breadcrumbJsonLd(SITE_URL, pathname);
+
+  const articleOgAlt = article
+    ? `${article.title} – Prime7 ERP Resources`
+    : "Prime7 ERP — Cloud ERP for Garments and Buying Houses";
 
   const articleJsonLd =
     article &&
-    (() => ({
-      "@context": "https://schema.org",
-      "@type": "Article",
-      headline: article.title,
-      datePublished: article.date,
-      author: {
-        "@type": "Person",
-        name: article.author,
-        jobTitle: article.authorRole,
-      },
-      description: article.excerpt,
-    }))();
+    (() => {
+      const datePublished = resourceArticleDateToIsoDate(article.date);
+      return {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        headline: article.title,
+        datePublished,
+        author: {
+          "@type": "Person",
+          name: article.author,
+          jobTitle: article.authorRole,
+        },
+        publisher: {
+          "@id": ORG_ID,
+        },
+        image: [DEFAULT_OG_IMAGE],
+        description: article.excerpt,
+        mainEntityOfPage: {
+          "@type": "WebPage",
+          "@id": canonicalUrl,
+        },
+      };
+    })();
 
   return (
-    <Helmet>
+    <Helmet htmlAttributes={{ lang: "en" }}>
       <title>{meta.title}</title>
       <meta name="description" content={meta.description} />
-      {meta.keywords && <meta name="keywords" content={meta.keywords} />}
-      {isApp ? (
-        <meta name="robots" content="noindex, nofollow" />
-      ) : null}
+      <meta name="robots" content={robotsContent} />
       <link rel="canonical" href={canonicalUrl} />
-      <meta
-        property="og:type"
-        content={article ? "article" : "website"}
-      />
+      <link rel="alternate" hrefLang="en" href={canonicalUrl} />
+      <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
+      <meta property="og:locale" content="en_US" />
+      <meta property="og:type" content={article ? "article" : "website"} />
       <meta property="og:url" content={canonicalUrl} />
       <meta property="og:title" content={meta.title} />
       <meta property="og:description" content={meta.description} />
@@ -110,9 +137,13 @@ export function Seo() {
       <meta property="og:image" content={DEFAULT_OG_IMAGE} />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content="Prime7 ERP — Cloud ERP for Garments and Buying Houses" />
+      <meta property="og:image:alt" content={articleOgAlt} />
+      {article ? (
+        <meta property="article:published_time" content={resourceArticleDateToIsoDateTime(article.date)} />
+      ) : null}
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:image" content={DEFAULT_OG_IMAGE} />
+      <meta name="twitter:image:alt" content={articleOgAlt} />
       <meta name="twitter:title" content={meta.title} />
       <meta name="twitter:description" content={meta.description} />
       {isLanding && (
@@ -123,6 +154,9 @@ export function Seo() {
       )}
       {articleJsonLd && (
         <script type="application/ld+json">{JSON.stringify(articleJsonLd)}</script>
+      )}
+      {crumbs && (
+        <script type="application/ld+json">{JSON.stringify(crumbs)}</script>
       )}
     </Helmet>
   );

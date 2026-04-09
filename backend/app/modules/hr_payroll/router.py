@@ -702,33 +702,24 @@ async def post_run(
     if total_net <= 0:
         raise HTTPException(status_code=400, detail="Payroll net total must be greater than zero")
 
-    expense_account_id = body.payroll_expense_account_id
-    payable_account_id = body.payroll_payable_account_id
-    cfg = (
-        await db.execute(select(PayrollAccountingConfig).where(PayrollAccountingConfig.tenant_id == tenant.id).limit(1))
-    ).scalar_one_or_none()
-    if cfg is not None:
-        if expense_account_id is None and cfg.salary_expense_account_id is not None:
-            expense_account_id = cfg.salary_expense_account_id
-        if payable_account_id is None and cfg.salary_payable_account_id is not None:
-            payable_account_id = cfg.salary_payable_account_id
-    if expense_account_id is None or payable_account_id is None:
-        accounts = (
-            await db.execute(
-                select(ChartOfAccount)
-                .where(ChartOfAccount.tenant_id == tenant.id, ChartOfAccount.is_active.is_(True))
-                .order_by(ChartOfAccount.id.asc())
-            )
-        ).scalars().all()
-        if len(accounts) < 2:
-            raise HTTPException(
-                status_code=400,
-                detail="Need at least two active chart-of-account records to auto-post payroll",
-            )
-        if expense_account_id is None:
-            expense_account_id = accounts[0].id
-        if payable_account_id is None:
-            payable_account_id = accounts[1].id
+    from app.modules.hr_payroll.account_resolver import resolve_payroll_accounts
+
+    acc = await resolve_payroll_accounts(
+        db,
+        tenant.id,
+        expense_override=body.payroll_expense_account_id,
+        payable_override=body.payroll_payable_account_id,
+    )
+    expense_account_id = acc["expense"]
+    payable_account_id = acc["payable"]
+    if not expense_account_id or not payable_account_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cannot resolve payroll GL accounts: set salary accounts in Payroll accounting settings, "
+                "pass payroll_expense_account_id / payroll_payable_account_id, or run system COA seed."
+            ),
+        )
 
     expense_acc = await db.get(ChartOfAccount, expense_account_id)
     payable_acc = await db.get(ChartOfAccount, payable_account_id)

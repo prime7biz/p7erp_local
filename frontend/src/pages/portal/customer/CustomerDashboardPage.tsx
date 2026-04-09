@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
+import { PortalTenantInfoBanner } from "@/components/external-access/PortalTenantInfoBanner";
+import type { PortalOutletContext } from "@/types/portalOutlet";
 import { customerPortalApi } from "@/hooks/useCustomerPortal";
 import { listPageKpiGridClass } from "@/components/app/listPageLayout";
 import { PortalMetricCard } from "@/components/external-access/PortalMetricCard";
@@ -26,6 +28,7 @@ type Dash = {
 };
 
 export function CustomerDashboardPage() {
+  const { me } = useOutletContext<PortalOutletContext>();
   const [data, setData] = useState<Dash | null>(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
@@ -53,6 +56,7 @@ export function CustomerDashboardPage() {
 
   return (
     <div className="space-y-8">
+      <PortalTenantInfoBanner me={me} />
       <div>
         <h1 className="text-lg font-semibold text-text-primary">Dashboard</h1>
         <p className="text-sm text-text-muted">Overview of your orders and milestones.</p>

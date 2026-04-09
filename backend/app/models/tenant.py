@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import JSON, String, Boolean, DateTime, Enum as SQLEnum, ForeignKey, text
+from sqlalchemy import JSON, String, Boolean, DateTime, Enum as SQLEnum, ForeignKey, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from app.database import Base
@@ -56,6 +56,10 @@ class Tenant(Base):
     # ISO 3166-1 alpha-2 (e.g. BD, US) for public holiday import and locale.
     country_code: Mapped[str | None] = mapped_column(String(4), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # ISO 4217; used for facility / finance base-currency reporting (defaults to BDT for existing tenants).
+    base_currency: Mapped[str] = mapped_column(String(10), nullable=False, default="BDT")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     # Soft-delete: platform admin sets deleted_at; tenant users cannot log in when set.
@@ -63,3 +67,4 @@ class Tenant(Base):
 
     users = relationship("User", back_populates="tenant")
     roles = relationship("Role", back_populates="tenant")
+    staff_invitations = relationship("StaffInvitation", back_populates="tenant")

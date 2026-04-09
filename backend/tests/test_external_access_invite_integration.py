@@ -14,6 +14,12 @@ from httpx import ASGITransport, AsyncClient
 from app.common.auth import get_current_user
 from app.common.tenant import require_tenant
 from app.database import get_db
+from app.external_access.admin.service import create_invitation
+from app.external_access.constants import (
+    FF_CUSTOMER_PORTAL_ENABLED,
+    FF_FINANCIER_PORTAL_ENABLED,
+    PRINCIPAL_CUSTOMER,
+)
 from app.main import app
 from app.models import Customer, Tenant, User
 from app.models.tenant import TenantType
@@ -27,6 +33,10 @@ async def _seed_admin_tenant_with_customer(db):
         tenant_type=TenantType.both,
         is_active=True,
         company_code=f"ei{slug}"[:18],
+        feature_flags={
+            FF_CUSTOMER_PORTAL_ENABLED: True,
+            FF_FINANCIER_PORTAL_ENABLED: True,
+        },
     )
     db.add(tenant)
     await db.flush()
@@ -96,6 +106,49 @@ async def test_invite_customer_principal_ok(db_session_integration):
         app.dependency_overrides.pop(get_db, None)
         app.dependency_overrides.pop(get_current_user, None)
         app.dependency_overrides.pop(require_tenant, None)
+
+
+@pytest.mark.asyncio
+async def test_customer_accept_invite_returns_tokens(db_session_integration):
+    db = db_session_integration
+    tenant, user, customer = await _seed_admin_tenant_with_customer(db)
+    await db.commit()
+
+    inv, plain = await create_invitation(
+        db,
+        tenant=tenant,
+        invited_by=user,
+        principal_type=PRINCIPAL_CUSTOMER,
+        email="portal.buyer@example.com",
+        full_name="Portal Buyer",
+        payload={"role_codes": ["customer_viewer"], "customer_ids": [customer.id]},
+    )
+    await db.flush()
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            r = await ac.post(
+                "/api/external/auth/accept-invite",
+                json={
+                    "token": plain,
+                    "full_name": "Portal Buyer",
+                    "password": "longpass1",
+                    "phone": None,
+                },
+            )
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data.get("access_token")
+        assert data.get("refresh_token")
+        assert data.get("tenant_id") == tenant.id
+        assert data.get("principal_type") == "customer"
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.mark.asyncio

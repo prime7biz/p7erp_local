@@ -14,18 +14,17 @@ from app.modules.finance.voucher_controls import (
 )
 from app.models import (
     AccountingPeriod,
-    CoAConfig,
     DeliveryChallanItem,
     GoodsReceiving,
     GoodsReceivingItem,
     InventoryGlPosting,
-    Item,
     StockAdjustment,
-    StockGroup,
     StockMovement,
     Voucher,
     VoucherLine,
 )
+
+from app.services.inventory_account_resolver import resolve_inventory_accounts
 
 
 def _f(s: str | None) -> float:
@@ -37,32 +36,6 @@ def _f(s: str | None) -> float:
 
 def _amt(v: float) -> str:
     return f"{round(v, 4):.4f}"
-
-
-async def _coa_config_row(db: AsyncSession, tenant_id: int) -> CoAConfig | None:
-    return (await db.execute(select(CoAConfig).where(CoAConfig.tenant_id == tenant_id))).scalars().first()
-
-
-async def _accounts_for_item(
-    db: AsyncSession,
-    tenant_id: int,
-    item_id: int,
-    cfg: CoAConfig | None,
-) -> dict[str, int | None]:
-    item = await db.get(Item, item_id)
-    sg: StockGroup | None = None
-    if item and item.stock_group_id:
-        sg = await db.get(StockGroup, item.stock_group_id)
-        if sg and sg.tenant_id != tenant_id:
-            sg = None
-    return {
-        "inventory": (sg.inventory_account_id if sg else None)
-        or (cfg.inventory_stock_account_id if cfg else None),
-        "grni": (sg.grni_account_id if sg else None) or (cfg.inventory_clearing_account_id if cfg else None),
-        "cogs": sg.cogs_account_id if sg else None,
-        "wip": sg.wip_account_id if sg else None,
-        "adjustment": sg.adjustment_account_id if sg else None,
-    }
 
 
 async def _open_period(db: AsyncSession, tenant_id: int, v_date: date) -> AccountingPeriod | None:
@@ -211,27 +184,41 @@ async def post_grn_receipt_gl(
     grn: GoodsReceiving,
     items: list[GoodsReceivingItem],
 ) -> None:
-    cfg = await _coa_config_row(db, tenant_id)
     v_date = grn.received_date or date.today()
     buckets: dict[tuple[int | None, int | None], float] = defaultdict(float)
 
     for line in items:
-        mv = (
-            await db.execute(
-                select(StockMovement).where(
-                    StockMovement.tenant_id == tenant_id,
-                    StockMovement.reference_type == "GRN",
-                    StockMovement.reference_id == grn.id,
-                    StockMovement.item_id == line.item_id,
-                    StockMovement.warehouse_id == line.warehouse_id,
-                    StockMovement.movement_type == "IN",
-                )
+        stmt = select(StockMovement).where(
+            StockMovement.tenant_id == tenant_id,
+            StockMovement.reference_type == "GRN",
+            StockMovement.reference_id == grn.id,
+            StockMovement.movement_type == "IN",
+        )
+        if getattr(line, "id", None):
+            stmt = stmt.where(StockMovement.goods_receiving_item_id == line.id)
+        else:
+            stmt = stmt.where(
+                StockMovement.item_id == line.item_id,
+                StockMovement.warehouse_id == line.warehouse_id,
             )
-        ).scalars().first()
+        mv = (await db.execute(stmt.order_by(StockMovement.id.desc()))).scalars().first()
+        if mv is None and getattr(line, "id", None):
+            mv = (
+                await db.execute(
+                    select(StockMovement).where(
+                        StockMovement.tenant_id == tenant_id,
+                        StockMovement.reference_type == "GRN",
+                        StockMovement.reference_id == grn.id,
+                        StockMovement.item_id == line.item_id,
+                        StockMovement.warehouse_id == line.warehouse_id,
+                        StockMovement.movement_type == "IN",
+                    ).order_by(StockMovement.id.desc())
+                )
+            ).scalars().first()
         val = _f(mv.movement_value) if mv else 0.0
         if val <= 0:
             continue
-        acc = await _accounts_for_item(db, tenant_id, line.item_id, cfg)
+        acc = await resolve_inventory_accounts(db, tenant_id, line.item_id)
         inv_id = acc["inventory"]
         grni_id = acc["grni"]
         if not inv_id or not grni_id:
@@ -270,7 +257,6 @@ async def post_delivery_challan_gl(
     challan_code: str,
     lines: list[DeliveryChallanItem],
 ) -> None:
-    cfg = await _coa_config_row(db, tenant_id)
     v_date = delivery_date or date.today()
     buckets: dict[tuple[int | None, int | None], float] = defaultdict(float)
 
@@ -290,7 +276,7 @@ async def post_delivery_challan_gl(
         val = _f(mv.movement_value) if mv else 0.0
         if val <= 0:
             continue
-        acc = await _accounts_for_item(db, tenant_id, line.item_id, cfg)
+        acc = await resolve_inventory_accounts(db, tenant_id, line.item_id)
         inv_id = acc["inventory"]
         cogs_id = acc["cogs"]
         if not inv_id or not cogs_id:
@@ -327,7 +313,6 @@ async def post_process_order_issue_gl(
     output_item_id: int,
     notes: str,
 ) -> None:
-    cfg = await _coa_config_row(db, tenant_id)
     mv = (
         await db.execute(
             select(StockMovement).where(
@@ -342,8 +327,8 @@ async def post_process_order_issue_gl(
     val = _f(mv.movement_value) if mv else 0.0
     if val <= 0:
         return
-    in_acc = await _accounts_for_item(db, tenant_id, input_item_id, cfg)
-    out_acc = await _accounts_for_item(db, tenant_id, output_item_id, cfg)
+    in_acc = await resolve_inventory_accounts(db, tenant_id, input_item_id)
+    out_acc = await resolve_inventory_accounts(db, tenant_id, output_item_id)
     inv_in = in_acc["inventory"]
     wip = out_acc["wip"]
     if not inv_in or not wip:
@@ -375,7 +360,6 @@ async def post_process_order_receive_gl(
     output_item_id: int,
     notes: str,
 ) -> None:
-    cfg = await _coa_config_row(db, tenant_id)
     mv = (
         await db.execute(
             select(StockMovement).where(
@@ -390,7 +374,7 @@ async def post_process_order_receive_gl(
     val = _f(mv.movement_value) if mv else 0.0
     if val <= 0:
         return
-    out_acc = await _accounts_for_item(db, tenant_id, output_item_id, cfg)
+    out_acc = await resolve_inventory_accounts(db, tenant_id, output_item_id)
     inv_out = out_acc["inventory"]
     wip = out_acc["wip"]
     if not inv_out or not wip:
@@ -420,7 +404,6 @@ async def post_stock_adjustment_gl(
     user_id: int | None,
     adj: StockAdjustment,
 ) -> None:
-    cfg = await _coa_config_row(db, tenant_id)
     mv = (
         await db.execute(
             select(StockMovement)
@@ -440,7 +423,7 @@ async def post_stock_adjustment_gl(
     val = _f(mv.movement_value)
     if val <= 0:
         return
-    acc = await _accounts_for_item(db, tenant_id, adj.item_id, cfg)
+    acc = await resolve_inventory_accounts(db, tenant_id, adj.item_id)
     inv_id = acc["inventory"]
     adj_id = acc["adjustment"]
     if not inv_id or not adj_id:
@@ -472,7 +455,6 @@ async def post_physical_inventory_gl(
     session_code: str,
     count_date: date | None,
 ) -> None:
-    cfg = await _coa_config_row(db, tenant_id)
     v_date = count_date or date.today()
     mvs = (
         await db.execute(
@@ -490,7 +472,7 @@ async def post_physical_inventory_gl(
         val = _f(mv.movement_value)
         if val <= 0:
             continue
-        acc = await _accounts_for_item(db, tenant_id, mv.item_id, cfg)
+        acc = await resolve_inventory_accounts(db, tenant_id, mv.item_id)
         inv_id = acc["inventory"]
         adj_id = acc["adjustment"]
         if not inv_id or not adj_id:
@@ -538,34 +520,42 @@ async def post_consumption_issue_gl(
     user_id: int | None,
     movement_id: int,
 ) -> None:
-    cfg = await _coa_config_row(db, tenant_id)
     mv = await db.get(StockMovement, movement_id)
     if not mv or mv.tenant_id != tenant_id:
         return
-    if (mv.reference_type or "").upper() != "CONSUMPTION_ISSUE":
+    ref = (mv.reference_type or "").upper()
+    if ref == "CONSUMPTION_ISSUE":
+        memo = "Consumption issue"
+        v_prefix = "CMI"
+        src = "CONSUMPTION_ISSUE"
+    elif ref == "PRODUCTION_MATERIAL_ISSUE":
+        memo = "Production material issue"
+        v_prefix = "PMI"
+        src = "PRODUCTION_MATERIAL_ISSUE"
+    else:
         return
     val = _f(mv.movement_value)
     if val <= 0:
         return
-    acc = await _accounts_for_item(db, tenant_id, mv.item_id, cfg)
+    acc = await resolve_inventory_accounts(db, tenant_id, mv.item_id)
     inv_id = acc["inventory"]
     cogs_id = acc["cogs"]
     if not inv_id or not cogs_id:
         return
     v_date = mv.movement_date or date.today()
     entries = [
-        (cogs_id, "DEBIT", val, "Consumption issue"),
-        (inv_id, "CREDIT", val, "Consumption issue"),
+        (cogs_id, "DEBIT", val, memo),
+        (inv_id, "CREDIT", val, memo),
     ]
     await _post_balanced_voucher(
         db,
         tenant_id,
         user_id,
         v_date,
-        f"Consumption issue MV#{movement_id}",
-        f"CMI-{movement_id}",
+        f"{memo} MV#{movement_id}",
+        f"{v_prefix}-{movement_id}",
         entries,
-        source_system="CONSUMPTION_ISSUE",
+        source_system=src,
         source_id=movement_id,
         action="POST",
     )

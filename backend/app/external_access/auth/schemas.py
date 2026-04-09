@@ -27,12 +27,17 @@ class ExternalMeResponse(BaseModel):
     tenant_id: int
     tenant_name: str
     company_code: str | None
+    tenant_address: str | None = None
+    tenant_phone: str | None = None
     email: str
     full_name: str
     principal_type: str
     role_codes: list[str]
     feature_flags: dict | None = None
     must_reset_password: bool = False
+    financier_access_scope: str | None = Field(
+        default=None, description="Highest financier access scope (financier logins only)."
+    )
 
 
 class ExternalAcceptInviteRequest(BaseModel):

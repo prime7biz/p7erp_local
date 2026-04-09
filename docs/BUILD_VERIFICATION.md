@@ -28,6 +28,25 @@ Use this when you run the stack with **`docker compose`** (see repo root `docker
 
 **Why Docker fixes the earlier migration errors:** Host Python 3.14 may fail to build some wheels; the Dockerfile uses **3.12-slim**, which matches a supported stack for FastAPI / pydantic.
 
+### Faster Docker rebuilds (use the cache)
+
+- **Normal rebuild (fast):** From repo root, use BuildKit cache — **do not** pass `--no-cache` unless you truly need a clean install (suspicious cache bug, or you changed base images and want to verify from scratch).
+
+  ```powershell
+  docker compose build
+  docker compose up -d
+  ```
+
+  Docker reuses layers when `requirements.txt`, `package.json` / lockfiles, and earlier steps are unchanged. Only changed layers (and later steps) rebuild.
+
+- **After editing only app code** (Python/TS, not dependency files): The dependency-install steps stay cached; rebuild is mostly `COPY` + `npm run build` / image export.
+
+- **When dependencies change:** After editing `requirements.txt` or `package-lock.json`, the matching `RUN pip install` / `RUN npm ci` layer reruns. BuildKit **cache mounts** (pip/npm) in the Dockerfiles still speed repeated installs on the same machine.
+
+- **Full clean rebuild** (slow; use rarely): `docker compose build --no-cache`
+
+- **Optional helper:** `scripts/docker-rebuild.ps1` runs a normal cached build and restarts the stack.
+
 ## B1 – Backend build
 
 ```powershell
@@ -71,6 +90,46 @@ After B1–B3, with backend + frontend running and a logged-in session, you can 
 - `POST /api/v1/ai-extract/customer-form` and `POST /api/v1/ai-extract/inquiry-form` with `multipart/form-data` (`file` = PNG/JPEG/WebP/PDF, max 10 MB).
 
 Or use the **Import Customer Info** / **Import Inquiry Info** blocks on **New customer** and **New inquiry** pages.
+
+## Optional: Financier portal (advanced) demo data
+
+After migrations, for a tenant that already has **items**, **vendors**, and **BTB LCs** (for example from `scripts/seed_lakhsma_interconnected_demo.py` and `scripts/seed_trade_import_export_workflow_demo.py --tenant-code <COMPANY_CODE>`), you can seed facilities, procurement rows, and a demo financier login:
+
+```powershell
+docker compose exec backend python scripts/seed_financier_portal_demo.py --company-code LAKH806201
+```
+
+Default demo login email is `financier.portal.demo@p7erp.local` (password printed on first create). Re-run is idempotent.
+
+Verification:
+
+```powershell
+docker compose exec backend pytest tests/test_financier_portal_demo_seed.py -q
+```
+
+### Comprehensive Lakhsma financier demo (all portal pages)
+
+For **`LAKH806201`** after the interconnected Lakhsma seed, run the **full** financier demo (extra vendors, POs/GRNs, stock movements, second BTB LC, trade cases/docs, facilities/utilizations/repayments, bank accounts, vouchers, bills, production rows, shipments, monthly snapshots). Idempotent marker vendor: `LKH-VEND-FABRIC-01`.
+
+```powershell
+docker compose exec backend python scripts/seed_lakhsma_interconnected_demo.py
+docker compose exec backend python scripts/seed_financier_full_demo.py --company-code LAKH806201
+```
+
+This also runs the base `financier_portal_demo` logic (principal + first facility). Verification:
+
+```powershell
+docker compose exec backend pytest tests/test_financier_full_demo_seed.py tests/test_financier_portal_demo_seed.py -q
+```
+
+### UI shows empty lists but seeds ran (Docker)
+
+The API and DB can be fine while the browser still shows nothing. Check in order:
+
+1. **Correct app and login role** — Main ERP lists live under **`http://localhost:5173`** (not `5174/admin`). On the **unified login**, choose **Staff** or **Tenant admin**, enter **company code `LAKH806201`**, then your user email/password. **Customer** / **Financier** roles use the **portal** (`/portal/...`), not the full `/app` merchandising lists.
+2. **Clear stale session** — In the browser, open DevTools → **Application** → **Local storage** for your site. Remove **`p7_token`** and **`p7_tenant_id`**, then log in again. A wrong or missing tenant id breaks `X-Tenant-Id` on API calls.
+3. **Verify the network call** — DevTools → **Network** → reload **Orders**. You should see **`GET .../api/v1/orders/paginated`** with status **200** and JSON **`total`** greater than 0. **401** means log in again. If the request goes to the **wrong host** (not the machine running Docker), set a repo-root **`.env`** for Compose with `VITE_API_BASE_URL=` (empty) and **`docker compose build frontend && docker compose up -d`** so the SPA uses **same-origin** `/api/...` (nginx proxies to `backend:8000`).
+4. **Financier portal data** — Log in as **Financier** with the same company code, email **`financier.portal.demo@p7erp.local`** (password from first seed create), after **`seed_financier_full_demo.py`** has been run.
 
 ## Quick reference
 

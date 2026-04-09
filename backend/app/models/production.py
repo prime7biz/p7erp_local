@@ -192,6 +192,7 @@ class LineCrewDaily(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     sewing_line_id: Mapped[int] = mapped_column(ForeignKey("sewing_lines.id", ondelete="CASCADE"), nullable=False, index=True)
     shift_id: Mapped[int] = mapped_column(ForeignKey("production_shifts.id", ondelete="CASCADE"), nullable=False, index=True)
     production_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
@@ -222,6 +223,7 @@ class UnitCrewDaily(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     department_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     machine_id: Mapped[int | None] = mapped_column(
         ForeignKey("department_machines.id", ondelete="SET NULL"), nullable=True, index=True
@@ -276,6 +278,7 @@ class OperationBulletin(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     style_id: Mapped[int] = mapped_column(ForeignKey("garment_styles.id", ondelete="CASCADE"), nullable=False, index=True)
     ob_code: Mapped[str] = mapped_column(String(64), nullable=False)
     version_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -312,6 +315,7 @@ class LineBalanceRun(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     ob_id: Mapped[int] = mapped_column(ForeignKey("operation_bulletins.id", ondelete="CASCADE"), nullable=False, index=True)
     line_id: Mapped[int] = mapped_column(ForeignKey("sewing_lines.id", ondelete="CASCADE"), nullable=False)
     num_workstations: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -421,6 +425,7 @@ class LayPlan(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     marker_plan_id: Mapped[int] = mapped_column(ForeignKey("marker_plans.id", ondelete="CASCADE"), nullable=False, index=True)
     lay_code: Mapped[str] = mapped_column(String(64), nullable=False)
     fabric_item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id", ondelete="SET NULL"), nullable=True)
@@ -439,6 +444,7 @@ class CutTicket(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     lay_plan_id: Mapped[int] = mapped_column(ForeignKey("lay_plans.id", ondelete="CASCADE"), nullable=False, index=True)
     ticket_code: Mapped[str] = mapped_column(String(64), nullable=False)
     cut_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -481,6 +487,7 @@ class ProductionCostInput(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     department_type: Mapped[str] = mapped_column(String(32), nullable=False)
     line_id: Mapped[int | None] = mapped_column(ForeignKey("sewing_lines.id", ondelete="SET NULL"), nullable=True)
     cost_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -584,6 +591,7 @@ class DyeRecipe(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     recipe_code: Mapped[str] = mapped_column(String(64), nullable=False)
     color_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     color_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -666,6 +674,7 @@ class ProductionQcCheck(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     sewing_line_id: Mapped[int] = mapped_column(ForeignKey("sewing_lines.id", ondelete="CASCADE"), nullable=False, index=True)
     shift_id: Mapped[int] = mapped_column(ForeignKey("production_shifts.id", ondelete="CASCADE"), nullable=False, index=True)
     production_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
@@ -716,6 +725,7 @@ class LineCrewSheetHeader(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     sewing_line_id: Mapped[int] = mapped_column(ForeignKey("sewing_lines.id", ondelete="CASCADE"), nullable=False, index=True)
     shift_id: Mapped[int] = mapped_column(ForeignKey("production_shifts.id", ondelete="CASCADE"), nullable=False, index=True)
     production_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)

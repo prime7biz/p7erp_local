@@ -15,7 +15,14 @@ import { PlanningGroundingCard } from "@/components/orders/PlanningGroundingCard
 import { CommercialAlignmentCard } from "@/components/orders/CommercialAlignmentCard";
 import { ChangeRequestPanel } from "@/components/orders/ChangeRequestPanel";
 import { ORDER_PROTECTED_FIELD_DEFS } from "@/lib/commercialChangeFields";
-import { getOrderStatusChoices } from "@/features/merch/workflow";
+import {
+  getOrderStatusChoices,
+  PIPELINE_STAGES,
+  suggestNaSteps,
+  humanizePipelineStatus,
+} from "@/features/merch/workflow";
+import { OrderMilestoneTracker } from "@/components/app/OrderMilestoneTracker";
+import { useAuth } from "@/context/AuthContext";
 import { useOrderAi } from "@/hooks/useOrderAi";
 import { logApiError } from "@/utils/logApiError";
 import { useSecureImage } from "@/hooks/useSecureImage";
@@ -23,6 +30,7 @@ import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
 
 export function OrderDetailPage() {
+  const { me } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [item, setItem] = useState<OrderResponse | null>(null);
@@ -39,8 +47,14 @@ export function OrderDetailPage() {
   const [promiseCheck, setPromiseCheck] = useState<OrderPromiseCheckResponse | null>(null);
   const [promiseLoading, setPromiseLoading] = useState(false);
   const [promiseError, setPromiseError] = useState("");
+  const [milestoneTick, setMilestoneTick] = useState(0);
+  const [pipelineSaving, setPipelineSaving] = useState(false);
+  const [pipelineDraftType, setPipelineDraftType] = useState<string>("export");
+  const [pipelineDraftNa, setPipelineDraftNa] = useState<Set<string>>(() => new Set());
+  const [forcePipeline, setForcePipeline] = useState("");
   const styleImageUrl = useSecureImage(item?.style_image_url);
   const orderAi = useOrderAi();
+  const isTenantAdmin = (me?.role_name || "").toLowerCase() === "admin";
 
   const orderAiFormSnapshot = useMemo(
     () =>
@@ -69,6 +83,12 @@ export function OrderDetailPage() {
     const order = await api.getOrder(orderId, { ai_indicators: 1 });
     setItem(order);
     setNewStatus(order.status);
+    setMilestoneTick((t) => t + 1);
+  };
+
+  const syncPipelineDraftFromApi = (orderType: string | null | undefined, na: string[] | null | undefined) => {
+    setPipelineDraftType((orderType || "export").toLowerCase());
+    setPipelineDraftNa(new Set((na || []).map((x) => String(x).toUpperCase())));
   };
 
   useEffect(() => {
@@ -92,6 +112,12 @@ export function OrderDetailPage() {
         setPromiseCheck(promise);
         setAmendments(await api.listOrderAmendments(order.id));
         setNewStatus(order.status);
+        try {
+          const ms = await api.getOrderMilestones(order.id);
+          syncPipelineDraftFromApi(ms.order_type, ms.pipeline_na_steps);
+        } catch {
+          syncPipelineDraftFromApi(order.order_type, order.pipeline_na_steps ?? null);
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load order");
       } finally {
@@ -129,7 +155,9 @@ export function OrderDetailPage() {
       <AppPageHeader
         backTo={{ label: "Back to orders", to: "/app/orders" }}
         title={`Order ${item.order_code}`}
-        description={`${customer?.name ?? `Customer #${item.customer_id}`} · Status ${item.status}. ${execHint}${
+        description={`${customer?.name ?? `Customer #${item.customer_id}`} · Status ${item.status}${
+          item.pipeline_status ? ` · Pipeline ${humanizePipelineStatus(item.pipeline_status)}` : ""
+        }. ${execHint}${
           item.ai_indicators && item.ai_indicators.duplicate_risk_score >= 35 ? " · Possible duplicate risk." : ""
         }`}
         belowTitle={
@@ -148,8 +176,8 @@ export function OrderDetailPage() {
               {
                 label: "Production",
                 value: "Planning",
-                to: "/app/manufacturing/planning",
-                hint: "Order pipeline and readiness",
+                to: `/app/production/planning?order_id=${item.id}`,
+                hint: "Manufacturing planning for this order",
               },
             ]}
           />
@@ -216,6 +244,116 @@ export function OrderDetailPage() {
             Back to list
           </button>
       </div>
+
+      <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
+        <OrderMilestoneTracker key={`mt-${item.id}-${milestoneTick}`} orderId={item.id} variant="full" />
+      </div>
+
+      <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-text-primary">Pipeline settings</h2>
+        <p className="text-xs text-text-muted">
+          Mark steps as N/A when they do not apply (for example local orders with no LC).
+        </p>
+        <div className="flex flex-wrap gap-3 text-xs items-center">
+          {(["export", "local", "both"] as const).map((t) => (
+            <label key={t} className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="radio"
+                name="order_type"
+                checked={pipelineDraftType === t}
+                onChange={() => setPipelineDraftType(t)}
+              />
+              {t}
+            </label>
+          ))}
+          <button
+            type="button"
+            className="rounded border border-border-strong px-2 py-0.5 hover:bg-surface-subtle"
+            onClick={() => setPipelineDraftNa(new Set(suggestNaSteps(pipelineDraftType)))}
+          >
+            Apply suggested N/A for type
+          </button>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+          {PIPELINE_STAGES.map((stage) => (
+            <label key={stage} className="flex items-center gap-2 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={pipelineDraftNa.has(stage)}
+                onChange={(e) => {
+                  const next = new Set(pipelineDraftNa);
+                  if (e.target.checked) next.add(stage);
+                  else next.delete(stage);
+                  setPipelineDraftNa(next);
+                }}
+              />
+              {humanizePipelineStatus(stage)}
+            </label>
+          ))}
+        </div>
+        <button
+          type="button"
+          disabled={pipelineSaving}
+          className="rounded-lg border border-brand-primary bg-brand-primary px-3 py-1.5 text-sm text-white disabled:opacity-50"
+          onClick={async () => {
+            setPipelineSaving(true);
+            setError("");
+            try {
+              await api.updateOrderPipelineSettings(item.id, {
+                order_type: pipelineDraftType,
+                na_steps: [...pipelineDraftNa],
+              });
+              await refreshOrder(item.id);
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Failed to save pipeline settings");
+            } finally {
+              setPipelineSaving(false);
+            }
+          }}
+        >
+          {pipelineSaving ? "Saving…" : "Save pipeline settings"}
+        </button>
+      </div>
+
+      {isTenantAdmin ? (
+        <div className="rounded-xl border border-status-warning/40 bg-status-warning-subtle p-4 text-sm">
+          <h2 className="font-semibold text-status-warning-foreground">Admin: force pipeline stage</h2>
+          <p className="mt-1 text-xs text-text-muted">
+            Use only when auto-advance is stuck. Legacy order status is unchanged unless you also update it above.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <select
+              value={forcePipeline}
+              onChange={(e) => setForcePipeline(e.target.value)}
+              className="rounded border border-border-strong bg-surface-raised px-2 py-1 text-xs"
+            >
+              <option value="">Select stage…</option>
+              {PIPELINE_STAGES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="rounded border border-border-strong px-2 py-1 text-xs hover:bg-surface-subtle"
+              disabled={!forcePipeline}
+              onClick={async () => {
+                try {
+                  setError("");
+                  await api.updateOrderStatus(item.id, item.status, { force_pipeline_status: forcePipeline });
+                  await refreshOrder(item.id);
+                  setForcePipeline("");
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Force failed");
+                }
+              }}
+            >
+              Apply force
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <section className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-text-primary">Related Records</h2>
@@ -344,17 +482,8 @@ export function OrderDetailPage() {
                 onClick={async () => {
                   try {
                     setError("");
-                    if (newStatus === "IN_PROGRESS") {
-                      const check = await api.getOrderPromiseCheck(item.id);
-                      setPromiseCheck(check);
-                      if (!(check.atp_ok && check.ctp_ok)) {
-                        setError(check.reasons.join("; ") || "Promise check failed");
-                        return;
-                      }
-                    }
                     const updated = await api.updateOrderStatus(item.id, newStatus);
-                    setItem(updated);
-                    setNewStatus(updated.status);
+                    await refreshOrder(updated.id);
                     const latestPromise = await api.getOrderPromiseCheck(item.id).catch((e) => {
                       logApiError("OrderDetailPage.getOrderPromiseCheck(refresh)", e);
                       return null;

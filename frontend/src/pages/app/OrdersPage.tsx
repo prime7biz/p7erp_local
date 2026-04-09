@@ -20,6 +20,7 @@ import {
 import { getOrderStatusChoices } from "@/features/merch/workflow";
 import { SecureImage } from "@/components/SecureImage";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { OrderPipelineListCell } from "@/components/app/OrderMilestoneTracker";
 import {
   listPageChipActiveClass,
   listPageChipInactiveClass,
@@ -301,7 +302,7 @@ export function OrdersPage() {
         ) : (
           <>
           <ResponsiveTableContainer>
-          <table className={cn(listTableBaseClass, "min-w-[1420px]")}>
+          <table className={cn(listTableBaseClass, "min-w-[1540px]")}>
             <thead className={listTableTheadClass}>
               <tr>
                 <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Code</th>
@@ -330,6 +331,9 @@ export function OrdersPage() {
                   title="Pending commercial change requests"
                 >
                   CR
+                </th>
+                <th className={cn(listTableThClass, "w-[220px] whitespace-nowrap")} title="Auto pipeline milestone">
+                  Pipeline
                 </th>
                 <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Status</th>
                 <th className={cn(listTableThRightClass, "w-24 whitespace-nowrap")}>Actions</th>
@@ -453,6 +457,9 @@ export function OrdersPage() {
                     ) : (
                       "—"
                     )}
+                  </td>
+                  <td className={cn(listTableTdClass, "whitespace-nowrap align-top")}>
+                    <OrderPipelineListCell pipelineStatus={o.pipeline_status} rmPct={o.rm_inhouse_pct} />
                   </td>
                   <td className={cn(listTableTdClass, "whitespace-nowrap")}>
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(o.status)}`}>

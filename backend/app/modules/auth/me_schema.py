@@ -10,10 +10,12 @@ class MeResponse(BaseModel):
     user_id: int
     tenant_id: int
     email: str
-    username: str
+    username: str | None = None
     first_name: str | None
     last_name: str | None
     tenant_name: str
     tenant_type: TenantType
     company_code: str | None = None
     feature_flags: dict[str, Any] | None = None
+    role_name: str
+    role_permissions: dict[str, Any]

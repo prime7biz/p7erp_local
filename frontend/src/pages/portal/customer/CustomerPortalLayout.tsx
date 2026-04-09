@@ -1,9 +1,10 @@
 import { Suspense } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 import { useExternalAuth } from "@/hooks/useExternalAuth";
 import { Button } from "@/components/ui/button";
 import { PortalPageSkeleton } from "@/components/external-access/PortalSkeletons";
 import { PortalErrorState } from "@/components/external-access/PortalErrorState";
+import { redirectToUnifiedLogin } from "@/utils/portalAuthRedirect";
 
 const nav = [
   { to: "/portal/customer", label: "Dashboard", end: true },
@@ -14,12 +15,11 @@ const nav = [
 ];
 
 export function CustomerPortalLayout() {
-  const navigate = useNavigate();
   const { me, loading, error, logout, refetch } = useExternalAuth("customer");
 
   async function handleLogout() {
     await logout();
-    navigate("/portal/customer/login", { replace: true });
+    redirectToUnifiedLogin("customer");
   }
 
   if (loading && !me) return <PortalPageSkeleton />;
@@ -60,7 +60,7 @@ export function CustomerPortalLayout() {
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 erp-main-content">
         <Suspense fallback={<PortalPageSkeleton />}>
-          <Outlet />
+          <Outlet context={{ me: me! }} />
         </Suspense>
       </main>
       <footer className="border-t border-border py-4 text-center text-xs text-text-muted">

@@ -413,7 +413,7 @@ function StakeholderPortalsMenu() {
       {open && (
         <div className="absolute right-0 z-10 mt-1 w-60 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
           <Link
-            to="/portal/customer/login"
+            to="/login?role=customer"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-subtle"
           >
@@ -421,7 +421,7 @@ function StakeholderPortalsMenu() {
             Customer portal
           </Link>
           <Link
-            to="/portal/financier/login"
+            to="/login?role=financier"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-subtle"
           >
@@ -654,7 +654,9 @@ export function Layout() {
   if (error) return <div className="p-6 text-status-danger">{error}</div>;
   if (!me) return <Navigate to="/login" replace />;
 
-  const displayName = me.first_name ? `${me.first_name} ${me.last_name ?? ""}`.trim() : me.username;
+  const displayName = me.first_name
+    ? `${me.first_name} ${me.last_name ?? ""}`.trim()
+    : (me.username?.trim() || me.email);
 
   return (
     <div className="flex min-h-[100dvh] lg:h-screen bg-surface-base overflow-hidden">

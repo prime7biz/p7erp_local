@@ -5,19 +5,34 @@ import type { ExternalPrincipalAdminRow } from "@/types/externalAccess";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { Button } from "@/components/ui/button";
 import { ExternalAccessInviteModal } from "@/components/external-access/ExternalAccessInviteModal";
+import { ExternalFinancierAccessEditModal } from "@/components/external-access/ExternalFinancierAccessEditModal";
 import { ExternalAccessStatusBadge } from "@/components/external-access/ExternalAccessStatusBadge";
-import { listPageErrorClass, listTableHeadCellClass, listTableRowClass, erpControlFocusClass } from "@/components/app/listPageLayout";
+import { listPageErrorClass, listTableHeadCellClass, listTableRowClass } from "@/components/app/listPageLayout";
 
-const SCOPES = ["tenant_summary", "orders_and_pipeline", "financial_summary", "full_financier_portal"] as const;
+const SCOPE_OPTIONS = [
+  { value: "tenant_summary", label: "tenant_summary" },
+  { value: "orders_and_pipeline", label: "orders_and_pipeline" },
+  { value: "financial_summary", label: "financial_summary" },
+  { value: "credit_monitoring", label: "credit_monitoring" },
+  { value: "full_financier_portal", label: "full_financier_portal" },
+] as const;
+
+const FINANCIER_ROLE_OPTIONS = [
+  { value: "financier_viewer", label: "financier_viewer" },
+  { value: "financier_analyst", label: "financier_analyst" },
+] as const;
 
 export function ExternalFinancierAccessPage() {
   const [rows, setRows] = useState<ExternalPrincipalAdminRow[]>([]);
   const [err, setErr] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [scope, setScope] = useState<string>("orders_and_pipeline");
-  const [roleCode, setRoleCode] = useState("financier_viewer");
+  const [editingRow, setEditingRow] = useState<ExternalPrincipalAdminRow | null>(null);
   const [tokenMsg, setTokenMsg] = useState("");
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [financierPrincipals, setFinancierPrincipals] = useState<
+    { id: number; full_name: string | null; email: string | null }[]
+  >([]);
+  const [financierPrincipalsLoading, setFinancierPrincipalsLoading] = useState(false);
 
   async function load() {
     try {
@@ -29,9 +44,26 @@ export function ExternalFinancierAccessPage() {
     }
   }
 
+  async function loadFinancierParties() {
+    setFinancierPrincipalsLoading(true);
+    try {
+      const list = await api.listFinancierPrincipalsForFacility();
+      setFinancierPrincipals(list);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to load financier parties");
+      setFinancierPrincipals([]);
+    } finally {
+      setFinancierPrincipalsLoading(false);
+    }
+  }
+
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (inviteOpen || editingRow) void loadFinancierParties();
+  }, [inviteOpen, editingRow]);
 
   useEffect(() => {
     if (openActionsId == null) return;
@@ -55,33 +87,10 @@ export function ExternalFinancierAccessPage() {
           Invite financier
         </Button>
       </div>
-      <div className="mb-4 flex flex-wrap gap-3 rounded-lg border border-border p-3 text-sm">
-        <label className="flex items-center gap-2">
-          Role
-          <select
-            className={`rounded-lg border border-border px-2 py-1 ${erpControlFocusClass}`}
-            value={roleCode}
-            onChange={(e) => setRoleCode(e.target.value)}
-          >
-            <option value="financier_viewer">financier_viewer</option>
-            <option value="financier_analyst">financier_analyst</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-2">
-          Scope
-          <select
-            className={`rounded-lg border border-border px-2 py-1 ${erpControlFocusClass}`}
-            value={scope}
-            onChange={(e) => setScope(e.target.value)}
-          >
-            {SCOPES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <p className="mb-4 text-xs text-text-muted">
+        For credit-line and loan portfolio views, choose scope <code>credit_monitoring</code> or higher in the invite form and link
+        the same <strong>financier party</strong> you use on facilities.
+      </p>
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-border">
@@ -121,6 +130,16 @@ export function ExternalFinancierAccessPage() {
                       <button
                         type="button"
                         className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        onClick={() => {
+                          setOpenActionsId(null);
+                          setEditingRow(r);
+                        }}
+                      >
+                        Edit access
+                      </button>
+                      <button
+                        type="button"
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
                         onClick={async () => {
                           setOpenActionsId(null);
                           try {
@@ -146,16 +165,41 @@ export function ExternalFinancierAccessPage() {
         <ExternalAccessInviteModal
           title="Invite financier user"
           onClose={() => setInviteOpen(false)}
-          onSubmit={async ({ email, full_name }) => {
+          financierInvite={{
+            principals: financierPrincipals,
+            principalsLoading: financierPrincipalsLoading,
+            scopeOptions: [...SCOPE_OPTIONS],
+            roleOptions: [...FINANCIER_ROLE_OPTIONS],
+          }}
+          onSubmit={async ({ email, full_name, role_code, access_scope, financier_party_id }) => {
             const res = await api.inviteExternalFinancier({
               email,
               full_name,
-              role_codes: [roleCode],
-              access_scope: scope,
+              role_codes: [role_code ?? "financier_viewer"],
+              access_scope: access_scope ?? "orders_and_pipeline",
+              financier_party_id: financier_party_id ?? null,
             });
             if (res.invite_email_sent) setTokenMsg(res.message || `Invitation email sent to ${email}.`);
-            else if (res.invite_token) setTokenMsg(`Invitation created. Email failed, so share token manually: ${res.invite_token}`);
+            else if (res.invite_token)
+              setTokenMsg(`Invitation created. Email failed, so share token manually: ${res.invite_token}`);
             else setTokenMsg(res.message || "Invitation created.");
+            await load();
+          }}
+        />
+      ) : null}
+      {editingRow ? (
+        <ExternalFinancierAccessEditModal
+          row={editingRow}
+          principals={financierPrincipals}
+          principalsLoading={financierPrincipalsLoading}
+          scopeOptions={[...SCOPE_OPTIONS]}
+          onClose={() => setEditingRow(null)}
+          onSubmit={async ({ access_scope, financier_party_id }) => {
+            await api.patchExternalFinancierPrincipal(editingRow.id, {
+              access_scope,
+              financier_party_id,
+            });
+            setTokenMsg(`Updated financier access for ${editingRow.email}.`);
             await load();
           }}
         />

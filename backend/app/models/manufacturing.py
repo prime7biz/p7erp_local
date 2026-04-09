@@ -80,6 +80,7 @@ class ManufacturingProductionPlan(Base):
     period_end: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft", index=True)
     created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -121,6 +122,7 @@ class ManufacturingWorkOrder(Base):
         nullable=True,
         index=True,
     )
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     qty_planned: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
     qty_completed: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft", index=True)
@@ -144,6 +146,7 @@ class ManufacturingWorkOrderOperation(Base):
     qty_in: Mapped[float | None] = mapped_column(Numeric(18, 3), nullable=True)
     qty_out: Mapped[float | None] = mapped_column(Numeric(18, 3), nullable=True)
     scrap_qty: Mapped[float | None] = mapped_column(Numeric(18, 3), nullable=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -159,6 +162,7 @@ class ManufacturingMaterialIssue(Base):
         nullable=True,
         index=True,
     )
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
     qty_issued: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
@@ -175,6 +179,7 @@ class ManufacturingMaterialReturn(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     issue_id: Mapped[int] = mapped_column(ForeignKey("mfg_material_issues.id", ondelete="CASCADE"), nullable=False, index=True)
     qty_returned: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -197,6 +202,7 @@ class ManufacturingQualityCheck(Base):
         nullable=True,
         index=True,
     )
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     check_type: Mapped[str] = mapped_column(String(64), nullable=False, default="in_process")
     result: Mapped[str] = mapped_column(String(16), nullable=False, default="pass", index=True)
     defect_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -211,6 +217,7 @@ class ManufacturingCostSnapshot(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     work_order_id: Mapped[int] = mapped_column(ForeignKey("mfg_work_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     material_cost: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     labor_cost: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     overhead_cost: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0)
@@ -250,6 +257,7 @@ class ManufacturingMrpRecommendation(Base):
     suggested_qty: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
@@ -263,6 +271,7 @@ class ManufacturingOperationAssignment(Base):
         nullable=False,
         index=True,
     )
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     assigned_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     role_type: Mapped[str] = mapped_column(String(32), nullable=False, default="operator")
     assigned_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -279,6 +288,7 @@ class ManufacturingDowntimeEvent(Base):
         nullable=False,
         index=True,
     )
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     reason_code: Mapped[str] = mapped_column(String(32), nullable=False)
     reason_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -295,6 +305,7 @@ class ManufacturingNcr(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     ncr_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     work_order_id: Mapped[int] = mapped_column(ForeignKey("mfg_work_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     work_order_operation_id: Mapped[int | None] = mapped_column(
         ForeignKey("mfg_work_order_operations.id", ondelete="SET NULL"),
         nullable=True,
@@ -315,6 +326,7 @@ class ManufacturingCapa(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     ncr_id: Mapped[int] = mapped_column(ForeignKey("mfg_ncrs.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     owner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     corrective_action: Mapped[str] = mapped_column(Text, nullable=False)
     preventive_action: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -408,6 +420,7 @@ class ManufacturingTnaPlanTask(Base):
         nullable=True,
         index=True,
     )
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     seq_no: Mapped[int] = mapped_column(Integer, nullable=False)
     task_name: Mapped[str] = mapped_column(String(128), nullable=False)
     department: Mapped[str | None] = mapped_column(String(64), nullable=True)

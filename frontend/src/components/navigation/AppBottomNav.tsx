@@ -166,7 +166,7 @@ export function AppBottomNav({
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Stakeholder portals</h3>
                 <div className="space-y-1">
                   <Link
-                    to="/portal/customer/login"
+                    to="/login?role=customer"
                     onClick={() => setIsMoreOpen(false)}
                     className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
                   >
@@ -174,7 +174,7 @@ export function AppBottomNav({
                     Customer portal login
                   </Link>
                   <Link
-                    to="/portal/financier/login"
+                    to="/login?role=financier"
                     onClick={() => setIsMoreOpen(false)}
                     className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
                   >

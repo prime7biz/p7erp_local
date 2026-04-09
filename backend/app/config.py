@@ -102,6 +102,15 @@ class Settings(BaseSettings):
     ai_copilot_readonly_enabled: bool = False
     ai_controlled_automation_enabled: bool = False
 
+    # Facility / financier portal / business overview (deterministic core + AI advisory).
+    facility_management_enabled: bool = True
+    business_overview_enabled: bool = True
+    business_overview_ai_enabled: bool = True
+    financier_advanced_portal_enabled: bool = True
+    financier_confidence_ai_enabled: bool = True
+    # When True, external portal AI narratives require internal approval before visibility.
+    external_ai_requires_approval: bool = False
+
     # Platform admin (super admin panel): JWT lifetime and local backup directory
     platform_admin_jwt_expire_minutes: int = 480
     backup_dir: str = "./backups"

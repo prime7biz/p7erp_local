@@ -3089,6 +3089,10 @@ async def update_followup_action(
         db.add(log_entry)
     await db.commit()
     await db.refresh(row)
+    from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+    await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=row.order_id)
+    await db.commit()
     order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, row.order_id)
     return OrderFollowupActionOut(
         id=row.id, order_id=row.order_id, order_code=order_code, delivery_date=delivery_date, style_code=style_code,
@@ -3122,6 +3126,10 @@ async def complete_followup_action(
     row.completed_by_id = user.id
     await db.commit()
     await db.refresh(row)
+    from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+    await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=row.order_id)
+    await db.commit()
     order_code, delivery_date, style_code = await _order_context_for_action(db, tenant.id, row.order_id)
     return OrderFollowupActionOut(
         id=row.id, order_id=row.order_id, order_code=order_code, delivery_date=delivery_date, style_code=style_code,
@@ -5593,6 +5601,24 @@ class ConsumptionReconItemOut(BaseModel):
     cost_variance: float | None = None
     last_issued_at: str | None = None
     movement_count: int = 0
+    # Three-layer (quoted vs BOM vs actual); optional for backward compatibility
+    quoted_consumption_per_unit: float | None = None
+    bom_net_consumption_per_unit: float | None = None
+    bom_gross_consumption_per_unit: float | None = None
+    wastage_pct: float | None = None
+    process_loss_pct: float | None = None
+    quoted_planned_qty: float | None = None
+    quoted_planned_cost: float | None = None
+    bom_planned_cost: float | None = None
+    quoted_vs_bom_variance_pct: float | None = None
+    bom_vs_actual_variance_pct: float | None = None
+    quoted_vs_actual_variance_pct: float | None = None
+    planned_wastage_qty: float | None = None
+    planned_process_loss_qty: float | None = None
+    planned_loss_vs_actual_loss: float | None = None
+    cost_impact_quoted_vs_bom: float | None = None
+    cost_impact_bom_vs_actual: float | None = None
+    cost_impact_quoted_vs_actual: float | None = None
 
 
 class ConsumptionReconSummaryOut(BaseModel):
@@ -5605,6 +5631,11 @@ class ConsumptionReconSummaryOut(BaseModel):
     total_actual_cost: float = 0.0
     cost_variance: float = 0.0
     cost_variance_pct: float = 0.0
+    total_quoted_planned_qty: float = 0.0
+    total_quoted_planned_cost: float = 0.0
+    total_bom_planned_cost: float = 0.0
+    quoted_vs_bom_cost_variance: float = 0.0
+    quoted_vs_actual_cost_variance: float = 0.0
 
 
 class ConsumptionReconResponse(BaseModel):
@@ -5647,7 +5678,29 @@ def _empty_recon_summary() -> ConsumptionReconSummaryOut:
         total_actual_cost=0.0,
         cost_variance=0.0,
         cost_variance_pct=0.0,
+        total_quoted_planned_qty=0.0,
+        total_quoted_planned_cost=0.0,
+        total_bom_planned_cost=0.0,
+        quoted_vs_bom_cost_variance=0.0,
+        quoted_vs_actual_cost_variance=0.0,
     )
+
+
+async def _get_active_order_governed_bom(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    order_id: int,
+) -> Bom | None:
+    r = await db.execute(
+        select(Bom).where(
+            Bom.tenant_id == tenant_id,
+            Bom.order_id == order_id,
+            Bom.is_active.is_(True),
+            Bom.status.in_(GOVERNED_BOM_STATUSES),
+        )
+    )
+    return r.scalars().first()
 
 
 async def _consumption_plan_status_for_order(
@@ -5723,11 +5776,19 @@ async def _get_consumption_recon_data(
     sid = quotation.style_id
     style = await db.get(GarmentStyle, sid)
     style_code = style.style_code if style else str(sid)
-    bom = await _get_latest_governed_bom(
-        db,
-        tenant_id=tenant.id,
-        style_id=sid,
+    order_governed = await _get_active_order_governed_bom(
+        db, tenant_id=tenant.id, order_id=order.id
     )
+    if order_governed:
+        bom = order_governed
+        use_order_bom = True
+    else:
+        bom = await _get_latest_governed_bom(
+            db,
+            tenant_id=tenant.id,
+            style_id=sid,
+        )
+        use_order_bom = False
     if not bom:
         return ConsumptionReconResponse(
             order=ConsumptionReconOrderOut(
@@ -5755,6 +5816,9 @@ async def _get_consumption_recon_data(
     total_actual = 0.0
     total_planned_cost = 0.0
     total_actual_cost = 0.0
+    total_quoted_qty = 0.0
+    total_quoted_cost = 0.0
+    total_bom_cost = 0.0
     items_exceeding = 0
     for line in lines_result.scalars().all():
         item = await db.get(Item, line.item_id)
@@ -5762,9 +5826,27 @@ async def _get_consumption_recon_data(
             continue
         cat = await db.get(ItemCategory, item.category_id) if item.category_id else None
         material_type = _wastage_category_from_item(item, cat)
-        base = _to_float_safe(line.base_consumption)
-        wastage = _to_float_safe(line.wastage_pct) / 100.0
-        planned_qty = order_qty * base * (1.0 + wastage)
+        quoted_cons = None
+        quoted_planned_qty = None
+        bom_net = None
+        bom_gross = None
+        w_pct = None
+        pl_pct = None
+        if use_order_bom and line.bom_gross_consumption_per_unit is not None:
+            bom_gross = float(line.bom_gross_consumption_per_unit)
+            planned_qty = order_qty * bom_gross
+            if line.quoted_consumption_per_unit is not None:
+                quoted_cons = float(line.quoted_consumption_per_unit)
+                quoted_planned_qty = order_qty * quoted_cons
+            if line.bom_net_consumption_per_unit is not None:
+                bom_net = float(line.bom_net_consumption_per_unit)
+            w_pct = _to_float_safe(line.wastage_pct)
+            if line.process_loss_pct is not None:
+                pl_pct = float(line.process_loss_pct)
+        else:
+            base = _to_float_safe(line.base_consumption)
+            wastage = _to_float_safe(line.wastage_pct) / 100.0
+            planned_qty = order_qty * base * (1.0 + wastage)
         act_result = await db.execute(
             select(StockMovement).where(
                 StockMovement.tenant_id == tenant.id,
@@ -5798,7 +5880,20 @@ async def _get_consumption_recon_data(
             unit_cost = cost_sum / cost_qty_weighted
         else:
             unit_cost = base_uc
-        planned_cost = planned_qty * unit_cost
+        bom_price = (
+            float(line.bom_expected_unit_price)
+            if use_order_bom and line.bom_expected_unit_price is not None
+            else unit_cost
+        )
+        quoted_price = (
+            float(line.quoted_unit_price)
+            if use_order_bom and line.quoted_unit_price is not None
+            else None
+        )
+        planned_cost = planned_qty * bom_price
+        quoted_planned_cost = None
+        if quoted_planned_qty is not None and quoted_price is not None:
+            quoted_planned_cost = quoted_planned_qty * quoted_price
         actual_cost_computed = 0.0
         for m in out_movements:
             q = _to_float_safe(m.quantity)
@@ -5818,6 +5913,42 @@ async def _get_consumption_recon_data(
         total_actual += actual_qty
         total_planned_cost += planned_cost
         total_actual_cost += actual_cost_computed
+        if quoted_planned_qty is not None:
+            total_quoted_qty += quoted_planned_qty
+        if quoted_planned_cost is not None:
+            total_quoted_cost += quoted_planned_cost
+        total_bom_cost += planned_cost
+
+        qvb = None
+        qva = None
+        bva = None
+        if quoted_cons is not None and bom_gross is not None and quoted_cons > 0:
+            qvb = (bom_gross - quoted_cons) / quoted_cons * 100.0
+        if quoted_planned_qty and quoted_planned_qty > 0:
+            qva = (actual_qty - quoted_planned_qty) / quoted_planned_qty * 100.0
+        if planned_qty > 0:
+            bva = (actual_qty - planned_qty) / planned_qty * 100.0
+        pwq = float(line.wastage_qty) if use_order_bom and line.wastage_qty is not None else None
+        plq = float(line.process_loss_qty) if use_order_bom and line.process_loss_qty is not None else None
+        planned_loss_total = (pwq or 0) + (plq or 0)
+        actual_loss_proxy = max(0.0, actual_qty - (order_qty * (bom_net or 0))) if bom_net else None
+        pl_vs_al = (
+            (planned_loss_total - actual_loss_proxy)
+            if actual_loss_proxy is not None and use_order_bom
+            else None
+        )
+        c_q_b = (
+            (planned_cost - quoted_planned_cost)
+            if quoted_planned_cost is not None and use_order_bom
+            else None
+        )
+        c_b_a = actual_cost_computed - planned_cost
+        c_q_a = (
+            (actual_cost_computed - quoted_planned_cost)
+            if quoted_planned_cost is not None and use_order_bom
+            else None
+        )
+
         items_out.append(
             ConsumptionReconItemOut(
                 item_id=line.item_id,
@@ -5835,11 +5966,30 @@ async def _get_consumption_recon_data(
                 cost_variance=round(cost_variance, 4),
                 last_issued_at=last_issued_at,
                 movement_count=movement_count,
+                quoted_consumption_per_unit=round(quoted_cons, 6) if quoted_cons is not None else None,
+                bom_net_consumption_per_unit=round(bom_net, 6) if bom_net is not None else None,
+                bom_gross_consumption_per_unit=round(bom_gross, 6) if bom_gross is not None else None,
+                wastage_pct=round(w_pct, 4) if w_pct is not None else None,
+                process_loss_pct=round(pl_pct, 4) if pl_pct is not None else None,
+                quoted_planned_qty=round(quoted_planned_qty, 4) if quoted_planned_qty is not None else None,
+                quoted_planned_cost=round(quoted_planned_cost, 4) if quoted_planned_cost is not None else None,
+                bom_planned_cost=round(planned_cost, 4) if use_order_bom else None,
+                quoted_vs_bom_variance_pct=round(qvb, 2) if qvb is not None else None,
+                bom_vs_actual_variance_pct=round(bva, 2) if bva is not None else None,
+                quoted_vs_actual_variance_pct=round(qva, 2) if qva is not None else None,
+                planned_wastage_qty=round(pwq, 4) if pwq is not None else None,
+                planned_process_loss_qty=round(plq, 4) if plq is not None else None,
+                planned_loss_vs_actual_loss=round(pl_vs_al, 4) if pl_vs_al is not None else None,
+                cost_impact_quoted_vs_bom=round(c_q_b, 4) if c_q_b is not None else None,
+                cost_impact_bom_vs_actual=round(c_b_a, 4),
+                cost_impact_quoted_vs_actual=round(c_q_a, 4) if c_q_a is not None else None,
             )
         )
     overall_pct = (total_actual - total_planned) / total_planned * 100.0 if total_planned > 0 else 0.0
     cost_var = total_actual_cost - total_planned_cost
     cost_var_pct = (cost_var / total_planned_cost * 100.0) if total_planned_cost > 0 else 0.0
+    qv_b_c = total_bom_cost - total_quoted_cost
+    qv_a_c = total_actual_cost - total_quoted_cost
     return ConsumptionReconResponse(
         order=ConsumptionReconOrderOut(
             id=order.id,
@@ -5858,6 +6008,11 @@ async def _get_consumption_recon_data(
             total_actual_cost=round(total_actual_cost, 4),
             cost_variance=round(cost_var, 4),
             cost_variance_pct=round(cost_var_pct, 2),
+            total_quoted_planned_qty=round(total_quoted_qty, 4),
+            total_quoted_planned_cost=round(total_quoted_cost, 4),
+            total_bom_planned_cost=round(total_bom_cost, 4),
+            quoted_vs_bom_cost_variance=round(qv_b_c, 4),
+            quoted_vs_actual_cost_variance=round(qv_a_c, 4),
         ),
         bom_version=str(bom.version_no),
         bom_status=bom.status,
@@ -6287,7 +6442,11 @@ async def get_consumption_reconciliation_movements(
     if order.quotation_id:
         quotation = await db.get(Quotation, order.quotation_id)
         if quotation and quotation.style_id:
-            bom = await _get_latest_governed_bom(db, tenant_id=tenant.id, style_id=quotation.style_id)
+            bom = await _get_active_order_governed_bom(
+                db, tenant_id=tenant.id, order_id=order.id
+            )
+            if not bom:
+                bom = await _get_latest_governed_bom(db, tenant_id=tenant.id, style_id=quotation.style_id)
             if bom:
                 bres = await db.execute(
                     select(BomItem).where(
@@ -6299,9 +6458,17 @@ async def get_consumption_reconciliation_movements(
                 bline = bres.scalars().first()
                 if bline:
                     oq = _to_float_safe(str(order.quantity)) if order.quantity else 0.0
-                    base = _to_float_safe(bline.base_consumption)
-                    wastage = _to_float_safe(bline.wastage_pct) / 100.0
-                    planned_qty = oq * base * (1.0 + wastage)
+                    if bline.bom_gross_consumption_per_unit is not None:
+                        planned_qty = oq * float(bline.bom_gross_consumption_per_unit)
+                    else:
+                        base = _to_float_safe(bline.base_consumption)
+                        wastage = _to_float_safe(bline.wastage_pct) / 100.0
+                        pl = (
+                            float(bline.process_loss_pct) / 100.0
+                            if bline.process_loss_pct is not None
+                            else 0.0
+                        )
+                        planned_qty = oq * base * (1.0 + wastage + pl)
     return ConsumptionReconMovementsResponse(
         item_id=item_id,
         item_code=item.item_code or "",

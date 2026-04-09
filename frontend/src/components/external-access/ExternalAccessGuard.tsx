@@ -1,6 +1,7 @@
-import { Navigate, useLocation } from "react-router-dom";
+import { useLayoutEffect } from "react";
 import type { ExternalPrincipalType } from "@/types/externalAccess";
 import { getExtPrincipalType, getExtToken } from "@/api/externalClient";
+import { redirectToUnifiedLogin } from "@/utils/portalAuthRedirect";
 
 export function ExternalAccessGuard({
   portal,
@@ -9,11 +10,22 @@ export function ExternalAccessGuard({
   portal: ExternalPrincipalType;
   children: React.ReactNode;
 }) {
-  const loc = useLocation();
   const token = getExtToken();
   const type = getExtPrincipalType();
-  if (!token || type !== portal) {
-    return <Navigate to={`/portal/${portal}/login`} replace state={{ from: loc.pathname }} />;
+  const ok = Boolean(token && type === portal);
+
+  useLayoutEffect(() => {
+    if (!ok) {
+      redirectToUnifiedLogin(portal);
+    }
+  }, [ok, portal]);
+
+  if (!ok) {
+    return (
+      <p className="p-4 text-center text-sm text-text-muted" role="status">
+        Redirecting to sign in…
+      </p>
+    );
   }
   return <>{children}</>;
 }

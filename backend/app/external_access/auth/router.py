@@ -39,6 +39,7 @@ from app.external_access.constants import (
     FF_FINANCIER_FINANCIAL_SUMMARY_ENABLED,
     FF_FINANCIER_PORTAL_ENABLED,
     FF_FINANCIER_PROJECTION_ENABLED,
+    PRINCIPAL_FINANCIER,
 )
 from app.external_access.feature_flags import is_customer_portal_enabled, is_financier_portal_enabled
 from app.external_access.permissions import get_role_codes
@@ -252,15 +253,24 @@ async def external_me(
             FF_FINANCIER_PORTAL_ENABLED: is_financier_portal_enabled(tenant),
         }
 
+    financier_scope: str | None = None
+    if principal.principal_type == PRINCIPAL_FINANCIER:
+        from app.external_access.deps import financier_max_scope
+
+        financier_scope = await financier_max_scope(db, principal)
+
     return ExternalMeResponse(
         principal_id=principal.id,
         tenant_id=tenant.id,
         tenant_name=tenant.name,
         company_code=tenant.company_code,
+        tenant_address=(tenant.address or "").strip() or None,
+        tenant_phone=(tenant.phone or "").strip() or None,
         email=principal.email,
         full_name=principal.full_name,
         principal_type=principal.principal_type,
         role_codes=role_codes,
         feature_flags=feature_subset,
         must_reset_password=principal.must_reset_password,
+        financier_access_scope=financier_scope,
     )

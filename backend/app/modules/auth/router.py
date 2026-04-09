@@ -15,7 +15,12 @@ from app.common.auth import (
     hash_password,
     verify_password,
 )
-from app.common.email_service import send_forgot_password_email, send_registration_confirmation_email
+from app.common.email_service import (
+    send_forgot_password_email,
+    send_password_changed_notification_email,
+    send_registration_confirmation_email,
+    send_staff_welcome_email,
+)
 from app.common.authz import ensure_user_is_tenant_admin
 from app.config import get_settings
 from app.database import get_db
@@ -23,14 +28,20 @@ from app.models import Tenant, User, Role
 from app.modules.auth.me_schema import MeResponse
 from app.modules.auth.legal_acceptance import CURRENT_LEGAL_ACCEPTANCE_VERSION
 from app.modules.audit.service import log_action
+from app.common.username import generate_unique_username_for_tenant
+from app.external_access.feature_flags import is_customer_portal_enabled, is_financier_portal_enabled
 from app.modules.auth.schemas import (
     ForgotPasswordRequest,
     MessageResponse,
     RegisterRequest,
     ResetPasswordRequest,
+    ResolveTenantRequest,
+    ResolveTenantResponse,
     TokenResponse,
     UserResponse,
 )
+from app.modules.staff_invite.schemas import AcceptStaffInviteRequest
+from app.modules.staff_invite.service import accept_staff_invitation
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -117,6 +128,39 @@ async def _resolve_user_for_forgot_password(
     return user, tenant
 
 
+@router.post("/resolve-tenant", response_model=ResolveTenantResponse)
+async def resolve_tenant_public(
+    body: ResolveTenantRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Public: validate company code and return non-sensitive tenant info for the unified login UI."""
+    cc = body.company_code.strip()
+    if not cc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="company_code is required")
+    tenant_result = await db.execute(
+        select(Tenant).where(
+            func.lower(Tenant.company_code) == cc.lower(),
+            Tenant.is_active.is_(True),
+            Tenant.deleted_at.is_(None),
+        ).limit(1)
+    )
+    tenant = tenant_result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    available = ["staff", "admin"]
+    if is_customer_portal_enabled(tenant):
+        available.append("customer")
+    if is_financier_portal_enabled(tenant):
+        available.append("financier")
+    return ResolveTenantResponse(
+        tenant_id=tenant.id,
+        tenant_name=tenant.name,
+        company_code=tenant.company_code,
+        logo_url=tenant.logo,
+        available_roles=available,
+    )
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(
     request: Request,
@@ -142,11 +186,18 @@ async def login(
             tenant_id = None
     username = (body.get("username") or "").strip() or None
     email = (body.get("email") or "").strip() or None
+    login_as_raw = (body.get("login_as") or body.get("loginAs") or "").strip().lower() or None
+
+    if login_as_raw in ("customer", "financier"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use POST /api/external/auth/login for customer or financier portal access",
+        )
 
     if not company_code and tenant_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide company_code or tenant_id")
     if not username and not email:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide username or email")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide email or username")
 
     tenant = None
     if company_code:
@@ -173,14 +224,69 @@ async def login(
     if username:
         user_query = user_query.where(User.username == username)
     elif email:
-        user_query = user_query.where(User.email == email)
+        em = email.strip().lower()
+        user_query = user_query.where(func.lower(User.email) == em)
     else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide username or email")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide email or username")
     user_result = await db.execute(user_query.limit(1))
     user = user_result.scalar_one_or_none()
     if not user or not await verify_password(password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    role_row = await db.execute(select(Role).where(Role.id == user.role_id, Role.tenant_id == tenant.id).limit(1))
+    role_obj = role_row.scalar_one_or_none()
+    is_admin = role_obj is not None and role_obj.name.lower() == "admin"
+
+    if login_as_raw == "admin" and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account does not have admin privileges",
+        )
+    if login_as_raw != "admin" and is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin accounts must use the Tenant admin login option",
+        )
+
+    user.last_login = datetime.utcnow()
+    await db.flush()
     await log_action(db, tenant_id=user.tenant_id, action="LOGIN", user_id=user.id, resource="auth")
+    token = create_access_token(subject=user.id)
+    return TokenResponse(access_token=token, tenant_id=tenant.id)
+
+
+@router.post("/accept-staff-invite", response_model=TokenResponse)
+async def accept_staff_invite_public(
+    body: AcceptStaffInviteRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Public: accept staff invitation and return internal JWT (same as login)."""
+    user, tenant = await accept_staff_invitation(
+        db,
+        token=body.token,
+        password=body.password,
+        first_name=body.first_name,
+        last_name=body.last_name,
+    )
+    try:
+        await send_staff_welcome_email(
+            to_email=user.email,
+            recipient_name=user.first_name or user.email,
+            tenant_name=tenant.name,
+            company_code=tenant.company_code,
+        )
+    except Exception as exc:
+        logger.warning("Staff welcome email failed for user_id=%s: %s", user.id, exc)
+    try:
+        await log_action(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            action="STAFF_INVITE_ACCEPTED",
+            resource="auth",
+        )
+    except Exception as exc:
+        logger.warning("Staff invite accept audit failed: %s", exc)
     token = create_access_token(subject=user.id)
     return TokenResponse(access_token=token, tenant_id=tenant.id)
 
@@ -249,8 +355,9 @@ async def register(
             detail="Legal terms acceptance is required to register this tenant",
         )
 
+    email_norm = str(body.email).strip().lower()
     existing = await db.execute(
-        select(User).where(User.tenant_id == body.tenant_id, User.email == body.email)
+        select(User).where(User.tenant_id == body.tenant_id, func.lower(User.email) == email_norm)
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered for this tenant")
@@ -261,11 +368,24 @@ async def register(
     role = role_result.scalar_one_or_none()
     if not role:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant has no roles; contact admin")
+    uname = (body.username or "").strip() or None
+    if uname:
+        exists_un = await db.execute(
+            select(User).where(
+                User.tenant_id == body.tenant_id,
+                User.username.isnot(None),
+                func.lower(User.username) == uname.lower(),
+            ).limit(1)
+        )
+        if exists_un.scalar_one_or_none():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already in use for this tenant")
+    if not uname:
+        uname = await generate_unique_username_for_tenant(db, body.tenant_id, email_norm)
     user = User(
         tenant_id=body.tenant_id,
         role_id=role.id,
-        email=body.email,
-        username=body.username,
+        email=email_norm,
+        username=uname,
         password_hash=await hash_password(body.password),
         first_name=body.first_name,
         last_name=body.last_name,
@@ -277,7 +397,7 @@ async def register(
         acceptance_version = (body.legal_acceptance_version or "").strip() or CURRENT_LEGAL_ACCEPTANCE_VERSION
         tenant.legal_acceptance_version = acceptance_version
         tenant.legal_accepted_at = datetime.now(UTC).replace(tzinfo=None)
-        tenant.legal_accepted_by_email = body.email
+        tenant.legal_accepted_by_email = email_norm
         await log_action(
             db,
             tenant_id=tenant.id,
@@ -291,7 +411,7 @@ async def register(
     try:
         await send_registration_confirmation_email(
             to_email=user.email,
-            recipient_name=user.first_name or user.username,
+            recipient_name=user.first_name or user.username or user.email,
             tenant_name=tenant.name,
             company_code=tenant.company_code,
         )
@@ -386,6 +506,13 @@ async def reset_password(
             action="PASSWORD_RESET_COMPLETED",
             resource="auth",
         )
+    try:
+        await send_password_changed_notification_email(
+            to_email=user.email,
+            recipient_name=user.first_name or user.username or user.email,
+        )
+    except Exception as exc:
+        logger.warning("Password changed notification email failed for user_id=%s: %s", user.id, exc)
     return MessageResponse(message="Password updated")
 
 
@@ -402,6 +529,10 @@ async def me(
     tenant = tenant_result.scalar_one_or_none()
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    role_result = await db.execute(select(Role).where(Role.id == user.role_id).limit(1))
+    role_obj = role_result.scalar_one_or_none()
+    role_name = role_obj.name if role_obj else ""
+    role_permissions = role_obj.permissions if role_obj and isinstance(role_obj.permissions, dict) else {}
     return MeResponse(
         user_id=user.id,
         tenant_id=user.tenant_id,
@@ -413,4 +544,6 @@ async def me(
         tenant_type=tenant.tenant_type,
         company_code=tenant.company_code,
         feature_flags=tenant.feature_flags if isinstance(tenant.feature_flags, dict) else None,
+        role_name=role_name,
+        role_permissions=role_permissions,
     )

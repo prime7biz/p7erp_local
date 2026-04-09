@@ -405,7 +405,6 @@ export function ConsumptionReconciliationPage() {
     setDashPage(1);
   };
 
-  const selectedOrder = orders.find((o) => String(o.id) === selectedOrderId);
   const maxTrend = useMemo(() => {
     if (!trendsData?.points.length) return 10;
     return Math.max(10, ...trendsData.points.map((p) => Math.abs(p.avg_variance_pct)));
@@ -1009,12 +1008,10 @@ export function ConsumptionReconciliationPage() {
                 View order
               </Link>
               <Link
-                to={`/app/bom?styleId=${selectedOrder?.style_id ?? ""}`}
-                className={`rounded-lg border border-border-strong px-3 py-1.5 hover:bg-surface-subtle ${
-                  !selectedOrder?.style_id ? "pointer-events-none opacity-50" : ""
-                }`}
+                to={`/app/bom?orderId=${data.order.id}`}
+                className="rounded-lg border border-border-strong px-3 py-1.5 hover:bg-surface-subtle"
               >
-                BOM
+                Order BOM
               </Link>
               <Link
                 to={`/app/inventory/consumption-control?orderId=${selectedOrderId}`}
@@ -1116,15 +1113,52 @@ export function ConsumptionReconciliationPage() {
                 </div>
               </div>
 
+              {data.summary.total_quoted_planned_cost != null || data.summary.total_bom_planned_cost != null ? (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 print:grid-cols-3">
+                  <div className="rounded-xl border border-border bg-surface-raised shadow-sm p-4">
+                    <p className="text-xs font-medium text-text-muted uppercase">Quoted total cost</p>
+                    <p className="mt-1 text-xl font-semibold text-brand-primary">
+                      {formatMoney(data.summary.total_quoted_planned_cost)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-surface-raised shadow-sm p-4">
+                    <p className="text-xs font-medium text-text-muted uppercase">BOM total cost</p>
+                    <p className="mt-1 text-xl font-semibold text-brand-primary">
+                      {formatMoney(data.summary.total_bom_planned_cost ?? data.summary.total_planned_cost)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-surface-raised shadow-sm p-4">
+                    <p className="text-xs font-medium text-text-muted uppercase">Three-way cost variance</p>
+                    <p className="mt-1 text-sm text-text-secondary">
+                      Q↔B {formatMoney(data.summary.quoted_vs_bom_cost_variance)} · Q↔A{" "}
+                      {formatMoney(data.summary.quoted_vs_actual_cost_variance)}
+                    </p>
+                    <p className="mt-1 text-xs text-text-muted">Planned (BOM) qty total: {formatNum(data.summary.total_planned)}</p>
+                  </div>
+                </div>
+              ) : null}
+
               {data.items.length > 0 && (
                 <div className="rounded-xl border border-border bg-surface-raised shadow-sm p-4 print:break-before-page">
-                  <h2 className="text-sm font-semibold text-brand-primary mb-4">Variance at a glance</h2>
+                  <h2 className="text-sm font-semibold text-brand-primary mb-4">Variance at a glance (quoted · BOM · actual)</h2>
+                  <div className="mb-2 flex flex-wrap gap-3 text-[11px] text-text-muted">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="h-2 w-4 rounded bg-slate-400/60" /> Quoted qty
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="h-2 w-4 rounded bg-status-info-subtle" /> BOM planned
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="h-2 w-4 rounded bg-brand-primary/70" /> Actual
+                    </span>
+                  </div>
                   <div className="space-y-3">
                     {[...data.items]
                       .sort((a, b) => Math.abs(b.variance_pct) - Math.abs(a.variance_pct))
                       .slice(0, 10)
                       .map((item) => {
-                        const maxQ = Math.max(item.planned_qty, item.actual_qty, 1);
+                        const quoted = item.quoted_planned_qty ?? 0;
+                        const maxQ = Math.max(quoted, item.planned_qty, item.actual_qty, 1);
                         return (
                           <div key={item.item_id} className="flex items-center gap-4">
                             <span
@@ -1134,19 +1168,31 @@ export function ConsumptionReconciliationPage() {
                               {item.item_code}
                             </span>
                             <div className="flex-1 flex gap-1 items-center">
+                              {quoted > 0 ? (
+                                <div
+                                  className="h-6 bg-slate-400/50 rounded min-w-[4px]"
+                                  style={{
+                                    width: `${Math.min(100, (quoted / maxQ) * 100)}%`,
+                                    maxWidth: "33%",
+                                  }}
+                                  title={`Quoted planned ${formatNum(quoted)}`}
+                                />
+                              ) : null}
                               <div
                                 className="h-6 bg-status-info-subtle rounded min-w-[4px]"
                                 style={{
                                   width: `${Math.min(100, (item.planned_qty / maxQ) * 100)}%`,
-                                  maxWidth: "40%",
+                                  maxWidth: "33%",
                                 }}
+                                title={`BOM planned ${formatNum(item.planned_qty)}`}
                               />
                               <div
                                 className="h-6 bg-brand-primary/70 rounded min-w-[4px]"
                                 style={{
                                   width: `${Math.min(100, (item.actual_qty / maxQ) * 100)}%`,
-                                  maxWidth: "40%",
+                                  maxWidth: "33%",
                                 }}
+                                title={`Actual ${formatNum(item.actual_qty)}`}
                               />
                             </div>
                             <span
@@ -1204,7 +1250,7 @@ export function ConsumptionReconciliationPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="min-w-[1100px] w-full text-sm">
+                    <table className="min-w-[1400px] w-full text-sm">
                       <thead className="bg-surface-subtle border-b border-border">
                         <tr>
                           <th className="px-4 py-3 text-left sticky left-0 bg-surface-subtle z-[1]">
@@ -1222,6 +1268,13 @@ export function ConsumptionReconciliationPage() {
                           <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase">
                             Unit
                           </th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase" title="Per piece from quotation">
+                            Q /u
+                          </th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase">BOM net /u</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase">Wast %</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase">Loss %</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase">Gross /u</th>
                           <th className="px-4 py-3 text-right">
                             <button
                               type="button"
@@ -1245,6 +1298,9 @@ export function ConsumptionReconciliationPage() {
                           <th className="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase">
                             Variance
                           </th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase">Q↔B %</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase">B↔A %</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase">Loss Δ</th>
                           <th className="px-4 py-3 text-right">
                             <button
                               type="button"
@@ -1264,6 +1320,8 @@ export function ConsumptionReconciliationPage() {
                               {detailSort.key === "cost_variance" ? (detailSort.dir === "asc" ? " ↑" : " ↓") : ""}
                             </button>
                           </th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase">Cost Q↔B</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase">Cost B↔A</th>
                           <th className="px-4 py-3 text-center text-xs font-medium text-text-muted uppercase">
                             Status
                           </th>
@@ -1278,12 +1336,15 @@ export function ConsumptionReconciliationPage() {
                       <tbody>
                         {filteredDetailItems.map((r: ConsumptionReconciliationRow) => {
                           const exceedsTolerance = Math.abs(r.variance_pct) > tolerancePct;
+                          const triLayerWarn =
+                            (r.quoted_vs_bom_variance_pct != null && Math.abs(r.quoted_vs_bom_variance_pct) > tolerancePct) ||
+                            (r.bom_vs_actual_variance_pct != null && Math.abs(r.bom_vs_actual_variance_pct) > tolerancePct);
                           const usagePct = r.planned_qty > 0 ? Math.min((r.actual_qty / r.planned_qty) * 100, 150) : 0;
                           return (
                             <tr
                               key={r.item_id}
                               className={`border-b border-border-subtle last:border-0 hover:bg-surface-subtle/50 ${
-                                exceedsTolerance ? "bg-status-danger-subtle/50" : ""
+                                exceedsTolerance || triLayerWarn ? "bg-status-danger-subtle/50" : ""
                               }`}
                             >
                               <td className="px-4 py-3 font-medium text-brand-primary sticky left-0 bg-surface-raised">
@@ -1295,6 +1356,17 @@ export function ConsumptionReconciliationPage() {
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-text-secondary">{r.uom ?? "—"}</td>
+                              <td className="px-4 py-3 text-right font-mono text-xs text-text-secondary">
+                                {r.quoted_consumption_per_unit != null ? r.quoted_consumption_per_unit.toFixed(4) : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-xs text-text-secondary">
+                                {r.bom_net_consumption_per_unit != null ? r.bom_net_consumption_per_unit.toFixed(4) : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-right text-xs">{r.wastage_pct ?? "—"}</td>
+                              <td className="px-4 py-3 text-right text-xs">{r.process_loss_pct ?? "—"}</td>
+                              <td className="px-4 py-3 text-right font-mono text-xs text-text-secondary">
+                                {r.bom_gross_consumption_per_unit != null ? r.bom_gross_consumption_per_unit.toFixed(4) : "—"}
+                              </td>
                               <td className="px-4 py-3 text-right font-mono text-text-secondary">
                                 {formatNum(r.planned_qty)}
                               </td>
@@ -1312,6 +1384,15 @@ export function ConsumptionReconciliationPage() {
                               >
                                 {r.variance > 0 ? "+" : ""}
                                 {formatNum(r.variance)}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-xs">
+                                {r.quoted_vs_bom_variance_pct != null ? `${r.quoted_vs_bom_variance_pct.toFixed(1)}%` : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-xs">
+                                {r.bom_vs_actual_variance_pct != null ? `${r.bom_vs_actual_variance_pct.toFixed(1)}%` : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-xs">
+                                {r.planned_loss_vs_actual_loss != null ? formatNum(r.planned_loss_vs_actual_loss) : "—"}
                               </td>
                               <td
                                 className={`px-4 py-3 text-right font-mono font-semibold ${
@@ -1331,6 +1412,12 @@ export function ConsumptionReconciliationPage() {
                                 }`}
                               >
                                 {r.cost_variance != null ? formatMoney(r.cost_variance) : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-xs">
+                                {r.cost_impact_quoted_vs_bom != null ? formatMoney(r.cost_impact_quoted_vs_bom) : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-xs">
+                                {r.cost_impact_bom_vs_actual != null ? formatMoney(r.cost_impact_bom_vs_actual) : "—"}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <VarianceBadge variancePct={r.variance_pct} tolerancePct={tolerancePct} />

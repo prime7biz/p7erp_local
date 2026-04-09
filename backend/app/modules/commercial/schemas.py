@@ -21,6 +21,10 @@ class MasterContractCreate(BaseModel):
         None,
         description="Cost center for payments and COGS under this contract; optional, can be created when contract is opened.",
     )
+    order_id: int | None = Field(
+        None,
+        description="When set, links this master contract to the sales order (orders.master_contract_id).",
+    )
 
 
 class MasterContractUpdate(BaseModel):
@@ -34,6 +38,10 @@ class MasterContractUpdate(BaseModel):
     bank_name: str | None = Field(None, max_length=255)
     expiry_date: date | None = None
     cost_center_id: int | None = None
+    order_id: int | None = Field(
+        None,
+        description="Link/unlink sales order (sets orders.master_contract_id to this contract when set).",
+    )
 
 
 class MasterContractResponse(BaseModel):
@@ -52,6 +60,7 @@ class MasterContractResponse(BaseModel):
     cost_center_id: int | None = None
     btb_utilization_pct: float | None = None
     btb_warning_band: str | None = None
+    linked_order_id: int | None = None
     created_at: str
     updated_at: str
 
@@ -66,6 +75,16 @@ class ExportCaseCreate(BaseModel):
     case_date: date | None = None
     amount: float | None = Field(None, ge=0)
     trade_case_id: int | None = None
+    order_id: int | None = None
+
+
+class ExportCaseUpdate(BaseModel):
+    reference: str | None = Field(default=None, max_length=64)
+    status: str | None = Field(default=None, max_length=32)
+    case_date: date | None = None
+    amount: float | None = Field(None, ge=0)
+    trade_case_id: int | None = None
+    order_id: int | None = None
 
 
 class ExportCaseResponse(BaseModel):
@@ -76,6 +95,7 @@ class ExportCaseResponse(BaseModel):
     case_date: str | None
     amount: float | None
     trade_case_id: int | None = None
+    order_id: int | None = None
     created_at: str
     updated_at: str
 
@@ -357,13 +377,13 @@ class BtbLcAccountingResponse(BaseModel):
 
 
 class BtbLcRecordOpeningBody(BaseModel):
-    upcoming_lc_liability_account_id: int = Field(
-        ...,
-        description="Debit account for upcoming import LC liability.",
+    upcoming_lc_liability_account_id: int | None = Field(
+        default=None,
+        description="Debit account for upcoming import LC liability. Omit to use system ledger BTB_NON_ACCEPTED_LC_LIABILITY.",
     )
-    blocked_credit_facility_account_id: int = Field(
-        ...,
-        description="Credit account for blocked bank LC credit facility.",
+    blocked_credit_facility_account_id: int | None = Field(
+        default=None,
+        description="Credit account for blocked bank LC credit facility. Omit to use system ledger BTB_CREDIT_LINE_UTILIZATION_CONTROL.",
     )
     voucher_date: date | None = None
     amount: float | None = Field(
@@ -376,13 +396,13 @@ class BtbLcRecordOpeningBody(BaseModel):
 
 
 class BtbLcRecordDocumentsAcceptanceBody(BaseModel):
-    lc_liability_account_id: int = Field(
-        ...,
-        description="Debit account that clears LC liability from opening stage.",
+    lc_liability_account_id: int | None = Field(
+        default=None,
+        description="Debit that clears opening LC liability. Omit to use system ledger BTB_NON_ACCEPTED_LC_LIABILITY.",
     )
-    import_bill_liability_account_id: int = Field(
-        ...,
-        description="Credit account for maturity/import bill liability.",
+    import_bill_liability_account_id: int | None = Field(
+        default=None,
+        description="Credit for maturity/import bill liability. Omit to use system ledger BTB_ACCEPTED_LC_LIABILITY.",
     )
     maturity_date: date | None = None
     voucher_date: date | None = None
@@ -396,13 +416,13 @@ class BtbLcRecordDocumentsAcceptanceBody(BaseModel):
 
 
 class BtbLcRecordRealizationBody(BaseModel):
-    import_bill_liability_account_id: int = Field(
-        ...,
-        description="Debit account for import bill liability settlement.",
+    import_bill_liability_account_id: int | None = Field(
+        default=None,
+        description="Debit for import bill liability settlement. Omit to use system ledger BTB_ACCEPTED_LC_LIABILITY.",
     )
-    payment_account_id: int = Field(
-        ...,
-        description="Credit account used for settlement payment (bank/cash).",
+    payment_account_id: int | None = Field(
+        default=None,
+        description="Credit GL for settlement. Omit only if BTB LC has bank_account_id with gl_account_id configured.",
     )
     voucher_date: date | None = None
     amount: float | None = Field(

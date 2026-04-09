@@ -179,6 +179,25 @@ class Order(Base):
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="DRAFT", index=True
     )
+    # Auto lifecycle pipeline (separate from legacy status); see app.common.workflow.PIPELINE_STAGES.
+    pipeline_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="ORDER_CONFIRMED", index=True
+    )
+    pipeline_na_steps: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
+    order_type: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    master_contract_id: Mapped[int | None] = mapped_column(
+        ForeignKey("master_contracts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    pi_issued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    lc_received_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    bom_created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    po_issued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rm_received_pct: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    rm_received_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    production_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    shipped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    payment_received_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Frozen quotation commercial header values at order conversion (audit / alignment; not auto-synced).
     commercial_snapshot_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -250,11 +269,49 @@ class Bom(Base):
     style_id: Mapped[int] = mapped_column(
         ForeignKey("garment_styles.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    quotation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("quotations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_legacy: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    revision_of_bom_id: Mapped[int | None] = mapped_column(
+        ForeignKey("boms.id", ondelete="SET NULL"), nullable=True
+    )
+    order_code_snapshot: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    quotation_code_snapshot: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    order_qty_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    order_qty_at_approval: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    currency_snapshot: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    submitted_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    approved_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rejected_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    rejection_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    frozen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    frozen_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     version_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="DRAFT", index=True
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bom_code: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    delivery_date_snapshot: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
@@ -279,12 +336,41 @@ class BomItem(Base):
     item_id: Mapped[int | None] = mapped_column(
         ForeignKey("items.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    quotation_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("quotation_materials.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     category: Mapped[str] = mapped_column(String(32), nullable=False)
     item_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    item_code_snapshot: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    description_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    material_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     uom: Mapped[str | None] = mapped_column(String(32), nullable=True)
     base_consumption: Mapped[str] = mapped_column(String(32), nullable=False)
     wastage_pct: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    quoted_consumption_per_unit: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    quoted_unit_price: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    quoted_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    quoted_total_cost: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    bom_net_consumption_per_unit: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    process_loss_pct: Mapped[float | None] = mapped_column(Numeric(10, 4), nullable=True)
+    bom_gross_consumption_per_unit: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    order_qty_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    required_net_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    wastage_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    process_loss_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    required_gross_qty: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    vendor_suggested_price: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    bom_expected_unit_price: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    bom_expected_total_cost: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    consumption_variance_pct: Mapped[float | None] = mapped_column(Numeric(10, 4), nullable=True)
+    price_variance_pct: Mapped[float | None] = mapped_column(Numeric(10, 4), nullable=True)
+    total_cost_variance: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
+    preferred_vendor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vendors.id", ondelete="SET NULL"), nullable=True
+    )
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

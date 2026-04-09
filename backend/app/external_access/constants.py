@@ -14,13 +14,15 @@ ROLE_FINANCIER_ANALYST = "financier_analyst"
 SCOPE_TENANT_SUMMARY = "tenant_summary"
 SCOPE_ORDERS_AND_PIPELINE = "orders_and_pipeline"
 SCOPE_FINANCIAL_SUMMARY = "financial_summary"
+SCOPE_CREDIT_MONITORING = "credit_monitoring"
 SCOPE_FULL_FINANCIER_PORTAL = "full_financier_portal"
 
 SCOPE_RANK = {
     SCOPE_TENANT_SUMMARY: 1,
     SCOPE_ORDERS_AND_PIPELINE: 2,
     SCOPE_FINANCIAL_SUMMARY: 3,
-    SCOPE_FULL_FINANCIER_PORTAL: 4,
+    SCOPE_CREDIT_MONITORING: 4,
+    SCOPE_FULL_FINANCIER_PORTAL: 5,
 }
 
 # Tenant feature_flags keys (JSON on tenants.feature_flags)

@@ -1,16 +1,21 @@
 from datetime import datetime
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user, hash_password
+from app.common.email_service import send_staff_welcome_email
+from app.common.permissions import permissions_registry_api_payload
+from app.common.username import generate_unique_username_for_tenant
 from app.common.authz import ensure_user_is_tenant_admin
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import AuditLog, CommissionMode, Role, Tenant, User
 from app.modules.audit.service import log_action
 from app.external_access.admin.router import router as external_access_admin_router
+from app.modules.staff_invite.router import router as staff_invite_router
 from app.modules.settings.schemas import (
     BackupHistoryRow,
     BackupStatusResponse,
@@ -29,8 +34,11 @@ from app.modules.settings.schemas import (
     SettingsUserUpdate,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/settings", tags=["settings"])
 router.include_router(external_access_admin_router)
+router.include_router(staff_invite_router)
 
 
 def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
@@ -137,6 +145,18 @@ async def update_settings_config(
         country_code=(tenant.country_code or "").strip() or None,
         timezone=(tenant.timezone or "").strip() or None,
     )
+
+
+@router.get("/permissions-registry")
+async def get_permissions_registry(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the canonical permission tree for the Roles UI (admin only)."""
+    _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
+    return permissions_registry_api_payload()
 
 
 @router.get("/roles", response_model=list[SettingsRoleResponse])
@@ -323,39 +343,59 @@ async def create_settings_user(
     role = await _get_tenant_role(db, tenant.id, body.role_id)
 
     email_value = body.email.strip().lower()
-    username_value = body.username.strip().lower()
-    existing = await db.execute(
-        select(User).where(
-            User.tenant_id == tenant.id,
-            (func.lower(User.email) == email_value) | (func.lower(User.username) == username_value),
+    uname_in = (body.username or "").strip() or None
+    if uname_in:
+        username_lower = uname_in.lower()
+        existing = await db.execute(
+            select(User).where(
+                User.tenant_id == tenant.id,
+                (func.lower(User.email) == email_value)
+                | (
+                    User.username.isnot(None) & (func.lower(User.username) == username_lower)
+                ),
+            )
         )
-    )
+    else:
+        existing = await db.execute(
+            select(User).where(User.tenant_id == tenant.id, func.lower(User.email) == email_value)
+        )
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User with same email or username already exists",
         )
 
+    final_username = uname_in or await generate_unique_username_for_tenant(db, tenant.id, email_value)
     new_user = User(
         tenant_id=tenant.id,
         role_id=role.id,
         email=email_value,
-        username=body.username.strip(),
+        username=final_username,
         password_hash=await hash_password(body.password),
         first_name=(body.first_name or "").strip() or None,
         last_name=(body.last_name or "").strip() or None,
         is_active=body.is_active,
+        invited_by_user_id=user.id,
     )
     db.add(new_user)
     await db.flush()
     await db.refresh(new_user)
+    try:
+        await send_staff_welcome_email(
+            to_email=new_user.email,
+            recipient_name=new_user.first_name or new_user.email,
+            tenant_name=tenant.name,
+            company_code=tenant.company_code,
+        )
+    except Exception as exc:
+        logger.warning("Welcome email failed for new user_id=%s: %s", new_user.id, exc)
     await log_action(
         db,
         tenant_id=tenant.id,
         user_id=user.id,
         action="SETTINGS_USER_CREATE",
         resource="settings.user",
-        details=f"Created user {new_user.username}",
+        details=f"Created user {new_user.email}",
     )
     return SettingsUserResponse(
         id=new_user.id,
@@ -404,6 +444,7 @@ async def update_settings_user(
         existing_username = await db.execute(
             select(User).where(
                 User.tenant_id == tenant.id,
+                User.username.isnot(None),
                 func.lower(User.username) == new_username.lower(),
                 User.id != target.id,
             )

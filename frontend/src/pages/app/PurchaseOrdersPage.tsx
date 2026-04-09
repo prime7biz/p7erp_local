@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   api,
+  type GoodsReceivingResponse,
   type InventoryItemResponse,
   type PurchaseOrderCreate,
   type PurchaseOrderItemCreate,
+  type PurchaseOrderReceiptProgress,
   type PurchaseOrderResponse,
   type VendorResponse,
   type WarehouseResponse,
@@ -38,6 +40,7 @@ import { useListPagination } from "@/hooks/useListPagination";
 import { cn } from "@/lib/utils";
 
 export function PurchaseOrdersPage() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<PurchaseOrderResponse[]>([]);
   const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
@@ -64,6 +67,17 @@ export function PurchaseOrdersPage() {
   const [poPage, setPoPage] = useState(1);
   const [poTotal, setPoTotal] = useState(0);
   const { isNarrow, view, setView, showCards } = useListViewPreference();
+
+  /** Receipt progress + received GRNs for vendor bill drafts */
+  const [poTrace, setPoTrace] = useState<{
+    po: PurchaseOrderResponse;
+    progress: PurchaseOrderReceiptProgress | null;
+    grns: GoodsReceivingResponse[];
+    loading: boolean;
+    error: string;
+    vendorBillBusyId: number | null;
+  } | null>(null);
+  const [poBanner, setPoBanner] = useState("");
 
   const itemName = useMemo(() => new Map(items.map((i) => [i.id, i.name])), [items]);
 
@@ -115,6 +129,48 @@ export function PurchaseOrdersPage() {
     setPoPage(1);
   }, [statusFilter, pageSize]);
 
+  const openPoTrace = useCallback(async (po: PurchaseOrderResponse) => {
+    setPoTrace({ po, progress: null, grns: [], loading: true, error: "", vendorBillBusyId: null });
+    try {
+      const [progress, grnPage] = await Promise.all([
+        api.getPurchaseOrderReceiptProgress(po.id),
+        api.listGoodsReceivingPaginated({
+          purchase_order_id: po.id,
+          status_filter: "RECEIVED",
+          page: 1,
+          page_size: 50,
+        }),
+      ]);
+      setPoTrace((prev) =>
+        prev && prev.po.id === po.id
+          ? { ...prev, progress, grns: grnPage.items, loading: false, error: "" }
+          : prev,
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to load receipt data";
+      setPoTrace((prev) => (prev && prev.po.id === po.id ? { ...prev, loading: false, error: msg } : prev));
+      logApiError("PurchaseOrdersPage.openPoTrace", e);
+    }
+  }, []);
+
+  const createVendorBillFromGrn = useCallback(
+    async (grnId: number) => {
+      setPoTrace((prev) => (prev ? { ...prev, vendorBillBusyId: grnId, error: "" } : prev));
+      try {
+        const r = await api.createVendorBillDraftFromGrn(grnId);
+        setPoBanner(`Vendor bill draft ${r.bill_code} created. Go to Finance → Vendor bills (GRN) to enter invoice ref and post.`);
+        setPoTrace(null);
+        navigate(`/app/accounts/vendor-bills`);
+        void load();
+      } catch (e) {
+        logApiError("PurchaseOrdersPage.createVendorBillFromGrn", e);
+        const msg = e instanceof Error ? e.message : "Failed to create vendor bill";
+        setPoTrace((prev) => (prev ? { ...prev, vendorBillBusyId: null, error: msg } : prev));
+      }
+    },
+    [navigate, load],
+  );
+
   const patchPoStatus = useCallback(
     async (id: number, nextStatus: string) => {
       setError("");
@@ -165,6 +221,14 @@ export function PurchaseOrdersPage() {
         }
       />
       {error ? <InventoryErrorPanel message={error} onRetry={() => void load()} /> : null}
+      {poBanner ? (
+        <div className="rounded-lg border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">
+          {poBanner}{" "}
+          <button type="button" className="underline" onClick={() => setPoBanner("")}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       <div className={cn(listPageFilterBarClass, "sm:justify-between")}>
         {isNarrow ? <InventoryListViewToggle value={view} onChange={setView} /> : null}
         <label className="flex flex-1 flex-wrap items-center gap-2 text-xs font-semibold text-text-secondary">
@@ -384,6 +448,24 @@ export function PurchaseOrdersPage() {
                             >
                               Print
                             </button>
+                            <button
+                              type="button"
+                              className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionsId(null);
+                                void openPoTrace(row);
+                              }}
+                            >
+                              Receipt progress &amp; vendor bill
+                            </button>
+                            <Link
+                              to={`/app/inventory/goods-receiving?po=${row.id}`}
+                              className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
+                              onClick={() => setOpenActionsId(null)}
+                            >
+                              Goods receiving (this PO)
+                            </Link>
                             {canApprove && (
                               <button
                                 type="button"
@@ -493,6 +575,24 @@ export function PurchaseOrdersPage() {
                               >
                                 Print
                               </button>
+                              <button
+                                type="button"
+                                className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenActionsId(null);
+                                  void openPoTrace(row);
+                                }}
+                              >
+                                Receipt progress &amp; vendor bill
+                              </button>
+                              <Link
+                                to={`/app/inventory/goods-receiving?po=${row.id}`}
+                                className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
+                                onClick={() => setOpenActionsId(null)}
+                              >
+                                Goods receiving (this PO)
+                              </Link>
                               {canApprove && (
                                 <button
                                   type="button"
@@ -573,6 +673,93 @@ export function PurchaseOrdersPage() {
       ) : null}
         </>
       )}
+
+      {poTrace ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="po-trace-title"
+        >
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-border bg-surface-raised p-4 shadow-lg">
+            <div className="flex items-start justify-between gap-2">
+              <h2 id="po-trace-title" className="text-lg font-semibold text-text-primary">
+                {poTrace.po.po_code} — receipt &amp; AP
+              </h2>
+              <button
+                type="button"
+                className="rounded border px-2 py-1 text-sm text-text-secondary"
+                onClick={() => setPoTrace(null)}
+              >
+                Close
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-text-muted">
+              Ordered vs accepted-received vs pending (per PO line). Create a finance vendor bill draft from a received GRN.
+            </p>
+            {poTrace.error ? (
+              <div className="mt-2 rounded border border-status-danger/20 bg-status-danger-subtle p-2 text-sm text-status-danger-foreground">
+                {poTrace.error}
+              </div>
+            ) : null}
+            {poTrace.loading ? (
+              <p className="mt-4 text-sm text-text-muted">Loading…</p>
+            ) : poTrace.progress ? (
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b text-text-secondary">
+                      <th className="py-1 pr-2">Line</th>
+                      <th className="py-1 pr-2">Item</th>
+                      <th className="py-1 pr-2 text-right">Ordered</th>
+                      <th className="py-1 pr-2 text-right">Accepted recv.</th>
+                      <th className="py-1 text-right">Pending</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {poTrace.progress.lines.map((ln) => (
+                      <tr key={ln.purchase_order_line_id} className="border-b border-border/50">
+                        <td className="py-1 pr-2">#{ln.purchase_order_line_id}</td>
+                        <td className="py-1 pr-2">{itemName.get(ln.item_id) ?? `#${ln.item_id}`}</td>
+                        <td className="py-1 pr-2 text-right">{ln.ordered_qty}</td>
+                        <td className="py-1 pr-2 text-right">{ln.accepted_received_qty}</td>
+                        <td className="py-1 text-right">{ln.pending_qty}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            <h3 className="mt-6 text-sm font-semibold text-text-primary">Received GRNs — vendor bill draft</h3>
+            {poTrace.loading ? null : poTrace.grns.length === 0 ? (
+              <p className="mt-1 text-xs text-text-muted">No RECEIVED GRNs for this PO yet.</p>
+            ) : (
+              <ul className="mt-2 space-y-2 text-sm">
+                {poTrace.grns.map((g) => (
+                  <li
+                    key={g.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-border px-2 py-2"
+                  >
+                    <span>
+                      {g.grn_code} · status {g.status}
+                      {g.received_date ? ` · ${g.received_date}` : ""}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={poTrace.vendorBillBusyId === g.id}
+                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      onClick={() => void createVendorBillFromGrn(g.id)}
+                    >
+                      {poTrace.vendorBillBusyId === g.id ? "Creating…" : "Create vendor bill draft"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

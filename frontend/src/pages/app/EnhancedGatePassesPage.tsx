@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   api,
-  type DeliveryChallanResponse,
-  type EnhancedGatePassCreate,
   type EnhancedGatePassResponse,
+  type InventoryDocumentPrintPayload,
 } from "@/api/client";
 import {
   InventoryEmptyState,
@@ -11,46 +11,40 @@ import {
   InventoryTableSkeleton,
 } from "@/components/inventory/InventoryListStates";
 import { inventoryScrollTableClass } from "@/components/inventory/InventoryMobileList";
+import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocumentPrintSheets";
+import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
+import { logApiError } from "@/utils/logApiError";
 
 const touchField = "min-h-[44px] w-full rounded border border-border px-3 py-3 text-base sm:text-sm touch-manipulation";
-const touchBtn =
-  "min-h-[44px] touch-manipulation inline-flex items-center justify-center rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50 active:opacity-90";
-const touchPrimary =
-  "min-h-[44px] touch-manipulation inline-flex items-center justify-center rounded-lg bg-brand-primary px-4 py-3 text-base font-medium text-brand-primary-foreground hover:opacity-95 active:opacity-90 sm:text-sm";
 
 export function EnhancedGatePassesPage() {
   const [rows, setRows] = useState<EnhancedGatePassResponse[]>([]);
-  const [challans, setChallans] = useState<DeliveryChallanResponse[]>([]);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState<EnhancedGatePassCreate>({
-    challan_id: null,
-    purpose: "",
-    status: "DRAFT",
-  });
-
-  const statuses = ["DRAFT", "SUBMITTED", "APPROVED", "RELEASED", "REJECTED"];
-
-  useEffect(() => {
-    const close = () => setOpenActionsId(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printData, setPrintData] = useState<InventoryDocumentPrintPayload | null>(null);
+  const [printTitle, setPrintTitle] = useState("");
+  const [copyCount, setCopyCount] = useState(1);
+  const [template, setTemplate] = useState<"standard" | "compact" | "audit">("standard");
 
   const load = useCallback(async () => {
     setError("");
     setLoading(true);
     try {
-      const [gps, dcs] = await Promise.all([api.listEnhancedGatePasses(), api.listDeliveryChallans()]);
-      setRows(gps);
-      setChallans(dcs);
+      setRows(await api.listEnhancedGatePasses());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load gate passes");
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    const close = () => setOpenActionsId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
   }, []);
 
   useEffect(() => {
@@ -60,15 +54,62 @@ export function EnhancedGatePassesPage() {
     void load();
   }, [load]);
 
-  const filteredRows = statusFilter ? rows.filter((r) => (r.status || "").toUpperCase() === statusFilter) : rows;
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const r of rows) {
+      const s = (r.status || "OTHER").toUpperCase();
+      c[s] = (c[s] ?? 0) + 1;
+    }
+    return c;
+  }, [rows]);
+
+  const filteredRows = statusFilter
+    ? rows.filter((r) => (r.status || "").toUpperCase() === statusFilter)
+    : rows;
+
+  async function openPrintForRow(row: EnhancedGatePassResponse) {
+    try {
+      const data = await api.getGatePassPrintData(row.id);
+      setPrintData(data);
+      setPrintTitle(row.gate_pass_code);
+      setPrintOpen(true);
+    } catch (e) {
+      logApiError("EnhancedGatePassesPage.print", e);
+      setError((e as Error).message);
+    }
+  }
 
   return (
     <div className="min-w-0 space-y-6 touch-manipulation">
-      <div>
-        <h1 className="text-2xl font-bold text-brand-primary">Enhanced Gate Passes</h1>
-        <p className="text-sm text-text-muted">Release control with approval and guard acknowledgement.</p>
-        <p className="mt-1 text-xs text-text-muted">Larger controls for tablet / phone use in the yard.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-brand-primary">Enhanced Gate Passes</h1>
+          <p className="text-sm text-text-muted">Yard release with approval, guard acknowledgement & verified print.</p>
+        </div>
+        <Link
+          to="/app/inventory/enhanced-gate-passes/new"
+          className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-brand-primary px-4 py-3 text-base font-semibold text-brand-primary-foreground hover:opacity-95 sm:text-sm"
+        >
+          New gate pass
+        </Link>
       </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {["DRAFT", "SUBMITTED", "APPROVED", "RELEASED", "REJECTED"].map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setStatusFilter((prev) => (prev === s ? "" : s))}
+            className={`rounded-xl border px-3 py-2 text-left text-xs ${
+              statusFilter === s ? "border-brand-primary bg-brand-primary/10" : "border-border bg-surface-raised"
+            }`}
+          >
+            <div className="font-semibold">{s}</div>
+            <div className="text-text-muted">{counts[s] ?? 0}</div>
+          </button>
+        ))}
+      </div>
+
       {error ? <InventoryErrorPanel message={error} onRetry={() => void load()} /> : null}
       <div className="rounded-xl border border-border bg-surface-raised p-3 sm:p-4">
         <label className="mb-2 block text-xs font-semibold text-text-secondary">Status filter</label>
@@ -81,83 +122,36 @@ export function EnhancedGatePassesPage() {
         />
       </div>
 
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          await api.createEnhancedGatePass(form);
-          setForm({ challan_id: null, purpose: "", status: "DRAFT" });
-          await load();
-        }}
-        className="grid grid-cols-1 gap-3 rounded-xl border border-border bg-surface-raised p-4 md:grid-cols-5 md:gap-2"
-      >
-        <select
-          className={touchField}
-          value={form.challan_id ?? ""}
-          onChange={(e) => setForm((p) => ({ ...p, challan_id: e.target.value ? Number(e.target.value) : null }))}
-          aria-label="Link delivery challan"
-        >
-          <option value="">No challan linked</option>
-          {challans.map((dc) => (
-            <option key={dc.id} value={dc.id}>
-              {dc.challan_code}
-            </option>
-          ))}
-        </select>
-        <input
-          className={touchField}
-          placeholder="Purpose"
-          value={form.purpose}
-          onChange={(e) => setForm((p) => ({ ...p, purpose: e.target.value }))}
-          required
-        />
-        <input
-          className={touchField}
-          placeholder="Destination"
-          value={form.destination ?? ""}
-          onChange={(e) => setForm((p) => ({ ...p, destination: e.target.value }))}
-        />
-        <input
-          className={touchField}
-          placeholder="Vehicle no"
-          value={form.vehicle_no ?? ""}
-          onChange={(e) => setForm((p) => ({ ...p, vehicle_no: e.target.value }))}
-        />
-        <button type="submit" className={touchPrimary}>
-          Create gate pass
-        </button>
-      </form>
-
       {loading ? (
         <InventoryTableSkeleton rows={8} cols={5} />
       ) : !filteredRows.length ? (
-        <InventoryEmptyState
-          title={rows.length ? "No gate passes match this status" : "No gate passes yet"}
-          description={rows.length ? "Clear the status filter to see all passes." : "Create a gate pass using the form above."}
-        />
+        <InventoryEmptyState title="No gate passes" description="Create one with the button above." />
       ) : (
         <div className={`rounded-xl border border-border bg-surface-raised ${inventoryScrollTableClass}`}>
           <table className="min-w-[720px] w-full">
             <thead className="bg-surface-subtle">
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-text-muted">Code</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-text-muted">Purpose</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-text-muted">Challan</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-text-muted">Status</th>
-                <th className="px-3 py-3 text-right text-xs font-medium uppercase text-text-muted">Actions</th>
+                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Code</th>
+                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Purpose</th>
+                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Status</th>
+                <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Challan</th>
+                <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredRows.map((row) => (
                 <tr key={row.id}>
-                  <td className="px-3 py-3 text-sm font-medium">{row.gate_pass_code}</td>
-                  <td className="px-3 py-3 text-sm">{row.purpose}</td>
-                  <td className="px-3 py-3 text-sm">{row.challan_id ? `#${row.challan_id}` : "—"}</td>
-                  <td className="px-3 py-3 text-sm">{row.status}</td>
-                  <td className="px-3 py-3 text-right">
+                  <td className="px-3 py-2 text-sm font-medium">{row.gate_pass_code}</td>
+                  <td className="px-3 py-2 text-sm">{row.purpose}</td>
+                  <td className="px-3 py-2 text-sm">{row.status}</td>
+                  <td className="px-3 py-2 text-xs text-text-secondary">
+                    {row.challan_id ? `#${row.challan_id}` : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right">
                     <div className="relative inline-block text-left">
                       <button
                         type="button"
-                        className={touchBtn}
+                        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpenActionsId((id) => (id === row.id ? null : row.id));
@@ -165,41 +159,28 @@ export function EnhancedGatePassesPage() {
                       >
                         Actions
                       </button>
-                      {openActionsId === row.id && (
-                        <div className="absolute right-0 z-10 mt-1 max-h-[min(70vh,320px)] w-52 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                          <p className="px-2 py-1.5 text-[10px] font-semibold uppercase text-gray-500">Set status</p>
-                          {statuses.map((s) => (
-                            <button
-                              key={s}
-                              type="button"
-                              className={`block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm hover:bg-gray-50 active:bg-gray-100 ${
-                                (row.status || "").toUpperCase() === s ? "font-semibold text-gray-900" : "text-gray-800"
-                              }`}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                setOpenActionsId(null);
-                                await api.updateEnhancedGatePassStatus(row.id, { status: s });
-                                await load();
-                              }}
-                            >
-                              {s}
-                            </button>
-                          ))}
-                          <div className="my-1 border-t border-gray-100" />
+                      {openActionsId === row.id ? (
+                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                          <Link
+                            to={`/app/inventory/enhanced-gate-passes/${row.id}`}
+                            className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            onClick={() => setOpenActionsId(null)}
+                          >
+                            View
+                          </Link>
                           <button
                             type="button"
-                            className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-50"
-                            onClick={async (e) => {
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            onClick={(e) => {
                               e.stopPropagation();
                               setOpenActionsId(null);
-                              await api.updateEnhancedGatePassStatus(row.id, { guard_acknowledged: !row.guard_acknowledged });
-                              await load();
+                              void openPrintForRow(row);
                             }}
                           >
-                            {row.guard_acknowledged ? "Clear guard acknowledgement" : "Mark guard acknowledged"}
+                            Print
                           </button>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -208,6 +189,23 @@ export function EnhancedGatePassesPage() {
           </table>
         </div>
       )}
+
+      {printOpen && printData ? (
+        <PrintPreviewModal
+          open={printOpen}
+          title={`Print — ${printTitle}`}
+          onClose={() => {
+            setPrintOpen(false);
+            setPrintData(null);
+          }}
+          copyCount={copyCount}
+          onCopyCountChange={setCopyCount}
+          template={template}
+          onTemplateChange={setTemplate}
+        >
+          <InventoryDocumentPrintSheets data={printData} copyCount={copyCount} template={template} />
+        </PrintPreviewModal>
+      ) : null}
     </div>
   );
 }

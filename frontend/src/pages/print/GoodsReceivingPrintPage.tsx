@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { QRCodeSVG } from "qrcode.react";
 import {
   api,
   type GoodsReceivingResponse,
+  type InventoryDocumentPrintPayload,
   type InventoryItemResponse,
   type SettingsConfigResponse,
 } from "@/api/client";
@@ -21,6 +23,9 @@ export function GoodsReceivingPrintPage() {
   const [grn, setGrn] = useState<GoodsReceivingResponse | null>(null);
   const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [settings, setSettings] = useState<SettingsConfigResponse | null>(null);
+  const [printPayload, setPrintPayload] = useState<(InventoryDocumentPrintPayload & Record<string, unknown>) | null>(
+    null,
+  );
 
   useEffect(() => {
     const grnId = Number(id);
@@ -34,17 +39,22 @@ export function GoodsReceivingPrintPage() {
       setLoading(true);
       setError("");
       try {
-        const [g, inv, cfg] = await Promise.all([
+        const [g, inv, cfg, pd] = await Promise.all([
           api.getGoodsReceiving(grnId),
           api.listInventoryItems(),
           api.getSettingsConfig().catch((e) => {
             logApiError("GoodsReceivingPrintPage.getSettingsConfig", e);
             return null;
           }),
+          api.getGoodsReceivingPrintData(grnId).catch((e) => {
+            logApiError("GoodsReceivingPrintPage.printData", e);
+            return null;
+          }),
         ]);
         setGrn(g);
         setItems(inv);
         setSettings(cfg);
+        setPrintPayload(pd);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load GRN print view.");
       } finally {
@@ -89,6 +99,11 @@ export function GoodsReceivingPrintPage() {
   const watermarkText = st === "RECEIVED" ? "Received" : "Draft";
   const watermarkClass = st === "RECEIVED" ? "qp-watermark-final" : "qp-watermark-draft";
 
+  const verifyQrUrl =
+    printPayload?.verification_path && typeof window !== "undefined"
+      ? `${window.location.origin}${printPayload.verification_path.startsWith("/") ? "" : "/"}${printPayload.verification_path}`
+      : "";
+
   return (
     <div className="qp-root">
       <div className="qp-toolbar no-print">
@@ -126,9 +141,23 @@ export function GoodsReceivingPrintPage() {
               <p className="qp-tenant-meta">Goods receiving</p>
             </div>
           </div>
-          <div className="qp-header-right">
-            <div className="qp-doc-title">{grn.grn_code}</div>
-            <div className="qp-status">{grn.status}</div>
+          <div className="qp-header-right flex flex-col items-end gap-2 sm:flex-row sm:items-start">
+            <div>
+              <div className="qp-doc-title">{grn.grn_code}</div>
+              <div className="qp-status">{grn.status}</div>
+              {printPayload?.document &&
+              typeof (printPayload.document as { verification_id?: string }).verification_id === "string" ? (
+                <p className="mt-1 max-w-[200px] text-right text-[9px] text-text-muted">
+                  VFY: {(printPayload.document as { verification_id: string }).verification_id}
+                </p>
+              ) : null}
+            </div>
+            {verifyQrUrl ? (
+              <div className="flex flex-col items-center rounded-lg border border-border/60 bg-white/80 p-2 shadow-sm">
+                <QRCodeSVG value={verifyQrUrl} size={76} level="M" />
+                <span className="mt-0.5 text-[8px] font-semibold uppercase tracking-wide text-text-muted">Verify</span>
+              </div>
+            ) : null}
           </div>
         </header>
 

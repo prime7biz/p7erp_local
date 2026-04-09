@@ -10,7 +10,14 @@ from sqlalchemy.orm import selectinload
 
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
-from app.modules.finance.voucher_controls import allocate_series_voucher_number
+from app.modules.finance.auto_posting_service import (
+    SYSTEM_BTB_DOCS_CREDIT,
+    SYSTEM_BTB_DOCS_DEBIT,
+    SYSTEM_BTB_OPENING_CREDIT,
+    SYSTEM_BTB_OPENING_DEBIT,
+    SYSTEM_BTB_REALIZE_DEBIT,
+    create_system_voucher_from_mapping,
+)
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import Tenant, User
@@ -27,9 +34,6 @@ from app.models.finance import (
     BankAccount,
     ChartOfAccount,
     CostCenter,
-    Voucher,
-    VoucherLine,
-    VoucherType,
 )
 from app.models.inventory import PurchaseOrder, Vendor
 from app.models.merch import Order
@@ -45,6 +49,7 @@ from app.modules.commercial.schemas import (
     CustomerForPrint,
     ExportCaseCreate,
     ExportCaseResponse,
+    ExportCaseUpdate,
     MasterContractCreate,
     MasterContractUpdate,
     MasterContractResponse,
@@ -82,7 +87,11 @@ def _utilization_percent(used: float | None, total: float | None) -> float | Non
     return round((used or 0) / total * 100, 2)
 
 
-def _master_contract_to_response(r: MasterContract) -> MasterContractResponse:
+def _master_contract_to_response(
+    r: MasterContract,
+    *,
+    linked_order_id: int | None = None,
+) -> MasterContractResponse:
     amount = float(r.amount) if r.amount is not None else None
     utilized_amount = float(r.btb_utilized_amount) if r.btb_utilized_amount is not None else None
     utilization_pct = _utilization_percent(utilized_amount, amount)
@@ -102,6 +111,7 @@ def _master_contract_to_response(r: MasterContract) -> MasterContractResponse:
         cost_center_id=r.cost_center_id,
         btb_utilization_pct=utilization_pct,
         btb_warning_band=_compute_btb_warning_band(utilization_pct),
+        linked_order_id=linked_order_id,
         created_at=r.created_at.isoformat(),
         updated_at=r.updated_at.isoformat(),
     )
@@ -116,15 +126,62 @@ def _export_case_to_response(r: ExportCase) -> ExportCaseResponse:
         case_date=r.case_date.isoformat() if r.case_date else None,
         amount=float(r.amount) if r.amount is not None else None,
         trade_case_id=r.trade_case_id,
+        order_id=r.order_id,
         created_at=r.created_at.isoformat(),
         updated_at=r.updated_at.isoformat(),
     )
 
 
+async def _linked_order_id_for_master_contract(
+    db: AsyncSession, *, tenant_id: int, master_contract_id: int
+) -> int | None:
+    result = await db.execute(
+        select(Order.id).where(
+            Order.tenant_id == tenant_id,
+            Order.master_contract_id == master_contract_id,
+        ).limit(1)
+    )
+    row = result.first()
+    return int(row[0]) if row else None
+
+
+async def _link_order_to_master_contract(
+    db: AsyncSession,
+    *,
+    tenant: Tenant,
+    master_contract_id: int,
+    order_id: int,
+) -> None:
+    from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+    ord_row = await db.get(Order, order_id)
+    if not ord_row or ord_row.tenant_id != tenant.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Order not found",
+        )
+    ord_row.master_contract_id = master_contract_id
+    await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=ord_row.id)
+
+
 def _order_ids_from_pi(pi: ProformaInvoice) -> list[int]:
     if pi.proforma_invoice_orders:
         return [pio.order_id for pio in sorted(pi.proforma_invoice_orders, key=lambda x: x.sort_order)]
-    return []
+
+
+async def _sync_order_pipeline_from_proforma(
+    db: AsyncSession, *, tenant_id: int, pi: ProformaInvoice
+) -> None:
+    """Copy master contract link to orders and refresh pipeline milestones."""
+    from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+    for oid in _order_ids_from_pi(pi):
+        order = await db.get(Order, oid)
+        if not order or order.tenant_id != tenant_id:
+            continue
+        if pi.master_contract_id:
+            order.master_contract_id = pi.master_contract_id
+        await auto_advance_order_pipeline(db, tenant_id=tenant_id, order_id=oid)
 
 
 def _proforma_invoice_to_response(pi: ProformaInvoice) -> ProformaInvoiceResponse:
@@ -297,86 +354,22 @@ async def _validate_posting_account(
     return account
 
 
-async def _create_lcj_voucher(
-    *,
+async def _resolve_btb_realization_payment_account_id(
     db: AsyncSession,
     tenant_id: int,
-    user_id: int | None,
-    voucher_date: date,
-    description: str | None,
-    reference: str | None,
-    debit_account_id: int,
-    credit_account_id: int,
-    amount: float,
-    cost_center_id: int | None,
-    btb_lc_id: int | None = None,
-) -> Voucher:
-    lcj_type = await db.execute(
-        select(VoucherType).where(
-            VoucherType.tenant_id == tenant_id,
-            VoucherType.code == "LCJ",
-            VoucherType.is_active.is_(True),
-        )
+    lc: BtbLc,
+    body_payment_account_id: int | None,
+) -> int:
+    if body_payment_account_id is not None:
+        return body_payment_account_id
+    if lc.bank_account_id:
+        bank = await db.get(BankAccount, lc.bank_account_id)
+        if bank and bank.tenant_id == tenant_id and bank.gl_account_id:
+            return int(bank.gl_account_id)
+    raise HTTPException(
+        status_code=400,
+        detail="Provide payment_account_id or link BTB LC to a bank account with GL account (gl_account_id).",
     )
-    if lcj_type.scalar_one_or_none() is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Voucher type LCJ is inactive or not configured.",
-        )
-    await _validate_posting_account(db, tenant_id, debit_account_id)
-    await _validate_posting_account(db, tenant_id, credit_account_id)
-    voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
-        db,
-        tenant_id=tenant_id,
-        voucher_date=voucher_date,
-        voucher_type="LCJ",
-        branch_code="MAIN",
-    )
-    voucher = Voucher(
-        tenant_id=tenant_id,
-        voucher_number=voucher_number,
-        voucher_type="LCJ",
-        voucher_date=voucher_date,
-        status="DRAFT",
-        description=description,
-        reference=reference,
-        btb_lc_id=btb_lc_id,
-        branch_code="MAIN",
-        fiscal_year=fy,
-        series_sequence=series_seq,
-        number_series_key=series_key,
-        source_module="LC_COMMERCIAL",
-        source_module_ref=f"btb_lc:{btb_lc_id}" if btb_lc_id else None,
-        allow_manual_edit=False,
-        created_by=user_id,
-    )
-    db.add(voucher)
-    await db.flush()
-    amount_str = f"{float(amount):.2f}"
-    db.add(
-        VoucherLine(
-            tenant_id=tenant_id,
-            voucher_id=voucher.id,
-            account_id=debit_account_id,
-            cost_center_id=cost_center_id,
-            entry_type="DEBIT",
-            amount=amount_str,
-            notes="BTB LC lifecycle auto entry",
-        )
-    )
-    db.add(
-        VoucherLine(
-            tenant_id=tenant_id,
-            voucher_id=voucher.id,
-            account_id=credit_account_id,
-            cost_center_id=cost_center_id,
-            entry_type="CREDIT",
-            amount=amount_str,
-            notes="BTB LC lifecycle auto entry",
-        )
-    )
-    await db.flush()
-    return voucher
 
 
 # ---------- Export cases ----------
@@ -436,9 +429,34 @@ async def create_export_case(
         case_date=body.case_date,
         amount=body.amount,
         trade_case_id=body.trade_case_id,
+        order_id=body.order_id,
     )
     db.add(row)
     await db.flush()
+    await db.refresh(row)
+    return _export_case_to_response(row)
+
+
+@router.patch(
+    "/export-cases/{case_id}",
+    response_model=ExportCaseResponse,
+    tags=["export-cases"],
+)
+async def update_export_case(
+    case_id: int,
+    body: ExportCaseUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    row = await db.get(ExportCase, case_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export case not found")
+    for key, value in body.model_dump(exclude_unset=True).items():
+        setattr(row, key, value)
+    await db.commit()
     await db.refresh(row)
     return _export_case_to_response(row)
 
@@ -465,7 +483,11 @@ async def list_master_contracts(
     stmt = stmt.order_by(MasterContract.created_at.desc()).limit(limit).offset(offset)
     result = await db.execute(stmt)
     rows = result.scalars().all()
-    return [_master_contract_to_response(r) for r in rows]
+    out: list[MasterContractResponse] = []
+    for r in rows:
+        lid = await _linked_order_id_for_master_contract(db, tenant_id=tenant.id, master_contract_id=r.id)
+        out.append(_master_contract_to_response(r, linked_order_id=lid))
+    return out
 
 
 @router.get(
@@ -486,7 +508,8 @@ async def get_master_contract(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Master contract not found")
     await _recompute_master_contract_utilization(db, row.id, tenant.id)
     await db.flush()
-    return _master_contract_to_response(row)
+    lid = await _linked_order_id_for_master_contract(db, tenant_id=tenant.id, master_contract_id=row.id)
+    return _master_contract_to_response(row, linked_order_id=lid)
 
 
 async def _ensure_master_contract_cost_center(
@@ -551,7 +574,15 @@ async def create_master_contract(
     await _ensure_master_contract_cost_center(db, row)
     await db.flush()
     await db.refresh(row)
-    return _master_contract_to_response(row)
+    if body.order_id:
+        await _link_order_to_master_contract(db, tenant=tenant, master_contract_id=row.id, order_id=body.order_id)
+        await db.flush()
+    return _master_contract_to_response(
+        row,
+        linked_order_id=body.order_id
+        if body.order_id
+        else await _linked_order_id_for_master_contract(db, tenant_id=tenant.id, master_contract_id=row.id),
+    )
 
 
 @router.patch(
@@ -572,6 +603,8 @@ async def update_master_contract(
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Master contract not found")
     updates = body.model_dump(exclude_unset=True)
+    link_requested = "order_id" in updates
+    link_order_id = updates.pop("order_id", None) if link_requested else None
     if "contract_type" in updates and updates["contract_type"] is not None:
         updates["contract_type"] = str(updates["contract_type"]).strip().upper()
     if "status" in updates and updates["status"] is not None:
@@ -581,8 +614,12 @@ async def update_master_contract(
     await _ensure_master_contract_cost_center(db, row)
     await _recompute_master_contract_utilization(db, row.id, tenant.id)
     await db.flush()
+    if link_requested and link_order_id is not None:
+        await _link_order_to_master_contract(db, tenant=tenant, master_contract_id=row.id, order_id=int(link_order_id))
+        await db.flush()
     await db.refresh(row)
-    return _master_contract_to_response(row)
+    lid = await _linked_order_id_for_master_contract(db, tenant_id=tenant.id, master_contract_id=row.id)
+    return _master_contract_to_response(row, linked_order_id=lid)
 
 
 # ---------- Proforma invoices ----------
@@ -744,6 +781,8 @@ async def create_proforma_invoice(
     )
     result = await db.execute(stmt)
     row = result.scalar_one()
+    await _sync_order_pipeline_from_proforma(db, tenant_id=tenant.id, pi=row)
+    await db.flush()
     return _proforma_invoice_to_response(row)
 
 
@@ -825,6 +864,8 @@ async def update_proforma_invoice(
     )
     result2 = await db.execute(stmt2)
     row = result2.scalar_one()
+    await _sync_order_pipeline_from_proforma(db, tenant_id=tenant.id, pi=row)
+    await db.flush()
     return _proforma_invoice_to_response(row)
 
 
@@ -1009,6 +1050,8 @@ async def finalize_proforma_invoice(
         row.verification_token = secrets.token_urlsafe(32)
     await db.flush()
     await db.refresh(row)
+    await _sync_order_pipeline_from_proforma(db, tenant_id=tenant.id, pi=row)
+    await db.flush()
     return _proforma_invoice_to_response(row)
 
 
@@ -1389,17 +1432,22 @@ async def record_btb_lc_opening(
     amount = float(raw_amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="BTB LC amount must be greater than zero")
-    voucher = await _create_lcj_voucher(
-        db=db,
+    voucher = await create_system_voucher_from_mapping(
+        db,
         tenant_id=tenant.id,
         user_id=user.id,
+        voucher_type="LCJ",
         voucher_date=body.voucher_date or lc.open_date or lc.lc_date or date.today(),
-        description=body.description or f"BTB LC opening liability for {lc.reference}",
-        reference=body.reference or f"{lc.reference}-OPEN",
+        amount=amount,
+        debit_system_code=SYSTEM_BTB_OPENING_DEBIT if body.upcoming_lc_liability_account_id is None else None,
+        credit_system_code=SYSTEM_BTB_OPENING_CREDIT if body.blocked_credit_facility_account_id is None else None,
         debit_account_id=body.upcoming_lc_liability_account_id,
         credit_account_id=body.blocked_credit_facility_account_id,
-        amount=amount,
         cost_center_id=contract.cost_center_id,
+        description=body.description or f"BTB LC opening liability for {lc.reference}",
+        reference=body.reference or f"{lc.reference}-OPEN",
+        source_module="LC_COMMERCIAL",
+        source_module_ref=f"btb_lc:{lc.id}",
         btb_lc_id=lc.id,
     )
     acc.lc_open_voucher_id = voucher.id
@@ -1449,17 +1497,22 @@ async def record_btb_lc_documents_acceptance(
     amount = float(raw_amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Import bill amount must be greater than zero")
-    voucher = await _create_lcj_voucher(
-        db=db,
+    voucher = await create_system_voucher_from_mapping(
+        db,
         tenant_id=tenant.id,
         user_id=user.id,
+        voucher_type="LCJ",
         voucher_date=body.voucher_date or date.today(),
-        description=body.description or f"BTB LC documents acceptance for {lc.reference}",
-        reference=body.reference or f"{lc.reference}-DOCS",
+        amount=amount,
+        debit_system_code=SYSTEM_BTB_DOCS_DEBIT if body.lc_liability_account_id is None else None,
+        credit_system_code=SYSTEM_BTB_DOCS_CREDIT if body.import_bill_liability_account_id is None else None,
         debit_account_id=body.lc_liability_account_id,
         credit_account_id=body.import_bill_liability_account_id,
-        amount=amount,
         cost_center_id=contract.cost_center_id,
+        description=body.description or f"BTB LC documents acceptance for {lc.reference}",
+        reference=body.reference or f"{lc.reference}-DOCS",
+        source_module="LC_COMMERCIAL",
+        source_module_ref=f"btb_lc:{lc.id}",
         btb_lc_id=lc.id,
     )
     if body.maturity_date is not None:
@@ -1512,17 +1565,25 @@ async def record_btb_lc_realization(
     amount = float(raw_amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Realization amount must be greater than zero")
-    voucher = await _create_lcj_voucher(
-        db=db,
+    payment_gl_id = await _resolve_btb_realization_payment_account_id(
+        db, tenant.id, lc, body.payment_account_id
+    )
+    voucher = await create_system_voucher_from_mapping(
+        db,
         tenant_id=tenant.id,
         user_id=user.id,
+        voucher_type="LCJ",
         voucher_date=body.voucher_date or acc.maturity_date or lc.maturity_date or date.today(),
+        amount=amount,
+        debit_system_code=SYSTEM_BTB_REALIZE_DEBIT if body.import_bill_liability_account_id is None else None,
+        credit_system_code=None,
+        debit_account_id=body.import_bill_liability_account_id,
+        credit_account_id=payment_gl_id,
+        cost_center_id=contract.cost_center_id,
         description=body.description or f"BTB LC realization for {lc.reference}",
         reference=body.reference or f"{lc.reference}-REALIZED",
-        debit_account_id=body.import_bill_liability_account_id,
-        credit_account_id=body.payment_account_id,
-        amount=amount,
-        cost_center_id=contract.cost_center_id,
+        source_module="LC_COMMERCIAL",
+        source_module_ref=f"btb_lc:{lc.id}",
         btb_lc_id=lc.id,
     )
     acc.realization_voucher_id = voucher.id

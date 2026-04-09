@@ -1,7 +1,24 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, type OrderResponse } from "@/api/client";
+import {
+  api,
+  type ConsumptionReconciliationResponse,
+  type InventoryDocumentPrintPayload,
+  type InventoryGlPostingDetail,
+  type OrderResponse,
+  type ProductionMaterialIssueResponse,
+} from "@/api/client";
+import { GlPostingsPanel } from "@/components/inventory/GlPostingsPanel";
+import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocumentPrintSheets";
+import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
+import { logApiError } from "@/utils/logApiError";
 import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
+
+function formatMoney(n: number | null | undefined) {
+  if (n == null || Number.isNaN(n)) return "—";
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export function ConsumptionControlPage() {
   const { me } = useAuth();
@@ -14,6 +31,7 @@ export function ConsumptionControlPage() {
   const [issueQty, setIssueQty] = useState<string>("0");
   const [issueWarehouseId, setIssueWarehouseId] = useState<number>(0);
   const [issueRemarks, setIssueRemarks] = useState<string>("");
+  const [issueBomLineId, setIssueBomLineId] = useState<number | "">("");
   const [warehouses, setWarehouses] = useState<Awaited<ReturnType<typeof api.listWarehouses>>>([]);
   const [changeRequests, setChangeRequests] = useState<Awaited<ReturnType<typeof api.listConsumptionChangeRequests>>>([]);
   const [crType, setCrType] = useState("QUANTITY_INCREASE");
@@ -26,6 +44,24 @@ export function ConsumptionControlPage() {
   const [kpi, setKpi] = useState({ openPo: 0, openGrn: 0, pendingCr: 0, lowStock: 0 });
   const [prevKpi, setPrevKpi] = useState<{ openPo: number; openGrn: number; pendingCr: number; lowStock: number } | null>(null);
   const [error, setError] = useState("");
+  const [layerRecon, setLayerRecon] = useState<ConsumptionReconciliationResponse | null>(null);
+  const [materialVar, setMaterialVar] = useState<Record<string, unknown> | null>(null);
+  const [pmiForOrder, setPmiForOrder] = useState<ProductionMaterialIssueResponse[]>([]);
+  const [pmiStage, setPmiStage] = useState("CUTTING");
+  const [pmiCovered, setPmiCovered] = useState(1);
+  const [pmiBomId, setPmiBomId] = useState<number | "">("");
+  const [pmiLines, setPmiLines] = useState<{ bom_line_id: number; actual_issue_qty: string }[]>([
+    { bom_line_id: 0, actual_issue_qty: "1" },
+  ]);
+  const [pmiSaving, setPmiSaving] = useState(false);
+  const [pmiPrintOpen, setPmiPrintOpen] = useState(false);
+  const [pmiPrintData, setPmiPrintData] = useState<InventoryDocumentPrintPayload | null>(null);
+  const [pmiPrintTitle, setPmiPrintTitle] = useState("");
+  const [pmiPrintCopy, setPmiPrintCopy] = useState(1);
+  const [pmiPrintTpl, setPmiPrintTpl] = useState<"standard" | "compact" | "audit">("standard");
+  const [pmiPostOpen, setPmiPostOpen] = useState(false);
+  const [pmiPostRows, setPmiPostRows] = useState<InventoryGlPostingDetail[]>([]);
+  const [pmiPostTitle, setPmiPostTitle] = useState("");
 
   const crStatusBadgeClass = (status: string) => {
     const s = status.toUpperCase();
@@ -78,9 +114,22 @@ export function ConsumptionControlPage() {
   const loadSnapshot = useCallback(async (orderId: number) => {
     if (!orderId) return;
     try {
-      const [snap, resv] = await Promise.all([api.getConsumptionSnapshot(orderId), api.getConsumptionReservations(orderId)]);
+      const [snap, resv, recon, variance, pmiAll] = await Promise.all([
+        api.getConsumptionSnapshot(orderId),
+        api.getConsumptionReservations(orderId),
+        api.getConsumptionReconciliation(orderId, { tolerance_pct: 5 }).catch(() => null),
+        api.getOrderMaterialVariance(orderId).catch(() => null),
+        api.listProductionMaterialIssues({ limit: 200 }).catch(() => []),
+      ]);
       setSnapshot(snap);
       setReservations(resv);
+      setLayerRecon(recon);
+      setMaterialVar(variance && typeof variance === "object" ? (variance as Record<string, unknown>) : null);
+      setPmiForOrder((pmiAll as ProductionMaterialIssueResponse[]).filter((p) => p.order_id === orderId));
+      if (variance && typeof variance === "object" && (variance as { ok?: boolean }).ok && "bom_id" in variance) {
+        const bid = (variance as { bom_id: number }).bom_id;
+        setPmiBomId((prev) => (prev === "" ? bid : prev));
+      }
       if (resv[0]) setIssueItemId(resv[0].item_id);
       if (snap.items?.length) {
         setCrItems((prev) =>
@@ -98,6 +147,7 @@ export function ConsumptionControlPage() {
       setChangeRequests(crRows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load snapshot");
+      setLayerRecon(null);
     }
   }, [crFilter]);
 
@@ -152,6 +202,7 @@ export function ConsumptionControlPage() {
         issue_qty: Number(issueQty),
         warehouse_id: issueWarehouseId,
         remarks: issueRemarks,
+        bom_line_id: issueBomLineId === "" ? null : issueBomLineId,
       });
       setIssueQty("0");
       setIssueRemarks("");
@@ -245,6 +296,34 @@ export function ConsumptionControlPage() {
 
       {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
+      {selectedOrderId > 0 && layerRecon && layerRecon.items.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Quoted material cost</div>
+            <div className="text-lg font-semibold">{formatMoney(layerRecon.summary.total_quoted_planned_cost)}</div>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">BOM planned cost</div>
+            <div className="text-lg font-semibold">{formatMoney(layerRecon.summary.total_bom_planned_cost)}</div>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Actual cost</div>
+            <div className="text-lg font-semibold">{formatMoney(layerRecon.summary.total_actual_cost)}</div>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Quoted ↔ BOM ↔ Actual</div>
+            <div className="text-xs text-text-secondary">
+              Δ Q↔B {formatMoney(layerRecon.summary.quoted_vs_bom_cost_variance)} · Δ all{" "}
+              {formatMoney(layerRecon.summary.quoted_vs_actual_cost_variance)}
+            </div>
+            <div className="mt-1 text-xs text-text-muted">
+              BOM {layerRecon.bom_status ?? "—"} · Lines &gt;5% quoted↔BOM:{" "}
+              {layerRecon.items.filter((i) => i.quoted_vs_bom_variance_pct != null && Math.abs(i.quoted_vs_bom_variance_pct) > 5).length}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <select
@@ -280,9 +359,228 @@ export function ConsumptionControlPage() {
         </div>
       </div>
 
+      {selectedOrderId > 0 && materialVar?.ok === true && Array.isArray(materialVar.lines) ? (
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <h2 className="mb-2 text-sm font-semibold text-text-secondary">Material variance (BOM vs actual issues)</h2>
+          <p className="mb-3 text-xs text-text-muted">
+            From inventory API: quoted vs BOM vs actual issued qty tied to BOM lines (stock movements with order + bom_line).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-surface-subtle text-left text-text-secondary">
+                <tr>
+                  <th className="px-2 py-2">BOM line</th>
+                  <th className="px-2 py-2">Material</th>
+                  <th className="px-2 py-2 text-right">BOM gross</th>
+                  <th className="px-2 py-2 text-right">Actual issued</th>
+                  <th className="px-2 py-2 text-right">BOM vs act %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(materialVar.lines as Array<Record<string, unknown>>).map((ln) => {
+                  const bva = ln.bom_vs_actual_pct as number | null | undefined;
+                  const badge =
+                    bva == null
+                      ? "text-text-muted"
+                      : Math.abs(bva) > 5
+                        ? "text-status-danger-foreground font-semibold"
+                        : Math.abs(bva) > 2
+                          ? "text-status-warning-foreground"
+                          : "text-status-success-foreground";
+                  return (
+                    <tr key={String(ln.bom_line_id)} className="border-t">
+                      <td className="px-2 py-2">#{String(ln.bom_line_id)}</td>
+                      <td className="px-2 py-2 max-w-[200px] truncate" title={String(ln.description ?? "")}>
+                        {String(ln.description ?? ln.item_id ?? "")}
+                      </td>
+                      <td className="px-2 py-2 text-right">{String(ln.bom_gross_required ?? "—")}</td>
+                      <td className="px-2 py-2 text-right">{String(ln.actual_issued_qty ?? "—")}</td>
+                      <td className={cn("px-2 py-2 text-right", badge)}>{bva == null ? "—" : `${bva}%`}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : selectedOrderId > 0 && materialVar && materialVar.ok === false ? (
+        <div className="rounded-lg border border-border bg-surface-subtle px-3 py-2 text-xs text-text-muted">
+          Material variance: {String(materialVar.detail ?? "No active BOM for this order.")}
+        </div>
+      ) : null}
+
+      {selectedOrderId > 0 && pmiForOrder.length > 0 ? (
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <h2 className="mb-2 text-sm font-semibold text-text-secondary">Production material issues (this order)</h2>
+          <ul className="space-y-2 text-xs text-text-secondary">
+            {pmiForOrder.map((p) => (
+              <li
+                key={p.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-subtle/30 px-3 py-2"
+              >
+                <span>
+                  {p.issue_code} · {p.production_stage} · covered {p.covered_order_qty} · {p.status}
+                </span>
+                <span className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded border border-border px-2 py-1 text-[11px] font-medium text-brand-primary hover:bg-surface-raised"
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          const d = await api.getProductionMaterialIssuePrintData(p.id);
+                          setPmiPrintData(d);
+                          setPmiPrintTitle(p.issue_code);
+                          setPmiPrintOpen(true);
+                        } catch (e) {
+                          logApiError("ConsumptionControlPage.pmiPrint", e);
+                          setError((e as Error).message);
+                        }
+                      })();
+                    }}
+                  >
+                    Print
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-border px-2 py-1 text-[11px] font-medium text-text-secondary hover:bg-surface-raised"
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          const rows = await api.getProductionMaterialIssueGlPostings(p.id);
+                          setPmiPostRows(rows);
+                          setPmiPostTitle(p.issue_code);
+                          setPmiPostOpen(true);
+                        } catch (e) {
+                          logApiError("ConsumptionControlPage.pmiPostings", e);
+                          setError((e as Error).message);
+                        }
+                      })();
+                    }}
+                  >
+                    GL postings
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {selectedOrderId > 0 ? (
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <h2 className="mb-2 text-sm font-semibold text-text-secondary">New production material issue (approved BOM)</h2>
+          <p className="mb-3 text-xs text-text-muted">
+            Posts stock OUT per BOM line. Over standard beyond tolerance requires manager/admin. Use BOM ID from variance table
+            above when available.
+          </p>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+            <input
+              className="rounded border px-3 py-2 text-sm"
+              type="number"
+              min={1}
+              placeholder="BOM ID"
+              value={pmiBomId === "" ? "" : String(pmiBomId)}
+              onChange={(e) => setPmiBomId(e.target.value ? Number(e.target.value) : "")}
+            />
+            <input
+              className="rounded border px-3 py-2 text-sm"
+              placeholder="Stage e.g. CUTTING"
+              value={pmiStage}
+              onChange={(e) => setPmiStage(e.target.value)}
+            />
+            <input
+              className="rounded border px-3 py-2 text-sm"
+              type="number"
+              min={1}
+              placeholder="Covered order qty"
+              value={pmiCovered}
+              onChange={(e) => setPmiCovered(Number(e.target.value) || 1)}
+            />
+            <select
+              className="rounded border px-3 py-2 text-sm"
+              value={String(issueWarehouseId)}
+              onChange={(e) => setIssueWarehouseId(Number(e.target.value))}
+            >
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="mt-3 space-y-2">
+            {pmiLines.map((row, idx) => (
+              <div key={idx} className="flex flex-wrap gap-2">
+                <input
+                  className="rounded border px-3 py-2 text-sm"
+                  type="number"
+                  placeholder="BOM line ID"
+                  value={row.bom_line_id || ""}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setPmiLines((prev) => prev.map((r, i) => (i === idx ? { ...r, bom_line_id: v } : r)));
+                  }}
+                />
+                <input
+                  className="rounded border px-3 py-2 text-sm"
+                  placeholder="Actual issue qty"
+                  value={row.actual_issue_qty}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setPmiLines((prev) => prev.map((r, i) => (i === idx ? { ...r, actual_issue_qty: v } : r)));
+                  }}
+                />
+                <button
+                  type="button"
+                  className="rounded border px-2 py-1 text-xs"
+                  onClick={() => setPmiLines((prev) => prev.filter((_, i) => i !== idx))}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="rounded border px-2 py-1 text-xs"
+              onClick={() => setPmiLines((prev) => [...prev, { bom_line_id: 0, actual_issue_qty: "1" }])}
+            >
+              Add line
+            </button>
+          </div>
+          <button
+            type="button"
+            className="mt-3 rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground disabled:opacity-50"
+            disabled={pmiSaving || pmiBomId === "" || !pmiLines.filter((l) => l.bom_line_id > 0).length}
+            onClick={async () => {
+              if (pmiBomId === "" || !selectedOrderId) return;
+              setPmiSaving(true);
+              setError("");
+              try {
+                await api.createProductionMaterialIssue({
+                  order_id: selectedOrderId,
+                  bom_id: Number(pmiBomId),
+                  production_stage: pmiStage.trim() || "GENERAL",
+                  covered_order_qty: pmiCovered,
+                  warehouse_id: issueWarehouseId,
+                  lines: pmiLines.filter((l) => l.bom_line_id > 0 && l.actual_issue_qty.trim() !== ""),
+                });
+                await loadSnapshot(selectedOrderId);
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Failed to create production material issue");
+              } finally {
+                setPmiSaving(false);
+              }
+            }}
+          >
+            {pmiSaving ? "Posting…" : "Post production material issue"}
+          </button>
+        </div>
+      ) : null}
+
       <div className="rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="mb-3 text-sm font-semibold text-text-secondary">Issue Reserved Material</h2>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-6">
           <select
             className="rounded border px-3 py-2 text-sm"
             value={String(issueItemId)}
@@ -310,6 +608,20 @@ export function ConsumptionControlPage() {
                 {w.name}
               </option>
             ))}
+          </select>
+          <select
+            className="rounded border px-3 py-2 text-sm"
+            value={issueBomLineId === "" ? "" : String(issueBomLineId)}
+            onChange={(e) => setIssueBomLineId(e.target.value ? Number(e.target.value) : "")}
+          >
+            <option value="">BOM line (optional — traceability)</option>
+            {materialVar?.ok === true && Array.isArray(materialVar.lines)
+              ? (materialVar.lines as Array<{ bom_line_id?: number }>).map((ln) => (
+                  <option key={ln.bom_line_id} value={ln.bom_line_id}>
+                    Line #{ln.bom_line_id}
+                  </option>
+                ))
+              : null}
           </select>
           <input
             className="rounded border px-3 py-2 text-sm"
@@ -384,6 +696,75 @@ export function ConsumptionControlPage() {
           </tbody>
         </table>
       </div>
+
+      {layerRecon && layerRecon.items.length > 0 ? (
+        <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+          <h2 className="border-b border-border bg-surface-subtle px-4 py-3 text-sm font-semibold text-text-secondary">
+            Quoted vs BOM vs actual (reconciliation)
+          </h2>
+          <table className="min-w-[1000px] w-full text-sm">
+            <thead className="bg-surface-subtle text-left text-text-secondary">
+              <tr>
+                <th className="px-3 py-2">Item</th>
+                <th className="px-3 py-2 text-right">Quoted /u</th>
+                <th className="px-3 py-2 text-right">BOM net /u</th>
+                <th className="px-3 py-2 text-right">Wast %</th>
+                <th className="px-3 py-2 text-right">Loss %</th>
+                <th className="px-3 py-2 text-right">BOM gross /u</th>
+                <th className="px-3 py-2 text-right">Planned qty</th>
+                <th className="px-3 py-2 text-right">Actual qty</th>
+                <th className="px-3 py-2 text-right">Q↔B %</th>
+                <th className="px-3 py-2 text-right">B↔A %</th>
+                <th className="px-3 py-2 text-right">Loss Δ</th>
+                <th className="px-3 py-2 text-right">Cost impact</th>
+              </tr>
+            </thead>
+            <tbody>
+              {layerRecon.items.map((r) => {
+                const oq = layerRecon.order.quantity ?? 0;
+                const actualPerUnit = oq > 0 ? r.actual_qty / oq : null;
+                return (
+                  <tr key={r.item_id} className="border-t border-border-subtle">
+                    <td className="px-3 py-2">
+                      {r.item_code} · {r.item_name}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-xs">
+                      {r.quoted_consumption_per_unit != null ? r.quoted_consumption_per_unit.toFixed(4) : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-xs">
+                      {r.bom_net_consumption_per_unit != null ? r.bom_net_consumption_per_unit.toFixed(4) : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs">{r.wastage_pct ?? "—"}</td>
+                    <td className="px-3 py-2 text-right text-xs">{r.process_loss_pct ?? "—"}</td>
+                    <td className="px-3 py-2 text-right font-mono text-xs">
+                      {r.bom_gross_consumption_per_unit != null ? r.bom_gross_consumption_per_unit.toFixed(4) : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">{r.planned_qty.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      {r.actual_qty.toFixed(2)}
+                      {actualPerUnit != null ? (
+                        <span className="block text-[10px] text-text-muted">/u {actualPerUnit.toFixed(4)}</span>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs">
+                      {r.quoted_vs_bom_variance_pct != null ? `${r.quoted_vs_bom_variance_pct.toFixed(1)}%` : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs">
+                      {r.bom_vs_actual_variance_pct != null ? `${r.bom_vs_actual_variance_pct.toFixed(1)}%` : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs">
+                      {r.planned_loss_vs_actual_loss != null ? r.planned_loss_vs_actual_loss.toFixed(2) : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs">
+                      {r.cost_impact_bom_vs_actual != null ? formatMoney(r.cost_impact_bom_vs_actual) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       <div className="rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="mb-3 text-sm font-semibold text-text-secondary">Consumption Change Requests</h2>
@@ -543,6 +924,37 @@ export function ConsumptionControlPage() {
           </table>
         </div>
       </div>
+
+      {pmiPrintOpen && pmiPrintData ? (
+        <PrintPreviewModal
+          open={pmiPrintOpen}
+          title={`Print — ${pmiPrintTitle}`}
+          onClose={() => {
+            setPmiPrintOpen(false);
+            setPmiPrintData(null);
+          }}
+          copyCount={pmiPrintCopy}
+          onCopyCountChange={setPmiPrintCopy}
+          template={pmiPrintTpl}
+          onTemplateChange={setPmiPrintTpl}
+        >
+          <InventoryDocumentPrintSheets data={pmiPrintData} copyCount={pmiPrintCopy} template={pmiPrintTpl} />
+        </PrintPreviewModal>
+      ) : null}
+
+      {pmiPostOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-surface-raised p-4 shadow-xl">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-text-primary">GL postings — {pmiPostTitle}</h3>
+              <button type="button" className="rounded-lg border border-border px-2 py-1 text-xs" onClick={() => setPmiPostOpen(false)}>
+                Close
+              </button>
+            </div>
+            <GlPostingsPanel postings={pmiPostRows} />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

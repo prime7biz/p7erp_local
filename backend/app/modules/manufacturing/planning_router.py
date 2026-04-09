@@ -82,6 +82,7 @@ def _to_work_order_response(row: ManufacturingWorkOrder) -> WorkOrderResponse:
         item_id=row.item_id,
         plan_line_id=row.plan_line_id,
         routing_id=row.routing_id,
+        order_id=row.order_id,
         qty_planned=float(row.qty_planned),
         qty_completed=float(row.qty_completed),
         status=row.status,
@@ -235,6 +236,7 @@ async def generate_work_orders(
             item_id=line.item_id,
             plan_line_id=line.id,
             routing_id=line.routing_id,
+            order_id=line.order_id,
             qty_planned=line.planned_qty,
             qty_completed=0,
             status="planned",
@@ -253,6 +255,7 @@ async def generate_work_orders(
                     ManufacturingWorkOrderOperation(
                         tenant_id=tenant.id,
                         work_order_id=wo.id,
+                        order_id=line.order_id,
                         step_no=step.step_no,
                         operation_id=step.operation_id,
                         work_center_id=step.work_center_id,
@@ -265,6 +268,13 @@ async def generate_work_orders(
     await commit_handling_duplicate_document_code(db)
     for row in created_orders:
         await db.refresh(row)
+    order_ids = {w.order_id for w in created_orders if w.order_id}
+    if order_ids:
+        from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+        for oid in order_ids:
+            await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=int(oid))
+        await db.commit()
     return [_to_work_order_response(row) for row in created_orders]
 
 

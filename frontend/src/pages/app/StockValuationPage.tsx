@@ -68,7 +68,8 @@ export function StockValuationPage() {
             <Link className="text-status-info hover:underline" to="/app/inventory/stock-inventory-summary">
               Inventory Summary (FIFO)
             </Link>
-            .
+            . <strong>Material control</strong> issues (e.g. <code className="rounded bg-surface-subtle px-1">PROD_ISSUE</code>,{" "}
+            <code className="rounded bg-surface-subtle px-1">CONSUMPTION_ISSUE</code>) consume FIFO layers like other OUT movements; trace fields (order, BOM line) are on the stock movement record.
           </p>
         </div>
         {data && !loading && (

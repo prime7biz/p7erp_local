@@ -79,8 +79,14 @@ const GoodsReceivingPage = lazy(() =>
 const DeliveryChallansPage = lazy(() =>
   import("@/pages/app/DeliveryChallansPage").then((m) => ({ default: m.DeliveryChallansPage })),
 );
+const DeliveryChallanDetailPage = lazy(() =>
+  import("@/pages/app/DeliveryChallanDetailPage").then((m) => ({ default: m.DeliveryChallanDetailPage })),
+);
 const EnhancedGatePassesPage = lazy(() =>
   import("@/pages/app/EnhancedGatePassesPage").then((m) => ({ default: m.EnhancedGatePassesPage })),
+);
+const GatePassDetailPage = lazy(() =>
+  import("@/pages/app/GatePassDetailPage").then((m) => ({ default: m.GatePassDetailPage })),
 );
 const ProcessOrdersPage = lazy(() => import("@/pages/app/ProcessOrdersPage").then((m) => ({ default: m.ProcessOrdersPage })));
 const ConsumptionControlPage = lazy(() =>
@@ -198,6 +204,27 @@ const VouchersPage = lazy(() => import("@/pages/app/VouchersPage").then((m) => (
 const CashForecastPage = lazy(() =>
   import("@/pages/app/CashForecastPage").then((m) => ({ default: m.CashForecastPage })),
 );
+const FacilitiesPage = lazy(() =>
+  import("@/pages/app/finance/FacilitiesPage").then((m) => ({ default: m.FacilitiesPage })),
+);
+const FacilityCreatePage = lazy(() =>
+  import("@/pages/app/finance/FacilityCreatePage").then((m) => ({ default: m.FacilityCreatePage })),
+);
+const FacilityDetailPage = lazy(() =>
+  import("@/pages/app/finance/FacilityDetailPage").then((m) => ({ default: m.FacilityDetailPage })),
+);
+const UtilizationCreatePage = lazy(() =>
+  import("@/pages/app/finance/UtilizationCreatePage").then((m) => ({ default: m.UtilizationCreatePage })),
+);
+const UtilizationDetailPage = lazy(() =>
+  import("@/pages/app/finance/UtilizationDetailPage").then((m) => ({ default: m.UtilizationDetailPage })),
+);
+const FacilityDashboardPage = lazy(() =>
+  import("@/pages/app/finance/FacilityDashboardPage").then((m) => ({ default: m.FacilityDashboardPage })),
+);
+const BusinessOverviewPage = lazy(() =>
+  import("@/pages/app/finance/BusinessOverviewPage").then((m) => ({ default: m.BusinessOverviewPage })),
+);
 const ProfitabilityPage = lazy(() =>
   import("@/pages/app/ProfitabilityPage").then((m) => ({ default: m.ProfitabilityPage })),
 );
@@ -215,6 +242,9 @@ const SettlementAuditPage = lazy(() =>
 );
 const PurchaseWorkflowPage = lazy(() =>
   import("@/pages/app/PurchaseWorkflowPage").then((m) => ({ default: m.PurchaseWorkflowPage })),
+);
+const VendorBillsPage = lazy(() =>
+  import("@/pages/app/accounts/VendorBillsPage").then((m) => ({ default: m.VendorBillsPage })),
 );
 
 const ReportsOverviewPage = lazy(() => import("@/pages/app/ReportsOverviewPage").then((m) => ({ default: m.ReportsOverviewPage })));
@@ -584,7 +614,9 @@ export function AppProtectedRouter() {
         <Route path="inventory/lots" element={<LotTraceabilityPage />} />
         <Route path="inventory/purchase-orders" element={<PurchaseOrdersPage />} />
         <Route path="inventory/goods-receiving" element={<GoodsReceivingPage />} />
+        <Route path="inventory/delivery-challans/:challanId" element={<DeliveryChallanDetailPage />} />
         <Route path="inventory/delivery-challans" element={<DeliveryChallansPage />} />
+        <Route path="inventory/enhanced-gate-passes/:gatePassId" element={<GatePassDetailPage />} />
         <Route path="inventory/enhanced-gate-passes" element={<EnhancedGatePassesPage />} />
         <Route path="inventory/process-orders" element={<ProcessOrdersPage />} />
         <Route path="inventory/manufacturing-orders" element={<Navigate to="/app/production/manufacturing-orders" replace />} />
@@ -680,6 +712,7 @@ export function AppProtectedRouter() {
         <Route path="accounts/cost-centers" element={<CostCentersPage />} />
         <Route path="accounts/budgets" element={<BudgetsPage />} />
         <Route path="accounts/purchase-workflow" element={<PurchaseWorkflowPage />} />
+        <Route path="accounts/vendor-bills" element={<VendorBillsPage />} />
         <Route path="banking/accounts" element={<BankAccountsPage />} />
         <Route path="banking/reconciliation" element={<BankReconciliationPage />} />
         <Route path="banking/payment-runs" element={<PaymentRunsPage />} />
@@ -697,6 +730,13 @@ export function AppProtectedRouter() {
         <Route path="accounts/reports/cash-flow" element={<CashFlowReportPage />} />
         <Route path="accounts/accounting-periods" element={<AccountingPeriodsPage />} />
         <Route path="finance/cash-forecast" element={<CashForecastPage />} />
+        <Route path="finance/facilities/dashboard" element={<FacilityDashboardPage />} />
+        <Route path="finance/facilities/new" element={<FacilityCreatePage />} />
+        <Route path="finance/facilities/:facilityId/utilizations/new" element={<UtilizationCreatePage />} />
+        <Route path="finance/facilities/:facilityId" element={<FacilityDetailPage />} />
+        <Route path="finance/facilities" element={<FacilitiesPage />} />
+        <Route path="finance/utilizations/:utilizationId" element={<UtilizationDetailPage />} />
+        <Route path="finance/business-overview" element={<BusinessOverviewPage />} />
         <Route path="finance/fx-receipts" element={<FxReceiptsPage />} />
         <Route path="finance/style-profitability" element={<ProfitabilityPage defaultMode="style" />} />
         <Route path="finance/lc-profitability" element={<ProfitabilityPage defaultMode="lc" />} />

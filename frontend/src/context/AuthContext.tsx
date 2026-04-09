@@ -7,7 +7,9 @@ interface AuthState {
   error: string | null;
 }
 
-const AuthContext = createContext<AuthState & { logout: () => void; refetch: () => Promise<void> } | null>(null);
+const AuthContext = createContext<
+  AuthState & { logout: () => void; refetch: () => Promise<void>; hasPermission: (key: string) => boolean }
+ | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -46,8 +48,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
   }, []);
 
+  const hasPermission = useCallback(
+    (key: string) => {
+      if (!me) return false;
+      if ((me.role_name || "").toLowerCase() === "admin") return true;
+      const p = me.role_permissions || {};
+      if (p["*"] === true) return true;
+      const mod = key.split(".")[0];
+      if (mod && p[`${mod}.*`] === true) return true;
+      return p[key] === true;
+    },
+    [me],
+  );
+
   return (
-    <AuthContext.Provider value={{ me, loading, error, logout, refetch }}>
+    <AuthContext.Provider value={{ me, loading, error, logout, refetch, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );

@@ -27,6 +27,7 @@ from app.modules.currency.router import router as currency_router
 from app.modules.merch.routers import router as merch_router
 from app.modules.inventory.router import router as inventory_router
 from app.modules.finance.router import router as finance_router
+from app.modules.facility.router import router as facility_router
 from app.modules.manufacturing.router import router as manufacturing_router
 from app.modules.production.router import router as production_router
 from app.modules.hr.router import router as hr_router
@@ -160,8 +161,22 @@ async def _run_platform_daily_maintenance() -> None:
             logger.exception("Platform daily maintenance failed")
 
 
+async def _seed_system_coa_startup() -> None:
+    """Self-heal: ensure system groups/ledgers/mappings exist for every tenant (idempotent)."""
+    from app.database import AsyncSessionLocal
+    from app.modules.finance.system_coa_seeding_service import seed_all_tenants_system_coa
+
+    try:
+        async with AsyncSessionLocal() as db:
+            await seed_all_tenants_system_coa(db)
+            await db.commit()
+    except Exception:
+        logger.exception("System COA startup seed failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await _seed_system_coa_startup()
     scan_task = asyncio.create_task(_run_alert_scan_all_tenants())
     trade_scan_task = asyncio.create_task(_run_trade_alert_scan_daily())
     weekly_ai_task = asyncio.create_task(_run_weekly_ai_reports())
@@ -233,6 +248,7 @@ app.include_router(currency_router, prefix=settings.api_v1_prefix)
 app.include_router(merch_router, prefix=settings.api_v1_prefix)
 app.include_router(inventory_router, prefix=settings.api_v1_prefix)
 app.include_router(finance_router, prefix=settings.api_v1_prefix)
+app.include_router(facility_router, prefix=settings.api_v1_prefix)
 app.include_router(manufacturing_router, prefix=settings.api_v1_prefix)
 app.include_router(production_router, prefix=settings.api_v1_prefix)
 app.include_router(hr_router, prefix=settings.api_v1_prefix)

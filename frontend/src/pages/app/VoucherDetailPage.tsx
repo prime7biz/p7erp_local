@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   api,
+  type VoucherPrintResponse,
   type VoucherResponse,
   type ChartOfAccountResponse,
   type CostCenterResponse,
   type BillReferenceRow,
 } from "@/api/client";
+import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
+import { VoucherPrintSheets } from "@/components/print/VoucherPrintSheets";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { LinkedRecordsSection, type LinkedRecordRow } from "@/components/app/LinkedRecordsSection";
 import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
@@ -67,6 +70,11 @@ export function VoucherDetailPage() {
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [tradeCaseLabel, setTradeCaseLabel] = useState<string | null>(null);
   const [btbLcLabel, setBtbLcLabel] = useState<string | null>(null);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printData, setPrintData] = useState<VoucherPrintResponse | null>(null);
+  const [printLoading, setPrintLoading] = useState(false);
+  const [printCopyCount, setPrintCopyCount] = useState(1);
+  const [printTemplate, setPrintTemplate] = useState<"standard" | "compact" | "audit">("standard");
 
   const loadVoucher = useCallback(async () => {
     const id = Number(voucherId);
@@ -636,9 +644,30 @@ export function VoucherDetailPage() {
         <button
           type="button"
           className="rounded-lg border border-border-strong px-4 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
+          disabled={printLoading}
+          onClick={async () => {
+            if (!voucher) return;
+            setPrintLoading(true);
+            try {
+              const d = await api.getVoucherPrint(voucher.id);
+              setPrintData(d);
+              setPrintOpen(true);
+            } catch (e) {
+              logApiError("VoucherDetailPage.print", e);
+              setError((e as Error).message);
+            } finally {
+              setPrintLoading(false);
+            }
+          }}
+        >
+          {printLoading ? "Loading…" : "Print / PDF"}
+        </button>
+        <button
+          type="button"
+          className="rounded-lg border border-dashed border-border-strong px-4 py-2 text-xs text-text-muted hover:bg-surface-subtle"
           onClick={() => navigate(`/app/accounts/vouchers/print?voucher_id=${voucher.id}`)}
         >
-          Print / PDF
+          Open print page
         </button>
         {actions.map((action) => (
           <button
@@ -660,6 +689,32 @@ export function VoucherDetailPage() {
           </button>
         ) : null}
       </div>
+
+      {printOpen && printData && voucher ? (
+        <PrintPreviewModal
+          open={printOpen}
+          title={`Print — ${voucher.voucher_number}`}
+          onClose={() => {
+            setPrintOpen(false);
+            setPrintData(null);
+          }}
+          copyCount={printCopyCount}
+          onCopyCountChange={setPrintCopyCount}
+          template={printTemplate}
+          onTemplateChange={setPrintTemplate}
+        >
+          <VoucherPrintSheets
+            data={printData}
+            copyCount={printCopyCount}
+            template={printTemplate}
+            verificationUrl={(() => {
+              if (!printData.voucher.verification_id) return "";
+              const origin = typeof window !== "undefined" ? window.location.origin : "";
+              return `${origin}/api/v1/finance/vouchers/verify/${encodeURIComponent(printData.voucher.verification_id)}`;
+            })()}
+          />
+        </PrintPreviewModal>
+      ) : null}
 
       <VoucherActionReasonModal
         open={pendingAction != null}

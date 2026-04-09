@@ -68,7 +68,10 @@ class ExternalPrincipal(Base):
         "ExternalCustomerAccess", back_populates="principal", cascade="all, delete-orphan"
     )
     financier_access_rows = relationship(
-        "ExternalFinancierAccess", back_populates="principal", cascade="all, delete-orphan"
+        "ExternalFinancierAccess",
+        back_populates="principal",
+        cascade="all, delete-orphan",
+        foreign_keys=lambda: [ExternalFinancierAccess.external_principal_id],
     )
 
 
@@ -116,11 +119,17 @@ class ExternalFinancierAccess(Base):
     external_principal_id: Mapped[int] = mapped_column(
         ForeignKey("external_principals.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    financier_party_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    financier_party_id: Mapped[int | None] = mapped_column(
+        ForeignKey("external_principals.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     access_scope: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
-    principal = relationship("ExternalPrincipal", back_populates="financier_access_rows")
+    principal = relationship(
+        "ExternalPrincipal",
+        back_populates="financier_access_rows",
+        foreign_keys=[external_principal_id],
+    )
 
 
 class ExternalNote(Base):

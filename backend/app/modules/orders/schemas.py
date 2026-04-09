@@ -50,6 +50,11 @@ class OrderResponse(BaseModel):
   delivery_date: str | None  # ISO date string for JSON
   quantity: int | None
   status: str
+  pipeline_status: str | None = None
+  pipeline_na_steps: list[str] | None = None
+  order_type: str | None = None
+  master_contract_id: int | None = None
+  rm_inhouse_pct: float | None = None
   remarks: str | None
   created_at: str
   updated_at: str
@@ -100,4 +105,26 @@ class PromiseCheckOut(BaseModel):
   ctp_ok: bool
   reasons: list[str]
   lines: list[PromiseCheckLine]
+
+
+class OrderMilestoneStepOut(BaseModel):
+  name: str
+  status: str
+  timestamp: str | None = None
+  linked_ids: list[int] = Field(default_factory=list)
+  rm_pct: float | None = None
+
+
+class OrderMilestonesOut(BaseModel):
+  pipeline_status: str
+  rm_inhouse_pct: float
+  steps: list[OrderMilestoneStepOut]
+  tna_warnings: list[str] = Field(default_factory=list)
+  pipeline_na_steps: list[str] = Field(default_factory=list)
+  order_type: str | None = None
+
+
+class OrderPipelineSettingsPatch(BaseModel):
+  na_steps: list[str] | None = None
+  order_type: str | None = Field(None, max_length=16)
 

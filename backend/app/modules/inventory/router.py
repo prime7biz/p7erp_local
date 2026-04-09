@@ -5,7 +5,7 @@ from datetime import date, datetime
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import Date as SQLDate
 from sqlalchemy import case, cast, delete, desc, func, or_, select
 from sqlalchemy.types import Numeric
@@ -31,16 +31,38 @@ from app.common.pagination import (
     safe_page,
     total_pages,
 )
+from app.common.permissions import (
+    PERMISSION_INVENTORY_NON_PO_RECEIPT_APPROVE,
+    PERMISSION_INVENTORY_OVER_ISSUE_APPROVE,
+    PERMISSION_INVENTORY_OVER_RECEIPT_APPROVE,
+    PERMISSION_INVENTORY_PROCESS_ORDER_APPROVE,
+    assert_delegate_manager_or_permission,
+)
 from app.common.tenant import require_tenant
+from app.config import get_settings
 from app.database import get_db
+from app.modules.inventory.document_qr_service import (
+    backfill_signatures_for_tenant,
+    list_gl_postings_for_inventory_doc,
+    sign_delivery_challan,
+    sign_gate_pass,
+    sign_goods_receiving,
+    sign_process_order,
+    sign_production_material_issue,
+    sign_warehouse_transfer,
+    verify_inventory_document,
+)
 from app.models import (
+    Bom,
     BomItem,
     ChartOfAccount,
     DeliveryChallan,
     DeliveryChallanItem,
+    DeliveryChallanOrder,
     EnhancedGatePass,
     ConsumptionChangeRequest,
     GoodsReceiving,
+    GoodsReceivingAcknowledgement,
     GoodsReceivingItem,
     ManufacturingMaterialIssue,
     ManufacturingMaterialReturn,
@@ -52,17 +74,21 @@ from app.models import (
     ItemUnit,
     PurchaseOrder,
     PurchaseOrderItem,
+    Order,
     ProcessOrder,
+    ProcessOrderCostLine,
+    ProductionMaterialIssue,
+    ProductionMaterialIssueLine,
     QuotationMaterial,
     StockGroup,
     StockAdjustment,
     StockMovement,
     InventoryCostLayer,
     CoAConfig,
-    ChartOfAccount,
     Tenant,
     User,
     Vendor,
+    VendorBill,
     Warehouse,
     WarehouseTransfer,
     WarehouseTransferLine,
@@ -70,8 +96,10 @@ from app.models import (
     PhysicalInventoryLine,
 )
 
+from app.modules.finance.system_coa_seeding_service import resolve_system_ledger
 from app.services.fifo_inventory import finalize_movement_fifo, rebuild_fifo_layers_for_tenant, fifo_on_hand_value
 from app.services.grn_inventory_gl import post_grn_receipt_gl_journal
+from app.modules.inventory.material_control_variance_service import build_order_material_variance
 from app.services.inventory_gl_service import (
     post_consumption_issue_gl,
     post_delivery_challan_gl,
@@ -113,6 +141,7 @@ def _purchase_order_to_out(row: PurchaseOrder, items: list[PurchaseOrderItem]) -
         base_total_amount=(float(row.base_total_amount) if row.base_total_amount is not None else None),
         btb_lc_id=row.btb_lc_id,
         source_bom_id=getattr(row, "source_bom_id", None),
+        source_order_id=getattr(row, "source_order_id", None),
         status=row.status,
         notes=row.notes,
         items=list(items),
@@ -129,7 +158,24 @@ def _goods_receiving_to_out(row: GoodsReceiving, items: list[GoodsReceivingItem]
         status=row.status,
         notes=row.notes,
         created_by_user_id=getattr(row, "created_by_user_id", None),
-        items=list(items),
+        vendor_id=getattr(row, "vendor_id", None),
+        default_warehouse_id=getattr(row, "default_warehouse_id", None),
+        source_type=getattr(row, "source_type", None),
+        approval_status=getattr(row, "approval_status", None),
+        supplier_delivery_challan_no=getattr(row, "supplier_delivery_challan_no", None),
+        supplier_invoice_no=getattr(row, "supplier_invoice_no", None),
+        vehicle_info=getattr(row, "vehicle_info", None),
+        non_po_reason=getattr(row, "non_po_reason", None),
+        acknowledgement_issued=bool(getattr(row, "acknowledgement_issued", False)),
+        source_order_id=getattr(row, "source_order_id", None),
+        source_bom_id=getattr(row, "source_bom_id", None),
+        btb_lc_id=getattr(row, "btb_lc_id", None),
+        master_contract_id=getattr(row, "master_contract_id", None),
+        export_case_id=getattr(row, "export_case_id", None),
+        items=[GoodsReceivingItemOut.model_validate(x) for x in items],
+        verification_id=getattr(row, "verification_id", None),
+        signature_hash=getattr(row, "signature_hash", None),
+        signed_at=getattr(row, "signed_at", None),
     )
 
 
@@ -295,11 +341,59 @@ def _to_float(value: str | None) -> float:
         return 0.0
 
 
+def _grn_line_accounting_qty_str(line: GoodsReceivingItem) -> str:
+    """Stock and GRNI use accepted qty, then received, then legacy quantity."""
+    a = getattr(line, "accepted_qty", None)
+    if a is not None and str(a).strip() != "" and _to_float(str(a)) >= 0:
+        return str(a).strip()
+    r = getattr(line, "received_qty", None)
+    if r is not None and str(r).strip() != "":
+        return str(r).strip()
+    return (line.quantity or "0").strip()
+
+
+async def _sum_accepted_for_po_line_excluding_grn(
+    db: AsyncSession,
+    tenant_id: int,
+    purchase_order_line_id: int,
+    exclude_grn_id: int | None,
+) -> float:
+    stmt = (
+        select(GoodsReceivingItem.accepted_qty, GoodsReceivingItem.received_qty, GoodsReceivingItem.quantity)
+        .join(GoodsReceiving, GoodsReceiving.id == GoodsReceivingItem.goods_receiving_id)
+        .where(
+            GoodsReceivingItem.tenant_id == tenant_id,
+            GoodsReceiving.tenant_id == tenant_id,
+            GoodsReceivingItem.purchase_order_line_id == purchase_order_line_id,
+            GoodsReceiving.status == "RECEIVED",
+        )
+    )
+    if exclude_grn_id is not None:
+        stmt = stmt.where(GoodsReceiving.id != exclude_grn_id)
+    total = 0.0
+    for acc, recv, qty in (await db.execute(stmt)).all():
+        q = acc or recv or qty
+        total += _to_float(str(q) if q is not None else "0")
+    return total
+
+
 async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
     role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
     role_name = (role.name if role else "").strip().lower()
     if role_name not in {"admin", "manager"}:
         raise HTTPException(status_code=403, detail="Only admin or manager can review change requests")
+
+
+def _scale_line_qty_for_covered(line_value: float | None, base_order_qty: float, covered: int) -> float:
+    """Scale a full-order BOM quantity to a partial covered order quantity."""
+    if line_value is None:
+        return 0.0
+    v = float(line_value)
+    if v <= 0:
+        return 0.0
+    if base_order_qty <= 0:
+        return v
+    return v * (float(covered) / base_order_qty)
 
 
 async def _on_hand_qty(
@@ -1014,6 +1108,9 @@ class PurchaseOrderItemOut(BaseModel):
     warehouse_id: int | None
     quantity: str
     unit_price: str
+    source_bom_line_id: int | None = None
+    source_order_id: int | None = None
+    source_quotation_line_id: int | None = None
 
     class Config:
         from_attributes = True
@@ -1032,6 +1129,7 @@ class PurchaseOrderOut(BaseModel):
     base_total_amount: float | None
     btb_lc_id: int | None
     source_bom_id: int | None = None
+    source_order_id: int | None = None
     status: str
     notes: str | None
     items: list[PurchaseOrderItemOut]
@@ -1042,6 +1140,12 @@ class GoodsReceivingItemBody(BaseModel):
     warehouse_id: int
     quantity: str
     lot_number: str | None = None
+    purchase_order_line_id: int | None = None
+    received_qty: str | None = None
+    accepted_qty: str | None = None
+    rejected_qty: str | None = None
+    rejection_reason: str | None = None
+    unit_price: str | None = None
 
     @field_validator("quantity", mode="before")
     @classmethod
@@ -1052,6 +1156,13 @@ class GoodsReceivingItemBody(BaseModel):
 class GoodsReceivingBody(BaseModel):
     grn_code: str | None = None
     purchase_order_id: int | None = None
+    vendor_id: int | None = None
+    default_warehouse_id: int | None = None
+    source_type: str | None = None  # PO | NON_PO
+    non_po_reason: str | None = None
+    supplier_delivery_challan_no: str | None = None
+    supplier_invoice_no: str | None = None
+    vehicle_info: str | None = None
     received_date: date | None = None
     notes: str | None = None
     status: str = "DRAFT"
@@ -1065,9 +1176,21 @@ class GoodsReceivingItemOut(BaseModel):
     warehouse_id: int
     quantity: str
     lot_number: str | None = None
+    purchase_order_line_id: int | None = None
+    ordered_qty: str | None = None
+    previously_received_qty: str | None = None
+    received_qty: str | None = None
+    accepted_qty: str | None = None
+    rejected_qty: str | None = None
+    pending_qty: str | None = None
+    unit_price: str | None = None
+    accepted_value: str | None = None
+    rejection_reason: str | None = None
+    source_order_id: int | None = None
+    source_bom_id: int | None = None
+    source_bom_line_id: int | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GoodsReceivingOut(BaseModel):
@@ -1079,7 +1202,24 @@ class GoodsReceivingOut(BaseModel):
     status: str
     notes: str | None
     created_by_user_id: int | None = None
+    vendor_id: int | None = None
+    default_warehouse_id: int | None = None
+    source_type: str | None = None
+    approval_status: str | None = None
+    supplier_delivery_challan_no: str | None = None
+    supplier_invoice_no: str | None = None
+    vehicle_info: str | None = None
+    non_po_reason: str | None = None
+    acknowledgement_issued: bool = False
+    source_order_id: int | None = None
+    source_bom_id: int | None = None
+    btb_lc_id: int | None = None
+    master_contract_id: int | None = None
+    export_case_id: int | None = None
     items: list[GoodsReceivingItemOut]
+    verification_id: str | None = None
+    signature_hash: str | None = None
+    signed_at: datetime | None = None
 
 
 class ItemListPageOut(BaseModel):
@@ -1270,6 +1410,7 @@ class DeliveryChallanBody(BaseModel):
     notes: str | None = None
     status: str = "DRAFT"
     items: list[DeliveryChallanItemBody] = []
+    order_ids: list[int] = Field(default_factory=list, description="Sales orders linked for pipeline / shipping milestone")
 
 
 class DeliveryChallanItemOut(BaseModel):
@@ -1293,9 +1434,18 @@ class DeliveryChallanOut(BaseModel):
     notes: str | None
     created_by_user_id: int | None = None
     items: list[DeliveryChallanItemOut]
+    order_ids: list[int] = Field(default_factory=list)
+    verification_id: str | None = None
+    signature_hash: str | None = None
+    signed_at: datetime | None = None
 
 
-def _delivery_challan_to_out(row: DeliveryChallan, items: list[DeliveryChallanItem]) -> DeliveryChallanOut:
+def _delivery_challan_to_out(
+    row: DeliveryChallan,
+    items: list[DeliveryChallanItem],
+    *,
+    order_ids: list[int] | None = None,
+) -> DeliveryChallanOut:
     return DeliveryChallanOut(
         id=row.id,
         tenant_id=row.tenant_id,
@@ -1306,6 +1456,10 @@ def _delivery_challan_to_out(row: DeliveryChallan, items: list[DeliveryChallanIt
         notes=row.notes,
         created_by_user_id=getattr(row, "created_by_user_id", None),
         items=list(items),
+        order_ids=list(order_ids or []),
+        verification_id=getattr(row, "verification_id", None),
+        signature_hash=getattr(row, "signature_hash", None),
+        signed_at=getattr(row, "signed_at", None),
     )
 
 
@@ -1330,6 +1484,9 @@ class GatePassOut(BaseModel):
     status: str
     guard_acknowledged: bool
     notes: str | None
+    verification_id: str | None = None
+    signature_hash: str | None = None
+    signed_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -2348,6 +2505,7 @@ async def list_goods_receiving(
     status_filter: str | None = Query(default=None),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
+    purchase_order_id: int | None = Query(default=None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     tenant: Tenant = Depends(require_tenant),
@@ -2357,6 +2515,8 @@ async def list_goods_receiving(
     _ensure_tenant(user, tenant)
     ps = clamp_page_size(page_size)
     stmt = select(GoodsReceiving).where(GoodsReceiving.tenant_id == tenant.id)
+    if purchase_order_id is not None:
+        stmt = stmt.where(GoodsReceiving.purchase_order_id == purchase_order_id)
     if status_filter:
         stmt = stmt.where(GoodsReceiving.status == status_filter.strip().upper())
     if date_from:
@@ -2423,6 +2583,16 @@ async def create_goods_receiving(
         grn_code = body.grn_code
     else:
         grn_code = await next_tenant_code(db, model=GoodsReceiving, tenant_id=tenant.id, prefix="GRN-", width=4)
+    src_type = (body.source_type or "").strip().upper() or ("PO" if body.purchase_order_id else "NON_PO")
+    po: PurchaseOrder | None = None
+    if body.purchase_order_id:
+        po = await db.get(PurchaseOrder, body.purchase_order_id)
+        if not po or po.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
+        pst = (po.status or "").upper()
+        if pst in {"CANCELLED", "CLOSED"}:
+            raise HTTPException(status_code=400, detail="Cannot receive against cancelled or closed PO")
+
     row = GoodsReceiving(
         tenant_id=tenant.id,
         grn_code=grn_code,
@@ -2431,31 +2601,100 @@ async def create_goods_receiving(
         status=body.status,
         notes=body.notes,
         created_by_user_id=user.id,
+        vendor_id=body.vendor_id or (po.vendor_id if po else None),
+        default_warehouse_id=body.default_warehouse_id,
+        source_type=src_type,
+        approval_status="PENDING",
+        non_po_reason=body.non_po_reason,
+        supplier_delivery_challan_no=body.supplier_delivery_challan_no,
+        supplier_invoice_no=body.supplier_invoice_no,
+        vehicle_info=body.vehicle_info,
+        acknowledgement_issued=False,
+        source_order_id=po.source_order_id if po else None,
+        source_bom_id=po.source_bom_id if po else None,
+        btb_lc_id=po.btb_lc_id if po else None,
     )
     db.add(row)
     await flush_handling_duplicate_document_code(db)
 
     if body.items:
         lines = body.items
-    elif body.purchase_order_id:
+    elif body.purchase_order_id and po:
         po_items_result = await db.execute(
             select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == body.purchase_order_id)
         )
-        lines = [
-            GoodsReceivingItemBody(
-                item_id=p.item_id,
-                warehouse_id=p.warehouse_id or 0,
-                quantity=p.quantity,
-                lot_number=None,
+        lines = []
+        for p in po_items_result.scalars().all():
+            wh_id = p.warehouse_id or body.default_warehouse_id
+            if not wh_id:
+                continue
+            prev = await _sum_accepted_for_po_line_excluding_grn(db, tenant.id, p.id, None)
+            ord_q = _to_float(p.quantity)
+            pending = max(0.0, ord_q - prev)
+            base_qty = f"{pending:.4g}" if pending > 0 else p.quantity
+            lines.append(
+                GoodsReceivingItemBody(
+                    item_id=p.item_id,
+                    warehouse_id=int(wh_id),
+                    quantity=base_qty,
+                    lot_number=None,
+                    purchase_order_line_id=p.id,
+                    received_qty=base_qty,
+                    accepted_qty=base_qty,
+                    unit_price=p.unit_price,
+                )
             )
-            for p in po_items_result.scalars().all()
-            if p.warehouse_id
-        ]
     else:
         lines = []
 
-    for line in lines:
-        db.add(GoodsReceivingItem(tenant_id=tenant.id, goods_receiving_id=row.id, **line.model_dump()))
+    for lb in lines:
+        d = lb.model_dump()
+        wh = int(d["warehouse_id"] or body.default_warehouse_id or 0)
+        if wh <= 0:
+            raise HTTPException(status_code=400, detail="Each line needs a warehouse_id or default_warehouse_id on GRN")
+        recv = validate_positive_qty_str(_as_str(d.get("received_qty") or d["quantity"]), "received_qty")
+        acc_raw = d.get("accepted_qty")
+        acc = _as_str(acc_raw) if acc_raw is not None else recv
+        acc = validate_non_negative_qty_str(acc, "accepted_qty")
+        if _to_float(acc) - _to_float(recv) > 1e-6:
+            raise HTTPException(status_code=400, detail="accepted_qty cannot exceed received_qty")
+        rej = f"{max(0.0, _to_float(recv) - _to_float(acc)):.4g}"
+        up = d.get("unit_price")
+        acc_val = None
+        if up is not None and str(up).strip():
+            acc_val = f"{round(_to_float(acc) * _to_float(str(up)), 4):.4f}"
+        poi_id = d.get("purchase_order_line_id")
+        poi = await db.get(PurchaseOrderItem, int(poi_id)) if poi_id else None
+        ord_snap = str(poi.quantity) if poi else None
+        prev_snap = None
+        pend_snap = None
+        if poi:
+            prev_snap = f"{await _sum_accepted_for_po_line_excluding_grn(db, tenant.id, poi.id, None):.4g}"
+            pend_snap = f"{max(0.0, _to_float(poi.quantity) - _to_float(prev_snap)):.4g}"
+        db.add(
+            GoodsReceivingItem(
+                tenant_id=tenant.id,
+                goods_receiving_id=row.id,
+                item_id=int(d["item_id"]),
+                warehouse_id=wh,
+                quantity=acc,
+                lot_number=d.get("lot_number"),
+                purchase_order_line_id=int(poi_id) if poi_id else None,
+                ordered_qty=ord_snap,
+                previously_received_qty=prev_snap,
+                received_qty=recv,
+                accepted_qty=acc,
+                rejected_qty=rej,
+                pending_qty=pend_snap,
+                unit_price=str(up) if up is not None else None,
+                accepted_value=acc_val,
+                rejection_reason=d.get("rejection_reason"),
+                source_order_id=poi.source_order_id if poi else None,
+                source_bom_id=poi.source_bom_id if poi else None,
+                source_bom_line_id=poi.source_bom_line_id if poi else None,
+                vendor_id=row.vendor_id,
+            )
+        )
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     items_result = await db.execute(select(GoodsReceivingItem).where(GoodsReceivingItem.goods_receiving_id == row.id))
@@ -2478,7 +2717,16 @@ async def _apply_grn_receive_goods(
     items = list(items_result.scalars().all())
     if not items:
         raise HTTPException(status_code=400, detail="GRN has no items")
-    po_lines: dict[tuple[int, int | None], PurchaseOrderItem] = {}
+    st_src = (getattr(row, "source_type", None) or "").upper()
+    if st_src == "NON_PO" and not (getattr(row, "non_po_reason", None) or "").strip():
+        raise HTTPException(status_code=400, detail="NON_PO receipt requires non_po_reason before receive")
+    if st_src == "NON_PO":
+        await assert_delegate_manager_or_permission(
+            db, user, tenant.id, permission_key=PERMISSION_INVENTORY_NON_PO_RECEIPT_APPROVE
+        )
+
+    po_lines_map: dict[tuple[int, int | None], PurchaseOrderItem] = {}
+    po_lines_by_id: dict[int, PurchaseOrderItem] = {}
     if row.purchase_order_id:
         pls = (
             await db.execute(
@@ -2486,71 +2734,127 @@ async def _apply_grn_receive_goods(
             )
         ).scalars().all()
         for pl in pls:
-            po_lines[(pl.item_id, pl.warehouse_id)] = pl
+            po_lines_map[(pl.item_id, pl.warehouse_id)] = pl
+            po_lines_by_id[pl.id] = pl
+
     for line in items:
+        recv_s = _as_str(getattr(line, "received_qty", None) or line.quantity)
+        acc_s = _grn_line_accounting_qty_str(line)
+        if _to_float(recv_s) + 1e-9 < _to_float(acc_s):
+            raise HTTPException(status_code=400, detail="accepted_qty cannot exceed received_qty")
+        line.rejected_qty = f"{max(0.0, _to_float(recv_s) - _to_float(acc_s)):.4g}"
+        line.received_qty = recv_s
+        line.accepted_qty = acc_s
+        line.quantity = acc_s
+        if _to_float(acc_s) <= 0:
+            continue
+
+        pl: PurchaseOrderItem | None = None
+        plid = getattr(line, "purchase_order_line_id", None)
+        if plid:
+            pl = po_lines_by_id.get(int(plid)) or await db.get(PurchaseOrderItem, int(plid))
+        if pl is None and row.purchase_order_id:
+            pl = po_lines_map.get((line.item_id, line.warehouse_id)) or po_lines_map.get((line.item_id, None))
+
+        if pl is not None and row.purchase_order_id:
+            prev = await _sum_accepted_for_po_line_excluding_grn(db, tenant.id, pl.id, row.id)
+            ord_q = _to_float(pl.quantity)
+            if prev + _to_float(acc_s) - ord_q > 1e-6:
+                await assert_delegate_manager_or_permission(
+                    db, user, tenant.id, permission_key=PERMISSION_INVENTORY_OVER_RECEIPT_APPROVE
+                )
+
+        uc = _to_float(getattr(line, "unit_price", None) or "0")
+        if uc <= 0 and pl is not None:
+            uc = _to_float(pl.unit_price)
+        if uc <= 0:
+            it_row = await db.get(Item, line.item_id)
+            uc = _to_float(it_row.default_cost) if it_row and it_row.tenant_id == tenant.id else 0.0
+
+        if getattr(line, "unit_price", None) is None and pl is not None:
+            line.unit_price = pl.unit_price
+        line.accepted_value = f"{round(_to_float(acc_s) * uc, 4):.4f}"
+
         mv = StockMovement(
             tenant_id=tenant.id,
             item_id=line.item_id,
             warehouse_id=line.warehouse_id,
             movement_type="IN",
-            quantity=line.quantity,
+            quantity=acc_s,
             reference_type="GRN",
             reference_id=row.id,
             movement_date=row.received_date,
             notes=f"Received via {row.grn_code}",
             lot_number=getattr(line, "lot_number", None),
             created_by_user_id=user.id,
+            movement_kind="GRN_RECEIPT",
+            goods_receiving_id=row.id,
+            goods_receiving_item_id=line.id,
+            purchase_order_id=row.purchase_order_id,
+            purchase_order_line_id=pl.id if pl else None,
+            order_id=getattr(line, "source_order_id", None) or getattr(row, "source_order_id", None),
+            bom_id=getattr(line, "source_bom_id", None),
+            bom_line_id=getattr(line, "source_bom_line_id", None),
+            vendor_id=getattr(line, "vendor_id", None) or getattr(row, "vendor_id", None),
+            btb_lc_id=getattr(row, "btb_lc_id", None),
+            master_contract_id=getattr(line, "master_contract_id", None),
+            export_case_id=getattr(line, "export_case_id", None),
         )
         db.add(mv)
         await db.flush()
-        pl = po_lines.get((line.item_id, line.warehouse_id)) or po_lines.get((line.item_id, None))
-        uc = _to_float(pl.unit_price) if pl is not None else 0.0
-        if uc <= 0:
-            it_row = await db.get(Item, line.item_id)
-            uc = _to_float(it_row.default_cost) if it_row and it_row.tenant_id == tenant.id else 0.0
         await finalize_movement_fifo(db, tenant.id, mv, in_unit_cost=uc)
+
     row.status = "RECEIVED"
+    row.approval_status = "APPROVED"
     if row.purchase_order_id:
         po = await db.get(PurchaseOrder, row.purchase_order_id)
-        if po and po.tenant_id == tenant.id and po.status != "CANCELLED":
+        if po and po.tenant_id == tenant.id and (po.status or "").upper() != "CANCELLED":
             po_lines_result = await db.execute(
                 select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == po.id)
             )
             po_lines_list = list(po_lines_result.scalars().all())
-            ordered: dict[int, float] = defaultdict(float)
+
+            def _accepted_this_grn_for_pl(pl_id: int) -> float:
+                t = 0.0
+                for gi in items:
+                    if getattr(gi, "purchase_order_line_id", None) == pl_id:
+                        t += _to_float(_grn_line_accounting_qty_str(gi))
+                return t
+
+            line_fully = True
+            any_ordered = False
             for pl in po_lines_list:
-                ordered[pl.item_id] += _to_float(pl.quantity)
-            received: dict[int, float] = defaultdict(float)
-            prev_grns = await db.execute(
-                select(GoodsReceiving).where(
-                    GoodsReceiving.tenant_id == tenant.id,
-                    GoodsReceiving.purchase_order_id == po.id,
-                    GoodsReceiving.status == "RECEIVED",
-                    GoodsReceiving.id != row.id,
-                )
-            )
-            for grn in prev_grns.scalars().all():
-                gi_result = await db.execute(
-                    select(GoodsReceivingItem).where(GoodsReceivingItem.goods_receiving_id == grn.id)
-                )
-                for gi in gi_result.scalars().all():
-                    received[gi.item_id] += _to_float(gi.quantity)
-            for line in items:
-                received[line.item_id] += _to_float(line.quantity)
-            fully_received = True
-            for item_id, ord_q in ordered.items():
+                ord_q = _to_float(pl.quantity)
                 if ord_q <= 0:
                     continue
-                if received.get(item_id, 0) + 1e-9 < ord_q:
-                    fully_received = False
-                    break
-            if fully_received and ordered:
-                po.status = "CLOSED"
-            elif po.status not in ("CLOSED", "CANCELLED"):
-                po.status = "APPROVED"
+                any_ordered = True
+                prev_other = await _sum_accepted_for_po_line_excluding_grn(db, tenant.id, pl.id, row.id)
+                got = prev_other + _accepted_this_grn_for_pl(pl.id)
+                if got + 1e-9 < ord_q:
+                    line_fully = False
+            pst = (po.status or "").upper()
+            if any_ordered and line_fully:
+                po.status = "FULLY_RECEIVED"
+            elif any_ordered and not line_fully:
+                if pst in ("DRAFT", "APPROVED", "PARTIALLY_RECEIVED"):
+                    po.status = "PARTIALLY_RECEIVED"
     await post_grn_receipt_gl_journal(db, tenant.id, user.id, row, items)
+    sign_goods_receiving(row, items)
     await db.commit()
     await db.refresh(row)
+    order_ids: set[int] = set()
+    if row.source_order_id:
+        order_ids.add(int(row.source_order_id))
+    if row.purchase_order_id:
+        po_row = await db.get(PurchaseOrder, row.purchase_order_id)
+        if po_row and po_row.tenant_id == tenant.id and po_row.source_order_id:
+            order_ids.add(int(po_row.source_order_id))
+    if order_ids:
+        from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+        for oid in order_ids:
+            await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=oid)
+        await db.commit()
     return _goods_receiving_to_out(row, items)
 
 
@@ -2562,6 +2866,194 @@ async def receive_goods(
     db: AsyncSession = Depends(get_db),
 ):
     return await _apply_grn_receive_goods(db, tenant, user, grn_id)
+
+
+@router.get("/purchase-orders/{po_id}/receipt-progress")
+async def purchase_order_receipt_progress(
+    po_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    po = await db.get(PurchaseOrder, po_id)
+    if not po or po.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    pls = (
+        await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == po.id))
+    ).scalars().all()
+    lines_out: list[dict] = []
+    for pl in pls:
+        prev = await _sum_accepted_for_po_line_excluding_grn(db, tenant.id, pl.id, None)
+        ord_q = _to_float(pl.quantity)
+        lines_out.append(
+            {
+                "purchase_order_line_id": pl.id,
+                "item_id": pl.item_id,
+                "ordered_qty": ord_q,
+                "accepted_received_qty": round(prev, 4),
+                "pending_qty": round(max(0.0, ord_q - prev), 4),
+                "unit_price": pl.unit_price,
+            }
+        )
+    return {
+        "purchase_order_id": po.id,
+        "po_code": po.po_code,
+        "status": po.status,
+        "lines": lines_out,
+    }
+
+
+@router.get("/material-control/order/{order_id}/variance")
+async def order_material_variance(
+    order_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    return await build_order_material_variance(db, tenant_id=tenant.id, order_id=order_id)
+
+
+@router.get("/stock-movements")
+async def list_stock_movements_ledger(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    order_id: int | None = Query(default=None),
+    movement_kind: str | None = Query(default=None),
+    limit: int = Query(200, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+):
+    _ensure_tenant(user, tenant)
+    stmt = select(StockMovement).where(StockMovement.tenant_id == tenant.id)
+    if order_id is not None:
+        stmt = stmt.where(StockMovement.order_id == order_id)
+    if movement_kind:
+        stmt = stmt.where(StockMovement.movement_kind == movement_kind)
+    stmt = stmt.order_by(StockMovement.id.desc()).offset(offset).limit(limit)
+    rows = list((await db.execute(stmt)).scalars().all())
+    return [
+        {
+            "id": m.id,
+            "movement_type": m.movement_type,
+            "movement_kind": getattr(m, "movement_kind", None),
+            "item_id": m.item_id,
+            "warehouse_id": m.warehouse_id,
+            "quantity": m.quantity,
+            "reference_type": m.reference_type,
+            "reference_id": m.reference_id,
+            "order_id": getattr(m, "order_id", None),
+            "bom_id": getattr(m, "bom_id", None),
+            "bom_line_id": getattr(m, "bom_line_id", None),
+            "purchase_order_id": getattr(m, "purchase_order_id", None),
+            "goods_receiving_id": getattr(m, "goods_receiving_id", None),
+            "process_order_id": getattr(m, "process_order_id", None),
+            "movement_value": m.movement_value,
+            "movement_date": m.movement_date.isoformat() if m.movement_date else None,
+        }
+        for m in rows
+    ]
+
+
+@router.post("/goods-receiving/{grn_id}/acknowledge")
+async def acknowledge_goods_receiving(
+    grn_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(GoodsReceiving, grn_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="GRN not found")
+    if (row.status or "").upper() != "RECEIVED":
+        raise HTTPException(status_code=400, detail="Only received GRN can be acknowledged")
+    gra_code = await next_tenant_code(
+        db, model=GoodsReceivingAcknowledgement, tenant_id=tenant.id, prefix="GRA-", width=4
+    )
+    ack = GoodsReceivingAcknowledgement(
+        tenant_id=tenant.id,
+        goods_receiving_id=row.id,
+        gra_code=gra_code,
+        issue_date=row.received_date or date.today(),
+        status="ISSUED",
+        issued_by_user_id=user.id,
+    )
+    db.add(ack)
+    row.acknowledgement_issued = True
+    row.acknowledgement_at = datetime.utcnow()
+    row.acknowledged_by_user_id = user.id
+    await db.commit()
+    await db.refresh(row)
+    items_result = await db.execute(select(GoodsReceivingItem).where(GoodsReceivingItem.goods_receiving_id == row.id))
+    return _goods_receiving_to_out(row, list(items_result.scalars().all()))
+
+
+@router.get("/goods-receiving/{grn_id}/print-data")
+async def goods_receiving_print_data(
+    grn_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Payload for internal GRN print and vendor acknowledgement."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(GoodsReceiving, grn_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="GRN not found")
+    v = await db.get(Vendor, row.vendor_id) if getattr(row, "vendor_id", None) else None
+    po = await db.get(PurchaseOrder, row.purchase_order_id) if row.purchase_order_id else None
+    items_result = await db.execute(select(GoodsReceivingItem).where(GoodsReceivingItem.goods_receiving_id == row.id))
+    items = list(items_result.scalars().all())
+    wh_ids = {i.warehouse_id for i in items}
+    wh_names: dict[int, str] = {}
+    for wid in wh_ids:
+        w = await db.get(Warehouse, wid)
+        if w:
+            wh_names[wid] = w.name
+    vid = getattr(row, "verification_id", None) or ""
+    verification_path = f"{get_settings().api_v1_prefix}/inventory/documents/verify/{vid}" if vid else None
+    return {
+        "tenant": {
+            "name": tenant.name,
+            "company_code": tenant.company_code,
+            "domain": tenant.domain,
+            "address": getattr(tenant, "address", None),
+        },
+        "grn": {
+            "id": row.id,
+            "grn_code": row.grn_code,
+            "status": row.status,
+            "verification_id": getattr(row, "verification_id", None),
+            "signature_hash": getattr(row, "signature_hash", None),
+            "signed_at": row.signed_at.isoformat() if getattr(row, "signed_at", None) else None,
+        },
+        "grn_code": row.grn_code,
+        "received_date": row.received_date.isoformat() if row.received_date else None,
+        "vendor_name": v.name if v else None,
+        "po_code": po.po_code if po else None,
+        "source_type": getattr(row, "source_type", None),
+        "lines": [
+            {
+                "item_id": i.item_id,
+                "warehouse": wh_names.get(i.warehouse_id, str(i.warehouse_id)),
+                "received_qty": getattr(i, "received_qty", None) or i.quantity,
+                "accepted_qty": _grn_line_accounting_qty_str(i),
+                "rejected_qty": getattr(i, "rejected_qty", None),
+                "rejection_reason": getattr(i, "rejection_reason", None),
+                "unit_price": getattr(i, "unit_price", None),
+            }
+            for i in items
+        ],
+        "notes": row.notes,
+        "acknowledgement_issued": bool(getattr(row, "acknowledgement_issued", False)),
+        "verification_path": verification_path,
+        "print_meta": {
+            "generated_at": datetime.utcnow().isoformat(),
+            "copy_labels": ["Original", "Duplicate", "Triplicate"],
+        },
+    }
 
 
 @router.get("/stock-summary", response_model=list[StockSummaryRow])
@@ -2815,6 +3307,13 @@ async def _sum_chart_balances(db: AsyncSession, tenant_id: int, account_ids: lis
     return round(sum(_to_float(a.balance) for a in accs), 4)
 
 
+async def _maybe_resolve_system_ledger_id(db: AsyncSession, tenant_id: int, mapping_key: str) -> int | None:
+    try:
+        return await resolve_system_ledger(db, tenant_id, mapping_key)
+    except ValueError:
+        return None
+
+
 @router.get("/reconciliation/stock-vs-gl", response_model=StockVsGlOut)
 async def reconciliation_stock_vs_gl(
     tenant: Tenant = Depends(require_tenant),
@@ -2838,6 +3337,10 @@ async def reconciliation_stock_vs_gl(
     for sg in sgs:
         if sg.inventory_account_id:
             ids.add(sg.inventory_account_id)
+    for key in ("RAW_MATERIAL_INVENTORY", "FINISHED_GOODS", "PACKING_MATERIAL_INVENTORY"):
+        lid = await _maybe_resolve_system_ledger_id(db, tenant.id, key)
+        if lid:
+            ids.add(lid)
     gl_bal = await _sum_chart_balances(db, tenant.id, list(ids))
     return StockVsGlOut(
         fifo_stock_value=fifo_total,
@@ -2867,6 +3370,9 @@ async def reconciliation_wip_vs_gl(
     for sg in sgs:
         if sg.wip_account_id:
             ids.add(sg.wip_account_id)
+    wip_sys = await _maybe_resolve_system_ledger_id(db, tenant.id, "WORK_IN_PROGRESS")
+    if wip_sys:
+        ids.add(wip_sys)
     gl_bal = await _sum_chart_balances(db, tenant.id, list(ids))
     return WipVsGlOut(
         process_wip_value=wip.total_wip_value,
@@ -3100,10 +3606,27 @@ async def create_delivery_challan(
     await flush_handling_duplicate_document_code(db)
     for line in body.items:
         db.add(DeliveryChallanItem(tenant_id=tenant.id, challan_id=row.id, **line.model_dump()))
+    linked_order_ids: list[int] = []
+    seen_oid: set[int] = set()
+    for oid in body.order_ids or []:
+        if oid in seen_oid:
+            continue
+        seen_oid.add(oid)
+        ord_row = await db.get(Order, oid)
+        if not ord_row or ord_row.tenant_id != tenant.id:
+            raise HTTPException(status_code=400, detail=f"Order {oid} not found")
+        db.add(
+            DeliveryChallanOrder(
+                tenant_id=tenant.id,
+                delivery_challan_id=row.id,
+                order_id=oid,
+            )
+        )
+        linked_order_ids.append(oid)
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     lines_result = await db.execute(select(DeliveryChallanItem).where(DeliveryChallanItem.challan_id == row.id))
-    return _delivery_challan_to_out(row, list(lines_result.scalars().all()))
+    return _delivery_challan_to_out(row, list(lines_result.scalars().all()), order_ids=linked_order_ids)
 
 
 @router.post("/delivery-challans/{challan_id}/status", response_model=DeliveryChallanOut)
@@ -3122,9 +3645,10 @@ async def update_delivery_challan_status(
     allowed = {"DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED"}
     if next_status not in allowed:
         raise HTTPException(status_code=400, detail="Invalid status")
+    posting_now = next_status == "POSTED" and row.status != "POSTED"
 
     # Safe stock posting: only create OUT stock movements once.
-    if next_status == "POSTED" and row.status != "POSTED":
+    if posting_now:
         lines_result = await db.execute(select(DeliveryChallanItem).where(DeliveryChallanItem.challan_id == row.id))
         lines = list(lines_result.scalars().all())
         if not lines:
@@ -3161,12 +3685,45 @@ async def update_delivery_challan_status(
             await db.flush()
             await finalize_movement_fifo(db, tenant.id, dc_mv)
         await post_delivery_challan_gl(db, tenant.id, user.id, row.id, row.delivery_date, row.challan_code, lines)
+        oids_for_sign = list(
+            dict.fromkeys(
+                r[0]
+                for r in (
+                    await db.execute(
+                        select(DeliveryChallanOrder.order_id).where(
+                            DeliveryChallanOrder.tenant_id == tenant.id,
+                            DeliveryChallanOrder.delivery_challan_id == row.id,
+                        )
+                    )
+                ).all()
+            )
+        )
+        sign_delivery_challan(row, lines, oids_for_sign)
 
     row.status = next_status
     await db.commit()
     await db.refresh(row)
+    if posting_now:
+        from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+        br = await db.execute(
+            select(DeliveryChallanOrder.order_id).where(
+                DeliveryChallanOrder.tenant_id == tenant.id,
+                DeliveryChallanOrder.delivery_challan_id == row.id,
+            )
+        )
+        for (oid,) in br.all():
+            await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=oid)
+        await db.commit()
+    oids_result = await db.execute(
+        select(DeliveryChallanOrder.order_id).where(
+            DeliveryChallanOrder.tenant_id == tenant.id,
+            DeliveryChallanOrder.delivery_challan_id == row.id,
+        )
+    )
+    linked_oids = list(dict.fromkeys(r[0] for r in oids_result.all()))
     lines_result = await db.execute(select(DeliveryChallanItem).where(DeliveryChallanItem.challan_id == row.id))
-    return _delivery_challan_to_out(row, list(lines_result.scalars().all()))
+    return _delivery_challan_to_out(row, list(lines_result.scalars().all()), order_ids=linked_oids)
 
 
 @router.get("/enhanced-gate-passes", response_model=list[GatePassOut])
@@ -3228,12 +3785,18 @@ async def update_enhanced_gate_pass_status(
         allowed = {"DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "RELEASED"}
         if next_status not in allowed:
             raise HTTPException(status_code=400, detail="Invalid status")
+        prev_status = (row.status or "").upper()
         row.status = next_status
+        if next_status == "RELEASED" and prev_status != "RELEASED":
+            sign_gate_pass(row)
     if "guard_acknowledged" in body:
         row.guard_acknowledged = bool(body["guard_acknowledged"])
     await db.commit()
     await db.refresh(row)
     return row
+
+
+CONSUMPTION_TOLERANCE_PCT = 2.0
 
 
 class ProcessOrderBody(BaseModel):
@@ -3247,6 +3810,19 @@ class ProcessOrderBody(BaseModel):
     input_quantity: str
     expected_output_qty: str
     remarks: str | None = None
+    process_stage: str | None = None
+    prior_process_order_id: int | None = None
+    vendor_id: int | None = None
+    output_warehouse_id: int | None = None
+    source_bom_id: int | None = None
+    source_order_id: int | None = None
+    btb_lc_id: int | None = None
+    master_contract_id: int | None = None
+    export_case_id: int | None = None
+    planned_loss_pct: str | None = None
+    output_same_as_input: bool | None = None
+    output_grade: str | None = None
+    output_lot_number: str | None = None
 
 
 class ProcessOrderOut(BaseModel):
@@ -3265,14 +3841,287 @@ class ProcessOrderOut(BaseModel):
     processing_charges: str
     status: str
     remarks: str | None
+    process_stage: str | None = None
+    prior_process_order_id: int | None = None
+    vendor_id: int | None = None
+    output_warehouse_id: int | None = None
+    source_bom_id: int | None = None
+    source_order_id: int | None = None
+    btb_lc_id: int | None = None
+    master_contract_id: int | None = None
+    export_case_id: int | None = None
+    planned_loss_pct: str | None = None
+    actual_loss_qty: str | None = None
+    output_grade: str | None = None
+    output_lot_number: str | None = None
+    output_same_as_input: bool | None = None
+    verification_id: str | None = None
+    signature_hash: str | None = None
+    signed_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProcessReceiveBody(BaseModel):
     actual_output_qty: str
     processing_charges: str | None = "0"
+
+
+class ProductionMaterialIssueLineIn(BaseModel):
+    bom_line_id: int
+    actual_issue_qty: str
+
+
+class ProductionMaterialIssueCreateBody(BaseModel):
+    order_id: int
+    bom_id: int
+    production_stage: str
+    covered_order_qty: int = Field(..., ge=1)
+    warehouse_id: int
+    issue_date: date | None = None
+    notes: str | None = None
+    lines: list[ProductionMaterialIssueLineIn]
+
+
+class ProductionMaterialIssueOut(BaseModel):
+    id: int
+    tenant_id: int
+    issue_code: str
+    order_id: int
+    bom_id: int
+    production_stage: str
+    covered_order_qty: int
+    warehouse_id: int
+    status: str
+    issue_date: date | None = None
+    verification_id: str | None = None
+    signature_hash: str | None = None
+    signed_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProductionMaterialIssueLineOut(BaseModel):
+    id: int
+    issue_id: int
+    bom_line_id: int
+    item_id: int
+    standard_qty_for_covered: str | None = None
+    actual_issue_qty: str
+    variance_qty: str | None = None
+    variance_pct: str | None = None
+    variance_type: str | None = None
+    approval_required: bool = False
+    stock_movement_id: int | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProductionMaterialIssueDetailOut(ProductionMaterialIssueOut):
+    lines: list[ProductionMaterialIssueLineOut] = Field(default_factory=list)
+
+
+class ProcessOrderCostLineBody(BaseModel):
+    cost_type: str = "ADD_ON"
+    description: str | None = None
+    amount: str
+    vendor_id: int | None = None
+    currency: str | None = None
+    remarks: str | None = None
+
+
+@router.get("/production-material-issues", response_model=list[ProductionMaterialIssueOut])
+async def list_production_material_issues(
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    result = await db.execute(
+        select(ProductionMaterialIssue)
+        .where(ProductionMaterialIssue.tenant_id == tenant.id)
+        .order_by(ProductionMaterialIssue.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+@router.post("/production-material-issues", response_model=ProductionMaterialIssueOut, status_code=status.HTTP_201_CREATED)
+async def create_and_post_production_material_issue(
+    body: ProductionMaterialIssueCreateBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    if not body.lines:
+        raise HTTPException(status_code=400, detail="At least one line is required")
+
+    bom = await db.get(Bom, body.bom_id)
+    if not bom or bom.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="BOM not found")
+    if bom.order_id != body.order_id:
+        raise HTTPException(status_code=400, detail="BOM does not belong to the given order")
+    st = (bom.status or "").upper()
+    if st not in {"APPROVED", "FROZEN"}:
+        raise HTTPException(status_code=400, detail="BOM must be approved or frozen before production material issue")
+
+    ord_row = await db.get(Order, body.order_id)
+    if not ord_row or ord_row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    wh = await db.get(Warehouse, body.warehouse_id)
+    if not wh or wh.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+
+    base_qty = float(bom.order_qty_snapshot or ord_row.quantity or 0) or float(body.covered_order_qty)
+    if base_qty <= 0:
+        base_qty = float(body.covered_order_qty)
+
+    line_payloads: list[dict] = []
+    any_over = False
+    for ln in body.lines:
+        bl = await db.get(BomItem, ln.bom_line_id)
+        if not bl or bl.tenant_id != tenant.id or bl.bom_id != bom.id:
+            raise HTTPException(status_code=400, detail=f"Invalid BOM line {ln.bom_line_id}")
+        if bl.item_id is None:
+            raise HTTPException(status_code=400, detail=f"BOM line {bl.id} has no item")
+        actual = _to_float(ln.actual_issue_qty)
+        if actual <= 0:
+            raise HTTPException(status_code=400, detail="actual_issue_qty must be greater than 0")
+
+        std_gross = _scale_line_qty_for_covered(
+            float(bl.required_gross_qty) if bl.required_gross_qty is not None else None,
+            base_qty,
+            body.covered_order_qty,
+        )
+        if std_gross <= 0 and bl.bom_gross_consumption_per_unit is not None:
+            std_gross = float(bl.bom_gross_consumption_per_unit) * float(body.covered_order_qty)
+
+        planned_w = _scale_line_qty_for_covered(
+            float(bl.wastage_qty) if bl.wastage_qty is not None else None,
+            base_qty,
+            body.covered_order_qty,
+        )
+        planned_l = _scale_line_qty_for_covered(
+            float(bl.process_loss_qty) if bl.process_loss_qty is not None else None,
+            base_qty,
+            body.covered_order_qty,
+        )
+
+        tol_limit = std_gross * (1.0 + CONSUMPTION_TOLERANCE_PCT / 100.0) if std_gross > 0 else None
+        need_mgr = tol_limit is not None and actual > tol_limit + 1e-9
+        if need_mgr:
+            any_over = True
+
+        var = actual - std_gross
+        var_pct = (var / std_gross * 100.0) if std_gross > 1e-9 else None
+        line_payloads.append(
+            {
+                "bl": bl,
+                "actual": actual,
+                "std": std_gross,
+                "planned_w": planned_w,
+                "planned_l": planned_l,
+                "need_mgr": need_mgr,
+                "var": var,
+                "var_pct": var_pct,
+                "raw_qty_str": ln.actual_issue_qty,
+            }
+        )
+
+    if any_over:
+        await assert_delegate_manager_or_permission(
+            db, user, tenant.id, permission_key=PERMISSION_INVENTORY_OVER_ISSUE_APPROVE
+        )
+
+    issue_code = await next_tenant_code(
+        db, model=ProductionMaterialIssue, tenant_id=tenant.id, prefix="PMI-", width=4
+    )
+    pmi = ProductionMaterialIssue(
+        tenant_id=tenant.id,
+        issue_code=issue_code,
+        order_id=body.order_id,
+        bom_id=body.bom_id,
+        production_stage=body.production_stage,
+        covered_order_qty=body.covered_order_qty,
+        warehouse_id=body.warehouse_id,
+        issue_date=body.issue_date or date.today(),
+        status="POSTED",
+        approval_status="MANAGER_OK" if any_over else "AUTO",
+        notes=body.notes,
+        created_by_user_id=user.id,
+    )
+    db.add(pmi)
+    await db.flush()
+
+    for p in line_payloads:
+        bl = p["bl"]
+        item_id = int(bl.item_id)
+        avail = await _on_hand_qty(db, tenant.id, item_id, body.warehouse_id)
+        if avail + 1e-9 < p["actual"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient stock for item {item_id}. Available={avail}, required={p['actual']}",
+            )
+        mv = StockMovement(
+            tenant_id=tenant.id,
+            item_id=item_id,
+            warehouse_id=body.warehouse_id,
+            movement_type="OUT",
+            quantity=str(p["actual"]),
+            reference_type="PRODUCTION_MATERIAL_ISSUE",
+            reference_id=pmi.id,
+            notes=f"PMI {issue_code} ({body.production_stage})",
+            created_by_user_id=user.id,
+            movement_kind="PROD_ISSUE",
+            order_id=body.order_id,
+            bom_id=bom.id,
+            bom_line_id=bl.id,
+            production_material_issue_id=pmi.id,
+        )
+        db.add(mv)
+        await db.flush()
+        await finalize_movement_fifo(db, tenant.id, mv)
+        await post_consumption_issue_gl(db, tenant.id, user.id, mv.id)
+
+        def _fmt_qty(x: float) -> str:
+            s = f"{x:.6f}".rstrip("0").rstrip(".")
+            return s or "0"
+
+        pmil = ProductionMaterialIssueLine(
+            tenant_id=tenant.id,
+            issue_id=pmi.id,
+            bom_line_id=bl.id,
+            item_id=item_id,
+            standard_qty_for_covered=_fmt_qty(p["std"]),
+            planned_wastage_qty=_fmt_qty(p["planned_w"]) if p["planned_w"] else None,
+            planned_process_loss_qty=_fmt_qty(p["planned_l"]) if p["planned_l"] else None,
+            actual_issue_qty=p["raw_qty_str"],
+            variance_qty=_fmt_qty(p["var"]),
+            variance_pct=f"{p['var_pct']:.4f}" if p["var_pct"] is not None else None,
+            variance_type="OVER_STANDARD" if p["var"] > 0 else ("UNDER_STANDARD" if p["var"] < 0 else None),
+            approval_required=bool(p["need_mgr"]),
+            stock_movement_id=mv.id,
+        )
+        db.add(pmil)
+
+    pm_lines = list(
+        (
+            await db.execute(
+                select(ProductionMaterialIssueLine).where(ProductionMaterialIssueLine.issue_id == pmi.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    sign_production_material_issue(pmi, pm_lines)
+    await db.commit()
+    await db.refresh(pmi)
+    return pmi
 
 
 @router.get("/process-orders", response_model=list[ProcessOrderOut])
@@ -3325,6 +4174,12 @@ async def create_process_order(
     db.add(row)
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
+    oid = body.source_order_id or body.linked_order_id
+    if oid:
+        from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+        await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=int(oid))
+        await db.commit()
     return row
 
 
@@ -3350,6 +4205,12 @@ async def update_process_order(
         setattr(row, key, value)
     await db.commit()
     await db.refresh(row)
+    oid = row.source_order_id or row.linked_order_id
+    if oid:
+        from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+        await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=int(oid))
+        await db.commit()
     return row
 
 
@@ -3385,6 +4246,11 @@ async def issue_process_order(
         reference_id=row.id,
         notes=f"Issue input for {row.process_number}",
         created_by_user_id=user.id,
+        movement_kind="PROCESS_INPUT",
+        process_order_id=row.id,
+        order_id=row.source_order_id or row.linked_order_id,
+        bom_id=row.source_bom_id,
+        vendor_id=row.vendor_id,
     )
     db.add(po_out)
     await db.flush()
@@ -3399,8 +4265,24 @@ async def issue_process_order(
         f"Issue input for {row.process_number}",
     )
     row.status = "ISSUED"
+    cost_lines = list(
+        (
+            await db.execute(
+                select(ProcessOrderCostLine).where(ProcessOrderCostLine.process_order_id == row.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    sign_process_order(row, cost_lines)
     await db.commit()
     await db.refresh(row)
+    oid = row.source_order_id or row.linked_order_id
+    if oid:
+        from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+        await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=int(oid))
+        await db.commit()
     return row
 
 
@@ -3434,17 +4316,36 @@ async def receive_process_order(
     ).scalars().all()
     input_cost = sum(_to_float(m.movement_value or "0") for m in outs)
     proc = _to_float(body.processing_charges or "0")
-    uc = (input_cost + proc) / actual_qty if actual_qty > 0 else 0.0
+    cost_line_rows = (
+        await db.execute(
+            select(ProcessOrderCostLine).where(
+                ProcessOrderCostLine.tenant_id == tenant.id,
+                ProcessOrderCostLine.process_order_id == row.id,
+            )
+        )
+    ).scalars().all()
+    add_on = sum(_to_float(cl.amount) for cl in cost_line_rows)
+    uc = (input_cost + proc + add_on) / actual_qty if actual_qty > 0 else 0.0
+    out_wh = row.output_warehouse_id or row.warehouse_id
+    if out_wh is None:
+        raise HTTPException(status_code=400, detail="Output warehouse is required before receiving process output")
+    inp_qty = _to_float(row.input_quantity)
+    row.actual_loss_qty = str(max(0.0, round(inp_qty - actual_qty, 6)))
     po_in = StockMovement(
         tenant_id=tenant.id,
         item_id=row.output_item_id,
-        warehouse_id=row.warehouse_id,
+        warehouse_id=out_wh,
         movement_type="IN",
         quantity=str(actual_qty),
         reference_type="PROCESS_ORDER",
         reference_id=row.id,
         notes=f"Receive output for {row.process_number}",
         created_by_user_id=user.id,
+        movement_kind="PROCESS_OUTPUT",
+        process_order_id=row.id,
+        order_id=row.source_order_id or row.linked_order_id,
+        bom_id=row.source_bom_id,
+        vendor_id=row.vendor_id,
     )
     db.add(po_in)
     await db.flush()
@@ -3460,9 +4361,58 @@ async def receive_process_order(
         row.output_item_id,
         f"Receive output for {row.process_number}",
     )
+    cost_lines = list(
+        (
+            await db.execute(
+                select(ProcessOrderCostLine).where(ProcessOrderCostLine.process_order_id == row.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    sign_process_order(row, cost_lines)
     await db.commit()
     await db.refresh(row)
+    oid = row.source_order_id or row.linked_order_id
+    if oid:
+        from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+        await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=int(oid))
+        await db.commit()
     return row
+
+
+@router.post("/process-orders/{process_order_id}/cost-lines")
+async def add_process_order_cost_line(
+    process_order_id: int,
+    body: ProcessOrderCostLineBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(ProcessOrder, process_order_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Process order not found")
+    if row.status not in {"DRAFT", "ISSUED"}:
+        raise HTTPException(status_code=400, detail="Cost lines can only be added while process order is draft or issued")
+    amt = _to_float(body.amount)
+    if amt < 0:
+        raise HTTPException(status_code=400, detail="amount must be non-negative")
+    ln = ProcessOrderCostLine(
+        tenant_id=tenant.id,
+        process_order_id=row.id,
+        cost_type=(body.cost_type or "ADD_ON").strip() or "ADD_ON",
+        description=body.description,
+        amount=str(amt),
+        vendor_id=body.vendor_id,
+        currency=body.currency,
+        remarks=body.remarks,
+    )
+    db.add(ln)
+    await db.commit()
+    await db.refresh(ln)
+    return {"id": ln.id, "process_order_id": row.id, "amount": ln.amount, "cost_type": ln.cost_type}
 
 
 @router.post("/process-orders/{process_order_id}/approve", response_model=ProcessOrderOut)
@@ -3473,12 +4423,25 @@ async def approve_process_order(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await assert_delegate_manager_or_permission(
+        db, user, tenant.id, permission_key=PERMISSION_INVENTORY_PROCESS_ORDER_APPROVE
+    )
     row = await db.get(ProcessOrder, process_order_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Process order not found")
     if row.status != "RECEIVED":
         raise HTTPException(status_code=400, detail="Only received process order can be approved")
     row.status = "APPROVED"
+    cost_lines = list(
+        (
+            await db.execute(
+                select(ProcessOrderCostLine).where(ProcessOrderCostLine.process_order_id == row.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    sign_process_order(row, cost_lines)
     await db.commit()
     await db.refresh(row)
     return row
@@ -3856,6 +4819,7 @@ class IssueMaterialBody(BaseModel):
     issue_qty: float
     warehouse_id: int | None = None
     remarks: str | None = None
+    bom_line_id: int | None = None
 
 
 class ReconciliationOverview(BaseModel):
@@ -3868,6 +4832,10 @@ class ReconciliationOverview(BaseModel):
     gate_pass_total: int
     gate_pass_released: int
     stock_items_on_hand: int
+    production_material_issues_total: int = 0
+    vendor_bills_draft: int = 0
+    vendor_bills_posted: int = 0
+    stock_movements_total: int = 0
 
 
 @router.post("/consumption-control/finalize-order/{order_id}")
@@ -4009,6 +4977,25 @@ async def issue_consumption_material(
     if body.issue_qty > available:
         raise HTTPException(status_code=400, detail=f"Insufficient stock in warehouse. Available={available}")
 
+    bom_row = (
+        await db.execute(
+            select(Bom).where(
+                Bom.tenant_id == tenant.id,
+                Bom.order_id == body.order_id,
+                Bom.is_active.is_(True),
+            )
+        )
+    ).scalars().first()
+    bom_id: int | None = bom_row.id if bom_row else None
+    bom_line_id: int | None = body.bom_line_id
+    if body.bom_line_id is not None:
+        bl = await db.get(BomItem, body.bom_line_id)
+        if not bl or bl.tenant_id != tenant.id:
+            raise HTTPException(status_code=400, detail="Invalid bom_line_id")
+        if bom_row is not None and bl.bom_id != bom_row.id:
+            raise HTTPException(status_code=400, detail="BOM line does not belong to the active order BOM")
+        bom_id = bl.bom_id
+
     c_mv = StockMovement(
         tenant_id=tenant.id,
         item_id=body.item_id,
@@ -4019,6 +5006,10 @@ async def issue_consumption_material(
         reference_id=body.order_id,
         notes=body.remarks or "Issue against finalized consumption plan",
         created_by_user_id=user.id,
+        movement_kind="CONSUMPTION_ISSUE",
+        order_id=body.order_id,
+        bom_id=bom_id,
+        bom_line_id=bom_line_id,
     )
     db.add(c_mv)
     await db.flush()
@@ -4045,6 +5036,15 @@ async def reconciliation_overview(
     )
     stock_rows = await _stock_summary_rows(db, tenant.id)
     on_hand_items = len([r for r in stock_rows if r.on_hand_qty > 0])
+    pmi_n = (
+        await db.execute(
+            select(func.count()).select_from(ProductionMaterialIssue).where(ProductionMaterialIssue.tenant_id == tenant.id)
+        )
+    ).scalar() or 0
+    vb_rows = list((await db.execute(select(VendorBill).where(VendorBill.tenant_id == tenant.id))).scalars().all())
+    sm_n = (
+        await db.execute(select(func.count()).select_from(StockMovement).where(StockMovement.tenant_id == tenant.id))
+    ).scalar() or 0
     return ReconciliationOverview(
         purchase_orders_total=len(po_rows),
         purchase_orders_open=len([r for r in po_rows if (r.status or "").upper() not in {"CLOSED", "CANCELLED"}]),
@@ -4055,6 +5055,10 @@ async def reconciliation_overview(
         gate_pass_total=len(gate_rows),
         gate_pass_released=len([r for r in gate_rows if (r.status or "").upper() == "RELEASED"]),
         stock_items_on_hand=on_hand_items,
+        production_material_issues_total=int(pmi_n),
+        vendor_bills_draft=len([b for b in vb_rows if (b.status or "").upper() == "DRAFT"]),
+        vendor_bills_posted=len([b for b in vb_rows if (b.status or "").upper() == "POSTED"]),
+        stock_movements_total=int(sm_n),
     )
 
 
@@ -4319,6 +5323,9 @@ class WarehouseTransferOut(BaseModel):
     notes: str | None
     created_by_user_id: int | None = None
     items: list[WarehouseTransferLineOut]
+    verification_id: str | None = None
+    signature_hash: str | None = None
+    signed_at: datetime | None = None
 
 
 class StockAdjustmentCreate(BaseModel):
@@ -4388,6 +5395,9 @@ def _to_transfer_out(row: WarehouseTransfer, lines: list[WarehouseTransferLine])
             )
             for ln in lines
         ],
+        verification_id=getattr(row, "verification_id", None),
+        signature_hash=getattr(row, "signature_hash", None),
+        signed_at=getattr(row, "signed_at", None),
     )
 
 
@@ -4538,6 +5548,7 @@ async def post_warehouse_transfer(
         db.add(in_mv)
         await db.flush()
         await finalize_movement_fifo(db, tenant.id, in_mv, in_unit_cost=uc)
+    sign_warehouse_transfer(row, lines)
     row.status = "POSTED"
     await db.commit()
     await db.refresh(row)
@@ -4959,6 +5970,495 @@ async def order_material_readiness(
     from app.modules.production.readiness_service import get_order_readiness
 
     return await get_order_readiness(db, tenant.id, order_id)
+
+
+def _print_tenant_dict(t: Tenant) -> dict:
+    return {
+        "name": t.name,
+        "company_code": t.company_code,
+        "domain": t.domain,
+        "address": getattr(t, "address", None),
+    }
+
+
+@router.get("/documents/verify/{verification_id}")
+async def verify_inventory_document_by_verification_id(
+    verification_id: str,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    result = await verify_inventory_document(db, tenant.id, verification_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Verification record not found")
+    return result
+
+
+@router.post("/documents/backfill-signatures")
+async def inventory_documents_backfill_signatures(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    counts = await backfill_signatures_for_tenant(db, tenant.id)
+    return {"ok": True, "signed": counts}
+
+
+@router.get("/delivery-challans/{challan_id}", response_model=DeliveryChallanOut)
+async def get_delivery_challan(
+    challan_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(DeliveryChallan, challan_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Delivery challan not found")
+    lines = list(
+        (await db.execute(select(DeliveryChallanItem).where(DeliveryChallanItem.challan_id == row.id)))
+        .scalars()
+        .all()
+    )
+    oids = list(
+        dict.fromkeys(
+            r[0]
+            for r in (
+                await db.execute(
+                    select(DeliveryChallanOrder.order_id).where(
+                        DeliveryChallanOrder.tenant_id == tenant.id,
+                        DeliveryChallanOrder.delivery_challan_id == row.id,
+                    )
+                )
+            ).all()
+        )
+    )
+    return _delivery_challan_to_out(row, lines, order_ids=oids)
+
+
+@router.get("/delivery-challans/{challan_id}/gl-postings")
+async def delivery_challan_gl_postings(
+    challan_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(DeliveryChallan, challan_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Delivery challan not found")
+    return await list_gl_postings_for_inventory_doc(db, tenant.id, "DELIVERY_CHALLAN", challan_id)
+
+
+@router.get("/delivery-challans/{challan_id}/print-data")
+async def delivery_challan_print_data(
+    challan_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(DeliveryChallan, challan_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Delivery challan not found")
+    lines = list(
+        (await db.execute(select(DeliveryChallanItem).where(DeliveryChallanItem.challan_id == row.id)))
+        .scalars()
+        .all()
+    )
+    item_ids = {ln.item_id for ln in lines}
+    items_map: dict[int, Item] = {}
+    for iid in item_ids:
+        it = await db.get(Item, iid)
+        if it and it.tenant_id == tenant.id:
+            items_map[iid] = it
+    wh_ids = {ln.warehouse_id for ln in lines}
+    wh_map: dict[int, str] = {}
+    for wid in wh_ids:
+        w = await db.get(Warehouse, wid)
+        if w:
+            wh_map[wid] = w.name
+    vid = getattr(row, "verification_id", None) or ""
+    verification_path = f"{get_settings().api_v1_prefix}/inventory/documents/verify/{vid}" if vid else None
+    return {
+        "tenant": _print_tenant_dict(tenant),
+        "document_type": "DELIVERY_CHALLAN",
+        "document": {
+            "id": row.id,
+            "challan_code": row.challan_code,
+            "customer_name": row.customer_name,
+            "delivery_date": row.delivery_date.isoformat() if row.delivery_date else None,
+            "status": row.status,
+            "notes": row.notes,
+            "verification_id": getattr(row, "verification_id", None),
+            "signature_hash": getattr(row, "signature_hash", None),
+            "signed_at": row.signed_at.isoformat() if getattr(row, "signed_at", None) else None,
+        },
+        "lines": [
+            {
+                "item_code": items_map.get(ln.item_id).item_code if items_map.get(ln.item_id) else str(ln.item_id),
+                "item_name": items_map.get(ln.item_id).name if items_map.get(ln.item_id) else "",
+                "warehouse": wh_map.get(ln.warehouse_id, str(ln.warehouse_id)),
+                "quantity": str(ln.quantity),
+            }
+            for ln in lines
+        ],
+        "verification_path": verification_path,
+        "print_meta": {
+            "generated_at": datetime.utcnow().isoformat(),
+            "title": "Delivery Challan",
+            "copy_labels": ["Original", "Duplicate", "Triplicate"],
+        },
+    }
+
+
+@router.get("/enhanced-gate-passes/{gate_pass_id}", response_model=GatePassOut)
+async def get_enhanced_gate_pass(
+    gate_pass_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(EnhancedGatePass, gate_pass_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Gate pass not found")
+    return row
+
+
+@router.get("/enhanced-gate-passes/{gate_pass_id}/gl-postings")
+async def gate_pass_gl_postings(
+    gate_pass_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(EnhancedGatePass, gate_pass_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Gate pass not found")
+    return await list_gl_postings_for_inventory_doc(db, tenant.id, "ENHANCED_GATE_PASS", gate_pass_id)
+
+
+@router.get("/enhanced-gate-passes/{gate_pass_id}/print-data")
+async def gate_pass_print_data(
+    gate_pass_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(EnhancedGatePass, gate_pass_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Gate pass not found")
+    challan_code = None
+    if row.challan_id:
+        dc = await db.get(DeliveryChallan, row.challan_id)
+        if dc and dc.tenant_id == tenant.id:
+            challan_code = dc.challan_code
+    vid = getattr(row, "verification_id", None) or ""
+    verification_path = f"{get_settings().api_v1_prefix}/inventory/documents/verify/{vid}" if vid else None
+    return {
+        "tenant": _print_tenant_dict(tenant),
+        "document_type": "GATE_PASS",
+        "document": {
+            "id": row.id,
+            "gate_pass_code": row.gate_pass_code,
+            "challan_id": row.challan_id,
+            "linked_challan_code": challan_code,
+            "purpose": row.purpose,
+            "destination": row.destination,
+            "vehicle_no": row.vehicle_no,
+            "status": row.status,
+            "guard_acknowledged": row.guard_acknowledged,
+            "notes": row.notes,
+            "verification_id": getattr(row, "verification_id", None),
+            "signature_hash": getattr(row, "signature_hash", None),
+            "signed_at": row.signed_at.isoformat() if getattr(row, "signed_at", None) else None,
+        },
+        "lines": [],
+        "verification_path": verification_path,
+        "print_meta": {
+            "generated_at": datetime.utcnow().isoformat(),
+            "title": "Gate Pass",
+            "copy_labels": ["Original", "Duplicate", "Triplicate"],
+        },
+    }
+
+
+@router.get("/goods-receiving/{grn_id}/gl-postings")
+async def grn_gl_postings(
+    grn_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(GoodsReceiving, grn_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="GRN not found")
+    return await list_gl_postings_for_inventory_doc(db, tenant.id, "GOODS_RECEIVING", grn_id)
+
+
+@router.get("/production-material-issues/{issue_id}", response_model=ProductionMaterialIssueDetailOut)
+async def get_production_material_issue(
+    issue_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(ProductionMaterialIssue, issue_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Production material issue not found")
+    lines = list(
+        (
+            await db.execute(
+                select(ProductionMaterialIssueLine).where(ProductionMaterialIssueLine.issue_id == row.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    base = ProductionMaterialIssueOut.model_validate(row)
+    return ProductionMaterialIssueDetailOut(
+        **base.model_dump(),
+        lines=[ProductionMaterialIssueLineOut.model_validate(x) for x in lines],
+    )
+
+
+@router.get("/production-material-issues/{issue_id}/gl-postings")
+async def pmi_gl_postings(
+    issue_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(ProductionMaterialIssue, issue_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Production material issue not found")
+    return await list_gl_postings_for_inventory_doc(db, tenant.id, "PRODUCTION_MATERIAL_ISSUE", issue_id)
+
+
+@router.get("/production-material-issues/{issue_id}/print-data")
+async def pmi_print_data(
+    issue_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(ProductionMaterialIssue, issue_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Production material issue not found")
+    lines = list(
+        (
+            await db.execute(
+                select(ProductionMaterialIssueLine).where(ProductionMaterialIssueLine.issue_id == row.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    item_map: dict[int, Item] = {}
+    for ln in lines:
+        if ln.item_id not in item_map:
+            it = await db.get(Item, ln.item_id)
+            if it and it.tenant_id == tenant.id:
+                item_map[ln.item_id] = it
+    wh = await db.get(Warehouse, row.warehouse_id)
+    vid = getattr(row, "verification_id", None) or ""
+    verification_path = f"{get_settings().api_v1_prefix}/inventory/documents/verify/{vid}" if vid else None
+    return {
+        "tenant": _print_tenant_dict(tenant),
+        "document_type": "PRODUCTION_MATERIAL_ISSUE",
+        "document": {
+            "id": row.id,
+            "issue_code": row.issue_code,
+            "order_id": row.order_id,
+            "bom_id": row.bom_id,
+            "production_stage": row.production_stage,
+            "covered_order_qty": row.covered_order_qty,
+            "warehouse_name": wh.name if wh else str(row.warehouse_id),
+            "issue_date": row.issue_date.isoformat() if row.issue_date else None,
+            "status": row.status,
+            "notes": row.notes,
+            "verification_id": getattr(row, "verification_id", None),
+            "signature_hash": getattr(row, "signature_hash", None),
+            "signed_at": row.signed_at.isoformat() if getattr(row, "signed_at", None) else None,
+        },
+        "lines": [
+            {
+                "item_code": item_map.get(ln.item_id).item_code if item_map.get(ln.item_id) else str(ln.item_id),
+                "item_name": item_map.get(ln.item_id).name if item_map.get(ln.item_id) else "",
+                "bom_line_id": ln.bom_line_id,
+                "actual_issue_qty": str(ln.actual_issue_qty),
+                "variance_qty": ln.variance_qty,
+            }
+            for ln in lines
+        ],
+        "verification_path": verification_path,
+        "print_meta": {
+            "generated_at": datetime.utcnow().isoformat(),
+            "title": "Production Material Issue",
+            "copy_labels": ["Original", "Duplicate", "Triplicate"],
+        },
+    }
+
+
+@router.get("/process-orders/{process_order_id}/gl-postings")
+async def process_order_gl_postings(
+    process_order_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(ProcessOrder, process_order_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Process order not found")
+    return await list_gl_postings_for_inventory_doc(db, tenant.id, "PROCESS_ORDER", process_order_id)
+
+
+@router.get("/process-orders/{process_order_id}/print-data")
+async def process_order_print_data(
+    process_order_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(ProcessOrder, process_order_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Process order not found")
+    inp = await db.get(Item, row.input_item_id)
+    outp = await db.get(Item, row.output_item_id)
+    cost_lines = list(
+        (
+            await db.execute(
+                select(ProcessOrderCostLine).where(ProcessOrderCostLine.process_order_id == row.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    vid = getattr(row, "verification_id", None) or ""
+    verification_path = f"{get_settings().api_v1_prefix}/inventory/documents/verify/{vid}" if vid else None
+    return {
+        "tenant": _print_tenant_dict(tenant),
+        "document_type": "PROCESS_ORDER",
+        "document": {
+            "id": row.id,
+            "process_number": row.process_number,
+            "process_type": row.process_type,
+            "status": row.status,
+            "input_item_code": inp.item_code if inp else str(row.input_item_id),
+            "input_item_name": inp.name if inp else "",
+            "output_item_code": outp.item_code if outp else str(row.output_item_id),
+            "output_item_name": outp.name if outp else "",
+            "input_quantity": str(row.input_quantity),
+            "expected_output_qty": str(row.expected_output_qty),
+            "actual_output_qty": str(row.actual_output_qty) if row.actual_output_qty else None,
+            "processing_charges": str(row.processing_charges),
+            "remarks": row.remarks,
+            "verification_id": getattr(row, "verification_id", None),
+            "signature_hash": getattr(row, "signature_hash", None),
+            "signed_at": row.signed_at.isoformat() if getattr(row, "signed_at", None) else None,
+        },
+        "lines": [
+            {
+                "cost_type": cl.cost_type,
+                "description": cl.description,
+                "amount": str(cl.amount),
+            }
+            for cl in cost_lines
+        ],
+        "verification_path": verification_path,
+        "print_meta": {
+            "generated_at": datetime.utcnow().isoformat(),
+            "title": "Process Order",
+            "copy_labels": ["Original", "Duplicate", "Triplicate"],
+        },
+    }
+
+
+@router.get("/warehouse-transfers/{transfer_id}/gl-postings")
+async def warehouse_transfer_gl_postings(
+    transfer_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(WarehouseTransfer, transfer_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    return await list_gl_postings_for_inventory_doc(db, tenant.id, "WAREHOUSE_TRANSFER", transfer_id)
+
+
+@router.get("/warehouse-transfers/{transfer_id}/print-data")
+async def warehouse_transfer_print_data(
+    transfer_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(WarehouseTransfer, transfer_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    lines = list(
+        (
+            await db.execute(
+                select(WarehouseTransferLine).where(WarehouseTransferLine.transfer_id == row.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    wf = await db.get(Warehouse, row.from_warehouse_id)
+    wt = await db.get(Warehouse, row.to_warehouse_id)
+    item_map: dict[int, Item] = {}
+    for ln in lines:
+        if ln.item_id not in item_map:
+            it = await db.get(Item, ln.item_id)
+            if it and it.tenant_id == tenant.id:
+                item_map[ln.item_id] = it
+    vid = getattr(row, "verification_id", None) or ""
+    verification_path = f"{get_settings().api_v1_prefix}/inventory/documents/verify/{vid}" if vid else None
+    return {
+        "tenant": _print_tenant_dict(tenant),
+        "document_type": "WAREHOUSE_TRANSFER",
+        "document": {
+            "id": row.id,
+            "transfer_code": row.transfer_code,
+            "from_warehouse": wf.name if wf else str(row.from_warehouse_id),
+            "to_warehouse": wt.name if wt else str(row.to_warehouse_id),
+            "transfer_date": row.transfer_date.isoformat() if row.transfer_date else None,
+            "status": row.status,
+            "notes": row.notes,
+            "verification_id": getattr(row, "verification_id", None),
+            "signature_hash": getattr(row, "signature_hash", None),
+            "signed_at": row.signed_at.isoformat() if getattr(row, "signed_at", None) else None,
+        },
+        "lines": [
+            {
+                "item_code": item_map.get(ln.item_id).item_code if item_map.get(ln.item_id) else str(ln.item_id),
+                "item_name": item_map.get(ln.item_id).name if item_map.get(ln.item_id) else "",
+                "quantity": str(ln.quantity),
+            }
+            for ln in lines
+        ],
+        "verification_path": verification_path,
+        "print_meta": {
+            "generated_at": datetime.utcnow().isoformat(),
+            "title": "Warehouse Transfer",
+            "copy_labels": ["Original", "Duplicate", "Triplicate"],
+        },
+    }
 
 
 from app.modules.inventory.vendor_ai_router import router as _vendor_ai_router

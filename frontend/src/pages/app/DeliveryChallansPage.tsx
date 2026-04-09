@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   api,
-  type DeliveryChallanCreate,
-  type DeliveryChallanItemCreate,
   type DeliveryChallanResponse,
-  type InventoryItemResponse,
-  type WarehouseResponse,
+  type InventoryDocumentPrintPayload,
 } from "@/api/client";
 import {
   InventoryEmptyState,
@@ -17,44 +15,30 @@ import {
   inventoryScrollTableClass,
   touchFieldClass,
 } from "@/components/inventory/InventoryMobileList";
+import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocumentPrintSheets";
+import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
+import { logApiError } from "@/utils/logApiError";
 
 export function DeliveryChallansPage() {
   const [rows, setRows] = useState<DeliveryChallanResponse[]>([]);
-  const [items, setItems] = useState<InventoryItemResponse[]>([]);
-  const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [form, setForm] = useState<DeliveryChallanCreate>({
-    customer_name: "",
-    status: "DRAFT",
-    items: [],
-  });
-  const [line, setLine] = useState<DeliveryChallanItemCreate>({ item_id: 0, warehouse_id: 0, quantity: "0" });
+  const [search, setSearch] = useState("");
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const { isNarrow, view, setView, showCards } = useListViewPreference();
-
-  const itemMap = useMemo(() => new Map(items.map((i) => [i.id, `${i.item_code} - ${i.name}`])), [items]);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printData, setPrintData] = useState<InventoryDocumentPrintPayload | null>(null);
+  const [printTitle, setPrintTitle] = useState("");
+  const [copyCount, setCopyCount] = useState(1);
+  const [template, setTemplate] = useState<"standard" | "compact" | "audit">("standard");
 
   const load = useCallback(async () => {
     setError("");
     setLoading(true);
     try {
-      const [dc, itm, wh] = await Promise.all([
-        api.listDeliveryChallans(),
-        api.listInventoryItems(),
-        api.listWarehouses(),
-      ]);
-      setRows(dc);
-      setItems(itm);
-      setWarehouses(wh);
-      setLine((p) => {
-        let next = { ...p };
-        if (!p.item_id && itm[0]) next = { ...next, item_id: itm[0]!.id };
-        if (!p.warehouse_id && wh[0]) next = { ...next, warehouse_id: wh[0]!.id };
-        return next;
-      });
+      setRows(await api.listDeliveryChallans());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load delivery challans");
     } finally {
@@ -75,75 +59,91 @@ export function DeliveryChallansPage() {
     return () => document.removeEventListener("click", close);
   }, []);
 
-  const statuses = ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED"];
-  const filteredRows = statusFilter ? rows.filter((r) => (r.status || "").toUpperCase() === statusFilter) : rows;
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const r of rows) {
+      const s = (r.status || "OTHER").toUpperCase();
+      c[s] = (c[s] ?? 0) + 1;
+    }
+    return c;
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    let out = rows;
+    if (statusFilter) out = out.filter((r) => (r.status || "").toUpperCase() === statusFilter);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      out = out.filter(
+        (r) =>
+          r.challan_code.toLowerCase().includes(q) || r.customer_name.toLowerCase().includes(q),
+      );
+    }
+    return out;
+  }, [rows, statusFilter, search]);
+
+  async function openPrintForRow(row: DeliveryChallanResponse) {
+    try {
+      const data = await api.getDeliveryChallanPrintData(row.id);
+      setPrintData(data);
+      setPrintTitle(row.challan_code);
+      setPrintOpen(true);
+    } catch (e) {
+      logApiError("DeliveryChallansPage.print", e);
+      setError((e as Error).message);
+    }
+  }
 
   return (
     <div className="min-w-0 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-brand-primary">Delivery Challans</h1>
-        <p className="text-sm text-text-muted">Manage dispatch workflow and post stock-out on final posting.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-brand-primary">Delivery Challans</h1>
+          <p className="text-sm text-text-muted">Dispatch workflow with verified print & QR.</p>
+        </div>
+        <Link
+          to="/app/inventory/delivery-challans/new"
+          className="inline-flex items-center justify-center rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground hover:opacity-95"
+        >
+          New challan
+        </Link>
       </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+        {["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED"].map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setStatusFilter((prev) => (prev === s ? "" : s))}
+            className={`rounded-xl border px-3 py-2 text-left text-xs transition ${
+              statusFilter === s ? "border-brand-primary bg-brand-primary/10" : "border-border bg-surface-raised"
+            }`}
+          >
+            <div className="font-semibold text-text-primary">{s}</div>
+            <div className="text-text-muted">{counts[s] ?? 0}</div>
+          </button>
+        ))}
+      </div>
+
       {error ? <InventoryErrorPanel message={error} onRetry={() => void load()} /> : null}
       <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-raised p-3 sm:flex-row sm:items-center sm:justify-between">
         {isNarrow ? <InventoryListViewToggle value={view} onChange={setView} /> : null}
         <label className="flex flex-1 flex-wrap items-center gap-2 text-xs font-semibold text-text-secondary">
-          Status Filter
+          Search
           <input
             className={`min-w-0 flex-1 rounded border px-2 py-1 text-xs sm:flex-none ${touchFieldClass}`}
-            value={statusFilter}
-            placeholder="e.g. POSTED"
-            onChange={(e) => setStatusFilter(e.target.value.toUpperCase())}
+            value={search}
+            placeholder="Code or customer"
+            onChange={(e) => setSearch(e.target.value)}
           />
         </label>
       </div>
-
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (form.items.length === 0) {
-            setError("Add at least one challan line");
-            return;
-          }
-          await api.createDeliveryChallan(form);
-          setForm({ customer_name: "", status: "DRAFT", items: [] });
-          await load();
-        }}
-        className="rounded-xl border border-border bg-surface-raised p-4 space-y-3"
-      >
-        <h2 className="text-sm font-semibold text-brand-primary">New Challan</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Customer name" value={form.customer_name} onChange={(e) => setForm((p) => ({ ...p, customer_name: e.target.value }))} required />
-          <input className="rounded border px-3 py-2 text-sm" type="date" value={form.delivery_date ?? ""} onChange={(e) => setForm((p) => ({ ...p, delivery_date: e.target.value }))} />
-          <select className="rounded border px-3 py-2 text-sm" value={form.status ?? "DRAFT"} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}>
-            {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Notes" value={form.notes ?? ""} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-          <select className="rounded border px-3 py-2 text-sm" value={line.item_id || ""} onChange={(e) => setLine((p) => ({ ...p, item_id: Number(e.target.value) }))}>
-            {items.map((it) => <option key={it.id} value={it.id}>{it.item_code}</option>)}
-          </select>
-          <select className="rounded border px-3 py-2 text-sm" value={line.warehouse_id || ""} onChange={(e) => setLine((p) => ({ ...p, warehouse_id: Number(e.target.value) }))}>
-            {warehouses.map((wh) => <option key={wh.id} value={wh.id}>{wh.name}</option>)}
-          </select>
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Quantity" value={line.quantity} onChange={(e) => setLine((p) => ({ ...p, quantity: e.target.value }))} />
-          <button type="button" className="rounded border border-border-strong px-3 py-2 text-sm" onClick={() => setForm((p) => ({ ...p, items: [...p.items, line] }))}>Add Line</button>
-        </div>
-        {form.items.length > 0 && (
-          <div className="text-xs text-text-secondary space-y-0.5">
-            {form.items.map((ln, i) => <div key={`${ln.item_id}-${i}`}>Line {i + 1}: {itemMap.get(ln.item_id) ?? `#${ln.item_id}`} · Qty {ln.quantity}</div>)}
-          </div>
-        )}
-        <button className="rounded bg-brand-primary px-3 py-2 text-sm font-medium text-brand-primary-foreground">Create Challan</button>
-      </form>
 
       {loading ? (
         <InventoryTableSkeleton rows={8} cols={5} />
       ) : !filteredRows.length ? (
         <InventoryEmptyState
-          title={rows.length ? "No challans match this status" : "No delivery challans yet"}
-          description={rows.length ? "Clear the status filter to see all challans." : "Create a challan using the form above."}
+          title={rows.length ? "No challans match filters" : "No delivery challans yet"}
+          description="Create a challan or clear filters."
         />
       ) : showCards ? (
         <div className="space-y-3">
@@ -160,7 +160,7 @@ export function DeliveryChallansPage() {
                 <div className="relative inline-block shrink-0 text-left">
                   <button
                     type="button"
-                    className="min-h-[44px] min-w-[88px] touch-manipulation rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:min-w-0 sm:px-2.5 sm:py-1"
+                    className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
                     onClick={(e) => {
                       e.stopPropagation();
                       setOpenActionsId((id) => (id === row.id ? null : row.id));
@@ -168,28 +168,28 @@ export function DeliveryChallansPage() {
                   >
                     Actions
                   </button>
-                  {openActionsId === row.id && (
-                    <div className="absolute right-0 z-10 mt-1 max-h-64 w-44 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                      <p className="px-2 py-1 text-[10px] font-semibold uppercase text-gray-500">Set status</p>
-                      {statuses.map((s) => (
-                        <button
-                          key={s}
-                          type="button"
-                          className={`block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs ${
-                            (row.status || "").toUpperCase() === s ? "font-medium text-gray-900" : "text-gray-700"
-                          }`}
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            setOpenActionsId(null);
-                            await api.updateDeliveryChallanStatus(row.id, s);
-                            await load();
-                          }}
-                        >
-                          {s}
-                        </button>
-                      ))}
+                  {openActionsId === row.id ? (
+                    <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                      <Link
+                        to={`/app/inventory/delivery-challans/${row.id}`}
+                        className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        onClick={() => setOpenActionsId(null)}
+                      >
+                        View
+                      </Link>
+                      <button
+                        type="button"
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenActionsId(null);
+                          void openPrintForRow(row);
+                        }}
+                      >
+                        Print
+                      </button>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -197,14 +197,14 @@ export function DeliveryChallansPage() {
         </div>
       ) : (
         <div className={`rounded-xl border border-border bg-surface-raised ${inventoryScrollTableClass}`}>
-          <table className="min-w-[640px] w-full">
+          <table className="min-w-[720px] w-full">
             <thead className="bg-surface-subtle">
               <tr>
                 <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Code</th>
                 <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Customer</th>
                 <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Status</th>
                 <th className="px-3 py-2 text-left text-xs font-medium uppercase text-text-muted">Lines</th>
-                <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">Action</th>
+                <th className="px-3 py-2 text-right text-xs font-medium uppercase text-text-muted">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -218,7 +218,7 @@ export function DeliveryChallansPage() {
                     <div className="relative inline-block text-left">
                       <button
                         type="button"
-                        className="min-h-[44px] min-w-[88px] touch-manipulation rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:min-w-0 sm:px-2.5 sm:py-1"
+                        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpenActionsId((id) => (id === row.id ? null : row.id));
@@ -226,28 +226,28 @@ export function DeliveryChallansPage() {
                       >
                         Actions
                       </button>
-                      {openActionsId === row.id && (
-                        <div className="absolute right-0 z-10 mt-1 max-h-64 w-44 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                          <p className="px-2 py-1 text-[10px] font-semibold uppercase text-gray-500">Set status</p>
-                          {statuses.map((s) => (
-                            <button
-                              key={s}
-                              type="button"
-                              className={`block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs ${
-                                (row.status || "").toUpperCase() === s ? "font-medium text-gray-900" : "text-gray-700"
-                              }`}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                setOpenActionsId(null);
-                                await api.updateDeliveryChallanStatus(row.id, s);
-                                await load();
-                              }}
-                            >
-                              {s}
-                            </button>
-                          ))}
+                      {openActionsId === row.id ? (
+                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                          <Link
+                            to={`/app/inventory/delivery-challans/${row.id}`}
+                            className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            onClick={() => setOpenActionsId(null)}
+                          >
+                            View
+                          </Link>
+                          <button
+                            type="button"
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenActionsId(null);
+                              void openPrintForRow(row);
+                            }}
+                          >
+                            Print
+                          </button>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -256,6 +256,23 @@ export function DeliveryChallansPage() {
           </table>
         </div>
       )}
+
+      {printOpen && printData ? (
+        <PrintPreviewModal
+          open={printOpen}
+          title={`Print — ${printTitle}`}
+          onClose={() => {
+            setPrintOpen(false);
+            setPrintData(null);
+          }}
+          copyCount={copyCount}
+          onCopyCountChange={setCopyCount}
+          template={template}
+          onTemplateChange={setTemplate}
+        >
+          <InventoryDocumentPrintSheets data={printData} copyCount={copyCount} template={template} />
+        </PrintPreviewModal>
+      ) : null}
     </div>
   );
 }

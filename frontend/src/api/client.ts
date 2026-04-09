@@ -8,6 +8,7 @@ import type {
   ExternalAuditListResponse,
   ExternalFeatureFlagsPatch,
   ExternalInviteResponse,
+  ExternalPrincipalAdminRow,
   ExternalPrincipalListResponse,
 } from "@/types/externalAccess";
 import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
@@ -22,7 +23,7 @@ export interface MeResponse {
   user_id: number;
   tenant_id: number;
   email: string;
-  username: string;
+  username: string | null;
   first_name: string | null;
   last_name: string | null;
   tenant_name: string;
@@ -30,6 +31,60 @@ export interface MeResponse {
   company_code: string | null;
   /** Optional tenant toggles, e.g. { trade_enabled: false } */
   feature_flags?: Record<string, boolean | string | number | null> | null;
+  role_name: string;
+  role_permissions: Record<string, unknown>;
+}
+
+export interface ResolveTenantResponse {
+  tenant_id: number;
+  tenant_name: string;
+  company_code: string | null;
+  logo_url: string | null;
+  available_roles: string[];
+}
+
+export interface PermissionsSubmoduleApi {
+  id: string;
+  label: string;
+  levels: string[];
+}
+
+export interface PermissionsModuleApi {
+  id: string;
+  label: string;
+  access_key: string | null;
+  submodules: PermissionsSubmoduleApi[];
+}
+
+export interface GovernanceToggleKeyApi {
+  key: string;
+  label: string;
+  group: string;
+}
+
+export interface PermissionsRegistryResponse {
+  modules: PermissionsModuleApi[];
+  /** Optional boolean keys (e.g. material-control governance) edited as checkboxes on Roles. */
+  governance_toggle_keys?: GovernanceToggleKeyApi[];
+}
+
+export interface StaffInviteRowResponse {
+  id: number;
+  tenant_id: number;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  role_id: number;
+  role_name: string;
+  status: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+}
+
+export interface StaffInviteCreateResponse {
+  invitation: StaffInviteRowResponse;
+  invite_token_plain?: string | null;
 }
 
 export interface TokenResponse {
@@ -1533,6 +1588,13 @@ export interface AiOpsOverviewResponse {
   tool_success_rate: number;
 }
 
+/** Loans & facilities (internal `/api/v1/facility/*`). */
+export type FacilityRow = Record<string, unknown> & { id: number; facility_code?: string; status?: string };
+export type FacilityUtilizationRow = Record<string, unknown> & { id: number; utilization_code?: string; status?: string };
+export type EmiPreviewResponse = Record<string, unknown>;
+export type BusinessOverviewResponse = Record<string, unknown>;
+export type BusinessHealthScoreResponse = Record<string, unknown>;
+
 export const api = {
   /** Reference-style: companyCode + username + password. Or tenant_id + email + password. */
   async login(params: {
@@ -1540,15 +1602,17 @@ export const api = {
     tenant_id?: number;
     username?: string;
     email?: string;
+    login_as?: string;
     password: string;
   }): Promise<TokenResponse> {
-    const { company_code, tenant_id, username, email, password } = params;
+    const { company_code, tenant_id, username, email, login_as, password } = params;
     // Send only non-empty fields so backend accepts company_code + username + password (no 422)
     const body: Record<string, unknown> = { password };
     if (company_code?.trim()) body.company_code = company_code.trim();
     if (tenant_id != null && Number.isFinite(tenant_id)) body.tenant_id = tenant_id;
     if (username?.trim()) body.username = username.trim();
     if (email?.trim()) body.email = email.trim();
+    if (login_as?.trim()) body.login_as = login_as.trim().toLowerCase();
     const res = await request<TokenResponse>("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify(body),
@@ -1558,6 +1622,28 @@ export const api = {
     });
     return res;
   },
+  async resolveTenant(company_code: string): Promise<ResolveTenantResponse> {
+    return requestPublic<ResolveTenantResponse>("/api/v1/auth/resolve-tenant", {
+      method: "POST",
+      body: JSON.stringify({ company_code: company_code.trim() }),
+    });
+  },
+  async acceptStaffInvite(data: {
+    token: string;
+    password: string;
+    first_name?: string | null;
+    last_name?: string | null;
+  }): Promise<TokenResponse> {
+    return requestPublic<TokenResponse>("/api/v1/auth/accept-staff-invite", {
+      method: "POST",
+      body: JSON.stringify({
+        token: data.token.trim(),
+        password: data.password,
+        first_name: data.first_name?.trim() || undefined,
+        last_name: data.last_name?.trim() || undefined,
+      }),
+    });
+  },
   async me(): Promise<MeResponse> {
     const tid = getTenantId();
     if (!tid) throw new Error("No tenant");
@@ -1566,7 +1652,7 @@ export const api = {
   async register(data: {
     tenant_id: number;
     email: string;
-    username: string;
+    username?: string | null;
     password: string;
     first_name?: string;
     last_name?: string;
@@ -1595,6 +1681,8 @@ export const api = {
   async createTenant(data: {
     name: string;
     tenant_type: TenantType;
+    phone?: string | null;
+    address?: string | null;
   }): Promise<TenantResponse> {
     return request<TenantResponse>("/api/v1/tenants", { method: "POST", body: JSON.stringify(data) });
   },
@@ -1644,6 +1732,31 @@ export const api = {
     return request<void>(`/api/v1/settings/users/${userId}`, {
       method: "DELETE",
     });
+  },
+  async settingsInviteStaff(data: {
+    email: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    role_id: number;
+  }): Promise<StaffInviteCreateResponse> {
+    return request<StaffInviteCreateResponse>("/api/v1/settings/users/invite", {
+      method: "POST",
+      body: JSON.stringify({
+        email: data.email.trim(),
+        first_name: data.first_name?.trim() || undefined,
+        last_name: data.last_name?.trim() || undefined,
+        role_id: data.role_id,
+      }),
+    });
+  },
+  async settingsListStaffInvitations(): Promise<StaffInviteRowResponse[]> {
+    return request<StaffInviteRowResponse[]>("/api/v1/settings/users/invitations");
+  },
+  async settingsCancelStaffInvitation(invitationId: number): Promise<void> {
+    return request<void>(`/api/v1/settings/users/invitations/${invitationId}`, { method: "DELETE" });
+  },
+  async settingsGetPermissionsRegistry(): Promise<PermissionsRegistryResponse> {
+    return request<PermissionsRegistryResponse>("/api/v1/settings/permissions-registry");
   },
   async listRoles(): Promise<RoleResponse[]> {
     return request<RoleResponse[]>("/api/v1/roles");
@@ -1941,6 +2054,18 @@ export const api = {
   }): Promise<ExternalInviteResponse> {
     return request<ExternalInviteResponse>("/api/v1/settings/external-access/financiers/invite", {
       method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async patchExternalFinancierPrincipal(
+    principalId: number,
+    body: {
+      access_scope?: string | null;
+      financier_party_id?: number | null;
+    },
+  ): Promise<ExternalPrincipalAdminRow> {
+    return request<ExternalPrincipalAdminRow>(`/api/v1/settings/external-access/financiers/${principalId}`, {
+      method: "PATCH",
       body: JSON.stringify(body),
     });
   },
@@ -3731,10 +3856,30 @@ export const api = {
       method: "POST",
     });
   },
-  async updateOrderStatus(id: number, status: string): Promise<OrderResponse> {
+  async updateOrderStatus(
+    id: number,
+    status: string,
+    opts?: { force_pipeline_status?: string | null },
+  ): Promise<OrderResponse> {
+    const body: Record<string, unknown> = { status };
+    if (opts?.force_pipeline_status) {
+      body.force_pipeline_status = opts.force_pipeline_status;
+    }
     return request<OrderResponse>(`/api/v1/orders/${id}/status`, {
       method: "PATCH",
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(body),
+    });
+  },
+  async getOrderMilestones(orderId: number): Promise<OrderMilestonesResponse> {
+    return request<OrderMilestonesResponse>(`/api/v1/orders/${orderId}/milestones`);
+  },
+  async updateOrderPipelineSettings(
+    orderId: number,
+    data: { na_steps?: string[]; order_type?: string },
+  ): Promise<OrderMilestonesResponse> {
+    return request<OrderMilestonesResponse>(`/api/v1/orders/${orderId}/pipeline-settings`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
     });
   },
   async listOrderAmendments(id: number): Promise<OrderAmendmentResponse[]> {
@@ -4106,15 +4251,24 @@ export const api = {
       body: JSON.stringify({ status }),
     });
   },
+  async getPurchaseOrderReceiptProgress(poId: number): Promise<PurchaseOrderReceiptProgress> {
+    return request<PurchaseOrderReceiptProgress>(`/api/v1/inventory/purchase-orders/${poId}/receipt-progress`);
+  },
   async getGoodsReceiving(id: number): Promise<GoodsReceivingResponse> {
     return request<GoodsReceivingResponse>(`/api/v1/inventory/goods-receiving/${id}`);
   },
-  async listGoodsReceiving(params?: { status_filter?: string; date_from?: string; date_to?: string }): Promise<GoodsReceivingResponse[]> {
+  async listGoodsReceiving(params?: {
+    status_filter?: string;
+    date_from?: string;
+    date_to?: string;
+    purchase_order_id?: number;
+  }): Promise<GoodsReceivingResponse[]> {
     return fetchAllPaginated(async (page, pageSize) => {
       const q = new URLSearchParams();
       if (params?.status_filter) q.set("status_filter", params.status_filter);
       if (params?.date_from) q.set("date_from", params.date_from);
       if (params?.date_to) q.set("date_to", params.date_to);
+      if (params?.purchase_order_id != null) q.set("purchase_order_id", String(params.purchase_order_id));
       q.set("page", String(page));
       q.set("page_size", String(pageSize));
       return request<PaginatedRows<GoodsReceivingResponse>>(`/api/v1/inventory/goods-receiving?${q.toString()}`);
@@ -4124,6 +4278,7 @@ export const api = {
     status_filter?: string;
     date_from?: string;
     date_to?: string;
+    purchase_order_id?: number;
     page?: number;
     page_size?: number;
   }): Promise<PaginatedRows<GoodsReceivingResponse>> {
@@ -4131,6 +4286,7 @@ export const api = {
     if (params?.status_filter) q.set("status_filter", params.status_filter);
     if (params?.date_from) q.set("date_from", params.date_from);
     if (params?.date_to) q.set("date_to", params.date_to);
+    if (params?.purchase_order_id != null) q.set("purchase_order_id", String(params.purchase_order_id));
     if (params?.page != null) q.set("page", String(params.page));
     if (params?.page_size != null) q.set("page_size", String(params.page_size));
     const suffix = q.toString() ? `?${q.toString()}` : "";
@@ -4146,6 +4302,12 @@ export const api = {
     return request<GoodsReceivingResponse>(`/api/v1/inventory/goods-receiving/${id}/receive`, {
       method: "POST",
     });
+  },
+  async acknowledgeGoodsReceiving(id: number): Promise<GoodsReceivingResponse> {
+    return request<GoodsReceivingResponse>(`/api/v1/inventory/goods-receiving/${id}/acknowledge`, { method: "POST" });
+  },
+  async getGoodsReceivingPrintData(id: number): Promise<InventoryDocumentPrintPayload & Record<string, unknown>> {
+    return request<InventoryDocumentPrintPayload & Record<string, unknown>>(`/api/v1/inventory/goods-receiving/${id}/print-data`);
   },
   async bulkPurchaseOrderStatus(ids: number[], status: string): Promise<{ updated: number }> {
     return request<{ updated: number }>("/api/v1/inventory/purchase-orders/bulk-status", {
@@ -4301,6 +4463,56 @@ export const api = {
       body: JSON.stringify({ status }),
     });
   },
+  async getDeliveryChallan(id: number): Promise<DeliveryChallanResponse> {
+    return request<DeliveryChallanResponse>(`/api/v1/inventory/delivery-challans/${id}`);
+  },
+  async getDeliveryChallanPrintData(id: number): Promise<InventoryDocumentPrintPayload> {
+    return request<InventoryDocumentPrintPayload>(`/api/v1/inventory/delivery-challans/${id}/print-data`);
+  },
+  async getDeliveryChallanGlPostings(id: number): Promise<InventoryGlPostingDetail[]> {
+    return request<InventoryGlPostingDetail[]>(`/api/v1/inventory/delivery-challans/${id}/gl-postings`);
+  },
+  async getEnhancedGatePass(id: number): Promise<EnhancedGatePassResponse> {
+    return request<EnhancedGatePassResponse>(`/api/v1/inventory/enhanced-gate-passes/${id}`);
+  },
+  async getGatePassPrintData(id: number): Promise<InventoryDocumentPrintPayload> {
+    return request<InventoryDocumentPrintPayload>(`/api/v1/inventory/enhanced-gate-passes/${id}/print-data`);
+  },
+  async getGatePassGlPostings(id: number): Promise<InventoryGlPostingDetail[]> {
+    return request<InventoryGlPostingDetail[]>(`/api/v1/inventory/enhanced-gate-passes/${id}/gl-postings`);
+  },
+  async getGoodsReceivingGlPostings(id: number): Promise<InventoryGlPostingDetail[]> {
+    return request<InventoryGlPostingDetail[]>(`/api/v1/inventory/goods-receiving/${id}/gl-postings`);
+  },
+  async verifyInventoryDocument(verificationId: string): Promise<InventoryDocumentVerifyResponse> {
+    return request<InventoryDocumentVerifyResponse>(
+      `/api/v1/inventory/documents/verify/${encodeURIComponent(verificationId)}`,
+    );
+  },
+  async backfillInventoryDocumentSignatures(): Promise<{ ok: boolean; signed: Record<string, number> }> {
+    return request(`/api/v1/inventory/documents/backfill-signatures`, { method: "POST" });
+  },
+  async getProductionMaterialIssueDetail(id: number): Promise<ProductionMaterialIssueDetailResponse> {
+    return request<ProductionMaterialIssueDetailResponse>(`/api/v1/inventory/production-material-issues/${id}`);
+  },
+  async getProductionMaterialIssuePrintData(id: number): Promise<InventoryDocumentPrintPayload> {
+    return request<InventoryDocumentPrintPayload>(`/api/v1/inventory/production-material-issues/${id}/print-data`);
+  },
+  async getProductionMaterialIssueGlPostings(id: number): Promise<InventoryGlPostingDetail[]> {
+    return request<InventoryGlPostingDetail[]>(`/api/v1/inventory/production-material-issues/${id}/gl-postings`);
+  },
+  async getProcessOrderPrintData(id: number): Promise<InventoryDocumentPrintPayload> {
+    return request<InventoryDocumentPrintPayload>(`/api/v1/inventory/process-orders/${id}/print-data`);
+  },
+  async getProcessOrderGlPostings(id: number): Promise<InventoryGlPostingDetail[]> {
+    return request<InventoryGlPostingDetail[]>(`/api/v1/inventory/process-orders/${id}/gl-postings`);
+  },
+  async getWarehouseTransferPrintData(id: number): Promise<InventoryDocumentPrintPayload> {
+    return request<InventoryDocumentPrintPayload>(`/api/v1/inventory/warehouse-transfers/${id}/print-data`);
+  },
+  async getWarehouseTransferGlPostings(id: number): Promise<InventoryGlPostingDetail[]> {
+    return request<InventoryGlPostingDetail[]>(`/api/v1/inventory/warehouse-transfers/${id}/gl-postings`);
+  },
   async listEnhancedGatePasses(params?: { status_filter?: string; date_from?: string; date_to?: string }): Promise<EnhancedGatePassResponse[]> {
     const q = new URLSearchParams();
     if (params?.status_filter) q.set("status_filter", params.status_filter);
@@ -4353,6 +4565,28 @@ export const api = {
   },
   async approveProcessOrder(id: number): Promise<ProcessOrderResponse> {
     return request<ProcessOrderResponse>(`/api/v1/inventory/process-orders/${id}/approve`, { method: "POST" });
+  },
+  async addProcessOrderCostLine(
+    processOrderId: number,
+    data: { cost_type?: string; description?: string | null; amount: string; vendor_id?: number | null; currency?: string | null; remarks?: string | null },
+  ): Promise<{ id: number; process_order_id: number; amount: string; cost_type: string }> {
+    return request(`/api/v1/inventory/process-orders/${processOrderId}/cost-lines`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async listProductionMaterialIssues(params?: { limit?: number; offset?: number }): Promise<ProductionMaterialIssueResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<ProductionMaterialIssueResponse[]>(`/api/v1/inventory/production-material-issues${suffix}`);
+  },
+  async createProductionMaterialIssue(data: ProductionMaterialIssueCreate): Promise<ProductionMaterialIssueResponse> {
+    return request<ProductionMaterialIssueResponse>("/api/v1/inventory/production-material-issues", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   },
   async listManufacturingOrders(params?: { limit?: number; offset?: number }): Promise<ManufacturingOrderResponse[]> {
     const q = new URLSearchParams();
@@ -4710,6 +4944,23 @@ export const api = {
   async getInventoryReconciliationOverview(): Promise<InventoryReconciliationOverview> {
     return request<InventoryReconciliationOverview>("/api/v1/inventory/reconciliation/overview");
   },
+  async getOrderMaterialVariance(orderId: number): Promise<Record<string, unknown>> {
+    return request(`/api/v1/inventory/material-control/order/${orderId}/variance`);
+  },
+  async listMaterialControlStockMovements(params?: {
+    order_id?: number;
+    movement_kind?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<MaterialControlStockMovementRow[]> {
+    const q = new URLSearchParams();
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    if (params?.movement_kind) q.set("movement_kind", params.movement_kind);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<MaterialControlStockMovementRow[]>(`/api/v1/inventory/stock-movements${suffix}`);
+  },
   async listConsumptionChangeRequests(params?: { status_filter?: string; order_id?: number }): Promise<ConsumptionChangeRequestResponse[]> {
     const q = new URLSearchParams();
     if (params?.status_filter) q.set("status_filter", params.status_filter);
@@ -5066,6 +5317,109 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     });
+  },
+  async listEligibleOrdersForBom(): Promise<EligibleOrderForBom[]> {
+    return request<EligibleOrderForBom[]>("/api/v1/merch/order-boms/eligible-orders");
+  },
+  async createBomFromOrder(orderId: number): Promise<OrderDrivenBomDetailResponse> {
+    return request<OrderDrivenBomDetailResponse>("/api/v1/merch/order-boms/from-order", {
+      method: "POST",
+      body: JSON.stringify({ order_id: orderId }),
+    });
+  },
+  async getOrderDrivenBomByOrder(orderId: number): Promise<OrderDrivenBomDetailResponse> {
+    return request<OrderDrivenBomDetailResponse>(`/api/v1/merch/order-boms/by-order/${orderId}`);
+  },
+  async getOrderDrivenBomDetail(bomId: number): Promise<OrderDrivenBomDetailResponse> {
+    return request<OrderDrivenBomDetailResponse>(`/api/v1/merch/order-boms/${bomId}/detail`);
+  },
+  async patchOrderDrivenBomLine(
+    bomId: number,
+    lineId: number,
+    data: OrderDrivenBomLinePatch,
+  ): Promise<OrderDrivenBomLine> {
+    return request<OrderDrivenBomLine>(`/api/v1/merch/order-boms/${bomId}/lines/${lineId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async addOrderDrivenBomLine(bomId: number, data: OrderDrivenBomLineCreate): Promise<OrderDrivenBomLine> {
+    return request<OrderDrivenBomLine>(`/api/v1/merch/order-boms/${bomId}/lines`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async deleteOrderDrivenBomLine(bomId: number, lineId: number): Promise<void> {
+    return request<void>(`/api/v1/merch/order-boms/${bomId}/lines/${lineId}`, { method: "DELETE" });
+  },
+  async submitOrderDrivenBom(bomId: number): Promise<OrderDrivenBomDetailResponse> {
+    return request<OrderDrivenBomDetailResponse>(`/api/v1/merch/order-boms/${bomId}/submit`, { method: "POST" });
+  },
+  async approveOrderDrivenBom(bomId: number): Promise<OrderDrivenBomDetailResponse> {
+    return request<OrderDrivenBomDetailResponse>(`/api/v1/merch/order-boms/${bomId}/approve`, { method: "POST" });
+  },
+  async rejectOrderDrivenBom(bomId: number, comment: string): Promise<OrderDrivenBomDetailResponse> {
+    return request<OrderDrivenBomDetailResponse>(`/api/v1/merch/order-boms/${bomId}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ comment }),
+    });
+  },
+  async freezeOrderDrivenBom(bomId: number): Promise<OrderDrivenBomDetailResponse> {
+    return request<OrderDrivenBomDetailResponse>(`/api/v1/merch/order-boms/${bomId}/freeze`, { method: "POST" });
+  },
+  async createPurchaseOrderFromOrderBomLine(
+    lineId: number,
+    data: CreatePoFromOrderBomLinePayload,
+  ): Promise<GeneratePOFromBOMResponse> {
+    return request<GeneratePOFromBOMResponse>(`/api/v1/merch/order-boms/lines/${lineId}/purchase-order`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async bulkGeneratePurchaseOrdersFromOrderBom(
+    bomId: number,
+    lineIds?: number[],
+  ): Promise<{ created: Array<{ id: number; po_code: string; line_count: number }> }> {
+    return request(`/api/v1/merch/order-boms/${bomId}/generate-purchase-orders-bulk`, {
+      method: "POST",
+      body: JSON.stringify({ line_ids: lineIds ?? null }),
+    });
+  },
+  async getSuggestedVendorsForOrderBomLine(lineId: number): Promise<{
+    suggestions: Array<{
+      unit_price: string;
+      vendor_id: number | null;
+      po_code: string;
+      purchase_order_id: number;
+      vendor_name: string | null;
+    }>;
+  }> {
+    return request(`/api/v1/merch/order-boms/lines/${lineId}/suggested-vendors`);
+  },
+  async getLinkedPurchaseOrdersForOrderBomLine(lineId: number): Promise<{
+    items: Array<{
+      purchase_order_id: number;
+      po_code: string;
+      status: string;
+      line_quantity: string;
+      unit_price: string;
+      received_qty: number;
+    }>;
+  }> {
+    return request(`/api/v1/merch/order-boms/lines/${lineId}/purchase-orders`);
+  },
+  async getOrderBomLineProcurementStatus(lineId: number): Promise<{ status: BomLineProcurementStatus }> {
+    return request(`/api/v1/merch/order-boms/lines/${lineId}/procurement-status`);
+  },
+  async refreshOrderBomLineVendorPrice(
+    lineId: number,
+    vendorId: number,
+  ): Promise<OrderDrivenBomLine> {
+    const q = new URLSearchParams({ vendor_id: String(vendorId) });
+    return request<OrderDrivenBomLine>(
+      `/api/v1/merch/order-boms/lines/${lineId}/refresh-vendor-price?${q.toString()}`,
+      { method: "POST" },
+    );
   },
   /**
    * Returns rows only (`X-Total-Count` is ignored). For paginated UIs use `listConsumptionPlansWithTotal`.
@@ -6079,6 +6433,106 @@ export const api = {
   },
   async getCashForecastSummary(): Promise<CashForecastSummaryResponse> {
     return request<CashForecastSummaryResponse>("/api/v1/finance/cash-forecast/summary");
+  },
+  async createVendorBillDraftFromGrn(grnId: number): Promise<{ id: number; bill_code: string; status: string }> {
+    return request(`/api/v1/finance/vendor-bills/from-grn/${grnId}`, { method: "POST" });
+  },
+  async listVendorBills(params?: { limit?: number; offset?: number }): Promise<VendorBillSummary[]> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<VendorBillSummary[]>(`/api/v1/finance/vendor-bills${suffix}`);
+  },
+  async getVendorBill(billId: number): Promise<VendorBillDetailResponse> {
+    return request<VendorBillDetailResponse>(`/api/v1/finance/vendor-bills/${billId}`);
+  },
+  async patchVendorBill(
+    billId: number,
+    data: { vendor_invoice_ref?: string | null; status?: string | null; notes?: string | null },
+  ): Promise<{ id: number; bill_code: string; status: string; vendor_invoice_ref: string | null }> {
+    return request(`/api/v1/finance/vendor-bills/${billId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async postVendorBill(billId: number): Promise<{ id: number; bill_code: string; status: string; voucher_id: number | null }> {
+    return request(`/api/v1/finance/vendor-bills/${billId}/post`, { method: "POST" });
+  },
+  async getBusinessOverview(): Promise<BusinessOverviewResponse> {
+    return request<BusinessOverviewResponse>("/api/v1/finance/business-overview");
+  },
+  async getBusinessOverviewHealthScore(): Promise<BusinessHealthScoreResponse> {
+    return request<BusinessHealthScoreResponse>("/api/v1/finance/business-overview/health-score");
+  },
+  async getBusinessOverviewDeterministicSummary(): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/finance/business-overview/deterministic-summary");
+  },
+  async getBusinessOverviewAiNarrative(): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/finance/business-overview/ai-narrative");
+  },
+  async listFinancierPrincipalsForFacility(): Promise<{ id: number; full_name: string | null; email: string | null }[]> {
+    return request("/api/v1/facility/financier-principals");
+  },
+  async listFacilities(params?: { status_filter?: string; limit?: number; offset?: number }): Promise<FacilityRow[]> {
+    const q = new URLSearchParams();
+    if (params?.status_filter) q.set("status_filter", params.status_filter);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<FacilityRow[]>(`/api/v1/facility/facilities${suffix}`);
+  },
+  async getFacility(id: number): Promise<{ facility: FacilityRow; utilizations: FacilityUtilizationRow[] }> {
+    return request(`/api/v1/facility/facilities/${id}`);
+  },
+  async createFacility(body: Record<string, unknown>): Promise<FacilityRow> {
+    return request<FacilityRow>("/api/v1/facility/facilities", { method: "POST", body: JSON.stringify(body) });
+  },
+  async patchFacility(id: number, body: Record<string, unknown>): Promise<FacilityRow> {
+    return request<FacilityRow>(`/api/v1/facility/facilities/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  async deleteFacility(id: number): Promise<{ ok: boolean }> {
+    return request(`/api/v1/facility/facilities/${id}`, { method: "DELETE" });
+  },
+  async listFacilityUtilizations(facilityId: number): Promise<FacilityUtilizationRow[]> {
+    return request<FacilityUtilizationRow[]>(`/api/v1/facility/facilities/${facilityId}/utilizations`);
+  },
+  async createFacilityUtilization(facilityId: number, body: Record<string, unknown>): Promise<FacilityUtilizationRow> {
+    return request<FacilityUtilizationRow>(`/api/v1/facility/facilities/${facilityId}/utilizations`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async getFacilityUtilization(id: number): Promise<{
+    utilization: FacilityUtilizationRow;
+    facility: FacilityRow | null;
+    schedule: Record<string, unknown>[];
+  }> {
+    return request(`/api/v1/facility/utilizations/${id}`);
+  },
+  async patchFacilityUtilization(id: number, body: Record<string, unknown>): Promise<FacilityUtilizationRow> {
+    return request<FacilityUtilizationRow>(`/api/v1/facility/utilizations/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  async getUtilizationSchedule(utilizationId: number): Promise<Record<string, unknown>[]> {
+    return request(`/api/v1/facility/utilizations/${utilizationId}/schedule`);
+  },
+  async calculateFacilityEmi(body: Record<string, unknown>): Promise<EmiPreviewResponse> {
+    return request<EmiPreviewResponse>("/api/v1/facility/calculate-emi", { method: "POST", body: JSON.stringify(body) });
+  },
+  async getFacilitySummary(): Promise<Record<string, unknown>> {
+    return request("/api/v1/facility/summary");
+  },
+  async getFacilityUpcomingObligations(): Promise<Record<string, unknown>> {
+    return request("/api/v1/facility/upcoming-obligations");
+  },
+  async activateFacilityUtilization(utilizationId: number, body?: { grace_days?: number | null }): Promise<Record<string, unknown>> {
+    return request(`/api/v1/facility/utilizations/${utilizationId}/activate`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    });
+  },
+  async generateFacilitySnapshots(body: { snapshot_month: string; facility_id?: number | null }): Promise<Record<string, unknown>> {
+    return request("/api/v1/facility/snapshots/generate", { method: "POST", body: JSON.stringify(body) });
   },
   async listFxReceipts(params?: { status_filter?: string }): Promise<FxReceiptResponse[]> {
     const q = new URLSearchParams();
@@ -7709,7 +8163,7 @@ export interface UserWithRoleResponse {
   tenant_id: number;
   role_id: number;
   email: string;
-  username: string;
+  username: string | null;
   first_name: string | null;
   last_name: string | null;
   is_active: boolean;
@@ -7741,7 +8195,7 @@ export interface SettingsRoleUpdate {
 export interface SettingsUserCreate {
   role_id: number;
   email: string;
-  username: string;
+  username?: string | null;
   password: string;
   first_name?: string | null;
   last_name?: string | null;
@@ -9477,6 +9931,12 @@ export interface GoodsReceivingItemCreate {
   warehouse_id: number;
   quantity: string;
   lot_number?: string | null;
+  purchase_order_line_id?: number | null;
+  received_qty?: string | null;
+  accepted_qty?: string | null;
+  rejected_qty?: string | null;
+  rejection_reason?: string | null;
+  unit_price?: string | null;
 }
 
 export interface GoodsReceivingItemResponse {
@@ -9486,11 +9946,31 @@ export interface GoodsReceivingItemResponse {
   warehouse_id: number;
   quantity: string;
   lot_number?: string | null;
+  purchase_order_line_id?: number | null;
+  ordered_qty?: string | null;
+  previously_received_qty?: string | null;
+  received_qty?: string | null;
+  accepted_qty?: string | null;
+  rejected_qty?: string | null;
+  pending_qty?: string | null;
+  unit_price?: string | null;
+  accepted_value?: string | null;
+  rejection_reason?: string | null;
+  source_order_id?: number | null;
+  source_bom_id?: number | null;
+  source_bom_line_id?: number | null;
 }
 
 export interface GoodsReceivingCreate {
   grn_code?: string;
   purchase_order_id?: number | null;
+  vendor_id?: number | null;
+  default_warehouse_id?: number | null;
+  source_type?: string | null;
+  non_po_reason?: string | null;
+  supplier_delivery_challan_no?: string | null;
+  supplier_invoice_no?: string | null;
+  vehicle_info?: string | null;
   received_date?: string | null;
   notes?: string;
   status?: string;
@@ -9505,7 +9985,25 @@ export interface GoodsReceivingResponse {
   received_date: string | null;
   status: string;
   notes: string | null;
+  created_by_user_id?: number | null;
+  vendor_id?: number | null;
+  default_warehouse_id?: number | null;
+  source_type?: string | null;
+  approval_status?: string | null;
+  supplier_delivery_challan_no?: string | null;
+  supplier_invoice_no?: string | null;
+  vehicle_info?: string | null;
+  non_po_reason?: string | null;
+  acknowledgement_issued?: boolean;
+  source_order_id?: number | null;
+  source_bom_id?: number | null;
+  btb_lc_id?: number | null;
+  master_contract_id?: number | null;
+  export_case_id?: number | null;
   items: GoodsReceivingItemResponse[];
+  verification_id?: string | null;
+  signature_hash?: string | null;
+  signed_at?: string | null;
 }
 
 export interface StockSummaryRow {
@@ -9809,6 +10307,10 @@ export interface WarehouseTransferResponse {
   status: string;
   notes: string | null;
   items: WarehouseTransferLineResponse[];
+  created_by_user_id?: number | null;
+  verification_id?: string | null;
+  signature_hash?: string | null;
+  signed_at?: string | null;
 }
 
 export interface WarehouseTransferCreate {
@@ -9854,6 +10356,7 @@ export interface DeliveryChallanCreate {
   notes?: string;
   status?: string;
   items: DeliveryChallanItemCreate[];
+  order_ids?: number[];
 }
 
 export interface DeliveryChallanItemResponse {
@@ -9873,6 +10376,11 @@ export interface DeliveryChallanResponse {
   status: string;
   notes: string | null;
   items: DeliveryChallanItemResponse[];
+  order_ids?: number[];
+  created_by_user_id?: number | null;
+  verification_id?: string | null;
+  signature_hash?: string | null;
+  signed_at?: string | null;
 }
 
 export interface EnhancedGatePassCreate {
@@ -9896,6 +10404,9 @@ export interface EnhancedGatePassResponse {
   status: string;
   guard_acknowledged: boolean;
   notes: string | null;
+  verification_id?: string | null;
+  signature_hash?: string | null;
+  signed_at?: string | null;
 }
 
 export interface ProcessOrderCreate {
@@ -9909,6 +10420,19 @@ export interface ProcessOrderCreate {
   input_quantity: string;
   expected_output_qty: string;
   remarks?: string;
+  process_stage?: string | null;
+  prior_process_order_id?: number | null;
+  vendor_id?: number | null;
+  output_warehouse_id?: number | null;
+  source_bom_id?: number | null;
+  source_order_id?: number | null;
+  btb_lc_id?: number | null;
+  master_contract_id?: number | null;
+  export_case_id?: number | null;
+  planned_loss_pct?: string | null;
+  output_same_as_input?: boolean | null;
+  output_grade?: string | null;
+  output_lot_number?: string | null;
 }
 
 export interface ProcessOrderReceive {
@@ -9932,6 +10456,190 @@ export interface ProcessOrderResponse {
   processing_charges: string;
   status: string;
   remarks: string | null;
+  process_stage?: string | null;
+  prior_process_order_id?: number | null;
+  vendor_id?: number | null;
+  output_warehouse_id?: number | null;
+  source_bom_id?: number | null;
+  source_order_id?: number | null;
+  btb_lc_id?: number | null;
+  master_contract_id?: number | null;
+  export_case_id?: number | null;
+  planned_loss_pct?: string | null;
+  actual_loss_qty?: string | null;
+  output_grade?: string | null;
+  output_lot_number?: string | null;
+  output_same_as_input?: boolean | null;
+  verification_id?: string | null;
+  signature_hash?: string | null;
+  signed_at?: string | null;
+}
+
+export interface ProductionMaterialIssueLineCreate {
+  bom_line_id: number;
+  actual_issue_qty: string;
+}
+
+export interface ProductionMaterialIssueCreate {
+  order_id: number;
+  bom_id: number;
+  production_stage: string;
+  covered_order_qty: number;
+  warehouse_id: number;
+  issue_date?: string | null;
+  notes?: string | null;
+  lines: ProductionMaterialIssueLineCreate[];
+}
+
+export interface ProductionMaterialIssueResponse {
+  id: number;
+  tenant_id: number;
+  issue_code: string;
+  order_id: number;
+  bom_id: number;
+  production_stage: string;
+  covered_order_qty: number;
+  warehouse_id: number;
+  status: string;
+  issue_date?: string | null;
+  verification_id?: string | null;
+  signature_hash?: string | null;
+  signed_at?: string | null;
+}
+
+export interface ProductionMaterialIssueLineDetailResponse {
+  id: number;
+  issue_id: number;
+  bom_line_id: number;
+  item_id: number;
+  standard_qty_for_covered?: string | null;
+  actual_issue_qty: string;
+  variance_qty?: string | null;
+  variance_pct?: string | null;
+  variance_type?: string | null;
+  approval_required: boolean;
+  stock_movement_id?: number | null;
+}
+
+export interface ProductionMaterialIssueDetailResponse extends ProductionMaterialIssueResponse {
+  lines: ProductionMaterialIssueLineDetailResponse[];
+}
+
+export interface InventoryGlPostingDetail {
+  posting_id: number;
+  action: string;
+  source_system: string;
+  source_id: number;
+  voucher_id: number;
+  voucher_number: string;
+  voucher_date: string | null;
+  voucher_status: string;
+  lines: Array<{
+    line_id: number;
+    account_id: number;
+    entry_type: string;
+    amount: string;
+    notes: string | null;
+  }>;
+  created_at?: string | null;
+}
+
+export interface InventoryDocumentVerifyResponse {
+  document_type: string;
+  document_id: number;
+  document_code: string | null;
+  verification_id: string | null;
+  is_valid: boolean;
+  signature_hash: string | null;
+  recalculated_hash: string;
+  signed_at: string | null;
+}
+
+export interface InventoryDocumentPrintPayload {
+  tenant: {
+    name: string;
+    company_code?: string | null;
+    domain?: string | null;
+    address?: string | null;
+  };
+  document_type: string;
+  document: Record<string, unknown>;
+  lines: Array<Record<string, unknown>>;
+  verification_path?: string | null;
+  print_meta?: {
+    generated_at?: string;
+    title?: string;
+    copy_labels?: string[];
+  };
+}
+
+export interface PurchaseOrderReceiptProgressLine {
+  purchase_order_line_id: number;
+  item_id: number;
+  ordered_qty: number;
+  accepted_received_qty: number;
+  pending_qty: number;
+  unit_price: string;
+}
+
+export interface PurchaseOrderReceiptProgress {
+  purchase_order_id: number;
+  po_code: string;
+  status: string;
+  lines: PurchaseOrderReceiptProgressLine[];
+}
+
+export interface MaterialControlStockMovementRow {
+  id: number;
+  movement_type: string;
+  movement_kind?: string | null;
+  item_id: number;
+  warehouse_id: number | null;
+  quantity: string;
+  reference_type: string | null;
+  reference_id: number | null;
+  order_id?: number | null;
+  bom_id?: number | null;
+  bom_line_id?: number | null;
+  purchase_order_id?: number | null;
+  goods_receiving_id?: number | null;
+  process_order_id?: number | null;
+  movement_value: string | null;
+  movement_date: string | null;
+}
+
+export interface VendorBillSummary {
+  id: number;
+  bill_code: string;
+  vendor_id: number;
+  status: string;
+  goods_receiving_id: number | null;
+  purchase_order_id: number | null;
+  total_amount: string | null;
+  vendor_invoice_ref: string | null;
+}
+
+export interface VendorBillLineResponse {
+  id: number;
+  item_id: number;
+  quantity: string;
+  unit_price: string;
+  line_total: string | null;
+  goods_receiving_item_id: number | null;
+  purchase_order_line_id: number | null;
+}
+
+export interface VendorBillDetailResponse {
+  id: number;
+  bill_code: string;
+  vendor_id: number;
+  status: string;
+  vendor_invoice_ref?: string | null;
+  goods_receiving_id: number | null;
+  purchase_order_id: number | null;
+  source_order_id: number | null;
+  is_non_po_receipt: boolean;
+  lines: VendorBillLineResponse[];
 }
 
 export interface ManufacturingOrderCreate {
@@ -10504,6 +11212,7 @@ export interface ConsumptionIssueCreate {
   issue_qty: number;
   warehouse_id?: number | null;
   remarks?: string;
+  bom_line_id?: number | null;
 }
 
 export interface InventoryReconciliationOverview {
@@ -10516,6 +11225,10 @@ export interface InventoryReconciliationOverview {
   gate_pass_total: number;
   gate_pass_released: number;
   stock_items_on_hand: number;
+  production_material_issues_total?: number;
+  vendor_bills_draft?: number;
+  vendor_bills_posted?: number;
+  stock_movements_total?: number;
 }
 
 export interface ConsumptionChangeRequestItem {
@@ -10792,6 +11505,12 @@ export interface OrderResponse {
   delivery_date: string | null;
   quantity: number | null;
   status: string;
+  /** Auto-advanced lifecycle stage (source of truth for fulfillment). */
+  pipeline_status?: string | null;
+  pipeline_na_steps?: string[] | null;
+  order_type?: string | null;
+  master_contract_id?: number | null;
+  rm_inhouse_pct?: number | null;
   remarks: string | null;
   created_at: string;
   updated_at: string;
@@ -10800,6 +11519,25 @@ export interface OrderResponse {
   commercial_book_currency?: string | null;
   customer_name?: string | null;
   quotation_code?: string | null;
+}
+
+export type OrderPipelineStepStatus = "done" | "current" | "pending" | "na";
+
+export interface OrderMilestoneStep {
+  name: string;
+  status: OrderPipelineStepStatus;
+  timestamp: string | null;
+  linked_ids: number[];
+  rm_pct?: number | null;
+}
+
+export interface OrderMilestonesResponse {
+  pipeline_status: string;
+  rm_inhouse_pct: number;
+  steps: OrderMilestoneStep[];
+  tna_warnings: string[];
+  pipeline_na_steps: string[];
+  order_type: string | null;
 }
 
 export interface OrderListPageResponse {
@@ -11210,6 +11948,142 @@ export interface GeneratePOFromBOMResponse {
   id: number;
   po_code: string;
   warnings?: string[];
+}
+
+/** Order-driven BOM (API under /merch/order-boms/*) */
+export interface EligibleOrderForBom {
+  order_id: number;
+  order_code: string;
+  customer_name: string;
+  style_id: number;
+  style_code: string | null;
+  style_name: string | null;
+  quotation_id: number;
+  quotation_code: string;
+  order_qty: number | null;
+  delivery_date: string | null;
+  status: string;
+}
+
+export type BomLineProcurementStatus =
+  | "NOT_PROCURED"
+  | "PO_DRAFT"
+  | "PO_APPROVED"
+  | "PARTIALLY_RECEIVED"
+  | "FULLY_RECEIVED";
+
+export interface OrderDrivenBomHeader {
+  id: number;
+  tenant_id: number;
+  style_id: number;
+  order_id: number | null;
+  quotation_id: number | null;
+  is_active: boolean;
+  is_legacy: boolean;
+  revision_of_bom_id: number | null;
+  order_code_snapshot: string | null;
+  quotation_code_snapshot: string | null;
+  order_qty_snapshot: number | null;
+  order_qty_at_approval: number | null;
+  currency_snapshot: string | null;
+  version_no: number;
+  status: string;
+  notes: string | null;
+  submitted_at: string | null;
+  submitted_by: number | null;
+  approved_at: string | null;
+  approved_by: number | null;
+  rejected_at: string | null;
+  rejected_by: number | null;
+  rejection_comment: string | null;
+  frozen_at: string | null;
+  frozen_by: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface OrderDrivenBomLine {
+  id: number;
+  bom_id: number;
+  item_id: number | null;
+  quotation_line_id: number | null;
+  category: string;
+  item_code: string | null;
+  description: string | null;
+  item_code_snapshot: string | null;
+  description_snapshot: string | null;
+  material_type: string | null;
+  uom: string | null;
+  base_consumption: string;
+  wastage_pct: string | null;
+  process_loss_pct: number | null;
+  quoted_consumption_per_unit: number | null;
+  quoted_unit_price: number | null;
+  quoted_currency: string | null;
+  quoted_total_cost: number | null;
+  bom_net_consumption_per_unit: number | null;
+  bom_gross_consumption_per_unit: number | null;
+  order_qty_snapshot: number | null;
+  required_net_qty: number | null;
+  wastage_qty: number | null;
+  process_loss_qty: number | null;
+  required_gross_qty: number | null;
+  vendor_suggested_price: number | null;
+  bom_expected_unit_price: number | null;
+  bom_expected_total_cost: number | null;
+  consumption_variance_pct: number | null;
+  price_variance_pct: number | null;
+  total_cost_variance: number | null;
+  preferred_vendor_id: number | null;
+  remarks: string | null;
+  sort_order: number;
+  procurement_status: BomLineProcurementStatus;
+}
+
+export interface OrderDrivenBomSummary {
+  total_quoted_material_cost: number;
+  total_bom_material_cost: number;
+  variance_amount: number;
+  planned_wastage_cost: number;
+  planned_process_loss_cost: number;
+  lines_pending_vendor: number;
+  lines_ready_for_po: number;
+  lines_procurement_started: number;
+}
+
+export interface OrderDrivenBomDetailResponse {
+  bom: OrderDrivenBomHeader;
+  items: OrderDrivenBomLine[];
+  summary: OrderDrivenBomSummary;
+}
+
+export interface OrderDrivenBomLinePatch {
+  bom_net_consumption_per_unit?: number | null;
+  wastage_pct?: number | null;
+  process_loss_pct?: number | null;
+  bom_expected_unit_price?: number | null;
+  preferred_vendor_id?: number | null;
+  remarks?: string | null;
+  item_id?: number | null;
+}
+
+export interface OrderDrivenBomLineCreate {
+  item_id?: number | null;
+  description?: string | null;
+  uom?: string | null;
+  bom_net_consumption_per_unit?: number;
+  wastage_pct?: number;
+  process_loss_pct?: number;
+  bom_expected_unit_price?: number;
+  category?: string;
+}
+
+export interface CreatePoFromOrderBomLinePayload {
+  vendor_id?: number | null;
+  quantity: number;
+  unit_price?: string;
+  currency?: string | null;
+  warehouse_id?: number | null;
 }
 
 export interface MaterialRequirementLineResponse {
@@ -11830,6 +12704,23 @@ export interface ConsumptionReconciliationRow {
   cost_variance?: number | null;
   last_issued_at?: string | null;
   movement_count?: number;
+  quoted_consumption_per_unit?: number | null;
+  bom_net_consumption_per_unit?: number | null;
+  bom_gross_consumption_per_unit?: number | null;
+  wastage_pct?: number | null;
+  process_loss_pct?: number | null;
+  quoted_planned_qty?: number | null;
+  quoted_planned_cost?: number | null;
+  bom_planned_cost?: number | null;
+  quoted_vs_bom_variance_pct?: number | null;
+  bom_vs_actual_variance_pct?: number | null;
+  quoted_vs_actual_variance_pct?: number | null;
+  planned_wastage_qty?: number | null;
+  planned_process_loss_qty?: number | null;
+  planned_loss_vs_actual_loss?: number | null;
+  cost_impact_quoted_vs_bom?: number | null;
+  cost_impact_bom_vs_actual?: number | null;
+  cost_impact_quoted_vs_actual?: number | null;
 }
 
 export interface ConsumptionReconciliationResponse {
@@ -11850,6 +12741,11 @@ export interface ConsumptionReconciliationResponse {
     total_actual_cost?: number;
     cost_variance?: number;
     cost_variance_pct?: number;
+    total_quoted_planned_qty?: number;
+    total_quoted_planned_cost?: number;
+    total_bom_planned_cost?: number;
+    quoted_vs_bom_cost_variance?: number;
+    quoted_vs_actual_cost_variance?: number;
   };
   bom_version?: string | null;
   bom_status?: string | null;
@@ -13011,8 +13907,10 @@ export interface BtbLcAccountingRow {
 }
 
 export interface BtbLcRecordOpeningBody {
-  upcoming_lc_liability_account_id: number;
-  blocked_credit_facility_account_id: number;
+  /** Omit to use system ledger BTB_NON_ACCEPTED_LC_LIABILITY */
+  upcoming_lc_liability_account_id?: number | null;
+  /** Omit to use system ledger BTB_CREDIT_LINE_UTILIZATION_CONTROL */
+  blocked_credit_facility_account_id?: number | null;
   voucher_date?: string | null;
   amount?: number | null;
   description?: string | null;
@@ -13020,8 +13918,10 @@ export interface BtbLcRecordOpeningBody {
 }
 
 export interface BtbLcRecordDocumentsAcceptanceBody {
-  lc_liability_account_id: number;
-  import_bill_liability_account_id: number;
+  /** Omit to use system ledger BTB_NON_ACCEPTED_LC_LIABILITY */
+  lc_liability_account_id?: number | null;
+  /** Omit to use system ledger BTB_ACCEPTED_LC_LIABILITY */
+  import_bill_liability_account_id?: number | null;
   maturity_date?: string | null;
   voucher_date?: string | null;
   amount?: number | null;
@@ -13030,8 +13930,10 @@ export interface BtbLcRecordDocumentsAcceptanceBody {
 }
 
 export interface BtbLcRecordRealizationBody {
-  import_bill_liability_account_id: number;
-  payment_account_id: number;
+  /** Omit to use system ledger BTB_ACCEPTED_LC_LIABILITY */
+  import_bill_liability_account_id?: number | null;
+  /** Omit if BTB LC bank account has gl_account_id configured */
+  payment_account_id?: number | null;
   voucher_date?: string | null;
   amount?: number | null;
   description?: string | null;

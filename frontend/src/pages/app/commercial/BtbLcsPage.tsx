@@ -110,6 +110,9 @@ export function BtbLcsPage() {
     voucher_date: "",
     amount: "",
   });
+  const [advancedOpeningAccounts, setAdvancedOpeningAccounts] = useState(false);
+  const [advancedDocsAccounts, setAdvancedDocsAccounts] = useState(false);
+  const [advancedRealizationDebit, setAdvancedRealizationDebit] = useState(false);
   const [alertMap, setAlertMap] = useState<Record<number, MerchAlertItem[]>>({});
 
   const severityRank: Record<string, number> = {
@@ -292,6 +295,9 @@ export function BtbLcsPage() {
     setOpenActionsId(null);
     setSelectedAccountingLc(lc);
     setAccountingDrawerOpen(true);
+    setAdvancedOpeningAccounts(false);
+    setAdvancedDocsAccounts(false);
+    setAdvancedRealizationDebit(false);
     resetAccountingForms(lc);
     await loadAccounting(lc);
   };
@@ -349,12 +355,15 @@ export function BtbLcsPage() {
     setSubmittingAccountingAction(true);
     setAccountingError("");
     try {
-      await api.recordBtbLcOpening(selectedAccountingLc.id, {
-        upcoming_lc_liability_account_id: Number(openEntryForm.upcoming_lc_liability_account_id),
-        blocked_credit_facility_account_id: Number(openEntryForm.blocked_credit_facility_account_id),
+      const openingBody: Parameters<typeof api.recordBtbLcOpening>[1] = {
         voucher_date: openEntryForm.voucher_date || undefined,
         amount: openEntryForm.amount ? Number(openEntryForm.amount) : undefined,
-      });
+      };
+      const up = openEntryForm.upcoming_lc_liability_account_id.trim();
+      const blk = openEntryForm.blocked_credit_facility_account_id.trim();
+      if (up) openingBody.upcoming_lc_liability_account_id = Number(up);
+      if (blk) openingBody.blocked_credit_facility_account_id = Number(blk);
+      await api.recordBtbLcOpening(selectedAccountingLc.id, openingBody);
       await Promise.all([loadAccounting(selectedAccountingLc), load()]);
     } catch (e) {
       logApiError("BtbLcsPage.submitOpening", e);
@@ -369,13 +378,16 @@ export function BtbLcsPage() {
     setSubmittingAccountingAction(true);
     setAccountingError("");
     try {
-      await api.recordBtbLcDocumentsAcceptance(selectedAccountingLc.id, {
-        lc_liability_account_id: Number(docsEntryForm.lc_liability_account_id),
-        import_bill_liability_account_id: Number(docsEntryForm.import_bill_liability_account_id),
+      const docsBody: Parameters<typeof api.recordBtbLcDocumentsAcceptance>[1] = {
         maturity_date: docsEntryForm.maturity_date || undefined,
         voucher_date: docsEntryForm.voucher_date || undefined,
         amount: docsEntryForm.amount ? Number(docsEntryForm.amount) : undefined,
-      });
+      };
+      const lcL = docsEntryForm.lc_liability_account_id.trim();
+      const imp = docsEntryForm.import_bill_liability_account_id.trim();
+      if (lcL) docsBody.lc_liability_account_id = Number(lcL);
+      if (imp) docsBody.import_bill_liability_account_id = Number(imp);
+      await api.recordBtbLcDocumentsAcceptance(selectedAccountingLc.id, docsBody);
       await Promise.all([loadAccounting(selectedAccountingLc), load()]);
     } catch (e) {
       logApiError("BtbLcsPage.submitDocumentsAcceptance", e);
@@ -390,12 +402,15 @@ export function BtbLcsPage() {
     setSubmittingAccountingAction(true);
     setAccountingError("");
     try {
-      await api.recordBtbLcRealization(selectedAccountingLc.id, {
-        import_bill_liability_account_id: Number(realizationEntryForm.import_bill_liability_account_id),
-        payment_account_id: Number(realizationEntryForm.payment_account_id),
+      const realBody: Parameters<typeof api.recordBtbLcRealization>[1] = {
         voucher_date: realizationEntryForm.voucher_date || undefined,
         amount: realizationEntryForm.amount ? Number(realizationEntryForm.amount) : undefined,
-      });
+      };
+      const ib = realizationEntryForm.import_bill_liability_account_id.trim();
+      const pay = realizationEntryForm.payment_account_id.trim();
+      if (ib) realBody.import_bill_liability_account_id = Number(ib);
+      if (pay) realBody.payment_account_id = Number(pay);
+      await api.recordBtbLcRealization(selectedAccountingLc.id, realBody);
       await Promise.all([loadAccounting(selectedAccountingLc), load()]);
     } catch (e) {
       logApiError("BtbLcsPage.submitRealization", e);
@@ -946,35 +961,52 @@ export function BtbLcsPage() {
 
                   <section className="rounded-lg border border-border p-3">
                     <h3 className="text-sm font-semibold text-text-primary">1) Record LC Opening</h3>
+                    <p className="mt-1 text-xs text-text-muted">
+                      Default accounts (system COA): debit <span className="font-mono">BTB_NON_ACCEPTED_LC_LIABILITY</span>
+                      , credit <span className="font-mono">BTB_CREDIT_LINE_UTILIZATION_CONTROL</span>. Expand below only if
+                      you need different ledgers.
+                    </p>
+                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={advancedOpeningAccounts}
+                        onChange={(e) => setAdvancedOpeningAccounts(e.target.checked)}
+                      />
+                      Advanced: override GL accounts
+                    </label>
                     <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-                      <select
-                        className="rounded border border-border-strong px-2 py-1 text-sm"
-                        value={openEntryForm.upcoming_lc_liability_account_id}
-                        onChange={(e) =>
-                          setOpenEntryForm((p) => ({ ...p, upcoming_lc_liability_account_id: e.target.value }))
-                        }
-                      >
-                        <option value="">Upcoming LC Liability Account</option>
-                        {accounts.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.account_number} - {a.name}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        className="rounded border border-border-strong px-2 py-1 text-sm"
-                        value={openEntryForm.blocked_credit_facility_account_id}
-                        onChange={(e) =>
-                          setOpenEntryForm((p) => ({ ...p, blocked_credit_facility_account_id: e.target.value }))
-                        }
-                      >
-                        <option value="">Blocked Credit Facility Account</option>
-                        {accounts.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.account_number} - {a.name}
-                          </option>
-                        ))}
-                      </select>
+                      {advancedOpeningAccounts && (
+                        <>
+                          <select
+                            className="rounded border border-border-strong px-2 py-1 text-sm"
+                            value={openEntryForm.upcoming_lc_liability_account_id}
+                            onChange={(e) =>
+                              setOpenEntryForm((p) => ({ ...p, upcoming_lc_liability_account_id: e.target.value }))
+                            }
+                          >
+                            <option value="">Upcoming LC Liability (Debit) — optional override</option>
+                            {accounts.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.account_number} - {a.name}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            className="rounded border border-border-strong px-2 py-1 text-sm"
+                            value={openEntryForm.blocked_credit_facility_account_id}
+                            onChange={(e) =>
+                              setOpenEntryForm((p) => ({ ...p, blocked_credit_facility_account_id: e.target.value }))
+                            }
+                          >
+                            <option value="">Blocked Credit Facility (Credit) — optional override</option>
+                            {accounts.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.account_number} - {a.name}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      )}
                       <input
                         type="date"
                         className="rounded border border-border-strong px-2 py-1 text-sm"
@@ -1002,35 +1034,51 @@ export function BtbLcsPage() {
 
                   <section className="rounded-lg border border-border p-3">
                     <h3 className="text-sm font-semibold text-text-primary">2) Record Documents Acceptance</h3>
+                    <p className="mt-1 text-xs text-text-muted">
+                      Default: debit <span className="font-mono">BTB_NON_ACCEPTED_LC_LIABILITY</span>, credit{" "}
+                      <span className="font-mono">BTB_ACCEPTED_LC_LIABILITY</span>.
+                    </p>
+                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={advancedDocsAccounts}
+                        onChange={(e) => setAdvancedDocsAccounts(e.target.checked)}
+                      />
+                      Advanced: override GL accounts
+                    </label>
                     <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-                      <select
-                        className="rounded border border-border-strong px-2 py-1 text-sm"
-                        value={docsEntryForm.lc_liability_account_id}
-                        onChange={(e) =>
-                          setDocsEntryForm((p) => ({ ...p, lc_liability_account_id: e.target.value }))
-                        }
-                      >
-                        <option value="">LC Liability (Debit)</option>
-                        {accounts.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.account_number} - {a.name}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        className="rounded border border-border-strong px-2 py-1 text-sm"
-                        value={docsEntryForm.import_bill_liability_account_id}
-                        onChange={(e) =>
-                          setDocsEntryForm((p) => ({ ...p, import_bill_liability_account_id: e.target.value }))
-                        }
-                      >
-                        <option value="">Import Bill Liability (Credit)</option>
-                        {accounts.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.account_number} - {a.name}
-                          </option>
-                        ))}
-                      </select>
+                      {advancedDocsAccounts && (
+                        <>
+                          <select
+                            className="rounded border border-border-strong px-2 py-1 text-sm"
+                            value={docsEntryForm.lc_liability_account_id}
+                            onChange={(e) =>
+                              setDocsEntryForm((p) => ({ ...p, lc_liability_account_id: e.target.value }))
+                            }
+                          >
+                            <option value="">LC Liability (Debit) — optional override</option>
+                            {accounts.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.account_number} - {a.name}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            className="rounded border border-border-strong px-2 py-1 text-sm"
+                            value={docsEntryForm.import_bill_liability_account_id}
+                            onChange={(e) =>
+                              setDocsEntryForm((p) => ({ ...p, import_bill_liability_account_id: e.target.value }))
+                            }
+                          >
+                            <option value="">Import Bill Liability (Credit) — optional override</option>
+                            {accounts.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.account_number} - {a.name}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      )}
                       <input
                         type="date"
                         className="rounded border border-border-strong px-2 py-1 text-sm"
@@ -1064,32 +1112,46 @@ export function BtbLcsPage() {
 
                   <section className="rounded-lg border border-border p-3">
                     <h3 className="text-sm font-semibold text-text-primary">3) Record Realization</h3>
+                    <p className="mt-1 text-xs text-text-muted">
+                      Default debit: <span className="font-mono">BTB_ACCEPTED_LC_LIABILITY</span>. Credit: your bank/cash GL
+                      (select below), or omit if this BTB LC has a bank account with GL linked.
+                    </p>
+                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={advancedRealizationDebit}
+                        onChange={(e) => setAdvancedRealizationDebit(e.target.checked)}
+                      />
+                      Advanced: override import-bill liability (debit) account
+                    </label>
                     <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                      {advancedRealizationDebit && (
+                        <select
+                          className="rounded border border-border-strong px-2 py-1 text-sm"
+                          value={realizationEntryForm.import_bill_liability_account_id}
+                          onChange={(e) =>
+                            setRealizationEntryForm((p) => ({
+                              ...p,
+                              import_bill_liability_account_id: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Import Bill Liability (Debit) — optional override</option>
+                          {accounts.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.account_number} - {a.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       <select
-                        className="rounded border border-border-strong px-2 py-1 text-sm"
-                        value={realizationEntryForm.import_bill_liability_account_id}
-                        onChange={(e) =>
-                          setRealizationEntryForm((p) => ({
-                            ...p,
-                            import_bill_liability_account_id: e.target.value,
-                          }))
-                        }
-                      >
-                        <option value="">Import Bill Liability (Debit)</option>
-                        {accounts.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.account_number} - {a.name}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        className="rounded border border-border-strong px-2 py-1 text-sm"
+                        className="rounded border border-border-strong px-2 py-1 text-sm md:col-span-2"
                         value={realizationEntryForm.payment_account_id}
                         onChange={(e) =>
                           setRealizationEntryForm((p) => ({ ...p, payment_account_id: e.target.value }))
                         }
                       >
-                        <option value="">Payment Account (Bank/Cash)</option>
+                        <option value="">Payment / bank GL (optional if LC bank has GL)</option>
                         {accounts.map((a) => (
                           <option key={a.id} value={a.id}>
                             {a.account_number} - {a.name}

@@ -410,6 +410,12 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <Link to="/trust-center" className="hover:text-brand-primary transition-colors">
                 Trust Center
               </Link>
+              <span className="text-text-muted/50 hidden sm:inline" aria-hidden>
+                ·
+              </span>
+              <Link to="/sitemap" className="hover:text-brand-primary transition-colors">
+                Site map
+              </Link>
             </nav>
           </div>
         </div>

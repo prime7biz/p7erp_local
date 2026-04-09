@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -10,6 +10,9 @@ from app.database import Base
 
 class AccountGroup(Base):
     __tablename__ = "account_groups"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "system_code", name="uq_account_groups_tenant_system_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -30,6 +33,9 @@ class AccountGroup(Base):
     allow_posting: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_summary_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_reviewed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+    system_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_protected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -66,6 +72,9 @@ class CoAConfig(Base):
 
 class ChartOfAccount(Base):
     __tablename__ = "chart_of_accounts"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "system_code", name="uq_chart_of_accounts_tenant_system_code"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -91,6 +100,11 @@ class ChartOfAccount(Base):
     )
     last_reviewed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     enable_bill_wise: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    system_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_protected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    usage_purpose: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    linked_module: Mapped[str | None] = mapped_column(String(64), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -100,6 +114,29 @@ class ChartOfAccount(Base):
     # Optimistic locking: UPDATE ... WHERE version = :v; must use Column ref, not str "version"
     # (str breaks INSERT return_defaults in SQLAlchemy 2.x).
     __mapper_args__ = {"version_id_col": version}
+
+
+class AccountingSystemMapping(Base):
+    """Maps stable keys (e.g. BTB_NON_ACCEPTED_LC_LIABILITY) to tenant chart_of_accounts.id for posting."""
+
+    __tablename__ = "accounting_system_mappings"
+    __table_args__ = (UniqueConstraint("tenant_id", "mapping_key", name="uq_accounting_system_mappings_tenant_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    mapping_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    ledger_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("account_groups.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    module: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class VoucherType(Base):
@@ -140,11 +177,17 @@ class Voucher(Base):
     trade_case_id: Mapped[int | None] = mapped_column(
         ForeignKey("trade_cases.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     btb_lc_id: Mapped[int | None] = mapped_column(
         ForeignKey("btb_lcs.id", ondelete="SET NULL"), nullable=True, index=True
     )
     mfg_work_order_id: Mapped[int | None] = mapped_column(
         ForeignKey("mfg_work_orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    facility_utilization_id: Mapped[int | None] = mapped_column(
+        ForeignKey("facility_utilizations.id", ondelete="SET NULL"), nullable=True, index=True
     )
     # Series / control (branch + fiscal year + type; calendar FY until tenant FY config exists)
     branch_code: Mapped[str] = mapped_column(String(32), nullable=False, default="MAIN", index=True)
@@ -245,6 +288,76 @@ class FxReceipt(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="OPEN", index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class VendorBill(Base):
+    """Finance-owned purchase invoice / vendor bill (AP), matched to GRN/PO."""
+
+    __tablename__ = "vendor_bills"
+    __table_args__ = (UniqueConstraint("tenant_id", "bill_code", name="uq_vendor_bills_tenant_bill_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    bill_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id", ondelete="RESTRICT"), nullable=False, index=True)
+    vendor_invoice_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    vendor_invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    bill_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    exchange_rate_to_base: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    subtotal_amount: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    tax_amount: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    total_amount: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="DRAFT", index=True)
+    goods_receiving_id: Mapped[int | None] = mapped_column(
+        ForeignKey("goods_receiving.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    purchase_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_non_po_receipt: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    voucher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    approved_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class VendorBillLine(Base):
+    __tablename__ = "vendor_bill_lines"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    vendor_bill_id: Mapped[int] = mapped_column(
+        ForeignKey("vendor_bills.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    goods_receiving_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("goods_receiving_items.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    purchase_order_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_order_items.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    unit_price: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    line_total: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    tax_rate: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    tax_amount: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class OutstandingBill(Base):

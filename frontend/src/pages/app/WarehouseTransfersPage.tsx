@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api,
+  type InventoryDocumentPrintPayload,
+  type InventoryGlPostingDetail,
   type InventoryItemResponse,
   type WarehouseResponse,
   type WarehouseTransferCreate,
   type WarehouseTransferResponse,
 } from "@/api/client";
+import { GlPostingsPanel } from "@/components/inventory/GlPostingsPanel";
+import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocumentPrintSheets";
+import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
+import { logApiError } from "@/utils/logApiError";
 import {
   InventoryEmptyState,
   InventoryErrorPanel,
@@ -34,6 +40,14 @@ export function WarehouseTransfersPage() {
   });
   const [loading, setLoading] = useState(true);
   const { isNarrow, view, setView, showCards } = useListViewPreference();
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printData, setPrintData] = useState<InventoryDocumentPrintPayload | null>(null);
+  const [printTitle, setPrintTitle] = useState("");
+  const [printCopyCount, setPrintCopyCount] = useState(1);
+  const [printTemplate, setPrintTemplate] = useState<"standard" | "compact" | "audit">("standard");
+  const [postingsOpen, setPostingsOpen] = useState(false);
+  const [postingsRows, setPostingsRows] = useState<InventoryGlPostingDetail[]>([]);
+  const [postingsTitle, setPostingsTitle] = useState("");
 
   const load = useCallback(async () => {
     setError("");
@@ -259,7 +273,7 @@ export function WarehouseTransfersPage() {
                     {row.transfer_date ? new Date(row.transfer_date).toLocaleDateString() : "—"} · {row.status}
                   </div>
                 </div>
-                {row.status === "DRAFT" ? (
+                {row.status === "DRAFT" || row.status === "POSTED" ? (
                   <div className="relative inline-block shrink-0">
                     <button
                       type="button"
@@ -273,22 +287,66 @@ export function WarehouseTransfersPage() {
                     </button>
                     {openActionsId === row.id && (
                       <div className="absolute right-0 z-10 mt-1 w-44 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                        {row.status === "DRAFT" ? (
+                          <button
+                            type="button"
+                            className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setOpenActionsId(null);
+                              setError("");
+                              try {
+                                await api.postWarehouseTransfer(row.id);
+                                await load();
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : "Post failed");
+                              }
+                            }}
+                          >
+                            Post to stock
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
-                          onClick={async (e) => {
+                          onClick={(e) => {
                             e.stopPropagation();
                             setOpenActionsId(null);
-                            setError("");
-                            try {
-                              await api.postWarehouseTransfer(row.id);
-                              await load();
-                            } catch (err) {
-                              setError(err instanceof Error ? err.message : "Post failed");
-                            }
+                            void (async () => {
+                              try {
+                                const d = await api.getWarehouseTransferPrintData(row.id);
+                                setPrintData(d);
+                                setPrintTitle(row.transfer_code);
+                                setPrintOpen(true);
+                              } catch (err) {
+                                logApiError("WarehouseTransfersPage.print", err);
+                                setError(err instanceof Error ? err.message : "Print failed");
+                              }
+                            })();
                           }}
                         >
-                          Post to stock
+                          Print preview
+                        </button>
+                        <button
+                          type="button"
+                          className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenActionsId(null);
+                            void (async () => {
+                              try {
+                                const p = await api.getWarehouseTransferGlPostings(row.id);
+                                setPostingsRows(p);
+                                setPostingsTitle(row.transfer_code);
+                                setPostingsOpen(true);
+                              } catch (err) {
+                                logApiError("WarehouseTransfersPage.postings", err);
+                                setError(err instanceof Error ? err.message : "Postings failed");
+                              }
+                            })();
+                          }}
+                        >
+                          GL postings
                         </button>
                       </div>
                     )}
@@ -337,7 +395,7 @@ export function WarehouseTransfersPage() {
                     ))}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {row.status === "DRAFT" ? (
+                    {row.status === "DRAFT" || row.status === "POSTED" ? (
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
@@ -351,22 +409,66 @@ export function WarehouseTransfersPage() {
                         </button>
                         {openActionsId === row.id && (
                           <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                            {row.status === "DRAFT" ? (
+                              <button
+                                type="button"
+                                className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setOpenActionsId(null);
+                                  setError("");
+                                  try {
+                                    await api.postWarehouseTransfer(row.id);
+                                    await load();
+                                  } catch (err) {
+                                    setError(err instanceof Error ? err.message : "Post failed");
+                                  }
+                                }}
+                              >
+                                Post to stock
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
-                              onClick={async (e) => {
+                              onClick={(e) => {
                                 e.stopPropagation();
                                 setOpenActionsId(null);
-                                setError("");
-                                try {
-                                  await api.postWarehouseTransfer(row.id);
-                                  await load();
-                                } catch (err) {
-                                  setError(err instanceof Error ? err.message : "Post failed");
-                                }
+                                void (async () => {
+                                  try {
+                                    const d = await api.getWarehouseTransferPrintData(row.id);
+                                    setPrintData(d);
+                                    setPrintTitle(row.transfer_code);
+                                    setPrintOpen(true);
+                                  } catch (err) {
+                                    logApiError("WarehouseTransfersPage.print", err);
+                                    setError(err instanceof Error ? err.message : "Print failed");
+                                  }
+                                })();
                               }}
                             >
-                              Post to stock
+                              Print preview
+                            </button>
+                            <button
+                              type="button"
+                              className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionsId(null);
+                                void (async () => {
+                                  try {
+                                    const p = await api.getWarehouseTransferGlPostings(row.id);
+                                    setPostingsRows(p);
+                                    setPostingsTitle(row.transfer_code);
+                                    setPostingsOpen(true);
+                                  } catch (err) {
+                                    logApiError("WarehouseTransfersPage.postings", err);
+                                    setError(err instanceof Error ? err.message : "Postings failed");
+                                  }
+                                })();
+                              }}
+                            >
+                              GL postings
                             </button>
                           </div>
                         )}
@@ -381,6 +483,37 @@ export function WarehouseTransfersPage() {
           </table>
         </div>
       )}
+
+      {printOpen && printData ? (
+        <PrintPreviewModal
+          open={printOpen}
+          title={`Print — ${printTitle}`}
+          onClose={() => {
+            setPrintOpen(false);
+            setPrintData(null);
+          }}
+          copyCount={printCopyCount}
+          onCopyCountChange={setPrintCopyCount}
+          template={printTemplate}
+          onTemplateChange={setPrintTemplate}
+        >
+          <InventoryDocumentPrintSheets data={printData} copyCount={printCopyCount} template={printTemplate} />
+        </PrintPreviewModal>
+      ) : null}
+
+      {postingsOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-surface-raised p-4 shadow-xl">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-text-primary">GL postings — {postingsTitle}</h3>
+              <button type="button" className="rounded-lg border border-border px-2 py-1 text-xs" onClick={() => setPostingsOpen(false)}>
+                Close
+              </button>
+            </div>
+            <GlPostingsPanel postings={postingsRows} />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

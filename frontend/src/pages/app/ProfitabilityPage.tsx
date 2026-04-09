@@ -114,6 +114,13 @@ export function ProfitabilityPage({ defaultMode = "style" }: { defaultMode?: Mod
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">Profitability & Variance</h1>
         <p className="mt-1 text-sm text-text-muted">Style, order/LC, trade case margin, and costing variance.</p>
+        <p className="mt-2 text-xs text-text-muted">
+          <strong>Order costing variance</strong> compares quotation vs BOM vs actuals. For inventory-issued quantities tied to BOM lines (PMI / consumption), also see{" "}
+          <Link className="text-status-info hover:underline" to="/app/inventory/consumption-control">
+            Consumption control
+          </Link>{" "}
+          (material variance API) and ledger movements with <code className="rounded bg-surface-subtle px-1">movement_kind</code>.
+        </p>
       </div>
 
       <div className="rounded-xl border border-border bg-surface-raised p-4">

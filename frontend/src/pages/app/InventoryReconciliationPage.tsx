@@ -177,7 +177,7 @@ export function InventoryReconciliationPage() {
       {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
 
       {overview ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6 xl:grid-cols-9">
           <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
             <div className="text-text-muted">PO Open</div>
             <div className="text-xl font-semibold">{overview.purchase_orders_open} <span className="text-xs text-text-muted">{trend(overview.purchase_orders_open, prevOverview?.purchase_orders_open)}</span></div>
@@ -205,6 +205,18 @@ export function InventoryReconciliationPage() {
           <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
             <div className="text-text-muted">Low Stock Items</div>
             <div className="text-xl font-semibold">{stockRows.filter((r) => r.on_hand_qty > 0 && r.on_hand_qty <= 5).length} <span className="text-xs text-text-muted">{trend(stockRows.filter((r) => r.on_hand_qty > 0 && r.on_hand_qty <= 5).length, prevOverview?.low_stock_count)}</span></div>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Prod. material issues</div>
+            <div className="text-xl font-semibold">{overview.production_material_issues_total ?? 0}</div>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Vendor bills draft</div>
+            <div className="text-xl font-semibold">{overview.vendor_bills_draft ?? 0}</div>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
+            <div className="text-text-muted">Stock movements</div>
+            <div className="text-xl font-semibold">{overview.stock_movements_total ?? 0}</div>
           </div>
         </div>
       ) : null}

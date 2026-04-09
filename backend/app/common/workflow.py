@@ -20,17 +20,37 @@ QUOTATION_TRANSITIONS: dict[str, set[str]] = {
   "CANCELLED": set(),
 }
 
+# Order execution pipeline (auto-advanced; stored on orders.pipeline_status).
+# Pre-order steps INQUIRY / QUOTATION are derived in the API from inquiry/quotation chain.
+PIPELINE_STAGES: list[str] = [
+    "INQUIRY",
+    "QUOTATION",
+    "ORDER_CONFIRMED",
+    "PI_ISSUED",
+    "LC_RECEIVED",
+    "BOM_CREATED",
+    "PO_ISSUED",
+    "RM_RECEIVED",
+    "IN_PRODUCTION",
+    "SHIPPED",
+    "PAYMENT_RECEIVED",
+    "COMPLETED",
+]
+
+PIPELINE_NA_PRESETS: dict[str, list[str]] = {
+    "local": ["LC_RECEIVED"],
+    "export": [],
+    "both": [],
+}
+
+# Legacy execution `status` on orders: manual edits are limited. Lifecycle is driven by
+# `pipeline_status` + auto-advance; use admin "force_pipeline_status" for rare fixes.
 ORDER_TRANSITIONS: dict[str, set[str]] = {
-  # Synthetic "DRAFT" on create must match UI/imports: allow common starting statuses (promise check runs for IN_PROGRESS).
-  "DRAFT": {"NEW", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED"},
-  # Allow closing from pre-production without forcing IN_PROGRESS (admin / trading / import parity).
-  "NEW": {"DRAFT", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED"},
-  "CONFIRMED": {"NEW", "IN_PROGRESS", "COMPLETED", "CANCELLED"},
-  # Step back to CONFIRMED/NEW or finish/void as needed.
-  "IN_PROGRESS": {"CONFIRMED", "COMPLETED", "CANCELLED", "NEW"},
-  # Reopen, void, or reset to NEW for admin/data fixes.
-  "COMPLETED": {"IN_PROGRESS", "CANCELLED", "NEW"},
-  # Restore cancelled orders back to pipeline entry (mistake / buyer change of mind).
+  "DRAFT": {"NEW", "CONFIRMED", "CANCELLED"},
+  "NEW": {"CANCELLED"},
+  "CONFIRMED": {"CANCELLED"},
+  "IN_PROGRESS": {"CANCELLED"},
+  "COMPLETED": {"CANCELLED"},
   "CANCELLED": {"NEW"},
 }
 

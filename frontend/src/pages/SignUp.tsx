@@ -34,7 +34,6 @@ export function SignUp() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -50,8 +49,8 @@ export function SignUp() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!companyName.trim() || !email.trim() || !username.trim() || !password) {
-      setError("Company name, email, username and password are required");
+    if (!companyName.trim() || !email.trim() || !password) {
+      setError("Company name, email and password are required");
       return;
     }
     if (!phone.trim() || phone.trim().length < 5) {
@@ -67,11 +66,12 @@ export function SignUp() {
       const tenant = await api.createTenant({
         name: companyName.trim(),
         tenant_type: businessType,
+        phone: phone.trim() || undefined,
+        address: address.trim() || undefined,
       });
       await api.register({
         tenant_id: tenant.id,
         email: email.trim(),
-        username: username.trim(),
         password,
         first_name: firstName.trim() || undefined,
         last_name: lastName.trim() || undefined,
@@ -81,8 +81,9 @@ export function SignUp() {
       });
       const res = await api.login({
         tenant_id: tenant.id,
-        username: username.trim(),
+        email: email.trim(),
         password,
+        login_as: "admin",
       });
       setAuth(res.access_token, res.tenant_id ?? tenant.id);
       setSuccessData({ companyCode: tenant.company_code ?? String(tenant.id) });
@@ -297,37 +298,20 @@ export function SignUp() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label htmlFor="username" className="block text-sm font-medium text-text-secondary">Username **</label>
-                      <div className="relative mt-1">
-                        <User className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
-                        <input
-                          id="username"
-                          type="text"
-                          placeholder="johndoe"
-                          className="w-full pl-10 pr-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                          value={username}
-                          onChange={(e) => setUsername(e.target.value)}
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="password" className="block text-sm font-medium text-text-secondary">Password **</label>
-                      <div className="relative mt-1">
-                        <Lock className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
-                        <input
-                          id="password"
-                          type="password"
-                          placeholder="Min 8 characters"
-                          className="w-full pl-10 pr-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          required
-                          minLength={8}
-                        />
-                      </div>
+                  <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-text-secondary">Password **</label>
+                    <div className="relative mt-1">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
+                      <input
+                        id="password"
+                        type="password"
+                        placeholder="Min 8 characters"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        minLength={8}
+                      />
                     </div>
                   </div>
                   <div>

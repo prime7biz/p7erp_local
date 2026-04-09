@@ -1,43 +1,60 @@
 import { Suspense, useMemo } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import { useExternalAuth } from "@/hooks/useExternalAuth";
 import { Button } from "@/components/ui/button";
 import { PortalPageSkeleton } from "@/components/external-access/PortalSkeletons";
 import { PortalErrorState } from "@/components/external-access/PortalErrorState";
+import { financierScopeAtLeast, type FinancierScopeKey } from "@/utils/financierScope";
+import { redirectToUnifiedLogin } from "@/utils/portalAuthRedirect";
 
-type FinancierNavItem = { to: string; label: string; end?: boolean };
+type FinancierNavItem = { to: string; label: string; end?: boolean; minScope: FinancierScopeKey };
 
 const navAll: FinancierNavItem[] = [
-  { to: "/portal/financier", label: "Dashboard", end: true },
-  { to: "/portal/financier/order-book", label: "Order book" },
-  { to: "/portal/financier/pipeline", label: "Pipeline" },
-  { to: "/portal/financier/goods-movement", label: "Goods movement" },
-  { to: "/portal/financier/financial-summary", label: "Financial summary" },
-  { to: "/portal/financier/projections", label: "Projections" },
-  { to: "/portal/financier/alerts", label: "Alerts" },
+  { to: "/portal/financier", label: "Dashboard", end: true, minScope: "tenant_summary" },
+  { to: "/portal/financier/order-book", label: "Order book", minScope: "orders_and_pipeline" },
+  { to: "/portal/financier/pipeline", label: "Pipeline", minScope: "orders_and_pipeline" },
+  { to: "/portal/financier/goods-movement", label: "Goods movement", minScope: "orders_and_pipeline" },
+  { to: "/portal/financier/financial-summary", label: "Financial summary", minScope: "financial_summary" },
+  { to: "/portal/financier/projections", label: "Projections", minScope: "financial_summary" },
+  { to: "/portal/financier/credit-lines", label: "Credit lines", minScope: "credit_monitoring" },
+  { to: "/portal/financier/loan-portfolio", label: "Portfolio", minScope: "credit_monitoring" },
+  { to: "/portal/financier/order-finance", label: "Order finance", minScope: "credit_monitoring" },
+  { to: "/portal/financier/procurement", label: "Procurement", minScope: "credit_monitoring" },
+  { to: "/portal/financier/raw-materials", label: "Raw materials", minScope: "credit_monitoring" },
+  { to: "/portal/financier/stock-collateral", label: "Stock", minScope: "credit_monitoring" },
+  { to: "/portal/financier/btb-liabilities", label: "BTB liabilities", minScope: "credit_monitoring" },
+  { to: "/portal/financier/inventory", label: "Inventory", minScope: "credit_monitoring" },
+  { to: "/portal/financier/production", label: "Production", minScope: "credit_monitoring" },
+  { to: "/portal/financier/traceability", label: "Traceability", minScope: "credit_monitoring" },
+  { to: "/portal/financier/financial-visibility", label: "Export finance", minScope: "credit_monitoring" },
+  { to: "/portal/financier/business-health", label: "Health", minScope: "credit_monitoring" },
+  { to: "/portal/financier/ai-confidence", label: "AI confidence", minScope: "credit_monitoring" },
+  { to: "/portal/financier/snapshots", label: "Snapshots", minScope: "full_financier_portal" },
+  { to: "/portal/financier/reports", label: "Reports", minScope: "full_financier_portal" },
+  { to: "/portal/financier/alerts", label: "Alerts", minScope: "tenant_summary" },
+  { to: "/portal/financier/risk-panel", label: "Risk panel", minScope: "tenant_summary" },
 ];
 
 export function FinancierPortalLayout() {
-  const navigate = useNavigate();
   const { me, loading, error, logout, refetch } = useExternalAuth("financier");
 
   const nav = useMemo(() => {
     const flags = me?.feature_flags as Record<string, boolean> | undefined;
     const financialOn = flags?.financier_financial_summary_enabled === true;
     const projectionsOn = flags?.financier_projection_enabled === true;
-    /* While profile loads, keep links visible; hide only once we know flags are off. */
-    const hideFinancial = me != null && !financialOn;
-    const hideProjections = me != null && !projectionsOn;
+    const scope = me?.financier_access_scope ?? null;
+
     return navAll.filter((item) => {
-      if (item.to === "/portal/financier/financial-summary") return !hideFinancial;
-      if (item.to === "/portal/financier/projections") return !hideProjections;
+      if (!financierScopeAtLeast(scope, item.minScope)) return false;
+      if (item.to === "/portal/financier/financial-summary") return financialOn || me == null;
+      if (item.to === "/portal/financier/projections") return projectionsOn || me == null;
       return true;
     });
   }, [me]);
 
   async function handleLogout() {
     await logout();
-    navigate("/portal/financier/login", { replace: true });
+    redirectToUnifiedLogin("financier");
   }
 
   if (loading && !me) return <PortalPageSkeleton />;
@@ -50,6 +67,9 @@ export function FinancierPortalLayout() {
           <div>
             <p className="text-sm font-semibold text-text-primary">Financier confidence center</p>
             <p className="text-xs text-text-muted">{me?.tenant_name}</p>
+            {me?.financier_access_scope ? (
+              <p className="text-[10px] text-text-muted">Scope: {me.financier_access_scope}</p>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-text-muted hidden sm:inline">{me?.full_name}</span>
@@ -75,7 +95,7 @@ export function FinancierPortalLayout() {
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 erp-main-content">
         <Suspense fallback={<PortalPageSkeleton />}>
-          <Outlet />
+          <Outlet context={{ me: me! }} />
         </Suspense>
       </main>
     </div>

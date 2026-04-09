@@ -1,9 +1,10 @@
 import { Suspense, lazy, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Landing } from "@/pages/Landing";
-import { Login } from "@/pages/Login";
+import { UnifiedLoginPage } from "@/pages/UnifiedLoginPage";
 import { SignUp } from "@/pages/SignUp";
-import { ForgotPasswordPage } from "@/pages/ForgotPasswordPage";
+import { UnifiedForgotPasswordPage } from "@/pages/UnifiedForgotPasswordPage";
+import { StaffAcceptInvitePage } from "@/pages/StaffAcceptInvitePage";
 import { ResetPasswordPage } from "@/pages/ResetPasswordPage";
 import { PublicLayout } from "@/components/public/PublicLayout";
 import { FeaturesPage } from "@/pages/public/FeaturesPage";
@@ -25,23 +26,20 @@ import { SecurityPage } from "@/pages/public/SecurityPage";
 import { ErpBangladeshPage } from "@/pages/public/ErpBangladeshPage";
 import { ErpComparisonPage } from "@/pages/public/ErpComparisonPage";
 import { ResourcesPage } from "@/pages/public/ResourcesPage";
+import { SitemapPage } from "@/pages/public/SitemapPage";
+import { NotFoundPage } from "@/pages/public/NotFoundPage";
 import { SupportPage } from "@/pages/public/SupportPage";
 import { VerifyProformaPage } from "@/pages/VerifyProformaPage";
 import { GlobalAiChatWidget } from "@/components/GlobalAiChatWidget";
 import { ExternalAccessGuard } from "@/components/external-access/ExternalAccessGuard";
+import { PortalLegacyLoginRedirect } from "@/components/external-access/PortalLegacyLoginRedirect";
 
 const AppProtectedRouter = lazy(() =>
   import("@/app/AppProtectedRouter").then((mod) => ({ default: mod.AppProtectedRouter })),
 );
 
-const CustomerLoginPage = lazy(() =>
-  import("@/pages/portal/customer/CustomerLoginPage").then((m) => ({ default: m.CustomerLoginPage })),
-);
 const CustomerAcceptInvitePage = lazy(() =>
   import("@/pages/portal/customer/CustomerAcceptInvitePage").then((m) => ({ default: m.CustomerAcceptInvitePage })),
-);
-const CustomerForgotPasswordPage = lazy(() =>
-  import("@/pages/portal/customer/CustomerForgotPasswordPage").then((m) => ({ default: m.CustomerForgotPasswordPage })),
 );
 const CustomerResetPasswordPage = lazy(() =>
   import("@/pages/portal/customer/CustomerResetPasswordPage").then((m) => ({ default: m.CustomerResetPasswordPage })),
@@ -68,14 +66,8 @@ const CustomerNotesPage = lazy(() =>
   import("@/pages/portal/customer/CustomerNotesPage").then((m) => ({ default: m.CustomerNotesPage })),
 );
 
-const FinancierLoginPage = lazy(() =>
-  import("@/pages/portal/financier/FinancierLoginPage").then((m) => ({ default: m.FinancierLoginPage })),
-);
 const FinancierAcceptInvitePage = lazy(() =>
   import("@/pages/portal/financier/FinancierAcceptInvitePage").then((m) => ({ default: m.FinancierAcceptInvitePage })),
-);
-const FinancierForgotPasswordPage = lazy(() =>
-  import("@/pages/portal/financier/FinancierForgotPasswordPage").then((m) => ({ default: m.FinancierForgotPasswordPage })),
 );
 const FinancierResetPasswordPage = lazy(() =>
   import("@/pages/portal/financier/FinancierResetPasswordPage").then((m) => ({ default: m.FinancierResetPasswordPage })),
@@ -106,6 +98,60 @@ const FinancierProjectionsPage = lazy(() =>
 );
 const FinancierAlertsPage = lazy(() =>
   import("@/pages/portal/financier/FinancierAlertsPage").then((m) => ({ default: m.FinancierAlertsPage })),
+);
+const FinancierCreditLinesPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierCreditLinesPage").then((m) => ({ default: m.FinancierCreditLinesPage })),
+);
+const FinancierLoanPortfolioPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierLoanPortfolioPage").then((m) => ({ default: m.FinancierLoanPortfolioPage })),
+);
+const FinancierLoanDetailPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierLoanDetailPage").then((m) => ({ default: m.FinancierLoanDetailPage })),
+);
+const FinancierProcurementTrackerPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierProcurementTrackerPage").then((m) => ({ default: m.FinancierProcurementTrackerPage })),
+);
+const FinancierStockCollateralPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierStockCollateralPage").then((m) => ({ default: m.FinancierStockCollateralPage })),
+);
+const FinancierBtbLiabilitiesPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierBtbLiabilitiesPage").then((m) => ({ default: m.FinancierBtbLiabilitiesPage })),
+);
+const FinancierInventoryPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierInventoryPage").then((m) => ({ default: m.FinancierInventoryPage })),
+);
+const FinancierTraceabilityPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierTraceabilityPage").then((m) => ({ default: m.FinancierTraceabilityPage })),
+);
+const FinancierTraceabilityDetailPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierTraceabilityDetailPage").then((m) => ({ default: m.FinancierTraceabilityDetailPage })),
+);
+const FinancierBusinessHealthPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierBusinessHealthPage").then((m) => ({ default: m.FinancierBusinessHealthPage })),
+);
+const FinancierSnapshotsPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierSnapshotsPage").then((m) => ({ default: m.FinancierSnapshotsPage })),
+);
+const FinancierReportsPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierReportsPage").then((m) => ({ default: m.FinancierReportsPage })),
+);
+const FinancierAiConfidencePage = lazy(() =>
+  import("@/pages/portal/financier/FinancierAiConfidencePage").then((m) => ({ default: m.FinancierAiConfidencePage })),
+);
+const FinancierOrderFinancePage = lazy(() =>
+  import("@/pages/portal/financier/FinancierOrderFinancePage").then((m) => ({ default: m.FinancierOrderFinancePage })),
+);
+const FinancierRawMaterialPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierRawMaterialPage").then((m) => ({ default: m.FinancierRawMaterialPage })),
+);
+const FinancierProductionTrackerPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierProductionTrackerPage").then((m) => ({ default: m.FinancierProductionTrackerPage })),
+);
+const FinancierFinancialVisibilityPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierFinancialVisibilityPage").then((m) => ({ default: m.FinancierFinancialVisibilityPage })),
+);
+const FinancierRiskPanelPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierRiskPanelPage").then((m) => ({ default: m.FinancierRiskPanelPage })),
 );
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -167,19 +213,14 @@ export function AppRouter() {
         <Route path="/resources" element={<PublicLayout><ResourcesPage /></PublicLayout>} />
         <Route path="/resources/:slug" element={<PublicLayout><ResourcesPage /></PublicLayout>} />
         <Route path="/support" element={<PublicLayout><SupportPage /></PublicLayout>} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/sitemap" element={<PublicLayout><SitemapPage /></PublicLayout>} />
+        <Route path="/login" element={<UnifiedLoginPage />} />
+        <Route path="/forgot-password" element={<UnifiedForgotPasswordPage />} />
+        <Route path="/accept-invite" element={<StaffAcceptInvitePage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/verify/proforma" element={<VerifyProformaPage />} />
-        <Route
-          path="/portal/customer/login"
-          element={
-            <Suspense fallback={portalRouteFallback}>
-              <CustomerLoginPage />
-            </Suspense>
-          }
-        />
+        <Route path="/portal/customer/login" element={<PortalLegacyLoginRedirect role="customer" />} />
         <Route
           path="/portal/customer/accept-invite"
           element={
@@ -188,14 +229,7 @@ export function AppRouter() {
             </Suspense>
           }
         />
-        <Route
-          path="/portal/customer/forgot-password"
-          element={
-            <Suspense fallback={portalRouteFallback}>
-              <CustomerForgotPasswordPage />
-            </Suspense>
-          }
-        />
+        <Route path="/portal/customer/forgot-password" element={<Navigate to="/forgot-password?role=customer" replace />} />
         <Route
           path="/portal/customer/reset-password"
           element={
@@ -221,14 +255,7 @@ export function AppRouter() {
           <Route path="shipments" element={<CustomerShipmentsPage />} />
           <Route path="notes" element={<CustomerNotesPage />} />
         </Route>
-        <Route
-          path="/portal/financier/login"
-          element={
-            <Suspense fallback={portalRouteFallback}>
-              <FinancierLoginPage />
-            </Suspense>
-          }
-        />
+        <Route path="/portal/financier/login" element={<PortalLegacyLoginRedirect role="financier" />} />
         <Route
           path="/portal/financier/accept-invite"
           element={
@@ -237,14 +264,7 @@ export function AppRouter() {
             </Suspense>
           }
         />
-        <Route
-          path="/portal/financier/forgot-password"
-          element={
-            <Suspense fallback={portalRouteFallback}>
-              <FinancierForgotPasswordPage />
-            </Suspense>
-          }
-        />
+        <Route path="/portal/financier/forgot-password" element={<Navigate to="/forgot-password?role=financier" replace />} />
         <Route
           path="/portal/financier/reset-password"
           element={
@@ -270,7 +290,26 @@ export function AppRouter() {
           <Route path="goods-movement" element={<FinancierGoodsMovementPage />} />
           <Route path="financial-summary" element={<FinancierFinancialSummaryPage />} />
           <Route path="projections" element={<FinancierProjectionsPage />} />
+          <Route path="credit-lines" element={<FinancierCreditLinesPage />} />
+          <Route path="loan-portfolio/:utilizationId" element={<FinancierLoanDetailPage />} />
+          <Route path="loan-portfolio" element={<FinancierLoanPortfolioPage />} />
+          <Route path="order-finance" element={<FinancierOrderFinancePage />} />
+          <Route path="procurement" element={<FinancierProcurementTrackerPage />} />
+          <Route path="raw-materials" element={<FinancierRawMaterialPage />} />
+          <Route path="production" element={<FinancierProductionTrackerPage />} />
+          <Route path="stock-collateral" element={<FinancierStockCollateralPage />} />
+          <Route path="btb-liabilities" element={<FinancierBtbLiabilitiesPage />} />
+          <Route path="inventory/:itemId" element={<FinancierInventoryPage />} />
+          <Route path="inventory" element={<FinancierInventoryPage />} />
+          <Route path="traceability/:utilizationId" element={<FinancierTraceabilityDetailPage />} />
+          <Route path="traceability" element={<FinancierTraceabilityPage />} />
+          <Route path="financial-visibility" element={<FinancierFinancialVisibilityPage />} />
+          <Route path="business-health" element={<FinancierBusinessHealthPage />} />
+          <Route path="ai-confidence" element={<FinancierAiConfidencePage />} />
+          <Route path="snapshots" element={<FinancierSnapshotsPage />} />
+          <Route path="reports" element={<FinancierReportsPage />} />
           <Route path="alerts" element={<FinancierAlertsPage />} />
+          <Route path="risk-panel" element={<FinancierRiskPanelPage />} />
         </Route>
         <Route
           path="/app/*"
@@ -282,7 +321,14 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route
+          path="*"
+          element={
+            <PublicLayout>
+              <NotFoundPage />
+            </PublicLayout>
+          }
+        />
       </Routes>
       <GlobalAiChatWidget />
     </>

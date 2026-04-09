@@ -153,6 +153,7 @@ class WorkOrderCreate(BaseModel):
     routing_id: int | None = None
     qty_planned: float = Field(..., gt=0)
     notes: str | None = None
+    order_id: int | None = Field(default=None, description="Sales order for pipeline; defaults from plan line if omitted")
 
 
 class WorkOrderStatusUpdate(BaseModel):
@@ -166,6 +167,7 @@ class WorkOrderResponse(BaseModel):
     item_id: int
     plan_line_id: int | None
     routing_id: int | None
+    order_id: int | None = None
     qty_planned: float
     qty_completed: float
     status: str
@@ -178,6 +180,7 @@ class WorkOrderOperationResponse(BaseModel):
     id: int
     tenant_id: int
     work_order_id: int
+    order_id: int | None = None
     step_no: int
     operation_id: int
     work_center_id: int | None

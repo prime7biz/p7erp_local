@@ -21,14 +21,14 @@ The app must serve `sitemap.xml` and `robots.txt` from the **static frontend** (
 ## Verify after deploy
 
 1. In a browser, open `https://prime7erp.com/sitemap.xml` — you should see XML with `<loc>` entries for public pages and resource articles (no `/app/` URLs).
-2. Locally, after `npm run build` or `node scripts/generate-sitemap.mjs` in `frontend/`:
+2. Locally, after `npm run build` (or `npm run prebuild`) in `frontend/`:
 
    ```bash
    cd frontend
    node scripts/validate-sitemap.mjs
    ```
 
-   Expect: `OK: N URLs, no /app/ entries.`
+   Expect: `OK: N URLs, no /app/ or private URLs.`
 
 3. Optional live check:
 
@@ -40,5 +40,5 @@ The app must serve `sitemap.xml` and `robots.txt` from the **static frontend** (
 ## Notes
 
 - **Authenticated app:** `/app/*` routes use `noindex` in [`frontend/src/components/Seo.tsx`](../frontend/src/components/Seo.tsx); they are **not** listed in the sitemap.
-- **New public pages:** add the path to `STATIC_PATHS` in `generate-sitemap.mjs` when you add a route in `router.tsx`.
+- **New public pages:** add the path to `PUBLIC_MARKETING_PATHS` in [`frontend/src/config/publicMarketingPaths.ts`](../frontend/src/config/publicMarketingPaths.ts) when you add a route in `router.tsx`, and add SEO copy in [`frontend/src/config/seo.ts`](../frontend/src/config/seo.ts) if needed.
 - **New resource articles:** add the article to `resourcesArticles.ts`; the next build will include the new slug automatically.

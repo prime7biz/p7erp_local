@@ -21,13 +21,52 @@ export const QUOTATION_TRANSITIONS: TransitionMap = {
 
 // Keep in sync with backend `ORDER_TRANSITIONS` in `app/common/workflow.py`.
 export const ORDER_TRANSITIONS: TransitionMap = {
-  DRAFT: ["NEW", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED"],
-  NEW: ["DRAFT", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED"],
-  CONFIRMED: ["NEW", "IN_PROGRESS", "COMPLETED", "CANCELLED"],
-  IN_PROGRESS: ["CONFIRMED", "COMPLETED", "CANCELLED", "NEW"],
-  COMPLETED: ["IN_PROGRESS", "CANCELLED", "NEW"],
+  DRAFT: ["NEW", "CONFIRMED", "CANCELLED"],
+  NEW: ["CANCELLED"],
+  CONFIRMED: ["CANCELLED"],
+  IN_PROGRESS: ["CANCELLED"],
+  COMPLETED: ["CANCELLED"],
   CANCELLED: ["NEW"],
 };
+
+/** Full order execution pipeline (matches backend `PIPELINE_STAGES`). */
+export const PIPELINE_STAGES = [
+  "INQUIRY",
+  "QUOTATION",
+  "ORDER_CONFIRMED",
+  "PI_ISSUED",
+  "LC_RECEIVED",
+  "BOM_CREATED",
+  "PO_ISSUED",
+  "RM_RECEIVED",
+  "IN_PRODUCTION",
+  "SHIPPED",
+  "PAYMENT_RECEIVED",
+  "COMPLETED",
+] as const;
+
+export type PipelineStageName = (typeof PIPELINE_STAGES)[number];
+
+export const PIPELINE_NA_PRESETS: Record<string, string[]> = {
+  local: ["LC_RECEIVED"],
+  export: [],
+  both: [],
+};
+
+export function suggestNaSteps(orderType: string | undefined): string[] {
+  const k = (orderType || "export").toLowerCase();
+  return [...(PIPELINE_NA_PRESETS[k] ?? PIPELINE_NA_PRESETS.both ?? [])];
+}
+
+export function humanizePipelineStatus(status: string): string {
+  return humanizeStatus(status);
+}
+
+/** Lifecycle stages that are advanced automatically (manual column is limited to cancel / draft setup). */
+export function isPipelineAutoStatus(status: string | undefined): boolean {
+  const s = normalizeStatus(status, "NEW");
+  return s !== "DRAFT" && s !== "CANCELLED";
+}
 
 export const INQUIRY_STATUS_FILTER_OPTIONS = [
   "DRAFT",

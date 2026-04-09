@@ -7,7 +7,6 @@ import {
   BookOpen,
   Tag,
 } from "lucide-react";
-import { Helmet } from "react-helmet-async";
 import {
   getAllArticles,
   getArticleBySlug,
@@ -304,13 +303,6 @@ export function ResourcesPage() {
   if (slug && !article) {
     return (
       <>
-        <Helmet>
-          <title>Article Not Found – Prime7 ERP Resources</title>
-          <meta
-            name="description"
-            content="The requested article was not found."
-          />
-        </Helmet>
         <section className="py-20 text-center">
           <h1 className="text-3xl font-bold text-text-primary mb-4">
             Article Not Found

@@ -18,6 +18,7 @@ from app.models import (
     ManufacturingMaterialReturn,
     ManufacturingOperation,
     ManufacturingOperationAssignment,
+    ManufacturingProductionPlanLine,
     ManufacturingWorkCenter,
     ManufacturingWorkOrder,
     ManufacturingWorkOrderOperation,
@@ -108,6 +109,7 @@ def _to_work_order_response(row: ManufacturingWorkOrder) -> WorkOrderResponse:
         item_id=row.item_id,
         plan_line_id=row.plan_line_id,
         routing_id=row.routing_id,
+        order_id=row.order_id,
         qty_planned=float(row.qty_planned),
         qty_completed=float(row.qty_completed),
         status=row.status,
@@ -122,6 +124,7 @@ def _to_operation_response(row: ManufacturingWorkOrderOperation) -> WorkOrderOpe
         id=row.id,
         tenant_id=row.tenant_id,
         work_order_id=row.work_order_id,
+        order_id=row.order_id,
         step_no=row.step_no,
         operation_id=row.operation_id,
         work_center_id=row.work_center_id,
@@ -139,12 +142,15 @@ def _to_operation_response(row: ManufacturingWorkOrderOperation) -> WorkOrderOpe
 @router.get("/work-orders", response_model=list[WorkOrderResponse])
 async def list_work_orders(
     status_filter: str | None = Query(default=None),
+    order_id: int | None = Query(default=None),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
     stmt = select(ManufacturingWorkOrder).where(ManufacturingWorkOrder.tenant_id == tenant.id)
+    if order_id is not None:
+        stmt = stmt.where(ManufacturingWorkOrder.order_id == order_id)
     if status_filter and status_filter.strip():
         stmt = stmt.where(ManufacturingWorkOrder.status == status_filter.strip().lower())
     result = await db.execute(stmt.order_by(ManufacturingWorkOrder.id.desc()))
@@ -164,12 +170,18 @@ async def create_work_order(
     else:
         last_id = (await db.execute(select(func.max(ManufacturingWorkOrder.id)).where(ManufacturingWorkOrder.tenant_id == tenant.id))).scalar()
         mo_number = _next_code("MWO-", last_id)
+    resolved_order_id = body.order_id
+    if resolved_order_id is None and body.plan_line_id is not None:
+        pl = await db.get(ManufacturingProductionPlanLine, body.plan_line_id)
+        if pl and pl.tenant_id == tenant.id:
+            resolved_order_id = pl.order_id
     row = ManufacturingWorkOrder(
         tenant_id=tenant.id,
         mo_number=mo_number,
         item_id=body.item_id,
         plan_line_id=body.plan_line_id,
         routing_id=body.routing_id,
+        order_id=resolved_order_id,
         qty_planned=body.qty_planned,
         qty_completed=0,
         status="draft",
@@ -178,6 +190,11 @@ async def create_work_order(
     db.add(row)
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
+    if resolved_order_id:
+        from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+        await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=int(resolved_order_id))
+        await db.commit()
     return _to_work_order_response(row)
 
 

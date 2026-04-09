@@ -2,6 +2,7 @@
  * HTTP client for `/api/external/*` — separate auth from internal ERP (`p7_token`).
  */
 import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
+import { redirectToUnifiedLogin } from "@/utils/portalAuthRedirect";
 import type {
   ExternalMeResponse,
   ExternalPrincipalType,
@@ -49,9 +50,9 @@ function extSessionExpiredRedirect(sentAuth: boolean) {
   try {
     const path = window.location.pathname;
     if (path.startsWith("/portal/customer")) {
-      window.location.replace("/portal/customer/login?reason=session_expired");
+      redirectToUnifiedLogin("customer", { reason: "session_expired" });
     } else if (path.startsWith("/portal/financier")) {
-      window.location.replace("/portal/financier/login?reason=session_expired");
+      redirectToUnifiedLogin("financier", { reason: "session_expired" });
     }
   } catch {
     /* ignore */

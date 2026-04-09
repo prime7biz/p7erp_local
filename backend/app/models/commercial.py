@@ -63,6 +63,9 @@ class ExportCase(Base):
     trade_case_id: Mapped[int | None] = mapped_column(
         ForeignKey("trade_cases.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

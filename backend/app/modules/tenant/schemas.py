@@ -7,6 +7,8 @@ class TenantCreate(BaseModel):
     name: str
     domain: str | None = None
     tenant_type: TenantType = TenantType.both
+    phone: str | None = None
+    address: str | None = None
 
 
 class TenantResponse(BaseModel):

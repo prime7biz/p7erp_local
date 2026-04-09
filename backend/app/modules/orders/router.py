@@ -11,6 +11,7 @@ from app.common.db_errors import flush_handling_duplicate_document_code
 from app.common.tenant import require_tenant
 from app.common.workflow import (
   ORDER_TRANSITIONS,
+  PIPELINE_STAGES,
   QUOTATION_TRANSITIONS,
   validate_transition,
 )
@@ -26,6 +27,7 @@ from app.models import (
   OrderAmendment,
   OrderFollowupAction,
   Quotation,
+  Role,
   SewingLineStyleConfig,
   StockMovement,
   Tenant,
@@ -33,6 +35,11 @@ from app.models import (
 )
 from app.modules.orders.order_ai_router import router as order_ai_subrouter
 from app.modules.orders.order_ai_schemas import OrderAiIndicatorsOut
+from app.modules.orders.pipeline_service import (
+  auto_advance_order_pipeline,
+  build_milestone_payload,
+  suggest_na_steps,
+)
 from app.modules.orders.promise_checks import run_order_promise_check
 from app.modules.orders.order_ai_service import compute_order_ai_indicators
 from app.modules.orders.commercial_numeraire import resolve_commercial_book_currency
@@ -44,6 +51,9 @@ from app.modules.orders.schemas import (
   OrderCommercialAlignmentOut,
   OrderCreate,
   OrderListPageResponse,
+  OrderMilestoneStepOut,
+  OrderMilestonesOut,
+  OrderPipelineSettingsPatch,
   OrderResponse,
   OrderUpdate,
   PromiseCheckLine,
@@ -72,6 +82,17 @@ async def _next_order_code(db: AsyncSession, tenant_id: int) -> str:
   )
 
 
+def _pipeline_na_as_list(order: Order) -> list[str] | None:
+  raw = getattr(order, "pipeline_na_steps", None)
+  if raw is None:
+    return None
+  if isinstance(raw, list):
+    return [str(x) for x in raw]
+  if isinstance(raw, dict) and "steps" in raw:
+    return [str(x) for x in raw.get("steps", [])]
+  return None
+
+
 def _to_order_response(
   order: Order,
   *,
@@ -86,6 +107,8 @@ def _to_order_response(
   if tenant is not None:
     doc_ccy = snap.get("document_currency") if snap else None
     book = resolve_commercial_book_currency(tenant, doc_ccy)
+  rm_pct = getattr(order, "rm_received_pct", None)
+  rm_out = float(rm_pct) if rm_pct is not None else None
   return OrderResponse(
     id=order.id,
     tenant_id=order.tenant_id,
@@ -102,6 +125,11 @@ def _to_order_response(
     delivery_date=order.delivery_date.isoformat() if order.delivery_date else None,
     quantity=order.quantity,
     status=order.status,
+    pipeline_status=getattr(order, "pipeline_status", None),
+    pipeline_na_steps=_pipeline_na_as_list(order),
+    order_type=getattr(order, "order_type", None),
+    master_contract_id=getattr(order, "master_contract_id", None),
+    rm_inhouse_pct=rm_out,
     remarks=order.remarks,
     created_at=order.created_at.isoformat(),
     updated_at=order.updated_at.isoformat(),
@@ -111,6 +139,13 @@ def _to_order_response(
     customer_name=customer_name,
     quotation_code=quotation_code,
   )
+
+
+async def _is_tenant_admin(user: User, db: AsyncSession) -> bool:
+  role = await db.get(Role, user.role_id)
+  if not role:
+    return False
+  return role.name.lower() in {"admin", "super_admin", "superadmin", "owner"}
 
 
 async def _validate_customer_intermediary(
@@ -149,7 +184,7 @@ async def _auto_generate_followup_actions_if_missing(
   next_status: str,
 ) -> None:
   status_key = (next_status or "").strip().upper()
-  if status_key not in {"NEW", "IN_PROGRESS"}:
+  if status_key not in {"NEW", "CONFIRMED", "IN_PROGRESS"}:
     return
 
   existing = await db.execute(
@@ -448,13 +483,6 @@ async def create_order(
     status=status_value,
     remarks=body.remarks,
   )
-  if status_value == "IN_PROGRESS":
-    promise = await run_order_promise_check(db, tenant_id=tenant.id, order=order)
-    if not (promise.atp_ok and promise.ctp_ok):
-      raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f"Promise check failed: {'; '.join(promise.reasons) or 'ATP/CTP not satisfied'}",
-      )
   db.add(order)
   if body.quotation_id is not None:
     quotation.status = validate_transition(
@@ -471,6 +499,8 @@ async def create_order(
     order=order,
     next_status=order.status,
   )
+  await db.refresh(order)
+  await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=order.id)
   await db.refresh(order)
   return _to_order_response(order, tenant=tenant)
 
@@ -722,13 +752,6 @@ async def update_order(
       fallback="DRAFT",
       entity_label="order",
     )
-    if order.status == "IN_PROGRESS":
-      promise = await run_order_promise_check(db, tenant_id=tenant.id, order=order)
-      if not (promise.atp_ok and promise.ctp_ok):
-        raise HTTPException(
-          status_code=status.HTTP_400_BAD_REQUEST,
-          detail=f"Promise check failed: {'; '.join(promise.reasons) or 'ATP/CTP not satisfied'}",
-        )
   if body.remarks is not None:
     order.remarks = body.remarks
 
@@ -739,6 +762,7 @@ async def update_order(
     order=order,
     next_status=order.status,
   )
+  await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=order.id)
   await db.refresh(order)
   return _to_order_response(order, tenant=tenant)
 
@@ -823,12 +847,77 @@ async def create_order_from_quotation(
     next_status=order.status,
   )
   await db.refresh(order)
+  await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=order.id)
+  await db.refresh(order)
 
   return _to_order_response(order, tenant=tenant)
 
 
 class OrderStatusBody(BaseModel):
   status: str
+  # Admin-only: set orders.pipeline_status directly (e.g. stuck pipeline)
+  force_pipeline_status: str | None = None
+
+
+@router.get("/{order_id}/milestones", response_model=OrderMilestonesOut)
+async def get_order_milestones(
+  order_id: int,
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  if user.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+  order = await db.get(Order, order_id)
+  if not order or order.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+  await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=order_id)
+  await db.refresh(order)
+  payload = await build_milestone_payload(db, tenant_id=tenant.id, order_id=order_id)
+  steps_raw = payload.get("steps") or []
+  steps = [OrderMilestoneStepOut(**s) for s in steps_raw]
+  return OrderMilestonesOut(
+    pipeline_status=payload.get("pipeline_status") or order.pipeline_status,
+    rm_inhouse_pct=float(payload.get("rm_inhouse_pct") or 0),
+    steps=steps,
+    tna_warnings=payload.get("tna_warnings") or [],
+    pipeline_na_steps=payload.get("pipeline_na_steps") or [],
+    order_type=payload.get("order_type"),
+  )
+
+
+@router.patch("/{order_id}/pipeline-settings", response_model=OrderMilestonesOut)
+async def patch_order_pipeline_settings(
+  order_id: int,
+  body: OrderPipelineSettingsPatch,
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  if user.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+  order = await db.get(Order, order_id)
+  if not order or order.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+  if body.order_type is not None:
+    order.order_type = body.order_type.strip().lower()[:16] or None
+    if body.na_steps is None:
+      order.pipeline_na_steps = suggest_na_steps(order.order_type)
+  if body.na_steps is not None:
+    order.pipeline_na_steps = [str(s).upper() for s in body.na_steps]
+  await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=order_id)
+  await db.commit()
+  await db.refresh(order)
+  payload = await build_milestone_payload(db, tenant_id=tenant.id, order_id=order_id)
+  steps = [OrderMilestoneStepOut(**s) for s in (payload.get("steps") or [])]
+  return OrderMilestonesOut(
+    pipeline_status=payload.get("pipeline_status") or order.pipeline_status,
+    rm_inhouse_pct=float(payload.get("rm_inhouse_pct") or 0),
+    steps=steps,
+    tna_warnings=payload.get("tna_warnings") or [],
+    pipeline_na_steps=payload.get("pipeline_na_steps") or [],
+    order_type=payload.get("order_type"),
+  )
 
 
 @router.patch("/{order_id}/status", response_model=OrderResponse)
@@ -844,6 +933,15 @@ async def update_order_status(
   order = await db.get(Order, order_id)
   if not order or order.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+  pipeline_forced = False
+  if body.force_pipeline_status:
+    if not await _is_tenant_admin(user, db):
+      raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    target = body.force_pipeline_status.strip().upper()
+    if target not in PIPELINE_STAGES and target != "COMPLETED":
+      raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid pipeline_status")
+    order.pipeline_status = target
+    pipeline_forced = True
   order.status = validate_transition(
     ORDER_TRANSITIONS,
     order.status,
@@ -851,13 +949,6 @@ async def update_order_status(
     fallback="DRAFT",
     entity_label="order",
   )
-  if order.status == "IN_PROGRESS":
-    promise = await run_order_promise_check(db, tenant_id=tenant.id, order=order)
-    if not (promise.atp_ok and promise.ctp_ok):
-      raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f"Promise check failed: {'; '.join(promise.reasons) or 'ATP/CTP not satisfied'}",
-      )
   await db.flush()
   await _auto_generate_followup_actions_if_missing(
     db,
@@ -865,6 +956,8 @@ async def update_order_status(
     order=order,
     next_status=order.status,
   )
+  if not pipeline_forced:
+    await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=order_id)
   await db.refresh(order)
   return _to_order_response(order, tenant=tenant)
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -213,8 +212,7 @@ async def assert_delegate_manager_or_permission(
 async def get_user_role_for_tenant(db: AsyncSession, user: User, tenant_id: int) -> Role | None:
     if user.tenant_id != tenant_id:
         return None
-    result = await db.execute(select(Role).where(Role.id == user.role_id, Role.tenant_id == tenant_id).limit(1))
-    return result.scalar_one_or_none()
+    return await get_user_role_scoped_to_tenant(db, user, tenant_id)
 
 
 def internal_permission_granted(*, role: Role | None, permission_key: str) -> bool:

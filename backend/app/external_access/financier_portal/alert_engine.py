@@ -114,7 +114,7 @@ async def order_lifecycle_alerts_for_party(db: AsyncSession, *, tenant_id: int, 
             if o.delivery_date <= today + timedelta(days=30) and o.delivery_date >= today - timedelta(days=120):
                 if o.production_started_at or o.rm_received_at:
                     add(
-                        "DELAYED_PRODUCTION",
+                        "DELAYED_SHIPMENT_WINDOW",
                         "medium",
                         "Shipment window approaching without ship",
                         f"Order {o.order_code}: delivery target {o.delivery_date}, not shipped yet.",

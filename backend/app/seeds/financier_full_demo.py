@@ -146,7 +146,7 @@ async def _enrich_orders_for_visibility(
     o1.shipped_at = _dt_at(today - timedelta(days=95))
     o1.payment_received_at = None
 
-    # ORD-02: production started, delivery passed, not shipped → DELAYED_SHIPMENT (+ possible DELAYED_PRODUCTION path)
+    # ORD-02: production started, delivery passed, not shipped → DELAYED_SHIPMENT (+ possible DELAYED_SHIPMENT_WINDOW path)
     o2 = orders["LKH-ORD-02"]
     o2.master_contract_id = mc_export.id
     s2 = dict(o2.commercial_snapshot_json or {})

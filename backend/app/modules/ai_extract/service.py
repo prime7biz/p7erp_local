@@ -37,6 +37,7 @@ from app.modules.ai_extract.schemas import (
 
 def _get_provider() -> BaseExtractionProvider:
     s = get_settings()
+    # Document AI extraction uses Gemini multimodal only when explicitly enabled (default off).
     if s.gemini_enabled and (s.gemini_api_key or "").strip():
         return GeminiExtractionProvider()
     return StubExtractionProvider()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from fastapi import HTTPException
@@ -429,7 +430,7 @@ async def test_quotation_change_request_flow(db_session_integration):
         customer_id=customer.id,
         quotation_code=f"QQ{slug}"[:14],
         currency="USD",
-        target_price="10",
+        target_price=Decimal("10"),
         status="APPROVED",
     )
     db.add(q)
@@ -449,7 +450,7 @@ async def test_quotation_change_request_flow(db_session_integration):
     await apply_change_request(db, tenant_id=tenant.id, user=user, cr_id=cr.id)
     await db.flush()
     await db.refresh(q)
-    assert q.target_price == "12"
+    assert q.target_price == Decimal("12")
 
 
 @pytest.mark.asyncio

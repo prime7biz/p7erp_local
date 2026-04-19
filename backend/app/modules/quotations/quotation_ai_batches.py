@@ -18,6 +18,7 @@ from app.modules.orders.commercial_fields import (
   is_quotation_commercial_locked,
 )
 from app.models.quotation_ai_suggestion import QuotationAiSuggestionBatch, QuotationAiSuggestionItem
+from app.modules.ai_extract.schemas import InquiryExtractionResponse
 from app.modules.ai_tool.audit import log_ai_event
 from app.modules.master_data_ai.request_context import get_master_data_ai_request_id
 
@@ -276,6 +277,84 @@ async def _load_batch_items(
         .order_by(QuotationAiSuggestionItem.id.asc())
     )
     return batch, list(r2.scalars().all())
+
+
+async def create_batch_from_extraction(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    user_id: int | None,
+    quotation_id: int | None,
+    extraction: InquiryExtractionResponse,
+    request_id: str | None,
+    model_hint: str | None,
+) -> int:
+    now = datetime.utcnow()
+    batch = QuotationAiSuggestionBatch(
+        tenant_id=tenant_id,
+        quotation_id=quotation_id,
+        action_type="extract",
+        provider=None,
+        model_hint=model_hint,
+        request_id=request_id,
+        generated_by_user_id=user_id,
+        source_type="document",
+        status="generated",
+        meta_json={
+            "extraction_success": extraction.success,
+            "field_count": len(extraction.fields),
+            "warnings_count": len(extraction.warnings or []),
+        },
+        created_at=now,
+        updated_at=now,
+        expires_at=now + timedelta(days=_batch_retention_days()),
+    )
+    db.add(batch)
+    await db.flush()
+
+    for fk, ef in (extraction.fields or {}).items():
+        nk = normalize_suggestion_field_key(fk)
+        if not nk or nk not in ALLOWED_FORM_KEYS:
+            continue
+        if ef.value is None:
+            continue
+        sv = _trunc(str(ef.value).strip(), TRUNC_VALUE)
+        if not sv:
+            continue
+        db.add(
+            QuotationAiSuggestionItem(
+                batch_id=batch.id,
+                tenant_id=tenant_id,
+                field_key=nk,
+                suggested_value=sv,
+                confidence=float(ef.confidence) if ef.confidence is not None else None,
+                source=_trunc(ef.source, 64),
+                rationale=None,
+                disposition="pending",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+    await db.flush()
+
+    await log_ai_event(
+        db,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        action="QUOTATION_AI_SUGGESTION_BATCH",
+        resource="quotation",
+        details_json={
+            "quotation_id": quotation_id,
+            "suggestion_batch_id": batch.id,
+            "action_type": "extract",
+            "phase": "generated",
+            "item_count": len(extraction.fields or {}),
+        },
+        request_id=request_id,
+        prompt_category="quotation_ai",
+        severity="INFO",
+    )
+    return batch.id
 
 
 async def create_batch_from_enrich(

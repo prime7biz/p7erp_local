@@ -50,6 +50,7 @@ export function BomBuilderPage() {
   const [manualPrice, setManualPrice] = useState("0");
 
   const orderIdParam = Number(searchParams.get("orderId") || 0);
+  const styleIdParam = Number(searchParams.get("styleId") || 0);
 
   useEffect(() => {
     if (!Number.isFinite(orderIdParam) || orderIdParam <= 0) return;
@@ -100,12 +101,28 @@ export function BomBuilderPage() {
           <div>
             <h1 className="text-2xl font-bold text-text-primary">BOM Builder</h1>
             <p className="mt-0.5 text-sm text-text-muted">
-              Create and govern BOMs from confirmed orders (prefilled from quotation materials), then raise POs per line or by
-              vendor.
+              Create and govern <strong>order execution</strong> BOMs from confirmed orders (prefilled from quotation materials),
+              then raise POs per line or by vendor. Reference BOMs for a style live on the style page (BOM tab).
             </p>
           </div>
         </div>
       </div>
+
+      {styleIdParam > 0 && orderIdParam <= 0 ? (
+        <div className="rounded-xl border border-status-warning/30 bg-status-warning-subtle/30 p-4 text-sm text-text-secondary">
+          <p className="font-medium text-text-primary">Style reference BOM</p>
+          <p className="mt-1">
+            This URL includes <code className="rounded bg-surface-subtle px-1">styleId</code> but no order. The BOM builder is
+            for <strong>order execution</strong> BOMs. Manage <strong>reference</strong> (style) BOMs from the style detail page.
+          </p>
+          <Link
+            className="mt-2 inline-block text-sm font-medium text-status-info-foreground hover:underline"
+            to={`/app/merchandising/styles/${styleIdParam}?tab=bom`}
+          >
+            Open style BOM tab →
+          </Link>
+        </div>
+      ) : null}
 
       {orderIdParam > 0 && (
         <div className="rounded-xl border border-border bg-surface-raised p-4">

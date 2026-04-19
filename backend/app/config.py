@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     ai_rate_limit_chat_per_window: int = 30
     ai_rate_limit_read_per_window: int = 50
     ai_rate_limit_heavy_per_window: int = 12
+    # Per-tenant daily cap for AI tool chat + escalation (UTC day). 0 = unlimited (default).
+    ai_max_requests_per_tenant_per_day: int = 0
+    # Max completion/request budget for external OpenAI-compatible paid calls (MCP loop).
+    ai_max_tokens_per_request: int = 4096
     ai_timeout_chat_seconds: int = 20
     ai_timeout_heavy_seconds: int = 35
     ai_circuit_breaker_failure_threshold: int = 5
@@ -48,20 +52,37 @@ class Settings(BaseSettings):
     # Suggestion and trace batches: default expiry window from creation (cleanup deletes after expires_at).
     customer_ai_batch_retention_days: int = 90
 
-    # Production planning AI (Gemini). Use cheapest Flash-lite model; override via GEMINI_MODEL.
+    # Google Gemini (optional). Disabled by default while testing OpenRouter + local Ollama.
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
-    gemini_enabled: bool = True
+    gemini_enabled: bool = False
+    # OpenRouter (OpenAI-compatible API). Tier-1 default when key + model are set.
+    openrouter_enabled: bool = True
+    openrouter_api_key: str = ""
+    # Alternates: see app.common.openrouter_model_presets.OPENROUTER_MODEL_PRESETS and docs/OPENROUTER.md
+    openrouter_model: str = "google/gemma-4-31b-it:free"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    # Optional OpenRouter attribution headers (recommended by OpenRouter).
+    openrouter_site_url: str = ""
+    openrouter_app_name: str = "P7 ERP"
+    # When true with OpenRouter keys set, tier-1 chat / structured AI uses OpenRouter before local Ollama.
+    openrouter_tier1_preferred: bool = False
+    # When true, tenant-scoped text features (dashboard brief, weekly report, planning narrative, etc.)
+    # call OpenRouter first via generate_text_for_tenant, then fall back to Gemini if configured.
+    openrouter_tenant_text_enabled: bool = False
     # 0 = unlimited; otherwise max Gemini API calls per calendar month (process-wide, persisted in media/)
     ai_monthly_budget_limit: int = 0
     # Tier-1 local routing model (Docker service name by default)
     ollama_enabled: bool = True
     ollama_url: str = "http://ollama:11434"
-    ollama_model: str = "llama3"
+    # Default: small Gemma 2 instruct (Q4_K_M) for CPU-only / low-RAM machines via Ollama; override with OLLAMA_MODEL.
+    ollama_model: str = "gemma2:2b-instruct-q4_K_M"
     # Tier-2 paid provider (used only after explicit escalation approval)
     paid_llm_provider: str = ""
     paid_llm_api_key: str = ""
     paid_llm_model: str = ""
+    # When set, OpenAI-compatible chat URL base (e.g. https://openrouter.ai/api/v1 for OpenRouter).
+    paid_llm_base_url: str = ""
     # Mounted in-process with FastAPI. Docker compose enables MCP explicitly for dev/prod; code default stays safe.
     mcp_enabled: bool = False
     # Require JWT auth + tenant binding on HTTP /mcp endpoint (default True for production safety)

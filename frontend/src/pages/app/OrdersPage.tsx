@@ -7,6 +7,8 @@ import {
   type CustomerResponse,
   type QuotationResponse,
   type PlanningGroundingSummaryRow,
+  type OrderFinancialStatusOut,
+  type OrderSewingLineSummaryOut,
 } from "@/api/client";
 import { useListPagination } from "@/hooks/useListPagination";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
@@ -47,6 +49,106 @@ import {
   listTableTrClass,
 } from "@/components/app/listPageLayout";
 import { cn } from "@/lib/utils";
+
+function fmtShortDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return "—";
+  }
+}
+
+function financialStatusTooltip(f: OrderFinancialStatusOut): string {
+  const docKind = f.master_contract_type === "SALES_CONTRACT" ? "sales contract" : "export LC";
+  return [
+    f.pi_issued ? "Proforma invoice issued to customer." : "No qualifying proforma invoice yet.",
+    f.buyer_document_received
+      ? `Buyer ${docKind} is received (master contract active).`
+      : "Buyer LC / sales contract not yet received.",
+    f.bank_facility_linked
+      ? "A bank facility is linked to this export master contract."
+      : "No bank facility linked to the master contract.",
+    f.btb_utilization_pct != null
+      ? `BTB LCs: ${f.btb_lc_opened_count ?? 0} opened of ${f.btb_lc_count ?? 0} total; ${f.btb_utilization_pct.toFixed(1)}% of master contract amount.`
+      : "No BTB utilization percentage (set master contract amount and BTB LCs).",
+    f.in_production ? "Production has started." : "Production not started.",
+    f.shipped ? "Shipped." : "Not shipped yet.",
+  ].join(" ");
+}
+
+function OrderFinancialStatusCell({ f }: { f: OrderFinancialStatusOut | null | undefined }) {
+  if (!f) return <span className="text-text-muted text-xs">—</span>;
+  const docLabel = f.master_contract_type === "SALES_CONTRACT" ? "SC" : "LC";
+  const chips: { k: string; label: string; ok: boolean }[] = [
+    { k: "pi", label: "PI", ok: !!f.pi_issued },
+    { k: "doc", label: docLabel, ok: !!f.buyer_document_received },
+    { k: "bank", label: "Bank", ok: !!f.bank_facility_linked },
+    {
+      k: "btb",
+      label: f.btb_utilization_pct != null ? `BTB ${f.btb_utilization_pct.toFixed(0)}%` : "BTB",
+      ok: (f.btb_lc_count ?? 0) > 0 || f.btb_utilization_pct != null,
+    },
+    { k: "prod", label: "Prod", ok: !!f.in_production },
+    { k: "ship", label: "Ship", ok: !!f.shipped },
+  ];
+  return (
+    <div
+      className="flex flex-wrap gap-0.5 max-w-[200px]"
+      title={financialStatusTooltip(f)}
+    >
+      {chips.map((c) => (
+        <span
+          key={c.k}
+          className={cn(
+            "rounded px-1 py-0.5 text-[10px] font-semibold",
+            c.ok ? "bg-status-success-subtle text-status-success-foreground" : "bg-surface-subtle text-text-muted",
+          )}
+        >
+          {c.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function OrderSewingLineCell({ s }: { s: OrderSewingLineSummaryOut | null | undefined }) {
+  if (!s || (!s.primary_line_code && (s.allocations?.length ?? 0) === 0)) {
+    return <span className="text-text-muted text-xs">—</span>;
+  }
+  const track =
+    s.delivery_on_track === "yes"
+      ? { text: "On track", cls: "text-status-success-foreground" }
+      : s.delivery_on_track === "no"
+        ? { text: "At risk", cls: "text-status-danger-foreground" }
+        : { text: "—", cls: "text-text-muted" };
+  const line = s.primary_line_code ?? s.allocations?.[0]?.line_code ?? "—";
+  const extra = (s.extra_allocation_count ?? 0) > 0 ? ` +${s.extra_allocation_count}` : "";
+  const tipLines =
+    s.allocations?.map(
+      (a) =>
+        `${a.line_code} · ${a.reservation_status} · start ${fmtShortDate(a.start_date)} · end ${fmtShortDate(a.planned_end_date ?? a.actual_end_date)} · booked ${fmtShortDate(a.booked_at)}`,
+    ) ?? [];
+  const title = [
+    ...tipLines,
+    `Delivery vs plan: ${s.delivery_on_track === "yes" ? "on time" : s.delivery_on_track === "no" ? "behind schedule" : "unknown"}`,
+  ].join("\n");
+
+  return (
+    <div className="max-w-[220px] text-xs leading-snug" title={title}>
+      <div className="font-medium text-text-primary truncate">
+        {line}
+        {extra}
+      </div>
+      <div className="text-text-muted">
+        Book {fmtShortDate(s.primary_booked_at)} · End {fmtShortDate(s.primary_planned_end_date)}
+      </div>
+      <div className={cn("font-semibold", track.cls)}>{track.text}</div>
+    </div>
+  );
+}
 
 export function OrdersPage() {
   const navigate = useNavigate();
@@ -302,16 +404,13 @@ export function OrdersPage() {
         ) : (
           <>
           <ResponsiveTableContainer>
-          <table className={cn(listTableBaseClass, "min-w-[1540px]")}>
+          <table className={cn(listTableBaseClass, "min-w-[1480px]")}>
             <thead className={listTableTheadClass}>
               <tr>
                 <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Code</th>
                 <th className={cn(listTableThClass, "min-w-[120px]")}>Customer</th>
                 <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Quotation</th>
                 <th className={cn(listTableThClass, "min-w-[140px]")}>Style</th>
-                <th className={cn(listTableThClass, "min-w-[100px] whitespace-nowrap")}>Intermediary</th>
-                <th className={cn(listTableThClass, "w-20 whitespace-nowrap")}>Shipping</th>
-                <th className={cn(listTableThClass, "min-w-[120px] whitespace-nowrap")}>Commission</th>
                 <th className={cn(listTableThClass, "w-28 whitespace-nowrap")}>Delivery date</th>
                 <th className={cn(listTableThRightClass, "w-20 whitespace-nowrap")}>Qty</th>
                 <th
@@ -332,6 +431,18 @@ export function OrdersPage() {
                 >
                   CR
                 </th>
+                <th
+                  className={cn(listTableThClass, "w-[200px] whitespace-nowrap")}
+                  title="PI, LC, bank facility, BTB, production, shipment"
+                >
+                  Financial
+                </th>
+                <th
+                  className={cn(listTableThClass, "w-[220px] whitespace-nowrap")}
+                  title="Sewing line booking and delivery vs plan"
+                >
+                  Sewing line
+                </th>
                 <th className={cn(listTableThClass, "w-[220px] whitespace-nowrap")} title="Auto pipeline milestone">
                   Pipeline
                 </th>
@@ -344,11 +455,6 @@ export function OrdersPage() {
                 const styleName = o.style_name ?? null;
                 const styleRef = o.style_ref ?? null;
                 const styleImageForRow = o.style_image_url ?? null;
-                const intermediaryName = o.intermediary_name ?? null;
-                const shippingTerm = o.shipping_term ?? null;
-                const commissionMode = o.commission_mode ?? null;
-                const commissionType = o.commission_type ?? null;
-                const commissionValue = o.commission_value ?? null;
                 const g = groundingByOrderId[o.id];
 
                 return (
@@ -389,17 +495,6 @@ export function OrdersPage() {
                         )}
                       </div>
                     </div>
-                  </td>
-                  <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={intermediaryName ?? undefined}>
-                    {intermediaryName ?? "—"}
-                  </td>
-                  <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={shippingTerm ?? undefined}>
-                    {shippingTerm ?? "—"}
-                  </td>
-                  <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={commissionMode || commissionType || commissionValue ? `${commissionMode ?? "-"} / ${commissionType ?? "-"} / ${commissionValue ?? "-"}` : undefined}>
-                    {commissionMode || commissionType || commissionValue
-                      ? `${commissionMode ?? "-"} / ${commissionType ?? "-"} / ${commissionValue ?? "-"}`
-                      : "—"}
                   </td>
                   <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : undefined}>
                     {o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : "—"}
@@ -457,6 +552,12 @@ export function OrdersPage() {
                     ) : (
                       "—"
                     )}
+                  </td>
+                  <td className={cn(listTableTdClass, "whitespace-nowrap align-top")}>
+                    <OrderFinancialStatusCell f={o.financial_status} />
+                  </td>
+                  <td className={cn(listTableTdClass, "align-top")}>
+                    <OrderSewingLineCell s={o.sewing_line_summary} />
                   </td>
                   <td className={cn(listTableTdClass, "whitespace-nowrap align-top")}>
                     <OrderPipelineListCell pipelineStatus={o.pipeline_status} rmPct={o.rm_inhouse_pct} />

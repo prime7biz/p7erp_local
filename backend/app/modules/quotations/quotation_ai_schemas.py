@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.modules.ai_extract.schemas import InquiryExtractionResponse
+
 
 class QuotationAiQuotationOut(BaseModel):
     """Narrow shape returned after AI apply — avoids circular imports with full response."""
@@ -60,6 +62,15 @@ class QuotationAiEnrichRequest(BaseModel):
 class QuotationAiEnrichResponse(BaseModel):
     suggestions: dict[str, QuotationAiFieldSuggestion] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
+    suggestion_batch_id: int | None = None
+
+
+class QuotationAiExtractWrapResponse(BaseModel):
+    """Document extraction → inquiry-shaped fields; mapped to quotation suggestion batch on apply."""
+
+    extraction: InquiryExtractionResponse
+    model_hint: str = "gemini_multimodal"
+    request_id: str | None = None
     suggestion_batch_id: int | None = None
 
 

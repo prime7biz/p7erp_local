@@ -22,9 +22,11 @@ BENCHMARK_ACTION = "QUOTATION_COST_BENCHMARK"
 STATUSES_PEER = frozenset({"APPROVED", "SENT", "CONVERTED"})
 
 
-def _dec(s: str | None) -> Decimal | None:
+def _dec(s: str | Decimal | None) -> Decimal | None:
     if s is None:
         return None
+    if isinstance(s, Decimal):
+        return s
     try:
         return parse_money_decimal(str(s), field="v", allow_empty_as_zero=False)
     except Exception:

@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,10 +45,26 @@ from app.modules.production.schemas import (
 from app.modules.ai_tool.audit import log_ai_event
 from app.modules.erp_ai_phases.feature_flags import require_phase
 from app.modules.production.planning_advisory_service import build_capacity_and_sequencing_advisory
+from app.modules.production.line_reservation_service import (
+    confirm_reservation_firm,
+    confirm_reservation_soft,
+    propose_line_reservation,
+    release_reservation,
+)
+from app.modules.production.replan_service import shift_order_line_schedule
 from app.modules.production.settings_router import _get_or_create_settings
 from app.modules.production.suggest_service import suggest_assignments
 
 router = APIRouter(prefix="/production", tags=["production-planning"])
+
+
+class LineReservationProposeBody(BaseModel):
+    order_id: int = Field(..., gt=0)
+
+
+class MaterialDelayReplanBody(BaseModel):
+    order_id: int = Field(..., gt=0)
+    delay_days: int = Field(..., ge=1, le=365)
 
 
 def _ensure(user: User, tenant: Tenant) -> None:
@@ -106,6 +122,8 @@ async def get_plan_board(
                 "start_date": c.start_date.isoformat(),
                 "planned_end_date": c.planned_end_date.isoformat() if c.planned_end_date else None,
                 "status": c.status,
+                "reservation_status": getattr(c, "reservation_status", None),
+                "smv_per_piece": float(c.smv_per_piece) if getattr(c, "smv_per_piece", None) is not None else None,
                 "planned_qty": float(c.planned_qty or 0),
                 "completed_qty": float(c.completed_qty or 0),
                 "machine_count": c.machine_count,
@@ -144,6 +162,7 @@ async def assign_style(
         start_date=sd,
         planned_end_date=planned_end,
         status="planned",
+        reservation_status="DRAFT",
         planned_qty=body.planned_qty,
         sort_order=body.sort_order,
     )
@@ -151,6 +170,78 @@ async def assign_style(
     await db.commit()
     await db.refresh(row)
     return {"id": row.id}
+
+
+@router.post("/reservations/propose")
+async def reservations_propose(
+    body: LineReservationProposeBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure(user, tenant)
+    row = await propose_line_reservation(db, tenant_id=tenant.id, order_id=body.order_id, user_id=user.id)
+    await db.commit()
+    await db.refresh(row)
+    return {"id": row.id, "reservation_status": row.reservation_status}
+
+
+@router.post("/reservations/{config_id}/confirm-soft")
+async def reservations_confirm_soft(
+    config_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure(user, tenant)
+    row = await confirm_reservation_soft(db, tenant_id=tenant.id, config_id=config_id, user_id=user.id)
+    await db.commit()
+    return {"id": row.id, "reservation_status": row.reservation_status}
+
+
+@router.post("/reservations/{config_id}/confirm-firm")
+async def reservations_confirm_firm(
+    config_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure(user, tenant)
+    row = await confirm_reservation_firm(db, tenant_id=tenant.id, config_id=config_id, user_id=user.id)
+    await db.commit()
+    return {"id": row.id, "reservation_status": row.reservation_status}
+
+
+@router.post("/reservations/{config_id}/release")
+async def reservations_release(
+    config_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure(user, tenant)
+    row = await release_reservation(db, tenant_id=tenant.id, config_id=config_id, user_id=user.id)
+    await db.commit()
+    return {"id": row.id, "reservation_status": row.reservation_status}
+
+
+@router.post("/replan/material-delay")
+async def replan_material_delay(
+    body: MaterialDelayReplanBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure(user, tenant)
+    ids = await shift_order_line_schedule(
+        db,
+        tenant_id=tenant.id,
+        order_id=body.order_id,
+        delay_days=body.delay_days,
+        user_id=user.id,
+    )
+    await db.commit()
+    return {"shifted_config_ids": ids}
 
 
 @router.put("/plan-board/{config_id}/move")

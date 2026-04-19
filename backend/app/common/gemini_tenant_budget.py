@@ -6,7 +6,6 @@ import logging
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -18,9 +17,14 @@ logger = logging.getLogger(__name__)
 _DEFAULT_COST_PER_1M = Decimal("0.075")
 
 
-async def is_gemini_killed(db: AsyncSession) -> bool:
+async def is_platform_ai_kill_switch_on(db: AsyncSession) -> bool:
     row = await db.get(PlatformSettings, 1)
-    if row and row.gemini_kill_switch:
+    return bool(row and row.gemini_kill_switch)
+
+
+async def is_gemini_killed(db: AsyncSession) -> bool:
+    """True when platform kill-switch is on or Gemini is disabled in env."""
+    if await is_platform_ai_kill_switch_on(db):
         return True
     return not get_settings().gemini_enabled
 
@@ -35,23 +39,13 @@ async def get_or_create_tenant_budget(db: AsyncSession, tenant_id: int) -> Tenan
     return row
 
 
-async def allow_gemini_for_tenant(db: AsyncSession, tenant_id: int) -> bool:
-    """Return False if kill switch, env disabled, global monthly cap (file), or tenant throttled."""
-    if await is_gemini_killed(db):
-        return False
-    from app.common.gemini_budget import allow_gemini_call
-
-    if not allow_gemini_call():
-        return False
+async def _tenant_token_and_cost_budget_allows(db: AsyncSession, tenant_id: int) -> bool:
     b = await get_or_create_tenant_budget(db, tenant_id)
-    s = get_settings()
-    if int(s.ai_monthly_budget_limit or 0) > 0:
-        pass  # global file already enforced in allow_gemini_call
     if b.is_throttled:
         return False
     if b.monthly_token_limit and b.monthly_token_limit > 0:
         if b.current_month_tokens >= b.monthly_token_limit:
-            logger.warning("Tenant %s Gemini token budget exhausted", tenant_id)
+            logger.warning("Tenant %s AI token budget exhausted", tenant_id)
             b.is_throttled = True
             b.throttled_at = datetime.utcnow()
             await db.flush()
@@ -65,6 +59,36 @@ async def allow_gemini_for_tenant(db: AsyncSession, tenant_id: int) -> bool:
     return True
 
 
+async def allow_gemini_for_tenant(db: AsyncSession, tenant_id: int) -> bool:
+    """Return False if kill switch, env disabled, global monthly cap (file), or tenant throttled."""
+    if not get_settings().gemini_enabled:
+        return False
+    if await is_platform_ai_kill_switch_on(db):
+        return False
+    from app.common.gemini_budget import allow_gemini_call
+
+    if not allow_gemini_call():
+        return False
+    return await _tenant_token_and_cost_budget_allows(db, tenant_id)
+
+
+async def allow_openrouter_tenant_text(db: AsyncSession, tenant_id: int) -> bool:
+    """Budget gate for OpenRouter-backed tenant text (generate_text_for_tenant) without requiring Gemini."""
+    from app.common.gemini_budget import allow_gemini_call
+    from app.modules.ai_tool.llm_provider.openrouter_provider import openrouter_is_configured
+
+    s = get_settings()
+    if not getattr(s, "openrouter_tenant_text_enabled", False):
+        return False
+    if not openrouter_is_configured():
+        return False
+    if await is_platform_ai_kill_switch_on(db):
+        return False
+    if not allow_gemini_call():
+        return False
+    return await _tenant_token_and_cost_budget_allows(db, tenant_id)
+
+
 async def record_gemini_usage(
     db: AsyncSession,
     *,
@@ -75,6 +99,7 @@ async def record_gemini_usage(
     prompt_tokens: int | None,
     completion_tokens: int | None,
     total_tokens: int | None,
+    provider: str = "gemini",
 ) -> None:
     tt = total_tokens
     if tt is None and prompt_tokens is not None and completion_tokens is not None:
@@ -86,7 +111,7 @@ async def record_gemini_usage(
         AiUsageLog(
             tenant_id=tenant_id,
             user_id=user_id,
-            provider="gemini",
+            provider=(provider or "gemini")[:32],
             model=model,
             feature=feature,
             prompt_tokens=prompt_tokens,

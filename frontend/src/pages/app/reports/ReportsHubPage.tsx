@@ -4,11 +4,19 @@ import { api, type TenantOverviewReport } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 
 const PREFIX = "/app/reports";
+const MERCH_APP = "/app/merchandising";
 
 type Tile = { href: string; label: string; group: string };
 
 const TILES: Tile[] = [
-  { group: "Merchandising", href: `${PREFIX}/merchandising`, label: "Merchandising overview" },
+  { group: "Merchandising", href: `${PREFIX}/merchandising`, label: "Merchandising overview (tenant + KPIs)" },
+  { group: "Merchandising", href: `${MERCH_APP}/control-tower`, label: "Merch control tower" },
+  { group: "Merchandising", href: `${MERCH_APP}/pipeline`, label: "Order pipeline" },
+  { group: "Merchandising", href: `${MERCH_APP}/pipeline-analytics`, label: "Pipeline analytics" },
+  { group: "Merchandising", href: `${MERCH_APP}/samples`, label: "Sample development" },
+  { group: "Merchandising", href: `${MERCH_APP}/alerts`, label: "Critical alerts" },
+  { group: "Merchandising", href: `${MERCH_APP}/wastage-report`, label: "Wastage report" },
+  { group: "Merchandising", href: `${MERCH_APP}/consumption-reconciliation`, label: "Consumption reconciliation" },
   { group: "Merchandising", href: `${PREFIX}/style-360`, label: "Style 360" },
   { group: "Operations", href: `${PREFIX}/purchase-orders`, label: "Purchase orders" },
   { group: "Operations", href: `${PREFIX}/grn`, label: "GRN summary" },

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { MerchAlertItem } from "@/api/client";
+import { merchAlertPrimaryHref } from "@/utils/merchAlertLinks";
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   critical: { bg: "bg-status-danger-subtle", text: "text-status-danger-foreground", label: "Critical" },
@@ -19,6 +20,7 @@ interface MerchAlertCardProps {
 
 export function MerchAlertCard({ alert, selected, onToggleSelected, onOpen }: MerchAlertCardProps) {
   const severity = SEVERITY_STYLES[alert.severity] ?? DEFAULT_SEVERITY_STYLE;
+  const primaryHref = merchAlertPrimaryHref(alert);
   return (
     <div
       className={`rounded-lg border-l-4 ${severity.bg} border ${selected ? "ring-2 ring-focus-ring/60 border-brand-primary/40" : "border-border"} bg-surface-raised p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow ${alert.severity === "critical" ? "border-l-status-danger" : alert.severity === "high" ? "border-l-status-warning" : ""}`}
@@ -53,6 +55,14 @@ export function MerchAlertCard({ alert, selected, onToggleSelected, onOpen }: Me
               onClick={(e) => e.stopPropagation()}
             >
               {alert.order_code}
+            </Link>
+          ) : primaryHref ? (
+            <Link
+              to={primaryHref}
+              className="text-xs text-brand-primary hover:underline mt-1 inline-block"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Open related record
             </Link>
           ) : null}
           <p className="text-xs text-text-muted mt-1">{alert.created_at ? new Date(alert.created_at).toLocaleDateString() : ""}</p>

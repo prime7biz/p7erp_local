@@ -49,6 +49,7 @@ type PlanRow = {
   start_date: string;
   planned_end_date: string | null;
   status: string;
+  reservation_status?: string | null;
   planned_qty?: number;
   completed_qty?: number;
 };
@@ -485,6 +486,7 @@ export function ProductionLinePlanPage() {
                         const left = (si / days.length) * 100;
                         const width = (span / days.length) * 100;
                         const st = it.status ?? "planned";
+                        const rs = (it.reservation_status || "").replaceAll("_", " ") || "—";
                         const color = STATUS_BLOCK[st] ?? "bg-slate-600/90 text-white border-slate-700";
                         const oid = it.order_id;
                         const pr = oid != null ? pipelineByOrder.get(oid) : undefined;
@@ -511,9 +513,10 @@ export function ProductionLinePlanPage() {
                               className={`min-w-0 flex-1 truncate rounded-r border px-1 text-left text-[10px] font-medium leading-tight ${color} ${
                                 conflict ? "ring-2 ring-red-500" : ""
                               }`}
-                              title={`${labelForItem(it)} · ${st}`}
+                              title={`${labelForItem(it)} · ${st} · ${rs}`}
                             >
                               <span className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${overallDotClass(overall)}`} />
+                              <span className="mr-0.5 rounded bg-white/25 px-0.5 text-[9px] uppercase">{rs}</span>
                               {labelForItem(it)} · {st}
                             </div>
                           </div>
@@ -543,6 +546,7 @@ export function ProductionLinePlanPage() {
                   <th className="py-2 pr-4">Start</th>
                   <th className="py-2 pr-4">End</th>
                   <th className="py-2 pr-4">Status</th>
+                  <th className="py-2 pr-4">Reservation</th>
                   <th className="py-2 pr-4">Readiness</th>
                   <th className="py-2 pr-4">Progress</th>
                 </tr>
@@ -561,6 +565,9 @@ export function ProductionLinePlanPage() {
                       <td className="py-2 pr-4">{row.start_date}</td>
                       <td className="py-2 pr-4">{row.planned_end_date ?? "—"}</td>
                       <td className="py-2 pr-4">{row.status}</td>
+                      <td className="py-2 pr-4 text-[11px] text-text-secondary">
+                        {(row.reservation_status || "—").replaceAll("_", " ")}
+                      </td>
                       <td className="py-2 pr-4">{pr?.overall_status ?? "—"}</td>
                       <td className="py-2 pr-4">{pct}% ({cq}/{pq})</td>
                     </tr>

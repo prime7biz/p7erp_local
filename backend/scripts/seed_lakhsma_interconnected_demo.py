@@ -802,7 +802,7 @@ async def seed_interconnected_demo(db) -> None:
         inq = inquiries[i]
         st = styles[i]
         q_qty = inq.quantity or 0
-        unit = float(inq.target_price or "5")
+        unit = float(inq.target_price) if inq.target_price is not None else 5.0
         total_amt = f"{q_qty * unit:.2f}"
         q = Quotation(
             tenant_id=tenant.id,

@@ -17,7 +17,7 @@ export function BomHeaderSummary({ bom, isLegacy }: { bom: OrderDrivenBomHeader;
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-xs text-text-muted">
-            {isLegacy ? "Legacy style BOM" : "Order-driven BOM"} · #{bom.id} · V{bom.version_no}
+            {isLegacy ? "Reference BOM (style template)" : "Order execution BOM"} · #{bom.id} · V{bom.version_no}
             {bom.order_id ? (
               <>
                 {" "}

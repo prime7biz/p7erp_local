@@ -104,6 +104,7 @@ async def run_rule(
             inst.severity = payload.get("severity", "medium")
             inst.reason_text = payload.get("reason_text")
             inst.recommended_action = payload.get("recommended_action")
+            inst.evidence_json = payload.get("evidence_json")
             if inst.status not in ACTIVE_STATUSES:
                 inst.status = "new"
                 inst.resolved_at = None
@@ -128,6 +129,7 @@ async def run_rule(
                         source="system",
                         reason_text=payload.get("reason_text"),
                         recommended_action=payload.get("recommended_action"),
+                        evidence_json=payload.get("evidence_json"),
                     )
                     db.add(inst)
                     await db.flush()
@@ -145,6 +147,7 @@ async def run_rule(
                 inst.severity = payload.get("severity", "medium")
                 inst.reason_text = payload.get("reason_text")
                 inst.recommended_action = payload.get("recommended_action")
+                inst.evidence_json = payload.get("evidence_json")
                 if inst.status not in ACTIVE_STATUSES:
                     inst.status = "new"
                     inst.resolved_at = None

@@ -152,6 +152,7 @@ export function Dashboard() {
       informational: 0,
     },
     total: 0,
+    last_completed_scan_at: null,
   });
   const [promiseSummary, setPromiseSummary] = useState<OrderPromiseSummaryResponse>({
     scanned_count: 0,

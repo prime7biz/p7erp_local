@@ -1,5 +1,5 @@
 from datetime import date, datetime, time
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
@@ -9,6 +9,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete
 
 from app.common.auth import get_current_user
+from app.common.money import (
+  fabric_factor_from_input,
+  format_money,
+  format_pct,
+  format_rate,
+  line_consumption_from_input,
+  line_money_from_input,
+  line_pct_from_input,
+  line_rate_from_input,
+  parse_money,
+)
 from app.common.pagination import clamp_page_size, safe_page, total_pages
 from app.common.codegen import next_tenant_code
 from app.common.db_errors import flush_handling_duplicate_document_code
@@ -81,6 +92,27 @@ from app.modules.quotations.quotation_commercial_money import (
 router = APIRouter(prefix="/quotations", tags=["quotations"])
 router.include_router(quotation_ai_subrouter, prefix="/ai")
 
+FOUR_DP = Decimal("0.0001")
+
+
+def _quantize_money4(d: Decimal) -> Decimal:
+  return d.quantize(FOUR_DP, rounding=ROUND_HALF_UP)
+
+
+def _quotation_header_api_strings(q: Quotation) -> dict[str, str | None]:
+  return {
+    "target_price": format_money(q.target_price),
+    "exchange_rate": format_rate(q.exchange_rate),
+    "total_amount": format_money(q.total_amount),
+    "material_cost": format_money(q.material_cost),
+    "manufacturing_cost": format_money(q.manufacturing_cost),
+    "other_cost": format_money(q.other_cost),
+    "total_cost": format_money(q.total_cost),
+    "cost_per_piece": format_money(q.cost_per_piece),
+    "profit_percentage": format_pct(q.profit_percentage),
+    "quoted_price": format_money(q.quoted_price),
+  }
+
 
 async def _next_quotation_code(db: AsyncSession, tenant_id: int) -> str:
   return await next_tenant_code(
@@ -105,6 +137,7 @@ def _to_quotation_response(
     float(quotation.commission_value) if quotation.commission_value is not None else None
   )
   book_ccy = resolve_commercial_book_currency(tenant, quotation.currency) if tenant else None
+  hdr = _quotation_header_api_strings(quotation)
   return QuotationResponse(
     id=quotation.id,
     tenant_id=quotation.tenant_id,
@@ -122,18 +155,18 @@ def _to_quotation_response(
     projected_quantity=quotation.projected_quantity,
     quotation_date=quotation.quotation_date,
     projected_delivery_date=quotation.projected_delivery_date,
-    target_price=quotation.target_price,
+    target_price=hdr["target_price"],
     target_price_currency=quotation.target_price_currency,
-    exchange_rate=quotation.exchange_rate,
+    exchange_rate=hdr["exchange_rate"],
     currency=quotation.currency,
-    total_amount=quotation.total_amount,
-    material_cost=quotation.material_cost,
-    manufacturing_cost=quotation.manufacturing_cost,
-    other_cost=quotation.other_cost,
-    total_cost=quotation.total_cost,
-    cost_per_piece=quotation.cost_per_piece,
-    profit_percentage=quotation.profit_percentage,
-    quoted_price=quotation.quoted_price,
+    total_amount=hdr["total_amount"],
+    material_cost=hdr["material_cost"],
+    manufacturing_cost=hdr["manufacturing_cost"],
+    other_cost=hdr["other_cost"],
+    total_cost=hdr["total_cost"],
+    cost_per_piece=hdr["cost_per_piece"],
+    profit_percentage=hdr["profit_percentage"],
+    quoted_price=hdr["quoted_price"],
     status=quotation.status,
     next_status_options=next_status_options(
       QUOTATION_TRANSITIONS,
@@ -554,13 +587,15 @@ async def create_quotation_from_inquiry(
   if not customer or customer.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Customer not found")
 
-  profit_pct = (body.profit_percentage if body else 15.0) / 100.0
+  profit_dec = Decimal(str(body.profit_percentage if body else 15.0))
+  profit_pct = float(profit_dec) / 100.0
   # We treat target_price as a base and apply a margin to simulate quotation pricing
   try:
-    base_price = float(inquiry.target_price or 0) if inquiry.target_price is not None else 0.0
+    base_price = float(inquiry.target_price) if inquiry.target_price is not None else 0.0
   except (TypeError, ValueError):
     base_price = 0.0
   quoted_amount = base_price * (1.0 + profit_pct) if base_price > 0 else base_price
+  qamt = _quantize_money4(Decimal(str(quoted_amount))) if quoted_amount else None
   tenant_default_mode = (
     tenant.default_commission_mode.value
     if tenant.default_commission_mode is not None
@@ -586,11 +621,11 @@ async def create_quotation_from_inquiry(
     commission_value=inquiry.commission_value,
     target_price=inquiry.target_price,
     target_price_currency=inquiry.target_price_currency or inquiry.currency or "USD",
-    exchange_rate=inquiry.exchange_rate or "1",
-    profit_percentage=str(body.profit_percentage if body else 15.0),
+    exchange_rate=inquiry.exchange_rate if inquiry.exchange_rate is not None else Decimal("1"),
+    profit_percentage=profit_dec,
     currency=inquiry.currency or inquiry.target_price_currency or "USD",
-    quoted_price=str(quoted_amount) if quoted_amount else None,
-    total_amount=str(quoted_amount) if quoted_amount else None,
+    quoted_price=qamt,
+    total_amount=qamt,
     status="NEW",
     version_no=1,
     valid_until=None,
@@ -669,7 +704,7 @@ async def create_quotation(
     commission_type=body.commission_type,
     commission_value=body.commission_value,
     currency=body.currency,
-    total_amount=body.total_amount,
+    total_amount=parse_money(body.total_amount),
     status="DRAFT",
     version_no=1,
     valid_until=body.valid_until,
@@ -689,14 +724,14 @@ def _material_to_line(m: QuotationMaterial) -> QuotationMaterialLine:
     item_id=m.item_id,
     description=m.description,
     unit=m.unit,
-    consumption_per_dozen=m.consumption_per_dozen or "0",
-    unit_price=m.unit_price or "0",
-    amount_per_dozen=m.amount_per_dozen or "0",
-    total_amount=m.total_amount or "0",
+    consumption_per_dozen=format_rate(m.consumption_per_dozen) or "0",
+    unit_price=format_money(m.unit_price) or "0",
+    amount_per_dozen=format_money(m.amount_per_dozen) or "0",
+    total_amount=format_money(m.total_amount) or "0",
     currency=m.currency or "USD",
-    exchange_rate=m.exchange_rate or "1",
-    base_amount=m.base_amount or "0",
-    local_amount=m.local_amount or "0",
+    exchange_rate=format_rate(m.exchange_rate) or "1",
+    base_amount=format_money(m.base_amount) or "0",
+    local_amount=format_money(m.local_amount) or "0",
   )
 
 
@@ -706,17 +741,17 @@ def _manufacturing_to_line(m: QuotationManufacturing) -> QuotationManufacturingL
     serial_no=m.serial_no,
     style_part=m.style_part,
     machines_required=m.machines_required,
-    production_per_hour=m.production_per_hour or "0",
-    production_per_day=m.production_per_day or "0",
-    cost_per_machine=m.cost_per_machine or "0",
-    total_line_cost=m.total_line_cost or "0",
-    cost_per_dozen=m.cost_per_dozen or "0",
-    cm_per_piece=m.cm_per_piece or "0",
-    total_order_cost=m.total_order_cost or "0",
+    production_per_hour=format_rate(m.production_per_hour) or "0",
+    production_per_day=format_rate(m.production_per_day) or "0",
+    cost_per_machine=format_money(m.cost_per_machine) or "0",
+    total_line_cost=format_money(m.total_line_cost) or "0",
+    cost_per_dozen=format_money(m.cost_per_dozen) or "0",
+    cm_per_piece=format_money(m.cm_per_piece) or "0",
+    total_order_cost=format_money(m.total_order_cost) or "0",
     currency=m.currency or "USD",
-    exchange_rate=m.exchange_rate or "1",
-    base_amount=m.base_amount or "0",
-    local_amount=m.local_amount or "0",
+    exchange_rate=format_rate(m.exchange_rate) or "1",
+    base_amount=format_money(m.base_amount) or "0",
+    local_amount=format_money(m.local_amount) or "0",
   )
 
 
@@ -725,17 +760,17 @@ def _other_cost_to_line(c: QuotationOtherCost) -> QuotationOtherCostLine:
     id=c.id,
     serial_no=c.serial_no,
     cost_head=c.cost_head,
-    percentage=c.percentage or "0",
-    total_amount=c.total_amount or "0",
+    percentage=format_pct(c.percentage) or "0",
+    total_amount=format_money(c.total_amount) or "0",
     cost_type=c.cost_type or "fixed",
-    value=c.value or "0",
+    value=format_money(c.value) or "0",
     based_on=c.based_on or "subtotal",
-    calculated_amount=c.calculated_amount or "0",
+    calculated_amount=format_money(c.calculated_amount) or "0",
     notes=c.notes,
     currency=c.currency or "USD",
-    exchange_rate=c.exchange_rate or "1",
-    base_amount=c.base_amount or "0",
-    local_amount=c.local_amount or "0",
+    exchange_rate=format_rate(c.exchange_rate) or "1",
+    base_amount=format_money(c.base_amount) or "0",
+    local_amount=format_money(c.local_amount) or "0",
   )
 
 
@@ -744,8 +779,8 @@ def _size_ratio_to_line(s: QuotationSizeRatio) -> QuotationSizeRatioLine:
     id=s.id,
     serial_no=s.serial_no,
     size=s.size,
-    ratio_percentage=s.ratio_percentage or "0",
-    fabric_factor=s.fabric_factor or "1.0",
+    ratio_percentage=format_pct(s.ratio_percentage) or "0",
+    fabric_factor=format_money(s.fabric_factor) or "1",
     quantity=s.quantity,
   )
 
@@ -800,6 +835,7 @@ async def get_quotation(
   )
   converted_order_id = converted_map.get(quotation.id)
   book_ccy = resolve_commercial_book_currency(tenant, quotation.currency)
+  hdr = _quotation_header_api_strings(quotation)
   detail_ai = None
   if ai_indicators:
     detail_ai = compute_quotation_ai_indicators(
@@ -839,18 +875,18 @@ async def get_quotation(
     projected_quantity=quotation.projected_quantity,
     projected_delivery_date=quotation.projected_delivery_date,
     quotation_date=quotation.quotation_date,
-    target_price=quotation.target_price,
+    target_price=hdr["target_price"],
     target_price_currency=quotation.target_price_currency,
-    exchange_rate=quotation.exchange_rate,
-    material_cost=quotation.material_cost,
-    manufacturing_cost=quotation.manufacturing_cost,
-    other_cost=quotation.other_cost,
-    total_cost=quotation.total_cost,
-    cost_per_piece=quotation.cost_per_piece,
-    profit_percentage=quotation.profit_percentage,
-    quoted_price=quotation.quoted_price,
+    exchange_rate=hdr["exchange_rate"],
+    material_cost=hdr["material_cost"],
+    manufacturing_cost=hdr["manufacturing_cost"],
+    other_cost=hdr["other_cost"],
+    total_cost=hdr["total_cost"],
+    cost_per_piece=hdr["cost_per_piece"],
+    profit_percentage=hdr["profit_percentage"],
+    quoted_price=hdr["quoted_price"],
     currency=quotation.currency,
-    total_amount=quotation.total_amount,
+    total_amount=hdr["total_amount"],
     status=quotation.status,
     is_converted_to_order=converted_order_id is not None,
     converted_order_id=converted_order_id,
@@ -922,7 +958,7 @@ async def update_quotation(
   if body.currency is not None:
     quotation.currency = normalize_currency_code(body.currency)
   if body.total_amount is not None:
-    quotation.total_amount = body.total_amount
+    quotation.total_amount = parse_money(body.total_amount)
   if body.valid_until is not None:
     quotation.valid_until = body.valid_until
   if body.status is not None:
@@ -939,22 +975,6 @@ async def update_quotation(
   await db.flush()
   await db.refresh(quotation)
   return _to_quotation_response(quotation, tenant=tenant)
-
-
-FOUR_DP = Decimal("0.0001")
-
-
-def _parse_decimal(s: str | None) -> Decimal:
-  if s is None or s == "":
-    return Decimal("0")
-  try:
-    return Decimal(str(s))
-  except (InvalidOperation, ValueError, TypeError):
-    return Decimal("0")
-
-
-def _decimal_to_str(value: Decimal) -> str:
-  return str(value.quantize(FOUR_DP, rounding=ROUND_HALF_UP))
 
 
 @router.put("/{quotation_id}", response_model=QuotationDetailResponse)
@@ -1017,15 +1037,15 @@ async def full_update_quotation(
   if body.quotation_date is not None:
     quotation.quotation_date = body.quotation_date
   if body.target_price is not None:
-    quotation.target_price = body.target_price
+    quotation.target_price = parse_money(body.target_price)
   if body.target_price_currency is not None:
     quotation.target_price_currency = normalize_currency_code(body.target_price_currency)
   if body.exchange_rate is not None:
-    quotation.exchange_rate = body.exchange_rate
+    quotation.exchange_rate = parse_money(body.exchange_rate)
   if body.currency is not None:
     quotation.currency = normalize_currency_code(body.currency)
   if body.total_amount is not None:
-    quotation.total_amount = body.total_amount
+    quotation.total_amount = parse_money(body.total_amount)
   if body.status is not None:
     quotation.status = validate_transition(
       QUOTATION_TRANSITIONS,
@@ -1123,14 +1143,14 @@ async def full_update_quotation(
         item_id=row.item_id,
         description=row.description,
         unit=effective_unit or (row.unit or ""),
-        consumption_per_dozen=row.consumption_per_dozen or "0",
-        unit_price=row.unit_price or "0",
-        amount_per_dozen=row.amount_per_dozen or "0",
-        total_amount=row.total_amount or "0",
+        consumption_per_dozen=line_consumption_from_input(row.consumption_per_dozen),
+        unit_price=line_money_from_input(row.unit_price),
+        amount_per_dozen=line_money_from_input(row.amount_per_dozen),
+        total_amount=line_money_from_input(row.total_amount),
         currency=row.currency or "USD",
-        exchange_rate=row.exchange_rate or "1",
-        base_amount=row.base_amount or "0",
-        local_amount=row.local_amount or "0",
+        exchange_rate=line_rate_from_input(row.exchange_rate),
+        base_amount=line_money_from_input(row.base_amount),
+        local_amount=line_money_from_input(row.local_amount),
       ))
 
   # Replace manufacturing
@@ -1148,17 +1168,17 @@ async def full_update_quotation(
         serial_no=row.serial_no or (i + 1),
         style_part=row.style_part,
         machines_required=row.machines_required,
-        production_per_hour=row.production_per_hour or "0",
-        production_per_day=row.production_per_day or "0",
-        cost_per_machine=row.cost_per_machine or "0",
-        total_line_cost=row.total_line_cost or "0",
-        cost_per_dozen=row.cost_per_dozen or "0",
-        cm_per_piece=row.cm_per_piece or "0",
-        total_order_cost=row.total_order_cost or "0",
+        production_per_hour=line_rate_from_input(row.production_per_hour, default=Decimal("0")),
+        production_per_day=line_rate_from_input(row.production_per_day, default=Decimal("0")),
+        cost_per_machine=line_money_from_input(row.cost_per_machine),
+        total_line_cost=line_money_from_input(row.total_line_cost),
+        cost_per_dozen=line_money_from_input(row.cost_per_dozen),
+        cm_per_piece=line_money_from_input(row.cm_per_piece),
+        total_order_cost=line_money_from_input(row.total_order_cost),
         currency=row.currency or "USD",
-        exchange_rate=row.exchange_rate or "1",
-        base_amount=row.base_amount or "0",
-        local_amount=row.local_amount or "0",
+        exchange_rate=line_rate_from_input(row.exchange_rate),
+        base_amount=line_money_from_input(row.base_amount),
+        local_amount=line_money_from_input(row.local_amount),
       ))
 
   # Replace other costs
@@ -1175,17 +1195,17 @@ async def full_update_quotation(
         quotation_id=quotation_id,
         serial_no=row.serial_no or (i + 1),
         cost_head=row.cost_head,
-        percentage=row.percentage or "0",
-        total_amount=row.total_amount or "0",
+        percentage=line_pct_from_input(row.percentage),
+        total_amount=line_money_from_input(row.total_amount),
         cost_type=row.cost_type or "fixed",
-        value=row.value or "0",
+        value=line_money_from_input(row.value),
         based_on=row.based_on or "subtotal",
-        calculated_amount=row.calculated_amount or "0",
+        calculated_amount=line_money_from_input(row.calculated_amount),
         notes=row.notes,
         currency=row.currency or "USD",
-        exchange_rate=row.exchange_rate or "1",
-        base_amount=row.base_amount or "0",
-        local_amount=row.local_amount or "0",
+        exchange_rate=line_rate_from_input(row.exchange_rate),
+        base_amount=line_money_from_input(row.base_amount),
+        local_amount=line_money_from_input(row.local_amount),
       ))
 
   # Replace size ratios
@@ -1202,8 +1222,8 @@ async def full_update_quotation(
         quotation_id=quotation_id,
         serial_no=row.serial_no or (i + 1),
         size=row.size,
-        ratio_percentage=row.ratio_percentage or "0",
-        fabric_factor=row.fabric_factor or "1.0",
+        ratio_percentage=line_pct_from_input(row.ratio_percentage),
+        fabric_factor=fabric_factor_from_input(row.fabric_factor),
         quantity=row.quantity,
       ))
 
@@ -1252,18 +1272,18 @@ async def full_update_quotation(
     total_cost = mat_total + mfg_total + other_total
     qty = Decimal(str(quotation.projected_quantity or 0))
     cost_per_piece = (total_cost / qty).quantize(FOUR_DP, rounding=ROUND_HALF_UP) if qty > 0 else Decimal("0")
-    quotation.material_cost = _decimal_to_str(mat_total)
-    quotation.manufacturing_cost = _decimal_to_str(mfg_total)
-    quotation.other_cost = _decimal_to_str(other_total)
-    quotation.total_cost = _decimal_to_str(total_cost)
-    quotation.cost_per_piece = _decimal_to_str(cost_per_piece)
+    quotation.material_cost = _quantize_money4(mat_total)
+    quotation.manufacturing_cost = _quantize_money4(mfg_total)
+    quotation.other_cost = _quantize_money4(other_total)
+    quotation.total_cost = _quantize_money4(total_cost)
+    quotation.cost_per_piece = _quantize_money4(cost_per_piece)
 
   if body.profit_percentage is not None:
-    quotation.profit_percentage = body.profit_percentage
+    quotation.profit_percentage = parse_money(body.profit_percentage)
 
   quoted_auto_derived = False
   if body.quoted_price is not None:
-    quotation.quoted_price = body.quoted_price
+    quotation.quoted_price = parse_money(body.quoted_price)
   elif recompute_rollups and total_cost > 0 and quotation.profit_percentage:
     try:
       pct = parse_money_decimal(quotation.profit_percentage, field="profit_percentage") / Decimal("100")
@@ -1277,11 +1297,11 @@ async def full_update_quotation(
         },
       ) from e
     quoted_price = total_cost * (Decimal("1") + pct)
-    quotation.quoted_price = _decimal_to_str(quoted_price)
+    quotation.quoted_price = _quantize_money4(quoted_price)
     quoted_auto_derived = True
 
   if body.total_amount is not None:
-    quotation.total_amount = body.total_amount
+    quotation.total_amount = parse_money(body.total_amount)
   elif body.quoted_price is not None or quoted_auto_derived:
     quotation.total_amount = quotation.quoted_price
 

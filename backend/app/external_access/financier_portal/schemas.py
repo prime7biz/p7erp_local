@@ -63,6 +63,27 @@ class FinancierAlertsResponse(BaseModel):
     items: list[FinancierAlertItem]
 
 
+class FinancierDashboardNextDue(BaseModel):
+    """Next payable (EMI) or next BTB tranche / funding maturity in financier scope."""
+
+    due_date: date
+    amount: float | None = None
+    currency: str | None = None
+    reference: str | None = None
+
+
+class FinancierDashboardPartyInsights(BaseModel):
+    """Populated when the principal has credit monitoring scope and a linked financier party."""
+
+    next_emi: FinancierDashboardNextDue | None = None
+    next_btb_funding: FinancierDashboardNextDue | None = None
+    financed_orders_open: int | None = None
+    sewing_planned_qty: float | None = None
+    sewing_completed_qty: float | None = None
+    sewing_progress_pct: float | None = None
+    note: str | None = None
+
+
 class FinancierDashboardResponse(BaseModel):
     active_order_lines: int
     confirmed_style_orders: int
@@ -71,6 +92,8 @@ class FinancierDashboardResponse(BaseModel):
     shipments_due_this_month: int
     alerts_count: int
     projection_next_90_units: int | None = None
+    btb_maturities_upcoming_90d: int | None = None
+    party_insights: FinancierDashboardPartyInsights | None = None
 
 
 class FinancierOrderDetail(BaseModel):

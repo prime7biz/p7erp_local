@@ -23,11 +23,23 @@ def normalize_currency_code(value: str | None) -> str | None:
   return s[:10] if s else None
 
 
-def parse_money_decimal(value: str | None, *, field: str, allow_empty_as_zero: bool = True) -> Decimal:
+def parse_money_decimal(
+  value: str | Decimal | int | float | None,
+  *,
+  field: str,
+  allow_empty_as_zero: bool = True,
+) -> Decimal:
   if value is None or (isinstance(value, str) and not value.strip()):
     if allow_empty_as_zero:
       return Decimal("0")
     raise MoneyParseError(field, f"{field} cannot be empty")
+  if isinstance(value, Decimal):
+    return value
+  if isinstance(value, (int, float)):
+    try:
+      return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError) as e:
+      raise MoneyParseError(field, f"{field} is not a valid number: {value!r}") from e
   raw = str(value).strip().replace(",", "")
   try:
     d = Decimal(raw)
@@ -40,7 +52,7 @@ def line_fx_to_quotation_multiplier(
   *,
   document_currency: str | None,
   line_currency: str | None,
-  exchange_rate: str | None,
+  exchange_rate: str | Decimal | None,
 ) -> Decimal:
   """Match frontend lineFxToQuotation: 1 when same currency; else positive exchange_rate or 1."""
   dc = normalize_currency_code(document_currency) or "USD"
@@ -68,7 +80,7 @@ def validate_header_fx_rules(
   *,
   document_currency: str | None,
   target_price_currency: str | None,
-  exchange_rate: str | None,
+  exchange_rate: str | Decimal | None,
 ) -> list[str]:
   """Return human-readable validation errors (empty if OK)."""
   dc = normalize_currency_code(document_currency) or ""

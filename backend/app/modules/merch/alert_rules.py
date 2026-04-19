@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import and_, func, select
@@ -45,7 +46,11 @@ WASTAGE_THRESHOLD_PCT = 15.0
 TRIM_WASTAGE_THRESHOLD_PCT = 10.0
 
 
-def _to_float(value: str | None) -> float:
+def _to_float(value: str | int | float | Decimal | None) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, Decimal):
+        return float(value)
     try:
         return float(value or 0)
     except (TypeError, ValueError):
@@ -58,6 +63,30 @@ def _is_trim_category(category: ItemCategory | None) -> bool:
         return False
     code = (category.category_code or "").upper()
     return "TRIM" in code or "PACK" in code or "ACCESSORY" in code
+
+
+def _evidence_schema_v1(
+    rule_key: str,
+    *,
+    thresholds: dict[str, Any] | None = None,
+    facts: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Structured facts + thresholds for API/UI (schema_version 1)."""
+    return {
+        "schema_version": 1,
+        "rule_key": rule_key,
+        "evaluated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "thresholds": thresholds or {},
+        "facts": facts or {},
+    }
+
+
+def _d(val: date | datetime | None) -> str | None:
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.date().isoformat()
+    return val.isoformat()
 
 
 async def rule_followup_overdue(
@@ -90,6 +119,17 @@ async def rule_followup_overdue(
             "entity_type": "followup",
             "entity_id": r.id,
             "order_id": r.order_id,
+            "evidence_json": _evidence_schema_v1(
+                "followup_overdue",
+                thresholds={"critical_after_days": critical_days},
+                facts={
+                    "followup_id": r.id,
+                    "order_id": r.order_id,
+                    "due_date": _d(r.due_date),
+                    "days_overdue": days_overdue,
+                    "followup_status": r.status,
+                },
+            ),
         })
     return out
 
@@ -107,8 +147,9 @@ async def rule_order_missing_delivery_date(
     )
     result = await db.execute(stmt)
     rows = result.scalars().all()
-    return [
-        {
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        out.append({
             "natural_key": f"order_missing_delivery_date:order:{r.id}",
             "title": f"Order {r.order_code} missing delivery date",
             "description": f"Order {r.order_code} has status {r.status} but no delivery date set.",
@@ -118,9 +159,16 @@ async def rule_order_missing_delivery_date(
             "entity_type": "order",
             "entity_id": r.id,
             "order_id": r.id,
-        }
-        for r in rows
-    ]
+            "evidence_json": _evidence_schema_v1(
+                "order_missing_delivery_date",
+                facts={
+                    "order_id": r.id,
+                    "order_code": r.order_code,
+                    "order_status": r.status,
+                },
+            ),
+        })
+    return out
 
 
 async def rule_quotation_pending_too_long(
@@ -153,6 +201,17 @@ async def rule_quotation_pending_too_long(
                 "entity_type": "quotation",
                 "entity_id": r.id,
                 "order_id": None,
+                "evidence_json": _evidence_schema_v1(
+                    "quotation_pending_too_long",
+                    thresholds={"quotation_pending_days": days},
+                    facts={
+                        "quotation_id": r.id,
+                        "quotation_code": r.quotation_code,
+                        "quotation_status": r.status,
+                        "reference_date": ref_date.isoformat(),
+                        "cutoff_date": cutoff.isoformat(),
+                    },
+                ),
             })
     return out
 
@@ -197,6 +256,17 @@ async def rule_order_missing_tna(
             "entity_type": "order",
             "entity_id": o.id,
             "order_id": o.id,
+            "evidence_json": _evidence_schema_v1(
+                "order_missing_tna",
+                thresholds={"critical_if_delivery_within_days": 14},
+                facts={
+                    "order_id": o.id,
+                    "order_code": o.order_code,
+                    "delivery_date": _d(o.delivery_date),
+                    "days_to_delivery": days_to_delivery,
+                    "order_status": o.status,
+                },
+            ),
         })
     return out
 
@@ -287,6 +357,21 @@ async def rule_wastage_vs_bom(
                 "entity_type": "order",
                 "entity_id": order.id,
                 "order_id": order.id,
+                "evidence_json": _evidence_schema_v1(
+                    "wastage_vs_bom",
+                    thresholds={"wastage_threshold_pct": threshold},
+                    facts={
+                        "order_id": order.id,
+                        "order_code": order.order_code,
+                        "style_id": style_id,
+                        "bom_id": bom.id,
+                        "item_id": line.item_id,
+                        "item_code": item_code,
+                        "expected_qty": round(expected, 4),
+                        "actual_qty": round(actual, 4),
+                        "wastage_pct_vs_bom": round(wastage_pct, 2),
+                    },
+                ),
             })
     return out
 
@@ -382,6 +467,21 @@ async def rule_trim_overconsumption_above(
                 "entity_type": "order",
                 "entity_id": order.id,
                 "order_id": order.id,
+                "evidence_json": _evidence_schema_v1(
+                    "trim_overconsumption_above",
+                    thresholds={"trim_wastage_threshold_pct": threshold},
+                    facts={
+                        "order_id": order.id,
+                        "order_code": order.order_code,
+                        "style_id": style_id,
+                        "bom_id": bom.id,
+                        "item_id": line.item_id,
+                        "item_code": item_code,
+                        "expected_qty": round(expected, 4),
+                        "actual_qty": round(actual, 4),
+                        "wastage_pct_vs_bom": round(wastage_pct, 2),
+                    },
+                ),
             })
     return out
 
@@ -420,6 +520,17 @@ async def rule_tna_action_overdue(
             "entity_type": "followup_action",
             "entity_id": r.id,
             "order_id": r.order_id,
+            "evidence_json": _evidence_schema_v1(
+                "tna_action_overdue",
+                thresholds={"critical_after_days": 7},
+                facts={
+                    "action_id": r.id,
+                    "order_id": r.order_id,
+                    "planned_date": _d(r.planned_date),
+                    "days_overdue": days_overdue,
+                    "action_status": r.status,
+                },
+            ),
         })
     return out
 
@@ -456,6 +567,16 @@ async def rule_tna_action_due_soon(
             "entity_type": "followup_action",
             "entity_id": r.id,
             "order_id": r.order_id,
+            "evidence_json": _evidence_schema_v1(
+                "tna_action_due_soon",
+                thresholds={"tna_due_soon_days": n_days},
+                facts={
+                    "action_id": r.id,
+                    "order_id": r.order_id,
+                    "planned_date": _d(r.planned_date),
+                    "days_until_due": days_until,
+                },
+            ),
         })
     return out
 
@@ -501,6 +622,18 @@ async def rule_trade_lc_expiry_soon(
                     "entity_type": "trade_case",
                     "entity_id": c.id,
                     "order_id": c.order_id,
+                    "evidence_json": _evidence_schema_v1(
+                        "trade_lc_expiry_soon",
+                        thresholds={"trade_lc_expiry_days": days},
+                        facts={
+                            "trade_case_id": c.id,
+                            "reference": c.reference,
+                            "expiry_date": expiry_date.isoformat(),
+                            "days_until_expiry": days_left,
+                            "master_contract_id": c.master_contract_id,
+                            "btb_lc_id": c.btb_lc_id,
+                        },
+                    ),
                 }
             )
     return out
@@ -550,6 +683,20 @@ async def rule_trade_docs_missing_before_etd(
                 "entity_type": "trade_case",
                 "entity_id": c.id,
                 "order_id": c.order_id,
+                "evidence_json": _evidence_schema_v1(
+                    "trade_docs_missing_before_etd",
+                    thresholds={
+                        "trade_docs_before_etd_days": days,
+                        "trade_required_docs": sorted(required_docs),
+                    },
+                    facts={
+                        "trade_case_id": c.id,
+                        "reference": c.reference,
+                        "etd": _d(c.etd),
+                        "days_to_etd": days_left,
+                        "missing_doc_types": missing,
+                    },
+                ),
             }
         )
     return out
@@ -588,6 +735,17 @@ async def rule_trade_shipment_delayed(
                 "entity_type": "shipment",
                 "entity_id": s.id,
                 "order_id": case.order_id,
+                "evidence_json": _evidence_schema_v1(
+                    "trade_shipment_delayed",
+                    facts={
+                        "shipment_id": s.id,
+                        "trade_case_id": case.id,
+                        "reference": s.reference,
+                        "eta": _d(s.eta),
+                        "days_past_eta": days_over,
+                        "shipment_status": s.status,
+                    },
+                ),
             }
         )
     return out
@@ -621,6 +779,16 @@ async def rule_trade_case_stuck(
                 "entity_type": "trade_case",
                 "entity_id": c.id,
                 "order_id": c.order_id,
+                "evidence_json": _evidence_schema_v1(
+                    "trade_case_stuck",
+                    thresholds={"trade_case_stuck_days": days},
+                    facts={
+                        "trade_case_id": c.id,
+                        "reference": c.reference,
+                        "current_stage": c.current_stage,
+                        "last_updated_at": c.updated_at.isoformat() if c.updated_at else None,
+                    },
+                ),
             }
         )
     return out
@@ -692,6 +860,21 @@ async def rule_master_contract_btb_utilization_risk(
                 "entity_type": "master_contract",
                 "entity_id": contract.id,
                 "order_id": None,
+                "evidence_json": _evidence_schema_v1(
+                    "master_contract_btb_utilization_risk",
+                    thresholds={
+                        "minimum_alert_pct": minimum_alert_pct,
+                        "red_flag_pct": red_flag_pct,
+                    },
+                    facts={
+                        "master_contract_id": contract.id,
+                        "reference": contract.reference,
+                        "contract_amount": amount,
+                        "btb_utilized_amount": utilized,
+                        "utilization_pct": round(pct, 2),
+                        "band": band,
+                    },
+                ),
             }
         )
     return out
@@ -752,6 +935,18 @@ async def rule_btb_lc_maturity_due_or_overdue(
                 "entity_type": "btb_lc",
                 "entity_id": lc.id,
                 "order_id": None,
+                "evidence_json": _evidence_schema_v1(
+                    "btb_lc_maturity_due_or_overdue",
+                    thresholds={"due_soon_days": due_soon_days},
+                    facts={
+                        "btb_lc_id": lc.id,
+                        "lc_reference": lc.reference,
+                        "accounting_id": acc.id,
+                        "maturity_date": maturity.isoformat(),
+                        "days_to_maturity": days_delta,
+                        "accounting_status": acc.status,
+                    },
+                ),
             }
         )
     return out
@@ -796,6 +991,19 @@ async def rule_production_cm_overrun(
                 "entity_type": "order",
                 "entity_id": oid,
                 "order_id": oid,
+                "evidence_json": _evidence_schema_v1(
+                    "production_cm_overrun",
+                    thresholds={"high_severity_variance_pct": 20},
+                    facts={
+                        "order_id": oid,
+                        "order_code": code,
+                        "period_date": pd,
+                        "style_id": sid,
+                        "actual_cm_per_piece": round(actual, 6),
+                        "quoted_cm_per_piece": round(quoted, 6),
+                        "variance_pct": round(var_pct, 2),
+                    },
+                ),
             }
         )
     return out

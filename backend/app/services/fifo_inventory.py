@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +19,11 @@ from app.models import (
 )
 
 
-def _q(value: str | None) -> float:
+def _q(value: str | Decimal | float | int | None) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, Decimal):
+        return float(value)
     try:
         return float(value or "0")
     except (TypeError, ValueError):

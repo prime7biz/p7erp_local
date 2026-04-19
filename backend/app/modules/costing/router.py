@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, field_validator
 
 from app.common.auth import get_current_user
+from app.common.money import format_money, parse_money
 from app.common.pagination import DEFAULT_PAGE_SIZE, HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT, MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
 from app.database import get_db
@@ -75,8 +76,8 @@ class ItemResponse(BaseModel):
     def _default_cost_as_str(cls, v: object) -> str:
         if v is None:
             return "0"
-        s = str(v).strip()
-        return s if s else "0"
+        p = parse_money(v)
+        return format_money(p) if p is not None else "0"
 
     class Config:
         from_attributes = True

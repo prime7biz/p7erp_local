@@ -296,6 +296,7 @@ Each step has its own list and detail screens under \`/app/customers\`, \`/app/i
 - **Garment Styles** — \`/app/merchandising/styles\`
 - **BOM Builder** (order-driven BOM from orders; pipeline milestones shown when an order is selected) — \`/app/bom\`
 - **Consumption Plans** — \`/app/bom/orders\`
+- **Merch control tower** — \`/app/merchandising/control-tower\` (one-screen counts: open inquiries, quotation risk, drift, BOM, TNA, planning)
 - **Order Pipeline** / **Pipeline Analytics** — \`/app/merchandising/pipeline\`, \`/app/merchandising/pipeline-analytics\`
 - **Critical Alerts**, **Wastage**, **Consumption Recon** — merchandising operations views
 - **Follow-up & Unified TNA**, **Parties**, **Document Flow** — coordination and documents
@@ -304,7 +305,7 @@ Each step has its own list and detail screens under \`/app/customers\`, \`/app/i
 
 - Use **Actions** on each list row for view/edit/print where enabled.`,
         tags: ["inquiry", "quotation", "order", "customer", "merchandising"],
-        lastUpdated: "2026-04-07",
+        lastUpdated: "2026-04-10",
         featured: true,
         infographics: [
           {
@@ -326,6 +327,7 @@ Each step has its own list and detail screens under \`/app/customers\`, \`/app/i
           "/app/merchandising/styles",
           "/app/bom",
           "/app/bom/orders",
+          "/app/merchandising/control-tower",
           "/app/merchandising/pipeline",
           "/app/merchandising/pipeline-analytics",
         ],
@@ -473,9 +475,10 @@ Statuses follow a chain such as **Draft → Submitted → Approved → Sent → 
 ## Tips
 
 - Use **Actions** on list rows for **View**, **Edit**, and **Print** where enabled.
+- On the **quotation workspace**, **Quotation AI** may include **Import from document** (PDF/image) to suggest header fields — always review before applying; locked commercial fields still follow change-request rules.
 - If conversion is blocked, check **quotation status** and role permissions.`,
         tags: ["quotation", "order", "convert", "sales"],
-        lastUpdated: "2026-04-03",
+        lastUpdated: "2026-04-10",
         relatedAppRoutes: ["/app/quotations", "/app/quotations/new", "/app/orders", "/app/orders/new"],
         relatedArticleIds: ["merch-pipeline", "merch-inquiry-detail", "gs-row-actions"],
       },
@@ -754,6 +757,7 @@ Use **Transfers** to move stock between warehouses and **Adjustments** to correc
 - **Factory calendar** — \`/app/production/calendar\`
 - **Line plan board** — \`/app/production/line-plan\`
 - **Planning** — \`/app/production/planning\` (pipeline, MRP-style planning, history)
+- **Operations Control Tower** — \`/app/operations/control-tower\` (optional; enable in **Settings → Configuration**)
 
 ## Shop floor
 
@@ -765,14 +769,15 @@ Knitting, dyeing, printing, AOP, embroidery, elastic, washing (and hourly varian
 
 ## Samples & TNA
 
-- **Samples** — \`/app/samples/requests\`
+- **Sample development (merchandising)** — \`/app/merchandising/samples\` — style-linked sample types (proto, fit, PP, SMS, shipping, etc.), tasks, costing lines, materials, metrics, and **AI plan proposal → apply** for schedules.
+- **Manufacturing sample requests** (shop floor) — \`/app/samples/requests\` when enabled for your tenant.
 - **TNA Dashboard / Templates / Plans** — \`/app/tna/dashboard\`, \`/app/tna/templates\`, \`/app/tna/plans\`
 
 ## Cost
 
 - **Cost & CM** — \`/app/production/costs\``,
         tags: ["production", "planning", "shop floor", "TNA"],
-        lastUpdated: "2026-04-04",
+        lastUpdated: "2026-04-16",
         infographics: [
           {
             type: "flow",
@@ -784,8 +789,44 @@ Knitting, dyeing, printing, AOP, embroidery, elastic, washing (and hourly varian
             ],
           },
         ],
-        relatedAppRoutes: ["/app/production", "/app/production/planning", "/app/production/manufacturing-orders"],
-        relatedArticleIds: ["inv-overview", "mfg-planning-deep", "mfg-mo-deep", "mfg-hourly-deep"],
+        relatedAppRoutes: [
+          "/app/production",
+          "/app/production/planning",
+          "/app/production/manufacturing-orders",
+          "/app/operations/control-tower",
+        ],
+        relatedArticleIds: ["inv-overview", "mfg-planning-deep", "mfg-mo-deep", "mfg-hourly-deep", "ops-control-tower"],
+      },
+      {
+        id: "ops-control-tower",
+        title: "Operations Control Tower",
+        summary:
+          "Optional read-only screen that combines orders, master LC, capacity load, merchandising alerts, and finance (by role).",
+        content: `## Overview
+
+The **Control Tower** lives at \`/app/operations/control-tower\`. It is **read-only**: it does not replace orders, inventory, production, or finance entry screens.
+
+## Enablement
+
+Your administrator turns it on under **Settings → Configuration** using the **Enable Operations Control Tower** checkbox (\`control_tower_enabled\`).
+
+## What you see (depends on role)
+
+- **Order grid** — delivery window, pipeline stage, material readiness (actual), line and **reservation** status, planned end (projected).
+- **Master LC ladder** — pick a master contract linked to orders in the window; see reference, status, BTB count, linked orders.
+- **Capacity heatmap** — projected SMV-minute load by line and day (firm + soft bookings).
+- **Alerts** — open merchandising alerts with shortcuts.
+- **Finance snapshot** — funded vs non-funded BTB exposure and maturity tranches for the selected master LC (finance / management roles).
+
+## Tips
+
+- Use **Actions** on a row to open the order or line plan board.
+- From an order, open **Control Tower** in the workflow strip when the feature is enabled.
+- *Projected* labels are estimates; *actual* values come from posted transactions and stock.`,
+        tags: ["operations", "control tower", "planning", "master lc"],
+        lastUpdated: "2026-04-10",
+        relatedAppRoutes: ["/app/operations/control-tower", "/app/settings/configuration", "/app/orders"],
+        relatedArticleIds: ["mfg-overview", "mfg-planning-deep", "gs-sidebar"],
       },
       {
         id: "mfg-planning-deep",
@@ -1321,11 +1362,13 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 
 **Reports** (\`/app/reports\`) links to analytics and operational reports: merchandising, orders, inventory, finance, production, HR, shipments, exceptions, and more.
 
+**Merchandising overview** (\`/app/reports/merchandising\`) combines a tenant snapshot with a **Merch control tower** summary and shortcut tiles into operational merchandising screens (pipeline, analytics, **sample development** with tasks/costing/AI planning, wastage, consumption reconciliation, alerts).
+
 ## Tips
 
 - **Trade overview** appears only when trade is enabled for your tenant.`,
         tags: ["reports", "analytics"],
-        lastUpdated: "2026-04-04",
+        lastUpdated: "2026-04-16",
         infographics: [
           {
             type: "highlight",
@@ -1333,7 +1376,13 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
             body: "Start from the hub, pick a domain (merch, inventory, finance), then drill into the report your role needs.",
           },
         ],
-        relatedAppRoutes: ["/app/reports", "/app/reports/merchandising"],
+        relatedAppRoutes: [
+          "/app/reports",
+          "/app/reports/merchandising",
+          "/app/merchandising/control-tower",
+          "/app/merchandising/pipeline",
+          "/app/merchandising/samples",
+        ],
         relatedArticleIds: [],
       },
     ],

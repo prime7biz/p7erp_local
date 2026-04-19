@@ -1,21 +1,41 @@
 import { useEffect, useState } from "react";
-import { api, type TenantOverviewReport, type CustomerPerformanceRow } from "@/api/client";
+import { Link } from "react-router-dom";
+import {
+  api,
+  type MerchControlTowerSummaryResponse,
+  type MerchReportsCatalogResponse,
+  type TenantOverviewReport,
+  type CustomerPerformanceRow,
+} from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 
 export function ReportsOverviewPage() {
   const [overview, setOverview] = useState<TenantOverviewReport | null>(null);
   const [customers, setCustomers] = useState<CustomerPerformanceRow[] | null>(null);
+  const [merchCatalog, setMerchCatalog] = useState<MerchReportsCatalogResponse | null>(null);
+  const [merchTower, setMerchTower] = useState<MerchControlTowerSummaryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
         setError(null);
-        const [ov, perf] = await Promise.all([
+        const [ov, perf, catalog, tower] = await Promise.all([
           api.getTenantOverview(),
           api.getCustomerPerformance(),
+          api.getMerchReportsCatalog().catch((e) => {
+            logApiError("ReportsOverviewPage.getMerchReportsCatalog", e);
+            return null;
+          }),
+          api.getMerchControlTowerSummary().catch((e) => {
+            logApiError("ReportsOverviewPage.getMerchControlTowerSummary", e);
+            return null;
+          }),
         ]);
         setOverview(ov);
         setCustomers(perf);
+        setMerchCatalog(catalog);
+        setMerchTower(tower);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load reports");
       }
@@ -27,9 +47,9 @@ export function ReportsOverviewPage() {
     <div className="space-y-6">
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">Merchandising Reports</h1>
+          <h1 className="text-2xl font-bold text-text-primary">Merchandising reports</h1>
           <p className="text-text-muted text-sm mt-0.5">
-            Simple overview of your tenant activity and customer performance.
+            Tenant snapshot, customer performance, and shortcuts to merchandising analytics screens.
           </p>
         </div>
       </header>
@@ -40,9 +60,62 @@ export function ReportsOverviewPage() {
         </div>
       )}
 
+      {merchTower ? (
+        <section>
+          <h2 className="text-sm font-semibold text-text-primary mb-3">Merch control tower snapshot</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-lg border border-border bg-surface-raised p-4">
+              <div className="text-xs text-text-muted uppercase">Inquiries (action)</div>
+              <div className="text-xl font-semibold">{merchTower.inquiries_needing_action.count}</div>
+            </div>
+            <div className="rounded-lg border border-border bg-surface-raised p-4">
+              <div className="text-xs text-text-muted uppercase">Quotations at risk (signals)</div>
+              <div className="text-xl font-semibold">
+                {merchTower.quotations_at_risk.incomplete_count +
+                  merchTower.quotations_at_risk.anomaly_count +
+                  merchTower.quotations_at_risk.expiring_soon_count}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border bg-surface-raised p-4">
+              <div className="text-xs text-text-muted uppercase">Samples pending</div>
+              <div className="text-xl font-semibold">{merchTower.sample_pending}</div>
+            </div>
+            <div className="rounded-lg border border-border bg-surface-raised p-4">
+              <div className="text-xs text-text-muted uppercase">TNA overdue</div>
+              <div className="text-xl font-semibold">{merchTower.tna_overdue.count}</div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {merchCatalog && merchCatalog.reports.length > 0 ? (
+        <section>
+          <h2 className="text-sm font-semibold text-text-primary mb-3">Merchandising operations &amp; analytics</h2>
+          <p className="text-xs text-text-muted mb-3">
+            Open the in-app screen for each KPI. API paths are listed for integrations ({merchCatalog.reports.length}{" "}
+            entries).
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {merchCatalog.reports.map((r) => (
+              <Link
+                key={r.key}
+                to={r.ui_path}
+                className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm transition hover:border-border-strong hover:shadow-md"
+              >
+                <span className="font-medium text-text-primary">{r.title}</span>
+                <span className="mt-1 block text-[11px] text-text-muted font-mono truncate" title={r.api_path}>
+                  {r.api_path}
+                </span>
+                <span className="mt-2 block text-xs text-brand-primary">Open in app →</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="rounded-lg border border-border bg-surface-raised shadow-sm shadow-gray-200/60 p-5">
-          <h2 className="text-sm font-semibold text-text-primary mb-2">Tenant Snapshot</h2>
+          <h2 className="text-sm font-semibold text-text-primary mb-2">Tenant snapshot</h2>
           {overview ? (
             <dl className="space-y-1 text-sm text-text-secondary">
               <div className="flex justify-between">
@@ -64,7 +137,7 @@ export function ReportsOverviewPage() {
         </div>
 
         <div className="md:col-span-2 rounded-lg border border-border bg-surface-raised shadow-sm shadow-gray-200/60 p-5">
-          <h2 className="text-sm font-semibold text-text-primary mb-3">Orders by Status</h2>
+          <h2 className="text-sm font-semibold text-text-primary mb-3">Orders by status</h2>
           {overview && overview.orders_by_status.length > 0 ? (
             <ul className="space-y-1 text-sm text-text-secondary">
               {overview.orders_by_status.map((row) => (
@@ -81,7 +154,7 @@ export function ReportsOverviewPage() {
       </section>
 
       <section className="rounded-lg border border-border bg-surface-raised shadow-sm shadow-gray-200/60 p-5">
-        <h2 className="text-sm font-semibold text-text-primary mb-3">Customer Performance</h2>
+        <h2 className="text-sm font-semibold text-text-primary mb-3">Customer performance</h2>
         {customers && customers.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -108,4 +181,3 @@ export function ReportsOverviewPage() {
     </div>
   );
 }
-

@@ -9,6 +9,7 @@ from typing import Awaitable, TypeVar
 
 from fastapi import HTTPException, Request, status
 
+from app.common.redis_client import get_redis
 from app.config import get_settings
 
 T = TypeVar("T")
@@ -58,6 +59,57 @@ def rate_limit_dependency(category: str):
         await enforce_route_rate_limit(key=key, category=category)
 
     return _dep
+
+
+_daily_quota_lock = asyncio.Lock()
+_daily_quota_memory: dict[str, int] = {}
+
+
+def _utc_day_str() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+async def enforce_ai_daily_tenant_quota(*, tenant_id: int) -> None:
+    """Raise 429 when tenant exceeds daily AI request budget (chat message + escalation approval)."""
+    settings = get_settings()
+    limit = max(0, int(getattr(settings, "ai_max_requests_per_tenant_per_day", 0) or 0))
+    if limit <= 0:
+        return
+    day = _utc_day_str()
+    redis_key = f"ai:quota:day:{tenant_id}:{day}"
+    r = get_redis()
+    if r is not None:
+        try:
+            n = await r.incr(redis_key)
+            if n == 1:
+                await r.expire(redis_key, 86400 * 3)
+            if n > limit:
+                await r.decr(redis_key)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=(
+                        f"Daily AI request limit ({limit} per tenant, UTC day) exceeded. "
+                        f"Try again after UTC midnight or ask an admin to raise the cap."
+                    ),
+                )
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    mem_key = f"{tenant_id}:{day}"
+    async with _daily_quota_lock:
+        n = _daily_quota_memory.get(mem_key, 0) + 1
+        if n > limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    f"Daily AI request limit ({limit} per tenant, UTC day) exceeded. "
+                    f"Try again after UTC midnight or ask an admin to raise the cap."
+                ),
+            )
+        _daily_quota_memory[mem_key] = n
 
 
 async def call_with_timeout(timeout_seconds: int, awaitable: Awaitable[T], *, error_message: str) -> T:

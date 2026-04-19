@@ -34,6 +34,7 @@ import { QuotationCostingIntelligencePanel } from "@/components/quotations/Quota
 import { QuotationCostingSuggestionsPanel } from "@/components/quotations/QuotationCostingSuggestionsPanel";
 import { QuotationCostBenchmarkPanel } from "@/components/quotations/QuotationCostBenchmarkPanel";
 import { ChangeRequestPanel } from "@/components/orders/ChangeRequestPanel";
+import { CommercialTimelineCard } from "@/components/orders/CommercialTimelineCard";
 import { QUOTATION_PROTECTED_FIELD_DEFS } from "@/lib/commercialChangeFields";
 import { QuotationAiAuditHistory } from "@/components/quotations/QuotationAiAuditHistory";
 
@@ -1830,6 +1831,9 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           ) : null}
           {!isPrintMode && (
             <>
+              {quotation.id ? (
+                <CommercialTimelineCard entityType="quotation" entityId={quotation.id} />
+              ) : null}
               {quotation.id ? (
                 <ChangeRequestPanel
                   entityType="quotation"

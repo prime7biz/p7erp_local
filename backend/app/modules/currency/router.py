@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from app.common.auth import get_current_user
+from app.common.money import format_rate, line_rate_from_input, parse_money
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import CurrencyExchangeRate, Tenant, User
@@ -80,7 +81,7 @@ async def list_exchange_rates(
             tenant_id=r.tenant_id,
             from_currency=r.from_currency,
             to_currency=r.to_currency,
-            exchange_rate=r.exchange_rate,
+            exchange_rate=format_rate(parse_money(r.exchange_rate)) or "0",
             effective_date=r.effective_date,
             source=r.source,
             is_active=r.is_active,
@@ -125,7 +126,7 @@ async def get_exchange_rate_pair(
         tenant_id=row.tenant_id,
         from_currency=row.from_currency,
         to_currency=row.to_currency,
-        exchange_rate=row.exchange_rate,
+        exchange_rate=format_rate(parse_money(row.exchange_rate)) or "0",
         effective_date=row.effective_date,
         source=row.source,
         is_active=row.is_active,
@@ -150,7 +151,7 @@ async def create_exchange_rate(
         tenant_id=tenant.id,
         from_currency=body.from_currency.upper(),
         to_currency=body.to_currency.upper(),
-        exchange_rate=body.exchange_rate,
+        exchange_rate=line_rate_from_input(body.exchange_rate),
         effective_date=body.effective_date,
         source=body.source or "manual",
         is_active=True,
@@ -163,7 +164,7 @@ async def create_exchange_rate(
         tenant_id=rate.tenant_id,
         from_currency=rate.from_currency,
         to_currency=rate.to_currency,
-        exchange_rate=rate.exchange_rate,
+        exchange_rate=format_rate(parse_money(rate.exchange_rate)) or "0",
         effective_date=rate.effective_date,
         source=rate.source,
         is_active=rate.is_active,
@@ -195,7 +196,7 @@ async def update_exchange_rate(
     if not rate:
         raise HTTPException(status_code=404, detail="Exchange rate not found")
     if body.exchange_rate is not None:
-        rate.exchange_rate = body.exchange_rate
+        rate.exchange_rate = line_rate_from_input(body.exchange_rate)
     if body.effective_date is not None:
         rate.effective_date = body.effective_date
     if body.source is not None:
@@ -209,7 +210,7 @@ async def update_exchange_rate(
         tenant_id=rate.tenant_id,
         from_currency=rate.from_currency,
         to_currency=rate.to_currency,
-        exchange_rate=rate.exchange_rate,
+        exchange_rate=format_rate(parse_money(rate.exchange_rate)) or "0",
         effective_date=rate.effective_date,
         source=rate.source,
         is_active=rate.is_active,

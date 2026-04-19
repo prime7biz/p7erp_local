@@ -4,12 +4,22 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Any, Literal, Tuple
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.money import (
+    format_money,
+    format_pct,
+    format_rate,
+    line_consumption_from_input,
+    line_money_from_input,
+    line_pct_from_input,
+    line_rate_from_input,
+)
 from app.config import get_settings
 from app.models import Quotation, User
 from app.models.costing import QuotationManufacturing, QuotationMaterial, QuotationOtherCost, QuotationSizeRatio
@@ -58,6 +68,44 @@ ALLOWED_MFG_FIELDS: frozenset[str] = frozenset(
     }
 )
 
+_Q_MAT_NUM: frozenset[str] = frozenset(
+    {
+        "consumption_per_dozen",
+        "unit_price",
+        "amount_per_dozen",
+        "total_amount",
+        "exchange_rate",
+        "base_amount",
+        "local_amount",
+    }
+)
+_Q_MFG_NUM: frozenset[str] = frozenset(
+    {
+        "production_per_hour",
+        "production_per_day",
+        "cost_per_machine",
+        "total_line_cost",
+        "cost_per_dozen",
+        "cm_per_piece",
+        "total_order_cost",
+        "exchange_rate",
+        "base_amount",
+        "local_amount",
+    }
+)
+_Q_OTH_NUM: frozenset[str] = frozenset(
+    {
+        "percentage",
+        "total_amount",
+        "value",
+        "calculated_amount",
+        "exchange_rate",
+        "base_amount",
+        "local_amount",
+    }
+)
+
+
 ALLOWED_OTHER_FIELDS: frozenset[str] = frozenset(
     {
         "serial_no",
@@ -102,14 +150,14 @@ def _material_line_dict(m: QuotationMaterial) -> dict[str, Any]:
         "item_id": m.item_id,
         "description": m.description,
         "unit": m.unit,
-        "consumption_per_dozen": m.consumption_per_dozen,
-        "unit_price": m.unit_price,
-        "amount_per_dozen": m.amount_per_dozen,
-        "total_amount": m.total_amount,
+        "consumption_per_dozen": format_rate(m.consumption_per_dozen),
+        "unit_price": format_money(m.unit_price),
+        "amount_per_dozen": format_money(m.amount_per_dozen),
+        "total_amount": format_money(m.total_amount),
         "currency": m.currency,
-        "exchange_rate": m.exchange_rate,
-        "base_amount": m.base_amount,
-        "local_amount": m.local_amount,
+        "exchange_rate": format_rate(m.exchange_rate),
+        "base_amount": format_money(m.base_amount),
+        "local_amount": format_money(m.local_amount),
     }
 
 
@@ -119,17 +167,17 @@ def _mfg_line_dict(m: QuotationManufacturing) -> dict[str, Any]:
         "serial_no": m.serial_no,
         "style_part": m.style_part,
         "machines_required": m.machines_required,
-        "production_per_hour": m.production_per_hour,
-        "production_per_day": m.production_per_day,
-        "cost_per_machine": m.cost_per_machine,
-        "total_line_cost": m.total_line_cost,
-        "cost_per_dozen": m.cost_per_dozen,
-        "cm_per_piece": m.cm_per_piece,
-        "total_order_cost": m.total_order_cost,
+        "production_per_hour": format_rate(m.production_per_hour),
+        "production_per_day": format_rate(m.production_per_day),
+        "cost_per_machine": format_money(m.cost_per_machine),
+        "total_line_cost": format_money(m.total_line_cost),
+        "cost_per_dozen": format_money(m.cost_per_dozen),
+        "cm_per_piece": format_money(m.cm_per_piece),
+        "total_order_cost": format_money(m.total_order_cost),
         "currency": m.currency,
-        "exchange_rate": m.exchange_rate,
-        "base_amount": m.base_amount,
-        "local_amount": m.local_amount,
+        "exchange_rate": format_rate(m.exchange_rate),
+        "base_amount": format_money(m.base_amount),
+        "local_amount": format_money(m.local_amount),
     }
 
 
@@ -138,17 +186,17 @@ def _other_line_dict(m: QuotationOtherCost) -> dict[str, Any]:
         "id": m.id,
         "serial_no": m.serial_no,
         "cost_head": m.cost_head,
-        "percentage": m.percentage,
-        "total_amount": m.total_amount,
+        "percentage": format_pct(m.percentage),
+        "total_amount": format_money(m.total_amount),
         "cost_type": m.cost_type,
-        "value": m.value,
+        "value": format_money(m.value),
         "based_on": m.based_on,
-        "calculated_amount": m.calculated_amount,
+        "calculated_amount": format_money(m.calculated_amount),
         "notes": m.notes,
         "currency": m.currency,
-        "exchange_rate": m.exchange_rate,
-        "base_amount": m.base_amount,
-        "local_amount": m.local_amount,
+        "exchange_rate": format_rate(m.exchange_rate),
+        "base_amount": format_money(m.base_amount),
+        "local_amount": format_money(m.local_amount),
     }
 
 
@@ -157,8 +205,8 @@ def _sr_line_dict(m: QuotationSizeRatio) -> dict[str, Any]:
         "id": m.id,
         "serial_no": m.serial_no,
         "size": m.size,
-        "ratio_percentage": m.ratio_percentage,
-        "fabric_factor": m.fabric_factor,
+        "ratio_percentage": format_pct(m.ratio_percentage),
+        "fabric_factor": format_money(m.fabric_factor),
         "quantity": m.quantity,
     }
 
@@ -606,6 +654,12 @@ def _filter_field_changes(
     return out
 
 
+def _snap_json_val(v: Any) -> Any:
+    if isinstance(v, Decimal):
+        return str(v)
+    return v
+
+
 def _coerce_setattr(obj: Any, key: str, val: Any) -> None:
     if key in ("category_id", "item_id"):
         if val is None or val == "":
@@ -618,6 +672,30 @@ def _coerce_setattr(obj: Any, key: str, val: Any) -> None:
         return
     if key == "machines_required":
         setattr(obj, key, int(val) if val is not None and str(val).strip() != "" else 0)
+        return
+    if isinstance(obj, QuotationMaterial) and key in _Q_MAT_NUM:
+        if key == "exchange_rate":
+            setattr(obj, key, line_rate_from_input(val))
+        elif key == "consumption_per_dozen":
+            setattr(obj, key, line_consumption_from_input(val))
+        else:
+            setattr(obj, key, line_money_from_input(val))
+        return
+    if isinstance(obj, QuotationManufacturing) and key in _Q_MFG_NUM:
+        if key == "exchange_rate":
+            setattr(obj, key, line_rate_from_input(val))
+        elif key in ("production_per_hour", "production_per_day"):
+            setattr(obj, key, line_rate_from_input(val, default=Decimal("0")))
+        else:
+            setattr(obj, key, line_money_from_input(val))
+        return
+    if isinstance(obj, QuotationOtherCost) and key in _Q_OTH_NUM:
+        if key == "exchange_rate":
+            setattr(obj, key, line_rate_from_input(val))
+        elif key == "percentage":
+            setattr(obj, key, line_pct_from_input(val))
+        else:
+            setattr(obj, key, line_money_from_input(val))
         return
     setattr(obj, key, val)
 
@@ -716,7 +794,9 @@ async def apply_costing_suggestions(
                     skipped_ids.append(item_id)
                     it.disposition = "marked_skip"
                     continue
-                it.before_snapshot_json = {k: getattr(row, k, None) for k in sorted(changes.keys())}
+                it.before_snapshot_json = {
+                    k: _snap_json_val(getattr(row, k, None)) for k in sorted(changes.keys())
+                }
                 for k, v in changes.items():
                     _coerce_setattr(row, k, v)
                 row.updated_at = datetime.utcnow()
@@ -726,7 +806,9 @@ async def apply_costing_suggestions(
                     skipped_ids.append(item_id)
                     it.disposition = "marked_skip"
                     continue
-                it.before_snapshot_json = {k: getattr(row, k, None) for k in sorted(changes.keys())}
+                it.before_snapshot_json = {
+                    k: _snap_json_val(getattr(row, k, None)) for k in sorted(changes.keys())
+                }
                 for k, v in changes.items():
                     _coerce_setattr(row, k, v)
                 row.updated_at = datetime.utcnow()
@@ -736,7 +818,9 @@ async def apply_costing_suggestions(
                     skipped_ids.append(item_id)
                     it.disposition = "marked_skip"
                     continue
-                it.before_snapshot_json = {k: getattr(row, k, None) for k in sorted(changes.keys())}
+                it.before_snapshot_json = {
+                    k: _snap_json_val(getattr(row, k, None)) for k in sorted(changes.keys())
+                }
                 for k, v in changes.items():
                     _coerce_setattr(row, k, v)
                 row.updated_at = datetime.utcnow()
@@ -758,14 +842,14 @@ async def apply_costing_suggestions(
                     serial_no=serial,
                     description=changes.get("description"),
                     unit=changes.get("unit"),
-                    consumption_per_dozen=str(changes.get("consumption_per_dozen", "0")),
-                    unit_price=str(changes.get("unit_price", "0")),
-                    amount_per_dozen=str(changes.get("amount_per_dozen", "0")),
-                    total_amount=str(changes.get("total_amount", "0")),
+                    consumption_per_dozen=line_consumption_from_input(changes.get("consumption_per_dozen", "0")),
+                    unit_price=line_money_from_input(changes.get("unit_price", "0")),
+                    amount_per_dozen=line_money_from_input(changes.get("amount_per_dozen", "0")),
+                    total_amount=line_money_from_input(changes.get("total_amount", "0")),
                     currency=str(changes.get("currency", "USD")),
-                    exchange_rate=str(changes.get("exchange_rate", "1")),
-                    base_amount=str(changes.get("base_amount", "0")),
-                    local_amount=str(changes.get("local_amount", "0")),
+                    exchange_rate=line_rate_from_input(changes.get("exchange_rate", "1")),
+                    base_amount=line_money_from_input(changes.get("base_amount", "0")),
+                    local_amount=line_money_from_input(changes.get("local_amount", "0")),
                 )
                 if changes.get("category_id") is not None:
                     row.category_id = int(changes["category_id"]) if changes["category_id"] != "" else None
@@ -781,17 +865,21 @@ async def apply_costing_suggestions(
                     serial_no=serial,
                     style_part=str(changes.get("style_part") or "CM"),
                     machines_required=int(changes.get("machines_required", 0) or 0),
-                    production_per_hour=str(changes.get("production_per_hour", "0")),
-                    production_per_day=str(changes.get("production_per_day", "0")),
-                    cost_per_machine=str(changes.get("cost_per_machine", "0")),
-                    total_line_cost=str(changes.get("total_line_cost", "0")),
-                    cost_per_dozen=str(changes.get("cost_per_dozen", "0")),
-                    cm_per_piece=str(changes.get("cm_per_piece", "0")),
-                    total_order_cost=str(changes.get("total_order_cost", "0")),
+                    production_per_hour=line_rate_from_input(
+                        changes.get("production_per_hour", "0"), default=Decimal("0")
+                    ),
+                    production_per_day=line_rate_from_input(
+                        changes.get("production_per_day", "0"), default=Decimal("0")
+                    ),
+                    cost_per_machine=line_money_from_input(changes.get("cost_per_machine", "0")),
+                    total_line_cost=line_money_from_input(changes.get("total_line_cost", "0")),
+                    cost_per_dozen=line_money_from_input(changes.get("cost_per_dozen", "0")),
+                    cm_per_piece=line_money_from_input(changes.get("cm_per_piece", "0")),
+                    total_order_cost=line_money_from_input(changes.get("total_order_cost", "0")),
                     currency=str(changes.get("currency", "USD")),
-                    exchange_rate=str(changes.get("exchange_rate", "1")),
-                    base_amount=str(changes.get("base_amount", "0")),
-                    local_amount=str(changes.get("local_amount", "0")),
+                    exchange_rate=line_rate_from_input(changes.get("exchange_rate", "1")),
+                    base_amount=line_money_from_input(changes.get("base_amount", "0")),
+                    local_amount=line_money_from_input(changes.get("local_amount", "0")),
                 )
                 db.add(row)
                 await db.flush()
@@ -802,17 +890,17 @@ async def apply_costing_suggestions(
                     quotation_id=quotation_id,
                     serial_no=serial,
                     cost_head=str(changes.get("cost_head") or "Other"),
-                    percentage=str(changes.get("percentage", "0")),
-                    total_amount=str(changes.get("total_amount", "0")),
+                    percentage=line_pct_from_input(changes.get("percentage", "0")),
+                    total_amount=line_money_from_input(changes.get("total_amount", "0")),
                     cost_type=str(changes.get("cost_type", "fixed")),
-                    value=str(changes.get("value", "0")),
+                    value=line_money_from_input(changes.get("value", "0")),
                     based_on=str(changes.get("based_on", "subtotal")),
-                    calculated_amount=str(changes.get("calculated_amount", "0")),
+                    calculated_amount=line_money_from_input(changes.get("calculated_amount", "0")),
                     notes=changes.get("notes"),
                     currency=str(changes.get("currency", "USD")),
-                    exchange_rate=str(changes.get("exchange_rate", "1")),
-                    base_amount=str(changes.get("base_amount", "0")),
-                    local_amount=str(changes.get("local_amount", "0")),
+                    exchange_rate=line_rate_from_input(changes.get("exchange_rate", "1")),
+                    base_amount=line_money_from_input(changes.get("base_amount", "0")),
+                    local_amount=line_money_from_input(changes.get("local_amount", "0")),
                 )
                 db.add(row)
                 await db.flush()

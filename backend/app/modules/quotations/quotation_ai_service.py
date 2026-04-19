@@ -6,6 +6,7 @@ import html
 import json
 import re
 import time
+from decimal import Decimal
 from typing import Any, Literal
 
 import httpx
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Quotation, User
 from app.models.ai_tool import AiAuditLog
+from app.modules.ai_extract import service as extract_service
 from app.modules.ai_tool.audit import log_ai_event
 from app.modules.ai_tool.llm_provider import get_llm_provider
 from app.modules.quotations import quotation_ai_batches as qt_batches
@@ -26,6 +28,7 @@ from app.modules.quotations.quotation_ai_schemas import (
     QuotationAiDedupeResponse,
     QuotationAiEnrichRequest,
     QuotationAiEnrichResponse,
+    QuotationAiExtractWrapResponse,
     QuotationAiFieldSuggestion,
     QuotationAiIndicatorsOut,
     QuotationAiNextActionItem,
@@ -47,6 +50,14 @@ from app.modules.master_data_ai.sanitization import sanitize_untrusted_text
 from app.modules.quotations import quotation_costing_intelligence_config as costing_cfg
 from app.modules.quotations.quotation_costing_feature import is_quotation_costing_phase1_enabled
 from app.modules.quotations.quotation_costing_intelligence import build_costing_intelligence_bundle
+
+
+def _moneyish_truthy(v: object) -> bool:
+    if v is None:
+        return False
+    if isinstance(v, Decimal):
+        return v != 0
+    return bool(str(v).strip())
 
 
 def compute_quotation_ai_indicators(
@@ -95,8 +106,8 @@ def compute_quotation_ai_indicators(
     costing_checks = [
         q.style_id is not None or bool((q.style_ref or "").strip()),
         q.projected_quantity is not None and q.projected_quantity > 0,
-        bool((q.target_price or "").strip()),
-        bool((q.material_cost or "").strip()) or bool((q.manufacturing_cost or "").strip()),
+        _moneyish_truthy(q.target_price),
+        _moneyish_truthy(q.material_cost) or _moneyish_truthy(q.manufacturing_cost),
         bool((q.currency or "").strip()),
     ]
     costing_readiness = int(
@@ -221,6 +232,63 @@ async def _audit(
         latency_ms=latency_ms,
         prompt_category="quotation_ai",
         error_category=error_category,
+    )
+
+
+async def ai_extract_document(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    user_id: int | None,
+    file_bytes: bytes,
+    content_type: str,
+    quotation_id: int | None,
+) -> QuotationAiExtractWrapResponse:
+    """Extract quotation-relevant header fields from an uploaded document (same multimodal path as inquiry)."""
+    t0 = time.perf_counter()
+    base = await extract_service.extract_inquiry_form(db, tenant_id, file_bytes, content_type)
+    fields = {}
+    for k, ef in base.fields.items():
+        fields[k] = ef.model_copy(update={"source": "uploaded_document"})
+    resp = base.model_copy(update={"fields": fields})
+    ms = int((time.perf_counter() - t0) * 1000)
+    ext_result = (
+        "failed"
+        if not resp.success
+        else "partial"
+        if (resp.warnings or resp.unmapped_text or not resp.fields)
+        else "success"
+    )
+    req_id = get_master_data_ai_request_id()
+    suggestion_batch_id = await qt_batches.create_batch_from_extraction(
+        db,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        quotation_id=quotation_id,
+        extraction=resp,
+        request_id=req_id,
+        model_hint="gemini_multimodal",
+    )
+    await _audit(
+        db,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        action="QUOTATION_AI_EXTRACT",
+        details={
+            "quotation_id": quotation_id,
+            "field_keys": list(resp.fields.keys()),
+            "suggestion_batch_id": suggestion_batch_id,
+        },
+        model_used="gemini_multimodal",
+        latency_ms=ms,
+        result=ext_result,
+        error_category=None if resp.success else "extraction_failed",
+    )
+    return QuotationAiExtractWrapResponse(
+        extraction=resp,
+        model_hint="gemini_multimodal",
+        request_id=req_id,
+        suggestion_batch_id=suggestion_batch_id,
     )
 
 

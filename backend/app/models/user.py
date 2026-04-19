@@ -11,6 +11,7 @@ class Role(Base):
     tenant_id: Mapped[int | None] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     display_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     permissions: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     tenant = relationship("Tenant", back_populates="roles")

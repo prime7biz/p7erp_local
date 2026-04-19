@@ -47,7 +47,7 @@ def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
 
 
 def _is_protected_role(role: Role) -> bool:
-    return role.name.lower() == "admin"
+    return bool(getattr(role, "is_system", False))
 
 
 async def _get_tenant_role(db: AsyncSession, tenant_id: int, role_id: int) -> Role:
@@ -178,6 +178,7 @@ async def list_settings_roles(
             name=r.name,
             display_name=r.display_name,
             permissions=r.permissions or {},
+            is_system=bool(getattr(r, "is_system", False)),
         )
         for r in rows
     ]
@@ -222,6 +223,7 @@ async def create_settings_role(
         name=role.name,
         display_name=role.display_name,
         permissions=role.permissions or {},
+        is_system=bool(getattr(role, "is_system", False)),
     )
 
 
@@ -258,6 +260,7 @@ async def update_settings_role(
         name=role.name,
         display_name=role.display_name,
         permissions=role.permissions or {},
+        is_system=bool(getattr(role, "is_system", False)),
     )
 
 
@@ -272,7 +275,10 @@ async def delete_settings_role(
     await ensure_user_is_tenant_admin(db, user, tenant.id)
     role = await _get_tenant_role(db, tenant.id, role_id)
     if _is_protected_role(role):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Admin role cannot be deleted")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="System roles cannot be deleted",
+        )
 
     role_users = await db.execute(
         select(func.count()).select_from(User).where(User.tenant_id == tenant.id, User.role_id == role.id)

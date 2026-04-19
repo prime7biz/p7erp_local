@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime
+from decimal import Decimal
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -12,6 +13,7 @@ from sqlalchemy.types import Numeric
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.money import format_money, line_money_from_input, parse_money
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
 from app.common.db_errors import commit_handling_duplicate_document_code, flush_handling_duplicate_document_code
@@ -77,6 +79,7 @@ from app.models import (
     Order,
     ProcessOrder,
     ProcessOrderCostLine,
+    ProformaInvoice,
     ProductionMaterialIssue,
     ProductionMaterialIssueLine,
     QuotationMaterial,
@@ -100,6 +103,7 @@ from app.modules.finance.system_coa_seeding_service import resolve_system_ledger
 from app.services.fifo_inventory import finalize_movement_fifo, rebuild_fifo_layers_for_tenant, fifo_on_hand_value
 from app.services.grn_inventory_gl import post_grn_receipt_gl_journal
 from app.modules.inventory.material_control_variance_service import build_order_material_variance
+from app.modules.inventory.stock_availability_service import compute_item_availability
 from app.services.inventory_gl_service import (
     post_consumption_issue_gl,
     post_delivery_challan_gl,
@@ -334,7 +338,11 @@ async def _ensure_stock_group_deletable(db: AsyncSession, tenant_id: int, group_
         )
 
 
-def _to_float(value: str | None) -> float:
+def _to_float(value: str | Decimal | float | int | None) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, Decimal):
+        return float(value)
     try:
         return float(value or "0")
     except (TypeError, ValueError):
@@ -825,11 +833,10 @@ class ItemOut(BaseModel):
     @field_validator("default_cost", mode="before")
     @classmethod
     def _default_cost_as_str(cls, v: object) -> str:
-        # DB drivers may return Decimal/float; response validation must not 500 on list endpoints.
         if v is None:
             return "0"
-        s = str(v).strip()
-        return s if s else "0"
+        p = parse_money(v)
+        return format_money(p) if p is not None else "0"
 
     @field_validator("item_code", "name", mode="before")
     @classmethod
@@ -849,6 +856,14 @@ class ItemOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ItemAvailabilityOut(BaseModel):
+    item_id: int
+    on_hand: float
+    in_transit: float
+    reserved: float
+    available: float
 
 
 class ItemUpdateBody(BaseModel):
@@ -1813,6 +1828,37 @@ async def get_item(
     return row
 
 
+@router.get("/items/{item_id}/availability", response_model=ItemAvailabilityOut)
+async def get_item_availability(
+    item_id: int,
+    warehouse_id: int | None = Query(default=None, description="Scope to one warehouse (optional)"),
+    include_in_transit_po: bool = Query(default=True),
+    exclude_reserved: bool = Query(default=True),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(Item, item_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Item not found")
+    slot = await compute_item_availability(
+        db,
+        tenant.id,
+        item_id,
+        warehouse_id=warehouse_id,
+        include_in_transit_po=include_in_transit_po,
+        exclude_reserved=exclude_reserved,
+    )
+    return ItemAvailabilityOut(
+        item_id=slot.item_id,
+        on_hand=slot.on_hand,
+        in_transit=slot.in_transit,
+        reserved=slot.reserved,
+        available=slot.available,
+    )
+
+
 @router.post("/items", response_model=ItemOut)
 async def create_item(
     body: ItemBody,
@@ -1832,6 +1878,8 @@ async def create_item(
         code = await next_tenant_code(
             db, model=Item, tenant_id=tenant.id, prefix="ITEM-", width=6
         )
+    if "default_cost" in data:
+        data["default_cost"] = line_money_from_input(data.get("default_cost"))
     row = Item(tenant_id=tenant.id, item_code=code, **data)
     db.add(row)
     await commit_handling_duplicate_document_code(db)
@@ -1868,6 +1916,8 @@ async def update_item(
     sg = updates.get("stock_group_id", row.stock_group_id)
     if "stock_group_id" in updates:
         await _ensure_stock_group_for_item(db, tenant.id, sg)
+    if "default_cost" in updates:
+        updates["default_cost"] = line_money_from_input(updates["default_cost"])
     for key, value in updates.items():
         setattr(row, key, value)
     await db.commit()
@@ -2208,6 +2258,17 @@ async def list_purchase_orders(
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     source_bom_id: int | None = Query(default=None),
+    vendor_id: int | None = Query(default=None),
+    exclude_po_linked_to_proforma: int = Query(
+        0,
+        ge=0,
+        le=1,
+        description="When 1, omit POs already linked to a proforma invoice (IMPORT PI picker).",
+    ),
+    exclude_linked_to_proforma_invoice_id: int | None = Query(
+        default=None,
+        description="When excluding, keep the PO linked to this proforma invoice visible (edit draft).",
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     tenant: Tenant = Depends(require_tenant),
@@ -2225,6 +2286,19 @@ async def list_purchase_orders(
         stmt = stmt.where(PurchaseOrder.order_date <= date_to)
     if source_bom_id is not None:
         stmt = stmt.where(PurchaseOrder.source_bom_id == source_bom_id)
+    if vendor_id is not None:
+        stmt = stmt.where(PurchaseOrder.vendor_id == vendor_id)
+    if exclude_po_linked_to_proforma:
+        blocked = select(ProformaInvoice.purchase_order_id).where(
+            ProformaInvoice.tenant_id == tenant.id,
+            ProformaInvoice.purchase_order_id.isnot(None),
+        )
+        if exclude_linked_to_proforma_invoice_id is not None:
+            blocked = blocked.where(ProformaInvoice.id != exclude_linked_to_proforma_invoice_id)
+        blocked_r = await db.execute(blocked)
+        blocked_ids = [r[0] for r in blocked_r.all() if r[0] is not None]
+        if blocked_ids:
+            stmt = stmt.where(PurchaseOrder.id.notin_(blocked_ids))
     total = int((await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar() or 0)
     tp = total_pages(total, ps)
     sp = safe_page(page, total, ps)
@@ -5206,6 +5280,9 @@ async def approve_consumption_change_request(
 ):
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    from decimal import Decimal
+
+    from app.common.money import parse_money
     from app.models import ConsumptionPlanItem
 
     row = await db.get(ConsumptionChangeRequest, request_id)
@@ -5217,10 +5294,10 @@ async def approve_consumption_change_request(
     items = json.loads(row.items_json or "[]")
     for item in items:
         plan_item_id = int(item.get("plan_item_id") or 0)
-        new_qty = str(item.get("new_qty") or "0")
+        new_dec = parse_money(str(item.get("new_qty") or "0"))
         cpi = await db.get(ConsumptionPlanItem, plan_item_id)
         if cpi and cpi.tenant_id == tenant.id:
-            cpi.required_qty = new_qty
+            cpi.required_qty = new_dec if new_dec is not None else Decimal("0")
 
     row.status = "APPROVED"
     row.reviewed_by = user.id

@@ -9,6 +9,9 @@ import {
   canSubmitInquiry,
   humanizeStatus,
   INQUIRY_STATUS_FILTER_OPTIONS,
+  inquiryListRowPrimaryTextClass,
+  inquiryListRowSecondaryTextClass,
+  inquiryListRowTertiaryTextClass,
 } from "@/features/merch/workflow";
 import { SecureImage } from "@/components/SecureImage";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
@@ -22,8 +25,6 @@ import {
   listPageToolbarInputClass,
   listPageToolbarSelectClass,
   listTableBaseClass,
-  listTableTdClass,
-  listTableTdPrimaryClass,
   listTableThCenterClass,
   listTableThClass,
   listTableThRightClass,
@@ -35,10 +36,24 @@ import { cn } from "@/lib/utils";
 const statusClass = (status: string) => {
   const value = status.toUpperCase();
   if (value === "CONVERTED") return "bg-status-success-subtle text-status-success-foreground";
-  if (value === "LOST" || value === "CANCELLED") return "bg-status-danger-subtle text-status-danger-foreground";
+  if (value === "LOST") return "bg-status-warning-subtle text-status-warning-foreground";
+  if (value === "CANCELLED") return "bg-status-danger-subtle text-status-danger-foreground";
   if (value === "SUBMITTED") return "bg-status-info-subtle text-status-info-foreground";
   return "bg-status-neutral-subtle text-status-neutral-foreground";
 };
+
+function formatInquiryCreatedAt(iso: string | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export function InquiriesPage() {
   const navigate = useNavigate();
@@ -160,10 +175,13 @@ export function InquiriesPage() {
         ) : (
           <>
           <ResponsiveTableContainer>
-            <table className={cn(listTableBaseClass, "min-w-[1100px]")}>
+            <table className={cn(listTableBaseClass, "min-w-[1220px]")}>
               <thead className={listTableTheadClass}>
                 <tr>
                   <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Code</th>
+                  <th className={cn(listTableThClass, "w-36 whitespace-nowrap")} title="Server time when the inquiry was created">
+                    Created
+                  </th>
                   <th className={cn(listTableThClass, "min-w-[120px]")}>Customer</th>
                   <th className={cn(listTableThClass, "min-w-[160px]")}>Style</th>
                   <th className={cn(listTableThClass, "min-w-[100px] whitespace-nowrap")}>Intermediary</th>
@@ -181,17 +199,33 @@ export function InquiriesPage() {
               </thead>
               <tbody>
                 {filteredItems.map((inq) => {
+                  const rowTone = inq.status;
                   return (
                   <tr key={inq.id} className={listTableTrClass}>
-                    <td className={cn(listTableTdPrimaryClass, "whitespace-nowrap")}>
-                      <Link to={`/app/inquiries/${inq.id}`} className="text-status-info hover:underline">
+                    <td className={cn("px-4 py-3 text-sm whitespace-nowrap", inquiryListRowPrimaryTextClass(rowTone))}>
+                      <Link
+                        to={`/app/inquiries/${inq.id}`}
+                        className={cn(inquiryListRowPrimaryTextClass(rowTone), "hover:underline")}
+                      >
                         {inq.inquiry_code}
                       </Link>
                     </td>
-                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={displayCustomerName(inq)}>
+                    <td
+                      className={cn("px-4 py-3 text-sm whitespace-nowrap", inquiryListRowSecondaryTextClass(rowTone))}
+                      title={inq.created_at}
+                    >
+                      {formatInquiryCreatedAt(inq.created_at)}
+                    </td>
+                    <td
+                      className={cn(
+                        "px-4 py-3 text-sm whitespace-nowrap overflow-hidden text-ellipsis",
+                        inquiryListRowSecondaryTextClass(rowTone),
+                      )}
+                      title={displayCustomerName(inq)}
+                    >
                       {displayCustomerName(inq)}
                     </td>
-                    <td className={listTableTdClass}>
+                    <td className="px-4 py-3 text-sm">
                       <div className="flex items-center gap-2 min-w-0">
                         {inq.style_image_url ? (
                           <SecureImage
@@ -203,10 +237,20 @@ export function InquiriesPage() {
                           <div className="h-9 w-9 shrink-0 rounded bg-surface-subtle border border-border" />
                         )}
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-text-primary" title={inq.style_name ?? inq.style_ref ?? undefined}>
+                          <div
+                            className={cn("truncate", inquiryListRowPrimaryTextClass(rowTone))}
+                            title={inq.style_name ?? inq.style_ref ?? undefined}
+                          >
                             {inq.style_name ?? inq.style_ref ?? "—"}
                           </div>
-                          <div className="text-xs text-text-muted whitespace-nowrap truncate" title={inq.style_ref && inq.style_name && inq.style_ref !== inq.style_name ? inq.style_ref : inq.department ?? undefined}>
+                          <div
+                            className={cn("whitespace-nowrap truncate", inquiryListRowTertiaryTextClass(rowTone))}
+                            title={
+                              inq.style_ref && inq.style_name && inq.style_ref !== inq.style_name
+                                ? inq.style_ref
+                                : inq.department ?? undefined
+                            }
+                          >
                             {inq.style_ref && inq.style_name && inq.style_ref !== inq.style_name
                               ? inq.style_ref
                               : inq.department ?? "—"}
@@ -214,16 +258,36 @@ export function InquiriesPage() {
                         </div>
                       </div>
                     </td>
-                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={inq.intermediary_name ?? undefined}>
+                    <td
+                      className={cn(
+                        "px-4 py-3 text-sm whitespace-nowrap overflow-hidden text-ellipsis",
+                        inquiryListRowSecondaryTextClass(rowTone),
+                      )}
+                      title={inq.intermediary_name ?? undefined}
+                    >
                       {inq.intermediary_name ?? "—"}
                     </td>
-                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={inq.shipping_term ?? undefined}>
+                    <td
+                      className={cn(
+                        "px-4 py-3 text-sm whitespace-nowrap overflow-hidden text-ellipsis",
+                        inquiryListRowSecondaryTextClass(rowTone),
+                      )}
+                      title={inq.shipping_term ?? undefined}
+                    >
                       {inq.shipping_term ?? "—"}
                     </td>
-                    <td className={cn(listTableTdClass, "text-right whitespace-nowrap")}>
+                    <td
+                      className={cn(
+                        "px-4 py-3 text-sm text-right whitespace-nowrap",
+                        inquiryListRowSecondaryTextClass(rowTone),
+                      )}
+                    >
                       {inq.quantity != null ? inq.quantity.toLocaleString() : "—"}
                     </td>
-                    <td className={cn(listTableTdClass, "overflow-hidden text-ellipsis")} title={[inq.status, inq.is_converted_to_quotation ? "Converted to quotation" : null].filter(Boolean).join(" · ")}>
+                    <td
+                      className={cn("px-4 py-3 text-sm overflow-hidden text-ellipsis", inquiryListRowSecondaryTextClass(rowTone))}
+                      title={[inq.status, inq.is_converted_to_quotation ? "Converted to quotation" : null].filter(Boolean).join(" · ")}
+                    >
                       <div className="flex items-center gap-1.5 flex-wrap whitespace-nowrap min-w-0">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(inq.status)}`}>
                           {inq.status}
@@ -235,7 +299,12 @@ export function InquiriesPage() {
                         )}
                       </div>
                     </td>
-                    <td className={cn(listTableTdClass, "text-center text-xs whitespace-nowrap")}>
+                    <td
+                      className={cn(
+                        "px-4 py-3 text-center text-xs whitespace-nowrap",
+                        inquiryListRowSecondaryTextClass(rowTone),
+                      )}
+                    >
                       {inq.ai_indicators ? (
                         <span
                           title={
@@ -253,12 +322,15 @@ export function InquiriesPage() {
                         "—"
                       )}
                     </td>
-                    <td className={cn(listTableTdClass, "text-right whitespace-nowrap")}>
+                    <td className={cn("px-4 py-3 text-sm text-right whitespace-nowrap", inquiryListRowSecondaryTextClass(rowTone))}>
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
                           onClick={() => setOpenActionsId((prev) => (prev === inq.id ? null : inq.id))}
-                          className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
+                          className={cn(
+                            "rounded-lg border border-border-strong px-2.5 py-1 text-xs hover:bg-surface-subtle",
+                            inquiryListRowSecondaryTextClass(rowTone),
+                          )}
                         >
                           Actions
                         </button>

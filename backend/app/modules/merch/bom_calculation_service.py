@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 
@@ -75,10 +75,11 @@ def compute_bom_line_fields(
     }
 
 
-def sync_legacy_string_fields(
-    *,
-    net: float,
-    wastage_pct: float,
-) -> tuple[str, str]:
-    """Keep base_consumption / wastage_pct strings aligned for legacy readers."""
-    return (f"{net:.6g}".rstrip("0").rstrip(".") or "0", f"{wastage_pct:.4g}".rstrip("0").rstrip(".") or "0")
+def sync_bom_qty_columns(*, net: float, wastage_pct: float) -> tuple[Decimal, Decimal | None]:
+    """Persist net consumption and wastage % on BomItem numeric columns (Phase 3B)."""
+    net_d = Decimal(str(net)).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+    w = max(0.0, wastage_pct)
+    if abs(w) < 1e-15:
+        return net_d, None
+    w_d = Decimal(str(w)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    return net_d, w_d

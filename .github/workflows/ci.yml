@@ -75,6 +75,8 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           JWT_SECRET: test-secret-key
           GEMINI_ENABLED: "false"
+          OPENROUTER_ENABLED: "false"
+          OPENROUTER_API_KEY: ""
           OLLAMA_ENABLED: "false"
           VLLM_ENABLED: "false"
         run: |

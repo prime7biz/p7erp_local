@@ -1,6 +1,6 @@
 /**
  * Tenant file downloads use GET /{api_v1_prefix}/files/{module}/{filename} with JWT.
- * Paths must not be used as raw <img src> — use useSecureImage + blob fetch instead.
+ * Paths must not be used as raw `<img src>` — use useSecureImage + blob fetch instead.
  */
 
 function getApiV1Prefix(): string {
@@ -15,28 +15,16 @@ export function getTenantFilesPathPrefix(): string {
   return `${getApiV1Prefix()}/files/`;
 }
 
-function apiBaseOrigin(): string | null {
-  const base = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/$/, "");
-  if (!base) return null;
-  try {
-    return new URL(base).origin;
-  } catch {
-    return null;
-  }
-}
-
-/** Full URL is allowed for authenticated blob fetch only if it targets our API host (or same-origin when API base is unset). */
-function isAllowedFileFetchOrigin(origin: string): boolean {
-  const ao = apiBaseOrigin();
-  if (ao) return origin === ao;
-  if (typeof window !== "undefined" && window.location?.origin) {
-    return origin === window.location.origin;
-  }
-  return false;
+/** True when path is under the configured files prefix or matches /api/v{N}/files/... */
+function isTenantFilesApiPath(path: string, filesPrefix: string): boolean {
+  if (path.startsWith(filesPrefix)) return true;
+  return /^\/api\/v[^/]+\/files\//.test(path);
 }
 
 /**
- * Returns `/api/v1/files/...` path for requestBlob, or null if not a tenant file URL / not allowed.
+ * Returns `/api/v1/files/...` path for requestBlob, or null if not a tenant file URL.
+ * Absolute URLs: only the pathname is used with the API client (stored host may differ
+ * from VITE_API_BASE_URL, e.g. localhost vs 127.0.0.1).
  */
 export function toApiPathForBlobFetch(pathOrUrl: string | null | undefined): string | null {
   const raw = (pathOrUrl ?? "").trim();
@@ -45,15 +33,14 @@ export function toApiPathForBlobFetch(pathOrUrl: string | null | undefined): str
   const filesPrefix = getTenantFilesPathPrefix();
 
   if (raw.startsWith("/")) {
-    return raw.startsWith(filesPrefix) ? raw : null;
+    return isTenantFilesApiPath(raw, filesPrefix) ? raw : null;
   }
 
   if (/^https?:\/\//i.test(raw)) {
     try {
       const u = new URL(raw);
       const path = `${u.pathname}${u.search || ""}`;
-      if (!path.startsWith(filesPrefix)) return null;
-      if (!isAllowedFileFetchOrigin(u.origin)) return null;
+      if (!isTenantFilesApiPath(path, filesPrefix)) return null;
       return path;
     } catch {
       return null;

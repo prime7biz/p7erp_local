@@ -7,7 +7,11 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.gemini_budget import allow_gemini_call
-from app.common.gemini_tenant_budget import allow_gemini_for_tenant, record_gemini_usage
+from app.common.gemini_tenant_budget import (
+    allow_gemini_for_tenant,
+    allow_openrouter_tenant_text,
+    record_gemini_usage,
+)
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -135,8 +139,35 @@ async def generate_text_for_tenant(
     *,
     model_override: str | None = None,
 ) -> str | None:
-    """Async path: per-tenant budget, kill switch, usage logging."""
+    """Async path: per-tenant budget, kill switch, usage logging.
+
+    When ``OPENROUTER_TENANT_TEXT_ENABLED=true`` and OpenRouter is configured, tries OpenRouter first
+    (same tenant token/cost budgets as Gemini), then falls back to Gemini if enabled.
+    """
     s = get_settings()
+    if getattr(s, "openrouter_tenant_text_enabled", False) and await allow_openrouter_tenant_text(db, tenant_id):
+        from app.modules.ai_tool.llm_provider.openrouter_client import openrouter_generate_text
+
+        or_res = await openrouter_generate_text(prompt, log_feature=feature)
+        if or_res.text and len(or_res.text.strip()) > 5:
+            await record_gemini_usage(
+                db,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                model=or_res.model,
+                feature=feature,
+                prompt_tokens=or_res.prompt_tokens,
+                completion_tokens=or_res.completion_tokens,
+                total_tokens=or_res.total_tokens,
+                provider="openrouter",
+            )
+            await db.flush()
+            return or_res.text.strip()
+        logger.info(
+            "openrouter_tenant_text_skipped_fallback",
+            extra={"feature": feature, "tenant_id": tenant_id, "reason": or_res.error or "empty"},
+        )
+
     if not s.gemini_enabled:
         return None
     if not (s.gemini_api_key or "").strip():

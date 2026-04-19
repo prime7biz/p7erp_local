@@ -12,6 +12,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.common.auth import get_current_user
+from app.common.money import format_money, format_pct, format_rate, parse_money
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.main import app
@@ -86,6 +87,18 @@ async def _seed(db):
     return tenant, user, q
 
 
+def _snap_hdr_money(v):
+    return format_money(parse_money(v))
+
+
+def _snap_hdr_rate(v):
+    return format_rate(parse_money(v))
+
+
+def _snap_hdr_pct(v):
+    return format_pct(parse_money(v))
+
+
 async def _quotation_protected_snapshot(db, *, quotation_id: int, tenant_id: int):
     q = await db.get(Quotation, quotation_id)
     assert q is not None
@@ -114,17 +127,17 @@ async def _quotation_protected_snapshot(db, *, quotation_id: int, tenant_id: int
         )
     ).scalars().all()
     return {
-        "material_cost": q.material_cost,
-        "manufacturing_cost": q.manufacturing_cost,
-        "other_cost": q.other_cost,
-        "total_cost": q.total_cost,
-        "cost_per_piece": q.cost_per_piece,
-        "profit_percentage": q.profit_percentage,
-        "quoted_price": q.quoted_price,
-        "total_amount": q.total_amount,
+        "material_cost": _snap_hdr_money(q.material_cost),
+        "manufacturing_cost": _snap_hdr_money(q.manufacturing_cost),
+        "other_cost": _snap_hdr_money(q.other_cost),
+        "total_cost": _snap_hdr_money(q.total_cost),
+        "cost_per_piece": _snap_hdr_money(q.cost_per_piece),
+        "profit_percentage": _snap_hdr_pct(q.profit_percentage),
+        "quoted_price": _snap_hdr_money(q.quoted_price),
+        "total_amount": _snap_hdr_money(q.total_amount),
         "currency": q.currency,
-        "exchange_rate": q.exchange_rate,
-        "target_price": q.target_price,
+        "exchange_rate": _snap_hdr_rate(q.exchange_rate),
+        "target_price": _snap_hdr_money(q.target_price),
         "target_price_currency": q.target_price_currency,
         "status": q.status,
         "version_no": q.version_no,

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 class OrderCreate(BaseModel):
   customer_id: int = Field(..., gt=0)
   quotation_id: int | None = Field(None, gt=0)
+  style_id: int | None = Field(None, gt=0)
   style_ref: str | None = Field(None, max_length=128)
   customer_intermediary_id: int | None = Field(None, gt=0)
   shipping_term: str | None = Field(None, max_length=64)
@@ -21,6 +22,7 @@ class OrderCreate(BaseModel):
 
 
 class OrderUpdate(BaseModel):
+  style_id: int | None = Field(None, gt=0)
   style_ref: str | None = Field(None, max_length=128)
   customer_intermediary_id: int | None = Field(None, gt=0)
   shipping_term: str | None = Field(None, max_length=64)
@@ -34,12 +36,44 @@ class OrderUpdate(BaseModel):
   remarks: str | None = None
 
 
+class OrderFinancialStatusOut(BaseModel):
+  pi_issued: bool = False
+  buyer_document_received: bool = False
+  master_contract_type: str | None = None
+  bank_facility_linked: bool = False
+  btb_utilization_pct: float | None = None
+  btb_lc_count: int = 0
+  btb_lc_opened_count: int = 0
+  in_production: bool = False
+  shipped: bool = False
+
+
+class OrderSewingLineAllocationOut(BaseModel):
+  line_id: int
+  line_code: str
+  reservation_status: str
+  start_date: str | None = None
+  planned_end_date: str | None = None
+  actual_end_date: str | None = None
+  booked_at: str | None = None
+
+
+class OrderSewingLineSummaryOut(BaseModel):
+  allocations: list[OrderSewingLineAllocationOut] = Field(default_factory=list)
+  primary_line_code: str | None = None
+  primary_planned_end_date: str | None = None
+  primary_booked_at: str | None = None
+  delivery_on_track: Literal["yes", "no", "unknown"] = "unknown"
+  extra_allocation_count: int = 0
+
+
 class OrderResponse(BaseModel):
   id: int
   tenant_id: int
   customer_id: int
   quotation_id: int | None
   order_code: str
+  style_id: int | None = None
   style_ref: str | None
   customer_intermediary_id: int | None
   shipping_term: str | None
@@ -65,6 +99,8 @@ class OrderResponse(BaseModel):
   # Populated on paginated list / joins for UI (optional).
   customer_name: str | None = None
   quotation_code: str | None = None
+  financial_status: OrderFinancialStatusOut | None = None
+  sewing_line_summary: OrderSewingLineSummaryOut | None = None
 
   class Config:
     from_attributes = True

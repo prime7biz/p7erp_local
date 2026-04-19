@@ -1,8 +1,10 @@
 import { Sparkles, Loader2 } from "lucide-react";
 import type { useQuotationAi } from "@/hooks/useQuotationAi";
+import { FileImportCard } from "@/components/ai-extract/FileImportCard";
 import { cn } from "@/lib/utils";
 import { isQuotationCommercialLocked } from "@/lib/commercialChangeFields";
 import { logApiError } from "@/utils/logApiError";
+import type { ExtractionStatus } from "@/types/extraction";
 
 type AiHook = ReturnType<typeof useQuotationAi>;
 
@@ -67,6 +69,17 @@ export function QuotationAiPanel({
     ai.enrich || ai.validate || ai.dedupe || ai.summary || ai.nextActions,
   );
 
+  const extractUiStatus: ExtractionStatus =
+    ai.status === "processing"
+      ? "uploading"
+      : ai.status === "success"
+        ? "extracted"
+        : ai.status === "partial"
+          ? "partial"
+          : ai.status === "failed"
+            ? "failed"
+            : "idle";
+
   const fieldsForApi = Object.fromEntries(
     Object.entries(formSnapshot).map(([k, v]) => [k, v == null ? null : String(v)]),
   ) as Record<string, string | null>;
@@ -100,6 +113,22 @@ export function QuotationAiPanel({
         <div className="rounded-lg border border-status-warning/25 bg-status-warning-subtle/40 px-2 py-1.5 text-xs text-status-warning-foreground">
           This quotation is commercially locked. AI cannot apply protected commercial fields (currency, FX, prices,
           commission, dates, etc.); use a commercial change request for those.
+        </div>
+      ) : null}
+      {mode === "edit" ? (
+        <div className="space-y-1">
+          <FileImportCard
+            title="Import from document"
+            subtitle="Upload quotation sheet, buyer PO summary, or tech-pack (PNG, JPEG, WebP, PDF). AI fills header fields only — review before applying."
+            status={extractUiStatus}
+            error={ai.error}
+            disabled={busy}
+            onExtract={(f) => void ai.runExtractDocument(f, quotationId)}
+            onClear={() => void ai.discardAiResults()}
+          />
+          <p className="text-[11px] text-text-muted">
+            AI extracted values are suggestions only. They are not saved until you apply them from the list below.
+          </p>
         </div>
       ) : null}
       <div className="grid gap-2 sm:grid-cols-2">
@@ -139,7 +168,7 @@ export function QuotationAiPanel({
       </div>
       {ai.enrich && Object.keys(ai.enrich.suggestions).length > 0 ? (
         <div className="rounded-lg border border-border-subtle p-2 text-xs space-y-1 max-h-40 overflow-y-auto">
-          <div className="font-semibold text-text-primary">Enrich suggestions</div>
+          <div className="font-semibold text-text-primary">Header suggestions (enrich or document)</div>
           {Object.entries(ai.enrich.suggestions).map(([k, s]) => (
             <div key={k} className="text-text-secondary">
               <span className="font-medium text-text-primary">{k}</span>: {s.value ?? "—"}{" "}

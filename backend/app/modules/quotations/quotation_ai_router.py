@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.storage import _read_upload_with_limit
 from app.common.tenant import require_tenant
 from app.database import get_db
-from app.models import Tenant, User
+from app.models import Quotation, Tenant, User
 from app.modules.ai_tool.guardrails import rate_limit_dependency
 from app.modules.quotations import quotation_ai_batches as qt_batches
 from app.modules.quotations import quotation_ai_service as qt_svc
@@ -32,6 +34,7 @@ from app.modules.quotations.quotation_ai_schemas import (
     QuotationAiDiscardBatchRequest,
     QuotationAiEnrichRequest,
     QuotationAiEnrichResponse,
+    QuotationAiExtractWrapResponse,
     QuotationAiFinalizeAfterCreateRequest,
     QuotationAiFinalizeAfterCreateResponse,
     QuotationAiLinkBatchRequest,
@@ -69,11 +72,44 @@ router = APIRouter()
 
 _heavy_rl = Depends(rate_limit_dependency("heavy"))
 _read_rl = Depends(rate_limit_dependency("read"))
+_MAX_EXTRACT_BYTES = 10 * 1024 * 1024
 
 
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+
+
+@router.post("/extract", response_model=QuotationAiExtractWrapResponse)
+async def quotation_ai_extract(
+    file: UploadFile = File(...),
+    quotation_id: int | None = Form(default=None),
+    _trace: str = Depends(master_data_ai_trace_dependency),
+    _rl: None = _heavy_rl,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await require_quotation_ai_capability(db, user, "extract")
+    if quotation_id is not None:
+        r = await db.execute(
+            select(Quotation).where(Quotation.id == quotation_id, Quotation.tenant_id == tenant.id)
+        )
+        if r.scalar_one_or_none() is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+    body = await _read_upload_with_limit(file, _MAX_EXTRACT_BYTES)
+    if not body:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
+    ct = file.content_type or "application/octet-stream"
+    return await qt_svc.ai_extract_document(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        file_bytes=body,
+        content_type=ct,
+        quotation_id=quotation_id,
+    )
 
 
 @router.post("/enrich", response_model=QuotationAiEnrichResponse)

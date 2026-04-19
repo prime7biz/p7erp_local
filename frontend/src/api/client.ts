@@ -13,7 +13,29 @@ import type {
 } from "@/types/externalAccess";
 import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+/**
+ * Docker main UI is served on :5173 with nginx proxying `/api` to the backend. If an older build
+ * inlined `http://localhost:8000`, the browser would cross-call :8000 and often show a misleading
+ * CORS error when the connection drops. Force same-origin `/api` for that case.
+ */
+function resolveApiBase(): string {
+  const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? "";
+  if (typeof window === "undefined") return configured;
+  const { hostname, port } = window.location;
+  if ((hostname !== "localhost" && hostname !== "127.0.0.1") || port !== "5173") return configured;
+  if (!configured) return configured;
+  try {
+    const u = new URL(configured);
+    if ((u.hostname === "localhost" || u.hostname === "127.0.0.1") && u.port === "8000") {
+      return "";
+    }
+  } catch {
+    if (configured.startsWith("/")) return configured;
+  }
+  return configured;
+}
+
+const API_BASE = resolveApiBase();
 export const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev";
 
 export type TenantType = "manufacturer" | "buying_house" | "both";
@@ -2332,6 +2354,15 @@ export const api = {
 
   // ---------- Quotation AI ----------
 
+  async quotationAiExtract(file: File, quotationId?: number): Promise<QuotationAiExtractWrapResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (quotationId != null) fd.append("quotation_id", String(quotationId));
+    return request<QuotationAiExtractWrapResponse>("/api/v1/quotations/ai/extract", {
+      method: "POST",
+      body: fd,
+    });
+  },
   async quotationAiEnrich(body: {
     quotation_id?: number;
     website?: string;
@@ -3687,13 +3718,13 @@ export const api = {
   async createInquiry(data: InquiryCreate): Promise<InquiryResponse> {
     return request<InquiryResponse>("/api/v1/inquiries", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify(inquiryWriteBodyForApi(data)),
     });
   },
   async updateInquiry(id: number, data: InquiryUpdate): Promise<InquiryResponse> {
     return request<InquiryResponse>(`/api/v1/inquiries/${id}`, {
       method: "PATCH",
-      body: JSON.stringify(data),
+      body: JSON.stringify(inquiryWriteBodyForApi(data)),
     });
   },
   async deleteInquiry(id: number): Promise<void> {
@@ -3960,6 +3991,23 @@ export const api = {
   async getCommercialChangePendingSummary(): Promise<CommercialChangePendingSummary> {
     return request<CommercialChangePendingSummary>("/api/v1/change-requests/pending-summary");
   },
+  async getOrderCommercialTimeline(orderId: number, params?: { limit?: number }): Promise<CommercialTimelineOut> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<CommercialTimelineOut>(`/api/v1/orders/${orderId}/commercial-timeline${suffix}`);
+  },
+  async getQuotationCommercialTimeline(
+    quotationId: number,
+    params?: { limit?: number }
+  ): Promise<CommercialTimelineOut> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<CommercialTimelineOut>(
+      `/api/v1/quotations/${quotationId}/commercial-timeline${suffix}`
+    );
+  },
   async convertInquiryToQuotation(
     id: number,
     data?: { profit_percentage?: number }
@@ -4209,6 +4257,9 @@ export const api = {
     date_from?: string;
     date_to?: string;
     source_bom_id?: number;
+    vendor_id?: number;
+    exclude_po_linked_to_proforma?: number;
+    exclude_linked_to_proforma_invoice_id?: number;
   }): Promise<PurchaseOrderResponse[]> {
     return fetchAllPaginated(async (page, pageSize) => {
       const q = new URLSearchParams();
@@ -4216,6 +4267,16 @@ export const api = {
       if (params?.date_from) q.set("date_from", params.date_from);
       if (params?.date_to) q.set("date_to", params.date_to);
       if (params?.source_bom_id != null) q.set("source_bom_id", String(params.source_bom_id));
+      if (params?.vendor_id != null) q.set("vendor_id", String(params.vendor_id));
+      if (params?.exclude_po_linked_to_proforma != null) {
+        q.set("exclude_po_linked_to_proforma", String(params.exclude_po_linked_to_proforma));
+      }
+      if (params?.exclude_linked_to_proforma_invoice_id != null) {
+        q.set(
+          "exclude_linked_to_proforma_invoice_id",
+          String(params.exclude_linked_to_proforma_invoice_id)
+        );
+      }
       q.set("page", String(page));
       q.set("page_size", String(pageSize));
       return request<PaginatedRows<PurchaseOrderResponse>>(`/api/v1/inventory/purchase-orders?${q.toString()}`);
@@ -4226,6 +4287,9 @@ export const api = {
     date_from?: string;
     date_to?: string;
     source_bom_id?: number;
+    vendor_id?: number;
+    exclude_po_linked_to_proforma?: number;
+    exclude_linked_to_proforma_invoice_id?: number;
     page?: number;
     page_size?: number;
   }): Promise<PaginatedRows<PurchaseOrderResponse>> {
@@ -4234,6 +4298,16 @@ export const api = {
     if (params?.date_from) q.set("date_from", params.date_from);
     if (params?.date_to) q.set("date_to", params.date_to);
     if (params?.source_bom_id != null) q.set("source_bom_id", String(params.source_bom_id));
+    if (params?.vendor_id != null) q.set("vendor_id", String(params.vendor_id));
+    if (params?.exclude_po_linked_to_proforma != null) {
+      q.set("exclude_po_linked_to_proforma", String(params.exclude_po_linked_to_proforma));
+    }
+    if (params?.exclude_linked_to_proforma_invoice_id != null) {
+      q.set(
+        "exclude_linked_to_proforma_invoice_id",
+        String(params.exclude_linked_to_proforma_invoice_id)
+      );
+    }
     if (params?.page != null) q.set("page", String(params.page));
     if (params?.page_size != null) q.set("page_size", String(params.page_size));
     const suffix = q.toString() ? `?${q.toString()}` : "";
@@ -5652,6 +5726,132 @@ export const api = {
   async getMerchPipeline(): Promise<{ inquiries: number; quotations: number; orders: number }> {
     return request<{ inquiries: number; quotations: number; orders: number }>("/api/v1/merch/pipeline");
   },
+  async getMerchReportsCatalog(): Promise<MerchReportsCatalogResponse> {
+    return request<MerchReportsCatalogResponse>("/api/v1/merch/reports/catalog");
+  },
+  async getMerchControlTowerSummary(): Promise<MerchControlTowerSummaryResponse> {
+    return request<MerchControlTowerSummaryResponse>("/api/v1/merch/control-tower/summary");
+  },
+  async listMerchSamples(params?: {
+    status?: string;
+    sample_type?: string;
+    style_id?: number;
+    order_id?: number;
+    target_from?: string;
+    target_to?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<MerchSampleOut[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.sample_type) q.set("sample_type", params.sample_type);
+    if (params?.style_id != null) q.set("style_id", String(params.style_id));
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    if (params?.target_from) q.set("target_from", params.target_from);
+    if (params?.target_to) q.set("target_to", params.target_to);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<MerchSampleOut[]>(`/api/v1/merch/samples${suffix}`);
+  },
+  async listMerchSamplesByStyle(styleId: number, params?: { limit?: number }): Promise<MerchSampleOut[]> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<MerchSampleOut[]>(`/api/v1/merch/samples/by-style/${styleId}${suffix}`);
+  },
+  async getMerchSample(sampleId: number): Promise<MerchSampleOut> {
+    return request<MerchSampleOut>(`/api/v1/merch/samples/${sampleId}`);
+  },
+  async createMerchSample(data: MerchSampleCreate): Promise<MerchSampleOut> {
+    return request<MerchSampleOut>("/api/v1/merch/samples", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateMerchSample(sampleId: number, data: MerchSampleUpdate): Promise<MerchSampleOut> {
+    return request<MerchSampleOut>(`/api/v1/merch/samples/${sampleId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async listMerchSampleComments(sampleId: number): Promise<MerchSampleCommentOut[]> {
+    return request<MerchSampleCommentOut[]>(`/api/v1/merch/samples/${sampleId}/comments`);
+  },
+  async addMerchSampleComment(sampleId: number, data: MerchSampleCommentCreate): Promise<MerchSampleCommentOut> {
+    return request<MerchSampleCommentOut>(`/api/v1/merch/samples/${sampleId}/comments`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async getMerchSampleMetrics(sampleId: number): Promise<MerchSampleMetricsOut> {
+    return request<MerchSampleMetricsOut>(`/api/v1/merch/samples/${sampleId}/metrics`);
+  },
+  async listMerchSampleTasks(sampleId: number): Promise<MerchSampleTaskOut[]> {
+    return request<MerchSampleTaskOut[]>(`/api/v1/merch/samples/${sampleId}/tasks`);
+  },
+  async createMerchSampleTask(sampleId: number, data: MerchSampleTaskCreate): Promise<MerchSampleTaskOut> {
+    return request<MerchSampleTaskOut>(`/api/v1/merch/samples/${sampleId}/tasks`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateMerchSampleTask(sampleId: number, taskId: number, data: MerchSampleTaskUpdate): Promise<MerchSampleTaskOut> {
+    return request<MerchSampleTaskOut>(`/api/v1/merch/samples/${sampleId}/tasks/${taskId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async deleteMerchSampleTask(sampleId: number, taskId: number): Promise<void> {
+    await request<void>(`/api/v1/merch/samples/${sampleId}/tasks/${taskId}`, { method: "DELETE" });
+  },
+  async listMerchSampleCostLines(sampleId: number): Promise<MerchSampleCostLineOut[]> {
+    return request<MerchSampleCostLineOut[]>(`/api/v1/merch/samples/${sampleId}/cost-lines`);
+  },
+  async createMerchSampleCostLine(sampleId: number, data: MerchSampleCostLineCreate): Promise<MerchSampleCostLineOut> {
+    return request<MerchSampleCostLineOut>(`/api/v1/merch/samples/${sampleId}/cost-lines`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateMerchSampleCostLine(sampleId: number, lineId: number, data: MerchSampleCostLineUpdate): Promise<MerchSampleCostLineOut> {
+    return request<MerchSampleCostLineOut>(`/api/v1/merch/samples/${sampleId}/cost-lines/${lineId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async deleteMerchSampleCostLine(sampleId: number, lineId: number): Promise<void> {
+    await request<void>(`/api/v1/merch/samples/${sampleId}/cost-lines/${lineId}`, { method: "DELETE" });
+  },
+  async listMerchSampleMaterialLines(sampleId: number): Promise<MerchSampleMaterialLineOut[]> {
+    return request<MerchSampleMaterialLineOut[]>(`/api/v1/merch/samples/${sampleId}/material-lines`);
+  },
+  async createMerchSampleMaterialLine(sampleId: number, data: MerchSampleMaterialLineCreate): Promise<MerchSampleMaterialLineOut> {
+    return request<MerchSampleMaterialLineOut>(`/api/v1/merch/samples/${sampleId}/material-lines`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateMerchSampleMaterialLine(sampleId: number, lineId: number, data: MerchSampleMaterialLineUpdate): Promise<MerchSampleMaterialLineOut> {
+    return request<MerchSampleMaterialLineOut>(`/api/v1/merch/samples/${sampleId}/material-lines/${lineId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async deleteMerchSampleMaterialLine(sampleId: number, lineId: number): Promise<void> {
+    await request<void>(`/api/v1/merch/samples/${sampleId}/material-lines/${lineId}`, { method: "DELETE" });
+  },
+  async merchSampleAiPlanProposal(sampleId: number): Promise<MerchSampleAiPlanProposalResponse> {
+    return request<MerchSampleAiPlanProposalResponse>(`/api/v1/merch/samples/${sampleId}/ai/plan-proposal`, {
+      method: "POST",
+    });
+  },
+  async merchSampleAiPlanApply(sampleId: number, data: MerchSampleAiPlanApplyBody): Promise<MerchSampleTaskOut[]> {
+    return request<MerchSampleTaskOut[]>(`/api/v1/merch/samples/${sampleId}/ai/plan-apply`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
   async getMerchPipelineFull(params?: {
     document_type?: string;
     customer_id?: number;
@@ -6923,6 +7123,11 @@ export const api = {
   async getProformaInvoice(id: number): Promise<ProformaInvoiceRow> {
     return request<ProformaInvoiceRow>(`/api/v1/commercial/proforma-invoices/${id}`);
   },
+  async getIssuedExportProformaOrderIds(): Promise<{ order_ids: number[] }> {
+    return request<{ order_ids: number[] }>(
+      "/api/v1/commercial/proforma-invoices/issued-export-order-ids"
+    );
+  },
   async getProformaInvoiceForPrint(id: number): Promise<ProformaInvoiceForPrint> {
     return request<ProformaInvoiceForPrint>(`/api/v1/commercial/proforma-invoices/${id}/for-print`);
   },
@@ -7738,6 +7943,59 @@ export const api = {
   },
   async getPlanBoard(from_date: string, to_date: string): Promise<{ items: unknown[] }> {
     return request(`/api/v1/production/plan-board?from_date=${encodeURIComponent(from_date)}&to_date=${encodeURIComponent(to_date)}`);
+  },
+  async getControlTowerSummary(params: {
+    delivery_from: string;
+    delivery_to: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ControlTowerSummaryResponse> {
+    const q = new URLSearchParams();
+    q.set("delivery_from", params.delivery_from);
+    q.set("delivery_to", params.delivery_to);
+    if (params.limit != null) q.set("limit", String(params.limit));
+    if (params.offset != null) q.set("offset", String(params.offset));
+    return request(`/api/v1/control-tower/summary?${q}`);
+  },
+  async getControlTowerOrderTimeline(orderId: number): Promise<ControlTowerTimelineResponse> {
+    return request(`/api/v1/control-tower/order/${orderId}/timeline`);
+  },
+  async getControlTowerMasterLcSnapshot(masterContractId: number): Promise<ControlTowerLcSnapshotResponse> {
+    return request(`/api/v1/control-tower/master-lc/${masterContractId}/snapshot`);
+  },
+  async getControlTowerCapacityHeatmap(date_from: string, date_to: string): Promise<ControlTowerCapacityHeatmapResponse> {
+    const q = new URLSearchParams();
+    q.set("date_from", date_from);
+    q.set("date_to", date_to);
+    return request(`/api/v1/control-tower/capacity-heatmap?${q}`);
+  },
+  async getFinanceExposureMasterLc(masterContractId: number): Promise<FinanceMasterLcExposureResponse> {
+    return request(`/api/v1/finance/exposure/master-lc/${masterContractId}`);
+  },
+  async getFinanceMaturityLadder(masterContractId?: number): Promise<FinanceMaturityTrancheRow[]> {
+    const q = masterContractId != null ? `?master_contract_id=${masterContractId}` : "";
+    return request(`/api/v1/finance/maturity-ladder${q}`);
+  },
+  async proposeLineReservation(order_id: number): Promise<{ id: number; reservation_status: string }> {
+    return request("/api/v1/production/reservations/propose", {
+      method: "POST",
+      body: JSON.stringify({ order_id }),
+    });
+  },
+  async confirmReservationSoft(config_id: number): Promise<{ id: number; reservation_status: string }> {
+    return request(`/api/v1/production/reservations/${config_id}/confirm-soft`, { method: "POST" });
+  },
+  async confirmReservationFirm(config_id: number): Promise<{ id: number; reservation_status: string }> {
+    return request(`/api/v1/production/reservations/${config_id}/confirm-firm`, { method: "POST" });
+  },
+  async releaseLineReservation(config_id: number): Promise<{ id: number; reservation_status: string }> {
+    return request(`/api/v1/production/reservations/${config_id}/release`, { method: "POST" });
+  },
+  async replanMaterialDelay(body: { order_id: number; delay_days: number }): Promise<{ shifted_config_ids: number[] }> {
+    return request("/api/v1/production/replan/material-delay", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   },
   async getPlanSuggest(start_date: string): Promise<{ suggestions: unknown[] }> {
     return request(`/api/v1/production/plan-board/suggest?start_date=${encodeURIComponent(start_date)}`);
@@ -8787,6 +9045,13 @@ export interface QuotationAiEnrichResponse {
   suggestion_batch_id: number | null;
 }
 
+export interface QuotationAiExtractWrapResponse {
+  extraction: InquiryExtractionResponse;
+  model_hint: string;
+  request_id?: string | null;
+  suggestion_batch_id?: number | null;
+}
+
 export interface QuotationAiValidateIssue {
   field: string;
   severity: string;
@@ -9499,6 +9764,58 @@ export interface InquiryUpdate {
   items?: InquiryItemCreate[];
 }
 
+/**
+ * Inquiry forms keep some fields as UI strings (e.g. empty commission value).
+ * FastAPI expects `float | null` for commission_value and literals for commission mode/type,
+ * so empty strings must not be sent in JSON.
+ */
+function inquiryWriteBodyForApi(data: InquiryCreate | InquiryUpdate): Record<string, unknown> {
+  const body: Record<string, unknown> = { ...data };
+
+  if (body.commission_mode === "") {
+    delete body.commission_mode;
+  }
+  if (body.commission_type === "") {
+    delete body.commission_type;
+  }
+  if (body.expected_delivery_date === "") {
+    delete body.expected_delivery_date;
+  }
+
+  const cv = body.commission_value;
+  if (cv === "" || cv === null || cv === undefined) {
+    delete body.commission_value;
+  } else if (typeof cv === "string") {
+    const t = cv.trim();
+    if (!t) {
+      delete body.commission_value;
+    } else {
+      const n = Number(t);
+      if (Number.isFinite(n)) {
+        body.commission_value = n;
+      } else {
+        delete body.commission_value;
+      }
+    }
+  }
+
+  if (Array.isArray(body.items)) {
+    body.items = (body.items as InquiryItemCreate[]).map((it) => {
+      const row: Record<string, unknown> = { ...it };
+      const q = row.quantity;
+      if (q === "" || q === null || (typeof q === "number" && !Number.isFinite(q))) {
+        delete row.quantity;
+      }
+      if (row.sort_order === "" || row.sort_order === null) {
+        delete row.sort_order;
+      }
+      return row;
+    });
+  }
+
+  return body;
+}
+
 export interface QuotationResponse {
   id: number;
   tenant_id: number;
@@ -9921,6 +10238,7 @@ export interface PurchaseOrderResponse {
   base_total_amount: number | null;
   btb_lc_id: number | null;
   source_bom_id?: number | null;
+  source_order_id?: number | null;
   status: string;
   notes: string | null;
   items: PurchaseOrderItemResponse[];
@@ -11485,6 +11803,37 @@ export interface QuotationUpdate {
   notes?: string;
 }
 
+export interface OrderFinancialStatusOut {
+  pi_issued?: boolean;
+  buyer_document_received?: boolean;
+  master_contract_type?: string | null;
+  bank_facility_linked?: boolean;
+  btb_utilization_pct?: number | null;
+  btb_lc_count?: number;
+  btb_lc_opened_count?: number;
+  in_production?: boolean;
+  shipped?: boolean;
+}
+
+export interface OrderSewingLineAllocationOut {
+  line_id: number;
+  line_code: string;
+  reservation_status: string;
+  start_date?: string | null;
+  planned_end_date?: string | null;
+  actual_end_date?: string | null;
+  booked_at?: string | null;
+}
+
+export interface OrderSewingLineSummaryOut {
+  allocations?: OrderSewingLineAllocationOut[];
+  primary_line_code?: string | null;
+  primary_planned_end_date?: string | null;
+  primary_booked_at?: string | null;
+  delivery_on_track?: "yes" | "no" | "unknown";
+  extra_allocation_count?: number;
+}
+
 export interface OrderResponse {
   id: number;
   tenant_id: number;
@@ -11519,6 +11868,84 @@ export interface OrderResponse {
   commercial_book_currency?: string | null;
   customer_name?: string | null;
   quotation_code?: string | null;
+  financial_status?: OrderFinancialStatusOut | null;
+  sewing_line_summary?: OrderSewingLineSummaryOut | null;
+}
+
+/** GET /api/v1/control-tower/summary */
+export interface ControlTowerOrderRow {
+  order_id: number;
+  order_code: string;
+  customer_name?: string | null;
+  delivery_date?: string | null;
+  pipeline_status?: string | null;
+  style_id?: number | null;
+  master_contract_id?: number | null;
+  lc_status?: string | null;
+  material_readiness_pct?: number | null;
+  line_code?: string | null;
+  reservation_status?: string | null;
+  planned_end_date?: string | null;
+}
+
+export interface ControlTowerSummaryResponse {
+  delivery_from: string;
+  delivery_to: string;
+  limit: number;
+  offset: number;
+  total: number;
+  orders: ControlTowerOrderRow[];
+}
+
+export interface ControlTowerTimelineResponse {
+  order_id: number;
+  milestones: Record<string, unknown>;
+  readiness: Record<string, unknown>;
+}
+
+export interface ControlTowerLcSnapshotResponse {
+  master_contract_id: number;
+  reference: string;
+  status: string;
+  amount: number | null;
+  currency: string | null;
+  linked_order_ids: number[];
+  btb_lc_count: number;
+}
+
+export interface ControlTowerCapacityHeatmapCell {
+  line_id: number;
+  line_code: string;
+  bucket_date: string;
+  firm_minutes: number;
+  soft_minutes: number;
+  draft_minutes: number;
+}
+
+export interface ControlTowerCapacityHeatmapResponse {
+  date_from: string;
+  date_to: string;
+  cells: ControlTowerCapacityHeatmapCell[];
+}
+
+export interface FinanceMasterLcExposureResponse {
+  master_contract_id: number;
+  reference: string;
+  total_btb_amount: number;
+  funded_portion: number;
+  non_funded_portion: number;
+  btb_count: number;
+}
+
+export interface FinanceMaturityTrancheRow {
+  id: number;
+  btb_lc_id: number;
+  btb_reference: string | null;
+  tranche_no: number;
+  maturity_date: string | null;
+  amount: number | null;
+  currency: string | null;
+  status: string | null;
 }
 
 export type OrderPipelineStepStatus = "done" | "current" | "pending" | "na";
@@ -11687,6 +12114,22 @@ export interface CommercialChangeRequestCreate {
 
 export interface CommercialChangePendingSummary {
   pending_approval_count: number;
+}
+
+export interface CommercialTimelineEventOut {
+  id: number;
+  at: string;
+  action: string;
+  severity: string;
+  user_id: number | null;
+  username: string | null;
+  details: Record<string, unknown>;
+}
+
+export interface CommercialTimelineOut {
+  entity_type: string;
+  entity_id: number;
+  events: CommercialTimelineEventOut[];
 }
 
 export interface OrderAmendmentResponse {
@@ -12219,6 +12662,7 @@ export interface OrderFollowupActionOut {
   order_code: string | null;
   delivery_date: string | null;
   style_code: string | null;
+  merch_sample_request_id?: number | null;
   template_id: number | null;
   sequence_no: number;
   phase: string;
@@ -12279,6 +12723,7 @@ export interface FollowupActionRejectionLogCreate {
 
 export interface OrderFollowupActionCreate {
   order_id: number;
+  merch_sample_request_id?: number | null;
   template_id?: number | null;
   sequence_no?: number;
   phase: string;
@@ -12302,6 +12747,7 @@ export interface OrderFollowupActionCreate {
 }
 
 export interface OrderFollowupActionUpdate {
+  merch_sample_request_id?: number | null;
   sequence_no?: number | null;
   phase?: string | null;
   action_group?: string | null;
@@ -12560,6 +13006,8 @@ export interface MerchAlertItem {
   order_code: string | null;
   reason_text: string | null;
   recommended_action: string | null;
+  /** Structured rule output: schema_version, rule_key, evaluated_at, thresholds, facts */
+  evidence_json?: Record<string, unknown> | null;
   priority_score?: number;
   sla_bucket?: "at_risk" | "breach" | "met";
   snoozed_until: string | null;
@@ -12583,6 +13031,8 @@ export interface MerchAlertsSummaryResponse {
     informational: number;
   };
   total: number;
+  /** ISO timestamp of last completed alert scan for this tenant (optional). */
+  last_completed_scan_at?: string | null;
 }
 
 export interface MerchAlertDetailResponse extends MerchAlertItem {
@@ -12643,6 +13093,249 @@ export interface PipelineItemOut {
   created_at: string;
   detail_path: string;
   next_status_options: string[];
+}
+
+export interface MerchControlTowerCountAndDate {
+  count: number;
+  oldest_date: string | null;
+}
+
+export interface MerchControlTowerQuotationsAtRisk {
+  incomplete_count: number;
+  anomaly_count: number;
+  expiring_soon_count: number;
+}
+
+export interface MerchControlTowerBomStatus {
+  draft_count: number;
+  submitted_count: number;
+  approved_count: number;
+  frozen_count: number;
+}
+
+export interface MerchControlTowerTnaOverdue {
+  count: number;
+  critical_count: number;
+}
+
+export interface MerchSampleOut {
+  id: number;
+  tenant_id: number;
+  style_id: number;
+  inquiry_id: number | null;
+  order_id: number | null;
+  sample_code: string;
+  sample_type: string;
+  sample_subtype?: string | null;
+  status: string;
+  revision_no: number;
+  target_date: string | null;
+  actual_date: string | null;
+  assigned_to_id: number | null;
+  remarks: string | null;
+  created_at: string;
+  updated_at: string;
+  style_code?: string | null;
+  style_name?: string | null;
+  inquiry_code?: string | null;
+  order_code?: string | null;
+}
+
+export interface MerchSampleCreate {
+  style_id: number;
+  inquiry_id?: number | null;
+  order_id?: number | null;
+  sample_type: string;
+  sample_subtype?: string | null;
+  target_date?: string | null;
+  assigned_to_id?: number | null;
+  remarks?: string | null;
+}
+
+export interface MerchSampleUpdate {
+  status?: string | null;
+  sample_type?: string | null;
+  sample_subtype?: string | null;
+  revision_no?: number | null;
+  target_date?: string | null;
+  actual_date?: string | null;
+  assigned_to_id?: number | null;
+  remarks?: string | null;
+}
+
+export interface MerchSampleMetricsOut {
+  lead_time_days: number | null;
+  planned_vs_actual_days: number | null;
+  task_count: number;
+  avg_task_pct_complete: number | null;
+  planned_span_days_sum: number;
+  bottleneck_step: string | null;
+  total_cost_amount: string;
+}
+
+export interface MerchSampleTaskOut {
+  id: number;
+  sample_request_id: number;
+  sort_order: number;
+  step_name: string;
+  planned_start: string | null;
+  planned_end: string | null;
+  actual_start: string | null;
+  actual_end: string | null;
+  assigned_to_id: number | null;
+  pct_complete: string;
+  notes: string | null;
+}
+
+export interface MerchSampleTaskCreate {
+  step_name: string;
+  sort_order?: number;
+  planned_start?: string | null;
+  planned_end?: string | null;
+  actual_start?: string | null;
+  actual_end?: string | null;
+  assigned_to_id?: number | null;
+  pct_complete?: string | null;
+  notes?: string | null;
+}
+
+export interface MerchSampleTaskUpdate {
+  sort_order?: number;
+  step_name?: string | null;
+  planned_start?: string | null;
+  planned_end?: string | null;
+  actual_start?: string | null;
+  actual_end?: string | null;
+  assigned_to_id?: number | null;
+  pct_complete?: string | null;
+  notes?: string | null;
+}
+
+export interface MerchSampleCostLineOut {
+  id: number;
+  sample_request_id: number;
+  line_type: string;
+  label: string;
+  qty: string | null;
+  unit: string | null;
+  rate: string | null;
+  amount: string | null;
+  currency_code: string | null;
+}
+
+export interface MerchSampleCostLineCreate {
+  line_type: string;
+  label: string;
+  qty?: string | null;
+  unit?: string | null;
+  rate?: string | null;
+  amount?: string | null;
+  currency_code?: string | null;
+}
+
+export interface MerchSampleCostLineUpdate {
+  line_type?: string | null;
+  label?: string | null;
+  qty?: string | null;
+  unit?: string | null;
+  rate?: string | null;
+  amount?: string | null;
+  currency_code?: string | null;
+}
+
+export interface MerchSampleMaterialLineOut {
+  id: number;
+  sample_request_id: number;
+  item_id: number;
+  item_code?: string | null;
+  item_name?: string | null;
+  qty: string;
+  uom: string | null;
+  notes: string | null;
+}
+
+export interface MerchSampleMaterialLineCreate {
+  item_id: number;
+  qty: string;
+  uom?: string | null;
+  notes?: string | null;
+}
+
+export interface MerchSampleMaterialLineUpdate {
+  qty?: string | null;
+  uom?: string | null;
+  notes?: string | null;
+}
+
+export interface MerchSampleAiProposalOut {
+  id: number;
+  sample_request_id: number;
+  status: string;
+  proposal_json: Record<string, unknown>;
+  created_at: string;
+  applied_at: string | null;
+}
+
+export interface MerchSampleAiPlanTaskItem {
+  step_name: string;
+  sort_order: number;
+  days_from_start: number;
+  duration_days: number;
+}
+
+export interface MerchSampleAiPlanPreview {
+  tasks: MerchSampleAiPlanTaskItem[];
+  risk_notes: string[];
+}
+
+export interface MerchSampleAiPlanProposalResponse {
+  proposal: MerchSampleAiProposalOut;
+  preview: MerchSampleAiPlanPreview;
+}
+
+export interface MerchSampleAiPlanApplyBody {
+  proposal_id: number;
+  schedule_start?: string | null;
+}
+
+export interface MerchSampleCommentOut {
+  id: number;
+  sample_request_id: number;
+  comment: string;
+  attachment_url: string | null;
+  created_by_id: number | null;
+  created_at: string;
+}
+
+export interface MerchSampleCommentCreate {
+  comment: string;
+  attachment_url?: string | null;
+}
+
+export interface MerchControlTowerSummaryResponse {
+  generated_at: string;
+  inquiries_needing_action: MerchControlTowerCountAndDate;
+  quotations_at_risk: MerchControlTowerQuotationsAtRisk;
+  orders_with_drift: number;
+  pending_change_requests: number;
+  bom_status: MerchControlTowerBomStatus;
+  tna_overdue: MerchControlTowerTnaOverdue;
+  planning_risk: number;
+  sample_pending: number;
+  sample_overdue_target: number;
+}
+
+/** Stable index of merchandising KPI/report surfaces (GET /merch/reports/catalog). */
+export interface MerchReportCatalogEntry {
+  key: string;
+  title: string;
+  api_path: string;
+  ui_path: string;
+}
+
+export interface MerchReportsCatalogResponse {
+  tenant_id: number;
+  reports: MerchReportCatalogEntry[];
 }
 
 export interface MerchPipelineFullResponse {
@@ -13711,6 +14404,7 @@ export interface ProformaInvoiceRow {
   direction?: "EXPORT" | "IMPORT" | string;
   vendor_id?: number | null;
   master_contract_id?: number | null;
+  purchase_order_id?: number | null;
   invoice_date?: string | null;
   amount?: number | null;
   order_id?: number | null;
@@ -13742,6 +14436,7 @@ export interface ProformaInvoiceCreate {
   direction?: "EXPORT" | "IMPORT" | string;
   vendor_id?: number | null;
   master_contract_id?: number | null;
+  purchase_order_id?: number | null;
   reference?: string | null;
   status?: string | null;
   invoice_date?: string | null;

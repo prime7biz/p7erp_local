@@ -195,10 +195,53 @@ export function ConfigurationPage() {
             <span>
               <span className="font-medium text-text-primary">Enable Trade module</span>
               <span className="mt-0.5 block text-xs text-text-muted">
-                When unchecked, Trade Cases, Control Tower, Logistics, and trade reports are hidden for this tenant
+                When unchecked, Trade Cases, Trade dashboard, Logistics, and trade reports are hidden for this tenant
                 (requires <code className="rounded bg-surface-raised px-1">buying_house</code> or{" "}
                 <code className="rounded bg-surface-raised px-1">both</code> tenant type). Leave checked for default
                 behaviour.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3">
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.control_tower_enabled === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  control_tower_enabled: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Enable Operations Control Tower</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Shows the <strong>Operations → Control Tower</strong> screen and allows related read APIs (order grid,
+                master LC snapshot, capacity heatmap, finance exposure). Off by default during rollout.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.auto_line_booking_enabled === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  auto_line_booking_enabled: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Auto-propose line bookings</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                When enabled, the system may create a <strong>DRAFT</strong> sewing-line reservation as orders move
+                through the pipeline (requires planning data). Manual planning still works when off.
               </span>
             </span>
           </label>

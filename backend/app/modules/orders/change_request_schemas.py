@@ -58,3 +58,21 @@ class CommercialChangeRequestReviewBody(BaseModel):
 
 class CommercialChangePendingSummaryOut(BaseModel):
     pending_approval_count: int
+
+
+class CommercialTimelineEventOut(BaseModel):
+    """Single audit event in commercial governance timeline (AiAuditLog-backed)."""
+
+    id: int
+    at: str
+    action: str
+    severity: str
+    user_id: int | None = None
+    username: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class CommercialTimelineOut(BaseModel):
+    entity_type: str
+    entity_id: int
+    events: list[CommercialTimelineEventOut]

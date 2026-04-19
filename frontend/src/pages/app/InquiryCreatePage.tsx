@@ -66,6 +66,18 @@ const emptyForm = (): InquiryCreate => ({
 const INQ_INPUT =
   "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring";
 
+/** Labels and shells for fields that must be set before save (customer + style). */
+const REQUIRED_LABEL =
+  "block text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1";
+function requiredSelectShell(filled: boolean): string {
+  return cn(
+    "w-full rounded-lg px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring",
+    filled
+      ? "border border-border-strong"
+      : "border-2 border-amber-400/90 bg-amber-50/60 dark:border-amber-600 dark:bg-amber-950/35",
+  );
+}
+
 function inquiryAutofillRing(level?: FieldConfidence): string {
   if (!level) return "";
   if (level === "high") return "border-l-[3px] border-l-status-success pl-2";
@@ -882,7 +894,9 @@ export function InquiryCreatePage() {
           <p className="text-sm text-text-muted mt-0.5">
             Full-page inquiry entry with style, party, and commercial details.
           </p>
-          <p className="text-xs text-text-muted mt-1">Fields marked with ** are mandatory.</p>
+          <p className="text-xs text-text-muted mt-1">
+            Fields marked with ** are mandatory — amber labels and borders highlight them until filled.
+          </p>
           {!isEdit && (
             <p className="text-xs text-text-muted mt-1">Inquiry code is auto generated when you save (e.g. INQ-0001).</p>
           )}
@@ -1035,11 +1049,11 @@ export function InquiryCreatePage() {
             <h2 className="text-sm font-semibold text-text-primary">Inquiry Header</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-text-secondary mb-1">Customer **</label>
+                <label className={REQUIRED_LABEL}>Customer **</label>
                 <select
                   value={form.customer_id || ""}
                   onChange={(e) => onCustomerChange(Number(e.target.value) || 0)}
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  className={requiredSelectShell(Boolean(form.customer_id))}
                 >
                   <option value="">Select customer...</option>
                   {customers.map((c) => (
@@ -1050,14 +1064,12 @@ export function InquiryCreatePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-text-secondary mb-1">
-                  Style **
-                </label>
+                <label className={REQUIRED_LABEL}>Style **</label>
                 <div className="space-y-2">
                   <select
                     value={form.style_id ?? ""}
                     onChange={(e) => onStyleChange(e.target.value ? Number(e.target.value) : undefined)}
-                    className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                    className={requiredSelectShell(Boolean(form.style_id))}
                   >
                     <option value="">Select style...</option>
                     {styles.map((s) => (
@@ -1081,13 +1093,21 @@ export function InquiryCreatePage() {
               <div className="rounded-lg border border-status-info/30 bg-status-info-subtle/50 p-3 space-y-3">
                 <h3 className="text-xs font-semibold text-status-info-foreground">Quick Add Style</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <input
-                    type="text"
-                    value={quickStyleName}
-                    onChange={(e) => setQuickStyleName(e.target.value)}
-                    placeholder="Style name **"
-                    className="rounded border border-status-info/30 px-3 py-2 text-sm"
-                  />
+                  <div>
+                    <label className={REQUIRED_LABEL}>Style name **</label>
+                    <input
+                      type="text"
+                      value={quickStyleName}
+                      onChange={(e) => setQuickStyleName(e.target.value)}
+                      placeholder="Required for quick add"
+                      className={cn(
+                        "w-full rounded px-3 py-2 text-sm",
+                        quickStyleName.trim()
+                          ? "border border-status-info/30"
+                          : "border-2 border-amber-400/90 bg-amber-50/60 dark:border-amber-600 dark:bg-amber-950/35",
+                      )}
+                    />
+                  </div>
                   <input
                     type="text"
                     value={quickStyleSeason}

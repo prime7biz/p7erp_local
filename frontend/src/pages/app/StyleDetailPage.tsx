@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { logApiError } from "@/utils/logApiError";
 import {
   api,
@@ -17,6 +17,7 @@ import { useSecureImage } from "@/hooks/useSecureImage";
 export function StyleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const styleId = Number(id);
   const [style, setStyle] = useState<StyleResponse | null>(null);
   const [components, setComponents] = useState<StyleComponentResponse[]>([]);
@@ -93,6 +94,11 @@ export function StyleDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const tab = (searchParams.get("tab") || "").toLowerCase();
+    if (tab === "bom") setActiveTab("bom");
+  }, [searchParams]);
 
   const handleStyleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -202,7 +208,7 @@ export function StyleDetailPage() {
         <h2 className="text-sm font-semibold text-text-primary">Related Records</h2>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Link
-            to={`/app/bom?styleId=${styleId}`}
+            to={`/app/merchandising/styles/${styleId}?tab=bom`}
             className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
           >
             BOMs ({boms.length})
@@ -357,21 +363,28 @@ export function StyleDetailPage() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-sm font-semibold text-text-primary">Bill of materials</h2>
-                <p className="mt-1 text-xs text-text-muted">Manage BOM versions for this style and open the command center.</p>
+                <p className="mt-1 text-xs text-text-muted">
+                  Reference BOMs for this style (template). Order execution BOMs are created per order in{" "}
+                  <Link className="text-status-info-foreground hover:underline" to="/app/bom">
+                    BOM Builder
+                  </Link>
+                  .
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <Link
-                  to={`/app/bom?styleId=${styleId}`}
+                  to="/app/bom"
                   className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
                 >
-                  Open BOM command center
+                  Order BOM builder
                 </Link>
-                <Link
-                  to={`/app/bom?styleId=${styleId}`}
+                <button
+                  type="button"
+                  onClick={() => void navigate(`/app/merchandising/styles/${styleId}?tab=bom`)}
                   className="rounded-lg bg-brand-primary px-3 py-1.5 text-sm font-semibold text-brand-primary-foreground"
                 >
-                  Create / manage BOM
-                </Link>
+                  Focus BOM tab
+                </button>
               </div>
             </div>
           </div>
@@ -383,15 +396,23 @@ export function StyleDetailPage() {
             ) : (
               <div className="divide-y divide-border-subtle">
                 {boms.map((bom) => (
-                  <div key={bom.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                  <div
+                    key={bom.id}
+                    id={`bom-${bom.id}`}
+                    className="flex flex-wrap items-center justify-between gap-2 scroll-mt-24 px-4 py-3"
+                  >
                     <div className="text-sm text-text-primary">
-                      BOM #{bom.id} · V{bom.version_no} · <span className="text-text-muted">{(bom.status || "DRAFT").toUpperCase()}</span>
+                      <span className="mr-1 rounded bg-surface-subtle px-1.5 py-0.5 text-[10px] font-semibold uppercase text-text-muted">
+                        Reference
+                      </span>
+                      BOM #{bom.id} · V{bom.version_no} ·{" "}
+                      <span className="text-text-muted">{(bom.status || "DRAFT").toUpperCase()}</span>
                     </div>
                     <Link
-                      to={`/app/bom?styleId=${styleId}&bomId=${bom.id}`}
+                      to={`/app/merchandising/styles/${styleId}?tab=bom#bom-${bom.id}`}
                       className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                     >
-                      Open
+                      Scroll to
                     </Link>
                   </div>
                 ))}

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,7 +12,14 @@ from app.models import Bom, BomItem, Item, Order, Quotation, QuotationMaterial
 from app.modules.merch.bom_line_sync import apply_calculations_to_line
 
 
-def _safe_float(s: str | None, default: float = 0.0) -> float:
+def _safe_float(v: str | Decimal | float | int | None, default: float = 0.0) -> float:
+    if v is None:
+        return default
+    if isinstance(v, Decimal):
+        return float(v)
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
     if not s:
         return default
     try:
@@ -93,8 +102,10 @@ async def create_bom_from_order_prefill(
             description_snapshot=(m.description or "")[:255] if m.description else None,
             material_type="MATERIAL",
             uom=m.unit,
-            base_consumption=str(net_per_unit) if net_per_unit else "0",
-            wastage_pct="0",
+            base_consumption=Decimal(str(net_per_unit or 0)).quantize(
+                Decimal("0.000001"), rounding=ROUND_HALF_UP
+            ),
+            wastage_pct=None,
             quoted_consumption_per_unit=net_per_unit,
             quoted_unit_price=unit_price,
             quoted_currency=m.currency or "USD",

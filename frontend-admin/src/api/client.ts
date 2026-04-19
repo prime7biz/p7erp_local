@@ -1,4 +1,22 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+/** Same-origin `/api` on Docker admin UI (:5174) when a build baked `http://localhost:8000`. */
+function resolveApiBase(): string {
+  const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? "";
+  if (typeof window === "undefined") return configured;
+  const { hostname, port } = window.location;
+  if ((hostname !== "localhost" && hostname !== "127.0.0.1") || port !== "5174") return configured;
+  if (!configured) return configured;
+  try {
+    const u = new URL(configured);
+    if ((u.hostname === "localhost" || u.hostname === "127.0.0.1") && u.port === "8000") {
+      return "";
+    }
+  } catch {
+    if (configured.startsWith("/")) return configured;
+  }
+  return configured;
+}
+
+const API_BASE = resolveApiBase();
 
 const KEY = "p7_platform_admin_token";
 

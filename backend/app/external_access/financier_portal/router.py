@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import BtbLc, ExternalPrincipal, MasterContract, Order, Tenant
+from app.models import BtbLc, BtbMaturityTranche, ExternalPrincipal, MasterContract, Order, Tenant
 from app.models.inventory import PurchaseOrder, PurchaseOrderItem, Warehouse
 from app.models.costing import Item
 
@@ -23,10 +23,11 @@ from app.external_access.constants import (
     SCOPE_ORDERS_AND_PIPELINE,
     SCOPE_TENANT_SUMMARY,
 )
-from app.external_access.deps import require_financier_external, require_financier_scope
+from app.external_access.deps import financier_max_scope, require_financier_external, require_financier_scope
 from app.external_access.feature_flags import is_financier_financial_summary_enabled, is_financier_projection_enabled
 from app.external_access.financier_portal import selectors as sel
 from app.external_access.financier_portal import facility_selectors as fsel
+from app.external_access.financier_portal.dashboard_insights_service import build_financier_dashboard_party_insights
 from app.external_access.financier_portal.schemas import (
     FinancierAlertItem,
     FinancierAlertsResponse,
@@ -40,7 +41,7 @@ from app.external_access.financier_portal.schemas import (
     FinancierProjectionMonth,
     FinancierProjectionsResponse,
 )
-from app.external_access.permissions import get_role_codes, require_financier_portal_roles
+from app.external_access.permissions import financier_scope_satisfies, get_role_codes, require_financier_portal_roles
 
 router = APIRouter(prefix="/financier", tags=["external-financier"])
 
@@ -76,6 +77,32 @@ async def financier_dashboard(
     )
     proj = await sel.projected_units_by_month(db, tid, months=3)
     proj_units = sum(u for _, u in proj) if proj else None
+    tenant_row = await db.get(Tenant, tid)
+    maturities_90: int | None = None
+    if tenant_row and is_financier_financial_summary_enabled(tenant_row):
+        today = date.today()
+        end = today + timedelta(days=90)
+        maturities_90 = int(
+            (
+                await db.execute(
+                    select(func.count())
+                    .select_from(BtbMaturityTranche)
+                    .where(
+                        BtbMaturityTranche.tenant_id == tid,
+                        BtbMaturityTranche.maturity_date >= today,
+                        BtbMaturityTranche.maturity_date <= end,
+                        BtbMaturityTranche.status.in_(("UPCOMING", "DUE")),
+                    )
+                )
+            ).scalar()
+            or 0
+        )
+    party_insights = None
+    max_scope = await financier_max_scope(db, principal)
+    if max_scope and financier_scope_satisfies(SCOPE_CREDIT_MONITORING, max_scope):
+        party_id = await fsel.financier_party_id_for_principal(db, principal)
+        if party_id:
+            party_insights = await build_financier_dashboard_party_insights(db, tid, party_id)
     return FinancierDashboardResponse(
         active_order_lines=active_orders,
         confirmed_style_orders=confirmed,
@@ -94,6 +121,8 @@ async def financier_dashboard(
         shipments_due_this_month=await sel.shipments_due_this_month(db, tid),
         alerts_count=len(alerts),
         projection_next_90_units=proj_units,
+        btb_maturities_upcoming_90d=maturities_90,
+        party_insights=party_insights,
     )
 
 

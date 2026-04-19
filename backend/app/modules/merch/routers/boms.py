@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -40,6 +41,7 @@ from app.modules.merch.permissions import (
 )
 from app.common.tenant import require_tenant
 from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+from app.modules.merch.webhooks import dispatch_merch_event
 
 _ensure_tenant = ensure_tenant
 
@@ -47,6 +49,15 @@ router = APIRouter(prefix="/merch/order-boms", tags=["merch-order-boms"])
 
 ELIGIBLE_ORDER_STATUSES = frozenset({"NEW", "CONFIRMED", "IN_PROGRESS", "COMPLETED"})
 GOVERNED_SET = GOVERNED_BOM_STATUSES
+
+
+def _qty_field_api_str(v: Decimal | str | None) -> str | None:
+    if v is None:
+        return None
+    if isinstance(v, Decimal):
+        s = format(v, "f").rstrip("0").rstrip(".")
+        return s if s else "0"
+    return str(v)
 
 
 def _bom_to_dict(bom: Bom) -> dict:
@@ -102,8 +113,8 @@ def _line_to_dict(line: BomItem, procurement_status: str) -> dict:
         "description_snapshot": line.description_snapshot,
         "material_type": line.material_type,
         "uom": line.uom,
-        "base_consumption": line.base_consumption,
-        "wastage_pct": line.wastage_pct,
+        "base_consumption": _qty_field_api_str(line.base_consumption) or "0",
+        "wastage_pct": _qty_field_api_str(line.wastage_pct),
         "process_loss_pct": n(line.process_loss_pct),
         "quoted_consumption_per_unit": n(line.quoted_consumption_per_unit),
         "quoted_unit_price": n(line.quoted_unit_price),
@@ -267,6 +278,9 @@ async def list_eligible_orders_for_bom(
         if not quotation or not quotation.style_id:
             continue
         style = await db.get(GarmentStyle, quotation.style_id)
+        # Tenant isolation: style must belong to same tenant as order/quotation.
+        if not style or style.tenant_id != tenant.id:
+            continue
         out.append(
             {
                 "order_id": order.id,
@@ -399,7 +413,10 @@ async def patch_bom_line(
     if body.bom_net_consumption_per_unit is not None:
         line.bom_net_consumption_per_unit = body.bom_net_consumption_per_unit
     if body.wastage_pct is not None:
-        line.wastage_pct = str(body.wastage_pct)
+        w = float(body.wastage_pct)
+        line.wastage_pct = None if abs(w) < 1e-15 else Decimal(str(w)).quantize(
+            Decimal("0.0001"), rounding=ROUND_HALF_UP
+        )
     if body.process_loss_pct is not None:
         line.process_loss_pct = body.process_loss_pct
     if body.bom_expected_unit_price is not None:
@@ -434,6 +451,7 @@ async def add_bom_line(
     oq = bom.order_qty_snapshot or 0
     mx = await db.execute(select(func.max(BomItem.sort_order)).where(BomItem.bom_id == bom_id))
     sort_order = int(mx.scalar() or 0) + 1
+    w0 = float(body.wastage_pct)
     line = BomItem(
         tenant_id=tenant.id,
         bom_id=bom_id,
@@ -441,8 +459,12 @@ async def add_bom_line(
         category=body.category,
         description=body.description,
         uom=body.uom,
-        base_consumption=str(body.bom_net_consumption_per_unit),
-        wastage_pct=str(body.wastage_pct),
+        base_consumption=Decimal(str(body.bom_net_consumption_per_unit)).quantize(
+            Decimal("0.000001"), rounding=ROUND_HALF_UP
+        ),
+        wastage_pct=None
+        if abs(w0) < 1e-15
+        else Decimal(str(body.wastage_pct)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP),
         process_loss_pct=body.process_loss_pct,
         bom_net_consumption_per_unit=body.bom_net_consumption_per_unit,
         bom_expected_unit_price=body.bom_expected_unit_price,
@@ -553,6 +575,10 @@ async def freeze_order_bom(
     await db.refresh(bom)
     await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=bom.order_id)
     await db.commit()
+    dispatch_merch_event(
+        "order_bom_frozen",
+        {"tenant_id": tenant.id, "bom_id": bom.id, "order_id": bom.order_id, "user_id": user.id},
+    )
     return await _load_bom_detail(db, tenant, bom)
 
 

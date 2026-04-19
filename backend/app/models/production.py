@@ -359,6 +359,13 @@ class SewingLineStyleConfig(Base):
     planned_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     actual_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="planned")
+    reservation_status: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="FIRM_BOOKED", index=True
+    )  # DRAFT|SOFT_BOOKED|FIRM_BOOKED|IN_PROGRESS|COMPLETED|CANCELLED
+    soft_booked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    firm_booked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    smv_per_piece: Mapped[float | None] = mapped_column(Numeric(10, 4), nullable=True)
+    total_smv_minutes: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     planned_qty: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
     completed_qty: Mapped[float] = mapped_column(Numeric(18, 3), nullable=False, default=0)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

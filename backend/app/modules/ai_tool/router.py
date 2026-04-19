@@ -11,7 +11,7 @@ from app.modules.ai_tool import repository, service
 from app.modules.ai_tool.weekly_report_service import list_weekly_reports
 from app.modules.dashboard.ai_services import generate_data_quality_scan
 from app.modules.ai_tool.authz import ensure_tenant_access, require_ai_access
-from app.modules.ai_tool.guardrails import rate_limit_dependency
+from app.modules.ai_tool.guardrails import enforce_ai_daily_tenant_quota, rate_limit_dependency
 from app.modules.ai_tool.schemas import (
     AiChatRequest,
     AiChatResponse,
@@ -51,6 +51,13 @@ router = APIRouter(prefix="/ai-tool", tags=["ai-tool"])
 chat_limit = Depends(rate_limit_dependency("chat"))
 read_limit = Depends(rate_limit_dependency("read"))
 heavy_limit = Depends(rate_limit_dependency("heavy"))
+
+
+async def ai_tool_daily_quota(tenant: Tenant = Depends(require_tenant)) -> None:
+    await enforce_ai_daily_tenant_quota(tenant_id=tenant.id)
+
+
+daily_quota = Depends(ai_tool_daily_quota)
 
 
 @router.get("/quick-actions", response_model=AiQuickActionsResponse)
@@ -121,6 +128,7 @@ async def send_message(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _: None = chat_limit,
+    __: None = daily_quota,
 ):
     result = await service.process_prompt(
         db,
@@ -142,6 +150,7 @@ async def approve_escalation(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _: None = heavy_limit,
+    __: None = daily_quota,
 ):
     return await service.approve_escalation(
         db,

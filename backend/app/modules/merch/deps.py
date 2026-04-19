@@ -10,6 +10,7 @@ from .constants import STYLE_LIFECYCLE_STAGES, STYLE_PRIORITY_VALUES, STYLE_RISK
 
 
 def ensure_tenant(user: User, tenant: Tenant) -> None:
+    """Reject requests where JWT user tenant does not match resolved tenant (Rule 1: tenant isolation)."""
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
@@ -47,7 +48,11 @@ def normalize_optional_choice(value: str | None, allowed_values: set[str], field
     return normalized
 
 
-def to_float_safe(value: str | None) -> float:
+def to_float_safe(value: str | int | float | Decimal | None) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, Decimal):
+        return float(value)
     try:
         return float(value or 0)
     except (TypeError, ValueError):

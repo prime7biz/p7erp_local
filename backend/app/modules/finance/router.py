@@ -36,10 +36,12 @@ from app.modules.finance.voucher_controls import (
     fiscal_year_calendar,
 )
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
+from app.common.control_tower_flags import require_control_tower_enabled
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db
 from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher
+from app.modules.finance.exposure_service import build_maturity_ladder, compute_master_lc_exposure
 from app.models import (
     AccountGroup,
     CoAConfig,
@@ -129,7 +131,11 @@ def _posted_snapshot_dict(voucher: Voucher) -> dict | None:
         return None
 
 
-def _to_float(value: str | None) -> float:
+def _to_float(value: str | Decimal | None) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, Decimal):
+        return float(value)
     try:
         return float(value or "0")
     except (TypeError, ValueError):
@@ -165,7 +171,7 @@ async def _lookup_exchange_rate(
         )
     ).scalars().first()
     if latest:
-        return max(_to_float(latest.rate), 0.000001), "manual-rate-table", datetime.utcnow()
+        return max(_to_float(latest.exchange_rate), 0.000001), "manual-rate-table", datetime.utcnow()
 
     try:
         with urlopen(f"https://open.er-api.com/v6/latest/{from_code}", timeout=5) as response:
@@ -3717,7 +3723,45 @@ async def list_cost_centers(
     return list((await db.execute(stmt)).scalars().all())
 
 
-@router.get("/cost-centers/{center_id}", response_model=CostCenterOut)
+@router.get("/cost-centers/dashboard")
+async def cost_center_dashboard(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    centers = list((await db.execute(select(CostCenter).where(CostCenter.tenant_id == tenant.id))).scalars().all())
+    if not centers:
+        return []
+    center_ids = [c.id for c in centers]
+    all_lines = list(
+        (await db.execute(select(VoucherLine).where(VoucherLine.cost_center_id.in_(center_ids)))).scalars().all()
+    )
+    lines_by_center: dict[int, list[VoucherLine]] = defaultdict(list)
+    for line in all_lines:
+        if line.cost_center_id is not None:
+            lines_by_center[line.cost_center_id].append(line)
+    out = []
+    for c in centers:
+        lines = lines_by_center.get(c.id, [])
+        debit = sum(_to_float(l.amount) for l in lines if l.entry_type == "DEBIT")
+        credit = sum(_to_float(l.amount) for l in lines if l.entry_type == "CREDIT")
+        out.append(
+            {
+                "cost_center_id": c.id,
+                "center_code": c.center_code,
+                "name": c.name,
+                "department": c.department,
+                "debit_total": round(debit, 2),
+                "credit_total": round(credit, 2),
+                "net": round(debit - credit, 2),
+            }
+        )
+    return out
+
+
+# `{center_id:int}` so `/cost-centers/dashboard` never matches this route (avoids 422 if route order regresses).
+@router.get("/cost-centers/{center_id:int}", response_model=CostCenterOut)
 async def get_cost_center(
     center_id: int,
     tenant: Tenant = Depends(require_tenant),
@@ -3759,7 +3803,7 @@ async def create_cost_center(
     return row
 
 
-@router.patch("/cost-centers/{center_id}", response_model=CostCenterOut)
+@router.patch("/cost-centers/{center_id:int}", response_model=CostCenterOut)
 async def update_cost_center(
     center_id: int,
     body: CostCenterBody,
@@ -3778,43 +3822,6 @@ async def update_cost_center(
     await db.commit()
     await db.refresh(row)
     return row
-
-
-@router.get("/cost-centers/dashboard")
-async def cost_center_dashboard(
-    tenant: Tenant = Depends(require_tenant),
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    _ensure_tenant(user, tenant)
-    centers = list((await db.execute(select(CostCenter).where(CostCenter.tenant_id == tenant.id))).scalars().all())
-    if not centers:
-        return []
-    center_ids = [c.id for c in centers]
-    all_lines = list(
-        (await db.execute(select(VoucherLine).where(VoucherLine.cost_center_id.in_(center_ids)))).scalars().all()
-    )
-    lines_by_center: dict[int, list[VoucherLine]] = defaultdict(list)
-    for line in all_lines:
-        if line.cost_center_id is not None:
-            lines_by_center[line.cost_center_id].append(line)
-    out = []
-    for c in centers:
-        lines = lines_by_center.get(c.id, [])
-        debit = sum(_to_float(l.amount) for l in lines if l.entry_type == "DEBIT")
-        credit = sum(_to_float(l.amount) for l in lines if l.entry_type == "CREDIT")
-        out.append(
-            {
-                "cost_center_id": c.id,
-                "center_code": c.center_code,
-                "name": c.name,
-                "department": c.department,
-                "debit_total": round(debit, 2),
-                "credit_total": round(credit, 2),
-                "net": round(debit - credit, 2),
-            }
-        )
-    return out
 
 
 @router.get("/budgets", response_model=list[BudgetOut])
@@ -6872,3 +6879,34 @@ async def post_vendor_bill(
     await db.commit()
     await db.refresh(b)
     return {"id": b.id, "bill_code": b.bill_code, "status": b.status, "voucher_id": b.voucher_id}
+
+
+@router.get("/exposure/master-lc/{master_contract_id}")
+async def finance_exposure_master_lc(
+    master_contract_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    require_control_tower_enabled(tenant)
+    payload = await compute_master_lc_exposure(
+        db, tenant_id=tenant.id, master_contract_id=master_contract_id
+    )
+    if not payload:
+        raise HTTPException(status_code=404, detail="Master contract not found")
+    return payload
+
+
+@router.get("/maturity-ladder")
+async def finance_maturity_ladder(
+    master_contract_id: int | None = Query(default=None),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    require_control_tower_enabled(tenant)
+    return await build_maturity_ladder(
+        db, tenant_id=tenant.id, master_contract_id=master_contract_id
+    )

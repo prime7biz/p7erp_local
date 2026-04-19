@@ -36,7 +36,7 @@ class OllamaLlmProvider(BaseLlmProvider):
     async def generate(self, prompt: str) -> str:
         settings = get_settings()
         base_url = (settings.ollama_url or "").rstrip("/")
-        model = (settings.ollama_model or "llama3").strip() or "llama3"
+        model = (settings.ollama_model or "gemma2:2b-instruct-q4_K_M").strip() or "gemma2:2b-instruct-q4_K_M"
         if not base_url:
             return "Local AI is unavailable because OLLAMA_URL is not configured."
 

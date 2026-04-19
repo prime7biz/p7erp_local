@@ -1,6 +1,6 @@
 """Pydantic schemas for Commercial module."""
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -11,6 +11,9 @@ class MasterContractCreate(BaseModel):
     contract_type: str | None = Field(default="EXPORT_LC", max_length=24)
     reference: str = Field(..., max_length=64)
     status: str | None = Field(default="DRAFT", max_length=32)
+    lc_number: str | None = Field(None, max_length=64)
+    advising_bank: str | None = Field(None, max_length=255)
+    advised_at: datetime | None = None
     contract_date: date | None = None
     amount: float | None = Field(None, ge=0)
     currency: str | None = Field(None, max_length=10)
@@ -31,6 +34,9 @@ class MasterContractUpdate(BaseModel):
     contract_type: str | None = Field(default=None, max_length=24)
     reference: str | None = Field(default=None, max_length=64)
     status: str | None = Field(default=None, max_length=32)
+    lc_number: str | None = Field(default=None, max_length=64)
+    advising_bank: str | None = Field(default=None, max_length=255)
+    advised_at: datetime | None = None
     contract_date: date | None = None
     amount: float | None = Field(None, ge=0)
     currency: str | None = Field(None, max_length=10)
@@ -50,6 +56,9 @@ class MasterContractResponse(BaseModel):
     contract_type: str
     reference: str
     status: str
+    lc_number: str | None = None
+    advising_bank: str | None = None
+    advised_at: str | None = None
     contract_date: str | None
     amount: float | None
     btb_utilized_amount: float | None = None
@@ -137,6 +146,7 @@ class ProformaInvoiceCreate(BaseModel):
     shipper_bank_address: str | None = Field(None, max_length=255)
     shipper_bank_swift: str | None = Field(None, max_length=255)
     shipper_bank_account_id: int | None = None
+    purchase_order_id: int | None = None
 
 
 class ProformaInvoiceUpdate(BaseModel):
@@ -172,6 +182,7 @@ class ProformaInvoiceUpdate(BaseModel):
     shipper_bank_address: str | None = Field(None, max_length=255)
     shipper_bank_swift: str | None = Field(None, max_length=255)
     shipper_bank_account_id: int | None = None
+    purchase_order_id: int | None = None
 
 
 class ProformaInvoiceResponse(BaseModel):
@@ -185,6 +196,7 @@ class ProformaInvoiceResponse(BaseModel):
     amount: float | None
     order_ids: list[int] = Field(default_factory=list)
     master_contract_id: int | None = None
+    purchase_order_id: int | None = None
     buyer_name: str | None = None
     buyer_address: str | None = None
     buyer_bank_details: str | None = None
@@ -215,6 +227,10 @@ class ProformaInvoiceResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class IssuedExportProformaOrderIdsResponse(BaseModel):
+    order_ids: list[int]
 
 
 # For-print: full PI + orders (order_code, quantity, delivery_date, customer_id) + customers (id, name, address) + tenant (company_name, logo) + shipper_bank resolved

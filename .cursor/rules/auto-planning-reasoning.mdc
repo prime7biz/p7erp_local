@@ -1,0 +1,28 @@
+---
+description: Prefer high-reasoning planning when model/agent is Auto; use Plan mode for design work
+alwaysApply: true
+---
+
+# Auto model / agent mode — planning and reasoning
+
+**Scope:** When the chat **model** or **agent** setting is **Auto** (Cursor picks the model), planning and design work must not be treated as “quick cheap” tasks.
+
+## What counts as planning
+
+Architecture choices, phased refactors, multi-module impact, security or tenancy implications, ambiguous requirements, trade-off analysis, migration strategy, or any answer where “getting it wrong” is expensive.
+
+## What to do (in order)
+
+1. **Use Plan mode for real planning**  
+   For the situations above, **switch to Plan mode** (`SwitchMode` → `plan`) *before* producing a substantive plan, unless the user already opened Plan mode or explicitly asked for a trivial one-liner. Complete collaborative planning there, then return to Agent mode for implementation when appropriate.
+
+2. **Reason at premium depth even in Agent mode**  
+   If you stay in Agent mode, still: enumerate options and pick with explicit criteria, call out risks and unknowns, and sequence work clearly. Do not substitute a shallow outline for a plan when the problem is non-trivial.
+
+3. **If Auto clearly under-serves the task**  
+   Say once, plainly: for this planning step, pinning a **premium / high-reasoning** model (or staying in Plan mode) will give better results. Do not repeat every message.
+
+## Limits (so expectations stay honest)
+
+- Project rules **cannot** force Cursor’s Auto router to select a specific SKU; they guide **your** behavior (Plan mode, depth, escalation).
+- If the user has **already** pinned a premium model, still follow the same planning discipline; do not skip Plan mode solely because the model is strong—use it when the task is planning-heavy.

@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
+  LayoutGrid,
   Package,
   Users,
   ClipboardList,
@@ -69,6 +70,8 @@ export interface NavItem {
   productionUnitKey?: string;
   /** Hide when `me.feature_flags.trade_enabled === false` (Export/Import trade + logistics). */
   hideWhenTradeDisabled?: boolean;
+  /** Show only when `me.feature_flags[this key] === true` (e.g. `control_tower_enabled`). */
+  requiresFeatureFlag?: string;
 }
 
 /** Nested groups under a section (e.g. HR sub-menus). */
@@ -114,6 +117,9 @@ export function isNavItemVisibleForTenant(
   }
   if (item.productionUnitKey && !enabledOptionalProductionUnits.includes(item.productionUnitKey)) return false;
   if (item.hideWhenTradeDisabled && featureFlags && featureFlags.trade_enabled === false) return false;
+  if (item.requiresFeatureFlag) {
+    if (!featureFlags || featureFlags[item.requiresFeatureFlag] !== true) return false;
+  }
   return true;
 }
 
@@ -150,7 +156,9 @@ export const menuSections: MenuSection[] = [
       { icon: ClipboardList, label: "Inquiries", href: `${PREFIX}/inquiries` },
       { icon: FileText, label: "Quotations", href: `${PREFIX}/quotations` },
       { icon: ShoppingCart, label: "Orders", href: `${PREFIX}/orders` },
+      { icon: LayoutGrid, label: "Merch control tower", href: `${PREFIX}/merchandising/control-tower` },
       { icon: Shirt, label: "Garment Styles", href: `${PREFIX}/merchandising/styles` },
+      { icon: FlaskConical, label: "Sample development", href: `${PREFIX}/merchandising/samples` },
       { icon: Calculator, label: "BOM Builder", href: `${PREFIX}/bom` },
       { icon: Target, label: "Consumption Plans", href: `${PREFIX}/bom/orders` },
       { icon: TrendingUp, label: "Order Pipeline", href: `${PREFIX}/merchandising/pipeline` },
@@ -192,6 +200,18 @@ export const menuSections: MenuSection[] = [
         href: `${PREFIX}/logistics`,
         visibleFor: ["buying_house", "both"],
         hideWhenTradeDisabled: true,
+      },
+    ],
+  },
+  {
+    section: "Operations",
+    icon: Gauge,
+    items: [
+      {
+        icon: Gauge,
+        label: "Control Tower",
+        href: `${PREFIX}/operations/control-tower`,
+        requiresFeatureFlag: "control_tower_enabled",
       },
     ],
   },

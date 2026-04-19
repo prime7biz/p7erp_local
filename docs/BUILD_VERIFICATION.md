@@ -83,6 +83,10 @@ npm run lint
 
 **Success:** No TypeScript or Vite errors; `frontend/dist/` is produced. (`npm run lint` may still report existing warnings/errors until the codebase is cleaned up.)
 
+## Optional: OpenRouter + Ollama (tier-1 AI)
+
+Default tier-1 uses **Ollama** when **`OLLAMA_URL`** is set, else **OpenRouter** when **`OPENROUTER_API_KEY`** + **`OPENROUTER_MODEL`** are set (`OPENROUTER_TIER1_PREFERRED=true` flips to cloud-first when both exist). See **`docs/OPENROUTER.md`** and **`docs/OLLAMA_GEMMA.md`**. Set **`GEMINI_ENABLED=true`** and **`GEMINI_API_KEY`** only if you need legacy Gemini-backed planning/extraction.
+
 ## Optional: AI form extraction smoke test
 
 After B1–B3, with backend + frontend running and a logged-in session, you can verify the stateless **document → form** endpoints (see `docs/AI_FORM_EXTRACTION.md`):

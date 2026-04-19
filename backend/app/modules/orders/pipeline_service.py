@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.master_contract_workflow import is_lc_received_status
 from app.common.workflow import PIPELINE_NA_PRESETS, PIPELINE_STAGES
 from app.models import (
     Bom,
@@ -18,6 +19,7 @@ from app.models import (
     GoodsReceivingItem,
     Inquiry,
     ManufacturingWorkOrder,
+    MasterContract,
     Order,
     OrderFollowupAction,
     ProcessOrder,
@@ -153,6 +155,7 @@ async def _has_pi_issued(db: AsyncSession, tenant_id: int, order_id: int) -> boo
 
 
 async def _has_bom(db: AsyncSession, tenant_id: int, order_id: int) -> bool:
+    """Execution BOM for the order must exist and be approved or frozen (Phase 8 authority)."""
     r = await db.execute(
         select(func.count())
         .select_from(Bom)
@@ -160,6 +163,8 @@ async def _has_bom(db: AsyncSession, tenant_id: int, order_id: int) -> bool:
             Bom.tenant_id == tenant_id,
             Bom.order_id == order_id,
             Bom.is_active.is_(True),
+            Bom.is_legacy.is_(False),
+            Bom.status.in_(("APPROVED", "FROZEN")),
         )
     )
     return (r.scalar() or 0) > 0
@@ -279,7 +284,12 @@ async def is_stage_complete(
     if stage == "PI_ISSUED":
         return await _has_pi_issued(db, tenant_id, oid)
     if stage == "LC_RECEIVED":
-        return bool(order.master_contract_id)
+        if not order.master_contract_id:
+            return False
+        mc = await db.get(MasterContract, order.master_contract_id)
+        if not mc or mc.tenant_id != tenant_id:
+            return False
+        return is_lc_received_status(mc.status)
     if stage == "BOM_CREATED":
         return await _has_bom(db, tenant_id, oid)
     if stage == "PO_ISSUED":
@@ -335,8 +345,13 @@ async def sync_milestone_timestamps(
     ):
         if order.pi_issued_at is None:
             order.pi_issued_at = now
-    if bool(order.master_contract_id) or "LC_RECEIVED" in na:
-        if order.lc_received_at is None and bool(order.master_contract_id):
+    lc_ok = False
+    if order.master_contract_id:
+        mc = await db.get(MasterContract, order.master_contract_id)
+        if mc and mc.tenant_id == tenant_id:
+            lc_ok = is_lc_received_status(mc.status)
+    if lc_ok or "LC_RECEIVED" in na:
+        if order.lc_received_at is None and lc_ok:
             order.lc_received_at = now
     if await _has_bom(db, tenant_id, order.id) and order.bom_created_at is None:
         order.bom_created_at = now
@@ -373,6 +388,14 @@ async def auto_advance_order_pipeline(
     order.pipeline_status = new_stage
     if new_stage == "COMPLETED" and order.completed_at is None:
         order.completed_at = datetime.utcnow()
+    try:
+        from app.modules.production.line_reservation_service import maybe_auto_propose_line_booking
+
+        await maybe_auto_propose_line_booking(db, tenant_id=tenant_id, order_id=order_id, user_id=None)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).warning("auto line booking proposal skipped", exc_info=True)
     return new_stage
 
 

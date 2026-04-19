@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+
+from app.common.money import parse_money
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CommercialChangeRequest, Order, Quotation, User
+from app.models.ai_tool import AiAuditLog
 from app.modules.ai_tool.audit import log_ai_event
 from app.modules.master_data_ai.request_context import get_master_data_ai_request_id
 from app.modules.orders.commercial_fields import (
@@ -26,6 +30,21 @@ DATE_FIELDS: frozenset[str] = frozenset(
 INT_FIELDS: frozenset[str] = frozenset({"quantity", "projected_quantity"})
 NUMERIC_NEW_VALUE_REQUIRED: frozenset[str] = frozenset({"quantity", "projected_quantity", "commission_value"})
 
+QUOTATION_DECIMAL_HEADER_FIELDS: frozenset[str] = frozenset(
+    {
+        "target_price",
+        "exchange_rate",
+        "quoted_price",
+        "total_amount",
+        "material_cost",
+        "manufacturing_cost",
+        "other_cost",
+        "total_cost",
+        "cost_per_piece",
+        "profit_percentage",
+    }
+)
+
 
 def _serialize_value(val: Any) -> str | None:
     if val is None:
@@ -38,6 +57,8 @@ def _serialize_value(val: Any) -> str | None:
         return json.dumps(val)
     if isinstance(val, int):
         return json.dumps(val)
+    if isinstance(val, Decimal):
+        return json.dumps(str(val))
     return json.dumps(val, default=str)
 
 
@@ -81,6 +102,8 @@ def parse_value_for_apply(field_key: str, raw: str | None) -> Any:
                 },
             )
         return float(data)
+    if field_key in QUOTATION_DECIMAL_HEADER_FIELDS:
+        return parse_money(str(data)) if data is not None else None
     return data
 
 
@@ -400,6 +423,69 @@ async def apply_change_request(
         },
     )
     return cr
+
+
+async def build_commercial_timeline(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    entity_type: str,
+    entity_id: int,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    """Merge AiAuditLog commercial_change_control rows for this order or quotation (newest last)."""
+    et = entity_type.strip().lower()
+    if et not in ("order", "quotation"):
+        return []
+
+    lim = max(1, min(limit, 500))
+
+    cr_id_rows = await db.execute(
+        select(CommercialChangeRequest.id).where(
+            CommercialChangeRequest.tenant_id == tenant_id,
+            CommercialChangeRequest.entity_type == et,
+            CommercialChangeRequest.entity_id == entity_id,
+        )
+    )
+    cr_ids = [int(r[0]) for r in cr_id_rows.all()]
+
+    by_entity = and_(
+        AiAuditLog.details_json["entity_id"].as_string() == str(entity_id),
+        AiAuditLog.details_json["entity_type"].as_string() == et,
+    )
+    filters = [by_entity]
+    if cr_ids:
+        id_strs = [str(i) for i in cr_ids]
+        filters.append(AiAuditLog.details_json["change_request_id"].as_string().in_(id_strs))
+
+    stmt = (
+        select(AiAuditLog, User.username)
+        .outerjoin(User, User.id == AiAuditLog.user_id)
+        .where(
+            AiAuditLog.tenant_id == tenant_id,
+            AiAuditLog.prompt_category == "commercial_change_control",
+            or_(*filters),
+        )
+        .order_by(AiAuditLog.created_at.asc())
+        .limit(lim)
+    )
+    r = await db.execute(stmt)
+    out: list[dict[str, Any]] = []
+    for row, username in r.all():
+        log = row
+        details = log.details_json if isinstance(log.details_json, dict) else {}
+        out.append(
+            {
+                "id": log.id,
+                "at": log.created_at.isoformat() if log.created_at else "",
+                "action": log.action,
+                "severity": log.severity,
+                "user_id": log.user_id,
+                "username": username,
+                "details": details,
+            }
+        )
+    return out
 
 
 def cr_to_out(cr: CommercialChangeRequest) -> dict[str, Any]:

@@ -47,6 +47,7 @@ from app.modules.erp_ai_phases.router import router as erp_ai_phases_router
 from app.modules.tna_unified.router import router as tna_unified_router
 from app.modules.trade_case.router import router as trade_case_router
 from app.modules.logistics.router import router as logistics_router
+from app.modules.control_tower.router import router as control_tower_router
 from app.modules.files.router import router as files_router
 from app.modules.admin.router import router as admin_router
 from app.modules.announcements.router import router as announcements_router
@@ -62,15 +63,31 @@ from app.common.rate_limiter import TenantRateLimitMiddleware
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-if not origins:
-    origins = [
-        "http://localhost:5173", "http://127.0.0.1:5173",
-        "http://localhost:5174", "http://127.0.0.1:5174",
-        "http://localhost:5175", "http://127.0.0.1:5175",
-        "http://localhost:5176", "http://127.0.0.1:5176",
-        "http://localhost:5177", "http://127.0.0.1:5177",
-    ]
+# Local Vite dev servers: unioned with CORS_ORIGINS when that list is non-empty and/or APP_ENV is dev-like.
+_DEFAULT_LOCAL_VITE_ORIGINS = [
+    "http://localhost:5173", "http://127.0.0.1:5173",
+    "http://localhost:5174", "http://127.0.0.1:5174",
+    "http://localhost:5175", "http://127.0.0.1:5175",
+    "http://localhost:5176", "http://127.0.0.1:5176",
+    "http://localhost:5177", "http://127.0.0.1:5177",
+]
+
+def _frontend_looks_local(url: str) -> bool:
+    u = (url or "").strip().lower()
+    return u.startswith("http://localhost:") or u.startswith("http://127.0.0.1:")
+
+
+_configured_cors = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+# Keep in sync with app.config.Settings startup checks (dev-like environments).
+_app_env = settings.app_env.lower()
+_dev_like_app_env = _app_env in {"dev", "development", "local", "test", "testing"}
+_merge_local_vite = _dev_like_app_env or _frontend_looks_local(settings.frontend_url)
+if _configured_cors or _merge_local_vite:
+    # Union default Vite origins whenever CORS_ORIGINS is set and/or we are in a dev-like setup,
+    # so a strict production-style allowlist in backend/.env still allows http://localhost:5173.
+    origins = list(dict.fromkeys(_configured_cors + _DEFAULT_LOCAL_VITE_ORIGINS))
+else:
+    origins = list(_DEFAULT_LOCAL_VITE_ORIGINS)
 
 
 async def _run_alert_scan_all_tenants() -> None:
@@ -212,6 +229,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(ExternalAuditMiddleware)
+app.add_middleware(TenantRateLimitMiddleware)
+mount_mcp(app)
+# CORS registered last so it wraps all other middleware: short-circuit responses (e.g. 429) still get
+# Access-Control-Allow-Origin; otherwise browsers report a misleading CORS failure.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -220,10 +243,6 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["X-Total-Count"],
 )
-app.add_middleware(RequestLoggingMiddleware)
-app.add_middleware(ExternalAuditMiddleware)
-app.add_middleware(TenantRateLimitMiddleware)
-mount_mcp(app)
 
 # External stakeholder portals (separate JWT namespace; not under /api/v1).
 app.include_router(external_auth_router, prefix="/api/external")
@@ -268,6 +287,7 @@ app.include_router(erp_ai_phases_router, prefix=settings.api_v1_prefix)
 app.include_router(tna_unified_router, prefix=settings.api_v1_prefix)
 app.include_router(trade_case_router, prefix=settings.api_v1_prefix)
 app.include_router(logistics_router, prefix=settings.api_v1_prefix)
+app.include_router(control_tower_router, prefix=settings.api_v1_prefix)
 app.include_router(admin_router, prefix=settings.api_v1_prefix + "/admin")
 app.include_router(announcements_router, prefix=settings.api_v1_prefix)
 app.include_router(tenant_support_router, prefix=settings.api_v1_prefix)

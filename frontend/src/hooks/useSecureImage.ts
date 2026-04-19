@@ -5,23 +5,46 @@ import { resolveSafeImageUrl } from "@/utils/assetUrl";
 import { logApiError } from "@/utils/logApiError";
 import { toApiPathForBlobFetch } from "@/utils/secureImageUrl";
 
+export type SecureImageFetchStatus = "empty" | "loading" | "ready" | "error";
+
+/** Seed / demo URLs: avoid dead DNS; show a local public asset instead. */
+function normalizeDemoImageUrl(raw: string): string {
+  if (/^https?:\/\/cdn\.example\.com\//i.test(raw)) {
+    return "/images/og-default.png";
+  }
+  return raw;
+}
+
 /**
  * For tenant file URLs (/api/v1/files/...) the browser cannot send Authorization on `<img src>`.
  * Fetch as blob with the API client, then expose an object URL for display.
- * Supports relative paths and absolute URLs to the same API origin (see secureImageUrl.ts).
  */
-export function useSecureImage(pathOrUrl: string | null | undefined): string | null {
+export function useSecureImageState(pathOrUrl: string | null | undefined): {
+  src: string | null;
+  status: SecureImageFetchStatus;
+} {
   const raw = (pathOrUrl ?? "").trim();
-  const blobPath = toApiPathForBlobFetch(raw);
+  const normalizedRaw = normalizeDemoImageUrl(raw);
+
+  const blobPath = toApiPathForBlobFetch(normalizedRaw);
   const needsAuthFetch = blobPath != null;
 
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const createdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    createdRef.current = null;
-    if (!raw || !blobPath) {
-      setBlobUrl(null);
+    if (createdRef.current) {
+      URL.revokeObjectURL(createdRef.current);
+      createdRef.current = null;
+    }
+    setBlobUrl(null);
+    setFailed(false);
+
+    if (!normalizedRaw) {
+      return;
+    }
+    if (!blobPath) {
       return;
     }
 
@@ -38,7 +61,7 @@ export function useSecureImage(pathOrUrl: string | null | undefined): string | n
       })
       .catch((err) => {
         logApiError("useSecureImage.fetch", err);
-        if (!cancelled) setBlobUrl(null);
+        if (!cancelled) setFailed(true);
       });
 
     return () => {
@@ -49,10 +72,25 @@ export function useSecureImage(pathOrUrl: string | null | undefined): string | n
       }
       setBlobUrl(null);
     };
-  }, [raw, blobPath]);
+  }, [normalizedRaw, blobPath]);
 
-  if (!raw) return null;
-  if (/^https?:\/\/cdn\.example\.com\//i.test(raw)) return null;
-  if (needsAuthFetch) return blobUrl;
-  return resolveSafeImageUrl(raw);
+  if (!normalizedRaw) {
+    return { src: null, status: "empty" };
+  }
+
+  if (!needsAuthFetch) {
+    return { src: resolveSafeImageUrl(normalizedRaw), status: "ready" };
+  }
+
+  if (failed) {
+    return { src: null, status: "error" };
+  }
+  if (blobUrl) {
+    return { src: blobUrl, status: "ready" };
+  }
+  return { src: null, status: "loading" };
+}
+
+export function useSecureImage(pathOrUrl: string | null | undefined): string | null {
+  return useSecureImageState(pathOrUrl).src;
 }

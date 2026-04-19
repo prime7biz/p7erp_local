@@ -1,6 +1,7 @@
 """Order material readiness (BOM vs stock) and full planning chain (TNA, OB, line)."""
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
@@ -16,16 +17,21 @@ from app.models import (
     OrderFollowupAction,
     SewingLine,
     SewingLineStyleConfig,
-    StockMovement,
 )
+from app.models.merch import MerchSampleRequest
+from app.modules.inventory.stock_availability_service import compute_items_availability
 
 
-def _parse_qty(s: str | None) -> float:
-    if not s:
+def _parse_qty(s: str | int | float | Decimal | None) -> float:
+    if s is None:
+        return 0.0
+    if isinstance(s, Decimal):
+        return float(s)
+    if s == "":
         return 0.0
     try:
         return float(str(s).strip())
-    except ValueError:
+    except (TypeError, ValueError):
         return 0.0
 
 
@@ -59,10 +65,19 @@ async def get_order_chain_readiness(db: AsyncSession, tenant_id: int, order_id: 
     if not orow or orow.tenant_id != tenant_id:
         return {"error": "order_not_found"}
 
-    style_id: int | None = None
+    style_id: int | None = getattr(orow, "style_id", None)
     style_code: str | None = None
     style_name: str | None = None
-    if orow.style_ref:
+    gs: GarmentStyle | None = None
+    if style_id is not None:
+        gs = await db.get(GarmentStyle, style_id)
+        if gs and gs.tenant_id == tenant_id:
+            style_code = gs.style_code
+            style_name = gs.name
+        else:
+            gs = None
+            style_id = None
+    if gs is None and orow.style_ref:
         r = await db.execute(
             select(GarmentStyle).where(
                 GarmentStyle.tenant_id == tenant_id,
@@ -170,6 +185,15 @@ async def get_order_chain_readiness(db: AsyncSession, tenant_id: int, order_id: 
         all_ready = True
         ready_count = 0
         mat_items = []
+        mat_item_ids = [int(bi.item_id) for bi in bom_items if bi.item_id is not None]
+        availability = await compute_items_availability(
+            db,
+            tenant_id,
+            mat_item_ids,
+            warehouse_id=None,
+            include_in_transit_po=True,
+            exclude_reserved=True,
+        )
         for bi in bom_items:
             if not bi.item_id:
                 continue
@@ -177,29 +201,16 @@ async def get_order_chain_readiness(db: AsyncSession, tenant_id: int, order_id: 
             wastage = _parse_qty(bi.wastage_pct) if bi.wastage_pct else 0.0
             required = order_qty * base * (1.0 + wastage / 100.0) if order_qty else base
 
-            sm2 = await db.execute(
-                select(StockMovement.quantity, StockMovement.movement_type).where(
-                    StockMovement.tenant_id == tenant_id, StockMovement.item_id == bi.item_id
-                )
-            )
-            on_hand = 0.0
-            for row in sm2.all():
-                q, mt = row[0], row[1]
-                v = _parse_qty(q)
-                m = (mt or "").upper()
-                if m == "IN":
-                    on_hand += v
-                elif m == "OUT":
-                    on_hand -= v
-                else:
-                    on_hand += v
+            slot = availability.get(bi.item_id)
+            on_hand_physical = float(slot.on_hand) if slot else 0.0
+            available = float(slot.available) if slot else 0.0
 
             item_name = ""
             it = await db.get(Item, bi.item_id)
             if it:
                 item_name = it.name
 
-            short = max(0.0, required - on_hand)
+            short = max(0.0, required - available)
             ok = short <= 0.001
             if ok:
                 ready_count += 1
@@ -211,7 +222,8 @@ async def get_order_chain_readiness(db: AsyncSession, tenant_id: int, order_id: 
                     "item_name": item_name,
                     "category": bi.category,
                     "required": round(required, 4),
-                    "on_hand": round(on_hand, 4),
+                    "on_hand": round(on_hand_physical, 4),
+                    "available": round(available, 4),
                     "short": round(short, 4),
                     "ready": ok,
                 }
@@ -248,6 +260,27 @@ async def get_order_chain_readiness(db: AsyncSession, tenant_id: int, order_id: 
         line_status = "not_started"
         line_detail = "Not allocated to a sewing line"
 
+    # Linked merch samples for this order (buyer / factory sample approvals)
+    sample_status = "ready"
+    sample_detail = "No linked merch samples"
+    sample_pending_n = 0
+    ms_rows = (
+        await db.scalars(
+            select(MerchSampleRequest).where(
+                MerchSampleRequest.tenant_id == tenant_id,
+                MerchSampleRequest.order_id == order_id,
+            )
+        )
+    ).all()
+    if ms_rows:
+        pending = [r for r in ms_rows if r.status in ("requested", "in_progress", "submitted")]
+        sample_pending_n = len(pending)
+        if pending:
+            sample_status = "warning"
+            sample_detail = f"{sample_pending_n} merch sample(s) not approved"
+        else:
+            sample_detail = f"{len(ms_rows)} merch sample(s) linked; none pending approval"
+
     chain = {
         "style_linked": {"status": "ready", "detail": f"{style_code} — {style_name}"},
         "ob_ready": {"status": ob_status, "detail": ob_detail},
@@ -265,6 +298,11 @@ async def get_order_chain_readiness(db: AsyncSession, tenant_id: int, order_id: 
             "items": mat_items,
         },
         "line_allocated": {"status": line_status, "detail": line_detail},
+        "merch_samples": {
+            "status": sample_status,
+            "detail": sample_detail,
+            "pending_count": sample_pending_n,
+        },
     }
 
     overall = _worst_status(
@@ -273,6 +311,7 @@ async def get_order_chain_readiness(db: AsyncSession, tenant_id: int, order_id: 
         chain["customer_approval"]["status"],
         chain["material_readiness"]["status"],
         chain["line_allocated"]["status"],
+        chain["merch_samples"]["status"],
     )
 
     return {

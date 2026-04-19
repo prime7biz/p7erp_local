@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import BomItem
-from app.modules.merch.bom_calculation_service import compute_bom_line_fields, sync_legacy_string_fields
+from app.modules.merch.bom_calculation_service import compute_bom_line_fields, sync_bom_qty_columns
 
 
 def _net_from_line(line: BomItem) -> float:
@@ -68,9 +68,9 @@ def apply_calculations_to_line(line: BomItem, order_qty: int) -> None:
     line.total_cost_variance = out["total_cost_variance"]
     line.order_qty_snapshot = order_qty
 
-    base_s, wast_s = sync_legacy_string_fields(net=net, wastage_pct=w)
-    line.base_consumption = base_s
-    line.wastage_pct = wast_s
+    base_d, wast_d = sync_bom_qty_columns(net=net, wastage_pct=w)
+    line.base_consumption = base_d
+    line.wastage_pct = wast_d
 
 
 async def recalc_all_lines_for_bom(db: AsyncSession, lines: list[BomItem], order_qty: int) -> None:

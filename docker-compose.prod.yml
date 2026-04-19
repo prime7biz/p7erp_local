@@ -49,7 +49,7 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
-    entrypoint: ["ollama", "pull", "llama3"]
+    entrypoint: ["ollama", "pull", "gemma2:2b-instruct-q4_K_M"]
     environment:
       OLLAMA_HOST: http://ollama:11434
     volumes:
@@ -68,11 +68,17 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
-      GEMINI_ENABLED: ${GEMINI_ENABLED:-true}
+      GEMINI_ENABLED: ${GEMINI_ENABLED:-false}
+      OPENROUTER_ENABLED: ${OPENROUTER_ENABLED:-true}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-google/gemma-4-31b-it:free}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      OPENROUTER_SITE_URL: ${OPENROUTER_SITE_URL:-}
+      OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-P7 ERP}
       AI_MONTHLY_BUDGET_LIMIT: ${AI_MONTHLY_BUDGET_LIMIT:-0}
       OLLAMA_ENABLED: ${OLLAMA_ENABLED:-true}
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma2:2b-instruct-q4_K_M}
       VLLM_ENABLED: ${VLLM_ENABLED:-false}
       VLLM_URL: ${VLLM_URL:-http://vllm:8000}
       VLLM_MODEL: ${VLLM_MODEL:-meta-llama/Meta-Llama-3-8B-Instruct}
@@ -80,6 +86,7 @@ services:
       PAID_LLM_PROVIDER: ${PAID_LLM_PROVIDER:-}
       PAID_LLM_API_KEY: ${PAID_LLM_API_KEY:-}
       PAID_LLM_MODEL: ${PAID_LLM_MODEL:-}
+      PAID_LLM_BASE_URL: ${PAID_LLM_BASE_URL:-}
       MCP_ENABLED: ${MCP_ENABLED:-true}
       MCP_REQUIRE_AUTH: ${MCP_REQUIRE_AUTH:-true}
       MCP_COMMIT_BYPASS: ${MCP_COMMIT_BYPASS:-false}
@@ -105,7 +112,8 @@ services:
       - "8000:8000"
     volumes:
       - backend_media:/app/media
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
+    # Fewer workers than CPU count to leave headroom for Ollama on shared low-spec hosts.
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s

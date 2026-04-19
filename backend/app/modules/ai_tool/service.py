@@ -42,8 +42,11 @@ from app.modules.ai_tool.guardrails import (
 )
 from app.modules.ai_tool.intents import detect_intent
 from app.modules.ai_tool.llm_provider import get_llm_provider, get_paid_llm_provider, get_response_llm_provider
+from app.modules.ai_tool.llm_provider.openrouter_provider import OpenRouterLlmProvider, openrouter_is_configured
+from app.modules.ai_tool.llm_provider.ollama_provider import OllamaLlmProvider, TRIAGE_SYSTEM_PROMPT
 from app.modules.ai_tool.llm_provider.paid_provider import PaidLlmProvider
 from app.modules.ai_tool.llm_provider.stub_provider import StubLlmProvider
+from app.modules.ai_tool.llm_provider.vllm_provider import VllmLlmProvider
 from app.modules.ai_tool.knowledge import build_knowledge_tool_payload, list_knowledge_documents as list_knowledge_documents_core, query_knowledge
 from app.modules.ai_tool.reporting import build_report_tool_result, execute_report_request
 from app.modules.ai_tool.schemas import (
@@ -74,7 +77,21 @@ from app.modules.ai_tool.schemas import (
 from app.modules.ai_tool.router_engine.composer import merge_route_metadata
 from app.modules.ai_tool.router_engine.hybrid_router import HybridRouter
 from app.modules.ai_tool.tool_registry import select_tools
-from app.modules.ai_tool.triage import infer_tool_from_prompt, parse_ollama_response
+from app.modules.ai_tool.triage import infer_tool_from_prompt, normalize_paid_mcp_tool_name, parse_ollama_response
+from app.modules.ai_tool.tenant_ai_context import build_tenant_system_prompt_line
+from app.modules.ai_tool.llm_provider.prompt_sanitizer import redact_pii_for_external_provider
+
+
+AUTO_ESCALATION_INTENTS = frozenset({"report_request", "analysis_request", "forecast_request"})
+
+
+def _escalation_tool_for_auto_intent(intent: str, prompt: str) -> str:
+    mapped = infer_tool_from_prompt(prompt)
+    if mapped:
+        return mapped
+    if intent == "forecast_request":
+        return "generate_forecast"
+    return "analyze_structured_metrics"
 
 
 def _normalize_prompt(prompt: str) -> str:
@@ -291,8 +308,10 @@ async def _assistant_text_with_llm(
     tool_results: list[AiToolInvocationResult],
     intent: str,
     blocked: bool,
+    *,
+    tenant: Tenant | None = None,
 ) -> str:
-    """Rule-based reply, optionally rewritten by Gemini for natural language."""
+    """Rule-based reply, optionally rewritten by OpenRouter or local Ollama for natural language."""
     base = _assistant_text(tool_results, intent, blocked)
     provider = get_response_llm_provider()
     if isinstance(provider, StubLlmProvider):
@@ -308,6 +327,10 @@ async def _assistant_text_with_llm(
         "Stay under 250 words. Do not invent numbers or facts not present in the data.\n\n"
         f"{json.dumps(payload, default=str)[:14000]}"
     )
+    if isinstance(provider, OpenRouterLlmProvider):
+        llm_prompt = redact_pii_for_external_provider(llm_prompt)
+        if tenant is not None:
+            llm_prompt = f"{build_tenant_system_prompt_line(tenant)}\n\n{llm_prompt}"
     settings = get_settings()
     try:
         out = await asyncio.wait_for(
@@ -323,7 +346,7 @@ async def _assistant_text_with_llm(
     return base
 
 
-async def _run_tier1_triage(prompt: str) -> tuple[str, EscalationPayload | None]:
+async def _run_tier1_triage(prompt: str, *, tenant: Tenant | None = None) -> tuple[str, EscalationPayload | None]:
     """
     Run local gatekeeper triage.
 
@@ -332,13 +355,24 @@ async def _run_tier1_triage(prompt: str) -> tuple[str, EscalationPayload | None]
     - escalation payload when paid tier approval is required
     """
     settings = get_settings()
-    if not settings.ollama_enabled:
+    if not openrouter_is_configured() and not settings.ollama_enabled:
         return "", None
     provider = get_llm_provider()
     if isinstance(provider, StubLlmProvider):
         return "", None
-    raw = await provider.generate(prompt)
-    if "Local AI is unavailable" in raw:
+    if isinstance(provider, (OllamaLlmProvider, VllmLlmProvider)):
+        raw = await provider.generate(prompt)
+    elif isinstance(provider, OpenRouterLlmProvider):
+        user_part = redact_pii_for_external_provider(prompt.strip())
+        prefix = f"{build_tenant_system_prompt_line(tenant)}\n\n" if tenant is not None else ""
+        triage_prompt = f"{prefix}{TRIAGE_SYSTEM_PROMPT}\n\nUser message:\n{user_part}"
+        raw = await provider.generate(triage_prompt)
+    else:
+        raw = await provider.generate(prompt)
+    low = (raw or "").lower()
+    if "local ai is unavailable" in low:
+        return "", None
+    if "ai is unavailable" in low and "openrouter" in low:
         return "", None
     triage = parse_ollama_response(raw, prompt=prompt)
     if triage.tier == "escalate":
@@ -796,21 +830,46 @@ async def process_prompt(
         },
     )
 
-    # Tier-1 gatekeeper: try local answer first, or return escalation request.
+    # Tier-1 gatekeeper: escalation always stops here for approval.
+    # Inline tier-1 prose only for help/short prompts — otherwise dashboard/search/tools run
+    # (see docs: tier-1 must not swallow summary/search queries).
     triage_text = ""
     escalation: EscalationPayload | None = None
     if route_decision.use_tier1_triage:
         t_tier1 = tracer.now_ms()
-        try:
-            triage_text, escalation = await _run_tier1_triage(prompt)
-        except Exception:
-            triage_text, escalation = "", None
-        tracer.span_end(
-            "llm:tier1",
-            t_tier1,
-            metadata={"has_escalation": escalation is not None, "has_text": bool(triage_text)},
-        )
-    if escalation is not None or triage_text:
+        if intent_result.intent in AUTO_ESCALATION_INTENTS:
+            escalation = EscalationPayload(
+                tool_required=_escalation_tool_for_auto_intent(intent_result.intent, prompt),
+                reason=(
+                    "This report or extended analysis uses paid cloud processing with MCP tools. "
+                    "Click Approve to continue."
+                ),
+            )
+            triage_text = ""
+            tracer.span_end(
+                "llm:tier1",
+                t_tier1,
+                metadata={
+                    "has_escalation": True,
+                    "has_text": False,
+                    "auto_escalation_intent": intent_result.intent,
+                },
+            )
+        else:
+            try:
+                triage_text, escalation = await _run_tier1_triage(prompt, tenant=tenant)
+            except Exception:
+                triage_text, escalation = "", None
+            tracer.span_end(
+                "llm:tier1",
+                t_tier1,
+                metadata={"has_escalation": escalation is not None, "has_text": bool(triage_text)},
+            )
+    tier1_intents_inline_only = frozenset({"help_request", "unsupported_request"})
+    tier1_return_now = escalation is not None or (
+        bool(triage_text) and intent_result.intent in tier1_intents_inline_only
+    )
+    if tier1_return_now:
         assistant_content = triage_text or escalation.reason
         elapsed_ms = int((perf_counter() - overall_start) * 1000)
         prov = build_response_envelope(
@@ -1435,7 +1494,9 @@ async def process_prompt(
             )
 
     t_llm = tracer.now_ms()
-    assistant_text = await _assistant_text_with_llm(prompt, tool_results, intent_result.intent, blocked)
+    assistant_text = await _assistant_text_with_llm(
+        prompt, tool_results, intent_result.intent, blocked, tenant=tenant
+    )
     tracer.span_end("llm_compose", t_llm, metadata={})
     elapsed_ms = int((perf_counter() - overall_start) * 1000)
     prov = build_response_envelope(
@@ -1556,6 +1617,7 @@ async def approve_escalation(
     effective_tool = (tool_required or str(meta.get("tool_required") or "")).strip()
     if not effective_tool:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="tool_required is missing")
+    effective_tool = normalize_paid_mcp_tool_name(effective_tool)
 
     request_id = uuid4().hex
     # Critical: preserve full session context (not only the latest prompt).
@@ -1584,6 +1646,7 @@ async def approve_escalation(
             conversation=conversation,
             tenant_id=tenant.id,
             requested_tool=effective_tool,
+            tenant_system_prefix=build_tenant_system_prompt_line(tenant),
         )
     else:
         paid_prompt = (
@@ -1592,15 +1655,21 @@ async def approve_escalation(
             f"Conversation context: {json.dumps(conversation, default=str)[:12000]}"
         )
         paid_text = await paid_provider.generate(paid_prompt)
-    assistant_text = (
-        paid_text.strip()
-        if paid_text and "not configured" not in paid_text.lower()
-        else "Paid processing completed."
-    )
+    paid_stripped = (paid_text or "").strip()
+    if paid_stripped and "not configured" not in paid_stripped.lower():
+        assistant_text = paid_stripped
+    elif paid_stripped:
+        assistant_text = paid_stripped
+    else:
+        assistant_text = (
+            "Paid processing finished but the model returned no text. "
+            "If you saw a made-up tool name before (e.g. system_resource_audit), approve again — "
+            "the server now only forces tools that exist in ERP."
+        )
     tool_result = AiToolInvocationResult(
         tool_name=effective_tool,
         status="SUCCESS",
-        summary="Escalation approved and processed using paid AI + MCP tool loop.",
+        summary=(assistant_text[:500] + "…") if len(assistant_text) > 500 else assistant_text,
         source_area="mcp",
         data={
             "requested_tool": effective_tool,

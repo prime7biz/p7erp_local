@@ -12,6 +12,7 @@ import httpx
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.money import format_money, format_rate
 from app.models import Inquiry, User
 from app.models.ai_tool import AiAuditLog
 from app.modules.ai_extract import service as extract_service
@@ -48,6 +49,19 @@ from app.modules.inquiries.inquiry_ai_schemas import (
 )
 
 
+def _inquiry_decimal_nonempty(val: object) -> bool:
+    if val is None:
+        return False
+    try:
+        from decimal import Decimal
+
+        if isinstance(val, Decimal):
+            return val != 0
+    except Exception:
+        pass
+    return bool(str(val).strip())
+
+
 def compute_inquiry_ai_indicators(inv: Inquiry) -> InquiryAiIndicatorsOut:
     flags: list[str] = []
     if inv.quantity is None or inv.quantity <= 0:
@@ -78,9 +92,9 @@ def compute_inquiry_ai_indicators(inv: Inquiry) -> InquiryAiIndicatorsOut:
     q_checks = [
         inv.style_id is not None or bool((inv.style_ref or "").strip()),
         inv.quantity is not None and inv.quantity > 0,
-        bool((inv.target_price or "").strip()),
+        _inquiry_decimal_nonempty(inv.target_price),
         bool((inv.target_price_currency or "").strip()),
-        bool((inv.exchange_rate or "").strip())
+        _inquiry_decimal_nonempty(inv.exchange_rate)
         if (inv.target_price_currency or "").strip().upper() != (inv.currency or "").strip().upper()
         and (inv.target_price_currency or "").strip()
         and (inv.currency or "").strip()
@@ -104,10 +118,10 @@ def _inquiry_profile_dict(inv: Inquiry) -> dict[str, Any]:
         "season": inv.season,
         "department": inv.department,
         "quantity": inv.quantity,
-        "target_price": inv.target_price,
+        "target_price": format_money(inv.target_price),
         "target_price_currency": inv.target_price_currency,
         "currency": inv.currency,
-        "exchange_rate": inv.exchange_rate,
+        "exchange_rate": format_rate(inv.exchange_rate),
         "expected_delivery_date": str(inv.expected_delivery_date) if inv.expected_delivery_date else None,
         "shipping_term": inv.shipping_term,
         "commission_mode": inv.commission_mode,
@@ -346,10 +360,10 @@ def _field_merge(inv: Inquiry | None, f: dict[str, Any]) -> dict[str, Any]:
                 "season": inv.season,
                 "department": inv.department,
                 "quantity": inv.quantity,
-                "target_price": inv.target_price,
+                "target_price": format_money(inv.target_price),
                 "target_price_currency": inv.target_price_currency,
                 "currency": inv.currency,
-                "exchange_rate": inv.exchange_rate,
+                "exchange_rate": format_rate(inv.exchange_rate),
                 "expected_delivery_date": str(inv.expected_delivery_date) if inv.expected_delivery_date else None,
                 "shipping_term": inv.shipping_term,
                 "notes": inv.notes,

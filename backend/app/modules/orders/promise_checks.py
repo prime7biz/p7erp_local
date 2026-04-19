@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Bom, BomItem, Item, Order, Quotation, StockMovement
+from app.models import Bom, BomItem, Item, Order, Quotation
+from app.modules.inventory.stock_availability_service import compute_items_availability
 from app.modules.orders.schemas import PromiseCheckLine, PromiseCheckOut
 
 
-def _safe_float(value: str | int | float | None) -> float:
+def _safe_float(value: str | int | float | Decimal | None) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, Decimal):
+        return float(value)
     try:
         return float(value or 0)
     except (TypeError, ValueError):
@@ -46,15 +51,15 @@ async def run_order_promise_check(
         ctp_ok = False
         reasons.append("Delivery date is in the past")
 
-    if not order.quotation_id:
-        atp_ok = False
-        reasons.append("Order has no quotation linked for style/BOM resolution")
-        return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
+    style_id: int | None = getattr(order, "style_id", None)
+    if style_id is None and order.quotation_id:
+        quotation = await db.get(Quotation, order.quotation_id)
+        if quotation and quotation.tenant_id == tenant_id and quotation.style_id:
+            style_id = quotation.style_id
 
-    quotation = await db.get(Quotation, order.quotation_id)
-    if not quotation or quotation.tenant_id != tenant_id or not quotation.style_id:
+    if not style_id:
         atp_ok = False
-        reasons.append("Order quotation/style is missing")
+        reasons.append("Order has no style_id; link a quotation with style or set style on the order")
         return PromiseCheckOut(order_id=resolved_order_id, atp_ok=atp_ok, ctp_ok=ctp_ok, reasons=reasons, lines=lines)
 
     order_qty = _safe_float(quantity_override) if quantity_override is not None else _safe_float(order.quantity)
@@ -67,7 +72,7 @@ async def run_order_promise_check(
         select(Bom)
         .where(
             Bom.tenant_id == tenant_id,
-            Bom.style_id == quotation.style_id,
+            Bom.style_id == style_id,
             Bom.status.in_(("APPROVED", "FROZEN")),
         )
         .order_by(Bom.version_no.desc())
@@ -97,23 +102,14 @@ async def run_order_promise_check(
     items_result = (await db.execute(select(Item).where(Item.tenant_id == tenant_id, Item.id.in_(item_ids)))).scalars().all()
     items_by_id = {i.id: i for i in items_result}
 
-    mov_result = (
-        await db.execute(
-            select(StockMovement).where(
-                StockMovement.tenant_id == tenant_id,
-                StockMovement.item_id.in_(item_ids),
-            )
-        )
-    ).scalars().all()
-    in_qty_by_item: dict[int, float] = defaultdict(float)
-    out_qty_by_item: dict[int, float] = defaultdict(float)
-    for m in mov_result:
-        q = _safe_float(m.quantity)
-        mt = (m.movement_type or "").upper()
-        if mt == "IN":
-            in_qty_by_item[m.item_id] += q
-        elif mt == "OUT":
-            out_qty_by_item[m.item_id] += q
+    availability = await compute_items_availability(
+        db,
+        tenant_id,
+        item_ids,
+        warehouse_id=None,
+        include_in_transit_po=True,
+        exclude_reserved=True,
+    )
 
     for line in bom_lines:
         if line.item_id is None:
@@ -124,9 +120,8 @@ async def run_order_promise_check(
         base = _safe_float(line.base_consumption)
         wastage = _safe_float(line.wastage_pct) / 100.0
         required_qty = order_qty * base * (1.0 + wastage)
-        in_qty = in_qty_by_item.get(line.item_id, 0.0)
-        out_qty = out_qty_by_item.get(line.item_id, 0.0)
-        available_qty = round(in_qty - out_qty, 4)
+        slot = availability.get(line.item_id)
+        available_qty = round(slot.available, 4) if slot else 0.0
         shortage_qty = round(max(0.0, required_qty - available_qty), 4)
         if shortage_qty > 0:
             atp_ok = False

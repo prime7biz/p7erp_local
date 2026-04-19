@@ -81,12 +81,20 @@ Use this quick list whenever dependencies or runtime versions change:
 | `API_V1_PREFIX` | No | `/api/v1` | API path prefix. |
 | `AI_CONFIRMATION_TOKEN_PEPPER` | No | (dev default) | Change in production if using AI tool. |
 | `AI_RATE_LIMIT_*` / `AI_TIMEOUT_*` / `AI_CIRCUIT_BREAKER_*` | No | (see `backend/app/config.py`) | Optional tuning for AI module. |
-| `GEMINI_API_KEY` | No | (empty) | Google Gemini API key. Required for production planning AI, AI assistant, document extraction, and dashboard briefs. |
-| `GEMINI_MODEL` | No | `gemini-2.0-flash-lite` | Model name passed to the Gemini API. |
-| `GEMINI_ENABLED` | No | `true` | Set to `false` to disable Gemini calls (e.g. load tests). |
+| `OPENROUTER_API_KEY` | No | (empty) | OpenRouter API key. With `OPENROUTER_MODEL`, tier-1 uses **Ollama first** when `OLLAMA_URL` is set; set `OPENROUTER_TIER1_PREFERRED=true` for cloud first. See `docs/OPENROUTER.md`. |
+| `OPENROUTER_MODEL` | No | `google/gemma-4-31b-it:free` | Model slug on OpenRouter. For fewer 429s, use a slug **without** `:free` and credits (e.g. `google/gemini-2.5-flash-lite`); see `docs/OPENROUTER.md`. |
+| `OPENROUTER_BASE_URL` | No | `https://openrouter.ai/api/v1` | OpenAI-compatible API base. |
+| `OPENROUTER_ENABLED` | No | `true` | Set `false` to skip OpenRouter even if a key is present. |
+| `GEMINI_API_KEY` | No | (empty) | Google Gemini API key (legacy). Off by default; enable with `GEMINI_ENABLED=true` for planning/extraction features that still use Gemini. |
+| `GEMINI_MODEL` | No | `gemini-2.5-flash` | Model name passed to the Gemini API. |
+| `GEMINI_ENABLED` | No | **`false` by default** | Set `true` with `GEMINI_API_KEY` only if you need Gemini-backed features. |
 | `AI_MONTHLY_BUDGET_LIMIT` | No | (none) | Optional cap on Gemini **text** calls per calendar month (see `backend/app/common/gemini_budget.py`). |
+| `OLLAMA_ENABLED` | No | `true` | Local Ollama for tier-1 when `OLLAMA_URL` is set (default before OpenRouter unless `OPENROUTER_TIER1_PREFERRED=true`). OpenRouter tier-1 still falls back to Ollama on empty/failed responses when Ollama is up. |
+| `OLLAMA_URL` | No | `http://ollama:11434` | Ollama HTTP API base (use `http://host.docker.internal:11434` if Ollama runs on the host and the API is in Docker). |
+| `OLLAMA_MODEL` | No | `gemma2:2b-instruct-q4_K_M` | Model tag in Ollama (`ollama list`). |
+| `PAID_LLM_BASE_URL` | No | (empty) | Optional OpenAI-compatible base for `PAID_LLM_PROVIDER=openai` (e.g. OpenRouter URL). |
 
-**Docker Compose:** When you run `docker compose up`, variables are injected from a **repo root** `.env` (same folder as `docker-compose.yml`). `backend/.env` is used when you run Uvicorn **locally** without Docker. The compose files map `GEMINI_*` and `AI_MONTHLY_BUDGET_LIMIT` into the backend container—set them in the root `.env` so AI works inside Docker.
+**Docker Compose:** When you run `docker compose up`, variables are injected from a **repo root** `.env` (same folder as `docker-compose.yml`). `backend/.env` is used when you run Uvicorn **locally** without Docker. See **`docs/OPENROUTER.md`** and **`docs/OLLAMA_GEMMA.md`**.
 
 ### Frontend (build-time; `frontend/.env`)
 

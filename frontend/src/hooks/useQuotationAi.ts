@@ -4,6 +4,7 @@ import {
   ApiError,
   type QuotationAiDedupeResponse,
   type QuotationAiEnrichResponse,
+  type QuotationAiFieldSuggestion,
   type QuotationAiNextActionsResponse,
   type QuotationAiSummaryResponse,
   type QuotationAiValidateResponse,
@@ -116,6 +117,48 @@ export function useQuotationAi() {
           logApiError("useQuotationAi.enrich", e);
           setStatus("failed");
           setError(friendlyAiError(e, "Enrich failed"));
+          setEnrichBatchId(null);
+        }
+      });
+    },
+    [withGate],
+  );
+
+  const runExtractDocument = useCallback(
+    async (file: File, quotationId?: number | null) => {
+      return withGate(async () => {
+        setError(null);
+        setStatus("processing");
+        try {
+          const res = await api.quotationAiExtract(file, quotationId ?? undefined);
+          const ext = res.extraction;
+          const suggestions: Record<string, QuotationAiFieldSuggestion> = {};
+          for (const [k, v] of Object.entries(ext?.fields ?? {})) {
+            const fv = v as { value?: unknown; confidence?: number; source?: string | null };
+            suggestions[k] = {
+              value: fv.value != null ? String(fv.value) : null,
+              confidence: typeof fv.confidence === "number" ? fv.confidence : 0.5,
+              source: fv.source ?? "uploaded_document",
+              rationale: null,
+            };
+          }
+          const unmapped = (ext?.unmapped_text ?? []).map((t) => `Unmapped: ${t}`);
+          setEnrich({
+            suggestions,
+            warnings: [...(ext?.warnings ?? []), ...unmapped],
+            suggestion_batch_id: res.suggestion_batch_id ?? null,
+          });
+          setEnrichBatchId(res.suggestion_batch_id ?? null);
+          const partial =
+            !ext?.success ||
+            (ext?.warnings?.length ?? 0) > 0 ||
+            unmapped.length > 0 ||
+            Object.keys(suggestions).length === 0;
+          setStatus(partial ? "partial" : "success");
+        } catch (e) {
+          logApiError("useQuotationAi.extractDocument", e);
+          setStatus("failed");
+          setError(friendlyAiError(e, "Document extract failed"));
           setEnrichBatchId(null);
         }
       });
@@ -265,6 +308,7 @@ export function useQuotationAi() {
     applySuggestionsToQuotation,
     finalizeSuggestionBatchAfterCreate,
     runEnrich,
+    runExtractDocument,
     runValidate,
     runDedupe,
     runSummary,

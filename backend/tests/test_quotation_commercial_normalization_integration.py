@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -53,11 +54,11 @@ async def _seed_quotation_for_put(db):
     currency="USD",
     target_price_currency="USD",
     status="DRAFT",
-    material_cost="88.0000",
-    manufacturing_cost="0.0000",
-    other_cost="0.0000",
-    total_cost="88.0000",
-    cost_per_piece="0.8800",
+    material_cost=Decimal("88.0000"),
+    manufacturing_cost=Decimal("0.0000"),
+    other_cost=Decimal("0.0000"),
+    total_cost=Decimal("88.0000"),
+    cost_per_piece=Decimal("0.8800"),
     notes="seed",
   )
   db.add(q)
@@ -92,8 +93,8 @@ async def test_put_without_cost_arrays_preserves_header_rollups(db_session_integ
       )
     assert r.status_code == 200, r.text
     await db.refresh(q)
-    assert q.material_cost == "88.0000"
-    assert q.total_cost == "88.0000"
+    assert q.material_cost == Decimal("88.0000")
+    assert q.total_cost == Decimal("88.0000")
     assert q.notes == "updated note only"
   finally:
     app.dependency_overrides.clear()
@@ -136,7 +137,8 @@ async def test_put_fx_mismatch_without_rate_returns_422(db_session_integration):
 
 
 @pytest.mark.asyncio
-async def test_put_invalid_material_total_amount_returns_422(db_session_integration):
+async def test_put_invalid_material_total_amount_coerces_to_zero_on_lines(db_session_integration):
+  """Costing lines use MoneyLineStr: unparseable totals become 0 (Phase 3A), PUT still succeeds."""
   db = db_session_integration
   tenant, user, q = await _seed_quotation_for_put(db)
 
@@ -173,7 +175,9 @@ async def test_put_invalid_material_total_amount_returns_422(db_session_integrat
         json={"materials": [mat]},
         headers={"X-Tenant-Id": str(tenant.id)},
       )
-    assert r.status_code == 422
-    assert r.json().get("detail", {}).get("code") == "QUOTATION_MONEY_VALIDATION"
+    assert r.status_code == 200, r.text
+    body = r.json()
+    mats = body.get("materials") or []
+    assert mats and mats[0].get("total_amount") == "0.0000"
   finally:
     app.dependency_overrides.clear()

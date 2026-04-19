@@ -14,10 +14,13 @@ from app.modules.orders.change_request_schemas import (
     CommercialChangeRequestCreate,
     CommercialChangeRequestOut,
     CommercialChangeRequestReviewBody,
+    CommercialTimelineEventOut,
+    CommercialTimelineOut,
 )
 from app.modules.orders.change_request_service import (
     approve_change_request,
     apply_change_request,
+    build_commercial_timeline,
     cancel_change_request,
     count_pending_approvals,
     create_change_request,
@@ -117,6 +120,29 @@ async def list_order_change_requests(
     return [CommercialChangeRequestOut.model_validate(cr_to_out(r)) for r in rows]
 
 
+@router.get("/orders/{order_id}/commercial-timeline", response_model=CommercialTimelineOut)
+async def get_order_commercial_timeline(
+    order_id: int,
+    limit: int = Query(default=200, ge=1, le=500),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    await require_commercial_capability(db, user, "view_changes")
+    from app.models import Order
+
+    o = await db.get(Order, order_id)
+    if not o or o.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    raw = await build_commercial_timeline(
+        db, tenant_id=tenant.id, entity_type="order", entity_id=order_id, limit=limit
+    )
+    events = [CommercialTimelineEventOut.model_validate(x) for x in raw]
+    return CommercialTimelineOut(entity_type="order", entity_id=order_id, events=events)
+
+
 @router.get("/quotations/{quotation_id}/change-requests", response_model=list[CommercialChangeRequestOut])
 async def list_quotation_change_requests(
     quotation_id: int,
@@ -145,6 +171,29 @@ async def list_quotation_change_requests(
         offset=offset,
     )
     return [CommercialChangeRequestOut.model_validate(cr_to_out(r)) for r in rows]
+
+
+@router.get("/quotations/{quotation_id}/commercial-timeline", response_model=CommercialTimelineOut)
+async def get_quotation_commercial_timeline(
+    quotation_id: int,
+    limit: int = Query(default=200, ge=1, le=500),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    await require_commercial_capability(db, user, "view_changes")
+    from app.models import Quotation
+
+    q = await db.get(Quotation, quotation_id)
+    if not q or q.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+    raw = await build_commercial_timeline(
+        db, tenant_id=tenant.id, entity_type="quotation", entity_id=quotation_id, limit=limit
+    )
+    events = [CommercialTimelineEventOut.model_validate(x) for x in raw]
+    return CommercialTimelineOut(entity_type="quotation", entity_id=quotation_id, events=events)
 
 
 @router.post("/change-requests/{cr_id}/approve", response_model=CommercialChangeRequestOut)

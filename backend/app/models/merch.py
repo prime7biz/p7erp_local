@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     JSON,
@@ -41,10 +42,10 @@ class Inquiry(Base):
     season: Mapped[str | None] = mapped_column(String(64), nullable=True)
     department: Mapped[str | None] = mapped_column(String(64), nullable=True)
     quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    target_price: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    target_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     target_price_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
-    exchange_rate: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    exchange_rate: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
     expected_delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     shipping_term: Mapped[str | None] = mapped_column(String(64), nullable=True)
     commission_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -111,22 +112,22 @@ class Quotation(Base):
     projected_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     projected_delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     quotation_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    target_price: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    target_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     target_price_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    exchange_rate: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    material_cost: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    manufacturing_cost: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    other_cost: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    total_cost: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    cost_per_piece: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    profit_percentage: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    quoted_price: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    exchange_rate: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
+    material_cost: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    manufacturing_cost: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    other_cost: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    total_cost: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    cost_per_piece: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    profit_percentage: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    quoted_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     shipping_term: Mapped[str | None] = mapped_column(String(64), nullable=True)
     commission_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     commission_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     commission_value: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
-    total_amount: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    total_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="DRAFT", index=True
     )
@@ -161,6 +162,9 @@ class Order(Base):
     )
     quotation_id: Mapped[int | None] = mapped_column(
         ForeignKey("quotations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    style_id: Mapped[int | None] = mapped_column(
+        ForeignKey("garment_styles.id", ondelete="SET NULL"), nullable=True, index=True
     )
     customer_intermediary_id: Mapped[int | None] = mapped_column(
         ForeignKey("customer_intermediaries.id", ondelete="SET NULL"),
@@ -235,7 +239,7 @@ class GarmentStyle(Base):
     buyer_style_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
     hs_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     uom: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    target_fob: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    target_fob: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
     sample_lead_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     production_lead_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -346,8 +350,8 @@ class BomItem(Base):
     description_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     material_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     uom: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    base_consumption: Mapped[str] = mapped_column(String(32), nullable=False)
-    wastage_pct: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    base_consumption: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    wastage_pct: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
     quoted_consumption_per_unit: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
     quoted_unit_price: Mapped[float | None] = mapped_column(Numeric(18, 4), nullable=True)
     quoted_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -413,7 +417,7 @@ class ConsumptionPlanItem(Base):
         index=True,
     )
     item_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    required_qty: Mapped[str] = mapped_column(String(32), nullable=False)
+    required_qty: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     uom: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
@@ -489,6 +493,9 @@ class OrderFollowupAction(Base):
     )
     order_id: Mapped[int] = mapped_column(
         ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    merch_sample_request_id: Mapped[int | None] = mapped_column(
+        ForeignKey("merch_sample_requests.id", ondelete="SET NULL"), nullable=True, index=True
     )
     template_id: Mapped[int | None] = mapped_column(
         ForeignKey("followup_action_templates.id", ondelete="SET NULL"), nullable=True, index=True
@@ -573,6 +580,123 @@ class FollowupActionRejectionLog(Base):
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     resubmission_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+
+class MerchSampleTask(Base):
+    """Planned/actual steps for a merch sample (productivity + schedule)."""
+
+    __tablename__ = "merch_sample_tasks"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sample_request_id: Mapped[int] = mapped_column(
+        ForeignKey("merch_sample_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    step_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    planned_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    planned_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    actual_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    actual_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    assigned_to_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    pct_complete: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=Decimal("0"))
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class MerchSampleCostLine(Base):
+    """Labor / material / overhead lines for sample costing."""
+
+    __tablename__ = "merch_sample_cost_lines"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sample_request_id: Mapped[int] = mapped_column(
+        ForeignKey("merch_sample_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    line_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    qty: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    rate: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    currency_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class MerchSampleMaterialLine(Base):
+    """Material requisition line per sample (inventory item + qty)."""
+
+    __tablename__ = "merch_sample_material_lines"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sample_request_id: Mapped[int] = mapped_column(
+        ForeignKey("merch_sample_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), nullable=False)
+    qty: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    uom: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class MerchSampleAiProposal(Base):
+    """Governed AI plan proposal; apply creates tasks/cost hints."""
+
+    __tablename__ = "merch_sample_ai_proposals"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sample_request_id: Mapped[int] = mapped_column(
+        ForeignKey("merch_sample_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    proposal_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    applied_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -693,6 +817,66 @@ class InquiryEvent(Base):
     from_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     to_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+
+class MerchSampleRequest(Base):
+    """Merchandising sample / tech-pack lifecycle (Phase 6); not manufacturing mfg_sample_requests."""
+
+    __tablename__ = "merch_sample_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    style_id: Mapped[int] = mapped_column(
+        ForeignKey("garment_styles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    inquiry_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inquiries.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    sample_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    sample_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="requested", index=True)
+    revision_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    actual_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    assigned_to_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sample_subtype: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class MerchSampleComment(Base):
+    __tablename__ = "merch_sample_comments"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sample_request_id: Mapped[int] = mapped_column(
+        ForeignKey("merch_sample_requests.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    comment: Mapped[str] = mapped_column(Text, nullable=False)
+    attachment_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

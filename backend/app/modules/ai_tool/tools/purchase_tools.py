@@ -1,6 +1,8 @@
 """Phase F: Purchase/BOM-related AI tools – suggest vendor for item, orders with material shortage."""
 from __future__ import annotations
 
+from decimal import Decimal
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +20,11 @@ from app.models import (
 from app.modules.ai_tool.query_parser import parse_search_query
 
 
-def _to_float(value: str | None) -> float:
+def _to_float(value: str | int | float | Decimal | None) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, Decimal):
+        return float(value)
     try:
         return float(value or 0)
     except (TypeError, ValueError):

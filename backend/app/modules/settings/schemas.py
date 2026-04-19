@@ -55,6 +55,7 @@ class SettingsRoleResponse(BaseModel):
     name: str
     display_name: str
     permissions: dict
+    is_system: bool = False
 
     model_config = {"from_attributes": True}
 

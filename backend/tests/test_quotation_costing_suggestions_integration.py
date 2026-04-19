@@ -6,6 +6,7 @@ Run: docker compose exec backend pytest tests/test_quotation_costing_suggestions
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -185,7 +186,7 @@ async def test_costing_suggestions_apply_fixes_negative_line(db_session_integrat
             await db.execute(select(QuotationMaterial).where(QuotationMaterial.quotation_id == q.id))
         ).scalars().first()
         assert mat is not None
-        assert mat.total_amount == "0"
+        assert mat.total_amount == Decimal("0")
     finally:
         app.dependency_overrides.clear()
 
@@ -241,6 +242,6 @@ async def test_costing_suggestions_locked_blocked(db_session_integration):
             await db.execute(select(QuotationMaterial).where(QuotationMaterial.quotation_id == q.id))
         ).scalars().first()
         assert mat is not None
-        assert mat.total_amount == "-1.00"
+        assert mat.total_amount == Decimal("-1.0000")
     finally:
         app.dependency_overrides.clear()

@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Order
 from app.models.production import SewingLineStyleConfig
 
+_PEER_RESERVATION_STATUSES = frozenset({"SOFT_BOOKED", "FIRM_BOOKED", "IN_PROGRESS", "COMPLETED"})
+
 
 def _cfg_window_end(cfg: SewingLineStyleConfig) -> date:
     if cfg.planned_end_date:
@@ -58,6 +60,7 @@ async def scan_capacity_bottlenecks_for_order(
         SewingLineStyleConfig.line_id.in_(line_ids),
         SewingLineStyleConfig.order_id.is_not(None),
         SewingLineStyleConfig.order_id != order.id,
+        SewingLineStyleConfig.reservation_status.in_(tuple(_PEER_RESERVATION_STATUSES)),
     )
     peers = (await db.execute(peer_stmt)).scalars().all()
 
@@ -71,6 +74,13 @@ async def scan_capacity_bottlenecks_for_order(
             b0, b1 = p.start_date, _cfg_window_end(p)
             if _ranges_overlap(a0, a1, b0, b1):
                 hits += 1
+                this_min = float(cfg.planned_qty or 0) * float(getattr(cfg, "smv_per_piece", None) or 0)
+                peer_min = float(p.planned_qty or 0) * float(getattr(p, "smv_per_piece", None) or 0)
+                msg = "Another order overlaps this line in the same window."
+                if this_min > 0 or peer_min > 0:
+                    msg += f" Approx committed SMV-minutes (this={round(this_min, 2)}, peer={round(peer_min, 2)})."
+                else:
+                    msg += " (SMV per piece not set — date overlap only.)"
                 bottlenecks.append(
                     {
                         "line_id": cfg.line_id,
@@ -81,8 +91,10 @@ async def scan_capacity_bottlenecks_for_order(
                         "window_end": a1.isoformat(),
                         "peer_window_start": b0.isoformat(),
                         "peer_window_end": b1.isoformat(),
+                        "this_reservation_status": getattr(cfg, "reservation_status", None),
+                        "peer_reservation_status": getattr(p, "reservation_status", None),
                         "severity_hint": "warning",
-                        "message": "Another order overlaps this line in the same window (date-range heuristic only).",
+                        "message": msg,
                     }
                 )
                 if len(bottlenecks) >= 40:

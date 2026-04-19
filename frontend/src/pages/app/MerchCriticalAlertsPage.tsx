@@ -11,6 +11,8 @@ import {
 import { RefreshCw, Play, X, LayoutGrid, List, Bookmark } from "lucide-react";
 import { logApiError } from "@/utils/logApiError";
 import { MerchAlertCard } from "@/components/merch/MerchAlertCard";
+import { MerchAlertEvidence } from "@/components/merch/MerchAlertEvidence";
+import { merchAlertPrimaryHref } from "@/utils/merchAlertLinks";
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   critical: { bg: "bg-status-danger-subtle", text: "text-status-danger-foreground", label: "Critical" },
@@ -273,7 +275,12 @@ export function MerchCriticalAlertsPage() {
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Critical Alerts</h1>
           <p className="text-sm text-text-muted mt-0.5">
-            Overdue and at-risk merchandising follow-ups. Alerts are updated every 15 minutes.
+            Overdue and at-risk merchandising follow-ups. Background scan runs about every 15 minutes.
+            {summary?.last_completed_scan_at ? (
+              <span className="block mt-1 text-xs">
+                Last scan: {new Date(summary.last_completed_scan_at).toLocaleString()}
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -651,6 +658,18 @@ export function MerchCriticalAlertsPage() {
                           <p className="text-sm text-text-secondary">{drawerAlert.recommended_action}</p>
                         </div>
                       )}
+                      {(() => {
+                        const href = merchAlertPrimaryHref(drawerAlert);
+                        return href ? (
+                          <div>
+                            <p className="text-xs font-medium text-text-muted uppercase">Open record</p>
+                            <Link to={href} className="text-sm text-brand-primary hover:underline">
+                              Go to related screen
+                            </Link>
+                          </div>
+                        ) : null;
+                      })()}
+                      <MerchAlertEvidence evidence={drawerAlert.evidence_json} />
                       <div className="pt-2 border-t border-border">
                         <p className="text-xs font-medium text-text-muted uppercase mb-2">Update status</p>
                         <div className="flex flex-wrap gap-2">

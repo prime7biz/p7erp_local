@@ -6,6 +6,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.money import format_money, format_rate, parse_money
 from app.common.pagination import clamp_page_size, safe_page, total_pages
 from app.common.codegen import next_tenant_code
 from app.common.db_errors import flush_handling_duplicate_document_code
@@ -168,10 +169,10 @@ def _serialize_inquiry(
     season=inquiry.season,
     department=inquiry.department,
     quantity=inquiry.quantity,
-    target_price=inquiry.target_price,
+    target_price=format_money(inquiry.target_price),
     target_price_currency=inquiry.target_price_currency,
     currency=inquiry.currency,
-    exchange_rate=inquiry.exchange_rate,
+    exchange_rate=format_rate(inquiry.exchange_rate),
     expected_delivery_date=inquiry.expected_delivery_date.isoformat() if inquiry.expected_delivery_date else None,
     shipping_term=inquiry.shipping_term,
     commission_mode=inquiry.commission_mode,
@@ -440,10 +441,10 @@ async def create_inquiry(
     season=body.season,
     department=body.department,
     quantity=body.quantity,
-    target_price=body.target_price,
+    target_price=parse_money(body.target_price),
     target_price_currency=body.target_price_currency,
     currency=body.currency,
-    exchange_rate=body.exchange_rate,
+    exchange_rate=parse_money(body.exchange_rate),
     expected_delivery_date=body.expected_delivery_date,
     shipping_term=body.shipping_term,
     commission_mode=commission_mode,
@@ -538,13 +539,13 @@ async def update_inquiry(
   if body.quantity is not None:
     inquiry.quantity = body.quantity
   if body.target_price is not None:
-    inquiry.target_price = body.target_price
+    inquiry.target_price = parse_money(body.target_price)
   if body.target_price_currency is not None:
     inquiry.target_price_currency = body.target_price_currency
   if body.currency is not None:
     inquiry.currency = body.currency
   if body.exchange_rate is not None:
-    inquiry.exchange_rate = body.exchange_rate
+    inquiry.exchange_rate = parse_money(body.exchange_rate)
   if body.expected_delivery_date is not None:
     inquiry.expected_delivery_date = body.expected_delivery_date
   if body.shipping_term is not None:

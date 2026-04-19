@@ -1,11 +1,8 @@
-"""Merchandising schema namespace.
+"""Merchandising schema namespace — re-exports from split routers."""
 
-This module centralizes schema access for incremental router splitting.
-Current classes are re-exported from the legacy router to avoid API breakage
-while route handlers are moved domain-by-domain.
-"""
+from __future__ import annotations
 
-from app.modules.merch.router import (
+from app.modules.merch.routers.alerts import (
     AlertAssignBody,
     AlertCommentBody,
     AlertDefinitionOut,
@@ -15,12 +12,21 @@ from app.modules.merch.router import (
     AlertSavedViewBody,
     AlertSnoozeBody,
     AlertStatusUpdateBody,
+)
+from app.modules.merch.routers.classic_boms import (
     BomCreate,
     BomItemBody,
     BomUpdate,
+    GeneratePOFromBOMBody,
+)
+from app.modules.merch.routers.consumption import (
     ConsumptionPlanCreate,
     ConsumptionPlanItemBody,
     ConsumptionPlanUpdate,
+    MaterialRequirementLineOut,
+    MaterialRequirementOut,
+)
+from app.modules.merch.routers.consumption_recon import (
     ConsumptionReconCategoryBreakdown,
     ConsumptionReconDashboardOrderRow,
     ConsumptionReconDashboardResponse,
@@ -33,26 +39,15 @@ from app.modules.merch.router import (
     ConsumptionReconSummaryOut,
     ConsumptionReconTrendPoint,
     ConsumptionReconTrendsResponse,
-    FollowupActionCommentCreate,
-    FollowupActionCommentOut,
-    FollowupActionTemplateCreate,
-    FollowupActionTemplateOut,
-    FollowupActionTemplateUpdate,
-    FollowupCreate,
-    FollowupSummaryOut,
-    FollowupUpdate,
-    GeneratePOFromBOMBody,
-    MaterialRequirementLineOut,
-    MaterialRequirementOut,
-    OrderFollowupActionCreate,
-    OrderFollowupActionOut,
-    OrderFollowupActionUpdate,
+)
+from app.modules.merch.routers.followups import FollowupCreate, FollowupUpdate
+from app.modules.merch.routers.pipeline import (
     PipelineAnalyticsBucket,
     PipelineAnalyticsResponse,
     PipelineItemOut,
     PipelineStageOut,
-    RejectionLogCreate,
-    RejectionLogEntryOut,
+)
+from app.modules.merch.routers.styles import (
     StyleColorwayBody,
     StyleComponentBody,
     StyleCreate,
@@ -62,7 +57,22 @@ from app.modules.merch.router import (
     StyleSummaryResponse,
     StyleTimelineEvent,
     StyleUpdate,
+)
+from app.modules.merch.routers.tna import (
+    FollowupActionCommentCreate,
+    FollowupActionCommentOut,
+    FollowupActionTemplateCreate,
+    FollowupActionTemplateOut,
+    FollowupActionTemplateUpdate,
+    FollowupSummaryOut,
+    OrderFollowupActionCreate,
+    OrderFollowupActionOut,
+    OrderFollowupActionUpdate,
+    RejectionLogCreate,
+    RejectionLogEntryOut,
     TnaGenerateRequest,
+)
+from app.modules.merch.routers.wastage import (
     WastageManagementSummaryOut,
     WastageOrderDetailBomLine,
     WastageOrderDetailOut,

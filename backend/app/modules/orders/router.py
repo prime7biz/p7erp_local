@@ -22,6 +22,7 @@ from app.models import (
   Customer,
   CustomerIntermediary,
   FollowupActionTemplate,
+  GarmentStyle,
   Item,
   Order,
   OrderAmendment,
@@ -47,14 +48,17 @@ from app.modules.orders.commercial_snapshot_service import (
   build_commercial_alignment_payload,
   build_order_commercial_snapshot_at_conversion,
 )
+from app.modules.orders.order_list_summary_service import build_order_list_summaries
 from app.modules.orders.schemas import (
   OrderCommercialAlignmentOut,
   OrderCreate,
+  OrderFinancialStatusOut,
   OrderListPageResponse,
   OrderMilestoneStepOut,
   OrderMilestonesOut,
   OrderPipelineSettingsPatch,
   OrderResponse,
+  OrderSewingLineSummaryOut,
   OrderUpdate,
   PromiseCheckLine,
   PromiseCheckOut,
@@ -82,6 +86,25 @@ async def _next_order_code(db: AsyncSession, tenant_id: int) -> str:
   )
 
 
+async def _validate_garment_style_id(db: AsyncSession, tenant_id: int, style_id: int) -> None:
+  gs = await db.get(GarmentStyle, style_id)
+  if not gs or gs.tenant_id != tenant_id:
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Garment style not found")
+
+
+async def _resolve_style_id_from_style_ref(db: AsyncSession, tenant_id: int, style_ref: str | None) -> int | None:
+  ref = (style_ref or "").strip()
+  if not ref:
+    return None
+  r = await db.execute(
+    select(GarmentStyle.id).where(
+      GarmentStyle.tenant_id == tenant_id,
+      func.lower(func.trim(GarmentStyle.style_code)) == ref.lower(),
+    ).limit(1)
+  )
+  return r.scalar_one_or_none()
+
+
 def _pipeline_na_as_list(order: Order) -> list[str] | None:
   raw = getattr(order, "pipeline_na_steps", None)
   if raw is None:
@@ -100,6 +123,8 @@ def _to_order_response(
   tenant: Tenant | None = None,
   customer_name: str | None = None,
   quotation_code: str | None = None,
+  financial_status: OrderFinancialStatusOut | None = None,
+  sewing_line_summary: OrderSewingLineSummaryOut | None = None,
 ) -> OrderResponse:
   commission_value = float(order.commission_value) if order.commission_value is not None else None
   snap = order.commercial_snapshot_json if isinstance(order.commercial_snapshot_json, dict) else None
@@ -115,6 +140,7 @@ def _to_order_response(
     customer_id=order.customer_id,
     quotation_id=order.quotation_id,
     order_code=order.order_code,
+    style_id=getattr(order, "style_id", None),
     style_ref=order.style_ref,
     customer_intermediary_id=order.customer_intermediary_id,
     shipping_term=order.shipping_term,
@@ -138,6 +164,8 @@ def _to_order_response(
     commercial_book_currency=book,
     customer_name=customer_name,
     quotation_code=quotation_code,
+    financial_status=financial_status,
+    sewing_line_summary=sewing_line_summary,
   )
 
 
@@ -310,6 +338,11 @@ async def list_orders(
       if oid is not None:
         layout_counts[int(oid)] = int(c)
 
+  fin_by_id: dict[int, OrderFinancialStatusOut] = {}
+  sew_by_id: dict[int, OrderSewingLineSummaryOut] = {}
+  if rows:
+    fin_by_id, sew_by_id = await build_order_list_summaries(db, tenant_id=tenant.id, orders=list(rows))
+
   return [
     _to_order_response(
       r,
@@ -320,6 +353,8 @@ async def list_orders(
       if ai_indicators
       else None,
       tenant=tenant,
+      financial_status=fin_by_id.get(r.id),
+      sewing_line_summary=sew_by_id.get(r.id),
     )
     for r in rows
   ]
@@ -398,6 +433,11 @@ async def list_orders_paginated(
       if oid is not None:
         layout_counts[int(oid)] = int(c)
 
+  fin_by_id: dict[int, OrderFinancialStatusOut] = {}
+  sew_by_id: dict[int, OrderSewingLineSummaryOut] = {}
+  if orders_only:
+    fin_by_id, sew_by_id = await build_order_list_summaries(db, tenant_id=tenant.id, orders=orders_only)
+
   items: list[OrderResponse] = []
   for order, cust_name, quot_code in row_tuples:
     items.append(
@@ -412,6 +452,8 @@ async def list_orders_paginated(
         tenant=tenant,
         customer_name=cust_name,
         quotation_code=quot_code,
+        financial_status=fin_by_id.get(order.id),
+        sewing_line_summary=sew_by_id.get(order.id),
       )
     )
 
@@ -438,6 +480,7 @@ async def create_order(
   if not customer or customer.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Customer not found")
 
+  quotation: Quotation | None = None
   if body.quotation_id is not None:
     quotation = await db.get(Quotation, body.quotation_id)
     if not quotation or quotation.tenant_id != tenant.id:
@@ -458,6 +501,18 @@ async def create_order(
       customer_intermediary_id=body.customer_intermediary_id,
     )
 
+  resolved_style_id: int | None = None
+  if body.style_id is not None:
+    await _validate_garment_style_id(db, tenant.id, body.style_id)
+    resolved_style_id = body.style_id
+  elif quotation is not None and quotation.style_id:
+    resolved_style_id = quotation.style_id
+  else:
+    style_ref_for_lookup = body.style_ref
+    if quotation is not None and not (style_ref_for_lookup or "").strip():
+      style_ref_for_lookup = quotation.style_ref
+    resolved_style_id = await _resolve_style_id_from_style_ref(db, tenant.id, style_ref_for_lookup)
+
   code = await _next_order_code(db, tenant.id)
   status_value = validate_transition(
     ORDER_TRANSITIONS,
@@ -471,6 +526,7 @@ async def create_order(
     customer_id=body.customer_id,
     quotation_id=body.quotation_id,
     order_code=code,
+    style_id=resolved_style_id,
     style_ref=body.style_ref,
     customer_intermediary_id=body.customer_intermediary_id,
     shipping_term=body.shipping_term,
@@ -484,7 +540,7 @@ async def create_order(
     remarks=body.remarks,
   )
   db.add(order)
-  if body.quotation_id is not None:
+  if quotation is not None:
     quotation.status = validate_transition(
       QUOTATION_TRANSITIONS,
       quotation.status,
@@ -592,7 +648,7 @@ async def get_order_materials(
   db: AsyncSession = Depends(get_db),
 ):
   """PrimeX-style alias: same payload as GET /api/v1/merch/orders/{order_id}/material-requirement."""
-  from app.modules.merch.router import get_order_material_requirement
+  from app.modules.merch.routers.consumption import get_order_material_requirement
 
   return await get_order_material_requirement(order_id, tenant, user, db)
 
@@ -720,8 +776,13 @@ async def update_order(
       },
     )
 
+  if body.style_id is not None:
+    await _validate_garment_style_id(db, tenant.id, body.style_id)
+    order.style_id = body.style_id
   if body.style_ref is not None:
     order.style_ref = body.style_ref
+    if body.style_id is None:
+      order.style_id = await _resolve_style_id_from_style_ref(db, tenant.id, body.style_ref)
   if body.customer_intermediary_id is not None:
     await _validate_customer_intermediary(
       db,
@@ -818,6 +879,7 @@ async def create_order_from_quotation(
     customer_id=quotation.customer_id,
     quotation_id=quotation.id,
     order_code=code,
+    style_id=quotation.style_id,
     style_ref=quotation.style_ref,
     customer_intermediary_id=quotation.customer_intermediary_id,
     shipping_term=quotation.shipping_term,

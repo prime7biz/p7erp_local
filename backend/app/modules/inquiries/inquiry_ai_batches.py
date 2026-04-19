@@ -11,6 +11,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.money import format_money, format_rate, parse_money
 from app.config import get_settings
 from app.models import Customer, CustomerIntermediary, GarmentStyle, Inquiry, Tenant
 from app.models.inquiry_ai_suggestion import InquiryAiSuggestionBatch, InquiryAiSuggestionItem
@@ -128,10 +129,10 @@ def inquiry_snapshot_for_field(inquiry: Inquiry, field_key: str) -> str:
         "season": inquiry.season or "",
         "department": inquiry.department or "",
         "quantity": str(inquiry.quantity) if inquiry.quantity is not None else "",
-        "target_price": inquiry.target_price or "",
+        "target_price": format_money(inquiry.target_price) or "",
         "target_price_currency": inquiry.target_price_currency or "",
         "currency": inquiry.currency or "",
-        "exchange_rate": inquiry.exchange_rate or "",
+        "exchange_rate": format_rate(inquiry.exchange_rate) or "",
         "expected_delivery_date": inquiry.expected_delivery_date.isoformat() if inquiry.expected_delivery_date else "",
         "shipping_term": inquiry.shipping_term or "",
         "commission_mode": inquiry.commission_mode or "",
@@ -164,13 +165,13 @@ def accumulate_inquiry_update(field_key: str, raw: str | None, acc: dict[str, An
         except (TypeError, ValueError):
             pass
     elif field_key == "target_price":
-        acc["target_price"] = _clean_str(v, 32)
+        acc["target_price"] = parse_money(v)
     elif field_key == "target_price_currency":
         acc["target_price_currency"] = v.upper()[:10] if v else None
     elif field_key == "currency":
         acc["currency"] = v.upper()[:8] if v else None
     elif field_key == "exchange_rate":
-        acc["exchange_rate"] = _clean_str(v, 32)
+        acc["exchange_rate"] = parse_money(v)
     elif field_key == "expected_delivery_date":
         if not v:
             acc["expected_delivery_date"] = None

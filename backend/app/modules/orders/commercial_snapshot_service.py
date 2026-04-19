@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from app.common.money import format_money, format_pct, format_rate
 from app.models import Order, Quotation
 from app.modules.orders.commercial_fields import is_quotation_commercial_locked
 from app.modules.orders.commercial_numeraire import resolve_commercial_book_currency
@@ -18,12 +19,12 @@ def quotation_commercial_header_dict(q: Quotation) -> dict[str, Any]:
     "status": q.status,
     "document_currency": q.currency,
     "target_price_currency": q.target_price_currency,
-    "target_price": q.target_price,
-    "exchange_rate": q.exchange_rate,
-    "quoted_price": q.quoted_price,
-    "total_amount": q.total_amount,
-    "total_cost": q.total_cost,
-    "profit_percentage": q.profit_percentage,
+    "target_price": format_money(q.target_price),
+    "exchange_rate": format_rate(q.exchange_rate),
+    "quoted_price": format_money(q.quoted_price),
+    "total_amount": format_money(q.total_amount),
+    "total_cost": format_money(q.total_cost),
+    "profit_percentage": format_pct(q.profit_percentage),
     "projected_quantity": q.projected_quantity,
     "projected_delivery_date": q.projected_delivery_date.isoformat() if q.projected_delivery_date else None,
     "quotation_date": q.quotation_date.isoformat() if q.quotation_date else None,

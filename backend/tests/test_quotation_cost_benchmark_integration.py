@@ -12,6 +12,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.common.auth import get_current_user
+from app.common.money import parse_money
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db
@@ -273,7 +274,7 @@ async def test_cost_benchmark_does_not_mutate_quotation(db_session_integration):
     tenant, user, q = await _seed_quote(db)
     for i in range(3):
         await _add_peer(db, tenant, q.customer_id, f"{i}{uuid.uuid4().hex[:6]}")
-    before_tc = q.total_cost
+    before_tc = parse_money(q.total_cost)
 
     async def override_db():
         yield db
@@ -297,7 +298,7 @@ async def test_cost_benchmark_does_not_mutate_quotation(db_session_integration):
             )
         assert r.status_code == 200
         await db.refresh(q)
-        assert q.total_cost == before_tc
+        assert parse_money(q.total_cost) == before_tc
     finally:
         app.dependency_overrides.clear()
 

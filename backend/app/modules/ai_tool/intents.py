@@ -18,7 +18,21 @@ def detect_intent(prompt: str) -> IntentResult:
     action_keywords = {"approve", "post", "create", "update", "delete", "execute", "run payment", "submit", "add holiday", "import holiday"}
     report_verb_keywords = {"generate", "create", "build", "prepare"}
     forecast_keywords = {"forecast", "projection", "project", "trend prediction", "outlook", "shortfall", "delay risk"}
-    report_keywords = {"report", "summary report", "executive summary", "insight report"}
+    report_keywords = {
+        "report",
+        "summary report",
+        "executive summary",
+        "insight report",
+        "monthly report",
+        "quarterly report",
+        "annual report",
+        "white paper",
+        "deep dive",
+        "root cause",
+        "trend narrative",
+        "extended analysis",
+        "comprehensive analysis",
+    }
     search_keywords = {
         "search",
         "find",
@@ -47,7 +61,18 @@ def detect_intent(prompt: str) -> IntentResult:
         "calendar",
         "next holiday",
     }
-    summary_keywords = {"summary", "snapshot", "dashboard", "production issues", "inventory", "finance"}
+    summary_keywords = {
+        "summary",
+        "snapshot",
+        "dashboard",
+        "production issues",
+        "inventory",
+        "finance",
+        "system health",
+        "health check",
+        "status of the system",
+        "ops status",
+    }
     help_keywords = {
         "help",
         "how to",
@@ -91,6 +116,12 @@ def detect_intent(prompt: str) -> IntentResult:
         "delay analysis",
         "order risk",
         "inventory variance",
+        "bottleneck",
+        "bottlenecks",
+        "throughput analysis",
+        "capacity analysis",
+        "what-if",
+        "what if",
     }
     if any(k in text for k in analysis_keywords):
         return IntentResult(intent="analysis_request", confidence=0.85, reason="Structured analysis keyword detected")

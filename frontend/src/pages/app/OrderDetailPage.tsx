@@ -14,6 +14,7 @@ import { OrderAiAuditHistory } from "@/components/orders/OrderAiAuditHistory";
 import { PlanningGroundingCard } from "@/components/orders/PlanningGroundingCard";
 import { CommercialAlignmentCard } from "@/components/orders/CommercialAlignmentCard";
 import { ChangeRequestPanel } from "@/components/orders/ChangeRequestPanel";
+import { CommercialTimelineCard } from "@/components/orders/CommercialTimelineCard";
 import { ORDER_PROTECTED_FIELD_DEFS } from "@/lib/commercialChangeFields";
 import {
   getOrderStatusChoices,
@@ -55,6 +56,8 @@ export function OrderDetailPage() {
   const styleImageUrl = useSecureImage(item?.style_image_url);
   const orderAi = useOrderAi();
   const isTenantAdmin = (me?.role_name || "").toLowerCase() === "admin";
+  const featureFlags = me?.feature_flags as Record<string, boolean> | undefined;
+  const controlTowerOn = featureFlags?.control_tower_enabled === true;
 
   const orderAiFormSnapshot = useMemo(
     () =>
@@ -179,6 +182,16 @@ export function OrderDetailPage() {
                 to: `/app/production/planning?order_id=${item.id}`,
                 hint: "Manufacturing planning for this order",
               },
+              ...(controlTowerOn
+                ? [
+                    {
+                      label: "Control Tower",
+                      value: "Open",
+                      to: `/app/operations/control-tower?focus_order=${item.id}`,
+                      hint: "Cross-functional execution snapshot",
+                    },
+                  ]
+                : []),
             ]}
           />
         }
@@ -415,6 +428,11 @@ export function OrderDetailPage() {
               {item.style_ref ?? "—"}
             </div>
             <div>
+              <span className="font-medium">Style ID:</span>{" "}
+              {item.style_id != null ? String(item.style_id) : "—"}{" "}
+              <span className="text-xs text-text-muted">(authoritative link to garment style)</span>
+            </div>
+            <div>
               <span className="font-medium">Style name:</span>{" "}
               {item.style_name ?? "—"}
             </div>
@@ -549,6 +567,8 @@ export function OrderDetailPage() {
 
       <CommercialAlignmentCard orderId={item.id} quotationId={item.quotation_id} />
       <PlanningGroundingCard orderId={item.id} />
+
+      <CommercialTimelineCard entityType="order" entityId={item.id} />
 
       <ChangeRequestPanel
         entityType="order"

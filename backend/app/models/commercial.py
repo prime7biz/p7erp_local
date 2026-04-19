@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -34,6 +34,9 @@ class MasterContract(Base):
     )  # SALES_CONTRACT | EXPORT_LC
     reference: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
+    lc_number: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    advising_bank: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    advised_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     contract_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -89,6 +92,9 @@ class ProformaInvoice(Base):
     )
     master_contract_id: Mapped[int | None] = mapped_column(
         ForeignKey("master_contracts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    purchase_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True, index=True
     )
     reference: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
@@ -195,6 +201,33 @@ class BtbLc(Base):
     maturity_amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
     exchange_rate_to_base: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
     base_currency_amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+
+class BtbMaturityTranche(Base):
+    """Installment / tranche maturity under a BTB LC (multi-due-date ladder)."""
+
+    __tablename__ = "btb_maturity_tranches"
+    __table_args__ = (UniqueConstraint("btb_lc_id", "tranche_no", name="uq_btb_maturity_tranches_lc_tranche"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    btb_lc_id: Mapped[int] = mapped_column(ForeignKey("btb_lcs.id", ondelete="CASCADE"), nullable=False, index=True)
+    tranche_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    maturity_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="UPCOMING", index=True)
+    payment_voucher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

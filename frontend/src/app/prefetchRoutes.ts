@@ -51,6 +51,16 @@ const prefetchRules: PrefetchRule[] = [
     load: () => import("@/pages/app/production/ProductionSetupPage"),
   },
   {
+    key: "operations-control-tower",
+    matches: (href) => href.startsWith("/app/operations/control-tower"),
+    load: () => import("@/pages/app/operations/ControlTowerPage"),
+  },
+  {
+    key: "merch-control-tower",
+    matches: (href) => href.startsWith("/app/merchandising/control-tower"),
+    load: () => import("@/pages/app/MerchControlTowerPage"),
+  },
+  {
     key: "reports-module",
     matches: (href) => href.startsWith("/app/reports/"),
     load: () => import("@/pages/app/ReportsOverviewPage"),

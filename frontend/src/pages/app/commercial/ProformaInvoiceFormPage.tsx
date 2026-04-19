@@ -9,6 +9,7 @@ import {
   type OrderResponse,
   type CustomerResponse,
   type BankAccountResponse,
+  type PurchaseOrderResponse,
 } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 
@@ -42,6 +43,7 @@ const defaultForm = (): FormState => ({
   direction: "EXPORT",
   vendor_id: undefined,
   master_contract_id: undefined,
+  purchase_order_id: undefined,
   reference: "",
   status: "DRAFT",
   invoice_date: "",
@@ -84,6 +86,8 @@ export function ProformaInvoiceFormPage() {
   const [bankAccounts, setBankAccounts] = useState<BankAccountResponse[]>([]);
   const [vendors, setVendors] = useState<VendorResponse[]>([]);
   const [masterContracts, setMasterContracts] = useState<MasterContractRow[]>([]);
+  const [issuedBlockedOrderIds, setIssuedBlockedOrderIds] = useState<number[]>([]);
+  const [vendorPurchaseOrders, setVendorPurchaseOrders] = useState<PurchaseOrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [issuing, setIssuing] = useState(false);
@@ -95,12 +99,28 @@ export function ProformaInvoiceFormPage() {
     [orders, form.order_ids]
   );
 
+  const blockedOrderSet = useMemo(() => new Set(issuedBlockedOrderIds), [issuedBlockedOrderIds]);
+
+  const ordersForExportPicker = useMemo(() => {
+    if (form.direction !== "EXPORT") return orders;
+    return orders.filter(
+      (o) => !blockedOrderSet.has(o.id) || form.order_ids.includes(o.id)
+    );
+  }, [orders, form.direction, form.order_ids, blockedOrderSet]);
+
+  const importFlowIncomplete =
+    form.direction === "IMPORT" &&
+    (!form.vendor_id || !form.master_contract_id || !form.purchase_order_id);
+  const exportFlowIncomplete = form.direction === "EXPORT" && form.order_ids.length === 0;
+  const saveIssueBlocked = importFlowIncomplete || exportFlowIncomplete;
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError("");
       try {
-        const [ordersList, customersList, banksList, vendorsList, masterContractsList] = await Promise.all([
+        const [ordersList, customersList, banksList, vendorsList, masterContractsList, blockedExport] =
+          await Promise.all([
           api.listOrders({ limit: 500, offset: 0 }),
           api.listCustomers(),
           api.listBankAccounts().catch((e) => {
@@ -115,7 +135,12 @@ export function ProformaInvoiceFormPage() {
             logApiError("ProformaInvoiceFormPage.listMasterContracts", e);
             return [];
           }),
+          api.getIssuedExportProformaOrderIds().catch((e) => {
+            logApiError("ProformaInvoiceFormPage.getIssuedExportProformaOrderIds", e);
+            return { order_ids: [] as number[] };
+          }),
         ]);
+        setIssuedBlockedOrderIds(blockedExport.order_ids ?? []);
         setOrders(ordersList);
         setCustomers(customersList);
         setBankAccounts(banksList);
@@ -129,6 +154,7 @@ export function ProformaInvoiceFormPage() {
             direction: (pi.direction as "EXPORT" | "IMPORT") ?? "EXPORT",
             vendor_id: (pi.vendor_id as number | undefined) ?? undefined,
             master_contract_id: (pi.master_contract_id as number | undefined) ?? undefined,
+            purchase_order_id: (pi.purchase_order_id as number | undefined) ?? undefined,
             reference: pi.reference ?? "",
             status: (pi.status as FormState["status"]) ?? "DRAFT",
             invoice_date: pi.invoice_date ?? "",
@@ -169,6 +195,32 @@ export function ProformaInvoiceFormPage() {
     };
     void load();
   }, [isEdit, numericId]);
+
+  useEffect(() => {
+    if (form.direction !== "IMPORT" || !form.vendor_id) {
+      setVendorPurchaseOrders([]);
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const rows = await api.listPurchaseOrders({
+          vendor_id: form.vendor_id ?? undefined,
+          exclude_po_linked_to_proforma: 1,
+          exclude_linked_to_proforma_invoice_id:
+            isEdit && numericId > 0 ? numericId : undefined,
+        });
+        if (!cancelled) setVendorPurchaseOrders(rows);
+      } catch (e) {
+        logApiError("ProformaInvoiceFormPage.listPurchaseOrders", e);
+        if (!cancelled) setVendorPurchaseOrders([]);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.direction, form.vendor_id, isEdit, numericId]);
 
   const toggleOrder = (orderId: number) => {
     setForm((prev) => ({
@@ -221,11 +273,9 @@ export function ProformaInvoiceFormPage() {
 
   const buildPayload = (): ProformaInvoiceCreate => {
     const terms = (form.terms_and_conditions ?? []).filter((t) => t.trim() !== "");
-    return {
+    const base: ProformaInvoiceCreate = {
       order_ids: form.order_ids,
       direction: form.direction,
-      vendor_id: form.vendor_id,
-      master_contract_id: form.master_contract_id,
       reference: form.reference || undefined,
       status: form.status || undefined,
       invoice_date: form.invoice_date || undefined,
@@ -255,17 +305,41 @@ export function ProformaInvoiceFormPage() {
       shipper_bank_address: form.shipper_bank_address || undefined,
       shipper_bank_swift: form.shipper_bank_swift || undefined,
     };
+    if (form.direction === "EXPORT") {
+      return {
+        ...base,
+        vendor_id: null,
+        master_contract_id: null,
+        purchase_order_id: null,
+      };
+    }
+    return {
+      ...base,
+      vendor_id: form.vendor_id ?? null,
+      master_contract_id: form.master_contract_id ?? null,
+      purchase_order_id: form.purchase_order_id ?? null,
+    };
   };
 
   const handleSaveDraft = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (form.direction !== "IMPORT" && form.order_ids.length === 0) {
+    if (form.direction === "EXPORT" && form.order_ids.length === 0) {
       setError("Select at least one order.");
       return;
     }
-    if (form.direction === "IMPORT" && !form.vendor_id) {
-      setError("Select vendor for import proforma.");
-      return;
+    if (form.direction === "IMPORT") {
+      if (!form.vendor_id) {
+        setError("Select vendor for import proforma.");
+        return;
+      }
+      if (!form.master_contract_id) {
+        setError("Select master contract / LC for import proforma.");
+        return;
+      }
+      if (!form.purchase_order_id) {
+        setError("Select a purchase order for import proforma.");
+        return;
+      }
     }
     setSaving(true);
     setError("");
@@ -287,13 +361,23 @@ export function ProformaInvoiceFormPage() {
 
   const handleIssue = async () => {
     if (!isEdit) return;
-    if (form.direction !== "IMPORT" && form.order_ids.length === 0) {
+    if (form.direction === "EXPORT" && form.order_ids.length === 0) {
       setError("Select at least one order.");
       return;
     }
-    if (form.direction === "IMPORT" && !form.vendor_id) {
-      setError("Select vendor for import proforma.");
-      return;
+    if (form.direction === "IMPORT") {
+      if (!form.vendor_id) {
+        setError("Select vendor for import proforma.");
+        return;
+      }
+      if (!form.master_contract_id) {
+        setError("Select master contract / LC for import proforma.");
+        return;
+      }
+      if (!form.purchase_order_id) {
+        setError("Select a purchase order for import proforma.");
+        return;
+      }
     }
     setIssuing(true);
     setError("");
@@ -362,64 +446,104 @@ export function ProformaInvoiceFormPage() {
             <h2 className="text-base font-semibold text-text-primary">Flow linkage</h2>
             <p className="mt-0.5 text-xs text-text-muted">Define whether this PI is export (our PI) or import (vendor PI).</p>
           </div>
-          <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 lg:grid-cols-4">
             <div>
               <label className={labelClass}>Direction</label>
               <select
                 value={form.direction ?? "EXPORT"}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const next = e.target.value as "EXPORT" | "IMPORT";
                   setForm((prev) => ({
                     ...prev,
-                    direction: e.target.value as "EXPORT" | "IMPORT",
-                    order_ids: e.target.value === "IMPORT" ? [] : prev.order_ids,
-                  }))
-                }
+                    direction: next,
+                    order_ids: next === "IMPORT" ? [] : prev.order_ids,
+                    master_contract_id: next === "EXPORT" ? undefined : prev.master_contract_id,
+                    vendor_id: next === "EXPORT" ? undefined : prev.vendor_id,
+                    purchase_order_id: next === "EXPORT" ? undefined : prev.purchase_order_id,
+                  }));
+                }}
                 className={inputClass}
               >
                 <option value="EXPORT">EXPORT (Our PI to customer)</option>
                 <option value="IMPORT">IMPORT (Vendor PI to us)</option>
               </select>
             </div>
-            <div>
-              <label className={labelClass}>Master Contract / LC</label>
-              <select
-                value={form.master_contract_id ?? ""}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    master_contract_id: e.target.value ? Number(e.target.value) : undefined,
-                  }))
-                }
-                className={inputClass}
-              >
-                <option value="">Not linked</option>
-                {masterContracts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.reference || `#${c.id}`} ({c.contract_type || "—"})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Vendor (for IMPORT)</label>
-              <select
-                value={form.vendor_id ?? ""}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    vendor_id: e.target.value ? Number(e.target.value) : undefined,
-                  }))
-                }
-                className={inputClass}
-              >
-                <option value="">Select vendor</option>
-                {vendors.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.vendor_code} - {v.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {form.direction === "IMPORT" ? (
+              <>
+                <div>
+                  <label className={labelClass}>Master Contract / LC (required)</label>
+                  <select
+                    value={form.master_contract_id ?? ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        master_contract_id: e.target.value ? Number(e.target.value) : undefined,
+                      }))
+                    }
+                    className={inputClass}
+                    required
+                  >
+                    <option value="">Select master contract</option>
+                    {masterContracts.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.reference || `#${c.id}`} ({c.contract_type || "—"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Vendor (required)</label>
+                  <select
+                    value={form.vendor_id ?? ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        vendor_id: e.target.value ? Number(e.target.value) : undefined,
+                        purchase_order_id: undefined,
+                      }))
+                    }
+                    className={inputClass}
+                    required
+                  >
+                    <option value="">Select vendor</option>
+                    {vendors.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.vendor_code} - {v.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Purchase order (required)</label>
+                  <select
+                    value={form.purchase_order_id ?? ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        purchase_order_id: e.target.value ? Number(e.target.value) : undefined,
+                      }))
+                    }
+                    className={inputClass}
+                    disabled={!form.vendor_id}
+                    required
+                  >
+                    <option value="">
+                      {form.vendor_id ? "Select purchase order" : "Select vendor first"}
+                    </option>
+                    {vendorPurchaseOrders.map((po) => (
+                      <option key={po.id} value={po.id}>
+                        {po.po_code}
+                        {po.source_order_id != null ? ` (order #${po.source_order_id})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            ) : (
+              <p className="md:col-span-3 rounded-lg border border-border-subtle bg-surface-subtle/50 px-3 py-2 text-xs text-text-muted">
+                Customer PI does not use a master contract here; link LC or sales contract after the buyer responds.
+              </p>
+            )}
           </div>
         </section>
 
@@ -430,12 +554,12 @@ export function ProformaInvoiceFormPage() {
             <p className="mt-0.5 text-xs text-text-muted">
               {form.direction === "IMPORT"
                 ? "For vendor PI this can stay empty, or link related orders if available."
-                : "Select at least one order to include in this proforma invoice."}
+                : "Select at least one order. Orders already on an issued customer PI are hidden unless selected on this draft."}
             </p>
           </div>
           <div className="p-5">
             <div className="grid max-h-52 grid-cols-1 gap-2 overflow-y-auto rounded-lg border border-border-subtle bg-surface-subtle/50 p-3">
-              {orders.map((o) => (
+              {(form.direction === "EXPORT" ? ordersForExportPicker : orders).map((o) => (
                 <label key={o.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-2 py-1.5 hover:bg-surface-raised">
                   <input
                     type="checkbox"
@@ -846,7 +970,7 @@ export function ProformaInvoiceFormPage() {
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-subtle/50 px-5 py-4">
           <button
             type="submit"
-            disabled={saving || form.order_ids.length === 0}
+            disabled={saving || saveIssueBlocked}
             className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-brand-primary-foreground shadow-sm hover:bg-brand-primary/90 disabled:opacity-70 focus:outline-none focus:ring-2 focus:ring-focus-ring focus:ring-offset-2"
           >
             <Save className="h-4 w-4" aria-hidden />
@@ -857,7 +981,7 @@ export function ProformaInvoiceFormPage() {
               <button
                 type="button"
                 onClick={handleIssue}
-                disabled={issuing || form.order_ids.length === 0}
+                disabled={issuing || saveIssueBlocked}
                 className="inline-flex items-center gap-2 rounded-xl border-2 border-status-success bg-status-success-subtle px-5 py-2.5 text-sm font-semibold text-status-success-foreground hover:bg-status-success-subtle disabled:opacity-70"
               >
                 <Send className="h-4 w-4" aria-hidden />

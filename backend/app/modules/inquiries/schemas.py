@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.common.money_schema import MoneyStrOpt, RateStrOpt
+
 
 class InquiryItemCreate(BaseModel):
   item_name: str | None = Field(None, max_length=255)
@@ -27,10 +29,10 @@ class InquiryCreate(BaseModel):
   season: str | None = Field(None, max_length=64)
   department: str | None = Field(None, max_length=64)
   quantity: int | None = Field(None, ge=0)
-  target_price: str | None = Field(None, max_length=32)
+  target_price: MoneyStrOpt = Field(None, max_length=32)
   target_price_currency: str | None = Field(None, max_length=10)
   currency: str | None = Field(None, max_length=8)
-  exchange_rate: str | None = Field(None, max_length=32)
+  exchange_rate: RateStrOpt = Field(None, max_length=32)
   expected_delivery_date: date | None = None
   shipping_term: str | None = Field(None, max_length=64)
   commission_mode: Literal["INCLUDE", "EXCLUDE"] | None = None
@@ -47,10 +49,10 @@ class InquiryUpdate(BaseModel):
   season: str | None = Field(None, max_length=64)
   department: str | None = Field(None, max_length=64)
   quantity: int | None = Field(None, ge=0)
-  target_price: str | None = Field(None, max_length=32)
+  target_price: MoneyStrOpt = Field(None, max_length=32)
   target_price_currency: str | None = Field(None, max_length=10)
   currency: str | None = Field(None, max_length=8)
-  exchange_rate: str | None = Field(None, max_length=32)
+  exchange_rate: RateStrOpt = Field(None, max_length=32)
   expected_delivery_date: date | None = None
   shipping_term: str | None = Field(None, max_length=64)
   commission_mode: Literal["INCLUDE", "EXCLUDE"] | None = None

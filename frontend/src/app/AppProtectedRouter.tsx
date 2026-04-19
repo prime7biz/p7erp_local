@@ -29,6 +29,9 @@ const TradeCaseDetailPage = lazy(() =>
 const TradeDashboardPage = lazy(() =>
   import("@/pages/app/trade/TradeDashboardPage").then((m) => ({ default: m.TradeDashboardPage })),
 );
+const ControlTowerPage = lazy(() =>
+  import("@/pages/app/operations/ControlTowerPage").then((m) => ({ default: m.ControlTowerPage })),
+);
 const PartiesPage = lazy(() => import("@/pages/app/parties/PartiesPage").then((m) => ({ default: m.PartiesPage })));
 const DocumentFlowPage = lazy(() => import("@/pages/app/flow/DocumentFlowPage").then((m) => ({ default: m.DocumentFlowPage })));
 const CustomersPage = lazy(() => import("@/pages/app/CustomersPage").then((m) => ({ default: m.CustomersPage })));
@@ -57,6 +60,13 @@ const ConsumptionPlansPage = lazy(() =>
 );
 const FollowupPage = lazy(() => import("@/pages/app/FollowupPage").then((m) => ({ default: m.FollowupPage })));
 const MerchPipelinePage = lazy(() => import("@/pages/app/MerchPipelinePage").then((m) => ({ default: m.MerchPipelinePage })));
+const MerchControlTowerPage = lazy(() =>
+  import("@/pages/app/MerchControlTowerPage").then((m) => ({ default: m.MerchControlTowerPage })),
+);
+const MerchSamplesPage = lazy(() => import("@/pages/app/MerchSamplesPage").then((m) => ({ default: m.MerchSamplesPage })));
+const MerchSampleDetailPage = lazy(() =>
+  import("@/pages/app/MerchSampleDetailPage").then((m) => ({ default: m.MerchSampleDetailPage })),
+);
 const PipelineAnalyticsPage = lazy(() =>
   import("@/pages/app/PipelineAnalyticsPage").then((m) => ({ default: m.PipelineAnalyticsPage })),
 );
@@ -593,6 +603,9 @@ export function AppProtectedRouter() {
         <Route path="merchandising/styles/:id" element={<StyleDetailPage />} />
         <Route path="bom" element={<BomBuilderPage />} />
         <Route path="bom/orders" element={<ConsumptionPlansPage />} />
+        <Route path="merchandising/control-tower" element={<MerchControlTowerPage />} />
+        <Route path="merchandising/samples" element={<MerchSamplesPage />} />
+        <Route path="merchandising/samples/:id" element={<MerchSampleDetailPage />} />
         <Route path="merchandising/pipeline" element={<MerchPipelinePage />} />
         <Route path="merchandising/pipeline-analytics" element={<PipelineAnalyticsPage />} />
         <Route path="merchandising/alerts" element={<MerchCriticalAlertsPage />} />
@@ -673,6 +686,7 @@ export function AppProtectedRouter() {
         <Route path="commercial/proforma-invoices/new" element={<ProformaInvoiceFormPage />} />
         <Route path="commercial/proforma-invoices/:id/edit" element={<ProformaInvoiceFormPage />} />
         <Route path="commercial/btb-lcs" element={<BtbLcsPage />} />
+        <Route path="operations/control-tower" element={<ControlTowerPage />} />
         <Route element={<TradeFeatureRouteGuard />}>
           <Route path="trade/cases" element={<TradeCasesPage />} />
           <Route path="trade/cases/:caseId" element={<TradeCaseDetailPage />} />

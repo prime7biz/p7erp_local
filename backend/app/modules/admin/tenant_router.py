@@ -12,6 +12,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.storage import get_media_root
+from app.common.system_roles import SYSTEM_ROLE_SEEDS
 from app.database import get_db
 from app.models import AuditLog, Customer, Order, PlatformPlan, Role, Tenant, TenantSubscription, User
 from app.models.tenant import TenantType
@@ -168,8 +169,16 @@ async def create_tenant_admin(
     )
     db.add(tenant)
     await db.flush()
-    for name, display in (("admin", "Admin"), ("user", "User")):
-        db.add(Role(tenant_id=tenant.id, name=name, display_name=display, permissions={}))
+    for name, display in SYSTEM_ROLE_SEEDS:
+        db.add(
+            Role(
+                tenant_id=tenant.id,
+                name=name,
+                display_name=display,
+                permissions={},
+                is_system=True,
+            )
+        )
     await db.flush()
     await log_action(db, tenant_id=tenant.id, action="TENANT_CREATE", resource="tenant", details=f"by_admin={ctx.admin.id}")
     await log_admin_action(

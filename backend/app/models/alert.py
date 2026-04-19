@@ -76,6 +76,7 @@ class AlertInstance(Base):
     escalation_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reason_text: Mapped[str | None] = mapped_column(String(512), nullable=True)
     recommended_action: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    evidence_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now_utc)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now_utc, onupdate=_now_utc

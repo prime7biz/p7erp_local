@@ -6,6 +6,7 @@ Matches PrimeX structure for BOM/inventory/currency integration.
 from __future__ import annotations
 
 from datetime import datetime, date
+from decimal import Decimal
 
 from sqlalchemy import (
     String,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     UniqueConstraint,
+    Numeric,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -128,7 +130,7 @@ class Item(Base):
     stock_group_id: Mapped[int | None] = mapped_column(
         ForeignKey("stock_groups.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    default_cost: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    default_cost: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
@@ -173,7 +175,7 @@ class CurrencyExchangeRate(Base):
     )
     from_currency: Mapped[str] = mapped_column(String(10), nullable=False)
     to_currency: Mapped[str] = mapped_column(String(10), nullable=False)
-    exchange_rate: Mapped[str] = mapped_column(String(24), nullable=False)
+    exchange_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     effective_date: Mapped[date] = mapped_column(Date, nullable=False)
     source: Mapped[str] = mapped_column(String(50), nullable=False, default="manual")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -208,14 +210,16 @@ class QuotationMaterial(Base):
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    consumption_per_dozen: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    unit_price: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    amount_per_dozen: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    total_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    consumption_per_dozen: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6), nullable=False, default=Decimal("0")
+    )
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    amount_per_dozen: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     currency: Mapped[str] = mapped_column(String(10), nullable=False, default="USD")
-    exchange_rate: Mapped[str] = mapped_column(String(32), nullable=False, default="1")
-    base_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    local_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    exchange_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("1"))
+    base_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    local_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
@@ -241,17 +245,21 @@ class QuotationManufacturing(Base):
     serial_no: Mapped[int] = mapped_column(Integer, nullable=False)
     style_part: Mapped[str] = mapped_column(String(64), nullable=False)
     machines_required: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    production_per_hour: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    production_per_day: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    cost_per_machine: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    total_line_cost: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    cost_per_dozen: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    cm_per_piece: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    total_order_cost: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    production_per_hour: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6), nullable=False, default=Decimal("0")
+    )
+    production_per_day: Mapped[Decimal] = mapped_column(
+        Numeric(18, 6), nullable=False, default=Decimal("0")
+    )
+    cost_per_machine: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    total_line_cost: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    cost_per_dozen: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    cm_per_piece: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    total_order_cost: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     currency: Mapped[str] = mapped_column(String(10), nullable=False, default="USD")
-    exchange_rate: Mapped[str] = mapped_column(String(32), nullable=False, default="1")
-    base_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    local_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    exchange_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("1"))
+    base_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    local_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
@@ -276,17 +284,17 @@ class QuotationOtherCost(Base):
     )
     serial_no: Mapped[int] = mapped_column(Integer, nullable=False)
     cost_head: Mapped[str] = mapped_column(String(100), nullable=False)
-    percentage: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    total_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    percentage: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     cost_type: Mapped[str] = mapped_column(String(20), nullable=False, default="fixed")
-    value: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    value: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     based_on: Mapped[str] = mapped_column(String(30), nullable=False, default="subtotal")
-    calculated_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    calculated_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     currency: Mapped[str] = mapped_column(String(10), nullable=False, default="USD")
-    exchange_rate: Mapped[str] = mapped_column(String(32), nullable=False, default="1")
-    base_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    local_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    exchange_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("1"))
+    base_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    local_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
@@ -311,8 +319,8 @@ class QuotationSizeRatio(Base):
     )
     serial_no: Mapped[int] = mapped_column(Integer, nullable=False)
     size: Mapped[str] = mapped_column(String(10), nullable=False)
-    ratio_percentage: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    fabric_factor: Mapped[str] = mapped_column(String(32), nullable=False, default="1.0")
+    ratio_percentage: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
+    fabric_factor: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("1"))
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
@@ -337,8 +345,8 @@ class QuotationCostSummary(Base):
         ForeignKey("quotations.id", ondelete="CASCADE"), nullable=False, index=True
     )
     category_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    total_cost: Mapped[str] = mapped_column(String(32), nullable=False)
-    percentage_of_total: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    total_cost: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    percentage_of_total: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

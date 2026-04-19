@@ -1,6 +1,6 @@
 """Commercial API: export cases, proforma invoices, BTB LCs."""
 
-from datetime import date
+from datetime import date, datetime
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -9,6 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.common.auth import get_current_user
+from app.common.master_contract_workflow import (
+    LC_RECEIVED_OPERATIONAL_STATUSES,
+    MASTER_CONTRACT_STATUS_VALUES,
+)
 from app.common.codegen import next_tenant_code
 from app.modules.finance.auto_posting_service import (
     SYSTEM_BTB_DOCS_CREDIT,
@@ -53,6 +57,7 @@ from app.modules.commercial.schemas import (
     MasterContractCreate,
     MasterContractUpdate,
     MasterContractResponse,
+    IssuedExportProformaOrderIdsResponse,
     ProformaInvoiceCreate,
     ProformaInvoiceForPrint,
     ProformaInvoiceOrderForPrint,
@@ -87,6 +92,16 @@ def _utilization_percent(used: float | None, total: float | None) -> float | Non
     return round((used or 0) / total * 100, 2)
 
 
+def _normalize_master_contract_status(value: str | None) -> str:
+    s = (value or "DRAFT").strip().upper()
+    if s not in MASTER_CONTRACT_STATUS_VALUES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid master contract status: {value}",
+        )
+    return s
+
+
 def _master_contract_to_response(
     r: MasterContract,
     *,
@@ -101,6 +116,9 @@ def _master_contract_to_response(
         contract_type=r.contract_type,
         reference=r.reference,
         status=r.status,
+        lc_number=getattr(r, "lc_number", None),
+        advising_bank=getattr(r, "advising_bank", None),
+        advised_at=r.advised_at.isoformat() if getattr(r, "advised_at", None) else None,
         contract_date=r.contract_date.isoformat() if r.contract_date else None,
         amount=amount,
         btb_utilized_amount=utilized_amount,
@@ -165,8 +183,70 @@ async def _link_order_to_master_contract(
 
 
 def _order_ids_from_pi(pi: ProformaInvoice) -> list[int]:
-    if pi.proforma_invoice_orders:
-        return [pio.order_id for pio in sorted(pi.proforma_invoice_orders, key=lambda x: x.sort_order)]
+    if not pi.proforma_invoice_orders:
+        return []
+    return [pio.order_id for pio in sorted(pi.proforma_invoice_orders, key=lambda x: x.sort_order)]
+
+
+async def _validate_proforma_import_rules(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    direction: str,
+    vendor_id: int | None,
+    master_contract_id: int | None,
+    purchase_order_id: int | None,
+    exclude_pi_id: int | None = None,
+) -> None:
+    """IMPORT requires master contract + purchase order; EXPORT must not send purchase_order_id."""
+    d = (direction or "EXPORT").strip().upper()
+    if d == "EXPORT":
+        if purchase_order_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="purchase_order_id is not allowed for EXPORT proforma",
+            )
+        return
+    if d != "IMPORT":
+        return
+    if master_contract_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="master_contract_id is required for IMPORT proforma",
+        )
+    if purchase_order_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="purchase_order_id is required for IMPORT proforma",
+        )
+    if vendor_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="vendor_id is required for IMPORT proforma",
+        )
+    contract = await db.get(MasterContract, master_contract_id)
+    if not contract or contract.tenant_id != tenant_id:
+        raise HTTPException(status_code=400, detail="Master contract not found")
+    po = await db.get(PurchaseOrder, purchase_order_id)
+    if not po or po.tenant_id != tenant_id:
+        raise HTTPException(status_code=400, detail="Purchase order not found")
+    if po.vendor_id != vendor_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Purchase order does not belong to the selected vendor",
+        )
+    conflict_stmt = select(ProformaInvoice.id).where(
+        ProformaInvoice.tenant_id == tenant_id,
+        ProformaInvoice.purchase_order_id == purchase_order_id,
+    )
+    if exclude_pi_id is not None:
+        conflict_stmt = conflict_stmt.where(ProformaInvoice.id != exclude_pi_id)
+    conflict = await db.execute(conflict_stmt)
+    if conflict.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This purchase order is already linked to another proforma invoice",
+        )
 
 
 async def _sync_order_pipeline_from_proforma(
@@ -194,6 +274,7 @@ def _proforma_invoice_to_response(pi: ProformaInvoice) -> ProformaInvoiceRespons
         direction=pi.direction,
         vendor_id=pi.vendor_id,
         master_contract_id=pi.master_contract_id,
+        purchase_order_id=pi.purchase_order_id,
         invoice_date=pi.invoice_date.isoformat() if pi.invoice_date else None,
         amount=float(pi.amount) if pi.amount is not None else None,
         order_ids=order_ids,
@@ -561,7 +642,10 @@ async def create_master_contract(
         cost_center_id=body.cost_center_id,
         contract_type=(body.contract_type or "EXPORT_LC").strip().upper(),
         reference=body.reference,
-        status=body.status or "DRAFT",
+        status=_normalize_master_contract_status(body.status),
+        lc_number=(body.lc_number or "").strip() or None,
+        advising_bank=(body.advising_bank or "").strip() or None,
+        advised_at=body.advised_at,
         contract_date=body.contract_date,
         amount=body.amount,
         currency=body.currency,
@@ -607,10 +691,18 @@ async def update_master_contract(
     link_order_id = updates.pop("order_id", None) if link_requested else None
     if "contract_type" in updates and updates["contract_type"] is not None:
         updates["contract_type"] = str(updates["contract_type"]).strip().upper()
+    prev_status = (row.status or "").strip().upper()
     if "status" in updates and updates["status"] is not None:
-        updates["status"] = str(updates["status"]).strip().upper()
+        updates["status"] = _normalize_master_contract_status(str(updates["status"]))
+    if "lc_number" in updates and updates["lc_number"] is not None:
+        updates["lc_number"] = str(updates["lc_number"]).strip() or None
+    if "advising_bank" in updates and updates["advising_bank"] is not None:
+        updates["advising_bank"] = str(updates["advising_bank"]).strip() or None
     for key, value in updates.items():
         setattr(row, key, value)
+    new_status = (row.status or "").strip().upper()
+    if new_status in LC_RECEIVED_OPERATIONAL_STATUSES and new_status != prev_status and row.advised_at is None:
+        row.advised_at = datetime.utcnow()
     await _ensure_master_contract_cost_center(db, row)
     await _recompute_master_contract_utilization(db, row.id, tenant.id)
     await db.flush()
@@ -655,6 +747,34 @@ async def list_proforma_invoices(
     result = await db.execute(stmt)
     rows = result.scalars().all()
     return [_proforma_invoice_to_response(r) for r in rows]
+
+
+@router.get(
+    "/proforma-invoices/issued-export-order-ids",
+    response_model=IssuedExportProformaOrderIdsResponse,
+    tags=["proforma-invoices"],
+)
+async def list_issued_export_proforma_order_ids(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Order IDs already linked to an ISSUED EXPORT (customer) proforma — exclude from new PIs."""
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    stmt = (
+        select(ProformaInvoiceOrder.order_id)
+        .join(ProformaInvoice, ProformaInvoice.id == ProformaInvoiceOrder.proforma_invoice_id)
+        .where(
+            ProformaInvoice.tenant_id == tenant.id,
+            ProformaInvoice.direction == "EXPORT",
+            ProformaInvoice.status == "ISSUED",
+        )
+        .distinct()
+    )
+    result = await db.execute(stmt)
+    ids = sorted({int(r[0]) for r in result.all()})
+    return IssuedExportProformaOrderIdsResponse(order_ids=ids)
 
 
 @router.get(
@@ -722,6 +842,15 @@ async def create_proforma_invoice(
         vendor = await db.get(Vendor, body.vendor_id)
         if not vendor or vendor.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail="Vendor not found")
+    await _validate_proforma_import_rules(
+        db,
+        tenant_id=tenant.id,
+        direction=direction,
+        vendor_id=body.vendor_id,
+        master_contract_id=body.master_contract_id,
+        purchase_order_id=body.purchase_order_id,
+        exclude_pi_id=None,
+    )
     if body.master_contract_id is not None:
         contract = await db.get(MasterContract, body.master_contract_id)
         if not contract or contract.tenant_id != tenant.id:
@@ -732,6 +861,7 @@ async def create_proforma_invoice(
         direction=direction,
         vendor_id=body.vendor_id,
         master_contract_id=body.master_contract_id,
+        purchase_order_id=body.purchase_order_id,
         reference=body.reference,
         status=body.status or "DRAFT",
         invoice_date=body.invoice_date,
@@ -830,6 +960,10 @@ async def update_proforma_invoice(
         contract = await db.get(MasterContract, int(update_data["master_contract_id"]))
         if not contract or contract.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail="Master contract not found")
+    if "purchase_order_id" in update_data and update_data["purchase_order_id"] is not None:
+        po = await db.get(PurchaseOrder, int(update_data["purchase_order_id"]))
+        if not po or po.tenant_id != tenant.id:
+            raise HTTPException(status_code=400, detail="Purchase order not found")
     for key, value in update_data.items():
         setattr(row, key, value)
     if order_ids is not None:
@@ -864,6 +998,20 @@ async def update_proforma_invoice(
     )
     result2 = await db.execute(stmt2)
     row = result2.scalar_one()
+    await _validate_proforma_import_rules(
+        db,
+        tenant_id=tenant.id,
+        direction=row.direction,
+        vendor_id=row.vendor_id,
+        master_contract_id=row.master_contract_id,
+        purchase_order_id=row.purchase_order_id,
+        exclude_pi_id=row.id,
+    )
+    if row.direction.strip().upper() == "EXPORT" and len(_order_ids_from_pi(row)) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one order is required for EXPORT proforma",
+        )
     await _sync_order_pipeline_from_proforma(db, tenant_id=tenant.id, pi=row)
     await db.flush()
     return _proforma_invoice_to_response(row)
@@ -1044,6 +1192,20 @@ async def finalize_proforma_invoice(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only draft proforma invoices can be finalized",
+        )
+    await _validate_proforma_import_rules(
+        db,
+        tenant_id=tenant.id,
+        direction=row.direction,
+        vendor_id=row.vendor_id,
+        master_contract_id=row.master_contract_id,
+        purchase_order_id=row.purchase_order_id,
+        exclude_pi_id=row.id,
+    )
+    if row.direction.strip().upper() == "EXPORT" and len(_order_ids_from_pi(row)) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one order is required for EXPORT proforma",
         )
     row.status = "ISSUED"
     if not row.verification_token:

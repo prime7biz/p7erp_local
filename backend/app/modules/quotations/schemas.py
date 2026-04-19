@@ -1,9 +1,17 @@
 from datetime import date
-from typing import Literal
-
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+from app.common.money_schema import (
+  FabricFactorLineStr,
+  MoneyLineStr,
+  MoneyStrOpt,
+  PctLineStr,
+  PctStrOpt,
+  RateLineStr,
+  RateStrOpt,
+)
 
 
 class QuotationCreate(BaseModel):
@@ -17,7 +25,7 @@ class QuotationCreate(BaseModel):
   commission_type: Literal["PERCENTAGE", "FIXED"] | None = None
   commission_value: float | None = None
   currency: str | None = Field(None, max_length=8)
-  total_amount: str | None = Field(None, max_length=32)
+  total_amount: MoneyStrOpt = Field(None, max_length=32)
   valid_until: date | None = None
   notes: str | None = None
 
@@ -31,7 +39,7 @@ class QuotationUpdate(BaseModel):
   commission_type: Literal["PERCENTAGE", "FIXED"] | None = None
   commission_value: float | None = None
   currency: str | None = Field(None, max_length=8)
-  total_amount: str | None = Field(None, max_length=32)
+  total_amount: MoneyStrOpt = Field(None, max_length=32)
   valid_until: date | None = None
   status: str | None = Field(None, max_length=32)
   notes: str | None = None
@@ -101,14 +109,14 @@ class QuotationMaterialLine(BaseModel):
   item_id: int | None = None
   description: str | None = None
   unit: str | None = None
-  consumption_per_dozen: str = "0"
-  unit_price: str = "0"
-  amount_per_dozen: str = "0"
-  total_amount: str = "0"
+  consumption_per_dozen: MoneyLineStr = "0"
+  unit_price: MoneyLineStr = "0"
+  amount_per_dozen: MoneyLineStr = "0"
+  total_amount: MoneyLineStr = "0"
   currency: str = "USD"
-  exchange_rate: str = "1"
-  base_amount: str = "0"
-  local_amount: str = "0"
+  exchange_rate: RateLineStr = "1"
+  base_amount: MoneyLineStr = "0"
+  local_amount: MoneyLineStr = "0"
 
 
 class QuotationManufacturingLine(BaseModel):
@@ -116,42 +124,42 @@ class QuotationManufacturingLine(BaseModel):
   serial_no: int = 1
   style_part: str = ""
   machines_required: int = 0
-  production_per_hour: str = "0"
-  production_per_day: str = "0"
-  cost_per_machine: str = "0"
-  total_line_cost: str = "0"
-  cost_per_dozen: str = "0"
-  cm_per_piece: str = "0"
-  total_order_cost: str = "0"
+  production_per_hour: MoneyLineStr = "0"
+  production_per_day: MoneyLineStr = "0"
+  cost_per_machine: MoneyLineStr = "0"
+  total_line_cost: MoneyLineStr = "0"
+  cost_per_dozen: MoneyLineStr = "0"
+  cm_per_piece: MoneyLineStr = "0"
+  total_order_cost: MoneyLineStr = "0"
   currency: str = "USD"
-  exchange_rate: str = "1"
-  base_amount: str = "0"
-  local_amount: str = "0"
+  exchange_rate: RateLineStr = "1"
+  base_amount: MoneyLineStr = "0"
+  local_amount: MoneyLineStr = "0"
 
 
 class QuotationOtherCostLine(BaseModel):
   id: int | None = None
   serial_no: int = 1
   cost_head: str = ""
-  percentage: str = "0"
-  total_amount: str = "0"
+  percentage: PctLineStr = "0"
+  total_amount: MoneyLineStr = "0"
   cost_type: str = "fixed"
-  value: str = "0"
+  value: MoneyLineStr = "0"
   based_on: str = "subtotal"
-  calculated_amount: str = "0"
+  calculated_amount: MoneyLineStr = "0"
   notes: str | None = None
   currency: str = "USD"
-  exchange_rate: str = "1"
-  base_amount: str = "0"
-  local_amount: str = "0"
+  exchange_rate: RateLineStr = "1"
+  base_amount: MoneyLineStr = "0"
+  local_amount: MoneyLineStr = "0"
 
 
 class QuotationSizeRatioLine(BaseModel):
   id: int | None = None
   serial_no: int = 1
   size: str = ""
-  ratio_percentage: str = "0"
-  fabric_factor: str = "1.0"
+  ratio_percentage: PctLineStr = "0"
+  fabric_factor: FabricFactorLineStr = "1.0"
   quantity: int = 0
 
 
@@ -220,18 +228,18 @@ class QuotationFullUpdate(BaseModel):
   projected_quantity: int | None = None
   projected_delivery_date: date | None = None
   quotation_date: date | None = None
-  target_price: str | None = None
+  target_price: MoneyStrOpt = None
   target_price_currency: str | None = None
-  exchange_rate: str | None = None
-  material_cost: str | None = None
-  manufacturing_cost: str | None = None
-  other_cost: str | None = None
-  total_cost: str | None = None
-  cost_per_piece: str | None = None
-  profit_percentage: str | None = None
-  quoted_price: str | None = None
+  exchange_rate: RateStrOpt = None
+  material_cost: MoneyStrOpt = None
+  manufacturing_cost: MoneyStrOpt = None
+  other_cost: MoneyStrOpt = None
+  total_cost: MoneyStrOpt = None
+  cost_per_piece: MoneyStrOpt = None
+  profit_percentage: PctStrOpt = None
+  quoted_price: MoneyStrOpt = None
   currency: str | None = None
-  total_amount: str | None = None
+  total_amount: MoneyStrOpt = None
   status: str | None = None
   valid_until: date | None = None
   size_ratio_enabled: bool | None = None

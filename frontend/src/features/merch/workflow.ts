@@ -173,3 +173,23 @@ export function humanizeStatus(status: string): string {
     .join(" ");
 }
 
+/** Inquiries still available to link on the new-quotation form (not closed and not already tied to a quotation). */
+export function isInquiryOpenForQuotationLink(inquiry: {
+  status: string;
+  is_converted_to_quotation?: boolean;
+}): boolean {
+  const s = normalizeStatus(inquiry.status, "DRAFT");
+  if (s === "CONVERTED" || s === "LOST" || s === "CANCELLED") return false;
+  return !inquiry.is_converted_to_quotation;
+}
+
+/** Quotations still available to link on the new-order form (no order yet; not a closed quotation status). */
+export function isQuotationOpenForOrderLink(quotation: {
+  status: string;
+  is_converted_to_order?: boolean;
+}): boolean {
+  if (quotation.is_converted_to_order) return false;
+  const s = normalizeStatus(quotation.status, "DRAFT");
+  return s !== "CONVERTED" && s !== "CANCELLED" && s !== "REJECTED";
+}
+

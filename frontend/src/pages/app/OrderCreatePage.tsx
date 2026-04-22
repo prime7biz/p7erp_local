@@ -23,6 +23,7 @@ import {
   SHIPPING_TERM_OPTIONS,
   withLegacyOption,
 } from "@/lib/commercialTerms";
+import { isQuotationOpenForOrderLink } from "@/features/merch/workflow";
 
 const ORDER_AI_MERGE_KEYS = new Set([
   "style_ref",
@@ -140,7 +141,7 @@ export function OrderCreatePage() {
           api.listQuotations({ limit: 200, offset: 0 }),
         ]);
         setCustomers(customersData);
-        setQuotations(quotationsData);
+        setQuotations(quotationsData.filter(isQuotationOpenForOrderLink));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load order form data");
       } finally {
@@ -265,7 +266,6 @@ export function OrderCreatePage() {
                   {quotations.map((q) => (
                     <option key={q.id} value={q.id}>
                       {q.quotation_code}
-                      {q.is_converted_to_order ? " (converted)" : ""}
                     </option>
                   ))}
                 </select>

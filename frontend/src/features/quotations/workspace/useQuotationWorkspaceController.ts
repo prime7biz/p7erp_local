@@ -17,7 +17,7 @@ import {
   type QuotationSizeRatioLine,
   type StyleResponse,
 } from "@/api/client";
-import { canConvertInquiryToQuotation } from "@/features/merch/workflow";
+import { canConvertInquiryToQuotation, isInquiryOpenForQuotationLink } from "@/features/merch/workflow";
 import { buildQuotationFullUpdatePayload } from "./mappers/buildQuotationFullUpdatePayload";
 import { calculateQuotationTotals } from "./mappers/calculateQuotationTotals";
 import { resolveRate } from "./mappers/currencyFx";
@@ -95,7 +95,7 @@ export function useQuotationWorkspaceController(id?: string) {
         setCurrencies(currenciesRes.filter((currency) => currency.is_active));
         if (isNew) {
           setCustomers(customersRes);
-          setInquiries(inquiriesRes);
+          setInquiries(inquiriesRes.filter(isInquiryOpenForQuotationLink));
           setAllLinks(linksRes);
         }
 

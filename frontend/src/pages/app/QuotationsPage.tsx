@@ -237,6 +237,9 @@ export function QuotationsPage() {
             <thead className={listTableTheadClass}>
               <tr>
                 <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Code</th>
+                <th className={cn(listTableThClass, "w-36 whitespace-nowrap")} title="Server time when the quotation was created">
+                  Created
+                </th>
                 <th className={cn(listTableThClass, "min-w-[120px]")}>Customer</th>
                 <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Inquiry</th>
                 <th className={cn(listTableThClass, "min-w-[140px]")}>Style</th>
@@ -248,7 +251,6 @@ export function QuotationsPage() {
                 <th className={cn(listTableThRightClass, "w-28 whitespace-nowrap")}>vs inquiry target</th>
                 <th className={cn(listTableThClass, "min-w-[140px] whitespace-nowrap")}>Status</th>
                 <th className={cn(listTableThCenterClass, "min-w-[5.5rem] whitespace-nowrap")}>C-ready</th>
-                <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Created</th>
                 <th className={cn(listTableThRightClass, "w-24 whitespace-nowrap")}>Actions</th>
               </tr>
             </thead>
@@ -282,6 +284,9 @@ export function QuotationsPage() {
                       >
                         {q.quotation_code}
                       </Link>
+                    </td>
+                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={q.created_at}>
+                      {new Date(q.created_at).toLocaleDateString()}
                     </td>
                     <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={displayCustomerName(q)}>
                       {displayCustomerName(q)}
@@ -394,9 +399,6 @@ export function QuotationsPage() {
                       })() : (
                         "—"
                       )}
-                    </td>
-                    <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={new Date(q.created_at).toLocaleDateString()}>
-                      {new Date(q.created_at).toLocaleDateString()}
                     </td>
                     <td className={cn(listTableTdClass, "text-right whitespace-nowrap")}>
                       <div className="relative inline-block text-left">

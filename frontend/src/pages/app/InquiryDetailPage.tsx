@@ -137,8 +137,11 @@ export function InquiryDetailPage() {
             Inquiry {item.inquiry_code}
           </h1>
           <p className="text-text-muted text-sm mt-0.5">
-            {customer?.name ?? `Customer #${item.customer_id}`} ·{" "}
-            {item.status}
+            <span title={item.created_at}>
+              Created {new Date(item.created_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+            </span>
+            {" · "}
+            {customer?.name ?? `Customer #${item.customer_id}`} · {item.status}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -351,8 +354,7 @@ export function InquiryDetailPage() {
       </div>
 
       <div className="text-xs text-text-muted">
-        Created at {new Date(item.created_at).toLocaleString()} · Updated at{" "}
-        {new Date(item.updated_at).toLocaleString()}
+        Updated at {new Date(item.updated_at).toLocaleString()}
       </div>
     </div>
   );

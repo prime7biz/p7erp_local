@@ -305,6 +305,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
       <div className="print-only mb-3 border-b border-border pb-2">
         <h1 className="text-2xl font-bold text-text-primary">Quotation {quotation.quotation_code}</h1>
         <div className="text-sm text-text-secondary">
+          Created {new Date(quotation.created_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })} ·{" "}
           {customer?.name ?? `Customer #${quotation.customer_id}`} · {quotation.status}
         </div>
       </div>
@@ -313,6 +314,10 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Quotation {quotation.quotation_code}</h1>
           <p className="text-sm text-text-muted">
+            <span title={quotation.created_at}>
+              Created {new Date(quotation.created_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+            </span>
+            {" · "}
             {customer?.name ?? `Customer #${quotation.customer_id}`} · {quotation.status}
           </p>
           {showEditableHeader && <p className="mt-1 text-xs text-text-muted">Fields marked with ** are mandatory.</p>}
@@ -1715,8 +1720,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           </CollapsibleSection>
 
           <div className="text-xs text-text-muted">
-            Created at {new Date(quotation.created_at).toLocaleString()} · Updated at{" "}
-            {new Date(quotation.updated_at).toLocaleString()}
+            Updated at {new Date(quotation.updated_at).toLocaleString()}
           </div>
 
           <section className="print-only print-card rounded-xl border border-border bg-surface-raised p-4">

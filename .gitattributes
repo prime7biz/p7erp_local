@@ -1,0 +1,32 @@
+# Keep text files as LF in the Git index and on checkout (avoids Windows CRLF churn
+# and "LF will be replaced by CRLF" warnings when core.autocrlf is true).
+# If you still see conversion warnings, run once in this repo:
+#   git config core.autocrlf false
+* text=auto eol=lf
+
+# Binaries (do not touch line endings)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.eot binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.7z binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.sqlite3 binary
+
+# Windows-only scripts (if added later) should keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf

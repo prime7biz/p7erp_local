@@ -1,4 +1,4 @@
-import { externalGet } from "@/api/externalClient";
+import { externalGet, externalPost } from "@/api/externalClient";
 
 export const financierPortalApi = {
   dashboard: () => externalGet<Record<string, unknown>>("/financier/dashboard"),
@@ -69,4 +69,14 @@ export const financierPortalApi = {
   },
   inventoryReconciliation: () => externalGet<Record<string, unknown>>("/financier/inventory-reconciliation"),
   inventoryBalanceSheet: () => externalGet<Record<string, unknown>>("/financier/inventory-balance-sheet"),
+  contractsList: () => externalGet<{ items: Record<string, unknown>[]; note?: string }>("/financier/contracts"),
+  contractDetail: (id: number, q?: { as_of_date?: string }) => {
+    const p = new URLSearchParams();
+    if (q?.as_of_date) p.set("as_of_date", q.as_of_date);
+    const s = p.toString() ? `?${p.toString()}` : "";
+    return externalGet<Record<string, unknown>>(`/financier/contracts/${id}${s}`);
+  },
+  contractNarrative: (id: number) => externalGet<Record<string, unknown>>(`/financier/contracts/${id}/narrative`),
+  contractWhatIf: (id: number, body: { etd_shift_days?: number; rm_accel_pct?: number }) =>
+    externalPost<Record<string, unknown>>(`/financier/contracts/${id}/what-if`, body),
 };

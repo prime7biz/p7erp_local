@@ -105,3 +105,8 @@ class FinancierOrderDetail(BaseModel):
     order_date: date | None
     delivery_date: date | None
     updated_at: datetime
+
+
+class FinancierContractWhatIfBody(BaseModel):
+    etd_shift_days: int = 0
+    rm_accel_pct: float = 0.0

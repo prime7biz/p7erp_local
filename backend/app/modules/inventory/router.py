@@ -40,6 +40,11 @@ from app.common.permissions import (
     PERMISSION_INVENTORY_PROCESS_ORDER_APPROVE,
     assert_delegate_manager_or_permission,
 )
+from app.common.master_contract_rm_guard import (
+    assert_btb_has_master_if_flag,
+    assert_orders_have_master_contract,
+    require_master_contract_for_rm_enabled,
+)
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db
@@ -1087,6 +1092,7 @@ class PurchaseOrderItemBody(BaseModel):
     warehouse_id: int | None = None
     quantity: str
     unit_price: str = "0"
+    source_order_id: int | None = None
 
     @field_validator("quantity", mode="before")
     @classmethod
@@ -1111,6 +1117,7 @@ class PurchaseOrderBody(BaseModel):
     base_total_amount: float | None = None
     btb_lc_id: int | None = None
     source_bom_id: int | None = None
+    source_order_id: int | None = None
     notes: str | None = None
     status: str = "DRAFT"
     items: list[PurchaseOrderItemBody] = []
@@ -2366,6 +2373,15 @@ async def create_purchase_order(
             body.currency = vendor.default_currency
     if not supplier_name:
         raise HTTPException(status_code=400, detail="Either supplier_name or vendor_id (with existing vendor) is required")
+    if require_master_contract_for_rm_enabled(tenant):
+        await assert_btb_has_master_if_flag(db, tenant=tenant, btb_lc_id=body.btb_lc_id)
+        oids: set[int] = set()
+        if body.source_order_id:
+            oids.add(int(body.source_order_id))
+        for line in body.items:
+            if line.source_order_id:
+                oids.add(int(line.source_order_id))
+        await assert_orders_have_master_contract(db, tenant_id=tenant.id, order_ids=oids)
     line_total = 0.0
     for line in body.items:
         line_total += _to_float(line.quantity) * _to_float(line.unit_price)
@@ -2387,6 +2403,7 @@ async def create_purchase_order(
         base_total_amount=base_total,
         btb_lc_id=body.btb_lc_id,
         source_bom_id=body.source_bom_id,
+        source_order_id=body.source_order_id,
         status=body.status,
         notes=body.notes,
     )
@@ -2428,6 +2445,7 @@ async def create_purchase_order(
         base_total_amount=float(row.base_total_amount) if row.base_total_amount is not None else None,
         btb_lc_id=row.btb_lc_id,
         source_bom_id=getattr(row, "source_bom_id", None),
+        source_order_id=getattr(row, "source_order_id", None),
         status=row.status,
         notes=row.notes,
         items=list(items_result.scalars().all()),
@@ -2468,6 +2486,7 @@ async def update_purchase_order_status(
         base_total_amount=float(row.base_total_amount) if row.base_total_amount is not None else None,
         btb_lc_id=row.btb_lc_id,
         source_bom_id=getattr(row, "source_bom_id", None),
+        source_order_id=getattr(row, "source_order_id", None),
         status=row.status,
         notes=row.notes,
         items=list(items_result.scalars().all()),
@@ -2666,6 +2685,18 @@ async def create_goods_receiving(
         pst = (po.status or "").upper()
         if pst in {"CANCELLED", "CLOSED"}:
             raise HTTPException(status_code=400, detail="Cannot receive against cancelled or closed PO")
+        if require_master_contract_for_rm_enabled(tenant):
+            await assert_btb_has_master_if_flag(db, tenant=tenant, btb_lc_id=po.btb_lc_id)
+            oids: set[int] = set()
+            if po.source_order_id:
+                oids.add(int(po.source_order_id))
+            pls = (
+                await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == po.id))
+            ).scalars().all()
+            for pl in pls:
+                if pl.source_order_id:
+                    oids.add(int(pl.source_order_id))
+            await assert_orders_have_master_contract(db, tenant_id=tenant.id, order_ids=oids)
 
     row = GoodsReceiving(
         tenant_id=tenant.id,

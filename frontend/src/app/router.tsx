@@ -153,6 +153,12 @@ const FinancierFinancialVisibilityPage = lazy(() =>
 const FinancierRiskPanelPage = lazy(() =>
   import("@/pages/portal/financier/FinancierRiskPanelPage").then((m) => ({ default: m.FinancierRiskPanelPage })),
 );
+const FinancierContractsListPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierContractsListPage").then((m) => ({ default: m.FinancierContractsListPage })),
+);
+const FinancierContractDetailPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierContractDetailPage").then((m) => ({ default: m.FinancierContractDetailPage })),
+);
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem("p7_token");
@@ -284,6 +290,8 @@ export function AppRouter() {
           }
         >
           <Route index element={<FinancierDashboardPage />} />
+          <Route path="contracts/:contractId" element={<FinancierContractDetailPage />} />
+          <Route path="contracts" element={<FinancierContractsListPage />} />
           <Route path="order-book" element={<FinancierOrderBookPage />} />
           <Route path="orders/:orderId" element={<FinancierOrderDetailPage />} />
           <Route path="pipeline" element={<FinancierPipelinePage />} />

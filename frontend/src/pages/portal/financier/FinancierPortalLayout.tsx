@@ -11,6 +11,7 @@ type FinancierNavItem = { to: string; label: string; end?: boolean; minScope: Fi
 
 const navAll: FinancierNavItem[] = [
   { to: "/portal/financier", label: "Dashboard", end: true, minScope: "tenant_summary" },
+  { to: "/portal/financier/contracts", label: "Contracts", minScope: "credit_monitoring" },
   { to: "/portal/financier/order-book", label: "Order book", minScope: "orders_and_pipeline" },
   { to: "/portal/financier/pipeline", label: "Pipeline", minScope: "orders_and_pipeline" },
   { to: "/portal/financier/goods-movement", label: "Goods movement", minScope: "orders_and_pipeline" },

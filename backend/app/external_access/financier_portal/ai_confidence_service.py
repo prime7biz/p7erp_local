@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.database import safe_async_session_rollback
 from app.external_access.financier_portal import facility_selectors as fsel
 from app.external_access.financier_portal import selectors as sel
 from app.models import ExternalPrincipal, Tenant
@@ -53,7 +54,7 @@ async def build_financier_ai_confidence_bundle(
                     db, tenant_id=tenant_id, party_id=party_for_alerts
                 )
         except Exception:
-            pass
+            await safe_async_session_rollback(db)
 
     sev_counts: dict[str, int] = {}
     for a in alerts_raw:

@@ -184,6 +184,30 @@ export function ConfigurationPage() {
             <input
               type="checkbox"
               className="mt-1 rounded border-border-strong"
+              checked={featureFlags.require_master_contract_for_rm === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  require_master_contract_for_rm: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Require master contract for RM procurement</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                When enabled, purchase orders and GRNs linked to an order (or BTB LC without a master contract) are
+                blocked until <code className="rounded bg-surface-raised px-1">Order.master_contract_id</code> or BTB →
+                master contract is set. Recommended for bank-financed workflows.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3">
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
               checked={featureFlags.trade_enabled !== false}
               onChange={(e) =>
                 setFeatureFlags((prev) => ({

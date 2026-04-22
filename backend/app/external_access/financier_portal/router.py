@@ -31,6 +31,7 @@ from app.external_access.financier_portal.dashboard_insights_service import buil
 from app.external_access.financier_portal.schemas import (
     FinancierAlertItem,
     FinancierAlertsResponse,
+    FinancierContractWhatIfBody,
     FinancierDashboardResponse,
     FinancierFinancialSummary,
     FinancierGoodsMovementSummary,
@@ -817,3 +818,204 @@ async def financier_snapshot_get(
     if s.facility_id not in allowed:
         raise HTTPException(status_code=403, detail="Snapshot not in your facility scope")
     return {"id": s.id, "snapshot_type": s.snapshot_type, "data": s.data_json}
+
+
+@router.get("/contracts")
+async def financier_contracts_list(
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        return {"items": [], "note": "Link financier_party_id on your financier access to see contracts."}
+    from app.external_access.financier_portal.contract_command import service as cc_svc
+
+    items = await cc_svc.list_contracts_summary(db, tenant_id=principal.tenant_id, party_id=party_id)
+    return {"items": items}
+
+
+@router.get("/contracts/{contract_id}")
+async def financier_contract_detail(
+    contract_id: int,
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+    as_of_date: str | None = Query(default=None),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        raise HTTPException(status_code=403, detail="Financier party not linked")
+    from app.external_access.financier_portal.contract_command import service as cc_svc
+
+    payload = await cc_svc.build_contract_detail(
+        db,
+        tenant_id=principal.tenant_id,
+        party_id=party_id,
+        contract_id=contract_id,
+        as_of=as_of_date,
+    )
+    if not payload:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return payload
+
+
+@router.get("/contracts/{contract_id}/timeline")
+async def financier_contract_timeline(
+    contract_id: int,
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        raise HTTPException(status_code=403, detail="Financier party not linked")
+    from app.external_access.financier_portal.contract_command import service as cc_svc
+
+    d = await cc_svc.build_contract_detail(db, tenant_id=principal.tenant_id, party_id=party_id, contract_id=contract_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return {"timeline": d.get("timeline"), "master_contract": d.get("master_contract")}
+
+
+@router.get("/contracts/{contract_id}/orders")
+async def financier_contract_orders(
+    contract_id: int,
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        raise HTTPException(status_code=403, detail="Financier party not linked")
+    from app.external_access.financier_portal.contract_command import service as cc_svc
+
+    d = await cc_svc.build_contract_detail(db, tenant_id=principal.tenant_id, party_id=party_id, contract_id=contract_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return {"orders_risk": d.get("orders_risk"), "rollup": d.get("rollup")}
+
+
+@router.get("/contracts/{contract_id}/raw-materials")
+async def financier_contract_raw_materials(
+    contract_id: int,
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        return {"items": [], "note": "Link financier_party_id on your financier access."}
+    from app.external_access.financier_portal.contract_command import service as cc_svc
+
+    items, note = await cc_svc.raw_materials_for_contract(
+        db, tenant_id=principal.tenant_id, party_id=party_id, contract_id=contract_id
+    )
+    return {"items": items, "note": note}
+
+
+@router.get("/contracts/{contract_id}/production")
+async def financier_contract_production(
+    contract_id: int,
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        return {"items": [], "note": "Link financier_party_id on your financier access."}
+    from app.external_access.financier_portal.contract_command import service as cc_svc
+
+    items, note = await cc_svc.production_for_contract(
+        db, tenant_id=principal.tenant_id, party_id=party_id, contract_id=contract_id
+    )
+    return {"items": items, "note": note}
+
+
+@router.get("/contracts/{contract_id}/cash-ladder")
+async def financier_contract_cash_ladder(
+    contract_id: int,
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        raise HTTPException(status_code=403, detail="Financier party not linked")
+    from app.external_access.financier_portal.contract_command import service as cc_svc
+
+    d = await cc_svc.build_contract_detail(db, tenant_id=principal.tenant_id, party_id=party_id, contract_id=contract_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return {"cash_ladder": d.get("cash_ladder")}
+
+
+@router.get("/contracts/{contract_id}/risk")
+async def financier_contract_risk(
+    contract_id: int,
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        raise HTTPException(status_code=403, detail="Financier party not linked")
+    from app.external_access.financier_portal.contract_command import service as cc_svc
+
+    d = await cc_svc.build_contract_detail(db, tenant_id=principal.tenant_id, party_id=party_id, contract_id=contract_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return {"risk": d.get("risk")}
+
+
+@router.get("/contracts/{contract_id}/narrative")
+async def financier_contract_narrative(
+    contract_id: int,
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        raise HTTPException(status_code=403, detail="Financier party not linked")
+    from app.external_access.financier_portal.contract_command import service as cc_svc
+    from app.external_access.financier_portal.contract_command import narrative as cc_narr
+
+    d = await cc_svc.build_contract_detail(db, tenant_id=principal.tenant_id, party_id=party_id, contract_id=contract_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return await cc_narr.build_contract_narrative(db, principal=principal, contract_payload=d)
+
+
+@router.post("/contracts/{contract_id}/what-if")
+async def financier_contract_what_if(
+    contract_id: int,
+    body: FinancierContractWhatIfBody,
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        raise HTTPException(status_code=403, detail="Financier party not linked")
+    from app.external_access.financier_portal.contract_command import service as cc_svc
+    from app.external_access.financier_portal.contract_command import what_if as cc_what
+
+    d = await cc_svc.build_contract_detail(db, tenant_id=principal.tenant_id, party_id=party_id, contract_id=contract_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return cc_what.apply_what_if(
+        d,
+        etd_shift_days=body.etd_shift_days,
+        rm_accel_pct=body.rm_accel_pct,
+    )

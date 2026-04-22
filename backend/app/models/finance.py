@@ -105,6 +105,8 @@ class ChartOfAccount(Base):
     is_protected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     usage_purpose: Mapped[str | None] = mapped_column(String(128), nullable=True)
     linked_module: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # MATERIAL | CM | OTHER | NON_OPERATING — drives financier CM vs material ledger rollups (nullable = unknown).
+    cost_nature: Mapped[str | None] = mapped_column(String(24), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -238,6 +240,8 @@ class VoucherLine(Base):
     entry_type: Mapped[str] = mapped_column(String(8), nullable=False, index=True)  # DEBIT | CREDIT
     amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Overrides chart_of_accounts.cost_nature for this line when set.
+    cost_nature_override: Mapped[str | None] = mapped_column(String(24), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 

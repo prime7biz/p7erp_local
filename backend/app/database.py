@@ -189,6 +189,19 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
+async def safe_async_session_rollback(session: AsyncSession) -> None:
+    """End a failed PostgreSQL transaction so the same session can run more queries.
+
+    After any caught DB error, Postgres leaves the connection in "aborted transaction" until
+    ROLLBACK. Broad ``except Exception`` handlers must call this before returning or the next
+    ``execute()`` will raise InFailedSQLTransactionError and look like unrelated slow/failed reads.
+    """
+    try:
+        await session.rollback()
+    except Exception:
+        pass
+
+
 class Base(DeclarativeBase):
     pass
 

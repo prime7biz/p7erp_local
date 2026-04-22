@@ -15,3 +15,4 @@ alwaysApply: true
 - **Stack:** Python (FastAPI) backend, React (TypeScript) frontend. Multi-tenant; tenant types: manufacturer | buying_house | both.
 - **Reference parity:** See `docs/REFERENCE_PARITY.md` for auth, public routes, app sidebar, backend modules, and phases. Match reference flows when implementing features.
 - **Conventions:** Prefer consistent naming (e.g. tenant_id on tenant-scoped tables), JWT auth, company_code for tenant resolution on login.
+- **Database sessions:** If you `except` a failure from `await db.execute(...)` / ORM work on an `AsyncSession`, PostgreSQL aborts the transaction until `ROLLBACK`. Before returning from the handler (or running more queries), call `await safe_async_session_rollback(db)` from `app.database`. Skipping this causes `InFailedSQLTransactionError` on unrelated later queries and looks like random slowness or DB bugs.

@@ -250,6 +250,7 @@ export function FinancierDashboardPage() {
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {[
+                ...(showCredit ? [{ to: "/portal/financier/contracts", label: "Contracts" }] : []),
                 { to: "/portal/financier/order-book", label: "Order book" },
                 { to: "/portal/financier/pipeline", label: "Pipeline detail" },
                 { to: "/portal/financier/production-tracker", label: "Production" },

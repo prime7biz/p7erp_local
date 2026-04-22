@@ -137,7 +137,7 @@ p7erp_local/
 
 **PowerShell:** Use `;` instead of `&&` to chain commands (e.g. `cd backend; alembic upgrade head`).
 
-1. **Start DB (and optional Redis):**  
+1. **Start DB + Redis** (backend expects `REDIS_URL` when you run the API against Docker services):  
    `docker compose up -d postgres redis`
 2. **Backend:**  
    Copy `.env.example` to `.env` (or `backend/.env`). Then:
@@ -156,8 +156,10 @@ See **`docs/BUILD_VERIFICATION.md`** for the B1–B3 checklist.
 
 ## Run with Docker (development)
 
-- First time or after Dockerfile/dependency changes: `docker compose up --build`
-- Normal dev: `docker compose up`
+- Prefer **`docker compose up -d`** (or `docker compose up`) so **Redis** starts with Postgres and the backend. The API **`/health`** checks Redis; if Redis is down, health checks can hang or fail and the backend may stay **unhealthy**.
+- First time or after Dockerfile/dependency changes: `docker compose up --build -d`
+- Normal dev (background): `docker compose up -d` — same as `docker compose up` but detached.
+- Logs in the terminal: `docker compose up` (no `-d`).
 - Frontend: http://localhost:5173 | Backend docs: http://localhost:8000/docs
 - Migrations when schema changes: `docker compose exec backend alembic upgrade head`
 

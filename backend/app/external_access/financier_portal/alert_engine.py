@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import safe_async_session_rollback
 from app.external_access.financier_portal import facility_selectors as fsel
 from app.models import Order
 from app.models.facility import Facility, FacilityUtilization, RepaymentScheduleLine
@@ -59,7 +60,52 @@ async def facility_alerts_for_party(db: AsyncSession, *, tenant_id: int, party_i
                 )
 
     out.extend(await order_lifecycle_alerts_for_party(db, tenant_id=tenant_id, party_id=party_id))
+    out.extend(await contract_command_alerts_for_party(db, tenant_id=tenant_id, party_id=party_id))
     return out
+
+
+async def contract_command_alerts_for_party(db: AsyncSession, *, tenant_id: int, party_id: int) -> list[dict]:
+    try:
+        from app.external_access.financier_portal.contract_command import service as cc_svc
+    except Exception:
+        return []
+    try:
+        rows = await cc_svc.list_contracts_summary(db, tenant_id=tenant_id, party_id=party_id)
+    except Exception:
+        await safe_async_session_rollback(db)
+        return []
+    out: list[dict] = []
+    for row in rows[:30]:
+        ref = row.get("reference") or str(row.get("id"))
+        comp = float(row.get("composite_score") or 100)
+        if comp < 55:
+            out.append(
+                {
+                    "code": "CONTRACT_OTD_AT_RISK",
+                    "severity": "high",
+                    "title": "Contract composite risk elevated",
+                    "detail": f"Contract {ref}: composite score {comp:.0f}. Review Contracts command center.",
+                }
+            )
+        if float(row.get("maturity_safety_score") or 100) < 50:
+            out.append(
+                {
+                    "code": "BTB_MATURITY_THREAT",
+                    "severity": "medium",
+                    "title": "BTB maturity pressure (contract rollup)",
+                    "detail": f"Contract {ref}: maturity safety low vs inflow proxy.",
+                }
+            )
+        if float(row.get("cashability_score") or 100) < 50:
+            out.append(
+                {
+                    "code": "CM_WEEK_SHORTFALL",
+                    "severity": "medium",
+                    "title": "Manufacturing cashability stress",
+                    "detail": f"Contract {ref}: cash ladder shows red weeks vs planned CM.",
+                }
+            )
+    return out[:25]
 
 
 def _pct_rm(o: Order) -> float:

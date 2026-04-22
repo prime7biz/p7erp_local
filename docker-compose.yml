@@ -24,8 +24,12 @@ services:
       timeout: 5s
       retries: 5
 
+  # Required for backend REDIS_URL, /health (ping), and rate limits. Prefer full stack:
+  #   docker compose up -d
+  # If you start only some services, include redis (e.g. postgres redis backend).
   redis:
     image: redis:7-alpine
+    restart: always
     ports:
       - "6379:6379"
     healthcheck:

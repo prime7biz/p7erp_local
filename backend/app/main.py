@@ -317,7 +317,7 @@ async def health():
             redis_client = get_redis()
             if redis_client is None:
                 raise RuntimeError("Redis client is not initialized")
-            pong = await redis_client.ping()
+            pong = await asyncio.wait_for(redis_client.ping(), timeout=2.5)
             if pong:
                 components["redis"] = "healthy"
             else:

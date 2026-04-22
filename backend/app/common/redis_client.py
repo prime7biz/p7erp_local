@@ -24,7 +24,13 @@ def get_redis():
     try:
         import redis.asyncio as redis  # type: ignore[import-untyped]
 
-        _client = redis.from_url(url, decode_responses=True)
+        _client = redis.from_url(
+            url,
+            decode_responses=True,
+            socket_connect_timeout=2.5,
+            socket_timeout=5.0,
+            retry_on_timeout=True,
+        )
         return _client
     except Exception:
         logger.exception("Redis init failed")

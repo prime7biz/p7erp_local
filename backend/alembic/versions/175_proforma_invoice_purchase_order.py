@@ -1,7 +1,7 @@
 """Proforma invoice: optional purchase_order_id for IMPORT vendor PI linkage.
 
-Revision ID: 174
-Revises: 173
+Revision ID: 175
+Revises: 174
 """
 
 from typing import Sequence, Union
@@ -9,8 +9,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "174"
-down_revision: Union[str, None] = "173"
+revision: str = "175"
+down_revision: Union[str, None] = "174"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

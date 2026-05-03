@@ -1,8 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type HrAttendanceEntryCreate, type HrAttendanceEntryResponse, type HrAttendanceEntryUpdate } from "@/api/client";
+import {
+  api,
+  type HrAttendanceBulkEntryBody,
+  type HrAttendanceEntryCreate,
+  type HrAttendanceEntryResponse,
+  type HrAttendanceEntryUpdate,
+} from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 
 const PREFIX = "/app/hr";
+const BULK_IMPORT_SAMPLE = `{
+  "rows": [
+    {
+      "employee_id": 101,
+      "attendance_date": "2026-04-22",
+      "in_time": "09:00:00",
+      "out_time": "18:00:00",
+      "status": "PRESENT",
+      "source": "BIOMETRIC"
+    }
+  ]
+}`;
 
 export function HrAttendanceEntryPage() {
   const [rows, setRows] = useState<HrAttendanceEntryResponse[]>([]);
@@ -91,9 +109,11 @@ export function HrAttendanceEntryPage() {
   const onBulk = async () => {
     setBulkMsg("");
     try {
-      const parsed = JSON.parse(bulkJson) as { rows?: Record<string, unknown>[] };
-      const rowsPayload = parsed.rows ?? (Array.isArray(parsed) ? parsed : []);
-      const r = await api.postHrAttendanceEntriesBulk({ rows: rowsPayload });
+      const parsed = JSON.parse(bulkJson) as HrAttendanceBulkEntryBody;
+      if (!parsed || !Array.isArray(parsed.rows)) {
+        throw new Error('Invalid JSON body. Use {"rows":[...]}');
+      }
+      const r = await api.postHrAttendanceEntriesBulk(parsed);
       setBulkMsg(`Created ${r.created} entries.`);
       await load();
     } catch (e) {
@@ -179,12 +199,21 @@ export function HrAttendanceEntryPage() {
           rows={5}
           value={bulkJson}
           onChange={(e) => setBulkJson(e.target.value)}
-          placeholder='{"rows":[]}'
+          placeholder={BULK_IMPORT_SAMPLE}
         />
         {bulkMsg && <p className="mt-2 text-sm text-text-secondary">{bulkMsg}</p>}
-        <button type="button" className="mt-2 rounded border px-3 py-1.5 text-xs" onClick={() => void onBulk()}>
-          Upload batch
-        </button>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded border px-3 py-1.5 text-xs"
+            onClick={() => setBulkJson(BULK_IMPORT_SAMPLE)}
+          >
+            Load sample JSON
+          </button>
+          <button type="button" className="rounded border px-3 py-1.5 text-xs" onClick={() => void onBulk()}>
+            Upload batch
+          </button>
+        </div>
       </div>
 
       <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">

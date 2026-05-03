@@ -27,6 +27,41 @@ class ForecastTemplate:
     adapter_name: str
 
 
+_TEMPLATE_EXAMPLE_PROMPTS: dict[str, str] = {
+    "cash_flow_projection": "Generate cash flow projection",
+    "inventory_shortage_forecast": "Generate inventory shortage forecast",
+    "production_output_forecast": "Generate production output forecast",
+    "shipment_delay_risk_projection": "Generate shipment delay risk projection",
+    "receivable_risk_outlook": "Generate receivable risk outlook",
+    "capacity_shortfall_projection": "Generate capacity shortfall projection",
+}
+
+_TEMPLATE_DEFAULT_HORIZON: dict[str, int] = {
+    "cash_flow_projection": 90,
+    "inventory_shortage_forecast": 30,
+    "production_output_forecast": 90,
+    "shipment_delay_risk_projection": 30,
+    "receivable_risk_outlook": 30,
+    "capacity_shortfall_projection": 30,
+}
+
+
+def list_forecast_templates() -> list[dict[str, Any]]:
+    return [
+        {
+            "forecast_code": t.forecast_code,
+            "forecast_name": t.forecast_name,
+            "source_modules": list(t.source_modules),
+            "required_permission_keys": list(t.required_permission_keys),
+            "example_prompt": _TEMPLATE_EXAMPLE_PROMPTS.get(
+                t.forecast_code, f"Generate {t.forecast_name}"
+            ),
+            "default_horizon_days": _TEMPLATE_DEFAULT_HORIZON.get(t.forecast_code, 30),
+        }
+        for t in FORECAST_TEMPLATES.values()
+    ]
+
+
 FORECAST_TEMPLATES: dict[str, ForecastTemplate] = {
     "cash_flow_projection": ForecastTemplate(
         forecast_code="cash_flow_projection",

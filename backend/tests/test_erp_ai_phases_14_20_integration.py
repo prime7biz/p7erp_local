@@ -890,3 +890,58 @@ async def test_phase19_copilot_disabled_403(db_session_integration, monkeypatch)
         app.dependency_overrides.pop(get_db, None)
         app.dependency_overrides.pop(get_current_user, None)
         app.dependency_overrides.pop(require_tenant, None)
+
+
+@pytest.mark.asyncio
+async def test_governance_list_proposals_read(db_session_integration, monkeypatch):
+    """GET /governance/proposals is readable by any user when the phase is enabled (not admin-only)."""
+    monkeypatch.setenv("AI_CONTROLLED_AUTOMATION_ENABLED", "true")
+    get_settings.cache_clear()
+    db = db_session_integration
+    slug = uuid.uuid4().hex[:10]
+    tenant, admin_user = await _seed_admin_user(
+        db, name_slug=slug, feature_flags={"ai_controlled_automation_enabled": True}
+    )
+    viewer = await _seed_viewer_user(db, tenant=tenant)
+    db.add(
+        AiControlledActionProposal(
+            tenant_id=tenant.id,
+            created_by_user_id=admin_user.id,
+            rule_code="demo_rule",
+            status="proposed",
+            payload_json={"k": 1},
+        )
+    )
+    await db.commit()
+
+    async def override_db():
+        yield db
+
+    async def override_tenant():
+        return tenant
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[require_tenant] = override_tenant
+
+    async def override_user_viewer():
+        return viewer
+
+    app.dependency_overrides[get_current_user] = override_user_viewer
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            r = await ac.get(
+                "/api/v1/erp-ai/governance/proposals?status_filter=proposed",
+                headers={"X-Tenant-Id": str(tenant.id)},
+            )
+            assert r.status_code == 200, r.text
+            rows = r.json()
+            assert isinstance(rows, list) and len(rows) >= 1
+            assert all(x["tenant_id"] == tenant.id for x in rows)
+            assert all(x["status"] == "proposed" for x in rows)
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(require_tenant, None)
+        monkeypatch.delenv("AI_CONTROLLED_AUTOMATION_ENABLED", raising=False)
+        get_settings.cache_clear()

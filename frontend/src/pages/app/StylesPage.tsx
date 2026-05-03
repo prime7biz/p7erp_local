@@ -107,7 +107,12 @@ export function StylesPage() {
         if (ids.length === 0) {
           setReportRows([]);
         } else {
-          const reports = await api.listStyleSummaryReport({ style_ids: ids });
+          const reports = await api.listStyleSummaryReport({
+            style_ids: ids,
+            // Align with SQL fast path (server applies offset/limit after filters).
+            report_limit: Math.max(ids.length, 1),
+            report_offset: 0,
+          });
           setReportRows(reports);
         }
       }

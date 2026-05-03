@@ -48,6 +48,8 @@ async def list_plans(
                 "price_yearly_usd": float(p.price_yearly_usd),
                 "is_active": p.is_active,
                 "sort_order": p.sort_order,
+                "lemonsqueezy_variant_id_monthly": p.lemonsqueezy_variant_id_monthly,
+                "lemonsqueezy_variant_id_yearly": p.lemonsqueezy_variant_id_yearly,
             }
             for p in rows
         ]
@@ -90,7 +92,17 @@ async def patch_plan(
     p = await db.get(PlatformPlan, pid)
     if not p:
         raise HTTPException(404)
-    for k in ("name", "code", "is_active", "sort_order", "features_included", "optional_addons", "overage_rules"):
+    for k in (
+        "name",
+        "code",
+        "is_active",
+        "sort_order",
+        "features_included",
+        "optional_addons",
+        "overage_rules",
+        "lemonsqueezy_variant_id_monthly",
+        "lemonsqueezy_variant_id_yearly",
+    ):
         if k in body:
             setattr(p, k, body[k])
     if "support_level" in body:

@@ -217,6 +217,11 @@ export interface SettingsConfigUpdate {
   timezone?: string | null;
 }
 
+/** POST /api/v1/billing/lemonsqueezy/checkout */
+export interface LemonSqueezyCheckoutResponse {
+  checkout_url: string;
+}
+
 export interface FactoryCalendarOverrideRow {
   id: number;
   override_date: string;
@@ -651,6 +656,21 @@ export interface HrAttendanceEntryUpdate {
   early_out_minutes?: number;
   overtime_minutes?: number;
   remarks?: string | null;
+}
+
+export interface HrAttendanceBulkEntryRow {
+  employee_id: number;
+  attendance_date: string;
+  in_time?: string | null;
+  out_time?: string | null;
+  status?: string;
+  source?: string;
+  overtime_minutes?: number;
+  remarks?: string | null;
+}
+
+export interface HrAttendanceBulkEntryBody {
+  rows: HrAttendanceBulkEntryRow[];
 }
 
 export interface HrAttendanceSummaryRow {
@@ -1489,6 +1509,34 @@ export interface AiForecastRunResponse {
   narrative_explanation: string | null;
   created_at: string;
   completed_at: string | null;
+  model_version?: string | null;
+  model_type?: string | null;
+  quality_metrics?: Record<string, unknown> | null;
+  expires_at?: string | null;
+  celery_task_id?: string | null;
+}
+
+export interface AiForecastTemplateInfo {
+  forecast_code: string;
+  forecast_name: string;
+  source_modules: string[];
+  required_permission_keys: string[];
+  example_prompt: string;
+  default_horizon_days: number;
+}
+
+export interface AiForecastSummaryResponse {
+  total_runs: number;
+  last_run_at: string | null;
+  avg_confidence: number | null;
+  by_forecast_code: Record<string, number>;
+  by_status: Record<string, number>;
+  recent_failures: Array<{
+    id: number;
+    forecast_code: string;
+    created_at: string;
+    reason: string | null;
+  }>;
 }
 
 export interface AiKnowledgeSourceReference {
@@ -1548,6 +1596,33 @@ export interface AiActionRunResponse {
   executed_at: string | null;
 }
 
+export interface AiGovernanceProposal {
+  id: number;
+  tenant_id: number;
+  rule_code: string;
+  status: string;
+  payload_json: Record<string, unknown> | null;
+  created_by_user_id: number | null;
+  approved_by_user_id: number | null;
+  rejected_by_user_id: number | null;
+  rejected_reason: string | null;
+  created_at: string;
+  approved_at: string | null;
+  rejected_at: string | null;
+  executed_at: string | null;
+  rolled_back_at: string | null;
+}
+
+export interface AiAutomationRuleRow {
+  rule_code: string;
+  action_key: string;
+  label: string;
+  description: string | null;
+  is_enabled: boolean;
+  requires_confirmation: boolean;
+  permission_key: string | null;
+}
+
 export interface AiAnomalyEventResponse {
   id: number;
   tenant_id: number;
@@ -1591,6 +1666,12 @@ export interface AiDataQualityScanResponse {
   generated_at: string;
 }
 
+export interface AiWeeklyReportDeltaEntry {
+  current: number | null;
+  previous: number | null;
+  change: number | null;
+}
+
 export interface AiWeeklyReportItem {
   id: number;
   tenant_id: number;
@@ -1598,7 +1679,29 @@ export interface AiWeeklyReportItem {
   week_end: string;
   narrative: string;
   kpi_snapshot_json: Record<string, unknown> | null;
+  delta: Record<string, AiWeeklyReportDeltaEntry> | null;
   created_at: string;
+}
+
+export interface AiWeeklyReportStatus {
+  gemini_configured: boolean;
+  current_week_start: string;
+  current_week_end: string;
+  has_current_week_report: boolean;
+  last_report_created_at: string | null;
+  next_scheduled_utc: string;
+}
+
+export type AiWeeklyReportGenerateStatus =
+  | "created"
+  | "exists"
+  | "updated"
+  | "skipped_no_gemini"
+  | "skipped_empty";
+
+export interface AiWeeklyReportGenerateResult {
+  status: AiWeeklyReportGenerateStatus;
+  report: AiWeeklyReportItem | null;
 }
 
 export interface AiOpsOverviewResponse {
@@ -1883,11 +1986,37 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  async aiListForecastRuns(params?: { limit?: number }): Promise<AiForecastRunResponse[]> {
+  async aiListForecastRuns(params?: {
+    limit?: number;
+    offset?: number;
+    forecast_code?: string;
+    status?: string[];
+    since?: string;
+    until?: string;
+    min_confidence?: number;
+  }): Promise<AiForecastRunResponse[]> {
     const q = new URLSearchParams();
     if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    if (params?.forecast_code) q.set("forecast_code", params.forecast_code);
+    (params?.status ?? []).forEach((s) => q.append("status", s));
+    if (params?.since) q.set("since", params.since);
+    if (params?.until) q.set("until", params.until);
+    if (params?.min_confidence != null) q.set("min_confidence", String(params.min_confidence));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<AiForecastRunResponse[]>(`/api/v1/ai-tool/forecast-runs${suffix}`);
+  },
+  async aiListForecastTemplates(): Promise<AiForecastTemplateInfo[]> {
+    return request<AiForecastTemplateInfo[]>("/api/v1/ai-tool/forecast-templates");
+  },
+  async aiGetForecastSummary(): Promise<AiForecastSummaryResponse> {
+    return request<AiForecastSummaryResponse>("/api/v1/ai-tool/forecast-runs/summary");
+  },
+  async aiGetForecastRun(id: number): Promise<AiForecastRunResponse> {
+    return request<AiForecastRunResponse>(`/api/v1/ai-tool/forecast-runs/${id}`);
+  },
+  async aiDeleteForecastRun(id: number): Promise<void> {
+    return request<void>(`/api/v1/ai-tool/forecast-runs/${id}`, { method: "DELETE" });
   },
   async aiGenerateForecast(data: {
     prompt: string;
@@ -1958,6 +2087,21 @@ export const api = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<{ items: AiWeeklyReportItem[] }>(`/api/v1/ai-tool/weekly-reports${suffix}`);
   },
+  async aiGetWeeklyReportsStatus(): Promise<AiWeeklyReportStatus> {
+    return request<AiWeeklyReportStatus>("/api/v1/ai-tool/weekly-reports/status");
+  },
+  async aiGetWeeklyReport(reportId: number): Promise<AiWeeklyReportItem> {
+    return request<AiWeeklyReportItem>(`/api/v1/ai-tool/weekly-reports/${reportId}`);
+  },
+  async aiGenerateWeeklyReport(body?: { force?: boolean; target_date?: string }): Promise<AiWeeklyReportGenerateResult> {
+    return request<AiWeeklyReportGenerateResult>("/api/v1/ai-tool/weekly-reports/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        force: body?.force ?? false,
+        target_date: body?.target_date ?? null,
+      }),
+    });
+  },
   async aiSubmitFeedback(body: AiFeedbackSubmitBody): Promise<AiFeedbackResponse> {
     return request<AiFeedbackResponse>("/api/v1/ai-tool/feedback", {
       method: "POST",
@@ -2001,6 +2145,12 @@ export const api = {
   // Settings module
   async getSettingsConfig(): Promise<SettingsConfigResponse> {
     return request<SettingsConfigResponse>("/api/v1/settings/config");
+  },
+  async createLemonSqueezyCheckout(body: { variant_id: string; email?: string | null }): Promise<LemonSqueezyCheckoutResponse> {
+    return request<LemonSqueezyCheckoutResponse>("/api/v1/billing/lemonsqueezy/checkout", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   },
   async updateSettingsConfig(data: SettingsConfigUpdate): Promise<SettingsConfigResponse> {
     return request<SettingsConfigResponse>("/api/v1/settings/config", {
@@ -3190,7 +3340,7 @@ export const api = {
       body: JSON.stringify(body ?? {}),
     });
   },
-  async postHrAttendanceEntriesBulk(body: { rows: Record<string, unknown>[] }): Promise<{ ok: boolean; created: number }> {
+  async postHrAttendanceEntriesBulk(body: HrAttendanceBulkEntryBody): Promise<{ ok: boolean; created: number }> {
     return request<{ ok: boolean; created: number }>("/api/v1/hr/attendance/entries/bulk", {
       method: "POST",
       body: JSON.stringify(body),
@@ -6308,6 +6458,21 @@ export const api = {
     return request<Record<string, unknown>>(`/api/v1/erp-ai/governance/proposals/${proposalId}/rollback`, {
       method: "POST",
     });
+  },
+  async getErpAiGovernanceProposals(params?: {
+    status_filter?: "proposed" | "approved" | "rejected" | "rolled_back" | "all" | string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AiGovernanceProposal[]> {
+    const q = new URLSearchParams();
+    if (params?.status_filter != null) q.set("status_filter", params.status_filter);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<AiGovernanceProposal[]>(`/api/v1/erp-ai/governance/proposals${suffix}`);
+  },
+  async aiListAutomationRules(): Promise<AiAutomationRuleRow[]> {
+    return request<AiAutomationRuleRow[]>("/api/v1/ai-tool/automation/rules");
   },
   async getTenantOverview(): Promise<TenantOverviewReport> {
     return request<TenantOverviewReport>("/api/v1/reports/tenant-overview");
@@ -10888,6 +11053,8 @@ export interface InventoryDocumentPrintPayload {
     generated_at?: string;
     title?: string;
     copy_labels?: string[];
+    /** Optional; same pattern as vouchers — relative `/api/v1/...` path. */
+    verification_url?: string | null;
   };
 }
 
@@ -13577,6 +13744,10 @@ export interface AccountGroupHierarchyNode {
   depth?: number;
 }
 
+/** Financier / contract rollup bucket for GL accounts and optional per-voucher-line override. */
+export const FINANCE_COST_NATURE_CODES = ["MATERIAL", "CM", "OTHER", "NON_OPERATING"] as const;
+export type FinanceCostNature = (typeof FINANCE_COST_NATURE_CODES)[number];
+
 export interface ChartOfAccountCreate {
   account_number?: string;
   name: string;
@@ -13596,6 +13767,8 @@ export interface ChartOfAccountCreate {
   parent_account_id?: number | null;
   last_reviewed_at?: string | null;
   enable_bill_wise?: boolean;
+  /** Default cost bucket for reporting; null = inherit none / unknown. */
+  cost_nature?: FinanceCostNature | null;
 }
 
 export interface ChartOfAccountResponse extends ChartOfAccountCreate {
@@ -13660,6 +13833,8 @@ export interface VoucherLineCreate {
   entry_type: "DEBIT" | "CREDIT";
   amount: string;
   notes?: string;
+  /** When set, overrides chart_of_accounts.cost_nature for this line. */
+  cost_nature_override?: FinanceCostNature | null;
 }
 
 export interface VoucherCreate {
@@ -14335,6 +14510,8 @@ export interface VoucherPrintResponse {
     account_name: string;
     cost_center_id: number | null;
     cost_center_name: string;
+    /** Override, or account default with "(acct)" suffix, or "—". */
+    cost_nature: string;
     entry_type: string;
     currency: string;
     exchange_rate: string;

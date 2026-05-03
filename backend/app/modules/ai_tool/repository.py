@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Order
@@ -311,13 +311,29 @@ async def list_forecast_runs(
     tenant_id: int,
     user_id: int,
     limit: int = 30,
+    offset: int = 0,
+    forecast_code: str | None = None,
+    statuses: list[str] | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    min_confidence: float | None = None,
 ) -> list[AiForecastRun]:
-    result = await db.execute(
-        select(AiForecastRun)
-        .where(AiForecastRun.tenant_id == tenant_id, AiForecastRun.user_id == user_id)
-        .order_by(AiForecastRun.created_at.desc(), AiForecastRun.id.desc())
-        .limit(limit)
-    )
+    base = and_(AiForecastRun.tenant_id == tenant_id, AiForecastRun.user_id == user_id)
+    stmt = select(AiForecastRun).where(base)
+    if forecast_code:
+        stmt = stmt.where(AiForecastRun.forecast_code == forecast_code)
+    if statuses:
+        stmt = stmt.where(AiForecastRun.status.in_(statuses))
+    else:
+        stmt = stmt.where(AiForecastRun.status != "DELETED")
+    if since:
+        stmt = stmt.where(AiForecastRun.created_at >= since)
+    if until:
+        stmt = stmt.where(AiForecastRun.created_at <= until)
+    if min_confidence is not None:
+        stmt = stmt.where(AiForecastRun.confidence_score >= min_confidence)
+    stmt = stmt.order_by(AiForecastRun.created_at.desc(), AiForecastRun.id.desc()).limit(limit).offset(offset)
+    result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
@@ -333,9 +349,83 @@ async def get_forecast_run(
             AiForecastRun.id == run_id,
             AiForecastRun.tenant_id == tenant_id,
             AiForecastRun.user_id == user_id,
+            AiForecastRun.status != "DELETED",
         )
     )
     return result.scalar_one_or_none()
+
+
+async def summarize_forecast_runs(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    user_id: int,
+) -> dict:
+    base = and_(
+        AiForecastRun.tenant_id == tenant_id,
+        AiForecastRun.user_id == user_id,
+        AiForecastRun.status != "DELETED",
+    )
+    total = (await db.execute(select(func.count(AiForecastRun.id)).where(base))).scalar_one()
+    last_at = (await db.execute(select(func.max(AiForecastRun.created_at)).where(base))).scalar_one()
+    avg_conf = (await db.execute(select(func.avg(AiForecastRun.confidence_score)).where(base))).scalar_one()
+
+    by_code_rows = (
+        await db.execute(
+            select(AiForecastRun.forecast_code, func.count())
+            .where(base)
+            .group_by(AiForecastRun.forecast_code)
+        )
+    ).all()
+    by_status_rows = (
+        await db.execute(
+            select(AiForecastRun.status, func.count()).where(base).group_by(AiForecastRun.status)
+        )
+    ).all()
+    failures = (
+        await db.execute(
+            select(AiForecastRun)
+            .where(
+                AiForecastRun.tenant_id == tenant_id,
+                AiForecastRun.user_id == user_id,
+                AiForecastRun.status == "FAILED",
+            )
+            .order_by(AiForecastRun.created_at.desc())
+            .limit(5)
+        )
+    ).scalars().all()
+
+    return {
+        "total_runs": int(total or 0),
+        "last_run_at": last_at,
+        "avg_confidence": float(avg_conf) if avg_conf is not None else None,
+        "by_forecast_code": {str(code): int(c) for code, c in by_code_rows},
+        "by_status": {str(st): int(c) for st, c in by_status_rows},
+        "recent_failures": [
+            {
+                "id": r.id,
+                "forecast_code": r.forecast_code,
+                "created_at": r.created_at,
+                "reason": r.narrative_explanation,
+            }
+            for r in failures
+        ],
+    }
+
+
+async def delete_forecast_run(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    user_id: int,
+    run_id: int,
+) -> bool:
+    row = await get_forecast_run(db, tenant_id=tenant_id, user_id=user_id, run_id=run_id)
+    if not row:
+        return False
+    row.status = "DELETED"
+    await db.flush()
+    return True
 
 
 async def create_system_task(
@@ -571,6 +661,19 @@ async def create_automation_rule(
     db.add(row)
     await db.flush()
     return row
+
+
+async def list_automation_rules(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+) -> list[AiAutomationRule]:
+    result = await db.execute(
+        select(AiAutomationRule)
+        .where(AiAutomationRule.tenant_id == tenant_id)
+        .order_by(AiAutomationRule.rule_code.asc())
+    )
+    return list(result.scalars().all())
 
 
 async def list_action_runs(

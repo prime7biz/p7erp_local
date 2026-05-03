@@ -11,6 +11,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { SecureImage } from "@/components/SecureImage";
 import { logApiError } from "@/utils/logApiError";
+import { inventoryPrintVerifyUrl } from "@/utils/verifyPrintUrl";
 import "@/styles/quotation-print.css";
 
 export function GoodsReceivingPrintPage() {
@@ -99,10 +100,7 @@ export function GoodsReceivingPrintPage() {
   const watermarkText = st === "RECEIVED" ? "Received" : "Draft";
   const watermarkClass = st === "RECEIVED" ? "qp-watermark-final" : "qp-watermark-draft";
 
-  const verifyQrUrl =
-    printPayload?.verification_path && typeof window !== "undefined"
-      ? `${window.location.origin}${printPayload.verification_path.startsWith("/") ? "" : "/"}${printPayload.verification_path}`
-      : "";
+  const verifyQrUrl = printPayload ? inventoryPrintVerifyUrl(printPayload) : "";
 
   return (
     <div className="qp-root">

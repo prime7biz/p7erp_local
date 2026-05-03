@@ -568,7 +568,9 @@ async def _stock_summary_page_sql(
     def _ord(col):
         return col.asc() if sort_ascending else col.desc()
 
-    wh_sort = wh_name_coalesced.nulls_last()
+    # coalesce(name, '') is never NULL; do not chain .nulls_last() before .asc() — PostgreSQL
+    # requires "... ASC NULLS LAST", and SQLAlchemy emits "NULLS LAST ASC" from that pattern.
+    wh_sort = wh_name_coalesced
 
     if sk == "warehouse":
         order_cols = (_ord(wh_sort), _ord(Item.item_code))
@@ -3728,6 +3730,11 @@ async def create_delivery_challan(
             )
         )
         linked_order_ids.append(oid)
+    await db.flush()
+    lines_result = await db.execute(select(DeliveryChallanItem).where(DeliveryChallanItem.challan_id == row.id))
+    item_lines = list(lines_result.scalars().all())
+    # Sign at creation so print / QR work before POSTED (re-signed on POST with updated status in payload).
+    sign_delivery_challan(row, item_lines, linked_order_ids)
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     lines_result = await db.execute(select(DeliveryChallanItem).where(DeliveryChallanItem.challan_id == row.id))
@@ -3868,6 +3875,9 @@ async def create_enhanced_gate_pass(
         code = await next_tenant_code(db, model=EnhancedGatePass, tenant_id=tenant.id, prefix="GP-", width=4)
     row = EnhancedGatePass(tenant_id=tenant.id, gate_pass_code=code, **body.model_dump(exclude={"gate_pass_code"}))
     db.add(row)
+    await flush_handling_duplicate_document_code(db)
+    # Sign at creation so print / QR work before RELEASED (re-signed on RELEASED with updated status in payload).
+    sign_gate_pass(row)
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     return row
@@ -6176,6 +6186,22 @@ async def delivery_challan_print_data(
         .scalars()
         .all()
     )
+    if not getattr(row, "verification_id", None):
+        oids = list(
+            (
+                await db.execute(
+                    select(DeliveryChallanOrder.order_id).where(
+                        DeliveryChallanOrder.tenant_id == tenant.id,
+                        DeliveryChallanOrder.delivery_challan_id == row.id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        sign_delivery_challan(row, lines, oids)
+        await db.commit()
+        await db.refresh(row)
     item_ids = {ln.item_id for ln in lines}
     items_map: dict[int, Item] = {}
     for iid in item_ids:
@@ -6266,6 +6292,10 @@ async def gate_pass_print_data(
         dc = await db.get(DeliveryChallan, row.challan_id)
         if dc and dc.tenant_id == tenant.id:
             challan_code = dc.challan_code
+    if not getattr(row, "verification_id", None):
+        sign_gate_pass(row)
+        await db.commit()
+        await db.refresh(row)
     vid = getattr(row, "verification_id", None) or ""
     verification_path = f"{get_settings().api_v1_prefix}/inventory/documents/verify/{vid}" if vid else None
     return {

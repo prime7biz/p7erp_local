@@ -142,3 +142,23 @@ async def mark_rollback(
     row.status = "rolled_back"
     await db.flush()
     return row
+
+
+async def list_proposals(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    status_filter: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[AiControlledActionProposal]:
+    stmt = select(AiControlledActionProposal).where(AiControlledActionProposal.tenant_id == tenant_id)
+    if status_filter and status_filter != "all":
+        stmt = stmt.where(AiControlledActionProposal.status == status_filter)
+    stmt = (
+        stmt.order_by(AiControlledActionProposal.created_at.desc(), AiControlledActionProposal.id.desc())
+        .limit(max(1, min(200, limit)))
+        .offset(max(0, offset))
+    )
+    res = await db.execute(stmt)
+    return list(res.scalars().all())

@@ -136,6 +136,13 @@ class Settings(BaseSettings):
     platform_admin_jwt_expire_minutes: int = 480
     backup_dir: str = "./backups"
 
+    # Lemon Squeezy (Merchant of Record) — see backend/.env.example
+    lemonsqueezy_api_key: str = ""
+    lemonsqueezy_store_id: str = ""
+    lemonsqueezy_webhook_secret: str = ""
+    lemonsqueezy_api_base_url: str = "https://api.lemonsqueezy.com"
+    lemonsqueezy_checkout_success_url: str = ""
+
     # Trade document storage: currently backend uses local media/trade_docs; future: trade_docs_backend=local|s3, bucket, etc.
     # trade_docs_backend: str = "local"
 

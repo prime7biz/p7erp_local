@@ -160,6 +160,31 @@ class AiForecastRunResponse(BaseModel):
     celery_task_id: str | None = None
 
 
+class AiForecastTemplateInfo(BaseModel):
+    forecast_code: str
+    forecast_name: str
+    source_modules: list[str] = Field(default_factory=list)
+    required_permission_keys: list[str] = Field(default_factory=list)
+    example_prompt: str
+    default_horizon_days: int = 30
+
+
+class AiForecastSummaryFailure(BaseModel):
+    id: int
+    forecast_code: str
+    created_at: datetime
+    reason: str | None = None
+
+
+class AiForecastSummaryResponse(BaseModel):
+    total_runs: int
+    last_run_at: datetime | None
+    avg_confidence: float | None
+    by_forecast_code: dict[str, int] = Field(default_factory=dict)
+    by_status: dict[str, int] = Field(default_factory=dict)
+    recent_failures: list[AiForecastSummaryFailure] = Field(default_factory=list)
+
+
 class AiKnowledgeSourceReference(BaseModel):
     document_code: str
     document_title: str
@@ -269,6 +294,12 @@ class AiOpsOverviewResponse(BaseModel):
     tool_success_rate: float
 
 
+class AiWeeklyReportDeltaEntry(BaseModel):
+    current: float | int | None = None
+    previous: float | int | None = None
+    change: float | int | None = None
+
+
 class AiWeeklyReportResponse(BaseModel):
     id: int
     tenant_id: int
@@ -276,6 +307,7 @@ class AiWeeklyReportResponse(BaseModel):
     week_end: date
     narrative: str
     kpi_snapshot_json: dict[str, Any] | None = None
+    delta: dict[str, AiWeeklyReportDeltaEntry] | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -283,6 +315,30 @@ class AiWeeklyReportResponse(BaseModel):
 
 class AiWeeklyReportListResponse(BaseModel):
     items: list[AiWeeklyReportResponse]
+
+
+class AiWeeklyReportGenerateRequest(BaseModel):
+    force: bool = False
+    target_date: date | None = None
+
+
+AiWeeklyReportGenerateStatus = Literal[
+    "created", "exists", "updated", "skipped_no_gemini", "skipped_empty"
+]
+
+
+class AiWeeklyReportGenerateResponse(BaseModel):
+    status: AiWeeklyReportGenerateStatus
+    report: AiWeeklyReportResponse | None = None
+
+
+class AiWeeklyReportStatusResponse(BaseModel):
+    gemini_configured: bool
+    current_week_start: date
+    current_week_end: date
+    has_current_week_report: bool
+    last_report_created_at: datetime | None = None
+    next_scheduled_utc: datetime
 
 
 class AiSystemTaskCreateRequest(BaseModel):

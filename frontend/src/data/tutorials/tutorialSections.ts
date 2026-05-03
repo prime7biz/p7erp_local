@@ -1020,6 +1020,7 @@ Your administrator turns it on under **Settings → Configuration** using the **
 
 ## Tips
 
+- **AI Predictions** includes forecast templates, KPI summary, filters, run history with charts, a detail drawer (copy JSON), soft-delete for old runs, profitability narrative, and recent anomaly alerts with links to related modules.
 - Availability and behavior depend on tenant configuration and backend features.`,
         tags: ["AI", "assistant", "automation"],
         lastUpdated: "2026-04-04",

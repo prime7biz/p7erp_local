@@ -1,5 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { api, type ChartOfAccountCreate, type ChartOfAccountResponse, type AccountGroupResponse, type CoAConfigResponse } from "@/api/client";
+import {
+  api,
+  FINANCE_COST_NATURE_CODES,
+  type ChartOfAccountCreate,
+  type ChartOfAccountResponse,
+  type AccountGroupResponse,
+  type CoAConfigResponse,
+} from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { downloadCsv } from "@/lib/reportExport";
 
@@ -19,6 +26,7 @@ const defaultForm: ChartOfAccountCreate = {
   parent_account_id: null,
   last_reviewed_at: "",
   enable_bill_wise: false,
+  cost_nature: null,
 };
 
 export function ChartOfAccountsPage() {
@@ -87,6 +95,7 @@ export function ChartOfAccountsPage() {
         last_reviewed_at: form.last_reviewed_at?.trim() || undefined,
         reporting_code: form.reporting_code?.trim() || undefined,
         statistical_unit: form.statistical_unit?.trim() || undefined,
+        cost_nature: form.cost_nature ?? null,
       };
       if (editingId) {
         await api.updateChartOfAccount(editingId, payload);
@@ -104,15 +113,25 @@ export function ChartOfAccountsPage() {
   function startEdit(row: ChartOfAccountResponse) {
     setEditingId(row.id);
     setForm({
+      ...defaultForm,
       account_number: row.account_number,
       name: row.name,
       group_id: row.group_id,
       normal_balance: row.normal_balance,
       opening_balance: row.opening_balance,
-      description: row.description,
+      description: row.description ?? "",
       is_active: row.is_active,
       is_bank_account: row.is_bank_account,
       enable_bill_wise: row.enable_bill_wise ?? false,
+      account_type: row.account_type ?? "posting",
+      reporting_code: row.reporting_code ?? "",
+      display_order: row.display_order ?? 0,
+      statistical_unit: row.statistical_unit ?? "",
+      parent_account_id: row.parent_account_id ?? null,
+      last_reviewed_at: row.last_reviewed_at ?? "",
+      cost_nature: row.cost_nature ?? null,
+      account_currency: row.account_currency ?? undefined,
+      maintain_fc_balance: row.maintain_fc_balance ?? false,
     });
   }
 
@@ -533,6 +552,26 @@ export function ChartOfAccountsPage() {
               value={form.last_reviewed_at ?? ""}
               onChange={(e) => setForm((p) => ({ ...p, last_reviewed_at: e.target.value || undefined }))}
             />
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs text-text-muted">Cost nature (reporting / financier rollups)</label>
+              <select
+                className="w-full rounded border px-3 py-2 text-sm"
+                value={form.cost_nature ?? ""}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    cost_nature: e.target.value ? (e.target.value as (typeof FINANCE_COST_NATURE_CODES)[number]) : null,
+                  }))
+                }
+              >
+                <option value="">Not set (unknown)</option>
+                {FINANCE_COST_NATURE_CODES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
           </>
         ) : null}
         <div className="flex flex-wrap justify-end gap-2 sm:col-span-2 lg:col-span-1">
@@ -560,6 +599,7 @@ export function ChartOfAccountsPage() {
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Group</th>
               <th className="px-4 py-3">Type</th>
+              <th className="px-4 py-3">Cost nature</th>
               <th className="px-4 py-3">Normal</th>
               <th className="px-4 py-3">Opening</th>
               <th className="px-4 py-3">Balance</th>
@@ -570,13 +610,13 @@ export function ChartOfAccountsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td className="px-4 py-6 text-text-muted" colSpan={8}>
+                <td className="px-4 py-6 text-text-muted" colSpan={9}>
                   Loading chart of accounts...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 text-text-muted" colSpan={8}>
+                <td className="px-4 py-6 text-text-muted" colSpan={9}>
                   No ledger accounts found.
                 </td>
               </tr>
@@ -587,6 +627,7 @@ export function ChartOfAccountsPage() {
                   <td className="px-4 py-3">{r.name}</td>
                   <td className="px-4 py-3">{groupMap.get(r.group_id) || "-"}</td>
                   <td className="px-4 py-3">{r.account_type ?? "posting"}</td>
+                  <td className="px-4 py-3 text-text-muted">{r.cost_nature ?? "—"}</td>
                   <td className="px-4 py-3 uppercase">{r.normal_balance}</td>
                   <td className="px-4 py-3">{Number(r.opening_balance || 0).toLocaleString()}</td>
                   <td className="px-4 py-3">{Number(r.balance || 0).toLocaleString()}</td>

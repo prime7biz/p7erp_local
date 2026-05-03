@@ -21,7 +21,7 @@
 .vp-copy-badge {
   position: absolute;
   top: 14px;
-  right: 14px;
+  left: 14px;
   padding: 2px 10px;
   border: 1px solid #94a3b8;
   border-radius: 999px;
@@ -339,6 +339,15 @@
 
   .vp-voucher-title-bar {
     background: #f1f5f9 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* QR (SVG) must stay visible in print/PDF in Chromium-based browsers */
+  .vp-qr-box svg {
+    display: block !important;
+    width: 80px !important;
+    height: 80px !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

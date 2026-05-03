@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { api, type VoucherPrintResponse } from "@/api/client";
+import { voucherPrintVerificationUrl } from "@/utils/verifyPrintUrl";
 import "@/styles/voucher-print.css";
 
 const ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
@@ -37,11 +38,7 @@ export function VoucherPrintPage() {
   const [template, setTemplate] = useState<"standard" | "compact" | "audit">("standard");
   const queryVoucherId = searchParams.get("voucher_id");
 
-  const verificationUrl = useMemo(() => {
-    if (!data?.voucher.verification_id) return "";
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return `${origin}/api/v1/finance/vouchers/verify/${encodeURIComponent(data.voucher.verification_id)}`;
-  }, [data?.voucher.verification_id]);
+  const verificationUrl = useMemo(() => voucherPrintVerificationUrl(data), [data]);
 
   async function loadById(id: number) {
     setError("");

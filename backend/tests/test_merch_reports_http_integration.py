@@ -13,7 +13,7 @@ from app.database import get_db
 from app.main import app
 from app.models import Inquiry
 
-from tests.merch_fixtures import create_customer, create_merch_tenant_with_user
+from tests.merch_fixtures import create_customer, create_garment_style, create_merch_tenant_with_user
 
 
 def _setup_app_overrides(db, tenant, user):
@@ -182,12 +182,33 @@ async def test_style_summary_report_and_wastage_list_ok(db_session_integration):
             assert sr.status_code == 200, sr.text
             assert isinstance(sr.json(), list)
 
+            cust = await create_customer(db, tenant)
+            st = await create_garment_style(db, tenant, cust)
+            await db.commit()
+            # Styles page always passes style_ids + report_limit (SQL case() order); must not 500.
+            sr2 = await ac.get(
+                "/api/v1/merch/styles/summary-report",
+                params=[("style_ids", str(st.id)), ("report_limit", "10"), ("report_offset", "0")],
+                headers={"X-Tenant-Id": str(tenant.id)},
+            )
+            assert sr2.status_code == 200, sr2.text
+            assert isinstance(sr2.json(), list)
+            assert sr2.headers.get("X-Total-Count") is not None
+
             w = await ac.get(
                 "/api/v1/merch/reports/wastage",
                 headers={"X-Tenant-Id": str(tenant.id)},
             )
             assert w.status_code == 200, w.text
             assert isinstance(w.json(), list)
+
+            pf = await ac.get(
+                "/api/v1/merch/pipeline/full",
+                headers={"X-Tenant-Id": str(tenant.id)},
+            )
+            assert pf.status_code == 200, pf.text
+            body = pf.json()
+            assert "stages" in body and "items" in body and "summary" in body
     finally:
         _clear_app_overrides()
 

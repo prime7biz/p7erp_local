@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import Role, Tenant, User
+from app.models.ai_controlled_action import AiControlledActionProposal
 from app.modules.ai_tool.audit import log_ai_event
 from app.modules.erp_ai_phases import copilot_service as copilot_svc
 from app.modules.erp_ai_phases import document_ai_service as doc_ai_svc
@@ -97,6 +98,42 @@ class GovernanceProposeBody(BaseModel):
     rule_code: str = Field(..., min_length=2, max_length=64)
     payload_json: dict | None = None
     idempotency_key: str | None = Field(default=None, max_length=128)
+
+
+class GovernanceProposalOut(BaseModel):
+    id: int
+    tenant_id: int
+    rule_code: str
+    status: str
+    payload_json: dict | None = None
+    created_by_user_id: int | None = None
+    approved_by_user_id: int | None = None
+    rejected_by_user_id: int | None = None
+    rejected_reason: str | None = None
+    created_at: str
+    approved_at: str | None = None
+    rejected_at: str | None = None
+    executed_at: str | None = None
+    rolled_back_at: str | None = None
+
+    @classmethod
+    def from_row(cls, r: AiControlledActionProposal) -> "GovernanceProposalOut":
+        return cls(
+            id=r.id,
+            tenant_id=r.tenant_id,
+            rule_code=r.rule_code,
+            status=r.status,
+            payload_json=r.payload_json,
+            created_by_user_id=r.created_by_user_id,
+            approved_by_user_id=r.approved_by_user_id,
+            rejected_by_user_id=r.rejected_by_user_id,
+            rejected_reason=r.rejected_reason,
+            created_at=r.created_at.isoformat() if r.created_at else "",
+            approved_at=r.approved_at.isoformat() if r.approved_at else None,
+            rejected_at=r.rejected_at.isoformat() if r.rejected_at else None,
+            executed_at=r.executed_at.isoformat() if r.executed_at else None,
+            rolled_back_at=r.rolled_back_at.isoformat() if r.rolled_back_at else None,
+        )
 
 
 @router.post("/governance/proposals")
@@ -229,3 +266,25 @@ async def governance_rollback(
     )
     await db.commit()
     return {"id": row.id, "status": row.status}
+
+
+@router.get("/governance/proposals", response_model=list[GovernanceProposalOut])
+async def governance_list(
+    status_filter: str | None = Query(default=None, alias="status_filter"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List controlled automation proposals for the tenant. Read for any authenticated user when the phase is enabled."""
+    _ensure(user, tenant)
+    require_phase("ai_controlled_automation", tenant=tenant)
+    rows = await gov_svc.list_proposals(
+        db,
+        tenant_id=tenant.id,
+        status_filter=status_filter,
+        limit=limit,
+        offset=offset,
+    )
+    return [GovernanceProposalOut.from_row(r) for r in rows]

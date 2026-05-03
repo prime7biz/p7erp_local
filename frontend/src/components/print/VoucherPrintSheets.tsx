@@ -118,6 +118,7 @@ export function VoucherPrintSheets({ data, copyCount, template, verificationUrl 
                 <th className="vp-th">Account Code</th>
                 <th className="vp-th">Account Name</th>
                 <th className="vp-th">Cost Center</th>
+                <th className="vp-th">Cost nature</th>
                 <th className="vp-th vp-th-right">Debit</th>
                 <th className="vp-th vp-th-right">Credit</th>
                 <th className="vp-th">Notes</th>
@@ -130,6 +131,7 @@ export function VoucherPrintSheets({ data, copyCount, template, verificationUrl 
                   <td className="vp-td">{line.account_code}</td>
                   <td className="vp-td">{line.account_name}</td>
                   <td className="vp-td">{line.cost_center_name || "—"}</td>
+                  <td className="vp-td">{line.cost_nature ?? "—"}</td>
                   <td className="vp-td vp-td-right">
                     {line.entry_type === "DEBIT" ? line.amount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : ""}
                   </td>
@@ -142,7 +144,7 @@ export function VoucherPrintSheets({ data, copyCount, template, verificationUrl 
             </tbody>
             <tfoot>
               <tr className="vp-totals-row">
-                <td className="vp-td" colSpan={4}>
+                <td className="vp-td" colSpan={5}>
                   <strong>Total</strong>
                 </td>
                 <td className="vp-td vp-td-right">

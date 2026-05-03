@@ -131,8 +131,11 @@ services:
   frontend:
     image: ${FRONTEND_IMAGE:-your-dockerhub-user/p7erp-frontend:latest}
     restart: always
+    # Wait until /health succeeds; otherwise nginx proxies to a backend that is still
+    # running migrations or not listening yet → 502 on /api/* in the browser.
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "5173:80"
     healthcheck:

@@ -50,6 +50,8 @@ from app.modules.logistics.router import router as logistics_router
 from app.modules.control_tower.router import router as control_tower_router
 from app.modules.files.router import router as files_router
 from app.modules.admin.router import router as admin_router
+from app.modules.billing_lemonsqueezy.router import router as lemonsqueezy_api_router
+from app.modules.billing_lemonsqueezy.router import webhook_router as lemonsqueezy_webhook_router
 from app.modules.announcements.router import router as announcements_router
 from app.modules.support.router import router as tenant_support_router
 from app.external_access.auth.router import router as external_auth_router
@@ -291,6 +293,8 @@ app.include_router(control_tower_router, prefix=settings.api_v1_prefix)
 app.include_router(admin_router, prefix=settings.api_v1_prefix + "/admin")
 app.include_router(announcements_router, prefix=settings.api_v1_prefix)
 app.include_router(tenant_support_router, prefix=settings.api_v1_prefix)
+app.include_router(lemonsqueezy_api_router, prefix=settings.api_v1_prefix)
+app.include_router(lemonsqueezy_webhook_router)
 
 
 @app.get("/health")

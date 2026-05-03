@@ -1,13 +1,7 @@
 import { QRCodeSVG } from "qrcode.react";
 import "@/styles/voucher-print.css";
 import type { InventoryDocumentPrintPayload } from "@/api/client";
-
-function fullVerifyUrl(verificationPath: string | null | undefined): string {
-  if (!verificationPath) return "";
-  if (verificationPath.startsWith("http")) return verificationPath;
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  return `${origin}${verificationPath.startsWith("/") ? "" : "/"}${verificationPath}`;
-}
+import { inventoryPrintVerifyUrl } from "@/utils/verifyPrintUrl";
 
 type Props = {
   data: InventoryDocumentPrintPayload;
@@ -16,7 +10,7 @@ type Props = {
 };
 
 export function InventoryDocumentPrintSheets({ data, copyCount, template }: Props) {
-  const verifyUrl = fullVerifyUrl(data.verification_path);
+  const verifyUrl = inventoryPrintVerifyUrl(data);
   const copyLabels = data.print_meta?.copy_labels ?? ["Original", "Duplicate", "Triplicate"];
   const title = (data.print_meta?.title as string) || data.document_type.replace(/_/g, " ");
   const doc = data.document;

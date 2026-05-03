@@ -1,110 +1,100 @@
-import { useCallback, useEffect, useState } from "react";
-import { api, type AiActionRunResponse } from "@/api/client";
-import { logApiError } from "@/utils/logApiError";
-import { AlertTriangle, RefreshCw, ShieldCheck } from "lucide-react";
+import { useEffect, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
+import { AiAutomationHeader } from "./components/automation/AiAutomationHeader";
+import { AiAutomationTabs, type AutomationTab } from "./components/automation/AiAutomationTabs";
+import { AiDataQualityCard } from "./components/automation/AiDataQualityCard";
+import { AiActionProposeCard } from "./components/automation/AiActionProposeCard";
+import { AiActionRunsTable } from "./components/automation/AiActionRunsTable";
+import { AiRulesCatalogCard } from "./components/automation/AiRulesCatalogCard";
+import { AiGovernanceInbox } from "./components/automation/AiGovernanceInbox";
+import { AiStateNotice } from "./components/AiStateNotice";
+import { useAiAutomation } from "./hooks/useAiAutomation";
+
+const TAB_VALUES: readonly AutomationTab[] = ["drafts", "quality", "rules", "governance"] as const;
+
+const ADMIN_ROLES = new Set(["admin", "super_admin", "superadmin", "owner"]);
+
+function isAdminRole(role?: string | null): boolean {
+  return ADMIN_ROLES.has((role || "").toLowerCase());
+}
+
+function normalizeTab(raw: string | null): AutomationTab {
+  if (raw && (TAB_VALUES as readonly string[]).includes(raw)) {
+    return raw as AutomationTab;
+  }
+  return "drafts";
+}
 
 export function AiAutomationPage() {
-  const [scanNarrative, setScanNarrative] = useState<string | null>(null);
-  const [issues, setIssues] = useState<Array<Record<string, unknown>>>([]);
-  const [scanLoading, setScanLoading] = useState(false);
-  const [actions, setActions] = useState<AiActionRunResponse[]>([]);
-  const [actionsLoading, setActionsLoading] = useState(true);
+  const { me } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = normalizeTab(searchParams.get("tab"));
 
-  const loadActions = useCallback(() => {
-    setActionsLoading(true);
-    api
-      .aiListActionRuns({ limit: 30 })
-      .then(setActions)
-      .catch((e) => logApiError("AiAutomation.actionRuns", e))
-      .finally(() => setActionsLoading(false));
-  }, []);
+  const governanceEnabled = me?.feature_flags?.ai_controlled_automation_enabled === true;
+  const isAdmin = isAdminRole(me?.role_name);
+  const auto = useAiAutomation({ governanceEnabled });
 
   useEffect(() => {
-    loadActions();
-  }, [loadActions]);
+    if (tab === "governance" && !governanceEnabled) {
+      const p = new URLSearchParams(searchParams);
+      p.set("tab", "drafts");
+      setSearchParams(p, { replace: true });
+    }
+  }, [tab, governanceEnabled, searchParams, setSearchParams]);
 
-  const runScan = () => {
-    setScanLoading(true);
-    api
-      .aiDataQualityScan()
-      .then((r) => {
-        setScanNarrative(r.narrative);
-        setIssues(r.issues || []);
-      })
-      .catch((e) => logApiError("AiAutomation.dataQuality", e))
-      .finally(() => setScanLoading(false));
+  const handleTab = (next: AutomationTab) => {
+    if (next === "governance" && !governanceEnabled) {
+      return;
+    }
+    const p = new URLSearchParams(searchParams);
+    p.set("tab", next);
+    setSearchParams(p, { replace: true });
   };
+
+  let body: ReactNode;
+  switch (tab) {
+    case "quality":
+      body = <AiDataQualityCard scan={auto.scan} loading={auto.scanLoading} onRun={auto.runScan} />;
+      break;
+    case "rules":
+      body = <AiRulesCatalogCard rows={auto.rules} loading={auto.rulesLoading} />;
+      break;
+    case "governance":
+      body = !governanceEnabled ? (
+        <AiStateNotice message="Governance is not enabled for your tenant." />
+      ) : (
+        <AiGovernanceInbox
+          rows={auto.proposals}
+          loading={auto.proposalsLoading}
+          statusFilter={auto.proposalsStatus}
+          canAct={isAdmin}
+          onFilterChange={(s) => void auto.refreshProposals(s)}
+          onRefresh={() => void auto.refreshProposals()}
+          onApprove={auto.approveProposal}
+          onReject={auto.rejectProposal}
+          onRollback={auto.rollbackProposal}
+        />
+      );
+      break;
+    case "drafts":
+    default:
+      body = (
+        <div className="space-y-4">
+          <AiActionProposeCard freshRun={auto.freshRun} onPropose={auto.propose} onConfirm={auto.confirm} />
+          <AiActionRunsTable rows={auto.runs} loading={auto.runsLoading} onRefresh={auto.refreshRuns} />
+        </div>
+      );
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">AI Automation</h1>
-        <p className="text-sm text-text-muted">
-          Data quality scan (Gemini narrative) and recent AI action runs (draft workflows with confirmation).
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-border bg-surface-raised p-4">
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-status-info-foreground" />
-            <h2 className="text-sm font-semibold text-text-primary">Data quality scan</h2>
-          </div>
-          <button
-            type="button"
-            onClick={() => void runScan()}
-            disabled={scanLoading}
-            className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${scanLoading ? "animate-spin" : ""}`} />
-            Run scan
-          </button>
-        </div>
-        {issues.length > 0 && (
-          <ul className="mb-3 space-y-2">
-            {issues.map((it, i) => (
-              <li key={i} className="rounded-lg border border-border bg-surface-subtle p-2 text-xs">
-                <span className="font-semibold text-text-primary">{String(it.title ?? "")}</span>
-                <span className="text-text-muted"> ({String(it.severity ?? "")})</span>
-                <p className="text-text-secondary mt-0.5">{String(it.suggestion ?? "")}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-        {scanNarrative ? (
-          <p className="text-sm text-text-secondary whitespace-pre-wrap">{scanNarrative}</p>
-        ) : (
-          <p className="text-xs text-text-muted">Run scan to check orders, BOMs, customers, and stock movements.</p>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-border bg-surface-raised p-4">
-        <h2 className="text-sm font-semibold text-text-primary mb-3">Recent AI action runs</h2>
-        {actionsLoading ? (
-          <p className="text-sm text-text-muted">Loading…</p>
-        ) : actions.length === 0 ? (
-          <p className="text-sm text-text-muted">No action runs yet. Use AI Assistant to propose a draft action.</p>
-        ) : (
-          <div className="space-y-2">
-            {actions.map((a) => (
-              <div key={a.id} className="rounded-lg border border-border p-3 text-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-text-primary">{a.action_key}</span>
-                  <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-[10px]">{a.status}</span>
-                </div>
-                <p className="text-text-secondary mt-1 line-clamp-2">{a.preview_text || a.prompt_text}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-lg border border-dashed border-border p-3 flex gap-2 text-xs text-text-muted">
-        <AlertTriangle className="h-4 w-4 shrink-0 text-status-warning-foreground" />
-        <span>
-          Destructive or financial actions still require explicit confirmation in the AI Assistant chat flow.
-        </span>
-      </div>
+      <AiAutomationHeader />
+      <AiAutomationTabs value={tab} onChange={handleTab} governanceEnabled={governanceEnabled} />
+      {auto.sessions.error ? <AiStateNotice type="error" message={auto.sessions.error} /> : null}
+      {auto.error ? <AiStateNotice type="error" message={auto.error} /> : null}
+      {auto.info ? <AiStateNotice message={auto.info} /> : null}
+      {body}
     </div>
   );
 }

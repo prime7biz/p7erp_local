@@ -10,13 +10,17 @@ from io import StringIO
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Iterable, Literal
+
+# Rollup bucket for contract / CM reporting (chart_of_accounts.cost_nature, voucher_lines.cost_nature_override).
+COST_NATURE_CODES = frozenset({"MATERIAL", "CM", "OTHER", "NON_OPERATING"})
+CostNatureLiteral = Literal["MATERIAL", "CM", "OTHER", "NON_OPERATING"]
 from urllib.error import URLError
 from urllib.request import urlopen
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import Response as BytesResponse
-from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import case, cast, func, Numeric, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -384,6 +388,17 @@ class ChartAccountBody(BaseModel):
     parent_account_id: int | None = None
     last_reviewed_at: date | None = None
     enable_bill_wise: bool = False
+    cost_nature: CostNatureLiteral | None = None
+
+    @field_validator("cost_nature", mode="before")
+    @classmethod
+    def _coerce_cost_nature(cls, v):
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            u = v.strip().upper()
+            return u if u in COST_NATURE_CODES else v
+        return v
 
 
 class ChartAccountOut(ChartAccountBody):
@@ -431,6 +446,17 @@ class VoucherLineBody(BaseModel):
     entry_type: Literal["DEBIT", "CREDIT"]
     amount: str
     notes: str | None = None
+    cost_nature_override: CostNatureLiteral | None = None
+
+    @field_validator("cost_nature_override", mode="before")
+    @classmethod
+    def _coerce_cost_nature_override(cls, v):
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            u = v.strip().upper()
+            return u if u in COST_NATURE_CODES else v
+        return v
 
 
 class VoucherBody(BaseModel):
@@ -1563,6 +1589,7 @@ async def update_chart_account(
             "last_reviewed_at",
             "statistical_unit",
             "statistical_formula",
+            "cost_nature",
         }
         data = body.model_dump(exclude={"account_number"})
         for key in allowed:
@@ -1714,7 +1741,7 @@ def _coa_export_csv(tenant_id: int, groups: list, accounts: list, group_by_id: d
     w.writerow([
         "section", "account_number", "name", "group_code", "normal_balance", "opening_balance", "balance",
         "account_currency", "maintain_fc_balance", "description", "is_active", "is_bank_account",
-        "account_type", "reporting_code", "display_order", "statistical_unit", "parent_account_number",
+        "account_type", "reporting_code", "display_order", "statistical_unit", "parent_account_number", "cost_nature",
     ])
     for a in accounts:
         group_code = group_by_id.get(a.group_id)
@@ -1727,6 +1754,7 @@ def _coa_export_csv(tenant_id: int, groups: list, accounts: list, group_by_id: d
             a.account_currency or "", a.maintain_fc_balance, a.description or "", a.is_active, a.is_bank_account,
             getattr(a, "account_type", "posting"), getattr(a, "reporting_code", "") or "",
             getattr(a, "display_order", 0), getattr(a, "statistical_unit", "") or "", parent_num,
+            (getattr(a, "cost_nature", None) or "").strip(),
         ])
     return sio.getvalue()
 
@@ -1900,6 +1928,10 @@ async def coa_import(
         parent_account_id = None
         if parent_account_number and parent_account_number in num_to_account:
             parent_account_id = num_to_account[parent_account_number].id
+        cost_nature_raw = (r.get("cost_nature") or "").strip().upper()
+        cost_nature_val: str | None = cost_nature_raw if cost_nature_raw in COST_NATURE_CODES else None
+        if cost_nature_raw and cost_nature_val is None:
+            errors.append(f"Invalid cost_nature '{cost_nature_raw}' for account {account_number}; ignored.")
         if account_number in num_to_account:
             if conflict == "abort":
                 errors.append(f"Account number already exists: {account_number}")
@@ -1920,6 +1952,8 @@ async def coa_import(
                 acct.display_order = display_order
                 acct.statistical_unit = statistical_unit
                 acct.parent_account_id = parent_account_id
+                if "cost_nature" in r:
+                    acct.cost_nature = cost_nature_val
                 updated_a += 1
         else:
             new_acct = ChartOfAccount(
@@ -1940,6 +1974,7 @@ async def coa_import(
                 display_order=display_order,
                 statistical_unit=statistical_unit,
                 parent_account_id=parent_account_id,
+                cost_nature=cost_nature_val,
                 version=1,
             )
             db.add(new_acct)
@@ -2261,6 +2296,7 @@ async def create_voucher(
             entry_type=line.entry_type,
             amount=line.amount,
             notes=line.notes,
+            cost_nature_override=line.cost_nature_override,
         )
         db.add(
             voucher_line
@@ -2412,6 +2448,7 @@ async def update_voucher(
             entry_type=line.entry_type,
             amount=line.amount,
             notes=line.notes,
+            cost_nature_override=line.cost_nature_override,
         )
         db.add(voucher_line)
         updated_lines.append(voucher_line)
@@ -3730,28 +3767,56 @@ async def cost_center_dashboard(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    centers = list((await db.execute(select(CostCenter).where(CostCenter.tenant_id == tenant.id))).scalars().all())
-    if not centers:
-        return []
-    center_ids = [c.id for c in centers]
-    all_lines = list(
-        (await db.execute(select(VoucherLine).where(VoucherLine.cost_center_id.in_(center_ids)))).scalars().all()
+    # Aggregate in the database: avoids loading all voucher lines (memory / timeouts) and keeps
+    # voucher_lines scoped to tenant_id (the previous IN(cost_center_id) query did not).
+    amt = cast(VoucherLine.amount, Numeric(18, 4))
+    debit_sum = func.coalesce(
+        func.sum(case((VoucherLine.entry_type == "DEBIT", amt), else_=0)),
+        0,
     )
-    lines_by_center: dict[int, list[VoucherLine]] = defaultdict(list)
-    for line in all_lines:
-        if line.cost_center_id is not None:
-            lines_by_center[line.cost_center_id].append(line)
-    out = []
-    for c in centers:
-        lines = lines_by_center.get(c.id, [])
-        debit = sum(_to_float(l.amount) for l in lines if l.entry_type == "DEBIT")
-        credit = sum(_to_float(l.amount) for l in lines if l.entry_type == "CREDIT")
+    credit_sum = func.coalesce(
+        func.sum(case((VoucherLine.entry_type == "CREDIT", amt), else_=0)),
+        0,
+    )
+    line_totals = (
+        select(
+            VoucherLine.cost_center_id.label("cc_id"),
+            debit_sum.label("debit_total"),
+            credit_sum.label("credit_total"),
+        )
+        .where(
+            VoucherLine.tenant_id == tenant.id,
+            VoucherLine.cost_center_id.isnot(None),
+        )
+        .group_by(VoucherLine.cost_center_id)
+    ).subquery()
+
+    rows = (
+        await db.execute(
+            select(
+                CostCenter.id,
+                CostCenter.center_code,
+                CostCenter.name,
+                CostCenter.department,
+                func.coalesce(line_totals.c.debit_total, 0).label("debit_total"),
+                func.coalesce(line_totals.c.credit_total, 0).label("credit_total"),
+            )
+            .outerjoin(line_totals, line_totals.c.cc_id == CostCenter.id)
+            .where(CostCenter.tenant_id == tenant.id)
+            .order_by(CostCenter.center_code)
+        )
+    ).all()
+
+    out: list[dict] = []
+    for r in rows:
+        debit = float(r.debit_total or 0)
+        credit = float(r.credit_total or 0)
         out.append(
             {
-                "cost_center_id": c.id,
-                "center_code": c.center_code,
-                "name": c.name,
-                "department": c.department,
+                "cost_center_id": r.id,
+                "center_code": r.center_code,
+                "name": r.name,
+                "department": r.department,
                 "debit_total": round(debit, 2),
                 "credit_total": round(credit, 2),
                 "net": round(debit - credit, 2),
@@ -5271,6 +5336,11 @@ async def voucher_print(
     if not voucher or voucher.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher not found")
     lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all())
+    if not voucher.verification_id and lines:
+        _apply_internal_signature(voucher, lines)
+        await db.commit()
+        await db.refresh(voucher)
+        lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all())
 
     created_by_name = ""
     if voucher.created_by:
@@ -5326,6 +5396,14 @@ async def voucher_print(
             total_debit += amount
         else:
             total_credit += amount
+        cn_override = getattr(line, "cost_nature_override", None)
+        acct_cn = getattr(account, "cost_nature", None) if account else None
+        if cn_override:
+            cost_nature_display = str(cn_override).upper()
+        elif acct_cn:
+            cost_nature_display = f"{str(acct_cn).upper()} (acct)"
+        else:
+            cost_nature_display = "—"
         output_lines.append(
             {
                 "line_id": line.id,
@@ -5334,6 +5412,7 @@ async def voucher_print(
                 "account_name": account_name,
                 "cost_center_id": line.cost_center_id,
                 "cost_center_name": cost_center_name,
+                "cost_nature": cost_nature_display,
                 "entry_type": line.entry_type,
                 "currency": line.currency,
                 "exchange_rate": line.exchange_rate,
@@ -5741,6 +5820,7 @@ async def reverse_voucher(
                 entry_type=flipped,
                 amount=line.amount,
                 notes=f"Reversal line of voucher {src.voucher_number}",
+                cost_nature_override=getattr(line, "cost_nature_override", None),
             )
         )
         account = locked_accounts.get(line.account_id)

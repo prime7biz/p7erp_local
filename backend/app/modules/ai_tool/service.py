@@ -31,7 +31,11 @@ from app.modules.ai_tool.authz import ensure_tenant_access, has_tool_permission,
 from app.modules.ai_tool.policy_eval import evaluate_ai_safety_for_user
 from app.modules.ai_tool.provenance import build_response_envelope
 from app.modules.ai_tool.tracing import RequestTracer
-from app.modules.ai_tool.forecasting import build_forecast_tool_result, execute_forecast_request
+from app.modules.ai_tool.forecasting import (
+    build_forecast_tool_result,
+    execute_forecast_request,
+    list_forecast_templates as list_forecast_template_dicts,
+)
 from app.modules.ai_tool.guardrails import (
     build_policy_metadata,
     call_with_timeout,
@@ -72,6 +76,9 @@ from app.modules.ai_tool.schemas import (
     AiSystemTaskCreateRequest,
     AiSystemTaskResponse,
     AiToolInvocationResult,
+    AiForecastSummaryResponse,
+    AiForecastSummaryFailure,
+    AiForecastTemplateInfo,
     EscalationPayload,
 )
 from app.modules.ai_tool.router_engine.composer import merge_route_metadata
@@ -556,11 +563,64 @@ async def list_forecast_runs(
     tenant: Tenant,
     user: User,
     limit: int,
+    offset: int = 0,
+    forecast_code: str | None = None,
+    statuses: list[str] | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    min_confidence: float | None = None,
 ) -> list[AiForecastRunResponse]:
     ensure_tenant_access(user, tenant)
     await require_ai_access(db, user)
-    rows = await repository.list_forecast_runs(db, tenant_id=tenant.id, user_id=user.id, limit=limit)
+    rows = await repository.list_forecast_runs(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        limit=limit,
+        offset=offset,
+        forecast_code=forecast_code,
+        statuses=statuses,
+        since=since,
+        until=until,
+        min_confidence=min_confidence,
+    )
     return [_forecast_to_schema(row) for row in rows]
+
+
+async def get_forecast_summary(
+    db: AsyncSession, *, tenant: Tenant, user: User
+) -> AiForecastSummaryResponse:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    data = await repository.summarize_forecast_runs(db, tenant_id=tenant.id, user_id=user.id)
+    return AiForecastSummaryResponse(
+        total_runs=data["total_runs"],
+        last_run_at=data["last_run_at"],
+        avg_confidence=data["avg_confidence"],
+        by_forecast_code=data["by_forecast_code"],
+        by_status=data["by_status"],
+        recent_failures=[AiForecastSummaryFailure(**f) for f in data["recent_failures"]],
+    )
+
+
+async def list_forecast_template_catalog(
+    db: AsyncSession, *, tenant: Tenant, user: User
+) -> list[AiForecastTemplateInfo]:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    return [AiForecastTemplateInfo(**t) for t in list_forecast_template_dicts()]
+
+
+async def delete_forecast_run(
+    db: AsyncSession, *, tenant: Tenant, user: User, run_id: int
+) -> None:
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    ok = await repository.delete_forecast_run(
+        db, tenant_id=tenant.id, user_id=user.id, run_id=run_id
+    )
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Forecast run not found")
 
 
 async def get_forecast_run_by_id(

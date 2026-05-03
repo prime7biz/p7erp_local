@@ -15,6 +15,7 @@ import { LinkedRecordsSection, type LinkedRecordRow } from "@/components/app/Lin
 import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
 import { logApiError } from "@/utils/logApiError";
+import { voucherPrintVerificationUrl } from "@/utils/verifyPrintUrl";
 
 const WORKFLOW_STEPS = ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED"];
 const ACTION_TO_STATUS: Record<string, string> = {
@@ -170,6 +171,13 @@ export function VoucherDetailPage() {
     if (!ccId) return "—";
     const c = costCenters.find((x) => x.id === ccId);
     return c ? `${c.center_code} — ${c.name}` : `CC #${ccId}`;
+  }
+
+  function lineCostNatureLabel(line: { account_id: number; cost_nature_override?: string | null }) {
+    if (line.cost_nature_override) return line.cost_nature_override;
+    const a = accounts.find((x) => x.id === line.account_id);
+    const d = a?.cost_nature;
+    return d ? `${d} (account)` : "—";
   }
 
   const runAction = useCallback(
@@ -482,6 +490,7 @@ export function VoucherDetailPage() {
                 <th className="w-10 px-3 py-2 text-center">#</th>
                 <th className="px-3 py-2">Account</th>
                 <th className="px-3 py-2">Cost Center</th>
+                <th className="px-3 py-2">Cost nature</th>
                 <th className="px-3 py-2 text-right">Debit</th>
                 <th className="px-3 py-2 text-right">Credit</th>
                 <th className="px-3 py-2">Notes</th>
@@ -493,6 +502,7 @@ export function VoucherDetailPage() {
                   <td className="px-3 py-2 text-center text-text-muted">{idx + 1}</td>
                   <td className="px-3 py-2">{accountName(line.account_id)}</td>
                   <td className="px-3 py-2">{costCenterName(line.cost_center_id)}</td>
+                  <td className="px-3 py-2 text-text-muted">{lineCostNatureLabel(line)}</td>
                   <td className="px-3 py-2 text-right font-medium">
                     {line.entry_type === "DEBIT" ? Number(line.amount).toLocaleString(undefined, { minimumFractionDigits: 2 }) : ""}
                   </td>
@@ -505,7 +515,7 @@ export function VoucherDetailPage() {
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-border bg-surface-subtle">
-                <td colSpan={3} className="px-3 py-2 text-right font-semibold">
+                <td colSpan={4} className="px-3 py-2 text-right font-semibold">
                   Totals
                 </td>
                 <td className="px-3 py-2 text-right font-semibold">{debitTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
@@ -707,11 +717,7 @@ export function VoucherDetailPage() {
             data={printData}
             copyCount={printCopyCount}
             template={printTemplate}
-            verificationUrl={(() => {
-              if (!printData.voucher.verification_id) return "";
-              const origin = typeof window !== "undefined" ? window.location.origin : "";
-              return `${origin}/api/v1/finance/vouchers/verify/${encodeURIComponent(printData.voucher.verification_id)}`;
-            })()}
+            verificationUrl={voucherPrintVerificationUrl(printData)}
           />
         </PrintPreviewModal>
       ) : null}

@@ -11,6 +11,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.money import format_money
 from app.common.tenant import require_tenant
 from app.common.workflow import (
     INQUIRY_TRANSITIONS,
@@ -202,7 +203,7 @@ async def get_pipeline_full(
                 style_ref=qt.style_ref,
                 style_name=None,
                 quantity=qt.projected_quantity,
-                total_amount=qt.total_amount,
+                total_amount=format_money(qt.total_amount),
                 created_at=qt.created_at.isoformat(),
                 detail_path=f"/app/quotations/{qt.id}",
                 next_status_options=next_options,

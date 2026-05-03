@@ -1,14 +1,24 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from datetime import datetime
+
+from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.tenant import require_tenant
 from app.database import get_db
-from app.models import Tenant, User
+from app.models import AiWeeklyReport, Tenant, User
 from app.modules.ai_tool import repository, service
-from app.modules.ai_tool.weekly_report_service import list_weekly_reports
+from app.modules.ai_tool.weekly_report_service import (
+    get_report_by_id,
+    get_weekly_report_status,
+    list_weekly_report_deltas,
+    list_weekly_reports,
+    upsert_weekly_report,
+)
+from app.modules.ai_tool.automation import ensure_default_rules
 from app.modules.dashboard.ai_services import generate_data_quality_scan
 from app.modules.ai_tool.authz import ensure_tenant_access, require_ai_access
 from app.modules.ai_tool.guardrails import enforce_ai_daily_tenant_quota, rate_limit_dependency
@@ -21,6 +31,8 @@ from app.modules.ai_tool.schemas import (
     AiOpsOverviewResponse,
     AiConfirmActionRequest,
     AiForecastRunResponse,
+    AiForecastSummaryResponse,
+    AiForecastTemplateInfo,
     AiGenerateAnomalyInsightsRequest,
     AiGenerateForecastRequest,
     AiKnowledgeDocumentResponse,
@@ -43,9 +55,24 @@ from app.modules.ai_tool.schemas import (
     AiFeedbackSubmitRequest,
     AiSystemTaskCreateRequest,
     AiSystemTaskResponse,
+    AiWeeklyReportDeltaEntry,
+    AiWeeklyReportGenerateRequest,
+    AiWeeklyReportGenerateResponse,
     AiWeeklyReportListResponse,
     AiWeeklyReportResponse,
+    AiWeeklyReportStatusResponse,
 )
+
+
+class AiAutomationRuleOut(BaseModel):
+    rule_code: str
+    action_key: str
+    label: str
+    description: str | None = None
+    is_enabled: bool
+    requires_confirmation: bool
+    permission_key: str | None = None
+
 
 router = APIRouter(prefix="/ai-tool", tags=["ai-tool"])
 chat_limit = Depends(rate_limit_dependency("chat"))
@@ -58,6 +85,49 @@ async def ai_tool_daily_quota(tenant: Tenant = Depends(require_tenant)) -> None:
 
 
 daily_quota = Depends(ai_tool_daily_quota)
+
+
+def _weekly_report_to_response(
+    r: AiWeeklyReport, delta: dict | None
+) -> AiWeeklyReportResponse:
+    delta_m: dict[str, AiWeeklyReportDeltaEntry] | None = None
+    if delta:
+        built = {
+            k: AiWeeklyReportDeltaEntry(**v)
+            for k, v in delta.items()
+            if isinstance(v, dict)
+        }
+        delta_m = built or None
+    return AiWeeklyReportResponse(
+        id=r.id,
+        tenant_id=r.tenant_id,
+        week_start=r.week_start,
+        week_end=r.week_end,
+        narrative=r.narrative,
+        kpi_snapshot_json=r.kpi_snapshot_json,
+        delta=delta_m,
+        created_at=r.created_at,
+    )
+
+
+@router.get("/weekly-reports/status", response_model=AiWeeklyReportStatusResponse)
+async def weekly_reports_status(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    s = await get_weekly_report_status(db, tenant.id)
+    return AiWeeklyReportStatusResponse(
+        gemini_configured=s["gemini_configured"],
+        current_week_start=s["current_week_start"],
+        current_week_end=s["current_week_end"],
+        has_current_week_report=s["has_current_week_report"],
+        last_report_created_at=s["last_report_created_at"],
+        next_scheduled_utc=s["next_scheduled_utc"],
+    )
 
 
 @router.get("/quick-actions", response_model=AiQuickActionsResponse)
@@ -194,12 +264,49 @@ async def generate_report(
 @router.get("/forecast-runs", response_model=list[AiForecastRunResponse])
 async def list_forecast_runs(
     limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=1000),
+    forecast_code: str | None = Query(default=None),
+    status: list[str] | None = Query(default=None),
+    since: datetime | None = Query(default=None),
+    until: datetime | None = Query(default=None),
+    min_confidence: float | None = Query(default=None, ge=0.0, le=1.0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _: None = read_limit,
 ):
-    return await service.list_forecast_runs(db, tenant=tenant, user=user, limit=limit)
+    return await service.list_forecast_runs(
+        db,
+        tenant=tenant,
+        user=user,
+        limit=limit,
+        offset=offset,
+        forecast_code=forecast_code,
+        statuses=status,
+        since=since,
+        until=until,
+        min_confidence=min_confidence,
+    )
+
+
+@router.get("/forecast-runs/summary", response_model=AiForecastSummaryResponse)
+async def get_forecast_runs_summary(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    return await service.get_forecast_summary(db, tenant=tenant, user=user)
+
+
+@router.get("/forecast-templates", response_model=list[AiForecastTemplateInfo])
+async def list_forecast_templates(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    return await service.list_forecast_template_catalog(db, tenant=tenant, user=user)
 
 
 @router.get("/forecast-runs/{run_id}", response_model=AiForecastRunResponse)
@@ -231,6 +338,18 @@ async def generate_forecast(
         to_date=body.to_date,
         session_id=body.session_id,
     )
+
+
+@router.delete("/forecast-runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_forecast_run(
+    run_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    await service.delete_forecast_run(db, tenant=tenant, user=user, run_id=run_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/tasks", response_model=AiSystemTaskResponse, status_code=201)
@@ -400,19 +519,49 @@ async def weekly_reports_list(
     ensure_tenant_access(user, tenant)
     await require_ai_access(db, user)
     rows = await list_weekly_reports(db, tenant.id, limit=limit)
+    delta_list = await list_weekly_report_deltas(db, tenant.id, rows)
     return AiWeeklyReportListResponse(
-        items=[
-            AiWeeklyReportResponse(
-                id=r.id,
-                tenant_id=r.tenant_id,
-                week_start=r.week_start,
-                week_end=r.week_end,
-                narrative=r.narrative,
-                kpi_snapshot_json=r.kpi_snapshot_json,
-                created_at=r.created_at,
-            )
-            for r in rows
-        ]
+        items=[_weekly_report_to_response(r, d) for r, d in zip(rows, delta_list, strict=True)]
+    )
+
+
+@router.get("/weekly-reports/{report_id}", response_model=AiWeeklyReportResponse)
+async def weekly_report_get(
+    report_id: int = Path(..., ge=1),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    row = await get_report_by_id(db, tenant.id, report_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    deltas = await list_weekly_report_deltas(db, tenant.id, [row])
+    return _weekly_report_to_response(row, deltas[0] if deltas else None)
+
+
+@router.post("/weekly-reports/generate", response_model=AiWeeklyReportGenerateResponse)
+async def weekly_report_generate(
+    body: AiWeeklyReportGenerateRequest,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+    __: None = daily_quota,
+):
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    row, gen_status = await upsert_weekly_report(
+        db, tenant.id, force=body.force, target_date=body.target_date
+    )
+    if not row:
+        return AiWeeklyReportGenerateResponse(status=gen_status, report=None)
+    d_list = await list_weekly_report_deltas(db, tenant.id, [row])
+    return AiWeeklyReportGenerateResponse(
+        status=gen_status,
+        report=_weekly_report_to_response(row, d_list[0] if d_list else None),
     )
 
 
@@ -427,6 +576,33 @@ async def data_quality_scan(
     ensure_tenant_access(user, tenant)
     await require_ai_access(db, user)
     return await generate_data_quality_scan(db, tenant.id)
+
+
+@router.get("/automation/rules", response_model=list[AiAutomationRuleOut])
+async def list_automation_rules(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = read_limit,
+):
+    """List tenant AI automation rules (ensures default templates exist)."""
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    await ensure_default_rules(db, tenant_id=tenant.id)
+    rows = await repository.list_automation_rules(db, tenant_id=tenant.id)
+    await db.commit()
+    return [
+        AiAutomationRuleOut(
+            rule_code=r.rule_code,
+            action_key=r.action_key,
+            label=r.label,
+            description=r.description,
+            is_enabled=r.is_enabled,
+            requires_confirmation=r.requires_confirmation,
+            permission_key=r.permission_key,
+        )
+        for r in rows
+    ]
 
 
 @router.get("/ops/overview", response_model=AiOpsOverviewResponse)

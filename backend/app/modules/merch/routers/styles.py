@@ -11,7 +11,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from starlette.responses import Response
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
-from sqlalchemy import false, func, or_, select
+from sqlalchemy import case, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -330,10 +330,13 @@ async def _resolve_style_order_ids_batch(
     for s in styles:
         ref_set.add((s.style_code or "").lower())
         ref_set.add((s.name or "").lower())
+    if not ref_set:
+        return {s.id: [] for s in styles}
     conditions = []
     if all_qids:
         conditions.append(Order.quotation_id.in_(all_qids))
-    conditions.append(func.lower(func.coalesce(Order.style_ref, "")).in_(list(ref_set)))
+    ref_list = list(ref_set)
+    conditions.append(func.lower(func.coalesce(Order.style_ref, "")).in_(ref_list))
     ores = await db.execute(select(Order).where(Order.tenant_id == tenant_id, or_(*conditions)))
     orders = list(ores.scalars().all())
     out: dict[int, list[int]] = {}
@@ -437,16 +440,16 @@ async def _build_style_summary(
             if order.updated_at and (last_event_at is None or order.updated_at > last_event_at):
                 last_event_at = order.updated_at
 
-        invoice_rows = (
-            await db.execute(
-                select(ProformaInvoice)
-                .join(ProformaInvoiceOrder, ProformaInvoiceOrder.proforma_invoice_id == ProformaInvoice.id)
-                .where(
-                    ProformaInvoice.tenant_id == tenant_id,
-                    ProformaInvoiceOrder.order_id.in_(order_ids),
-                )
+        inv_result = await db.execute(
+            select(ProformaInvoice)
+            .join(ProformaInvoiceOrder, ProformaInvoiceOrder.proforma_invoice_id == ProformaInvoice.id)
+            .where(
+                ProformaInvoice.tenant_id == tenant_id,
+                ProformaInvoiceOrder.order_id.in_(order_ids),
             )
-        ).scalars().all()
+        )
+        # Join can duplicate a PI when it links to multiple orders; de-dupe for totals.
+        invoice_rows = inv_result.unique().scalars().all()
         invoice_refs = {inv.reference for inv in invoice_rows if inv.reference}
         for invoice in invoice_rows:
             invoice_amount += _to_decimal(invoice.amount)
@@ -758,6 +761,9 @@ async def list_style_summary_report(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    if style_ids:
+        # Stable order for CASE ordering; duplicate query params would repeat branches.
+        style_ids = list(dict.fromkeys(style_ids))
     stmt = _garment_style_list_base_stmt(
         tenant.id,
         search=search,

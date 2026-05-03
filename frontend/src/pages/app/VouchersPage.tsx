@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import {
   api,
+  FINANCE_COST_NATURE_CODES,
   type BtbLcRow,
   type ChartOfAccountResponse,
   type TradeCaseRow,
@@ -59,7 +60,16 @@ function rowAmount(lines: VoucherLineCreate[], t: "DEBIT" | "CREDIT") {
 }
 
 function makeLine(accountId: number, currency: string, exchangeRate: string, entryType: "DEBIT" | "CREDIT" = "DEBIT"): VoucherLineCreate {
-  return { account_id: accountId, cost_center_id: null, currency, exchange_rate: exchangeRate, entry_type: entryType, amount: "0", notes: "" };
+  return {
+    account_id: accountId,
+    cost_center_id: null,
+    currency,
+    exchange_rate: exchangeRate,
+    entry_type: entryType,
+    amount: "0",
+    notes: "",
+    cost_nature_override: null,
+  };
 }
 
 export function VouchersPage() {
@@ -413,6 +423,7 @@ export function VouchersPage() {
         entry_type: line.entry_type,
         amount: line.amount,
         notes: line.notes ?? "",
+        cost_nature_override: line.cost_nature_override ?? null,
       })),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -679,6 +690,7 @@ export function VouchersPage() {
                     <th className="w-10 px-3 py-2 text-center">#</th>
                     <th className="px-3 py-2">Account</th>
                     <th className="px-3 py-2">Cost Center</th>
+                    <th className="px-3 py-2 min-w-[8rem]">Cost nature</th>
                     <th className="px-3 py-2 text-right">Debit</th>
                     <th className="px-3 py-2 text-right">Credit</th>
                     <th className="px-3 py-2">Notes / Narration</th>
@@ -719,6 +731,27 @@ export function VouchersPage() {
                           hydrateById={hydrateCostCenter}
                           allowClear
                         />
+                      </td>
+                      <td className="px-3 py-2">
+                        <select
+                          className={CTL}
+                          value={line.cost_nature_override ?? ""}
+                          onChange={(e) =>
+                            setLine(idx, {
+                              cost_nature_override: e.target.value
+                                ? (e.target.value as (typeof FINANCE_COST_NATURE_CODES)[number])
+                                : null,
+                            })
+                          }
+                          title="Overrides the ledger account default for CM / material reporting on this line"
+                        >
+                          <option value="">Use account default</option>
+                          {FINANCE_COST_NATURE_CODES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="px-3 py-2">
                         <input className={`${CTL} text-right`} type="number" min="0" step="0.01" placeholder="0.00" value={line.entry_type === "DEBIT" ? line.amount : ""} onChange={(e) => setLineSideAmount(idx, "DEBIT", e.target.value)} />

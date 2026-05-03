@@ -171,6 +171,9 @@ class PlatformPlan(Base):
     price_yearly_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Lemon Squeezy variant IDs (stringified) — map one platform plan row to checkout variants.
+    lemonsqueezy_variant_id_monthly: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lemonsqueezy_variant_id_yearly: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -181,6 +184,10 @@ class TenantSubscription(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), unique=True, nullable=False)
     plan_id: Mapped[int] = mapped_column(ForeignKey("platform_plans.id", ondelete="RESTRICT"), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="manual", index=True)
+    lemonsqueezy_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    lemonsqueezy_customer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lemonsqueezy_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="trial")
     trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     current_period_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -190,6 +197,22 @@ class TenantSubscription(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class LemonsqueezyWebhookEvent(Base):
+    """Idempotency + audit for Lemon Squeezy webhook deliveries (retries reuse the same body)."""
+
+    __tablename__ = "lemonsqueezy_webhook_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    event_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    signature_ok: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tenant_id: Mapped[int | None] = mapped_column(ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class BillingInvoice(Base):

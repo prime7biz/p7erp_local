@@ -41,7 +41,7 @@ def upgrade() -> None:
 
     # Best-effort: create mfg_work_orders for legacy rows without migration target
     op.execute(
-        """
+        r"""
         INSERT INTO mfg_work_orders (
             tenant_id, mo_number, item_id, plan_line_id, routing_id,
             qty_planned, qty_completed, status, notes, created_at, updated_at

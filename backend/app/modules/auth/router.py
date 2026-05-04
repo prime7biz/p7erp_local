@@ -50,10 +50,6 @@ PASSWORD_RESET_TOKEN_USE = "password_reset"
 logger = logging.getLogger(__name__)
 
 
-def _is_dev_app_env(settings) -> bool:
-    return settings.app_env.lower() in {"dev", "development", "local", "test", "testing"}
-
-
 def _create_password_reset_token(*, user: User, expires_at: datetime) -> str:
     settings = get_settings()
     payload = {
@@ -334,14 +330,6 @@ async def register(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Bootstrap registration key required or invalid",
                 )
-        elif not _is_dev_app_env(settings):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    "Bootstrap registration is disabled: set BOOTSTRAP_REGISTRATION_KEY or "
-                    "tenants.bootstrap_token_hash for this tenant"
-                ),
-            )
     if not is_bootstrap and not getattr(settings, "allow_public_registration", False):
         if current_user is None:
             raise HTTPException(

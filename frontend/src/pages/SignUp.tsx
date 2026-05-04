@@ -41,7 +41,6 @@ export function SignUp() {
   const [businessType, setBusinessType] = useState<TenantType>("both");
   const [acceptedLegalTerms, setAcceptedLegalTerms] = useState(false);
   const [error, setError] = useState("");
-  const [bootstrapKey, setBootstrapKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [successData, setSuccessData] = useState<{ companyCode: string } | null>(null);
   const navigate = useNavigate();
@@ -77,7 +76,6 @@ export function SignUp() {
         last_name: lastName.trim() || undefined,
         accepted_legal_terms: acceptedLegalTerms,
         legal_acceptance_version: CURRENT_LEGAL_ACCEPTANCE_VERSION,
-        ...(bootstrapKey.trim() ? { bootstrap_key: bootstrapKey.trim() } : {}),
       });
       const res = await api.login({
         tenant_id: tenant.id,
@@ -313,23 +311,6 @@ export function SignUp() {
                         minLength={8}
                       />
                     </div>
-                  </div>
-                  <div>
-                    <label htmlFor="bootstrapKey" className="block text-sm font-medium text-text-secondary">
-                      Invitation code
-                    </label>
-                    <p className="text-xs text-text-muted mt-0.5">
-                      Only if your server requires a first-user key (optional in most environments).
-                    </p>
-                    <input
-                      id="bootstrapKey"
-                      type="password"
-                      autoComplete="off"
-                      placeholder="Leave blank unless required"
-                      className="mt-1 w-full px-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                      value={bootstrapKey}
-                      onChange={(e) => setBootstrapKey(e.target.value)}
-                    />
                   </div>
                 </div>
               </div>

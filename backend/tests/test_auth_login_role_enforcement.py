@@ -46,6 +46,7 @@ async def _seed_tenant_with_users(db):
         tenant_id=tenant.id,
         role_id=staff_role.id,
         email=f"staff_{slug}@example.com",
+        username="CaseStaffUser",
         password_hash=pwd,
         is_active=True,
     )
@@ -147,5 +148,59 @@ async def test_login_happy_paths_admin_and_staff(db_session_integration):
         assert rs.status_code == 200, rs.text
         assert ra.json().get("access_token")
         assert rs.json().get("access_token")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.asyncio
+async def test_login_username_case_insensitive(db_session_integration):
+    db = db_session_integration
+    tenant, _admin_user, staff_user, password = await _seed_tenant_with_users(db)
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            r = await ac.post(
+                "/api/v1/auth/login",
+                json={
+                    "company_code": tenant.company_code,
+                    "username": staff_user.username.lower(),
+                    "password": password,
+                    "login_as": "staff",
+                },
+            )
+        assert r.status_code == 200, r.text
+        assert r.json().get("access_token")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.asyncio
+async def test_login_username_field_accepts_email_string(db_session_integration):
+    db = db_session_integration
+    tenant, _admin_user, staff_user, password = await _seed_tenant_with_users(db)
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            r = await ac.post(
+                "/api/v1/auth/login",
+                json={
+                    "company_code": tenant.company_code,
+                    "username": staff_user.email.upper(),
+                    "password": password,
+                    "login_as": "staff",
+                },
+            )
+        assert r.status_code == 200, r.text
+        assert r.json().get("access_token")
     finally:
         app.dependency_overrides.pop(get_db, None)

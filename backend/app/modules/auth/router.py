@@ -218,7 +218,15 @@ async def login(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     user_query = select(User).where(User.tenant_id == tenant.id, User.is_active.is_(True))
     if username:
-        user_query = user_query.where(User.username == username)
+        un = username.strip()
+        # Many clients put an email in the "username" field; accept that shape.
+        if "@" in un:
+            user_query = user_query.where(func.lower(User.email) == un.lower())
+        else:
+            user_query = user_query.where(
+                User.username.isnot(None),
+                func.lower(User.username) == un.lower(),
+            )
     elif email:
         em = email.strip().lower()
         user_query = user_query.where(func.lower(User.email) == em)

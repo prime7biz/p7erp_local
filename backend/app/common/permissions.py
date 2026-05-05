@@ -246,9 +246,15 @@ def require_internal_permission(permission_key: str):
         user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ) -> None:
-        tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
-        tenant = tenant_result.scalar_one_or_none()
-        rbac_mode = get_tenant_rbac_mode(tenant.feature_flags if tenant else None)
+        if getattr(request.state, "tenant_feature_flags_cached", False):
+            tenant_feature_flags = getattr(request.state, "tenant_feature_flags", None)
+        else:
+            tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+            tenant = tenant_result.scalar_one_or_none()
+            tenant_feature_flags = tenant.feature_flags if tenant else None
+            request.state.tenant_feature_flags = tenant_feature_flags
+            request.state.tenant_feature_flags_cached = True
+        rbac_mode = get_tenant_rbac_mode(tenant_feature_flags)
         if rbac_mode == RBAC_MODE_OFF:
             return
 

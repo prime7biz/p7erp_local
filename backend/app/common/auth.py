@@ -11,8 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.common.tenant_feature_keys import is_single_session_enforced
 from app.database import get_db
-from app.models import User
+from app.models import Tenant, User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -36,10 +37,17 @@ async def verify_password(plain: str, hashed: str) -> bool:
     return await asyncio.to_thread(_verify_password_sync, plain, hashed)
 
 
-def create_access_token(subject: str | int, expires_delta: timedelta | None = None) -> str:
+def create_access_token(
+    subject: str | int,
+    expires_delta: timedelta | None = None,
+    *,
+    session_version: int | None = None,
+) -> str:
     settings = get_settings()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.jwt_expire_minutes))
     to_encode = {"sub": str(subject), "exp": expire}
+    if session_version is not None:
+        to_encode["sv"] = int(session_version)
     return jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
@@ -73,6 +81,24 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+    tenant = tenant_result.scalar_one_or_none()
+    if tenant and is_single_session_enforced(tenant.feature_flags):
+        token_sv = payload.get("sv")
+        # Backward compatibility: pre-rollout JWTs have no `sv` claim.
+        if token_sv is not None:
+            try:
+                token_session_version = int(token_sv)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+            if token_session_version != int(user.auth_session_version or 0):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail={
+                        "code": "session_superseded",
+                        "message": "Session has been replaced by a newer login",
+                    },
+                )
     return user
 
 
@@ -95,4 +121,18 @@ async def get_current_user_optional(
         return None
     result = await db.execute(select(User).where(User.id == user_id, User.is_active.is_(True)))
     user = result.scalar_one_or_none()
+    if not user:
+        return None
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+    tenant = tenant_result.scalar_one_or_none()
+    if tenant and is_single_session_enforced(tenant.feature_flags):
+        token_sv = payload.get("sv")
+        # Keep grace-window behavior for pre-change tokens.
+        if token_sv is not None:
+            try:
+                token_session_version = int(token_sv)
+            except (TypeError, ValueError):
+                return None
+            if token_session_version != int(user.auth_session_version or 0):
+                return None
     return user

@@ -1,5 +1,6 @@
 """Aggregate production module routers."""
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from app.common.permissions import require_internal_permission
 
 from app.modules.production.costing_router import router as costing_router
 from app.modules.production.crew_router import router as crew_router
@@ -19,18 +20,20 @@ from app.modules.production.skills_router import router as skills_router
 
 router = APIRouter()
 
-router.include_router(settings_router)
-router.include_router(lines_router)
-router.include_router(crew_router)
-router.include_router(dashboard_router)
-router.include_router(quality_router)
-router.include_router(skills_router)
-router.include_router(roster_router)
-router.include_router(ie_router)
-router.include_router(planning_router)
-router.include_router(hourly_router)
-router.include_router(cutting_router)
-router.include_router(costing_router)
-router.include_router(knitting_router)
-router.include_router(dyeing_router)
-router.include_router(dept_router)
+_production_access_dependency = [Depends(require_internal_permission("production.access"))]
+
+router.include_router(settings_router, dependencies=_production_access_dependency)
+router.include_router(lines_router, dependencies=_production_access_dependency)
+router.include_router(crew_router, dependencies=_production_access_dependency)
+router.include_router(dashboard_router, dependencies=_production_access_dependency)
+router.include_router(quality_router, dependencies=_production_access_dependency)
+router.include_router(skills_router, dependencies=_production_access_dependency)
+router.include_router(roster_router, dependencies=_production_access_dependency)
+router.include_router(ie_router, dependencies=_production_access_dependency)
+router.include_router(planning_router, dependencies=_production_access_dependency)
+router.include_router(hourly_router, dependencies=_production_access_dependency)
+router.include_router(cutting_router, dependencies=_production_access_dependency)
+router.include_router(costing_router, dependencies=_production_access_dependency)
+router.include_router(knitting_router, dependencies=_production_access_dependency)
+router.include_router(dyeing_router, dependencies=_production_access_dependency)
+router.include_router(dept_router, dependencies=_production_access_dependency)

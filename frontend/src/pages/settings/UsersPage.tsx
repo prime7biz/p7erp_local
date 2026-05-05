@@ -7,6 +7,7 @@ import {
   type StaffInviteRowResponse,
   type UserWithRoleResponse,
 } from "@/api/client";
+import { PasswordFieldInput } from "@/components/auth/PasswordFieldInput";
 
 function userLabel(u: UserWithRoleResponse): string {
   return (u.username && u.username.trim()) || u.email;
@@ -328,13 +329,15 @@ export function UsersPage() {
               </option>
             ))}
           </select>
-          <input
+          <PasswordFieldInput
+            id={`settings-user-password-${editingId ?? "new"}`}
             value={form.password}
-            onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-            className="rounded border border-border px-3 py-2 text-sm"
+            onChange={(next) => setForm((prev) => ({ ...prev, password: next }))}
             placeholder={editingId ? "New password (optional)" : "Password **"}
-            type="password"
             required={!editingId}
+            autoComplete="new-password"
+            showLock={false}
+            inputClassName="min-w-0 w-full rounded border border-border py-2 text-sm"
           />
         </div>
 

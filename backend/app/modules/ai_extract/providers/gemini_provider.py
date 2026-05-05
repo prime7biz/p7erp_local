@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 from typing import Any
 
+import httpx
+
 from app.common.gemini_client import generate_multimodal_sync
+from app.config import get_settings
 from app.modules.ai_extract.providers.base import BaseExtractionProvider
 
 
@@ -82,6 +86,121 @@ _warnings: array of short notes.
 Do not invent internal order numbers or system IDs. Never output tenant_id, order_code, or database IDs."""
 
 
+def _openrouter_message_text(data: dict[str, Any]) -> str | None:
+    try:
+        choices = data.get("choices") or []
+        if not choices:
+            return None
+        msg = choices[0].get("message") or {}
+        content = msg.get("content")
+        if content is None:
+            return None
+        if isinstance(content, str):
+            out = content.strip()
+            return out or None
+        if isinstance(content, list):
+            parts: list[str] = []
+            for row in content:
+                if isinstance(row, dict) and row.get("type") == "text":
+                    txt = str(row.get("text") or "").strip()
+                    if txt:
+                        parts.append(txt)
+            out = "\n".join(parts).strip()
+            return out or None
+        return str(content).strip() or None
+    except Exception:
+        return None
+
+
+def _ollama_multimodal_sync(prompt: str, file_bytes: bytes, mime_type: str) -> str | None:
+    s = get_settings()
+    if not s.ollama_enabled:
+        return None
+    base_url = (s.ollama_url or "").strip().rstrip("/")
+    model = (s.ollama_model or "").strip()
+    if not base_url or not model:
+        return None
+    ct = (mime_type or "").lower().split(";")[0].strip()
+    if not ct.startswith("image/"):
+        return None
+    try:
+        payload = {
+            "model": model,
+            "stream": False,
+            "prompt": prompt,
+            "images": [base64.b64encode(file_bytes).decode("ascii")],
+        }
+        timeout = float(max(20, s.ai_timeout_heavy_seconds + 15))
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(f"{base_url}/api/generate", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+        txt = str(data.get("response") or "").strip()
+        return txt or None
+    except Exception:
+        return None
+
+
+def _openrouter_multimodal_sync(prompt: str, file_bytes: bytes, mime_type: str) -> str | None:
+    s = get_settings()
+    if not s.openrouter_enabled:
+        return None
+    api_key = (s.openrouter_api_key or "").strip()
+    model = (s.openrouter_model or "").strip()
+    if not api_key or not model:
+        return None
+    ct = (mime_type or "").lower().split(";")[0].strip()
+    if not ct.startswith("image/"):
+        return None
+    data_url = f"data:{ct};base64,{base64.b64encode(file_bytes).decode('ascii')}"
+    base = (s.openrouter_base_url or "https://openrouter.ai/api/v1").strip().rstrip("/")
+    headers: dict[str, str] = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    site = (s.openrouter_site_url or s.frontend_url or "").strip()
+    if site:
+        headers["HTTP-Referer"] = site
+    title = (s.openrouter_app_name or "P7 ERP").strip()
+    if title:
+        headers["X-Title"] = title
+    body: dict[str, Any] = {
+        "model": model,
+        "temperature": 0.0,
+        "max_tokens": 2500,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            }
+        ],
+    }
+    try:
+        timeout = float(max(20, s.ai_timeout_heavy_seconds + 20))
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(f"{base}/chat/completions", json=body, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+        return _openrouter_message_text(data)
+    except Exception:
+        return None
+
+
+def _tiered_multimodal_sync(prompt: str, file_bytes: bytes, mime_type: str) -> str | None:
+    # Priority requested by product: local Ollama first, then OpenRouter.
+    txt = _ollama_multimodal_sync(prompt, file_bytes, mime_type)
+    if txt:
+        return txt
+    txt = _openrouter_multimodal_sync(prompt, file_bytes, mime_type)
+    if txt:
+        return txt
+    # Final fallback: Gemini supports both images and PDF.
+    return generate_multimodal_sync(prompt, file_bytes, mime_type)
+
+
 def _extraction_unavailable_raw(*, inquiry: bool) -> dict[str, Any]:
     """
     Return empty extraction when Gemini produced no text, the response was not valid JSON,
@@ -106,7 +225,7 @@ def _extraction_unavailable_raw(*, inquiry: bool) -> dict[str, Any]:
 class GeminiExtractionProvider(BaseExtractionProvider):
     async def extract_customer_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
         ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
-        text = generate_multimodal_sync(_CUSTOMER_PROMPT, file_bytes, ct)
+        text = _tiered_multimodal_sync(_CUSTOMER_PROMPT, file_bytes, ct)
         parsed = _parse_json_object(text or "") if text else None
         if isinstance(parsed, dict) and parsed:
             return parsed
@@ -114,7 +233,7 @@ class GeminiExtractionProvider(BaseExtractionProvider):
 
     async def extract_inquiry_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
         ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
-        text = generate_multimodal_sync(_INQUIRY_PROMPT, file_bytes, ct)
+        text = _tiered_multimodal_sync(_INQUIRY_PROMPT, file_bytes, ct)
         parsed = _parse_json_object(text or "") if text else None
         if isinstance(parsed, dict) and parsed:
             return parsed
@@ -122,7 +241,7 @@ class GeminiExtractionProvider(BaseExtractionProvider):
 
     async def extract_vendor_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
         ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
-        text = generate_multimodal_sync(_VENDOR_PROMPT, file_bytes, ct)
+        text = _tiered_multimodal_sync(_VENDOR_PROMPT, file_bytes, ct)
         parsed = _parse_json_object(text or "") if text else None
         if isinstance(parsed, dict) and parsed:
             return parsed
@@ -130,7 +249,7 @@ class GeminiExtractionProvider(BaseExtractionProvider):
 
     async def extract_order_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
         ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
-        text = generate_multimodal_sync(_ORDER_PROMPT, file_bytes, ct)
+        text = _tiered_multimodal_sync(_ORDER_PROMPT, file_bytes, ct)
         parsed = _parse_json_object(text or "") if text else None
         if isinstance(parsed, dict) and parsed:
             # Normalize ex_factory_date → delivery_date for downstream allowlist

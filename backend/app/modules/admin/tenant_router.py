@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.storage import get_media_root
 from app.common.system_roles import SYSTEM_ROLE_SEEDS
+from app.common.tenant_feature_keys import normalize_feature_flags
 from app.database import get_db
 from app.models import AuditLog, Customer, Order, PlatformPlan, Role, Tenant, TenantSubscription, User
 from app.models.tenant import TenantType
@@ -215,7 +216,10 @@ async def patch_tenant(
     if body.is_active is not None:
         t.is_active = body.is_active
     if body.feature_flags is not None:
-        t.feature_flags = body.feature_flags
+        try:
+            t.feature_flags = normalize_feature_flags(body.feature_flags)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await log_admin_action(
         db,
         admin_id=ctx.admin.id,

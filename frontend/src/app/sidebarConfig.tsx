@@ -72,6 +72,8 @@ export interface NavItem {
   hideWhenTradeDisabled?: boolean;
   /** Show only when `me.feature_flags[this key] === true` (e.g. `control_tower_enabled`). */
   requiresFeatureFlag?: string;
+  /** With `productionUnitKey: "knitting"`, also require `me.feature_flags.knitting_enabled === true` (hub page). */
+  requiresKnittingTenantFeature?: boolean;
 }
 
 /** Nested groups under a section (e.g. HR sub-menus). */
@@ -119,6 +121,9 @@ export function isNavItemVisibleForTenant(
   if (item.hideWhenTradeDisabled && featureFlags && featureFlags.trade_enabled === false) return false;
   if (item.requiresFeatureFlag) {
     if (!featureFlags || featureFlags[item.requiresFeatureFlag] !== true) return false;
+  }
+  if (item.requiresKnittingTenantFeature) {
+    if (!featureFlags || featureFlags.knitting_enabled !== true) return false;
   }
   return true;
 }
@@ -313,7 +318,13 @@ export const menuSections: MenuSection[] = [
       {
         label: "Units (optional)",
         items: [
-          { icon: Shirt, label: "Knitting", href: `${PREFIX}/production/knitting`, productionUnitKey: "knitting" },
+          {
+            icon: Shirt,
+            label: "Knitting",
+            href: `${PREFIX}/production/knitting`,
+            productionUnitKey: "knitting",
+            requiresKnittingTenantFeature: true,
+          },
           {
             icon: Activity,
             label: "Hourly — Knitting",

@@ -593,6 +593,66 @@ class KnittingPlan(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class KnittingChargeRate(Base):
+    """Effective-dated knitting conversion charge master (fabric type × unit basis)."""
+
+    __tablename__ = "knitting_charge_rates"
+    __table_args__ = ()
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    fabric_type_code: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    unit_basis: Mapped[str] = mapped_column(String(32), nullable=False, default="per_kg_greige")
+    rate_per_unit: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False, default=0)
+    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="BDT")
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class KnittingWorkOrder(Base):
+    """Operational knitting job: yarns → greige; links to inventory process orders and documents."""
+
+    __tablename__ = "knitting_work_orders"
+    __table_args__ = (UniqueConstraint("tenant_id", "wo_number", name="uq_knitting_work_orders_tenant_wo"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    wo_number: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False, default="in_house")
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    vendor_id: Mapped[int | None] = mapped_column(ForeignKey("vendors.id", ondelete="SET NULL"), nullable=True, index=True)
+    machine_id: Mapped[int | None] = mapped_column(
+        ForeignKey("department_machines.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    yarn_item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
+    greige_item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
+    fabric_type_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    gauge: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    planned_yarn_qty: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    planned_greige_qty: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    processing_charge_preview: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
+    output_warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
+    knitting_plan_id: Mapped[int | None] = mapped_column(ForeignKey("knitting_plans.id", ondelete="SET NULL"), nullable=True, index=True)
+    linked_order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    process_order_id: Mapped[int | None] = mapped_column(ForeignKey("process_orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    delivery_challan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("delivery_challans.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    gate_pass_id: Mapped[int | None] = mapped_column(
+        ForeignKey("enhanced_gate_passes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="draft", index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class DyeRecipe(Base):
     __tablename__ = "dye_recipes"
 

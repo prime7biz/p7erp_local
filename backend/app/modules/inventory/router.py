@@ -39,6 +39,7 @@ from app.common.permissions import (
     PERMISSION_INVENTORY_OVER_RECEIPT_APPROVE,
     PERMISSION_INVENTORY_PROCESS_ORDER_APPROVE,
     assert_delegate_manager_or_permission,
+    require_internal_permission,
 )
 from app.common.master_contract_rm_guard import (
     assert_btb_has_master_if_flag,
@@ -118,7 +119,11 @@ from app.services.inventory_gl_service import (
     post_stock_adjustment_gl,
 )
 
-router = APIRouter(prefix="/inventory", tags=["inventory"])
+router = APIRouter(
+    prefix="/inventory",
+    tags=["inventory"],
+    dependencies=[Depends(require_internal_permission("inventory.access"))],
+)
 
 
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
@@ -3928,6 +3933,7 @@ class ProcessOrderBody(BaseModel):
     process_stage: str | None = None
     prior_process_order_id: int | None = None
     vendor_id: int | None = None
+    customer_id: int | None = None
     output_warehouse_id: int | None = None
     source_bom_id: int | None = None
     source_order_id: int | None = None
@@ -3959,6 +3965,7 @@ class ProcessOrderOut(BaseModel):
     process_stage: str | None = None
     prior_process_order_id: int | None = None
     vendor_id: int | None = None
+    customer_id: int | None = None
     output_warehouse_id: int | None = None
     source_bom_id: int | None = None
     source_order_id: int | None = None
@@ -3973,6 +3980,7 @@ class ProcessOrderOut(BaseModel):
     verification_id: str | None = None
     signature_hash: str | None = None
     signed_at: datetime | None = None
+    knitting_service_voucher_id: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -4430,7 +4438,7 @@ async def receive_process_order(
         )
     ).scalars().all()
     input_cost = sum(_to_float(m.movement_value or "0") for m in outs)
-    proc = _to_float(body.processing_charges or "0")
+    proc_total = _to_float(body.processing_charges or "0")
     cost_line_rows = (
         await db.execute(
             select(ProcessOrderCostLine).where(
@@ -4440,7 +4448,12 @@ async def receive_process_order(
         )
     ).scalars().all()
     add_on = sum(_to_float(cl.amount) for cl in cost_line_rows)
-    uc = (input_cost + proc + add_on) / actual_qty if actual_qty > 0 else 0.0
+    knitting_family = (row.process_type or "").strip().lower() == "knitting"
+    knitting_method = (row.process_method or "in_house").strip().lower()
+    proc_in_inventory_cost = (
+        0.0 if (knitting_family and knitting_method == "jobwork_customer") else proc_total
+    )
+    uc = (input_cost + proc_in_inventory_cost + add_on) / actual_qty if actual_qty > 0 else 0.0
     out_wh = row.output_warehouse_id or row.warehouse_id
     if out_wh is None:
         raise HTTPException(status_code=400, detail="Output warehouse is required before receiving process output")
@@ -4467,6 +4480,22 @@ async def receive_process_order(
     await finalize_movement_fifo(db, tenant.id, po_in, in_unit_cost=uc)
     row.actual_output_qty = str(actual_qty)
     row.processing_charges = body.processing_charges or "0"
+    recv_date = date.today()
+
+    from app.modules.production.knitting_finance_service import (
+        maybe_post_knitting_subcontract_accrual_before_receive_gl,
+    )
+
+    if knitting_family:
+        await maybe_post_knitting_subcontract_accrual_before_receive_gl(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            po=row,
+            knitting_charge_amount=proc_total,
+            movement_date=recv_date,
+        )
+
     row.status = "RECEIVED"
     await post_process_order_receive_gl(
         db,
@@ -4476,6 +4505,19 @@ async def receive_process_order(
         row.output_item_id,
         f"Receive output for {row.process_number}",
     )
+
+    from app.modules.production.knitting_finance_service import maybe_post_knitting_jobwork_revenue_after_receive_gl
+
+    if knitting_family:
+        await maybe_post_knitting_jobwork_revenue_after_receive_gl(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            po=row,
+            knitting_charge_amount=proc_total,
+            movement_date=recv_date,
+        )
+
     cost_lines = list(
         (
             await db.execute(

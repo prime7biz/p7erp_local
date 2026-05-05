@@ -15,6 +15,7 @@ from app.common.auth import (
     hash_password,
     verify_password,
 )
+from app.common.tenant_feature_keys import is_single_session_enforced
 from app.common.email_service import (
     send_forgot_password_email,
     send_password_changed_notification_email,
@@ -253,9 +254,13 @@ async def login(
         )
 
     user.last_login = datetime.utcnow()
+    session_version: int | None = None
+    if is_single_session_enforced(tenant.feature_flags):
+        user.auth_session_version = int(user.auth_session_version or 0) + 1
+        session_version = user.auth_session_version
     await db.flush()
     await log_action(db, tenant_id=user.tenant_id, action="LOGIN", user_id=user.id, resource="auth")
-    token = create_access_token(subject=user.id)
+    token = create_access_token(subject=user.id, session_version=session_version)
     return TokenResponse(access_token=token, tenant_id=tenant.id)
 
 
@@ -291,7 +296,12 @@ async def accept_staff_invite_public(
         )
     except Exception as exc:
         logger.warning("Staff invite accept audit failed: %s", exc)
-    token = create_access_token(subject=user.id)
+    session_version: int | None = None
+    if is_single_session_enforced(tenant.feature_flags):
+        user.auth_session_version = int(user.auth_session_version or 0) + 1
+        session_version = user.auth_session_version
+        await db.flush()
+    token = create_access_token(subject=user.id, session_version=session_version)
     return TokenResponse(access_token=token, tenant_id=tenant.id)
 
 
@@ -489,11 +499,13 @@ async def reset_password(
     if _hash_reset_token(token_plain) != user.password_reset_token_hash:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
     user.password_hash = await hash_password(body.new_password)
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+    tenant = tenant_result.scalar_one_or_none()
+    if tenant and is_single_session_enforced(tenant.feature_flags):
+        user.auth_session_version = int(user.auth_session_version or 0) + 1
     user.password_reset_token_hash = None
     user.password_reset_expires_at = None
     await db.flush()
-    tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
-    tenant = tenant_result.scalar_one_or_none()
     if tenant:
         await log_action(
             db,

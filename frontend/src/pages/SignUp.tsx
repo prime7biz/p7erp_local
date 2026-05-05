@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api, setAuth } from "@/api/client";
 import type { TenantType } from "@/api/client";
+import { PasswordFieldInput } from "@/components/auth/PasswordFieldInput";
 import {
   User,
   Mail,
-  Lock,
   ArrowLeft,
   Building2,
   Factory,
@@ -298,19 +298,17 @@ export function SignUp() {
                   </div>
                   <div>
                     <label htmlFor="password" className="block text-sm font-medium text-text-secondary">Password **</label>
-                    <div className="relative mt-1">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
-                      <input
-                        id="password"
-                        type="password"
-                        placeholder="Min 8 characters"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        minLength={8}
-                      />
-                    </div>
+                    <PasswordFieldInput
+                      id="password"
+                      value={password}
+                      onChange={setPassword}
+                      autoComplete="new-password"
+                      placeholder="Min 8 characters"
+                      required
+                      minLength={8}
+                      wrapperClassName="mt-1"
+                      inputClassName="w-full py-2.5 rounded-md border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                    />
                   </div>
                 </div>
               </div>

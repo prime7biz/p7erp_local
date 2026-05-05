@@ -2,6 +2,9 @@ import { Suspense, lazy, useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { TradeFeatureRouteGuard } from "@/components/TradeFeatureRouteGuard";
+import { KnittingFeatureRouteGuard } from "@/components/KnittingFeatureRouteGuard";
+import { PermissionRouteGuard } from "@/components/auth/PermissionRouteGuard";
+import { ROUTE_PERMISSION } from "@/app/routePermissions";
 
 const Dashboard = lazy(() => import("@/pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const AppComingSoonPage = lazy(() => import("@/pages/app/AppComingSoonPage").then((m) => ({ default: m.AppComingSoonPage })));
@@ -611,28 +614,30 @@ export function AppProtectedRouter() {
         <Route path="merchandising/alerts" element={<MerchCriticalAlertsPage />} />
         <Route path="merchandising/wastage-report" element={<WastageReportPage />} />
         <Route path="merchandising/consumption-reconciliation" element={<ConsumptionReconciliationPage />} />
-        <Route path="inventory" element={<InventoryItemsPage />} />
-        <Route path="inventory/items" element={<InventoryItemsPage />} />
-        <Route path="inventory/categories" element={<Navigate to="/app/inventory?tab=masters" replace />} />
-        <Route path="inventory/subcategories" element={<Navigate to="/app/inventory?tab=masters" replace />} />
-        <Route path="inventory/units" element={<Navigate to="/app/inventory?tab=units" replace />} />
-        <Route path="inventory/vendors" element={<VendorsPage />} />
-        <Route path="inventory/warehouses" element={<Navigate to="/app/inventory?tab=warehouses" replace />} />
-        <Route path="inventory/stock-groups" element={<StockGroupsPage />} />
-        <Route path="inventory/stock-dashboard" element={<StockDashboardPage />} />
-        <Route path="inventory/stock-valuation" element={<StockValuationPage />} />
-        <Route path="inventory/stock-adjustments" element={<StockAdjustmentsPage />} />
-        <Route path="inventory/stock-adjustments/new" element={<StockAdjustmentsPage />} />
-        <Route path="inventory/warehouse-transfers" element={<WarehouseTransfersPage />} />
-        <Route path="inventory/lots" element={<LotTraceabilityPage />} />
-        <Route path="inventory/purchase-orders" element={<PurchaseOrdersPage />} />
-        <Route path="inventory/goods-receiving" element={<GoodsReceivingPage />} />
-        <Route path="inventory/delivery-challans/:challanId" element={<DeliveryChallanDetailPage />} />
-        <Route path="inventory/delivery-challans" element={<DeliveryChallansPage />} />
-        <Route path="inventory/enhanced-gate-passes/:gatePassId" element={<GatePassDetailPage />} />
-        <Route path="inventory/enhanced-gate-passes" element={<EnhancedGatePassesPage />} />
-        <Route path="inventory/process-orders" element={<ProcessOrdersPage />} />
-        <Route path="inventory/manufacturing-orders" element={<Navigate to="/app/production/manufacturing-orders" replace />} />
+        <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.inventory} />}>
+          <Route path="inventory" element={<InventoryItemsPage />} />
+          <Route path="inventory/items" element={<InventoryItemsPage />} />
+          <Route path="inventory/categories" element={<Navigate to="/app/inventory?tab=masters" replace />} />
+          <Route path="inventory/subcategories" element={<Navigate to="/app/inventory?tab=masters" replace />} />
+          <Route path="inventory/units" element={<Navigate to="/app/inventory?tab=units" replace />} />
+          <Route path="inventory/vendors" element={<VendorsPage />} />
+          <Route path="inventory/warehouses" element={<Navigate to="/app/inventory?tab=warehouses" replace />} />
+          <Route path="inventory/stock-groups" element={<StockGroupsPage />} />
+          <Route path="inventory/stock-dashboard" element={<StockDashboardPage />} />
+          <Route path="inventory/stock-valuation" element={<StockValuationPage />} />
+          <Route path="inventory/stock-adjustments" element={<StockAdjustmentsPage />} />
+          <Route path="inventory/stock-adjustments/new" element={<StockAdjustmentsPage />} />
+          <Route path="inventory/warehouse-transfers" element={<WarehouseTransfersPage />} />
+          <Route path="inventory/lots" element={<LotTraceabilityPage />} />
+          <Route path="inventory/purchase-orders" element={<PurchaseOrdersPage />} />
+          <Route path="inventory/goods-receiving" element={<GoodsReceivingPage />} />
+          <Route path="inventory/delivery-challans/:challanId" element={<DeliveryChallanDetailPage />} />
+          <Route path="inventory/delivery-challans" element={<DeliveryChallansPage />} />
+          <Route path="inventory/enhanced-gate-passes/:gatePassId" element={<GatePassDetailPage />} />
+          <Route path="inventory/enhanced-gate-passes" element={<EnhancedGatePassesPage />} />
+          <Route path="inventory/process-orders" element={<ProcessOrdersPage />} />
+          <Route path="inventory/manufacturing-orders" element={<Navigate to="/app/production/manufacturing-orders" replace />} />
+        </Route>
         <Route path="samples" element={<PlaceholderPage title="Samples" />} />
         <Route path="samples/:id" element={<PlaceholderPage title="Sample Detail" />} />
         <Route path="samples/requests" element={<SamplesRequestsPage />} />
@@ -641,44 +646,52 @@ export function AppProtectedRouter() {
         <Route path="tna/templates" element={<TnaTemplatesPage />} />
         <Route path="tna/plans" element={<TnaPlansPage />} />
         <Route path="tna/plans/:planId" element={<TnaPlanDetailPage />} />
-        <Route path="production" element={<GarmentProductionOverviewPage />} />
-        <Route path="production/manufacturing-orders" element={<ManufacturingOrdersPage />} />
-        <Route path="production/setup" element={<ProductionSetupPage />} />
-        <Route path="production/calendar" element={<ProductionFactoryCalendarPage />} />
-        <Route path="production/line-plan" element={<ProductionLinePlanPage />} />
-        <Route path="production/planning" element={<ProductionPlanningPage />} />
-        <Route path="production/advanced-planning" element={<Navigate to="/app/production/planning" replace />} />
-        <Route path="production/cutting/pipeline" element={<ProductionCuttingPage />} />
-        <Route path="production/cutting" element={<ShopFloorExecutionPage />} />
-        <Route path="production/sewing" element={<ShopFloorExecutionPage />} />
-        <Route path="production/finishing-packing" element={<ShopFloorExecutionPage />} />
-        <Route path="production/ie/operations" element={<ProductionIeOperationsPage />} />
-        <Route path="production/ie/bulletins" element={<ProductionOperationBulletinsPage />} />
-        <Route path="production/ie/line-balance" element={<ProductionLineBalancePage />} />
-        <Route path="production/ie" element={<ProductionIeEfficiencyPage />} />
-        <Route path="production/hourly/:dept" element={<HourlyProductionPage />} />
-        <Route path="production/crew-daily" element={<DailyCrewSheetPage />} />
-        <Route path="production/quality" element={<ProductionQualityPage />} />
-        <Route path="production/crew-roster" element={<CrewRosterWeeklyPage />} />
-        <Route path="production/costs" element={<ProductionCostsPage />} />
-        <Route path="production/knitting" element={<ProductionKnittingPage />} />
-        <Route path="production/dyeing" element={<ProductionDyeingPage />} />
-        <Route path="production/dept/:deptType" element={<DepartmentProductionPage />} />
-        <Route path="quality/dashboard" element={<QualityDashboardPage />} />
-        <Route path="quality/inspections" element={<QualityInspectionsPage />} />
-        <Route path="quality/capa" element={<QualityCapaPage />} />
-        <Route path="quality/lab-tests" element={<QualityLabTestsPage />} />
-        <Route path="quality/returns" element={<QualityReturnsPage />} />
-        <Route path="quality/qc" element={<QualityInspectionsPage />} />
-        <Route path="ai/assistant" element={<AiAssistantPage />} />
-        <Route path="ai/automation" element={<AiAutomationPage />} />
-        <Route path="ai/predictions" element={<AiPredictionsPage />} />
-        <Route path="ai/weekly-reports" element={<AiWeeklyReportsPage />} />
-        <Route path="inventory/consumption-control" element={<ConsumptionControlPage />} />
-        <Route path="inventory/reconciliation" element={<InventoryReconciliationPage />} />
-        <Route path="inventory/stock-summary" element={<StockSummaryPage />} />
-        <Route path="inventory/stock-inventory-summary" element={<StockInventorySummaryPage />} />
-        <Route path="inventory/stock-ledger" element={<StockLedgerPage />} />
+        <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.production} />}>
+          <Route path="production" element={<GarmentProductionOverviewPage />} />
+          <Route path="production/manufacturing-orders" element={<ManufacturingOrdersPage />} />
+          <Route path="production/setup" element={<ProductionSetupPage />} />
+          <Route path="production/calendar" element={<ProductionFactoryCalendarPage />} />
+          <Route path="production/line-plan" element={<ProductionLinePlanPage />} />
+          <Route path="production/planning" element={<ProductionPlanningPage />} />
+          <Route path="production/advanced-planning" element={<Navigate to="/app/production/planning" replace />} />
+          <Route path="production/cutting/pipeline" element={<ProductionCuttingPage />} />
+          <Route path="production/cutting" element={<ShopFloorExecutionPage />} />
+          <Route path="production/sewing" element={<ShopFloorExecutionPage />} />
+          <Route path="production/finishing-packing" element={<ShopFloorExecutionPage />} />
+          <Route path="production/ie/operations" element={<ProductionIeOperationsPage />} />
+          <Route path="production/ie/bulletins" element={<ProductionOperationBulletinsPage />} />
+          <Route path="production/ie/line-balance" element={<ProductionLineBalancePage />} />
+          <Route path="production/ie" element={<ProductionIeEfficiencyPage />} />
+          <Route path="production/hourly/:dept" element={<HourlyProductionPage />} />
+          <Route path="production/crew-daily" element={<DailyCrewSheetPage />} />
+          <Route path="production/quality" element={<ProductionQualityPage />} />
+          <Route path="production/crew-roster" element={<CrewRosterWeeklyPage />} />
+          <Route path="production/costs" element={<ProductionCostsPage />} />
+          <Route element={<KnittingFeatureRouteGuard />}>
+            <Route path="production/knitting" element={<ProductionKnittingPage />} />
+          </Route>
+          <Route path="production/dyeing" element={<ProductionDyeingPage />} />
+          <Route path="production/dept/:deptType" element={<DepartmentProductionPage />} />
+          <Route path="quality/dashboard" element={<QualityDashboardPage />} />
+          <Route path="quality/inspections" element={<QualityInspectionsPage />} />
+          <Route path="quality/capa" element={<QualityCapaPage />} />
+          <Route path="quality/lab-tests" element={<QualityLabTestsPage />} />
+          <Route path="quality/returns" element={<QualityReturnsPage />} />
+          <Route path="quality/qc" element={<QualityInspectionsPage />} />
+        </Route>
+        <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.ai} />}>
+          <Route path="ai/assistant" element={<AiAssistantPage />} />
+          <Route path="ai/automation" element={<AiAutomationPage />} />
+          <Route path="ai/predictions" element={<AiPredictionsPage />} />
+          <Route path="ai/weekly-reports" element={<AiWeeklyReportsPage />} />
+        </Route>
+        <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.inventory} />}>
+          <Route path="inventory/consumption-control" element={<ConsumptionControlPage />} />
+          <Route path="inventory/reconciliation" element={<InventoryReconciliationPage />} />
+          <Route path="inventory/stock-summary" element={<StockSummaryPage />} />
+          <Route path="inventory/stock-inventory-summary" element={<StockInventorySummaryPage />} />
+          <Route path="inventory/stock-ledger" element={<StockLedgerPage />} />
+        </Route>
         <Route path="commercial" element={<CommercialPage />} />
         <Route path="commercial/export-cases" element={<ExportCasesPage />} />
         <Route path="commercial/master-contracts" element={<MasterContractsPage />} />
@@ -697,125 +710,135 @@ export function AppProtectedRouter() {
         <Route path="followup" element={<FollowupPage />} />
         <Route path="parties" element={<PartiesPage />} />
         <Route path="flow" element={<DocumentFlowPage />} />
-        <Route path="reports" element={<ReportsHubPage />} />
-        <Route path="reports/merchandising" element={<ReportsOverviewPage />} />
-        <Route path="reports/purchase-orders" element={<ReportPurchaseOrdersPage />} />
-        <Route path="reports/grn" element={<ReportGrnPage />} />
-        <Route path="reports/sales-orders" element={<ReportSalesOrdersPage />} />
-        <Route path="reports/style-360" element={<ReportStyle360Page />} />
-        <Route path="reports/lc-outstanding" element={<ReportLcOutstandingPage />} />
-        <Route path="reports/btb-maturity" element={<ReportBtbMaturityPage />} />
-        <Route path="reports/production-efficiency" element={<ReportProductionEfficiencyPage />} />
-        <Route path="reports/qc-summary" element={<ReportQcSummaryPage />} />
-        <Route path="reports/employee" element={<ReportEmployeeSummaryPage />} />
-        <Route path="reports/payroll" element={<ReportPayrollSummaryPage />} />
-        <Route path="reports/shipments" element={<ReportShipmentsPage />} />
-        <Route path="reports/gate-passes" element={<ReportGatePassesPage />} />
-        <Route path="reports/challans" element={<ReportChallansPage />} />
-        <Route path="reports/reconciliation" element={<ReportReconciliationPage />} />
-        <Route path="reports/exceptions" element={<ReportExceptionsPage />} />
-        <Route path="accounts/advance-options" element={<AdvanceOptionsPage />} />
-        <Route path="accounts/groups" element={<AccountGroupsPage />} />
-        <Route path="accounts" element={<ChartOfAccountsPage />} />
-        <Route path="accounts/vouchers" element={<VouchersPage />} />
-        <Route path="accounts/vouchers/print" element={<VoucherPrintPage />} />
-        <Route path="accounts/vouchers/:voucherId" element={<VoucherDetailPage />} />
-        <Route path="accounts/vouchers/approval-queue" element={<VoucherApprovalsPage />} />
-        <Route path="accounts/currency" element={<AccountsCurrencyPage />} />
-        <Route path="accounts/outstanding-bills" element={<OutstandingBillsPage />} />
-        <Route path="accounts/cost-centers" element={<CostCentersPage />} />
-        <Route path="accounts/budgets" element={<BudgetsPage />} />
-        <Route path="accounts/purchase-workflow" element={<PurchaseWorkflowPage />} />
-        <Route path="accounts/vendor-bills" element={<VendorBillsPage />} />
-        <Route path="banking/accounts" element={<BankAccountsPage />} />
-        <Route path="banking/reconciliation" element={<BankReconciliationPage />} />
-        <Route path="banking/payment-runs" element={<PaymentRunsPage />} />
-        <Route path="banking/settlement-audit" element={<SettlementAuditPage />} />
-        <Route path="banking/payment-advice" element={<PaymentAdvicePage />} />
-        <Route path="cashflow/calendar" element={<CashflowCalendarPage />} />
-        <Route path="accounts/reports/day-book" element={<DayBookPage />} />
-        <Route path="accounts/reports/trial-balance" element={<TrialBalancePage />} />
-        <Route path="accounts/reports/financial-statements" element={<FinancialStatementsPage />} />
-        <Route path="accounts/reports/ar-ap-aging" element={<ArApAgingReportPage />} />
-        <Route path="accounts/reports/ledger-activity" element={<LedgerActivityPage />} />
-        <Route path="accounts/reports/voucher-analytics" element={<VoucherAnalyticsPage />} />
-        <Route path="accounts/reports/group-summary" element={<GroupSummaryPage />} />
-        <Route path="accounts/reports/ratio-analysis" element={<RatioAnalysisPage />} />
-        <Route path="accounts/reports/cash-flow" element={<CashFlowReportPage />} />
-        <Route path="accounts/accounting-periods" element={<AccountingPeriodsPage />} />
-        <Route path="finance/cash-forecast" element={<CashForecastPage />} />
-        <Route path="finance/facilities/dashboard" element={<FacilityDashboardPage />} />
-        <Route path="finance/facilities/new" element={<FacilityCreatePage />} />
-        <Route path="finance/facilities/:facilityId/utilizations/new" element={<UtilizationCreatePage />} />
-        <Route path="finance/facilities/:facilityId" element={<FacilityDetailPage />} />
-        <Route path="finance/facilities" element={<FacilitiesPage />} />
-        <Route path="finance/utilizations/:utilizationId" element={<UtilizationDetailPage />} />
-        <Route path="finance/business-overview" element={<BusinessOverviewPage />} />
-        <Route path="finance/fx-receipts" element={<FxReceiptsPage />} />
-        <Route path="finance/style-profitability" element={<ProfitabilityPage defaultMode="style" />} />
-        <Route path="finance/lc-profitability" element={<ProfitabilityPage defaultMode="lc" />} />
-        <Route path="finance/costing-variance" element={<ProfitabilityPage defaultMode="variance" />} />
-        <Route path="hr" element={<HrDashboardPage />} />
-        <Route path="hr/departments" element={<HrDepartmentsPage />} />
-        <Route path="hr/designations" element={<HrDesignationsPage />} />
-        <Route path="hr/sections" element={<HrSectionsPage />} />
-        <Route path="hr/employees" element={<HrEmployeesPage />} />
-        <Route path="hr/employees/:employeeId" element={<HrEmployeeDetailPage />} />
-        <Route path="hr/attendance/shifts" element={<HrShiftsPage />} />
-        <Route path="hr/attendance/holidays" element={<HrAttendanceHolidaysPage />} />
-        <Route path="hr/attendance/roster" element={<HrRosterPage />} />
-        <Route path="hr/attendance/entries" element={<HrAttendanceEntryPage />} />
-        <Route path="hr/attendance/regularizations" element={<HrRegularizationsPage />} />
-        <Route path="hr/attendance/overtime-rules" element={<HrOvertimeRulesPage />} />
-        <Route path="hr/attendance/overtime" element={<HrOvertimePage />} />
-        <Route path="hr/attendance/summary" element={<HrAttendanceSummaryPage />} />
-        <Route path="hr/leave/types" element={<HrLeaveTypesPage />} />
-        <Route path="hr/leave/policies" element={<HrLeavePoliciesPage />} />
-        <Route path="hr/leave/balances" element={<HrLeaveBalancesPage />} />
-        <Route path="hr/leave/requests" element={<HrLeaveRequestsPage />} />
-        <Route path="hr/leave/approvals" element={<HrLeaveApprovalsPage />} />
-        <Route path="hr/leave/calendar" element={<HrLeaveCalendarPage />} />
-        <Route path="hr/payroll/components" element={<HrPayrollComponentsPage />} />
-        <Route path="hr/payroll/periods" element={<HrPayrollPeriodsPage />} />
-        <Route path="hr/payroll/salary-structures" element={<HrSalaryStructuresPage />} />
-        <Route path="hr/payroll/runs" element={<HrPayrollRunsPage />} />
-        <Route path="hr/payroll/advances" element={<HrPayrollAdvancesPage />} />
-        <Route path="hr/payroll/bonuses" element={<HrPayrollBonusesPage />} />
-        <Route path="hr/payroll/accounting-config" element={<HrPayrollAccountingConfigPage />} />
-        <Route path="hr/payroll/approvals" element={<HrPayrollApprovalsPage />} />
-        <Route path="hr/payroll/payslips" element={<HrPayslipsPage />} />
-        <Route path="hr/performance/cycles" element={<HrPerformanceCyclesPage />} />
-        <Route path="hr/performance/goals" element={<HrGoalsPage />} />
-        <Route path="hr/performance/reviews" element={<HrReviewsPage />} />
-        <Route path="hr/performance/dashboard" element={<HrPerformanceDashboardPage />} />
-        <Route path="hr/recruitment/requisitions" element={<HrJobRequisitionsPage />} />
-        <Route path="hr/recruitment/candidates" element={<HrCandidatesPage />} />
-        <Route path="hr/recruitment/interviews" element={<HrInterviewsPage />} />
-        <Route path="hr/recruitment/offers" element={<HrOffersPage />} />
-        <Route path="hr/ess/profile" element={<HrMyProfilePage />} />
-        <Route path="hr/ess/attendance" element={<HrMyAttendancePage />} />
-        <Route path="hr/ess/leave" element={<HrMyLeavePage />} />
-        <Route path="hr/ess/payslips" element={<HrMyPayslipsPage />} />
-        <Route path="hr/ess/tickets" element={<HrEssTicketsPage />} />
-        <Route path="hr/compliance" element={<HrCompliancePage />} />
-        <Route path="hr/reports" element={<HrReportsDashboardPage />} />
+        <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.reports} />}>
+          <Route path="reports" element={<ReportsHubPage />} />
+          <Route path="reports/merchandising" element={<ReportsOverviewPage />} />
+          <Route path="reports/purchase-orders" element={<ReportPurchaseOrdersPage />} />
+          <Route path="reports/grn" element={<ReportGrnPage />} />
+          <Route path="reports/sales-orders" element={<ReportSalesOrdersPage />} />
+          <Route path="reports/style-360" element={<ReportStyle360Page />} />
+          <Route path="reports/lc-outstanding" element={<ReportLcOutstandingPage />} />
+          <Route path="reports/btb-maturity" element={<ReportBtbMaturityPage />} />
+          <Route path="reports/production-efficiency" element={<ReportProductionEfficiencyPage />} />
+          <Route path="reports/qc-summary" element={<ReportQcSummaryPage />} />
+          <Route path="reports/employee" element={<ReportEmployeeSummaryPage />} />
+          <Route path="reports/payroll" element={<ReportPayrollSummaryPage />} />
+          <Route path="reports/shipments" element={<ReportShipmentsPage />} />
+          <Route path="reports/gate-passes" element={<ReportGatePassesPage />} />
+          <Route path="reports/challans" element={<ReportChallansPage />} />
+          <Route path="reports/reconciliation" element={<ReportReconciliationPage />} />
+          <Route path="reports/exceptions" element={<ReportExceptionsPage />} />
+        </Route>
+        <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.finance} />}>
+          <Route path="accounts/advance-options" element={<AdvanceOptionsPage />} />
+          <Route path="accounts/groups" element={<AccountGroupsPage />} />
+          <Route path="accounts" element={<ChartOfAccountsPage />} />
+          <Route path="accounts/vouchers" element={<VouchersPage />} />
+          <Route path="accounts/vouchers/print" element={<VoucherPrintPage />} />
+          <Route path="accounts/vouchers/:voucherId" element={<VoucherDetailPage />} />
+          <Route path="accounts/vouchers/approval-queue" element={<VoucherApprovalsPage />} />
+          <Route path="accounts/currency" element={<AccountsCurrencyPage />} />
+          <Route path="accounts/outstanding-bills" element={<OutstandingBillsPage />} />
+          <Route path="accounts/cost-centers" element={<CostCentersPage />} />
+          <Route path="accounts/budgets" element={<BudgetsPage />} />
+          <Route path="accounts/purchase-workflow" element={<PurchaseWorkflowPage />} />
+          <Route path="accounts/vendor-bills" element={<VendorBillsPage />} />
+          <Route path="banking/accounts" element={<BankAccountsPage />} />
+          <Route path="banking/reconciliation" element={<BankReconciliationPage />} />
+          <Route path="banking/payment-runs" element={<PaymentRunsPage />} />
+          <Route path="banking/settlement-audit" element={<SettlementAuditPage />} />
+          <Route path="banking/payment-advice" element={<PaymentAdvicePage />} />
+          <Route path="cashflow/calendar" element={<CashflowCalendarPage />} />
+          <Route path="accounts/reports/day-book" element={<DayBookPage />} />
+          <Route path="accounts/reports/trial-balance" element={<TrialBalancePage />} />
+          <Route path="accounts/reports/financial-statements" element={<FinancialStatementsPage />} />
+          <Route path="accounts/reports/ar-ap-aging" element={<ArApAgingReportPage />} />
+          <Route path="accounts/reports/ledger-activity" element={<LedgerActivityPage />} />
+          <Route path="accounts/reports/voucher-analytics" element={<VoucherAnalyticsPage />} />
+          <Route path="accounts/reports/group-summary" element={<GroupSummaryPage />} />
+          <Route path="accounts/reports/ratio-analysis" element={<RatioAnalysisPage />} />
+          <Route path="accounts/reports/cash-flow" element={<CashFlowReportPage />} />
+          <Route path="accounts/accounting-periods" element={<AccountingPeriodsPage />} />
+          <Route path="finance/cash-forecast" element={<CashForecastPage />} />
+          <Route path="finance/fx-receipts" element={<FxReceiptsPage />} />
+          <Route path="finance/style-profitability" element={<ProfitabilityPage defaultMode="style" />} />
+          <Route path="finance/lc-profitability" element={<ProfitabilityPage defaultMode="lc" />} />
+          <Route path="finance/costing-variance" element={<ProfitabilityPage defaultMode="variance" />} />
+        </Route>
+        <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.facility} />}>
+          <Route path="finance/facilities/dashboard" element={<FacilityDashboardPage />} />
+          <Route path="finance/facilities/new" element={<FacilityCreatePage />} />
+          <Route path="finance/facilities/:facilityId/utilizations/new" element={<UtilizationCreatePage />} />
+          <Route path="finance/facilities/:facilityId" element={<FacilityDetailPage />} />
+          <Route path="finance/facilities" element={<FacilitiesPage />} />
+          <Route path="finance/utilizations/:utilizationId" element={<UtilizationDetailPage />} />
+          <Route path="finance/business-overview" element={<BusinessOverviewPage />} />
+        </Route>
+        <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.hr} />}>
+          <Route path="hr" element={<HrDashboardPage />} />
+          <Route path="hr/departments" element={<HrDepartmentsPage />} />
+          <Route path="hr/designations" element={<HrDesignationsPage />} />
+          <Route path="hr/sections" element={<HrSectionsPage />} />
+          <Route path="hr/employees" element={<HrEmployeesPage />} />
+          <Route path="hr/employees/:employeeId" element={<HrEmployeeDetailPage />} />
+          <Route path="hr/attendance/shifts" element={<HrShiftsPage />} />
+          <Route path="hr/attendance/holidays" element={<HrAttendanceHolidaysPage />} />
+          <Route path="hr/attendance/roster" element={<HrRosterPage />} />
+          <Route path="hr/attendance/entries" element={<HrAttendanceEntryPage />} />
+          <Route path="hr/attendance/regularizations" element={<HrRegularizationsPage />} />
+          <Route path="hr/attendance/overtime-rules" element={<HrOvertimeRulesPage />} />
+          <Route path="hr/attendance/overtime" element={<HrOvertimePage />} />
+          <Route path="hr/attendance/summary" element={<HrAttendanceSummaryPage />} />
+          <Route path="hr/leave/types" element={<HrLeaveTypesPage />} />
+          <Route path="hr/leave/policies" element={<HrLeavePoliciesPage />} />
+          <Route path="hr/leave/balances" element={<HrLeaveBalancesPage />} />
+          <Route path="hr/leave/requests" element={<HrLeaveRequestsPage />} />
+          <Route path="hr/leave/approvals" element={<HrLeaveApprovalsPage />} />
+          <Route path="hr/leave/calendar" element={<HrLeaveCalendarPage />} />
+          <Route path="hr/payroll/components" element={<HrPayrollComponentsPage />} />
+          <Route path="hr/payroll/periods" element={<HrPayrollPeriodsPage />} />
+          <Route path="hr/payroll/salary-structures" element={<HrSalaryStructuresPage />} />
+          <Route path="hr/payroll/runs" element={<HrPayrollRunsPage />} />
+          <Route path="hr/payroll/advances" element={<HrPayrollAdvancesPage />} />
+          <Route path="hr/payroll/bonuses" element={<HrPayrollBonusesPage />} />
+          <Route path="hr/payroll/accounting-config" element={<HrPayrollAccountingConfigPage />} />
+          <Route path="hr/payroll/approvals" element={<HrPayrollApprovalsPage />} />
+          <Route path="hr/payroll/payslips" element={<HrPayslipsPage />} />
+          <Route path="hr/performance/cycles" element={<HrPerformanceCyclesPage />} />
+          <Route path="hr/performance/goals" element={<HrGoalsPage />} />
+          <Route path="hr/performance/reviews" element={<HrReviewsPage />} />
+          <Route path="hr/performance/dashboard" element={<HrPerformanceDashboardPage />} />
+          <Route path="hr/recruitment/requisitions" element={<HrJobRequisitionsPage />} />
+          <Route path="hr/recruitment/candidates" element={<HrCandidatesPage />} />
+          <Route path="hr/recruitment/interviews" element={<HrInterviewsPage />} />
+          <Route path="hr/recruitment/offers" element={<HrOffersPage />} />
+          <Route path="hr/ess/profile" element={<HrMyProfilePage />} />
+          <Route path="hr/ess/attendance" element={<HrMyAttendancePage />} />
+          <Route path="hr/ess/leave" element={<HrMyLeavePage />} />
+          <Route path="hr/ess/payslips" element={<HrMyPayslipsPage />} />
+          <Route path="hr/ess/tickets" element={<HrEssTicketsPage />} />
+          <Route path="hr/compliance" element={<HrCompliancePage />} />
+          <Route path="hr/reports" element={<HrReportsDashboardPage />} />
+        </Route>
         <Route path="approvals" element={<AllApprovalsPage />} />
-        <Route path="settings" element={<SettingsLayout />}>
-          <Route index element={<SettingsOverviewPage />} />
-          <Route path="config" element={<ConfigurationPage />} />
-          <Route path="users" element={<UsersPage />} />
-          <Route path="roles" element={<RolesPage />} />
-          <Route path="audit" element={<AuditPage />} />
-          <Route path="currency" element={<CurrencyManagementPage />} />
-          <Route path="backup" element={<BackupRestorePage />} />
-          <Route path="tenant" element={<TenantSettingsPage />} />
-          <Route path="pricing" element={<PricingSettingsPage />} />
-          <Route path="activity-logs" element={<AuditPage />} />
-          <Route path="cheque-templates" element={<ChequeTemplatesPage />} />
-          <Route path="external-access" element={<ExternalAccessPage />} />
-          <Route path="external-access/customers" element={<ExternalCustomerAccessPage />} />
-          <Route path="external-access/financiers" element={<ExternalFinancierAccessPage />} />
-          <Route path="external-access/audit" element={<ExternalAccessAuditPage />} />
+        <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.settings} />}>
+          <Route path="settings" element={<SettingsLayout />}>
+            <Route index element={<SettingsOverviewPage />} />
+            <Route path="config" element={<ConfigurationPage />} />
+            <Route path="users" element={<UsersPage />} />
+            <Route path="roles" element={<RolesPage />} />
+            <Route path="audit" element={<AuditPage />} />
+            <Route path="currency" element={<CurrencyManagementPage />} />
+            <Route path="backup" element={<BackupRestorePage />} />
+            <Route path="tenant" element={<TenantSettingsPage />} />
+            <Route path="pricing" element={<PricingSettingsPage />} />
+            <Route path="activity-logs" element={<AuditPage />} />
+            <Route path="cheque-templates" element={<ChequeTemplatesPage />} />
+            <Route path="external-access" element={<ExternalAccessPage />} />
+            <Route path="external-access/customers" element={<ExternalCustomerAccessPage />} />
+            <Route path="external-access/financiers" element={<ExternalFinancierAccessPage />} />
+            <Route path="external-access/audit" element={<ExternalAccessAuditPage />} />
+          </Route>
         </Route>
         <Route path="tutorials" element={<TutorialsPage />} />
         <Route path="tutorials/:articleId" element={<TutorialArticlePage />} />

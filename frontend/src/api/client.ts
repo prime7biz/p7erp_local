@@ -1115,7 +1115,7 @@ export function clearAuth(): void {
  * Does not redirect on `/login` or `/signup` (wrong password / stale token during sign-in).
  * See docs/PRE_PRODUCTION_AUDIT.md Finding #5.
  */
-function handleSessionExpiredUnauthorized(sentAuthorization: boolean): void {
+function handleSessionExpiredUnauthorized(sentAuthorization: boolean, code?: string | null): void {
   if (!sentAuthorization) return;
   clearAuth();
   try {
@@ -1123,9 +1123,11 @@ function handleSessionExpiredUnauthorized(sentAuthorization: boolean): void {
     if (path === "/login" || path === "/signup") return;
     if (!path.startsWith("/app")) return;
     const next = path + window.location.search;
-    window.location.replace(`/login?reason=session_expired&next=${encodeURIComponent(next)}`);
+    const reason = code === "session_superseded" ? "session_replaced" : "session_expired";
+    window.location.replace(`/login?reason=${reason}&next=${encodeURIComponent(next)}`);
   } catch {
-    window.location.replace("/login?reason=session_expired");
+    const reason = code === "session_superseded" ? "session_replaced" : "session_expired";
+    window.location.replace(`/login?reason=${reason}`);
   }
 }
 
@@ -1189,10 +1191,10 @@ async function request<T>(
   const sentAuthorization = Boolean(token);
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!res.ok) {
-    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     const raw = err as { detail?: unknown; message?: string };
     const parsed = parseFastApiErrorDetail(raw.detail);
+    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization, parsed.code);
     const fallback = typeof raw.message === "string" ? raw.message : null;
     const message = parsed.message !== "Request failed" ? parsed.message : fallback ?? "Request failed";
     const requestId = res.headers.get("X-Request-Id");
@@ -1221,10 +1223,10 @@ async function requestWithTotal<T>(
   const sentAuthorization = Boolean(token);
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!res.ok) {
-    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     const raw = err as { detail?: unknown; message?: string };
     const parsed = parseFastApiErrorDetail(raw.detail);
+    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization, parsed.code);
     const fallback = typeof raw.message === "string" ? raw.message : null;
     const message = parsed.message !== "Request failed" ? parsed.message : fallback ?? "Request failed";
     const requestId = res.headers.get("X-Request-Id");
@@ -1274,9 +1276,10 @@ async function requestBlob(
   const sentAuthorization = Boolean(token);
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!res.ok) {
-    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const raw = err as { detail?: string };
+    const raw = err as { detail?: unknown; message?: string };
+    const parsed = parseFastApiErrorDetail(raw.detail);
+    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization, parsed.code);
     const message = typeof raw.detail === "string" ? raw.detail : "Export failed";
     throw new ApiError(message, res.status);
   }
@@ -1299,10 +1302,11 @@ async function requestText(
   const sentAuthorization = Boolean(token);
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!res.ok) {
-    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization);
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const raw = err as { detail?: string | { msg?: string }[]; message?: string };
-    const d = raw.detail;
+    const raw = err as { detail?: unknown; message?: string };
+    const parsed = parseFastApiErrorDetail(raw.detail);
+    if (res.status === 401) handleSessionExpiredUnauthorized(sentAuthorization, parsed.code);
+    const d = raw.detail as string | { msg?: string }[] | undefined;
     const message = typeof d === "string" ? d : Array.isArray(d) && d[0]?.msg ? d[0].msg : raw.message ?? "Request failed";
     const requestId = res.headers.get("X-Request-Id");
     throw new ApiError(message, res.status, requestId);
@@ -8446,6 +8450,57 @@ export const api = {
   },
   async createKnittingPlan(body: Record<string, unknown>): Promise<{ id: number }> {
     return request("/api/v1/production/knitting/plans", { method: "POST", body: JSON.stringify(body) });
+  },
+  async listKnittingChargeRates(activeOnly?: boolean): Promise<{ items: unknown[] }> {
+    const q = typeof activeOnly === "boolean" ? `?active_only=${activeOnly ? "true" : "false"}` : "";
+    return request(`/api/v1/production/knitting/charge-rates${q}`);
+  },
+  async createKnittingChargeRate(body: Record<string, unknown>): Promise<{ id: number }> {
+    return request("/api/v1/production/knitting/charge-rates", { method: "POST", body: JSON.stringify(body) });
+  },
+  async patchKnittingChargeRate(rateId: number, body: Record<string, unknown>): Promise<{ ok: boolean }> {
+    return request(`/api/v1/production/knitting/charge-rates/${rateId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+  async getKnittingChargePreview(params: Record<string, string | number>): Promise<{
+    suggested_charge: number;
+    currency_hint?: string;
+  }> {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) sp.set(k, String(v));
+    return request(`/api/v1/production/knitting/charge-preview?${sp.toString()}`);
+  },
+  async listKnittingWorkOrders(): Promise<{ items: unknown[] }> {
+    return request("/api/v1/production/knitting/work-orders");
+  },
+  async createKnittingWorkOrder(body: Record<string, unknown>): Promise<unknown> {
+    return request("/api/v1/production/knitting/work-orders", { method: "POST", body: JSON.stringify(body) });
+  },
+  async getKnittingWorkOrder(woId: number): Promise<unknown> {
+    return request(`/api/v1/production/knitting/work-orders/${woId}`);
+  },
+  async patchKnittingWorkOrder(woId: number, body: Record<string, unknown>): Promise<unknown> {
+    return request(`/api/v1/production/knitting/work-orders/${woId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  async linkKnittingWorkOrderDocuments(
+    woId: number,
+    body: { delivery_challan_id?: number | null; gate_pass_id?: number | null },
+  ): Promise<unknown> {
+    return request(`/api/v1/production/knitting/work-orders/${woId}/link-documents`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async createKnittingWorkOrderProcessOrder(woId: number): Promise<unknown> {
+    return request(`/api/v1/production/knitting/work-orders/${woId}/process-order`, { method: "POST" });
+  },
+  async refreshKnittingWorkOrderStatus(woId: number): Promise<unknown> {
+    return request(`/api/v1/production/knitting/work-orders/${woId}/refresh-status`, { method: "POST" });
+  },
+  async getKnittingDashboardStats(): Promise<unknown> {
+    return request("/api/v1/production/knitting/dashboard-stats");
   },
   async listDyeRecipes(): Promise<{ items: unknown[] }> {
     return request("/api/v1/production/dyeing/recipes");

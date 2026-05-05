@@ -543,7 +543,13 @@ class ProcessOrder(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     process_number: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     process_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    process_method: Mapped[str] = mapped_column(String(16), nullable=False, default="in_house")
+    process_method: Mapped[str] = mapped_column(String(24), nullable=False, default="in_house")
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    knitting_service_voucher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     linked_order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
     input_item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)

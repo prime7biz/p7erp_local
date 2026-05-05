@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user, hash_password
 from app.common.email_service import send_staff_welcome_email
-from app.common.permissions import permissions_registry_api_payload
+from app.common.permissions import permissions_registry_api_payload, require_internal_permission
 from app.common.username import generate_unique_username_for_tenant
 from app.common.authz import ensure_user_is_tenant_admin
 from app.common.tenant import require_tenant
+from app.common.tenant_feature_keys import normalize_feature_flags
 from app.database import get_db
 from app.models import AuditLog, CommissionMode, Role, Tenant, User
 from app.modules.audit.service import log_action
@@ -36,7 +37,11 @@ from app.modules.settings.schemas import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/settings", tags=["settings"])
+router = APIRouter(
+    prefix="/settings",
+    tags=["settings"],
+    dependencies=[Depends(require_internal_permission("settings.access"))],
+)
 router.include_router(external_access_admin_router)
 router.include_router(staff_invite_router)
 
@@ -114,7 +119,10 @@ async def update_settings_config(
     if body.default_commission_mode is not None:
         tenant.default_commission_mode = body.default_commission_mode
     if body.feature_flags is not None:
-        tenant.feature_flags = body.feature_flags
+        try:
+            tenant.feature_flags = normalize_feature_flags(body.feature_flags)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if body.country_code is not None:
         cc = (body.country_code or "").strip().upper() or None
         tenant.country_code = cc

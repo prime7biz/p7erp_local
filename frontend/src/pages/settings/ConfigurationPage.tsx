@@ -228,6 +228,30 @@ export function ConfigurationPage() {
           </label>
         </div>
 
+        <div className="rounded-lg border border-border bg-surface-subtle p-3">
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.knitting_enabled === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  knitting_enabled: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Enable Knitting module</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                When checked, Manufacturing shows <strong>Knitting</strong> (hub page), APIs open, charge rates/work orders
+                are available. Turn off for tenants without an in‑house knitting unit. Keep <strong>Knitting</strong> in{" "}
+                <strong>Production setup → optional units</strong> enabled for machines and hourly capture.
+              </span>
+            </span>
+          </label>
+        </div>
+
         <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3">
           <label className="flex items-start gap-3 text-sm text-text-secondary">
             <input

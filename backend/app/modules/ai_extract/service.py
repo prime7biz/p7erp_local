@@ -37,10 +37,12 @@ from app.modules.ai_extract.schemas import (
 
 def _get_provider() -> BaseExtractionProvider:
     s = get_settings()
-    # Document AI extraction uses Gemini multimodal only when explicitly enabled (default off).
-    if s.gemini_enabled and (s.gemini_api_key or "").strip():
-        return GeminiExtractionProvider()
-    return StubExtractionProvider()
+    # Keep deterministic stub output only for automated tests.
+    # For normal environments, always use Gemini provider (it already
+    # returns a clear "unavailable" warning when Gemini is not configured).
+    if (s.app_env or "").strip().lower() in {"test", "testing"}:
+        return StubExtractionProvider()
+    return GeminiExtractionProvider()
 
 
 def _esc(s: str | None) -> str | None:

@@ -1,4 +1,4 @@
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, JSON, UniqueConstraint, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from app.database import Base
@@ -32,6 +32,7 @@ class User(Base):
     first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    auth_session_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     password_reset_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     password_reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

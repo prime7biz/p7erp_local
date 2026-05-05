@@ -2,7 +2,8 @@ import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, setAuth } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
-import { AlertCircle, ArrowLeft, Lock } from "lucide-react";
+import { PasswordFieldInput } from "@/components/auth/PasswordFieldInput";
+import { AlertCircle, ArrowLeft } from "lucide-react";
 
 export function StaffAcceptInvitePage() {
   const [searchParams] = useSearchParams();
@@ -113,37 +114,29 @@ export function StaffAcceptInvitePage() {
               <label htmlFor="pw" className="text-text-secondary text-sm font-medium">
                 Password
               </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
-                <input
-                  id="pw"
-                  type="password"
-                  autoComplete="new-password"
-                  className="w-full pl-10 pr-4 py-3 h-11 rounded-md border border-border bg-surface-raised focus:border-brand-primary focus:ring-2 focus:ring-focus-ring outline-none"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                />
-              </div>
+              <PasswordFieldInput
+                id="pw"
+                value={password}
+                onChange={setPassword}
+                autoComplete="new-password"
+                required
+                minLength={8}
+                inputClassName="w-full py-3 h-11 rounded-md border border-border bg-surface-raised focus:border-brand-primary focus:ring-2 focus:ring-focus-ring outline-none"
+              />
             </div>
             <div className="space-y-1.5">
               <label htmlFor="pw2" className="text-text-secondary text-sm font-medium">
                 Confirm password
               </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
-                <input
-                  id="pw2"
-                  type="password"
-                  autoComplete="new-password"
-                  className="w-full pl-10 pr-4 py-3 h-11 rounded-md border border-border bg-surface-raised focus:border-brand-primary focus:ring-2 focus:ring-focus-ring outline-none"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  required
-                  minLength={8}
-                />
-              </div>
+              <PasswordFieldInput
+                id="pw2"
+                value={confirm}
+                onChange={setConfirm}
+                autoComplete="new-password"
+                required
+                minLength={8}
+                inputClassName="w-full py-3 h-11 rounded-md border border-border bg-surface-raised focus:border-brand-primary focus:ring-2 focus:ring-focus-ring outline-none"
+              />
             </div>
             <button
               type="submit"

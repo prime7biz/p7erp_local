@@ -14,6 +14,7 @@ import {
 import { useProductionOptionalUnits } from "@/hooks/useProductionOptionalUnits";
 import { prefetchSidebarRoute, prefetchTopSearchRoutes } from "@/app/prefetchRoutes";
 import { AppBottomNav } from "@/components/navigation/AppBottomNav";
+import { getRbacMode } from "@/components/auth/rbacMode";
 import {
   Bell,
   BookOpen,
@@ -42,6 +43,19 @@ function getNameInitial(name?: string | null) {
   return name.trim().charAt(0).toUpperCase();
 }
 
+function sectionPermissionKey(section: string): string | null {
+  if (section === "Merchandising") return "merch.access";
+  if (section === "Export & Import") return "merch.access";
+  if (section === "Inventory") return "inventory.access";
+  if (section === "Manufacturing") return "production.access";
+  if (section === "AI Tools") return "ai.access";
+  if (section === "HR") return "hr.access";
+  if (section === "Finance") return "finance.access";
+  if (section === "Reports") return "reports.access";
+  if (section === "Settings") return "settings.access";
+  return null;
+}
+
 function Sidebar({
   tenantType,
   tenantName,
@@ -51,6 +65,7 @@ function Sidebar({
   onToggleCollapse,
   enabledOptionalProductionUnits,
   featureFlags,
+  hasPermission,
 }: {
   tenantType: TenantType;
   tenantName: string;
@@ -60,6 +75,7 @@ function Sidebar({
   onToggleCollapse: () => void;
   enabledOptionalProductionUnits: string[];
   featureFlags?: MeResponse["feature_flags"];
+  hasPermission: (key: string) => boolean;
 }) {
   const location = useLocation();
   const [openSection, setOpenSection] = useState<string | null>("Dashboard");
@@ -70,8 +86,15 @@ function Sidebar({
   const userPopoverRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
+    const rbacMode = getRbacMode(featureFlags);
     return menuSections
       .filter((s) => isVisible(tenantType, s.visibleFor))
+      .filter((s) => {
+        if (rbacMode !== "enforce") return true;
+        const permissionKey = sectionPermissionKey(s.section);
+        if (!permissionKey) return true;
+        return hasPermission(permissionKey);
+      })
       .map((s) => {
         if (s.subsections && s.subsections.length > 0) {
           const subsections = s.subsections
@@ -96,7 +119,7 @@ function Sidebar({
         if (s.subsections && s.subsections.length > 0) return s.subsections.some((sub) => sub.items.length > 0);
         return s.items.length > 0;
       });
-  }, [tenantType, enabledOptionalProductionUnits, featureFlags]);
+  }, [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission]);
 
   useEffect(() => {
     const path = location.pathname;
@@ -619,7 +642,7 @@ function AppFooter() {
 }
 
 export function Layout() {
-  const { me, loading, error, logout, refetch } = useAuth();
+  const { me, loading, error, logout, refetch, hasPermission } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { enabledOptionalUnits } = useProductionOptionalUnits(me?.tenant_type);
   const [announcements, setAnnouncements] = useState<{ id: number; title: string; content: string; type: string }[]>([]);
@@ -670,6 +693,7 @@ export function Layout() {
           onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
           enabledOptionalProductionUnits={enabledOptionalUnits}
           featureFlags={me.feature_flags}
+          hasPermission={hasPermission}
         />
       </div>
       <div className="flex-1 min-w-0 flex flex-col">
@@ -703,6 +727,7 @@ export function Layout() {
         tenantType={me.tenant_type}
         enabledOptionalProductionUnits={enabledOptionalUnits}
         featureFlags={me.feature_flags}
+        hasPermission={hasPermission}
       />
     </div>
   );

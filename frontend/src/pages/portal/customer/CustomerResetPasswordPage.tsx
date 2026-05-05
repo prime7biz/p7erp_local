@@ -1,6 +1,7 @@
 import { useState, type FormEvent, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { externalResetPassword } from "@/api/externalClient";
+import { PasswordFieldInput } from "@/components/auth/PasswordFieldInput";
 import { Button } from "@/components/ui/button";
 import { erpControlFocusClass } from "@/components/app/listPageLayout";
 
@@ -58,27 +59,35 @@ export function CustomerResetPasswordPage() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-xs font-medium text-text-muted">New password</label>
-              <input
-                type="password"
-                className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
+              <label htmlFor="portal-customer-np" className="text-xs font-medium text-text-muted">
+                New password
+              </label>
+              <PasswordFieldInput
+                id="portal-customer-np"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
                 autoComplete="new-password"
                 minLength={8}
                 required
+                showLock={false}
+                wrapperClassName="mt-1"
+                inputClassName={`w-full rounded-lg border border-border py-2 text-sm ${erpControlFocusClass}`}
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-text-muted">Confirm password</label>
-              <input
-                type="password"
-                className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
+              <label htmlFor="portal-customer-npc" className="text-xs font-medium text-text-muted">
+                Confirm password
+              </label>
+              <PasswordFieldInput
+                id="portal-customer-npc"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={setConfirmPassword}
                 autoComplete="new-password"
                 minLength={8}
                 required
+                showLock={false}
+                wrapperClassName="mt-1"
+                inputClassName={`w-full rounded-lg border border-border py-2 text-sm ${erpControlFocusClass}`}
               />
             </div>
             {error ? <p className="text-sm text-status-danger-foreground">{error}</p> : null}

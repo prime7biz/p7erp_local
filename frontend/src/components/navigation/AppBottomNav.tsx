@@ -9,6 +9,7 @@ import {
   type TenantTypeFilter,
 } from "@/app/sidebarConfig";
 import { prefetchSidebarRoute } from "@/app/prefetchRoutes";
+import { getRbacMode } from "@/components/auth/rbacMode";
 import { Landmark, Settings, Users, X } from "lucide-react";
 
 function isVisible(tenantType: TenantType, filter?: TenantTypeFilter[]): boolean {
@@ -19,6 +20,19 @@ function isVisible(tenantType: TenantType, filter?: TenantTypeFilter[]): boolean
 
 function isPathMatch(pathname: string, basePath: string): boolean {
   return pathname === basePath || pathname.startsWith(`${basePath}/`);
+}
+
+function sectionPermissionKey(section: string): string | null {
+  if (section === "Merchandising") return "merch.access";
+  if (section === "Export & Import") return "merch.access";
+  if (section === "Inventory") return "inventory.access";
+  if (section === "Manufacturing") return "production.access";
+  if (section === "AI Tools") return "ai.access";
+  if (section === "HR") return "hr.access";
+  if (section === "Finance") return "finance.access";
+  if (section === "Reports") return "reports.access";
+  if (section === "Settings") return "settings.access";
+  return null;
 }
 
 function isTabActive(pathname: string, tab: BottomNavItem, hasPrimaryActive: boolean, isMoreOpen: boolean): boolean {
@@ -36,11 +50,13 @@ export function AppBottomNav({
   tenantType,
   enabledOptionalProductionUnits = [],
   featureFlags,
+  hasPermission,
 }: {
   tenantType: TenantType;
   /** From Production setup; gates optional units (knitting, dyeing, …) in the mobile “More” menu. */
   enabledOptionalProductionUnits?: string[];
   featureFlags?: Record<string, boolean | string | number | null> | null;
+  hasPermission: (key: string) => boolean;
 }) {
   const location = useLocation();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
@@ -51,8 +67,15 @@ export function AppBottomNav({
   );
 
   const filteredSections = useMemo(() => {
+    const rbacMode = getRbacMode(featureFlags);
     return menuSections
       .filter((section) => isVisible(tenantType, section.visibleFor))
+      .filter((section) => {
+        if (rbacMode !== "enforce") return true;
+        const permissionKey = sectionPermissionKey(section.section);
+        if (!permissionKey) return true;
+        return hasPermission(permissionKey);
+      })
       .map((section) => {
         const topItems = section.items.filter((item) =>
           isNavItemVisibleForTenant(item, tenantType, enabledOptionalProductionUnits, featureFlags),
@@ -69,7 +92,7 @@ export function AppBottomNav({
         };
       })
       .filter((section) => section.items.length > 0 || Boolean(section.directLink));
-  }, [tenantType, enabledOptionalProductionUnits, featureFlags]);
+  }, [tenantType, enabledOptionalProductionUnits, featureFlags, hasPermission]);
 
   const hasPrimaryActive = useMemo(() => {
     const primaryTabs = tabs.filter((tab) => !tab.isMore);

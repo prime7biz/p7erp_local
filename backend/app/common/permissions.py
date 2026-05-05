@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.tenant_feature_keys import RBAC_MODE_ENFORCE, RBAC_MODE_OFF, get_tenant_rbac_mode
 from app.database import get_db
-from app.models import Role, User
+from app.models import Role, Tenant, User
+
+logger = logging.getLogger(__name__)
 
 # --- Material control & AP governance (optional JSON on Role.permissions) ---
 PERMISSION_BOM_PRICE_OVERRIDE = "bom.price_override"
@@ -237,11 +242,35 @@ def require_internal_permission(permission_key: str):
     """FastAPI Depends() factory for a single permission key on internal JWT users."""
 
     async def _dep(
+        request: Request,
         user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ) -> None:
+        tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+        tenant = tenant_result.scalar_one_or_none()
+        rbac_mode = get_tenant_rbac_mode(tenant.feature_flags if tenant else None)
+        if rbac_mode == RBAC_MODE_OFF:
+            return
+
         role = await get_user_role_for_tenant(db, user, user.tenant_id)
-        if not internal_permission_granted(role=role, permission_key=permission_key):
+        granted = internal_permission_granted(role=role, permission_key=permission_key)
+        if granted:
+            return
+
+        role_name = (role.name if role else "").strip().lower() or "unknown"
+        if rbac_mode != RBAC_MODE_ENFORCE:
+            logger.warning(
+                "rbac_shadow_denial tenant_id=%s user_id=%s role=%s permission=%s method=%s path=%s request_id=%s",
+                user.tenant_id,
+                user.id,
+                role_name,
+                permission_key,
+                request.method,
+                request.url.path,
+                request.headers.get("X-Request-Id"),
+            )
+            return
+        if not granted:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Permission denied: {permission_key}",

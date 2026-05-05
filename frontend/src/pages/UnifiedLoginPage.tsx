@@ -3,8 +3,8 @@ import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { api, setAuth } from "@/api/client";
 import { externalLogin, setExtAuth } from "@/api/externalClient";
 import { useAuth } from "@/context/AuthContext";
+import { PasswordFieldInput } from "@/components/auth/PasswordFieldInput";
 import {
-  Lock,
   AlertCircle,
   ArrowLeft,
   Building2,
@@ -198,6 +198,12 @@ export function UnifiedLoginPage() {
                 <span>Your session expired. Please sign in again to continue.</span>
               </div>
             )}
+            {sessionReason === "session_replaced" && (
+              <div className="flex items-start gap-2 rounded-lg border border-brand-primary/25 bg-brand-primary/5 px-4 py-3 text-sm text-text-primary">
+                <Info className="h-4 w-4 shrink-0 mt-0.5 text-brand-primary" />
+                <span>You were logged out because this account signed in on another device.</span>
+              </div>
+            )}
 
             {error && (
               <div className="flex items-start gap-2 rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
@@ -276,19 +282,16 @@ export function UnifiedLoginPage() {
                     Forgot password?
                   </Link>
                 </div>
-                <div className="relative mt-1">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
-                  <input
-                    id="password"
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder="Enter your password"
-                    className="w-full pl-10 pr-4 py-3 h-11 rounded-md border border-border bg-surface-raised focus:border-brand-primary focus:ring-2 focus:ring-focus-ring outline-none"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
+                <PasswordFieldInput
+                  id="password"
+                  value={password}
+                  onChange={setPassword}
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  required
+                  wrapperClassName="mt-1"
+                  inputClassName="w-full py-3 h-11 rounded-md border border-border bg-surface-raised focus:border-brand-primary focus:ring-2 focus:ring-focus-ring outline-none"
+                />
               </div>
 
               <button

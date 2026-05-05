@@ -1,7 +1,8 @@
 import { useState, type FormEvent, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "@/api/client";
-import { AlertCircle, ArrowLeft, CheckCircle, Lock } from "lucide-react";
+import { PasswordFieldInput } from "@/components/auth/PasswordFieldInput";
+import { AlertCircle, ArrowLeft, CheckCircle } from "lucide-react";
 
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -72,37 +73,29 @@ export function ResetPasswordPage() {
               <label htmlFor="np" className="text-text-secondary text-sm font-medium">
                 New password
               </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
-                <input
-                  id="np"
-                  type="password"
-                  className="w-full pl-10 pr-4 py-3 h-11 rounded-md border border-border bg-surface-raised focus:border-brand-primary focus:ring-2 focus:ring-focus-ring outline-none"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                />
-              </div>
+              <PasswordFieldInput
+                id="np"
+                value={password}
+                onChange={setPassword}
+                required
+                minLength={8}
+                autoComplete="new-password"
+                inputClassName="w-full py-3 h-11 rounded-md border border-border bg-surface-raised focus:border-brand-primary focus:ring-2 focus:ring-focus-ring outline-none"
+              />
             </div>
             <div className="space-y-1.5">
               <label htmlFor="npc" className="text-text-secondary text-sm font-medium">
                 Confirm password
               </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-text-muted" />
-                <input
-                  id="npc"
-                  type="password"
-                  className="w-full pl-10 pr-4 py-3 h-11 rounded-md border border-border bg-surface-raised focus:border-brand-primary focus:ring-2 focus:ring-focus-ring outline-none"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                />
-              </div>
+              <PasswordFieldInput
+                id="npc"
+                value={confirm}
+                onChange={setConfirm}
+                required
+                minLength={8}
+                autoComplete="new-password"
+                inputClassName="w-full py-3 h-11 rounded-md border border-border bg-surface-raised focus:border-brand-primary focus:ring-2 focus:ring-focus-ring outline-none"
+              />
             </div>
             <button
               type="submit"

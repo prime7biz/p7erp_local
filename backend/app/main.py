@@ -5,11 +5,12 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.config import get_settings
+from app.common.permissions import require_internal_permission
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
 from app.modules.tenant.router import router as tenant_router
@@ -254,41 +255,153 @@ app.include_router(external_financier_router, prefix="/api/external")
 app.include_router(files_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(tenant_router, prefix=settings.api_v1_prefix)
-app.include_router(users_router, prefix=settings.api_v1_prefix)
-app.include_router(roles_router, prefix=settings.api_v1_prefix)
-app.include_router(audit_router, prefix=settings.api_v1_prefix)
-app.include_router(customers_router, prefix=settings.api_v1_prefix)
+app.include_router(
+    users_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("settings.access"))],
+)
+app.include_router(
+    roles_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("settings.access"))],
+)
+app.include_router(
+    audit_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("settings.access"))],
+)
+app.include_router(
+    customers_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
 app.include_router(dashboard_router, prefix=settings.api_v1_prefix)
-app.include_router(reports_router, prefix=settings.api_v1_prefix)
-app.include_router(inquiries_router, prefix=settings.api_v1_prefix)
-app.include_router(quotations_router, prefix=settings.api_v1_prefix)
-app.include_router(orders_router, prefix=settings.api_v1_prefix)
-app.include_router(commercial_change_requests_router, prefix=settings.api_v1_prefix)
-app.include_router(costing_router, prefix=settings.api_v1_prefix)
-app.include_router(currency_router, prefix=settings.api_v1_prefix)
-app.include_router(merch_router, prefix=settings.api_v1_prefix)
+app.include_router(
+    reports_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("reports.access"))],
+)
+app.include_router(
+    inquiries_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
+app.include_router(
+    quotations_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
+app.include_router(
+    orders_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
+app.include_router(
+    commercial_change_requests_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
+app.include_router(
+    costing_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
+app.include_router(
+    currency_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("settings.access"))],
+)
+app.include_router(
+    merch_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
 app.include_router(inventory_router, prefix=settings.api_v1_prefix)
 app.include_router(finance_router, prefix=settings.api_v1_prefix)
 app.include_router(facility_router, prefix=settings.api_v1_prefix)
 app.include_router(manufacturing_router, prefix=settings.api_v1_prefix)
 app.include_router(production_router, prefix=settings.api_v1_prefix)
-app.include_router(hr_router, prefix=settings.api_v1_prefix)
-app.include_router(hr_attendance_router, prefix=settings.api_v1_prefix)
-app.include_router(hr_leave_router, prefix=settings.api_v1_prefix)
-app.include_router(hr_payroll_router, prefix=settings.api_v1_prefix)
-app.include_router(hr_performance_router, prefix=settings.api_v1_prefix)
-app.include_router(hr_recruitment_router, prefix=settings.api_v1_prefix)
-app.include_router(hr_ess_router, prefix=settings.api_v1_prefix)
-app.include_router(hr_reports_router, prefix=settings.api_v1_prefix)
+app.include_router(
+    hr_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+app.include_router(
+    hr_attendance_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+app.include_router(
+    hr_leave_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+app.include_router(
+    hr_payroll_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+app.include_router(
+    hr_performance_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+app.include_router(
+    hr_recruitment_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+app.include_router(
+    hr_ess_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+app.include_router(
+    hr_reports_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
 app.include_router(settings_router, prefix=settings.api_v1_prefix)
-app.include_router(commercial_router, prefix=settings.api_v1_prefix)
-app.include_router(parties_router, prefix=settings.api_v1_prefix)
-app.include_router(ai_tool_router, prefix=settings.api_v1_prefix)
-app.include_router(ai_extract_router, prefix=settings.api_v1_prefix)
-app.include_router(erp_ai_phases_router, prefix=settings.api_v1_prefix)
-app.include_router(tna_unified_router, prefix=settings.api_v1_prefix)
-app.include_router(trade_case_router, prefix=settings.api_v1_prefix)
-app.include_router(logistics_router, prefix=settings.api_v1_prefix)
+app.include_router(
+    commercial_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
+app.include_router(
+    parties_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
+app.include_router(
+    ai_tool_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("ai.access"))],
+)
+app.include_router(
+    ai_extract_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("ai.access"))],
+)
+app.include_router(
+    erp_ai_phases_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("ai.access"))],
+)
+app.include_router(
+    tna_unified_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
+app.include_router(
+    trade_case_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("trade.access"))],
+)
+app.include_router(
+    logistics_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("trade.access"))],
+)
 app.include_router(control_tower_router, prefix=settings.api_v1_prefix)
 app.include_router(admin_router, prefix=settings.api_v1_prefix + "/admin")
 app.include_router(announcements_router, prefix=settings.api_v1_prefix)

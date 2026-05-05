@@ -765,7 +765,9 @@ Cutting, sewing, finishing, hourly boards, crew sheets, roster, QC — routes un
 
 ## Optional units
 
-Knitting, dyeing, printing, AOP, embroidery, elastic, washing (and hourly variants) appear when your tenant enables those **optional production units** in settings.
+Knitting, dyeing, printing, AOP, embroidery, elastic, washing (and hourly variants) appear when your tenant enables those **optional production units** in **Production setup**.
+
+The **Knitting hub** (\`/app/production/knitting\`) also needs **knitting_enabled** under **Settings → Configuration** (tenant feature flag).
 
 ## Samples & TNA
 
@@ -777,7 +779,7 @@ Knitting, dyeing, printing, AOP, embroidery, elastic, washing (and hourly varian
 
 - **Cost & CM** — \`/app/production/costs\``,
         tags: ["production", "planning", "shop floor", "TNA"],
-        lastUpdated: "2026-04-16",
+        lastUpdated: "2026-05-04",
         infographics: [
           {
             type: "flow",
@@ -793,6 +795,7 @@ Knitting, dyeing, printing, AOP, embroidery, elastic, washing (and hourly varian
           "/app/production",
           "/app/production/planning",
           "/app/production/manufacturing-orders",
+          "/app/production/knitting",
           "/app/operations/control-tower",
         ],
         relatedArticleIds: ["inv-overview", "mfg-planning-deep", "mfg-mo-deep", "mfg-hourly-deep", "ops-control-tower"],
@@ -892,9 +895,9 @@ Your administrator turns it on under **Settings → Configuration** using the **
 
 ## Tips
 
-- Optional units (knitting, dyeing, etc.) appear only when enabled for your tenant.`,
+- Optional units (dyeing, printing, washing, …) appear when marked optional in Production setup for your tenant. The **Knitting hub** (/app/production/knitting — charge rates, work orders, process-order hand-off) also requires **knitting_enabled** under Settings → Configuration.`,
         tags: ["manufacturing order", "MO", "production"],
-        lastUpdated: "2026-04-04",
+        lastUpdated: "2026-05-04",
         featured: true,
         coverImage: "/images/hero-factory.svg",
         infographics: [

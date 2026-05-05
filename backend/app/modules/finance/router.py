@@ -88,7 +88,11 @@ from app.models import (
     Vendor,
 )
 
-router = APIRouter(prefix="/finance", tags=["finance"])
+router = APIRouter(
+    prefix="/finance",
+    tags=["finance"],
+    dependencies=[Depends(require_internal_permission("finance.access"))],
+)
 
 DEFAULT_VOUCHER_TYPES: list[tuple[str, str]] = [
     ("PAYMENT", "Payment"),

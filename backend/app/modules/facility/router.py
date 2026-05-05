@@ -48,7 +48,11 @@ from app.modules.facility.emi_service import preview_emi
 from app.modules.facility.schedule_service import replace_schedule_for_utilization, update_utilization_classification
 from app.modules.facility.snapshot_service import build_facility_snapshot_payload, upsert_month_facility_snapshot
 
-router = APIRouter(prefix="/facility", tags=["facility"])
+router = APIRouter(
+    prefix="/facility",
+    tags=["facility"],
+    dependencies=[Depends(require_internal_permission("facility.access"))],
+)
 
 
 def _require_facility_enabled() -> None:

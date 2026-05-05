@@ -1,0 +1,46 @@
+---
+description: Live server stability — guard rails because every git push auto-deploys to production
+alwaysApply: true
+---
+
+# Live server stability is non-negotiable
+
+Every push to **`main`** auto-deploys to the live server via Docker. Treat **every** change going to `main` like a production change. When in doubt, choose the safer, smaller, reversible option.
+
+## Default posture for every change
+
+- Prefer **additive, backwards-compatible** edits. Do not remove or rename API fields, DB columns, env vars, or routes without explicit user approval and a deprecation path.
+- For risky or large work, ship behind a **feature flag** (`tenants.feature_flags.*` or an env flag), OFF by default; turn it on only after the user confirms.
+- Up front, state operational impact: required env changes, manual steps, downtime risk, blast radius. Do not bury this in the body.
+- If a change needs a coordinated server step (env var, migration, restart), say so explicitly before suggesting commit/push.
+
+## Alembic migrations
+
+- Migrations must be **reversible and phased**: add nullable column → backfill → flip `NOT NULL` in separate revisions.
+- No `DROP COLUMN` / `DROP TABLE` / in-place rename on populated tables without explicit user confirmation.
+- Always provide a working `downgrade()`. If a true downgrade is impossible, call it out and propose a manual rollback plan.
+- Run migrations only inside the container (`docker compose exec backend alembic upgrade head`), per `.cursor/rules/docker-python.mdc`.
+
+## Docker / env / infra changes
+
+- Do not change ports, volumes, networks, service names, or base images in `docker-compose*.yml` / `Dockerfile*` without flagging it explicitly. Preserve all rules in `.cursor/rules/production-architecture.mdc`.
+- New env vars must have safe defaults in `backend/app/config.py` (or the equivalent frontend default). Never make startup depend on a new secret without warning the user to add it to the live `.env` first.
+- Prod frontend is Nginx-served static build — no Node runtime commands in production frontend services.
+
+## Code-level guards
+
+- Wrap new risky DB paths in try/except plus `await safe_async_session_rollback(db)` so a single failure cannot poison the transaction or crash workers.
+- Keep imports of new optional dependencies lazy/guarded so a missing package does not crash app startup.
+- Do not break existing response shapes; add fields, do not remove or rename them.
+- New cron/Celery jobs must fail closed (log + skip) rather than crash the worker.
+
+## Before declaring "ready to commit/push"
+
+- Touched code must build, lint, and import cleanly (`npm run lint` / `npm run build` for frontend, container-side `python -c "import app.main"` or `pytest` for backend).
+- For changes to auth, tenancy, migrations, Docker, or env config, explicitly tell the user to verify locally with `docker compose up` before pushing to `main`.
+- Never use `git commit --no-verify`, `git push --force`, or `--force-with-lease` against `main` unless the user explicitly asks. Prefer feature branches + PRs for anything non-trivial so `main` stays deployable.
+
+## Rollback awareness
+
+- For every non-trivial change, briefly state the rollback plan: `git revert <sha>`, `alembic downgrade -1`, toggle the feature flag off, etc.
+- If rollback is genuinely hard (irreversible migration, data rewrite), say so up front so the user can decide whether to proceed.

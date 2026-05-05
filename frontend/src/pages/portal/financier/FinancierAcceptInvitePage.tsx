@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { clearExtAuth, externalAcceptInvite, setExtAuth } from "@/api/externalClient";
+import { PasswordFieldInput } from "@/components/auth/PasswordFieldInput";
 import { Button } from "@/components/ui/button";
 import { erpControlFocusClass } from "@/components/app/listPageLayout";
 
@@ -94,23 +95,33 @@ export function FinancierAcceptInvitePage() {
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-text-muted">Password</label>
-              <input
-                type="password"
-                className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
+              <label htmlFor="portal-financier-invite-pw" className="text-xs font-medium text-text-muted">
+                Password
+              </label>
+              <PasswordFieldInput
+                id="portal-financier-invite-pw"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
                 autoComplete="new-password"
+                minLength={8}
+                showLock={false}
+                wrapperClassName="mt-1"
+                inputClassName={`w-full rounded-lg border border-border py-2 text-sm ${erpControlFocusClass}`}
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-text-muted">Confirm password</label>
-              <input
-                type="password"
-                className={`mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
+              <label htmlFor="portal-financier-invite-pw2" className="text-xs font-medium text-text-muted">
+                Confirm password
+              </label>
+              <PasswordFieldInput
+                id="portal-financier-invite-pw2"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={setConfirmPassword}
                 autoComplete="new-password"
+                minLength={8}
+                showLock={false}
+                wrapperClassName="mt-1"
+                inputClassName={`w-full rounded-lg border border-border py-2 text-sm ${erpControlFocusClass}`}
               />
             </div>
             {error ? <p className="text-sm text-status-danger-foreground">{error}</p> : null}

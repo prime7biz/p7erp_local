@@ -190,6 +190,6 @@ export function isQuotationOpenForOrderLink(quotation: {
 }): boolean {
   if (quotation.is_converted_to_order) return false;
   const s = normalizeStatus(quotation.status, "DRAFT");
-  return s !== "CONVERTED" && s !== "CANCELLED" && s !== "REJECTED";
+  return s === "SENT";
 }
 

@@ -514,6 +514,11 @@ async def create_order(
     resolved_style_id = await _resolve_style_id_from_style_ref(db, tenant.id, style_ref_for_lookup)
 
   code = await _next_order_code(db, tenant.id)
+  commercial_snap = (
+    build_order_commercial_snapshot_at_conversion(quotation, tenant=tenant)
+    if quotation is not None
+    else None
+  )
   status_value = validate_transition(
     ORDER_TRANSITIONS,
     "DRAFT",
@@ -538,6 +543,7 @@ async def create_order(
     quantity=body.quantity,
     status=status_value,
     remarks=body.remarks,
+    commercial_snapshot_json=commercial_snap,
   )
   db.add(order)
   if quotation is not None:

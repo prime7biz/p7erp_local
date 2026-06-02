@@ -670,6 +670,7 @@ async def create_quotation(
   if not customer or customer.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Customer not found")
 
+  inquiry: Inquiry | None = None
   if body.inquiry_id is not None:
     inquiry = await db.get(Inquiry, body.inquiry_id)
     if not inquiry or inquiry.tenant_id != tenant.id:
@@ -711,6 +712,25 @@ async def create_quotation(
     notes=body.notes,
   )
   db.add(quotation)
+  if inquiry is not None:
+    old_status = inquiry.status
+    inquiry.status = validate_transition(
+      INQUIRY_TRANSITIONS,
+      inquiry.status,
+      "CONVERTED",
+      fallback="DRAFT",
+      entity_label="inquiry",
+    )
+    db.add(
+      InquiryEvent(
+        tenant_id=tenant.id,
+        inquiry_id=inquiry.id,
+        event_type="converted_to_quotation",
+        from_status=old_status,
+        to_status=inquiry.status,
+        notes=f"Converted to quotation {code}",
+      )
+    )
   await flush_handling_duplicate_document_code(db)
   await db.refresh(quotation)
   return _to_quotation_response(quotation, tenant=tenant)

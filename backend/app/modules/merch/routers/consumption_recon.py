@@ -191,6 +191,15 @@ def _recon_aggregate_status(overall_pct: float, items_exceeding: int, tolerance_
     return "exceeds"
 
 
+def _actual_issue_movements_stmt(*, tenant_id: int, order_id: int, bom_line_ids: list[int]):
+    return select(StockMovement).where(
+        StockMovement.tenant_id == tenant_id,
+        StockMovement.order_id == order_id,
+        StockMovement.movement_type == "OUT",
+        StockMovement.bom_line_id.in_(bom_line_ids),
+    )
+
+
 async def _get_consumption_recon_data(
     order_id: int,
     tolerance_pct: float,
@@ -313,18 +322,19 @@ async def _get_consumption_recon_data(
         for u in ur.scalars().all():
             units_by_id[u.id] = u
 
-    movements_by_item: dict[int, list[StockMovement]] = defaultdict(list)
-    if ordered_item_ids:
+    line_ids = [ln.id for ln in lines]
+    movements_by_bom_line: dict[int, list[StockMovement]] = defaultdict(list)
+    if line_ids:
         mr = await db.execute(
-            select(StockMovement).where(
-                StockMovement.tenant_id == tenant.id,
-                StockMovement.reference_type == "CONSUMPTION_ISSUE",
-                StockMovement.reference_id == order.id,
-                StockMovement.item_id.in_(ordered_item_ids),
+            _actual_issue_movements_stmt(
+                tenant_id=tenant.id,
+                order_id=order.id,
+                bom_line_ids=line_ids,
             )
         )
         for m in mr.scalars().all():
-            movements_by_item[m.item_id].append(m)
+            if m.bom_line_id is not None:
+                movements_by_bom_line[m.bom_line_id].append(m)
 
     items_out: list[ConsumptionReconItemOut] = []
     total_planned = 0.0
@@ -362,8 +372,7 @@ async def _get_consumption_recon_data(
             base = _to_float_safe(line.base_consumption)
             wastage = _to_float_safe(line.wastage_pct) / 100.0
             planned_qty = order_qty * base * (1.0 + wastage)
-        movements = movements_by_item.get(line.item_id, []) if line.item_id is not None else []
-        out_movements = [m for m in movements if (m.movement_type or "").upper() == "OUT"]
+        out_movements = movements_by_bom_line.get(line.id, [])
         actual_qty = sum(_to_float_safe(m.quantity) for m in out_movements)
         movement_count = len(out_movements)
         cost_qty_weighted = 0.0

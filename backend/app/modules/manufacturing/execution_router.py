@@ -13,6 +13,8 @@ from app.common.db_errors import commit_handling_duplicate_document_code
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
+    Bom,
+    BomItem,
     ManufacturingDowntimeEvent,
     ManufacturingMaterialIssue,
     ManufacturingMaterialReturn,
@@ -27,6 +29,7 @@ from app.models import (
     Tenant,
     User,
 )
+from app.services.fifo_inventory import finalize_movement_fifo
 from app.modules.manufacturing.schemas import (
     DowntimeCreate,
     DowntimeEndBody,
@@ -349,6 +352,31 @@ async def create_material_issue(
     if not allow_neg and available + 1e-9 < body.qty_issued:
         raise HTTPException(status_code=400, detail=f"Insufficient stock. Available={available}")
 
+    resolved_bom_line_id: int | None = None
+    if wo.order_id is not None:
+        active_bom = (
+            await db.execute(
+                select(Bom).where(
+                    Bom.tenant_id == tenant.id,
+                    Bom.order_id == wo.order_id,
+                    Bom.is_active.is_(True),
+                )
+            )
+        ).scalars().first()
+        if active_bom is not None:
+            resolved_bom_line_id = (
+                await db.execute(
+                    select(BomItem.id)
+                    .where(
+                        BomItem.tenant_id == tenant.id,
+                        BomItem.bom_id == active_bom.id,
+                        BomItem.item_id == body.item_id,
+                    )
+                    .order_by(BomItem.sort_order.asc(), BomItem.id.asc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+
     movement = StockMovement(
         tenant_id=tenant.id,
         item_id=body.item_id,
@@ -357,11 +385,14 @@ async def create_material_issue(
         quantity=str(body.qty_issued),
         reference_type="MFG_ISSUE",
         reference_id=body.work_order_id,
+        order_id=wo.order_id,
+        bom_line_id=resolved_bom_line_id,
         notes=f"Issued against {wo.mo_number}",
         created_by_user_id=user.id,
     )
     db.add(movement)
     await db.flush()
+    await finalize_movement_fifo(db, tenant.id, movement, in_unit_cost=None)
 
     row = ManufacturingMaterialIssue(
         tenant_id=tenant.id,

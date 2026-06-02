@@ -117,6 +117,15 @@ Written for beginner-friendly use.
 
 ---
 
+## 4.1 Auto-Posting Policy (SoD note)
+
+- Operational modules can create vouchers directly in `POSTED` status (for example inventory GL, payroll posting, payment run execution, selected system-generated vouchers).
+- Manual finance vouchers follow the staged workflow (`DRAFT -> SUBMITTED -> CHECKED -> RECOMMENDED -> APPROVED -> POSTED`).
+- This is intentional for operational throughput, but finance leads should review posted operational vouchers daily in Day Book / Voucher Analytics.
+- If stricter segregation-of-duties is needed later, enable it as a controlled feature-flag rollout rather than changing all flows at once.
+
+---
+
 ## 5) Quick Reference – Report Menu
 
 | Report | Use |

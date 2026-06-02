@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime
+import logging
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,8 @@ from app.models import (
 )
 
 from app.services.inventory_account_resolver import resolve_inventory_accounts
+
+logger = logging.getLogger(__name__)
 
 
 def _f(s: str | None) -> float:
@@ -79,16 +82,31 @@ async def _post_balanced_voucher(
     action: str,
 ) -> None:
     """entries: (account_id, DEBIT|CREDIT, amount, notes)."""
+    def _log_skip(reason: str, **extra: object) -> None:
+        logger.warning(
+            "inventory_gl_post_skipped reason=%s source_system=%s source_id=%s action=%s tenant_id=%s extra=%s",
+            reason,
+            source_system,
+            source_id,
+            action,
+            tenant_id,
+            extra,
+        )
+
     if await _already_posted(db, tenant_id, source_system, source_id, action):
+        _log_skip("already_posted")
         return
     deb = sum(a for _, t, a, _ in entries if t == "DEBIT")
     cre = sum(a for _, t, a, _ in entries if t == "CREDIT")
     if abs(deb - cre) > 0.0001:
+        _log_skip("unbalanced_entries", debit_total=round(deb, 4), credit_total=round(cre, 4))
         return
     if deb <= 0:
+        _log_skip("non_positive_amount", debit_total=round(deb, 4))
         return
     period = await _open_period(db, tenant_id, voucher_date)
     if not period:
+        _log_skip("missing_open_period", voucher_date=voucher_date.isoformat())
         return
 
     from app.modules.finance.router import (

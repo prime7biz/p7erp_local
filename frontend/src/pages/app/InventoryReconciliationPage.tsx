@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type StockVsGlResponse, type WipVsGlResponse } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 
 type TabKey = "po" | "grn" | "challan" | "gatepass" | "stock" | "finance";
 
@@ -56,8 +57,14 @@ export function InventoryReconciliationPage() {
       const [ov, pendingCrRows, sgl, wgl] = await Promise.all([
         api.getInventoryReconciliationOverview(),
         api.listConsumptionChangeRequests({ status_filter: "PENDING" }),
-        api.getReconciliationStockVsGl().catch(() => null),
-        api.getReconciliationWipVsGl().catch(() => null),
+        api.getReconciliationStockVsGl().catch((e) => {
+          logApiError("InventoryReconciliation.stockVsGl", e);
+          return null;
+        }),
+        api.getReconciliationWipVsGl().catch((e) => {
+          logApiError("InventoryReconciliation.wipVsGl", e);
+          return null;
+        }),
       ]);
       setStockGl(sgl);
       setWipGl(wgl);

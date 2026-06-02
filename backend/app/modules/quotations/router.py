@@ -713,24 +713,26 @@ async def create_quotation(
   )
   db.add(quotation)
   if inquiry is not None:
-    old_status = inquiry.status
-    inquiry.status = validate_transition(
-      INQUIRY_TRANSITIONS,
-      inquiry.status,
-      "CONVERTED",
-      fallback="DRAFT",
-      entity_label="inquiry",
-    )
-    db.add(
-      InquiryEvent(
-        tenant_id=tenant.id,
-        inquiry_id=inquiry.id,
-        event_type="converted_to_quotation",
-        from_status=old_status,
-        to_status=inquiry.status,
-        notes=f"Converted to quotation {code}",
+    current_inquiry_status = (inquiry.status or "DRAFT").strip().upper()
+    if current_inquiry_status == "SUBMITTED":
+      old_status = inquiry.status
+      inquiry.status = validate_transition(
+        INQUIRY_TRANSITIONS,
+        inquiry.status,
+        "CONVERTED",
+        fallback="DRAFT",
+        entity_label="inquiry",
       )
-    )
+      db.add(
+        InquiryEvent(
+          tenant_id=tenant.id,
+          inquiry_id=inquiry.id,
+          event_type="converted_to_quotation",
+          from_status=old_status,
+          to_status=inquiry.status,
+          notes=f"Converted to quotation {code}",
+        )
+      )
   await flush_handling_duplicate_document_code(db)
   await db.refresh(quotation)
   return _to_quotation_response(quotation, tenant=tenant)

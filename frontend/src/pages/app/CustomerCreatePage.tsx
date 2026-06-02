@@ -102,7 +102,10 @@ export function CustomerCreatePage() {
           rows.filter((c) => c.is_active).map((c) => ({ code: c.code, name: c.name })),
         ),
       )
-      .catch(() => setCurrencyOptions([]));
+      .catch((e) => {
+        logApiError("CustomerCreatePage.listCurrencies", e);
+        setCurrencyOptions([]);
+      });
   }, []);
 
   useEffect(() => {

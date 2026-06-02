@@ -10,6 +10,7 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import safe_async_session_rollback
 
 from app.common.codegen import next_tenant_code
 from app.models import Department, Designation, Employee, EmployeeDocument, EmployeeStatusHistory, HrSection, Tenant, User
@@ -180,6 +181,6 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
     try:
         await db.commit()
     except IntegrityError as e:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail=f"Import failed: {e!s}") from e
     return {"created": created, "updated": updated, "errors": errors[:50]}

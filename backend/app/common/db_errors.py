@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import safe_async_session_rollback
 
 DUPLICATE_DOCUMENT_CODE_DETAIL = "Duplicate document code"
 
@@ -45,7 +46,7 @@ async def commit_handling_duplicate_document_code(db: AsyncSession) -> None:
     try:
         await db.commit()
     except IntegrityError as e:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise_duplicate_document_code_if_unique_violation(e)
 
 
@@ -53,5 +54,5 @@ async def flush_handling_duplicate_document_code(db: AsyncSession) -> None:
     try:
         await db.flush()
     except IntegrityError as e:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise_duplicate_document_code_if_unique_violation(e)

@@ -143,7 +143,18 @@ async def report_leave(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    leave_types = (await db.execute(select(LeaveType).where(LeaveType.tenant_id == tenant.id).order_by(LeaveType.name))).scalars().all()
+    leave_types = (
+        (
+            await db.execute(
+                select(LeaveType)
+                .where(LeaveType.tenant_id == tenant.id)
+                .order_by(LeaveType.name)
+                .limit(HR_LIST_MAX_LIMIT)
+            )
+        )
+        .scalars()
+        .all()
+    )
     requests = (
         await db.execute(
             select(LeaveRequest)
@@ -179,7 +190,18 @@ async def report_payroll(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    periods = (await db.execute(select(PayrollPeriod).where(PayrollPeriod.tenant_id == tenant.id))).scalars().all()
+    periods = (
+        (
+            await db.execute(
+                select(PayrollPeriod)
+                .where(PayrollPeriod.tenant_id == tenant.id)
+                .order_by(PayrollPeriod.id.desc())
+                .limit(HR_LIST_MAX_LIMIT)
+            )
+        )
+        .scalars()
+        .all()
+    )
     runs = (
         await db.execute(
             select(PayrollRun).where(PayrollRun.tenant_id == tenant.id).order_by(PayrollRun.id.desc()).limit(runs_limit)

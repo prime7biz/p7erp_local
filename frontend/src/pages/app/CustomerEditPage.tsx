@@ -22,6 +22,7 @@ import {
   deriveConfidenceLevel,
   formatExtractedValue,
 } from "@/utils/extractionHelpers";
+import { logApiError } from "@/utils/logApiError";
 
 function isValidWebsite(value: string): boolean {
   if (!value.trim()) return true;
@@ -106,7 +107,10 @@ export function CustomerEditPage() {
           rows.filter((c) => c.is_active).map((c) => ({ code: c.code, name: c.name })),
         ),
       )
-      .catch(() => setCurrencyOptions([]));
+      .catch((e) => {
+        logApiError("CustomerEditPage.listCurrencies", e);
+        setCurrencyOptions([]);
+      });
   }, []);
 
   useEffect(() => {

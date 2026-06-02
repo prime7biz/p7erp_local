@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.tenant import require_tenant
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.models import (
     Item,
     ManufacturingOperation,
@@ -129,7 +129,7 @@ async def create_work_center(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Work center code already exists")
     await db.refresh(row)
     return _to_work_center_response(row)
@@ -155,7 +155,7 @@ async def update_work_center(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Work center code already exists")
     await db.refresh(row)
     return _to_work_center_response(row)
@@ -200,7 +200,7 @@ async def create_operation(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Operation code already exists")
     await db.refresh(row)
     return _to_operation_response(row)
@@ -238,7 +238,7 @@ async def update_operation(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Operation code already exists")
     await db.refresh(row)
     return _to_operation_response(row)
@@ -282,7 +282,7 @@ async def create_routing_template(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Routing code/version already exists")
     await db.refresh(row)
     return _to_routing_response(row)
@@ -338,7 +338,7 @@ async def add_routing_step(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Step number already exists for this routing")
     await db.refresh(row)
     return _to_routing_step_response(row)

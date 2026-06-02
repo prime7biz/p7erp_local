@@ -907,7 +907,7 @@ async def get_consumption_reconciliation_movements(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """CONSUMPTION_ISSUE stock movements for one order line item."""
+    """OUT stock movements tied to the governed BOM lines for one order line item."""
     _ensure_tenant(user, tenant)
     order = await db.get(Order, order_id)
     if not order or order.tenant_id != tenant.id:
@@ -915,17 +915,52 @@ async def get_consumption_reconciliation_movements(
     item = await db.get(Item, item_id)
     if not item or item.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Item not found")
-    act_result = await db.execute(
-        select(StockMovement)
-        .where(
-            StockMovement.tenant_id == tenant.id,
-            StockMovement.reference_type == "CONSUMPTION_ISSUE",
-            StockMovement.reference_id == order.id,
-            StockMovement.item_id == item_id,
+    planned_qty = 0.0
+    bom_line_ids_for_item: list[int] = []
+    if order.quotation_id:
+        quotation = await db.get(Quotation, order.quotation_id)
+        if quotation and quotation.style_id:
+            bom = await _get_active_order_governed_bom(
+                db, tenant_id=tenant.id, order_id=order.id
+            )
+            if not bom:
+                bom = await get_latest_governed_bom(db, tenant_id=tenant.id, style_id=quotation.style_id)
+            if bom:
+                bres = await db.execute(
+                    select(BomItem).where(
+                        BomItem.tenant_id == tenant.id,
+                        BomItem.bom_id == bom.id,
+                        BomItem.item_id == item_id,
+                    )
+                )
+                blines = bres.scalars().all()
+                bom_line_ids_for_item = [ln.id for ln in blines]
+                bline = blines[0] if blines else None
+                if bline:
+                    oq = _to_float_safe(str(order.quantity)) if order.quantity else 0.0
+                    if bline.bom_gross_consumption_per_unit is not None:
+                        planned_qty = oq * float(bline.bom_gross_consumption_per_unit)
+                    else:
+                        base = _to_float_safe(bline.base_consumption)
+                        wastage = _to_float_safe(bline.wastage_pct) / 100.0
+                        pl = (
+                            float(bline.process_loss_pct) / 100.0
+                            if bline.process_loss_pct is not None
+                            else 0.0
+                        )
+                        planned_qty = oq * base * (1.0 + wastage + pl)
+    movements_raw: list[StockMovement] = []
+    if bom_line_ids_for_item:
+        act_result = await db.execute(
+            _actual_issue_movements_stmt(
+                tenant_id=tenant.id,
+                order_id=order.id,
+                bom_line_ids=bom_line_ids_for_item,
+            )
+            .where(StockMovement.item_id == item_id)
+            .order_by(StockMovement.created_at.desc())
         )
-        .order_by(StockMovement.created_at.desc())
-    )
-    movements_raw = [m for m in act_result.scalars().all() if (m.movement_type or "").upper() == "OUT"]
+        movements_raw = act_result.scalars().all()
     total_issued = sum(_to_float_safe(m.quantity) for m in movements_raw)
     out_list: list[ConsumptionReconMovementOut] = []
     for m in movements_raw:
@@ -955,37 +990,6 @@ async def get_consumption_reconciliation_movements(
                 notes=m.notes,
             )
         )
-    planned_qty = 0.0
-    if order.quotation_id:
-        quotation = await db.get(Quotation, order.quotation_id)
-        if quotation and quotation.style_id:
-            bom = await _get_active_order_governed_bom(
-                db, tenant_id=tenant.id, order_id=order.id
-            )
-            if not bom:
-                bom = await get_latest_governed_bom(db, tenant_id=tenant.id, style_id=quotation.style_id)
-            if bom:
-                bres = await db.execute(
-                    select(BomItem).where(
-                        BomItem.tenant_id == tenant.id,
-                        BomItem.bom_id == bom.id,
-                        BomItem.item_id == item_id,
-                    )
-                )
-                bline = bres.scalars().first()
-                if bline:
-                    oq = _to_float_safe(str(order.quantity)) if order.quantity else 0.0
-                    if bline.bom_gross_consumption_per_unit is not None:
-                        planned_qty = oq * float(bline.bom_gross_consumption_per_unit)
-                    else:
-                        base = _to_float_safe(bline.base_consumption)
-                        wastage = _to_float_safe(bline.wastage_pct) / 100.0
-                        pl = (
-                            float(bline.process_loss_pct) / 100.0
-                            if bline.process_loss_pct is not None
-                            else 0.0
-                        )
-                        planned_qty = oq * base * (1.0 + wastage + pl)
     return ConsumptionReconMovementsResponse(
         item_id=item_id,
         item_code=item.item_code or "",

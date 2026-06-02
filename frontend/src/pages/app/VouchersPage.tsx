@@ -14,6 +14,7 @@ import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
+import { ACTION_LABEL, ACTION_TO_STATUS, ACTIONS_NEEDING_REASON, VOUCHER_STATUSES } from "@/components/vouchers/workflowMeta";
 import { useListPagination } from "@/hooks/useListPagination";
 import {
   fetchBtbLcPage,
@@ -27,31 +28,6 @@ import {
 } from "@/lib/remoteSelectFetchers";
 import { logApiError } from "@/utils/logApiError";
 
-const STATUSES = ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED", "CANCELLED", "REVERSED"];
-const ACTION_TO_STATUS: Record<string, string> = {
-  submit: "SUBMITTED",
-  check: "CHECKED",
-  recommend: "RECOMMENDED",
-  approve: "APPROVED",
-  reject: "REJECTED",
-  set_draft: "DRAFT",
-  cancel: "CANCELLED",
-};
-const ACTION_LABEL: Record<string, string> = {
-  submit: "Submit",
-  check: "Check",
-  recommend: "Recommend",
-  approve: "Approve",
-  post: "Post",
-  reject: "Reject",
-  set_draft: "Set Draft",
-  cancel: "Cancel",
-  reverse: "Reverse",
-  cancel_posting: "Cancel posting",
-};
-
-/** Workflow actions where we ask for a mandatory reason (UX); backend persistence TBD. */
-const ACTIONS_NEEDING_REASON = new Set(["reject", "cancel", "reverse", "cancel_posting"]);
 const CTL =
   "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
 
@@ -173,7 +149,10 @@ export function VouchersPage() {
     void api
       .getVoucherAvailableActions(vid)
       .then((m) => setAvailableActionMap((p) => ({ ...p, [vid]: m.actions })))
-      .catch(() => setAvailableActionMap((p) => ({ ...p, [vid]: [] })));
+      .catch((e) => {
+        logApiError("VouchersPage.getVoucherAvailableActions", e);
+        setAvailableActionMap((p) => ({ ...p, [vid]: [] }));
+      });
   }, [openActionsId]);
 
   useEffect(() => {
@@ -185,7 +164,9 @@ export function VouchersPage() {
       void api
         .getChartOfAccount(id)
         .then((a) => setAccountBillWiseMap((m) => ({ ...m, [id]: Boolean(a.enable_bill_wise) })))
-        .catch(() => {});
+        .catch((e) => {
+          logApiError("VouchersPage.getChartOfAccount", e);
+        });
     }
   }, [showCreate, form.lines]);
 
@@ -810,7 +791,7 @@ export function VouchersPage() {
           <div className="flex flex-wrap gap-2">
             <select className={`${CTL} w-auto`} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">All Status</option>
-              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              {VOUCHER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
             <input className={`${CTL} md:w-72`} placeholder="Search number, type, reference, narration..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>

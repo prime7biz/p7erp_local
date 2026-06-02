@@ -117,9 +117,18 @@ export function ConsumptionControlPage() {
       const [snap, resv, recon, variance, pmiAll] = await Promise.all([
         api.getConsumptionSnapshot(orderId),
         api.getConsumptionReservations(orderId),
-        api.getConsumptionReconciliation(orderId, { tolerance_pct: 5 }).catch(() => null),
-        api.getOrderMaterialVariance(orderId).catch(() => null),
-        api.listProductionMaterialIssues({ limit: 200 }).catch(() => []),
+        api.getConsumptionReconciliation(orderId, { tolerance_pct: 5 }).catch((e) => {
+          logApiError("ConsumptionControl.getConsumptionReconciliation", e);
+          return null;
+        }),
+        api.getOrderMaterialVariance(orderId).catch((e) => {
+          logApiError("ConsumptionControl.getOrderMaterialVariance", e);
+          return null;
+        }),
+        api.listProductionMaterialIssues({ limit: 200 }).catch((e) => {
+          logApiError("ConsumptionControl.listProductionMaterialIssues", e);
+          return [];
+        }),
       ]);
       setSnapshot(snap);
       setReservations(resv);

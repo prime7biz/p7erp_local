@@ -380,6 +380,28 @@ class StockMovement(Base):
     )
 
 
+class StockBalanceSnapshot(Base):
+    """Precomputed (tenant, item, warehouse_dim) balances for optional fast reads.
+
+    ``warehouse_dim_id`` uses ``0`` when the live movement row has ``warehouse_id IS NULL`` so a single
+    unique constraint can be enforced (PostgreSQL treats NULLs as distinct in UNIQUE).
+    """
+
+    __tablename__ = "inventory_stock_balance_snapshots"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "item_id", "warehouse_dim_id", name="uq_inv_stock_snap_tenant_item_wh"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), nullable=False, index=True)
+    warehouse_dim_id: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
+    in_qty: Mapped[float] = mapped_column(Numeric(24, 6), nullable=False, default=0)
+    out_qty: Mapped[float] = mapped_column(Numeric(24, 6), nullable=False, default=0)
+    on_hand_qty: Mapped[float] = mapped_column(Numeric(24, 6), nullable=False, default=0)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class InventoryCostLayer(Base):
     """FIFO cost layer: one row per inbound stock_movements.id (IN)."""
     __tablename__ = "inventory_cost_layers"

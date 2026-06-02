@@ -20,6 +20,9 @@ RBAC_MODES: tuple[str, str, str] = (RBAC_MODE_OFF, RBAC_MODE_SHADOW, RBAC_MODE_E
 # Internal single-session policy toggle.
 SINGLE_SESSION_ENFORCED = "single_session_enforced"
 
+# When true, read stock summary rows from `inventory_stock_balance_snapshots` if populated (see stock_snapshot_service).
+STOCK_SNAPSHOT_READS = "stock_snapshot_reads"
+
 
 def get_tenant_rbac_mode(feature_flags: Any) -> Literal["off", "shadow", "enforce"]:
     """Return normalized RBAC mode from tenant feature flags (safe default: off)."""
@@ -38,6 +41,13 @@ def is_single_session_enforced(feature_flags: Any) -> bool:
     if not isinstance(feature_flags, dict):
         return False
     return feature_flags.get(SINGLE_SESSION_ENFORCED) is True
+
+
+def is_stock_snapshot_reads_enabled(feature_flags: Any) -> bool:
+    """When True, inventory stock-summary helpers may read precomputed snapshot rows (default off)."""
+    if not isinstance(feature_flags, dict):
+        return False
+    return feature_flags.get(STOCK_SNAPSHOT_READS) is True
 
 
 # --- Write-time validation -------------------------------------------------

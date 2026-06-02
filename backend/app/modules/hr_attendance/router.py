@@ -16,7 +16,7 @@ from app.common.pagination import (
     HR_REPORT_SUB_MAX,
 )
 from app.common.tenant import require_tenant
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.models import (
     AttendanceEntry,
     AttendanceHoliday,
@@ -203,7 +203,7 @@ async def create_shift(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Shift code already exists")
     await db.refresh(row)
     return _shift_out(row)
@@ -225,7 +225,7 @@ async def update_shift(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Shift code already exists")
     await db.refresh(row)
     return _shift_out(row)
@@ -268,7 +268,7 @@ async def create_roster(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Roster already exists for employee and date")
     await db.refresh(row)
     return _roster_out(row)
@@ -327,7 +327,7 @@ async def create_holiday(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Holiday already exists for this date")
     await db.refresh(row)
     return _holiday_out(row)
@@ -396,7 +396,7 @@ async def create_entry(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Attendance already exists for employee and date")
     await db.refresh(row)
     return _entry_out(row)
@@ -621,13 +621,21 @@ def _ot_entry_out(row: OvertimeEntry) -> OvertimeEntryOut:
 
 @router.get("/overtime-rules", response_model=list[OvertimeRuleOut])
 async def list_overtime_rules(
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
     rows = (
-        await db.execute(select(OvertimeRule).where(OvertimeRule.tenant_id == tenant.id).order_by(OvertimeRule.code))
+        await db.execute(
+            select(OvertimeRule)
+            .where(OvertimeRule.tenant_id == tenant.id)
+            .order_by(OvertimeRule.code)
+            .offset(offset)
+            .limit(limit)
+        )
     ).scalars().all()
     return [_ot_rule_out(r) for r in rows]
 
@@ -657,7 +665,7 @@ async def create_overtime_rule(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Overtime rule code already exists")
     await db.refresh(row)
     return _ot_rule_out(row)
@@ -689,7 +697,7 @@ async def update_overtime_rule(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Overtime rule code already exists")
     await db.refresh(row)
     return _ot_rule_out(row)

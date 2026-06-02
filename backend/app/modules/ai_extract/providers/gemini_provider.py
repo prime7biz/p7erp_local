@@ -141,6 +141,24 @@ def _ollama_multimodal_sync(prompt: str, file_bytes: bytes, mime_type: str) -> s
         return None
 
 
+def _openrouter_file_content_part(file_bytes: bytes, mime_type: str) -> dict[str, Any] | None:
+    """Build OpenRouter multimodal content part for images or PDFs."""
+    ct = (mime_type or "").lower().split(";")[0].strip()
+    if ct.startswith("image/"):
+        data_url = f"data:{ct};base64,{base64.b64encode(file_bytes).decode('ascii')}"
+        return {"type": "image_url", "image_url": {"url": data_url}}
+    if ct == "application/pdf":
+        data_url = f"data:application/pdf;base64,{base64.b64encode(file_bytes).decode('ascii')}"
+        return {
+            "type": "file",
+            "file": {
+                "filename": "document.pdf",
+                "file_data": data_url,
+            },
+        }
+    return None
+
+
 def _openrouter_multimodal_sync(prompt: str, file_bytes: bytes, mime_type: str) -> str | None:
     s = get_settings()
     if not s.openrouter_enabled:
@@ -149,10 +167,9 @@ def _openrouter_multimodal_sync(prompt: str, file_bytes: bytes, mime_type: str) 
     model = (s.openrouter_model or "").strip()
     if not api_key or not model:
         return None
-    ct = (mime_type or "").lower().split(";")[0].strip()
-    if not ct.startswith("image/"):
+    file_part = _openrouter_file_content_part(file_bytes, mime_type)
+    if file_part is None:
         return None
-    data_url = f"data:{ct};base64,{base64.b64encode(file_bytes).decode('ascii')}"
     base = (s.openrouter_base_url or "https://openrouter.ai/api/v1").strip().rstrip("/")
     headers: dict[str, str] = {
         "Authorization": f"Bearer {api_key}",
@@ -173,7 +190,7 @@ def _openrouter_multimodal_sync(prompt: str, file_bytes: bytes, mime_type: str) 
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": data_url}},
+                    file_part,
                 ],
             }
         ],
@@ -190,14 +207,32 @@ def _openrouter_multimodal_sync(prompt: str, file_bytes: bytes, mime_type: str) 
 
 
 def _tiered_multimodal_sync(prompt: str, file_bytes: bytes, mime_type: str) -> str | None:
-    # Priority requested by product: local Ollama first, then OpenRouter.
-    txt = _ollama_multimodal_sync(prompt, file_bytes, mime_type)
-    if txt:
-        return txt
-    txt = _openrouter_multimodal_sync(prompt, file_bytes, mime_type)
-    if txt:
-        return txt
-    # Final fallback: Gemini supports both images and PDF.
+    s = get_settings()
+    ct = (mime_type or "").lower().split(";")[0].strip()
+    is_pdf = ct == "application/pdf"
+    prefer_openrouter = bool(s.openrouter_tier1_preferred)
+
+    # Ollama vision does not accept PDF; OpenRouter + direct Gemini do.
+    if is_pdf:
+        txt = _openrouter_multimodal_sync(prompt, file_bytes, mime_type)
+        if txt:
+            return txt
+        return generate_multimodal_sync(prompt, file_bytes, mime_type)
+
+    if prefer_openrouter:
+        txt = _openrouter_multimodal_sync(prompt, file_bytes, mime_type)
+        if txt:
+            return txt
+        txt = _ollama_multimodal_sync(prompt, file_bytes, mime_type)
+        if txt:
+            return txt
+    else:
+        txt = _ollama_multimodal_sync(prompt, file_bytes, mime_type)
+        if txt:
+            return txt
+        txt = _openrouter_multimodal_sync(prompt, file_bytes, mime_type)
+        if txt:
+            return txt
     return generate_multimodal_sync(prompt, file_bytes, mime_type)
 
 

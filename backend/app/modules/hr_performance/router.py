@@ -9,7 +9,7 @@ from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.models import (
     Employee,
     PerformanceCycle,
@@ -170,7 +170,7 @@ async def create_cycle(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cycle already exists for this start date")
     await db.refresh(row)
     return _cycle_to_response(row)
@@ -340,7 +340,7 @@ async def create_review(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Review already exists for this type")
     await db.refresh(row)
     return _review_to_response(row)

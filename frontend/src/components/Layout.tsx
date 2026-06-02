@@ -15,6 +15,7 @@ import { useProductionOptionalUnits } from "@/hooks/useProductionOptionalUnits";
 import { prefetchSidebarRoute, prefetchTopSearchRoutes } from "@/app/prefetchRoutes";
 import { AppBottomNav } from "@/components/navigation/AppBottomNav";
 import { getRbacMode } from "@/components/auth/rbacMode";
+import { logApiError } from "@/utils/logApiError";
 import {
   Bell,
   BookOpen,
@@ -667,7 +668,9 @@ export function Layout() {
       .then((r) => {
         if (!cancelled) setAnnouncements(r.items ?? []);
       })
-      .catch(() => {});
+      .catch((e) => {
+        logApiError("Layout.getPlatformHealth", e);
+      });
     return () => {
       cancelled = true;
     };

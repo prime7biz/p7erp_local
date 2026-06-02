@@ -13,7 +13,7 @@ from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
 from app.common.tenant import require_tenant
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.models import (
     AttendanceEntry,
     ComplianceCheck,
@@ -272,7 +272,7 @@ async def create_department(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Department code or name already exists")
     await db.refresh(row)
     return _department_to_response(row)
@@ -300,7 +300,7 @@ async def update_department(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Department code or name already exists")
     await db.refresh(row)
     return _department_to_response(row)
@@ -389,7 +389,7 @@ async def create_designation(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Designation code or title already exists")
     await db.refresh(row)
     return _designation_to_response(row)
@@ -420,7 +420,7 @@ async def update_designation(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Designation code or title already exists")
     await db.refresh(row)
     return _designation_to_response(row)
@@ -552,7 +552,7 @@ async def create_employee(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Employee code already exists")
     await db.refresh(row)
     return _employee_to_response(row)
@@ -636,7 +636,7 @@ async def update_employee(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Employee code already exists")
     await db.refresh(row)
     return _employee_to_response(row)
@@ -797,7 +797,7 @@ async def create_section(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Section code already exists")
     await db.refresh(row)
     return SectionResponse(**hr_domain.section_to_dict(row))
@@ -837,7 +837,7 @@ async def update_section(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Section code already exists")
     await db.refresh(row)
     return SectionResponse(**hr_domain.section_to_dict(row))

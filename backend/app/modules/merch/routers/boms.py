@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.permissions import PERMISSION_BOM_PRICE_OVERRIDE, assert_delegate_manager_or_permission
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.models import (
     Bom,
     BomItem,
@@ -328,7 +328,7 @@ async def create_bom_from_order(
         await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=body.order_id)
         await db.commit()
     except ValueError as e:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail=str(e)) from e
     return await _load_bom_detail(db, tenant, bom)
 
@@ -617,7 +617,7 @@ async def create_po_from_line(
         await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=bom.order_id)
         await db.commit()
     except ValueError as e:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"id": po.id, "po_code": po.po_code, "warnings": warnings}
 

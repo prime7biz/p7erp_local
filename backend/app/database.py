@@ -1,7 +1,7 @@
 import os
 import re
 
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Session
 from sqlalchemy.sql.dml import Delete, Insert, Update
@@ -213,6 +213,13 @@ async def get_db() -> AsyncSession:
     """
     async with AsyncSessionLocal() as session:
         try:
+            _perf = get_settings()
+            _stmt_ms = int(getattr(_perf, "perf_session_statement_timeout_ms", 0) or 0)
+            if _stmt_ms > 0:
+                await session.execute(text(f"SET LOCAL statement_timeout = {_stmt_ms}"))
+            _lock_ms = int(getattr(_perf, "perf_session_lock_timeout_ms", 0) or 0)
+            if _lock_ms > 0:
+                await session.execute(text(f"SET LOCAL lock_timeout = {_lock_ms}"))
             yield session
             if (
                 session.new

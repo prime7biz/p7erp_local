@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.pagination import MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.models import (
     AlertComment,
     AlertDefinition,
@@ -616,7 +616,7 @@ async def _run_scan_background(tenant_id: int) -> None:
             await run_scan(db, tenant_id, trigger="manual")
             await db.commit()
         except Exception:
-            await db.rollback()
+            await safe_async_session_rollback(db)
             raise
 
 

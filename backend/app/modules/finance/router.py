@@ -43,7 +43,7 @@ from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.control_tower_flags import require_control_tower_enabled
 from app.common.tenant import require_tenant
 from app.config import get_settings
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.modules.finance.auto_posting_service import AutoPostingLine, create_system_voucher
 from app.modules.finance.exposure_service import build_maturity_ladder, compute_master_lc_exposure
 from app.models import (
@@ -1896,7 +1896,7 @@ async def coa_import(
             code_to_group[code] = new_group
             created_g += 1
     if aborted:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         return {"ok": False, "groups_created": 0, "groups_updated": 0, "accounts_created": 0, "accounts_updated": 0, "errors": errors}
 
     existing_accounts = (await db.execute(select(ChartOfAccount).where(ChartOfAccount.tenant_id == tenant.id))).scalars().all()
@@ -1986,7 +1986,7 @@ async def coa_import(
             num_to_account[account_number] = new_acct
             created_a += 1
     if aborted:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         return {"ok": False, "groups_created": 0, "groups_updated": 0, "accounts_created": 0, "accounts_updated": 0, "errors": errors}
     await db.commit()
     return {"ok": True, "groups_created": created_g, "groups_updated": updated_g, "accounts_created": created_a, "accounts_updated": updated_a, "errors": errors}

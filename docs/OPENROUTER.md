@@ -6,7 +6,9 @@ Set **`OPENROUTER_TIER1_PREFERRED=true`** when you want **OpenRouter traffic fir
 
 Structured INFO logs: every successful OpenRouter completion emits **`openrouter_chat_completion`** with `model`, `latency_ms`, token counts, and `feature` (`tier1`, `paid_mcp`, or the feature name for tenant text). Failures log **`openrouter_request_failed`**. Filter Docker logs with `docker compose logs backend | findstr openrouter` (Windows) or `grep openrouter` on Unix.
 
-Tenant-scoped narratives that previously used only Gemini (`generate_text_for_tenant`) can try OpenRouter first when **`OPENROUTER_TENANT_TEXT_ENABLED=true`**: dashboard AI brief, weekly report, production planning text, finance business overview (when that path calls the helper), etc. Rows in **`ai_usage_log`** use `provider='openrouter'` with token counts when the response includes usage. Document extraction stays on **Gemini multimodal** unless you enable Gemini; routing OpenRouter vision for PDFs is not in this path yet.
+Tenant-scoped narratives that previously used only Gemini (`generate_text_for_tenant`) can try OpenRouter first when **`OPENROUTER_TENANT_TEXT_ENABLED=true`**: dashboard AI brief, weekly report, production planning text, finance business overview (when that path calls the helper), etc. Rows in **`ai_usage_log`** use `provider='openrouter'` with token counts when the response includes usage.
+
+**Document extraction (inquiry/customer import):** Images and PDFs are sent to OpenRouter when `OPENROUTER_API_KEY` + `OPENROUTER_MODEL` are set. PDFs use OpenRouter’s `file` content type (base64 data URL). With `OPENROUTER_TIER1_PREFERRED=true`, images try OpenRouter before Ollama; PDFs always use OpenRouter first (Ollama cannot read PDF). If OpenRouter fails and `GEMINI_ENABLED=true` with a key, direct Gemini is the fallback.
 
 Report / extended-analysis / forecast intents can **request paid escalation** (approval card); outbound prompts to cloud models apply **PII redaction** and a short **tenant metadata** prefix (no customer PII).
 

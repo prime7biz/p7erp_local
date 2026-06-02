@@ -13,7 +13,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.config import get_settings
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, engine
 from sqlalchemy import select
 
 from app.models import AuditLog, User
@@ -110,6 +110,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         if _should_skip(path):
             return await call_next(request)
         start = datetime.utcnow()
+        settings = get_settings()
+        qraw = request.url.query or ""
+        warn_bytes = int(getattr(settings, "perf_request_query_warn_bytes", 0) or 0)
+        if warn_bytes > 0 and len(qraw.encode("utf-8", errors="replace")) > warn_bytes:
+            logger.warning(
+                "perf_oversized_query_string method=%s path=%s query_bytes=%s",
+                request.method,
+                path[:240],
+                len(qraw.encode("utf-8", errors="replace")),
+            )
         auth = request.headers.get("authorization") or ""
         tenant_id = None
         user_id = None
@@ -126,6 +136,27 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 _, user_id = _decode_tenant_user(token)
         response = await call_next(request)
         duration_ms = int((datetime.utcnow() - start).total_seconds() * 1000)
+        slow_ms = int(getattr(settings, "perf_timing_slow_ms", 750) or 750)
+        if settings.perf_timing_enabled and duration_ms >= slow_ms:
+            pool_chunk = ""
+            if settings.perf_pool_metrics_enabled:
+                try:
+                    pool = engine.sync_engine.pool
+                    pool_chunk = (
+                        f" pool_in={pool.checkedin()} pool_out={pool.checkedout()} pool_overflow={pool.overflow()}"
+                    )
+                except Exception:
+                    pool_chunk = " pool=unavailable"
+            logger.info(
+                "perf_request tenant_id=%s user_id=%s %s %s status=%s duration_ms=%s%s",
+                tenant_id,
+                user_id,
+                request.method,
+                path[:500],
+                response.status_code,
+                duration_ms,
+                pool_chunk,
+            )
         status_code = response.status_code
         if tenant_id is None and user_id is None:
             return response

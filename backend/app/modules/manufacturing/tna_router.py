@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.tenant import require_tenant
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.models import (
     Item,
     ManufacturingTnaPlan,
@@ -181,7 +181,7 @@ async def create_template(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Template code/version already exists")
     await db.refresh(row)
     return _to_template_response(row)
@@ -241,7 +241,7 @@ async def add_template_task(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Task sequence already exists for this template")
     await db.refresh(row)
     return _to_template_task_response(row)
@@ -355,7 +355,7 @@ async def create_plan(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Plan code already exists")
     await db.refresh(plan)
     return _to_plan_response(plan)

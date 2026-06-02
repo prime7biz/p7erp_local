@@ -12,7 +12,7 @@ from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.models import (
     AccountingPeriod,
     BonusDeclaration,
@@ -265,7 +265,7 @@ async def create_component(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Payroll component code already exists")
     await db.refresh(row)
     return _component_out(row)
@@ -299,7 +299,7 @@ async def update_component(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Payroll component code already exists")
     await db.refresh(row)
     return _component_out(row)
@@ -345,7 +345,7 @@ async def create_structure(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Payroll structure code already exists")
     await db.refresh(row)
     return _structure_out(row)
@@ -433,7 +433,7 @@ async def create_period(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Payroll period code already exists")
     await db.refresh(row)
     return _period_out(row)
@@ -508,7 +508,7 @@ async def create_run(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Payroll run code already exists")
     await db.refresh(row)
     return _run_out(row)

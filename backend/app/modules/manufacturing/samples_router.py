@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.tenant import require_tenant
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.models import Item, ManufacturingSampleRequest, Order, Tenant, User
 from app.modules.manufacturing.schemas import (
     SampleRequestCreate,
@@ -131,7 +131,7 @@ async def create_sample_request(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Sample number already exists")
     await db.refresh(row)
     return _to_response(row)

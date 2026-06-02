@@ -37,24 +37,24 @@ const ControlTowerPage = lazy(() =>
 );
 const PartiesPage = lazy(() => import("@/pages/app/parties/PartiesPage").then((m) => ({ default: m.PartiesPage })));
 const DocumentFlowPage = lazy(() => import("@/pages/app/flow/DocumentFlowPage").then((m) => ({ default: m.DocumentFlowPage })));
-const CustomersPage = lazy(() => import("@/pages/app/CustomersPage").then((m) => ({ default: m.CustomersPage })));
+const CustomersPage = lazy(() => import("@/pages/app/crm/CustomersPage").then((m) => ({ default: m.CustomersPage })));
 const CustomerCreatePage = lazy(() =>
-  import("@/pages/app/CustomerCreatePage").then((m) => ({ default: m.CustomerCreatePage })),
+  import("@/pages/app/crm/CustomerCreatePage").then((m) => ({ default: m.CustomerCreatePage })),
 );
 const CustomerDetailPage = lazy(() =>
-  import("@/pages/app/CustomerDetailPage").then((m) => ({ default: m.CustomerDetailPage })),
+  import("@/pages/app/crm/CustomerDetailPage").then((m) => ({ default: m.CustomerDetailPage })),
 );
-const CustomerEditPage = lazy(() => import("@/pages/app/CustomerEditPage").then((m) => ({ default: m.CustomerEditPage })));
-const InquiriesPage = lazy(() => import("@/pages/app/InquiriesPage").then((m) => ({ default: m.InquiriesPage })));
-const InquiryCreatePage = lazy(() => import("@/pages/app/InquiryCreatePage").then((m) => ({ default: m.InquiryCreatePage })));
-const QuotationsPage = lazy(() => import("@/pages/app/QuotationsPage").then((m) => ({ default: m.QuotationsPage })));
-const OrdersPage = lazy(() => import("@/pages/app/OrdersPage").then((m) => ({ default: m.OrdersPage })));
-const OrderCreatePage = lazy(() => import("@/pages/app/OrderCreatePage").then((m) => ({ default: m.OrderCreatePage })));
-const InquiryDetailPage = lazy(() => import("@/pages/app/InquiryDetailPage").then((m) => ({ default: m.InquiryDetailPage })));
+const CustomerEditPage = lazy(() => import("@/pages/app/crm/CustomerEditPage").then((m) => ({ default: m.CustomerEditPage })));
+const InquiriesPage = lazy(() => import("@/pages/app/crm/InquiriesPage").then((m) => ({ default: m.InquiriesPage })));
+const InquiryCreatePage = lazy(() => import("@/pages/app/crm/InquiryCreatePage").then((m) => ({ default: m.InquiryCreatePage })));
+const QuotationsPage = lazy(() => import("@/pages/app/crm/QuotationsPage").then((m) => ({ default: m.QuotationsPage })));
+const OrdersPage = lazy(() => import("@/pages/app/crm/OrdersPage").then((m) => ({ default: m.OrdersPage })));
+const OrderCreatePage = lazy(() => import("@/pages/app/crm/OrderCreatePage").then((m) => ({ default: m.OrderCreatePage })));
+const InquiryDetailPage = lazy(() => import("@/pages/app/crm/InquiryDetailPage").then((m) => ({ default: m.InquiryDetailPage })));
 const QuotationDetailPage = lazy(() =>
-  import("@/pages/app/QuotationDetailPage").then((m) => ({ default: m.QuotationDetailPage })),
+  import("@/pages/app/crm/QuotationDetailPage").then((m) => ({ default: m.QuotationDetailPage })),
 );
-const OrderDetailPage = lazy(() => import("@/pages/app/OrderDetailPage").then((m) => ({ default: m.OrderDetailPage })));
+const OrderDetailPage = lazy(() => import("@/pages/app/crm/OrderDetailPage").then((m) => ({ default: m.OrderDetailPage })));
 const StylesPage = lazy(() => import("@/pages/app/StylesPage").then((m) => ({ default: m.StylesPage })));
 const StyleDetailPage = lazy(() => import("@/pages/app/StyleDetailPage").then((m) => ({ default: m.StyleDetailPage })));
 const BomBuilderPage = lazy(() => import("@/pages/app/BomBuilderPage").then((m) => ({ default: m.BomBuilderPage })));

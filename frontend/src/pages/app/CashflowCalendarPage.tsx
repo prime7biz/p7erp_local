@@ -34,7 +34,10 @@ export function CashflowCalendarPage() {
     Promise.all([
       api.listOutstandingBills({}),
       api.listBtbLcs({}),
-      api.getCashForecastSummary().catch(() => null),
+      api.getCashForecastSummary().catch((e) => {
+        logApiError("CashflowCalendar.getCashForecastSummary", e);
+        return null;
+      }),
     ])
       .then(([b, lc, s]) => {
         if (!cancelled) {

@@ -49,7 +49,7 @@ from app.models.inventory import (
     Warehouse,
 )
 
-DEFAULT_DEMO_EMAIL = "financier.portal.demo@p7erp.local"
+DEFAULT_DEMO_EMAIL = "portal.financier.demo@prime7erp.com"
 DEFAULT_DEMO_PASSWORD = "FinancierPortalDemo123"
 
 WH_CODE = "WH-FP-COLLAT"
@@ -255,7 +255,9 @@ async def run_financier_portal_demo_seed(
         counts["warehouse_upserted"] = 1
 
     user_id = (
-        await db.execute(select(User.id).where(User.tenant_id == tid).order_by(User.id.asc()))
+        await db.execute(
+            select(User.id).where(User.tenant_id == tid).order_by(User.id.asc()).limit(1)
+        )
     ).scalar_one_or_none()
 
     po_row = await db.execute(

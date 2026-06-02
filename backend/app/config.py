@@ -146,6 +146,19 @@ class Settings(BaseSettings):
     # Trade document storage: currently backend uses local media/trade_docs; future: trade_docs_backend=local|s3, bucket, etc.
     # trade_docs_backend: str = "local"
 
+    # --- DB performance observability (all default off; no API response shape change) ---
+    # Log slow API requests (path, tenant, duration). See RequestLoggingMiddleware.
+    perf_timing_enabled: bool = False
+    perf_timing_slow_ms: int = 750
+    # When timing fires for a slow request, also emit SQLAlchemy pool stats (checked_in/out, overflow).
+    perf_pool_metrics_enabled: bool = False
+    # Warn once per request if the URL query string exceeds this many bytes (abnormally large GET).
+    perf_request_query_warn_bytes: int = 8192
+    # Per-request DB session: SET LOCAL statement_timeout (ms). 0 = disabled. Use only after profiling.
+    perf_session_statement_timeout_ms: int = 0
+    # Per-request DB session: SET LOCAL lock_timeout (ms). 0 = disabled.
+    perf_session_lock_timeout_ms: int = 0
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

@@ -95,7 +95,7 @@ else:
 
 async def _run_alert_scan_all_tenants() -> None:
     """Background: run merch alert scan for all tenants every 15 min."""
-    from app.database import AsyncSessionLocal
+    from app.database import AsyncSessionLocal, safe_async_session_rollback
     from app.modules.merch.alert_engine import run_scan, get_tenant_ids
     while True:
         await asyncio.sleep(60)  # wait 1 min after startup, then first run
@@ -107,7 +107,7 @@ async def _run_alert_scan_all_tenants() -> None:
                         await run_scan(db, tid, trigger="scheduled")
                         await db.commit()
                     except Exception:
-                        await db.rollback()
+                        await safe_async_session_rollback(db)
         except asyncio.CancelledError:
             break
         except Exception:
@@ -117,7 +117,7 @@ async def _run_alert_scan_all_tenants() -> None:
 
 async def _run_weekly_ai_reports() -> None:
     """Background: generate weekly Gemini executive report per tenant (Sundays UTC)."""
-    from app.database import AsyncSessionLocal
+    from app.database import AsyncSessionLocal, safe_async_session_rollback
     from app.modules.ai_tool.weekly_report_service import generate_and_store_weekly_report
     from app.modules.merch.alert_engine import get_tenant_ids
 
@@ -135,7 +135,7 @@ async def _run_weekly_ai_reports() -> None:
                         await generate_and_store_weekly_report(db, tid)
                         await db.commit()
                     except Exception:
-                        await db.rollback()
+                        await safe_async_session_rollback(db)
         except asyncio.CancelledError:
             break
         except Exception:
@@ -144,7 +144,7 @@ async def _run_weekly_ai_reports() -> None:
 
 async def _run_trade_alert_scan_daily() -> None:
     """Background: run trade-only alert rules for all tenants once per day."""
-    from app.database import AsyncSessionLocal
+    from app.database import AsyncSessionLocal, safe_async_session_rollback
     from app.modules.merch.alert_engine import run_scan_trade_rules_only, get_tenant_ids
     while True:
         await asyncio.sleep(60 * 5)  # wait 5 min after startup, then first run
@@ -156,7 +156,7 @@ async def _run_trade_alert_scan_daily() -> None:
                         await run_scan_trade_rules_only(db, tid, trigger="scheduled_daily")
                         await db.commit()
                     except Exception:
-                        await db.rollback()
+                        await safe_async_session_rollback(db)
         except asyncio.CancelledError:
             break
         except Exception:

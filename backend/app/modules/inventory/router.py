@@ -47,6 +47,7 @@ from app.common.master_contract_rm_guard import (
     require_master_contract_for_rm_enabled,
 )
 from app.common.tenant import require_tenant
+from app.common.tenant_feature_keys import is_stock_snapshot_reads_enabled
 from app.config import get_settings
 from app.database import get_db
 from app.modules.inventory.document_qr_service import (
@@ -60,6 +61,7 @@ from app.modules.inventory.document_qr_service import (
     sign_warehouse_transfer,
     verify_inventory_document,
 )
+from app.modules.inventory import stock_snapshot_service
 from app.models import (
     Bom,
     BomItem,
@@ -432,7 +434,17 @@ async def _on_hand_qty(
     return round(in_qty - out_qty, 3)
 
 
-async def _stock_summary_rows(db: AsyncSession, tenant_id: int) -> list[StockSummaryRow]:
+async def _stock_summary_rows(
+    db: AsyncSession,
+    tenant_id: int,
+    *,
+    tenant_feature_flags: dict | None = None,
+) -> list[StockSummaryRow]:
+    if tenant_feature_flags and is_stock_snapshot_reads_enabled(tenant_feature_flags):
+        if await stock_snapshot_service.snapshot_row_count(db, tenant_id) > 0:
+            payloads = await stock_snapshot_service.snapshot_summary_payloads(db, tenant_id)
+            return [StockSummaryRow.model_validate(p) for p in payloads]
+
     qty_col = cast(StockMovement.quantity, Numeric)
     in_agg = func.coalesce(
         func.sum(case((StockMovement.movement_type == "IN", qty_col), else_=0)),
@@ -454,10 +466,16 @@ async def _stock_summary_rows(db: AsyncSession, tenant_id: int) -> list[StockSum
     )
     agg_result = await db.execute(agg_stmt)
     agg_rows = list(agg_result.all())
-    items_result = await db.execute(select(Item).where(Item.tenant_id == tenant_id))
-    item_map = {r.id: r for r in items_result.scalars().all()}
-    wh_result = await db.execute(select(Warehouse).where(Warehouse.tenant_id == tenant_id))
-    wh_map = {r.id: r for r in wh_result.scalars().all()}
+    item_ids = {int(r[0]) for r in agg_rows}
+    wh_ids = {int(r[1]) for r in agg_rows if r[1] is not None}
+    item_map: dict[int, Item] = {}
+    if item_ids:
+        items_result = await db.execute(select(Item).where(Item.tenant_id == tenant_id, Item.id.in_(item_ids)))
+        item_map = {r.id: r for r in items_result.scalars().all()}
+    wh_map: dict[int, Warehouse] = {}
+    if wh_ids:
+        wh_result = await db.execute(select(Warehouse).where(Warehouse.tenant_id == tenant_id, Warehouse.id.in_(wh_ids)))
+        wh_map = {r.id: r for r in wh_result.scalars().all()}
 
     rows: list[StockSummaryRow] = []
     for item_id, warehouse_id, in_qty_raw, out_qty_raw in agg_rows:
@@ -3211,7 +3229,7 @@ async def stock_valuation(
 ):
     _ensure_tenant(user, tenant)
     fifo_map = await _fifo_layer_qty_value_map(db, tenant.id, as_of_date)
-    all_summary = await _stock_summary_rows(db, tenant.id)
+    all_summary = await _stock_summary_rows(db, tenant.id, tenant_feature_flags=tenant.feature_flags)
     summary = all_summary[offset:offset + limit]
     items_result = await db.execute(select(Item).where(Item.tenant_id == tenant.id))
     item_map = {r.id: r for r in items_result.scalars().all()}
@@ -3266,7 +3284,7 @@ async def stock_summary_by_group(
 ):
     _ensure_tenant(user, tenant)
     fifo_map = await _fifo_layer_qty_value_map(db, tenant.id, as_of_date)
-    summary = await _stock_summary_rows(db, tenant.id)
+    summary = await _stock_summary_rows(db, tenant.id, tenant_feature_flags=tenant.feature_flags)
     items_result = await db.execute(select(Item).where(Item.tenant_id == tenant.id))
     item_map = {r.id: r for r in items_result.scalars().all()}
     sg_result = await db.execute(select(StockGroup).where(StockGroup.tenant_id == tenant.id))
@@ -3308,7 +3326,7 @@ async def stock_summary_by_warehouse(
 ):
     _ensure_tenant(user, tenant)
     fifo_map = await _fifo_layer_qty_value_map(db, tenant.id, as_of_date)
-    summary = await _stock_summary_rows(db, tenant.id)
+    summary = await _stock_summary_rows(db, tenant.id, tenant_feature_flags=tenant.feature_flags)
     items_result = await db.execute(select(Item).where(Item.tenant_id == tenant.id))
     item_map = {r.id: r for r in items_result.scalars().all()}
     wh_result = await db.execute(select(Warehouse).where(Warehouse.tenant_id == tenant.id))
@@ -3519,7 +3537,7 @@ async def stock_dashboard(
             .where(GoodsReceiving.tenant_id == tenant.id, GoodsReceiving.status != "RECEIVED")
         )
     ).scalar_one()
-    summary = await _stock_summary_rows(db, tenant.id)
+    summary = await _stock_summary_rows(db, tenant.id, tenant_feature_flags=tenant.feature_flags)
     skus = sum(1 for r in summary if r.on_hand_qty > 0)
     low = sum(1 for r in summary if 0 < r.on_hand_qty < low_stock_threshold)
 
@@ -5191,7 +5209,7 @@ async def reconciliation_overview(
     gate_rows = list(
         (await db.execute(select(EnhancedGatePass).where(EnhancedGatePass.tenant_id == tenant.id))).scalars().all()
     )
-    stock_rows = await _stock_summary_rows(db, tenant.id)
+    stock_rows = await _stock_summary_rows(db, tenant.id, tenant_feature_flags=tenant.feature_flags)
     on_hand_items = len([r for r in stock_rows if r.on_hand_qty > 0])
     pmi_n = (
         await db.execute(

@@ -11,7 +11,7 @@ from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.models import (
     Employee,
     LeaveApproval,
@@ -207,7 +207,7 @@ async def create_leave_type(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Leave type code already exists")
     await db.refresh(row)
     return _leave_type_out(row)
@@ -233,7 +233,7 @@ async def update_leave_type(
     try:
         await db.commit()
     except IntegrityError:
-        await db.rollback()
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=400, detail="Leave type code already exists")
     await db.refresh(row)
     return _leave_type_out(row)

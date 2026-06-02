@@ -199,7 +199,7 @@ async def _has_grn(db: AsyncSession, tenant_id: int, order_id: int) -> bool:
                     )
                 ),
             ),
-            GoodsReceiving.status.in_(("POSTED", "APPROVED", "COMPLETED", "CLOSED")),
+            GoodsReceiving.status.in_(("RECEIVED", "POSTED", "APPROVED", "COMPLETED", "CLOSED")),
         )
     )
     return (r.scalar() or 0) > 0

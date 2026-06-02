@@ -141,19 +141,23 @@ async def collect_bank_cash_control_warnings(
     credits_bank = 0
     debits_cash = 0
     credits_cash = 0
+    bank_accounts_touched: list[tuple[ChartOfAccount, float]] = []
     for line in lines:
         pair = amap.get(line.account_id)
         if not pair:
             continue
         account, group = pair
+        amount = float(line.amount or "0")
         if line.entry_type == "DEBIT":
             if _is_bank_like(account, group):
                 debits_bank += 1
+                bank_accounts_touched.append((account, amount))
             elif _is_cash_like(account, group):
                 debits_cash += 1
         elif line.entry_type == "CREDIT":
             if _is_bank_like(account, group):
                 credits_bank += 1
+                bank_accounts_touched.append((account, amount))
             elif _is_cash_like(account, group):
                 credits_cash += 1
 

@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
+from app.common.orm_numeric import api_money_to_decimal, decimal_to_money_response
 from app.models import (
     BtbLc,
     BtbLcAccounting,
@@ -559,14 +560,14 @@ async def run_financier_full_demo_seed(db: AsyncSession, company_code: str) -> d
                         goods_receiving_id=g.id,
                         item_id=poli.item_id,
                         warehouse_id=poli.warehouse_id or wh_main.id,
-                        quantity=accepted,
+                        quantity=api_money_to_decimal(accepted),
                         purchase_order_line_id=poli.id,
                         ordered_qty=ordered,
                         received_qty=accepted,
                         accepted_qty=accepted,
                         rejected_qty=rejected,
                         pending_qty=pending,
-                        unit_price=poli.unit_price,
+                        unit_price=decimal_to_money_response(poli.unit_price),
                         source_order_id=order.id if order else None,
                         btb_lc_id=btb.id,
                         vendor_id=vendor.id,
@@ -588,8 +589,8 @@ async def run_financier_full_demo_seed(db: AsyncSession, company_code: str) -> d
             btb1,
             orders["LKH-ORD-01"],
             [
-                (pl1[0], pl1[0].quantity, pl1[0].quantity, "0", "0"),
-                (pl1[1], pl1[1].quantity, pl1[1].quantity, "0", "0"),
+                (pl1[0], decimal_to_money_response(pl1[0].quantity), decimal_to_money_response(pl1[0].quantity), "0", "0"),
+                (pl1[1], decimal_to_money_response(pl1[1].quantity), decimal_to_money_response(pl1[1].quantity), "0", "0"),
             ],
         )
     else:
@@ -600,13 +601,13 @@ async def run_financier_full_demo_seed(db: AsyncSession, company_code: str) -> d
         v_fab,
         btb1,
         orders["LKH-ORD-02"],
-        [(pl2[0], pl2[0].quantity, pl2[0].quantity, "0", "0")] if pl2 else [],
+        [(pl2[0], decimal_to_money_response(pl2[0].quantity), decimal_to_money_response(pl2[0].quantity), "0", "0")] if pl2 else [],
     )
     grn3_lines: list[tuple[PurchaseOrderItem, str, str, str, str]] = []
     if len(pl3) >= 2:
         grn3_lines = [
-            (pl3[0], pl3[0].quantity, str(float(pl3[0].quantity) * 0.6), "0", str(float(pl3[0].quantity) * 0.4)),
-            (pl3[1], pl3[1].quantity, str(float(pl3[1].quantity) * 0.5), "10", str(float(pl3[1].quantity) * 0.5 - 10)),
+            (pl3[0], decimal_to_money_response(pl3[0].quantity), str(float(pl3[0].quantity) * 0.6), "0", str(float(pl3[0].quantity) * 0.4)),
+            (pl3[1], decimal_to_money_response(pl3[1].quantity), str(float(pl3[1].quantity) * 0.5), "10", str(float(pl3[1].quantity) * 0.5 - 10)),
         ]
     grn3 = await _ensure_grn("LKH-GRN-003", po3, v_trim, btb1, orders["LKH-ORD-03"], grn3_lines, status="RECEIVED")
     grn4 = await _ensure_grn(
@@ -615,7 +616,7 @@ async def run_financier_full_demo_seed(db: AsyncSession, company_code: str) -> d
         v_fab,
         btb2,
         orders["LKH-ORD-04"],
-        [(pl4[0], pl4[0].quantity, pl4[0].quantity, "0", "0")] if pl4 else [],
+        [(pl4[0], decimal_to_money_response(pl4[0].quantity), decimal_to_money_response(pl4[0].quantity), "0", "0")] if pl4 else [],
     )
 
     async def _ensure_stock_in_from_grn_item(

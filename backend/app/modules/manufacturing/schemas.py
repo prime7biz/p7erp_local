@@ -72,6 +72,12 @@ class RoutingTemplateCreate(BaseModel):
     notes: str | None = None
 
 
+class RoutingTemplateUpdate(BaseModel):
+    routing_code: str | None = Field(default=None, min_length=1, max_length=32)
+    is_active: bool | None = None
+    notes: str | None = None
+
+
 class RoutingTemplateResponse(BaseModel):
     id: int
     tenant_id: int
@@ -90,6 +96,14 @@ class RoutingStepCreate(BaseModel):
     work_center_id: int | None = None
     std_minutes: float | None = Field(default=None, ge=0)
     qc_required: bool = False
+
+
+class RoutingStepUpdate(BaseModel):
+    step_no: int | None = Field(default=None, ge=1)
+    operation_id: int | None = None
+    work_center_id: int | None = None
+    std_minutes: float | None = Field(default=None, ge=0)
+    qc_required: bool | None = None
 
 
 class RoutingStepResponse(BaseModel):

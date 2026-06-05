@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.delete_guards import ensure_sewing_line_deletable
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import DepartmentMachine, SewingLine, Tenant, User
@@ -107,6 +108,7 @@ async def delete_sewing_line(
     row = await db.get(SewingLine, line_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(404, "Sewing line not found")
+    await ensure_sewing_line_deletable(db, tenant.id, line_id)
     await db.delete(row)
     await db.commit()
 

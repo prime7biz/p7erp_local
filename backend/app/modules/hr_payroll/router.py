@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.orm_numeric import api_money_to_decimal, decimal_to_money_response
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
@@ -118,7 +119,7 @@ def _component_out(row: PayrollComponent) -> PayrollComponentOut:
         name=row.name,
         component_type=row.component_type,
         calculation_type=row.calculation_type,
-        default_amount=row.default_amount,
+        default_amount=decimal_to_money_response(row.default_amount),
         gl_account_id=row.gl_account_id,
         formula=getattr(row, "formula", None),
         applies_to=getattr(row, "applies_to", "ALL") or "ALL",
@@ -147,7 +148,7 @@ def _structure_line_out(row: PayrollStructureLine) -> PayrollStructureLineOut:
         tenant_id=row.tenant_id,
         structure_id=row.structure_id,
         component_id=row.component_id,
-        amount=row.amount,
+        amount=decimal_to_money_response(row.amount),
         formula=row.formula,
         sort_order=row.sort_order,
         created_at=row.created_at.isoformat(),
@@ -179,9 +180,9 @@ def _run_out(row: PayrollRun) -> PayrollRunOut:
         run_code=row.run_code,
         run_date=row.run_date,
         status=row.status,
-        gross_total=row.gross_total,
-        deduction_total=row.deduction_total,
-        net_total=row.net_total,
+        gross_total=decimal_to_money_response(row.gross_total),
+        deduction_total=decimal_to_money_response(row.deduction_total),
+        net_total=decimal_to_money_response(row.net_total),
         finalized_by=row.finalized_by,
         finalized_at=row.finalized_at.isoformat() if row.finalized_at else None,
         created_by=row.created_by,
@@ -197,10 +198,10 @@ def _run_line_out(row: PayrollRunLine) -> PayrollRunLineOut:
         run_id=row.run_id,
         employee_id=row.employee_id,
         structure_id=row.structure_id,
-        gross_pay=row.gross_pay,
-        deductions=row.deductions,
-        net_pay=row.net_pay,
-        overtime_amount=getattr(row, "overtime_amount", "0") or "0",
+        gross_pay=decimal_to_money_response(row.gross_pay),
+        deductions=decimal_to_money_response(row.deductions),
+        net_pay=decimal_to_money_response(row.net_pay),
+        overtime_amount=decimal_to_money_response(getattr(row, "overtime_amount", None)),
         remarks=row.remarks,
         created_at=row.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
@@ -608,9 +609,9 @@ async def finalize_run(
     gross_total = sum(_to_float(x.gross_pay) for x in lines)
     deduction_total = sum(_to_float(x.deductions) for x in lines)
     net_total = sum(_to_float(x.net_pay) for x in lines)
-    run.gross_total = f"{gross_total:.2f}"
-    run.deduction_total = f"{deduction_total:.2f}"
-    run.net_total = f"{net_total:.2f}"
+    run.gross_total = api_money_to_decimal(f"{gross_total:.4f}")
+    run.deduction_total = api_money_to_decimal(f"{deduction_total:.4f}")
+    run.net_total = api_money_to_decimal(f"{net_total:.4f}")
     run.status = "FINALIZED"
     run.finalized_by = user.id
     run.finalized_at = datetime.utcnow()

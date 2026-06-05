@@ -62,6 +62,14 @@ from app.modules.mcp_server import mount_mcp
 from app.common.external_audit_middleware import ExternalAuditMiddleware
 from app.common.request_logger import RequestLoggingMiddleware
 from app.common.rate_limiter import TenantRateLimitMiddleware
+from app.common.background_lock import (
+    LOCK_MERCH_ALERT_SCAN,
+    LOCK_PLATFORM_MAINTENANCE,
+    LOCK_TRADE_ALERT_SCAN,
+    LOCK_WEEKLY_AI_REPORTS,
+    try_acquire_background_lock,
+    release_background_lock,
+)
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -101,13 +109,19 @@ async def _run_alert_scan_all_tenants() -> None:
         await asyncio.sleep(60)  # wait 1 min after startup, then first run
         try:
             async with AsyncSessionLocal() as db:
-                tenant_ids = await get_tenant_ids(db)
-                for tid in tenant_ids:
-                    try:
-                        await run_scan(db, tid, trigger="scheduled")
-                        await db.commit()
-                    except Exception:
-                        await safe_async_session_rollback(db)
+                if not await try_acquire_background_lock(db, LOCK_MERCH_ALERT_SCAN):
+                    continue
+                try:
+                    tenant_ids = await get_tenant_ids(db)
+                    for tid in tenant_ids:
+                        try:
+                            await run_scan(db, tid, trigger="scheduled")
+                            await db.commit()
+                        except Exception:
+                            await safe_async_session_rollback(db)
+                finally:
+                    await release_background_lock(db, LOCK_MERCH_ALERT_SCAN)
+                    await db.commit()
         except asyncio.CancelledError:
             break
         except Exception:
@@ -129,13 +143,19 @@ async def _run_weekly_ai_reports() -> None:
             if datetime.now(timezone.utc).weekday() != 6:
                 continue
             async with AsyncSessionLocal() as db:
-                tenant_ids = await get_tenant_ids(db)
-                for tid in tenant_ids:
-                    try:
-                        await generate_and_store_weekly_report(db, tid)
-                        await db.commit()
-                    except Exception:
-                        await safe_async_session_rollback(db)
+                if not await try_acquire_background_lock(db, LOCK_WEEKLY_AI_REPORTS):
+                    continue
+                try:
+                    tenant_ids = await get_tenant_ids(db)
+                    for tid in tenant_ids:
+                        try:
+                            await generate_and_store_weekly_report(db, tid)
+                            await db.commit()
+                        except Exception:
+                            await safe_async_session_rollback(db)
+                finally:
+                    await release_background_lock(db, LOCK_WEEKLY_AI_REPORTS)
+                    await db.commit()
         except asyncio.CancelledError:
             break
         except Exception:
@@ -150,13 +170,19 @@ async def _run_trade_alert_scan_daily() -> None:
         await asyncio.sleep(60 * 5)  # wait 5 min after startup, then first run
         try:
             async with AsyncSessionLocal() as db:
-                tenant_ids = await get_tenant_ids(db)
-                for tid in tenant_ids:
-                    try:
-                        await run_scan_trade_rules_only(db, tid, trigger="scheduled_daily")
-                        await db.commit()
-                    except Exception:
-                        await safe_async_session_rollback(db)
+                if not await try_acquire_background_lock(db, LOCK_TRADE_ALERT_SCAN):
+                    continue
+                try:
+                    tenant_ids = await get_tenant_ids(db)
+                    for tid in tenant_ids:
+                        try:
+                            await run_scan_trade_rules_only(db, tid, trigger="scheduled_daily")
+                            await db.commit()
+                        except Exception:
+                            await safe_async_session_rollback(db)
+                finally:
+                    await release_background_lock(db, LOCK_TRADE_ALERT_SCAN)
+                    await db.commit()
         except asyncio.CancelledError:
             break
         except Exception:
@@ -173,8 +199,14 @@ async def _run_platform_daily_maintenance() -> None:
         await asyncio.sleep(3600)  # hourly; internal tasks gate by day/month
         try:
             async with AsyncSessionLocal() as db:
-                await run_platform_daily_maintenance(db)
-                await db.commit()
+                if not await try_acquire_background_lock(db, LOCK_PLATFORM_MAINTENANCE):
+                    continue
+                try:
+                    await run_platform_daily_maintenance(db)
+                    await db.commit()
+                finally:
+                    await release_background_lock(db, LOCK_PLATFORM_MAINTENANCE)
+                    await db.commit()
         except asyncio.CancelledError:
             break
         except Exception:

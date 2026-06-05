@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time
+from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, Time
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text, Time
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -109,10 +110,10 @@ class OvertimeEntry(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("hr_employees.id", ondelete="CASCADE"), nullable=False, index=True)
     work_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    ot_hours: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
+    ot_hours: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     ot_type: Mapped[str] = mapped_column(String(24), nullable=False, default="WEEKDAY")
-    rate_multiplier: Mapped[str] = mapped_column(String(16), nullable=False, default="1.5")
-    amount: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    rate_multiplier: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("1.5"), server_default="1.5")
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     rule_id: Mapped[int | None] = mapped_column(ForeignKey("hr_overtime_rules.id", ondelete="SET NULL"), nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="PENDING", index=True)
     approved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

@@ -7,7 +7,6 @@ import { PermissionRouteGuard } from "@/components/auth/PermissionRouteGuard";
 import { ROUTE_PERMISSION } from "@/app/routePermissions";
 
 const Dashboard = lazy(() => import("@/pages/Dashboard").then((m) => ({ default: m.Dashboard })));
-const AppComingSoonPage = lazy(() => import("@/pages/app/AppComingSoonPage").then((m) => ({ default: m.AppComingSoonPage })));
 const PlaceholderPage = lazy(() => import("@/pages/app/PlaceholderPage").then((m) => ({ default: m.PlaceholderPage })));
 const AiAssistantPage = lazy(() => import("@/pages/app/ai/AiAssistantPage").then((m) => ({ default: m.AiAssistantPage })));
 const AiAutomationPage = lazy(() => import("@/pages/app/ai/AiAutomationPage").then((m) => ({ default: m.AiAutomationPage })));
@@ -638,10 +637,10 @@ export function AppProtectedRouter() {
           <Route path="inventory/process-orders" element={<ProcessOrdersPage />} />
           <Route path="inventory/manufacturing-orders" element={<Navigate to="/app/production/manufacturing-orders" replace />} />
         </Route>
-        <Route path="samples" element={<PlaceholderPage title="Samples" />} />
-        <Route path="samples/:id" element={<PlaceholderPage title="Sample Detail" />} />
+        <Route path="samples" element={<Navigate to="/app/samples/requests" replace />} />
+        <Route path="samples/:id" element={<Navigate to="/app/samples/requests" replace />} />
         <Route path="samples/requests" element={<SamplesRequestsPage />} />
-        <Route path="time-action" element={<AppComingSoonPage title="Time & Action" description="Use TNA Dashboard under Manufacturing for time and action plans." />} />
+        <Route path="time-action" element={<Navigate to="/app/tna/dashboard" replace />} />
         <Route path="tna/dashboard" element={<TnaDashboardPage />} />
         <Route path="tna/templates" element={<TnaTemplatesPage />} />
         <Route path="tna/plans" element={<TnaPlansPage />} />

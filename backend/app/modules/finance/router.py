@@ -19,7 +19,10 @@ from urllib.request import urlopen
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import Response as BytesResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator
+
+from app.common.money_schema import MoneyStrNonNeg, MoneyStrNonNegOpt, RateStrNonNeg, RateStrNonNegOpt
+from app.common.orm_numeric import decimal_to_money_response, decimal_to_rate_response
 from sqlalchemy import case, cast, func, Numeric, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -201,10 +204,10 @@ def _voucher_signature_payload(voucher: Voucher, lines: list[VoucherLine]) -> di
             "account_id": line.account_id,
             "cost_center_id": line.cost_center_id,
             "entry_type": line.entry_type,
-            "amount": line.amount,
-            "base_amount": line.base_amount,
+            "amount": decimal_to_money_response(line.amount),
+            "base_amount": decimal_to_money_response(line.base_amount),
             "currency": line.currency,
-            "exchange_rate": line.exchange_rate,
+            "exchange_rate": decimal_to_rate_response(line.exchange_rate),
             "notes": line.notes,
         }
         for line in lines
@@ -217,7 +220,7 @@ def _voucher_signature_payload(voucher: Voucher, lines: list[VoucherLine]) -> di
         "status": voucher.status,
         "currency": voucher.currency,
         "base_currency": voucher.base_currency,
-        "exchange_rate": voucher.exchange_rate,
+        "exchange_rate": decimal_to_rate_response(voucher.exchange_rate),
         "lines": serialized_lines,
     }
 
@@ -377,7 +380,7 @@ class ChartAccountBody(BaseModel):
     name: str
     group_id: int
     normal_balance: Literal["debit", "credit"] = "debit"
-    opening_balance: str = "0"
+    opening_balance: MoneyStrNonNeg = "0"
     account_currency: str | None = None
     maintain_fc_balance: bool = False
     description: str | None = None
@@ -417,6 +420,10 @@ class ChartAccountOut(ChartAccountBody):
     usage_purpose: str | None = None
     linked_module: str | None = None
 
+    @field_serializer("opening_balance", "balance")
+    def _serialize_money(self, value: object) -> str:
+        return decimal_to_money_response(value)
+
     class Config:
         from_attributes = True
 
@@ -443,12 +450,12 @@ class VoucherLineBody(BaseModel):
     account_id: int
     cost_center_id: int | None = None
     currency: str | None = None
-    exchange_rate: str | None = None
-    base_amount: str | None = None
+    exchange_rate: RateStrNonNegOpt = None
+    base_amount: MoneyStrNonNegOpt = None
     is_rate_overridden: bool = False
     rate_source: str | None = None
     entry_type: Literal["DEBIT", "CREDIT"]
-    amount: str
+    amount: MoneyStrNonNeg
     notes: str | None = None
     cost_nature_override: CostNatureLiteral | None = None
 
@@ -463,9 +470,23 @@ class VoucherLineBody(BaseModel):
         return v
 
 
+def _normalize_voucher_type_value(v: object) -> str:
+    if not isinstance(v, str) or not v.strip():
+        raise ValueError("voucher_type is required")
+    normalized = v.strip().upper()
+    if not all(ch.isalnum() or ch == "_" for ch in normalized):
+        raise ValueError("voucher_type must be alphanumeric (underscores allowed)")
+    return normalized
+
+
 class VoucherBody(BaseModel):
     voucher_number: str | None = None
-    voucher_type: str
+    voucher_type: str = Field(..., min_length=1, max_length=16)
+
+    @field_validator("voucher_type", mode="before")
+    @classmethod
+    def _normalize_voucher_type(cls, v: object) -> str:
+        return _normalize_voucher_type_value(v)
     voucher_date: date
     description: str | None = None
     reference: str | None = None
@@ -474,7 +495,7 @@ class VoucherBody(BaseModel):
     bank_reconciliation_id: int | None = None
     currency: str = "BDT"
     base_currency: str = "BDT"
-    exchange_rate: str | None = None
+    exchange_rate: RateStrNonNegOpt = None
     exchange_rate_source: str | None = None
     exchange_rate_fetched_at: datetime | None = None
     trade_case_id: int | None = None
@@ -484,7 +505,12 @@ class VoucherBody(BaseModel):
 
 
 class VoucherUpdateBody(BaseModel):
-    voucher_type: str
+    voucher_type: str = Field(..., min_length=1, max_length=16)
+
+    @field_validator("voucher_type", mode="before")
+    @classmethod
+    def _normalize_voucher_type(cls, v: object) -> str:
+        return _normalize_voucher_type_value(v)
     voucher_date: date
     description: str | None = None
     reference: str | None = None
@@ -493,7 +519,7 @@ class VoucherUpdateBody(BaseModel):
     bank_reconciliation_id: int | None = None
     currency: str = "BDT"
     base_currency: str = "BDT"
-    exchange_rate: str | None = None
+    exchange_rate: RateStrNonNegOpt = None
     facility_utilization_id: int | None = None
     lines: list[VoucherLineBody]
 
@@ -513,6 +539,18 @@ class VoucherLineOut(VoucherLineBody):
     id: int
     voucher_id: int
     tenant_id: int
+
+    @field_serializer("amount", "base_amount")
+    def _serialize_line_money(self, value: object) -> str | None:
+        if value is None:
+            return None
+        return decimal_to_money_response(value)
+
+    @field_serializer("exchange_rate")
+    def _serialize_line_rate(self, value: object) -> str | None:
+        if value is None:
+            return None
+        return decimal_to_rate_response(value)
 
     class Config:
         from_attributes = True
@@ -966,7 +1004,7 @@ def _voucher_to_out(
         bank_reconciliation_id=getattr(voucher, "bank_reconciliation_id", None),
         currency=voucher.currency,
         base_currency=voucher.base_currency,
-        exchange_rate=voucher.exchange_rate,
+        exchange_rate=decimal_to_rate_response(voucher.exchange_rate),
         exchange_rate_source=voucher.exchange_rate_source,
         exchange_rate_fetched_at=voucher.exchange_rate_fetched_at,
         verification_id=voucher.verification_id,

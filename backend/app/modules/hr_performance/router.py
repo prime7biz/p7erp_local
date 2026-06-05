@@ -22,12 +22,15 @@ from app.modules.hr_performance.schemas import (
     PerformanceCycleCreate,
     PerformanceCycleResponse,
     PerformanceCycleStatusUpdate,
+    PerformanceCycleUpdate,
     PerformanceGoalCreate,
     PerformanceGoalResponse,
     PerformanceGoalSubmit,
+    PerformanceGoalUpdate,
     PerformanceReviewCreate,
     PerformanceReviewResponse,
     PerformanceReviewSubmit,
+    PerformanceReviewUpdate,
 )
 
 router = APIRouter(prefix="/hr/performance", tags=["hr-performance"])
@@ -176,6 +179,39 @@ async def create_cycle(
     return _cycle_to_response(row)
 
 
+@router.patch("/cycles/{cycle_id}", response_model=PerformanceCycleResponse)
+async def update_cycle(
+    cycle_id: int,
+    body: PerformanceCycleUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    row = await _get_cycle_or_404(db, tenant.id, cycle_id)
+    if row.status == "closed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot edit a closed cycle")
+    payload = body.model_dump(exclude_unset=True)
+    if "name" in payload and payload["name"] is not None:
+        row.name = payload["name"].strip()
+    if "description" in payload:
+        row.description = payload["description"].strip() if payload["description"] else None
+    if "start_date" in payload and payload["start_date"] is not None:
+        row.start_date = payload["start_date"]
+    if "end_date" in payload and payload["end_date"] is not None:
+        row.end_date = payload["end_date"]
+    if row.end_date < row.start_date:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="end_date cannot be earlier than start_date")
+    try:
+        await db.commit()
+    except IntegrityError:
+        await safe_async_session_rollback(db)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cycle already exists for this start date")
+    await db.refresh(row)
+    return _cycle_to_response(row)
+
+
 @router.post("/cycles/{cycle_id}/status", response_model=PerformanceCycleResponse)
 async def update_cycle_status(
     cycle_id: int,
@@ -253,6 +289,39 @@ async def create_goal(
     await db.commit()
     await db.refresh(row)
     return _goal_to_response(row)
+
+
+@router.patch("/goals/{goal_id}", response_model=PerformanceGoalResponse)
+async def update_goal(
+    goal_id: int,
+    body: PerformanceGoalUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    goal = await _get_goal_or_404(db, tenant.id, goal_id)
+    cycle = await _get_cycle_or_404(db, tenant.id, goal.cycle_id)
+    my_employee = await _get_employee_by_user(db, tenant.id, user.id)
+    is_owner = my_employee is not None and my_employee.id == goal.employee_id
+    if not is_owner:
+        await _require_manager_or_admin(db, user, tenant.id)
+    if cycle.status == "closed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot edit goals in a closed cycle")
+    if goal.status not in {"draft", "submitted"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Goal cannot be edited in its current status")
+    payload = body.model_dump(exclude_unset=True)
+    if "title" in payload and payload["title"] is not None:
+        goal.title = payload["title"].strip()
+    if "description" in payload:
+        goal.description = payload["description"].strip() if payload["description"] else None
+    if "weight" in payload:
+        goal.weight = payload["weight"]
+    if "target_value" in payload:
+        goal.target_value = payload["target_value"].strip() if payload["target_value"] else None
+    await db.commit()
+    await db.refresh(goal)
+    return _goal_to_response(goal)
 
 
 @router.post("/goals/{goal_id}/submit", response_model=PerformanceGoalResponse)
@@ -344,6 +413,46 @@ async def create_review(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Review already exists for this type")
     await db.refresh(row)
     return _review_to_response(row)
+
+
+@router.patch("/reviews/{review_id}", response_model=PerformanceReviewResponse)
+async def update_review(
+    review_id: int,
+    body: PerformanceReviewUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    review = await _get_review_or_404(db, tenant.id, review_id)
+    my_employee = await _get_employee_by_user(db, tenant.id, user.id)
+    is_subject = my_employee is not None and my_employee.id == review.employee_id
+    is_assigned_reviewer = review.reviewer_user_id == user.id or (
+        my_employee is not None and review.reviewer_employee_id == my_employee.id
+    )
+    if not is_subject and not is_assigned_reviewer:
+        await _require_manager_or_admin(db, user, tenant.id)
+    if review.status not in {"draft", "pending"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Review cannot be edited in its current status")
+    payload = body.model_dump(exclude_unset=True)
+    if "reviewer_employee_id" in payload:
+        if payload["reviewer_employee_id"] is not None:
+            reviewer = await db.get(Employee, payload["reviewer_employee_id"])
+            if not reviewer or reviewer.tenant_id != tenant.id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reviewer employee not found")
+        review.reviewer_employee_id = payload["reviewer_employee_id"]
+    if "review_type" in payload and payload["review_type"] is not None:
+        review.review_type = payload["review_type"].strip().lower()
+    for field in ("self_rating", "manager_rating", "final_rating"):
+        if field in payload:
+            setattr(review, field, payload[field])
+    for field in ("employee_comment", "manager_comment"):
+        if field in payload:
+            value = payload[field]
+            setattr(review, field, value.strip() if value else None)
+    await db.commit()
+    await db.refresh(review)
+    return _review_to_response(review)
 
 
 @router.post("/reviews/{review_id}/submit", response_model=PerformanceReviewResponse)

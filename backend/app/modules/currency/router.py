@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from app.common.auth import get_current_user
+from app.common.delete_guards import ensure_exchange_rate_deletable
 from app.common.money import format_rate, line_rate_from_input, parse_money
 from app.common.tenant import require_tenant
 from app.database import get_db
@@ -240,6 +241,7 @@ async def delete_exchange_rate(
     rate = result.scalar_one_or_none()
     if not rate:
         raise HTTPException(status_code=404, detail="Exchange rate not found")
+    await ensure_exchange_rate_deletable(db, tenant.id, rate)
     await db.delete(rate)
     await db.commit()
 

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.delete_guards import ensure_defect_code_deletable
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import ProductionDefectCode, ProductionQcCheck, SewingLine, Tenant, User
@@ -94,6 +95,7 @@ async def delete_defect_code(
     row = await db.get(ProductionDefectCode, code_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(404, "Not found")
+    await ensure_defect_code_deletable(db, tenant.id, row)
     await db.delete(row)
     await db.commit()
 

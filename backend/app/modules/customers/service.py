@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from app.common.codegen import next_tenant_code
+from app.common.delete_guards import ensure_customer_deletable
 from app.common.pagination import MAX_PAGE_SIZE
 from app.models import Customer, Tenant, User
 from app.models.finance import OutstandingBill
@@ -838,6 +839,7 @@ async def delete_customer(db: AsyncSession, tenant: Tenant, customer_id: int) ->
     customer = result.scalar_one_or_none()
     if not customer:
         return False
+    await ensure_customer_deletable(db, tenant.id, customer_id)
     await db.delete(customer)
     await db.flush()
     return True

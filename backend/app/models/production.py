@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -633,9 +634,9 @@ class KnittingWorkOrder(Base):
     greige_item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
     fabric_type_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     gauge: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    planned_yarn_qty: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    planned_greige_qty: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    processing_charge_preview: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    planned_yarn_qty: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    planned_greige_qty: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    processing_charge_preview: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
     output_warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
     knitting_plan_id: Mapped[int | None] = mapped_column(ForeignKey("knitting_plans.id", ondelete="SET NULL"), nullable=True, index=True)

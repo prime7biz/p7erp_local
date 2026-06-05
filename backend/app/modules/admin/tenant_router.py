@@ -27,6 +27,7 @@ from app.modules.admin.schemas import (
     TenantUpdateBody,
 )
 from app.modules.audit.service import log_action
+from app.modules.finance.system_coa_seeding_service import seed_tenant_system_coa
 
 router = APIRouter(prefix="/tenants", tags=["platform-admin-tenants"])
 
@@ -181,6 +182,7 @@ async def create_tenant_admin(
             )
         )
     await db.flush()
+    await seed_tenant_system_coa(db, tenant.id)
     await log_action(db, tenant_id=tenant.id, action="TENANT_CREATE", resource="tenant", details=f"by_admin={ctx.admin.id}")
     await log_admin_action(
         db,

@@ -33,6 +33,7 @@ def test_tier1_prefers_openrouter_when_preferred_and_ollama_up(monkeypatch: pyte
 
 
 def test_tier1_prefers_ollama_when_local_and_openrouter_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_TIER1_PREFERRED", "false")
     monkeypatch.setenv("OPENROUTER_ENABLED", "true")
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
     monkeypatch.setenv("OPENROUTER_MODEL", "google/gemma-4-31b-it:free")
@@ -80,6 +81,7 @@ def test_tier1_prefers_vllm_when_ollama_and_openrouter_unavailable(monkeypatch: 
 
 
 def test_response_llm_matches_tier1_local_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_TIER1_PREFERRED", "false")
     monkeypatch.setenv("OPENROUTER_ENABLED", "true")
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
     monkeypatch.setenv("OPENROUTER_MODEL", "google/gemma-4-31b-it:free")

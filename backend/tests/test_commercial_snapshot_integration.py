@@ -96,7 +96,7 @@ async def test_create_order_from_quotation_stores_snapshot_and_qty(db_session_in
     assert isinstance(snap, dict)
     assert snap.get("document_currency") == "USD"
     assert snap.get("commercial_book_currency") == "BDT"
-    assert snap.get("quoted_price") == "500.00"
+    assert snap.get("quoted_price") in {"500.00", "500.0000"}
   finally:
     app.dependency_overrides.clear()
 

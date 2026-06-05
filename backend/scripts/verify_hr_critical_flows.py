@@ -42,7 +42,7 @@ async def _get_tenant() -> Tenant:
         tenant = (await db.execute(select(Tenant).where(Tenant.company_code == LAKHSMA_CODE))).scalar_one_or_none()
         if tenant:
             return tenant
-        tenant = (await db.execute(select(Tenant).order_by(Tenant.id.asc()))).scalar_one_or_none()
+        tenant = (await db.execute(select(Tenant).order_by(Tenant.id.asc()))).scalars().first()
         if not tenant:
             raise RuntimeError("No tenant found.")
         return tenant

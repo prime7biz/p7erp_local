@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -33,8 +34,8 @@ class LeavePolicy(Base):
         ForeignKey("hr_leave_types.id", ondelete="CASCADE"), nullable=False, index=True
     )
     employment_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    annual_quota_days: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
-    max_carry_forward_days: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
+    annual_quota_days: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    max_carry_forward_days: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -54,10 +55,10 @@ class LeaveBalance(Base):
         ForeignKey("hr_leave_types.id", ondelete="CASCADE"), nullable=False, index=True
     )
     balance_year: Mapped[int] = mapped_column(nullable=False, index=True)
-    allocated_days: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
-    used_days: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
-    pending_days: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
-    closing_balance_days: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
+    allocated_days: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    used_days: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    pending_days: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    closing_balance_days: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -75,7 +76,7 @@ class LeaveRequest(Base):
     )
     from_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     to_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    days_requested: Mapped[str] = mapped_column(String(16), nullable=False)
+    days_requested: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="DRAFT", index=True)
     requested_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)

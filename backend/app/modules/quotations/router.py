@@ -23,6 +23,7 @@ from app.common.money import (
 from app.common.pagination import clamp_page_size, safe_page, total_pages
 from app.common.codegen import next_tenant_code
 from app.common.db_errors import flush_handling_duplicate_document_code
+from app.common.delete_guards import ensure_quotation_deletable
 from app.common.tenant import require_tenant
 from app.common.workflow import (
   INQUIRY_TRANSITIONS,
@@ -1368,6 +1369,7 @@ async def delete_quotation(
   quotation = await db.get(Quotation, quotation_id)
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+  await ensure_quotation_deletable(db, tenant.id, quotation_id)
   await db.delete(quotation)
   await db.flush()
 

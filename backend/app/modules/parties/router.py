@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
 from app.common.db_errors import flush_handling_duplicate_document_code
+from app.common.delete_guards import ensure_customer_intermediary_deletable, ensure_intermediary_deletable
 from app.common.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
 from app.database import get_db
@@ -233,6 +234,7 @@ async def delete_intermediary(
   row = await db.get(Intermediary, intermediary_id)
   if not row or row.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Intermediary not found")
+  await ensure_intermediary_deletable(db, tenant.id, intermediary_id)
   await db.delete(row)
   await db.flush()
 
@@ -382,5 +384,6 @@ async def delete_customer_intermediary(
   row = await db.get(CustomerIntermediary, link_id)
   if not row or row.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer intermediary link not found")
+  await ensure_customer_intermediary_deletable(db, tenant.id, link_id)
   await db.delete(row)
   await db.flush()

@@ -10,6 +10,13 @@ class PerformanceCycleCreate(BaseModel):
     end_date: date
 
 
+class PerformanceCycleUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    description: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+
+
 class PerformanceCycleStatusUpdate(BaseModel):
     status: str = Field(..., min_length=1, max_length=32)
 
@@ -31,6 +38,13 @@ class PerformanceGoalCreate(BaseModel):
     cycle_id: int
     employee_id: int
     title: str = Field(..., min_length=1, max_length=255)
+    description: str | None = None
+    weight: float | None = Field(None, ge=0, le=100)
+    target_value: str | None = Field(None, max_length=255)
+
+
+class PerformanceGoalUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
     weight: float | None = Field(None, ge=0, le=100)
     target_value: str | None = Field(None, max_length=255)
@@ -62,6 +76,16 @@ class PerformanceReviewCreate(BaseModel):
     employee_id: int
     reviewer_employee_id: int | None = None
     review_type: str = Field(default="manager", min_length=1, max_length=32)
+    self_rating: float | None = Field(None, ge=0, le=5)
+    manager_rating: float | None = Field(None, ge=0, le=5)
+    final_rating: float | None = Field(None, ge=0, le=5)
+    employee_comment: str | None = None
+    manager_comment: str | None = None
+
+
+class PerformanceReviewUpdate(BaseModel):
+    reviewer_employee_id: int | None = None
+    review_type: str | None = Field(default=None, min_length=1, max_length=32)
     self_rating: float | None = Field(None, ge=0, le=5)
     manager_rating: float | None = Field(None, ge=0, le=5)
     final_rating: float | None = Field(None, ge=0, le=5)

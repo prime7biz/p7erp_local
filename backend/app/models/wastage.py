@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, date
+from decimal import Decimal
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -43,10 +44,10 @@ class WastageTransaction(Base):
     reason_id: Mapped[int | None] = mapped_column(
         ForeignKey("wastage_reasons.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    unit_cost: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    value: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    recoverable_value: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    value: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    recoverable_value: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     reference_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     reference_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -86,11 +87,11 @@ class WastageOrderSummary(Base):
     )
     period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
-    planned_fabric_cons: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    actual_fabric_cons: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    fabric_variance_pct: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
-    trim_wastage_value: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    total_wastage_value: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    planned_fabric_cons: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    actual_fabric_cons: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    fabric_variance_pct: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"), server_default="0")
+    trim_wastage_value: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    total_wastage_value: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     above_threshold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     snapshot_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 

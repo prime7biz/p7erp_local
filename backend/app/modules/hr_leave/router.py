@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.orm_numeric import decimal_to_money_response
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
@@ -131,8 +132,8 @@ def _leave_policy_out(row: LeavePolicy) -> LeavePolicyOut:
         tenant_id=row.tenant_id,
         leave_type_id=row.leave_type_id,
         employment_type=row.employment_type,
-        annual_quota_days=row.annual_quota_days,
-        max_carry_forward_days=row.max_carry_forward_days,
+        annual_quota_days=decimal_to_money_response(row.annual_quota_days),
+        max_carry_forward_days=decimal_to_money_response(row.max_carry_forward_days),
         effective_from=row.effective_from,
         effective_to=row.effective_to,
         is_active=row.is_active,
@@ -148,10 +149,10 @@ def _leave_balance_out(row: LeaveBalance) -> LeaveBalanceOut:
         employee_id=row.employee_id,
         leave_type_id=row.leave_type_id,
         balance_year=row.balance_year,
-        allocated_days=row.allocated_days,
-        used_days=row.used_days,
-        pending_days=row.pending_days,
-        closing_balance_days=row.closing_balance_days,
+        allocated_days=decimal_to_money_response(row.allocated_days),
+        used_days=decimal_to_money_response(row.used_days),
+        pending_days=decimal_to_money_response(row.pending_days),
+        closing_balance_days=decimal_to_money_response(row.closing_balance_days),
         created_at=row.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
     )
@@ -165,7 +166,7 @@ def _leave_request_out(row: LeaveRequest) -> LeaveRequestOut:
         leave_type_id=row.leave_type_id,
         from_date=row.from_date,
         to_date=row.to_date,
-        days_requested=row.days_requested,
+        days_requested=decimal_to_money_response(row.days_requested),
         reason=row.reason,
         status=row.status,
         requested_by=row.requested_by,

@@ -1,12 +1,15 @@
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+PayrollComponentType = Literal["EARNING", "DEDUCTION"]
 
 
 class PayrollComponentCreate(BaseModel):
     code: str = Field(..., min_length=1, max_length=24)
     name: str = Field(..., min_length=1, max_length=128)
-    component_type: str = Field(default="EARNING", min_length=1, max_length=16)
+    component_type: PayrollComponentType = "EARNING"
     calculation_type: str = Field(default="FIXED", min_length=1, max_length=24)
     default_amount: str = "0"
     gl_account_id: int | None = None
@@ -18,7 +21,7 @@ class PayrollComponentCreate(BaseModel):
 class PayrollComponentUpdate(BaseModel):
     code: str | None = Field(None, min_length=1, max_length=24)
     name: str | None = Field(None, min_length=1, max_length=128)
-    component_type: str | None = Field(None, min_length=1, max_length=16)
+    component_type: PayrollComponentType | None = None
     calculation_type: str | None = Field(None, min_length=1, max_length=24)
     default_amount: str | None = None
     gl_account_id: int | None = None

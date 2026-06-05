@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -82,8 +83,8 @@ class ChartOfAccount(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     group_id: Mapped[int] = mapped_column(ForeignKey("account_groups.id", ondelete="RESTRICT"), nullable=False, index=True)
     normal_balance: Mapped[str] = mapped_column(String(16), nullable=False, default="debit")
-    opening_balance: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    balance: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    opening_balance: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    balance: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     account_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
     maintain_fc_balance: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -169,7 +170,7 @@ class Voucher(Base):
     reference: Mapped[str | None] = mapped_column(String(64), nullable=True)
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="BDT")
     base_currency: Mapped[str] = mapped_column(String(8), nullable=False, default="BDT")
-    exchange_rate: Mapped[str] = mapped_column(String(32), nullable=False, default="1")
+    exchange_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("1"), server_default="1")
     exchange_rate_source: Mapped[str] = mapped_column(String(32), nullable=False, default="system")
     exchange_rate_fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     verification_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
@@ -233,12 +234,12 @@ class VoucherLine(Base):
     account_id: Mapped[int] = mapped_column(ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"), nullable=False, index=True)
     cost_center_id: Mapped[int | None] = mapped_column(ForeignKey("cost_centers.id", ondelete="SET NULL"), nullable=True, index=True)
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="BDT")
-    exchange_rate: Mapped[str] = mapped_column(String(32), nullable=False, default="1")
-    base_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    exchange_rate: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("1"), server_default="1")
+    base_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     is_rate_overridden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     rate_source: Mapped[str] = mapped_column(String(32), nullable=False, default="system")
     entry_type: Mapped[str] = mapped_column(String(8), nullable=False, index=True)  # DEBIT | CREDIT
-    amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Overrides chart_of_accounts.cost_nature for this line when set.
     cost_nature_override: Mapped[str | None] = mapped_column(String(24), nullable=True)
@@ -270,10 +271,10 @@ class CashForecastLine(Base):
         ForeignKey("cash_forecast_scenarios.id", ondelete="CASCADE"), nullable=False, index=True
     )
     month_label: Mapped[str] = mapped_column(String(16), nullable=False)
-    inflow: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    outflow: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    net: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    cumulative: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    inflow: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    outflow: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    net: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    cumulative: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
 
 
 class FxReceipt(Base):
@@ -285,10 +286,10 @@ class FxReceipt(Base):
     receipt_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     source_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="USD")
-    fc_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    rate_to_base: Mapped[str] = mapped_column(String(32), nullable=False, default="1")
-    base_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    settled_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    fc_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    rate_to_base: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("1"), server_default="1")
+    base_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    settled_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="OPEN", index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -310,9 +311,9 @@ class VendorBill(Base):
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
     exchange_rate_to_base: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
-    subtotal_amount: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    tax_amount: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    total_amount: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    subtotal_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    tax_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    total_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="DRAFT", index=True)
     goods_receiving_id: Mapped[int | None] = mapped_column(
         ForeignKey("goods_receiving.id", ondelete="SET NULL"), nullable=True, index=True
@@ -357,11 +358,11 @@ class VendorBillLine(Base):
     )
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    unit_price: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    line_total: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    tax_rate: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    tax_amount: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    line_total: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    tax_rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
+    tax_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
 
 
 class OutstandingBill(Base):
@@ -374,8 +375,8 @@ class OutstandingBill(Base):
     bill_type: Mapped[str] = mapped_column(String(16), nullable=False, default="PAYABLE", index=True)
     bill_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    paid_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    paid_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     currency: Mapped[str] = mapped_column(String(10), nullable=False, default="BDT")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="OPEN", index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -424,7 +425,7 @@ class BudgetLine(Base):
     cost_center_id: Mapped[int | None] = mapped_column(ForeignKey("cost_centers.id", ondelete="SET NULL"), nullable=True, index=True)
     account_id: Mapped[int | None] = mapped_column(ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True)
     period_month: Mapped[str] = mapped_column(String(7), nullable=False, index=True)  # YYYY-MM
-    amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
@@ -443,8 +444,8 @@ class BankAccount(Base):
     gl_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    opening_balance: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    current_balance: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    opening_balance: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    current_balance: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -461,9 +462,9 @@ class BankReconciliation(Base):
         ForeignKey("bank_accounts.id", ondelete="CASCADE"), nullable=False, index=True
     )
     statement_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    statement_balance: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    book_balance: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    difference_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    statement_balance: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    book_balance: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    difference_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="OPEN", index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_finalized: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
@@ -485,9 +486,9 @@ class BankStatementLine(Base):
     transaction_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reference: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    debit_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    credit_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    running_balance: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    debit_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    credit_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    running_balance: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     matched_payment_run_id: Mapped[int | None] = mapped_column(
         ForeignKey("payment_runs.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -533,7 +534,7 @@ class PaymentRun(Base):
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="DRAFT", index=True)
     base_currency: Mapped[str] = mapped_column(String(10), nullable=False, default="BDT")
-    total_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -554,10 +555,10 @@ class PaymentRunItem(Base):
         ForeignKey("outstanding_bills.id", ondelete="SET NULL"), nullable=True, index=True
     )
     party_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     source_currency: Mapped[str] = mapped_column(String(10), nullable=False, default="BDT")
-    fx_rate_to_base: Mapped[str] = mapped_column(String(32), nullable=False, default="1")
-    base_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    fx_rate_to_base: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("1"), server_default="1")
+    base_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING", index=True)
     reference: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
@@ -595,8 +596,8 @@ class BillReference(Base):
     bill_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     party_name: Mapped[str] = mapped_column(String(255), nullable=False)
     account_id: Mapped[int] = mapped_column(ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"), nullable=False, index=True)
-    original_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    pending_amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    original_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    pending_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     source_voucher_id: Mapped[int | None] = mapped_column(ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True)
     source_doc_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     source_doc_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -620,7 +621,7 @@ class BillAllocation(Base):
         ForeignKey("voucher_lines.id", ondelete="SET NULL"), nullable=True, index=True
     )
     allocation_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     account_id: Mapped[int] = mapped_column(
         ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"), nullable=False, index=True
     )

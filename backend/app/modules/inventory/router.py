@@ -6,7 +6,7 @@ from decimal import Decimal
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 from sqlalchemy import Date as SQLDate
 from sqlalchemy import case, cast, delete, desc, func, or_, select
 from sqlalchemy.types import Numeric
@@ -14,8 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.money import format_money, line_money_from_input, parse_money
+from app.common.orm_numeric import api_money_to_decimal, decimal_to_money_response
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
+from app.common.delete_guards import count_where as _count_where, ensure_vendor_deletable
+from app.common.inventory_enums import MovementType, ProcessCostType, ProcessType
 from app.common.db_errors import commit_handling_duplicate_document_code, flush_handling_duplicate_document_code
 from app.common.inventory_validation import (
     validate_non_negative_money_str,
@@ -160,7 +163,7 @@ def _purchase_order_to_out(row: PurchaseOrder, items: list[PurchaseOrderItem]) -
         source_order_id=getattr(row, "source_order_id", None),
         status=row.status,
         notes=row.notes,
-        items=list(items),
+        items=[PurchaseOrderItemOut.model_validate(i) for i in items],
     )
 
 
@@ -193,13 +196,6 @@ def _goods_receiving_to_out(row: GoodsReceiving, items: list[GoodsReceivingItem]
         signature_hash=getattr(row, "signature_hash", None),
         signed_at=getattr(row, "signed_at", None),
     )
-
-
-async def _count_where(db: AsyncSession, model, tenant_id: int, *filters) -> int:
-    stmt = select(func.count()).select_from(model).where(model.tenant_id == tenant_id)
-    for f in filters:
-        stmt = stmt.where(f)
-    return int((await db.execute(stmt)).scalar() or 0)
 
 
 async def _ensure_item_deletable(db: AsyncSession, tenant_id: int, item_id: int) -> None:
@@ -1159,6 +1155,11 @@ class PurchaseOrderItemOut(BaseModel):
     source_order_id: int | None = None
     source_quotation_line_id: int | None = None
 
+    @field_validator("quantity", "unit_price", mode="before")
+    @classmethod
+    def _coerce_po_line_money(cls, value: object) -> str:
+        return decimal_to_money_response(value)
+
     class Config:
         from_attributes = True
 
@@ -1236,6 +1237,11 @@ class GoodsReceivingItemOut(BaseModel):
     source_order_id: int | None = None
     source_bom_id: int | None = None
     source_bom_line_id: int | None = None
+
+    @field_validator("quantity", mode="before")
+    @classmethod
+    def _coerce_grn_line_qty(cls, value: object) -> str:
+        return decimal_to_money_response(value)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1467,6 +1473,11 @@ class DeliveryChallanItemOut(BaseModel):
     warehouse_id: int
     quantity: str
 
+    @field_validator("quantity", mode="before")
+    @classmethod
+    def _coerce_dc_line_qty(cls, value: object) -> str:
+        return decimal_to_money_response(value)
+
     class Config:
         from_attributes = True
 
@@ -1502,7 +1513,7 @@ def _delivery_challan_to_out(
         status=row.status,
         notes=row.notes,
         created_by_user_id=getattr(row, "created_by_user_id", None),
-        items=list(items),
+        items=[DeliveryChallanItemOut.model_validate(x) for x in items],
         order_ids=list(order_ids or []),
         verification_id=getattr(row, "verification_id", None),
         signature_hash=getattr(row, "signature_hash", None),
@@ -2277,6 +2288,7 @@ async def delete_vendor(
     row = await db.get(Vendor, vendor_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Vendor not found")
+    await ensure_vendor_deletable(db, tenant.id, vendor_id)
     await db.delete(row)
     await db.commit()
 
@@ -2455,26 +2467,7 @@ async def create_purchase_order(
     await commit_handling_duplicate_document_code(db)
     await db.refresh(row)
     items_result = await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.id))
-    return PurchaseOrderOut(
-        id=row.id,
-        tenant_id=row.tenant_id,
-        po_code=row.po_code,
-        vendor_id=row.vendor_id,
-        supplier_name=row.supplier_name,
-        order_date=row.order_date,
-        expected_date=row.expected_date,
-        currency=row.currency,
-        exchange_rate_to_base=(
-            float(row.exchange_rate_to_base) if row.exchange_rate_to_base is not None else None
-        ),
-        base_total_amount=float(row.base_total_amount) if row.base_total_amount is not None else None,
-        btb_lc_id=row.btb_lc_id,
-        source_bom_id=getattr(row, "source_bom_id", None),
-        source_order_id=getattr(row, "source_order_id", None),
-        status=row.status,
-        notes=row.notes,
-        items=list(items_result.scalars().all()),
-    )
+    return _purchase_order_to_out(row, list(items_result.scalars().all()))
 
 
 @router.patch("/purchase-orders/{po_id}/status", response_model=PurchaseOrderOut)
@@ -2496,26 +2489,7 @@ async def update_purchase_order_status(
     await db.commit()
     await db.refresh(row)
     items_result = await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.id))
-    return PurchaseOrderOut(
-        id=row.id,
-        tenant_id=row.tenant_id,
-        po_code=row.po_code,
-        vendor_id=row.vendor_id,
-        supplier_name=row.supplier_name,
-        order_date=row.order_date,
-        expected_date=row.expected_date,
-        currency=row.currency,
-        exchange_rate_to_base=(
-            float(row.exchange_rate_to_base) if row.exchange_rate_to_base is not None else None
-        ),
-        base_total_amount=float(row.base_total_amount) if row.base_total_amount is not None else None,
-        btb_lc_id=row.btb_lc_id,
-        source_bom_id=getattr(row, "source_bom_id", None),
-        source_order_id=getattr(row, "source_order_id", None),
-        status=row.status,
-        notes=row.notes,
-        items=list(items_result.scalars().all()),
-    )
+    return _purchase_order_to_out(row, list(items_result.scalars().all()))
 
 
 class LotTraceGrnLineOut(BaseModel):
@@ -2761,7 +2735,8 @@ async def create_goods_receiving(
             prev = await _sum_accepted_for_po_line_excluding_grn(db, tenant.id, p.id, None)
             ord_q = _to_float(p.quantity)
             pending = max(0.0, ord_q - prev)
-            base_qty = f"{pending:.4g}" if pending > 0 else p.quantity
+            base_qty = f"{pending:.4g}" if pending > 0 else decimal_to_money_response(p.quantity)
+            unit_price = decimal_to_money_response(p.unit_price) if p.unit_price is not None else None
             lines.append(
                 GoodsReceivingItemBody(
                     item_id=p.item_id,
@@ -2771,7 +2746,7 @@ async def create_goods_receiving(
                     purchase_order_line_id=p.id,
                     received_qty=base_qty,
                     accepted_qty=base_qty,
-                    unit_price=p.unit_price,
+                    unit_price=unit_price,
                 )
             )
     else:
@@ -2795,7 +2770,7 @@ async def create_goods_receiving(
             acc_val = f"{round(_to_float(acc) * _to_float(str(up)), 4):.4f}"
         poi_id = d.get("purchase_order_line_id")
         poi = await db.get(PurchaseOrderItem, int(poi_id)) if poi_id else None
-        ord_snap = str(poi.quantity) if poi else None
+        ord_snap = decimal_to_money_response(poi.quantity) if poi else None
         prev_snap = None
         pend_snap = None
         if poi:
@@ -2807,7 +2782,7 @@ async def create_goods_receiving(
                 goods_receiving_id=row.id,
                 item_id=int(d["item_id"]),
                 warehouse_id=wh,
-                quantity=acc,
+                quantity=api_money_to_decimal(acc),
                 lot_number=d.get("lot_number"),
                 purchase_order_line_id=int(poi_id) if poi_id else None,
                 ordered_qty=ord_snap,
@@ -3051,6 +3026,7 @@ async def list_stock_movements_ledger(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     order_id: int | None = Query(default=None),
+    movement_type: MovementType | None = Query(default=None),
     movement_kind: str | None = Query(default=None),
     limit: int = Query(200, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(0, ge=0),
@@ -3059,6 +3035,8 @@ async def list_stock_movements_ledger(
     stmt = select(StockMovement).where(StockMovement.tenant_id == tenant.id)
     if order_id is not None:
         stmt = stmt.where(StockMovement.order_id == order_id)
+    if movement_type is not None:
+        stmt = stmt.where(StockMovement.movement_type == movement_type)
     if movement_kind:
         stmt = stmt.where(StockMovement.movement_kind == movement_kind)
     stmt = stmt.order_by(StockMovement.id.desc()).offset(offset).limit(limit)
@@ -3939,7 +3917,7 @@ CONSUMPTION_TOLERANCE_PCT = 2.0
 
 class ProcessOrderBody(BaseModel):
     process_number: str | None = None
-    process_type: str
+    process_type: ProcessType
     process_method: str = "in_house"
     linked_order_id: int | None = None
     warehouse_id: int | None = None
@@ -4063,7 +4041,7 @@ class ProductionMaterialIssueDetailOut(ProductionMaterialIssueOut):
 
 
 class ProcessOrderCostLineBody(BaseModel):
-    cost_type: str = "ADD_ON"
+    cost_type: ProcessCostType = "ADD_ON"
     description: str | None = None
     amount: str
     vendor_id: int | None = None

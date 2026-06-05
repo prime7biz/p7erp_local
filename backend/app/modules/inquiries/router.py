@@ -10,6 +10,7 @@ from app.common.money import format_money, format_rate, parse_money
 from app.common.pagination import clamp_page_size, safe_page, total_pages
 from app.common.codegen import next_tenant_code
 from app.common.db_errors import flush_handling_duplicate_document_code
+from app.common.delete_guards import ensure_inquiry_deletable
 from app.common.tenant import require_tenant
 from app.common.workflow import INQUIRY_TRANSITIONS, next_status_options, validate_transition
 from app.database import get_db
@@ -603,6 +604,7 @@ async def delete_inquiry(
   inquiry = await db.get(Inquiry, inquiry_id)
   if not inquiry or inquiry.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
+  await ensure_inquiry_deletable(db, tenant.id, inquiry_id)
   await db.execute(
     delete(InquiryItem).where(
       InquiryItem.tenant_id == tenant.id, InquiryItem.inquiry_id == inquiry.id

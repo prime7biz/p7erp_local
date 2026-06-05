@@ -23,15 +23,19 @@ from app.modules.hr_recruitment.schemas import (
     CandidateCreate,
     CandidateResponse,
     CandidateStageUpdate,
+    CandidateUpdate,
     InterviewCreate,
     InterviewResponse,
     InterviewStatusUpdate,
+    InterviewUpdate,
     OfferCreate,
     OfferResponse,
     OfferStatusUpdate,
+    OfferUpdate,
     RequisitionCreate,
     RequisitionResponse,
     RequisitionStatusUpdate,
+    RequisitionUpdate,
 )
 
 router = APIRouter(prefix="/hr/recruitment", tags=["hr-recruitment"])
@@ -222,6 +226,51 @@ async def create_requisition(
     return _requisition_to_response(row)
 
 
+@router.patch("/requisitions/{requisition_id}", response_model=RequisitionResponse)
+async def update_requisition(
+    requisition_id: int,
+    body: RequisitionUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    row = await _get_requisition_or_404(db, tenant.id, requisition_id)
+    if row.status in {"closed", "filled", "cancelled"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Requisition cannot be edited in its current status")
+    payload = body.model_dump(exclude_unset=True)
+    if "title" in payload and payload["title"] is not None:
+        row.title = payload["title"].strip()
+    if "department_id" in payload:
+        if payload["department_id"] is not None:
+            department = await db.get(Department, payload["department_id"])
+            if not department or department.tenant_id != tenant.id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found")
+        row.department_id = payload["department_id"]
+    if "hiring_manager_employee_id" in payload:
+        if payload["hiring_manager_employee_id"] is not None:
+            manager = await db.get(Employee, payload["hiring_manager_employee_id"])
+            if not manager or manager.tenant_id != tenant.id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hiring manager employee not found")
+        row.hiring_manager_employee_id = payload["hiring_manager_employee_id"]
+    if "vacancy_count" in payload and payload["vacancy_count"] is not None:
+        row.vacancy_count = payload["vacancy_count"]
+    if "employment_type" in payload:
+        row.employment_type = payload["employment_type"].strip() if payload["employment_type"] else None
+    if "location" in payload:
+        row.location = payload["location"].strip() if payload["location"] else None
+    if "budget_min" in payload:
+        row.budget_min = payload["budget_min"]
+    if "budget_max" in payload:
+        row.budget_max = payload["budget_max"]
+    if "description" in payload:
+        row.description = payload["description"].strip() if payload["description"] else None
+    await db.commit()
+    await db.refresh(row)
+    return _requisition_to_response(row)
+
+
 @router.post("/requisitions/{requisition_id}/status", response_model=RequisitionResponse)
 async def update_requisition_status(
     requisition_id: int,
@@ -297,6 +346,44 @@ async def create_candidate(
     return _candidate_to_response(row)
 
 
+@router.patch("/candidates/{candidate_id}", response_model=CandidateResponse)
+async def update_candidate(
+    candidate_id: int,
+    body: CandidateUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    row = await _get_candidate_or_404(db, tenant.id, candidate_id)
+    payload = body.model_dump(exclude_unset=True)
+    if "requisition_id" in payload:
+        if payload["requisition_id"] is not None:
+            await _get_requisition_or_404(db, tenant.id, payload["requisition_id"])
+        row.requisition_id = payload["requisition_id"]
+    if "full_name" in payload and payload["full_name"] is not None:
+        row.full_name = payload["full_name"].strip()
+    if "email" in payload:
+        row.email = payload["email"].strip() if payload["email"] else None
+    if "phone" in payload:
+        row.phone = payload["phone"].strip() if payload["phone"] else None
+    if "source" in payload:
+        row.source = payload["source"].strip() if payload["source"] else None
+    if "current_company" in payload:
+        row.current_company = payload["current_company"].strip() if payload["current_company"] else None
+    if "current_designation" in payload:
+        row.current_designation = payload["current_designation"].strip() if payload["current_designation"] else None
+    if "expected_salary" in payload:
+        row.expected_salary = payload["expected_salary"]
+    if "resume_url" in payload:
+        row.resume_url = payload["resume_url"].strip() if payload["resume_url"] else None
+    if "notes" in payload:
+        row.notes = payload["notes"].strip() if payload["notes"] else None
+    await db.commit()
+    await db.refresh(row)
+    return _candidate_to_response(row)
+
+
 @router.post("/candidates/{candidate_id}/stage", response_model=CandidateResponse)
 async def update_candidate_stage(
     candidate_id: int,
@@ -367,6 +454,43 @@ async def create_interview(
     return _interview_to_response(row)
 
 
+@router.patch("/interviews/{interview_id}", response_model=InterviewResponse)
+async def update_interview(
+    interview_id: int,
+    body: InterviewUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    row = await _get_interview_or_404(db, tenant.id, interview_id)
+    is_interviewer = row.interviewer_user_id == user.id
+    if not is_interviewer:
+        await _require_manager_or_admin(db, user, tenant.id)
+    if row.status in {"completed", "cancelled"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Interview cannot be edited in its current status")
+    payload = body.model_dump(exclude_unset=True)
+    if "requisition_id" in payload:
+        if payload["requisition_id"] is not None:
+            await _get_requisition_or_404(db, tenant.id, payload["requisition_id"])
+        row.requisition_id = payload["requisition_id"]
+    if "interviewer_employee_id" in payload:
+        if payload["interviewer_employee_id"] is not None:
+            interviewer = await db.get(Employee, payload["interviewer_employee_id"])
+            if not interviewer or interviewer.tenant_id != tenant.id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interviewer employee not found")
+        row.interviewer_employee_id = payload["interviewer_employee_id"]
+    if "scheduled_at" in payload and payload["scheduled_at"] is not None:
+        row.scheduled_at = payload["scheduled_at"]
+    if "mode" in payload:
+        row.mode = payload["mode"].strip() if payload["mode"] else None
+    if "location" in payload:
+        row.location = payload["location"].strip() if payload["location"] else None
+    await db.commit()
+    await db.refresh(row)
+    return _interview_to_response(row)
+
+
 @router.post("/interviews/{interview_id}/status", response_model=InterviewResponse)
 async def update_interview_status(
     interview_id: int,
@@ -432,6 +556,39 @@ async def create_offer(
         status="draft",
     )
     db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return _offer_to_response(row)
+
+
+@router.patch("/offers/{offer_id}", response_model=OfferResponse)
+async def update_offer(
+    offer_id: int,
+    body: OfferUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    row = await _get_offer_or_404(db, tenant.id, offer_id)
+    if row.status not in {"draft"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Offer can only be edited while draft")
+    payload = body.model_dump(exclude_unset=True)
+    if "requisition_id" in payload:
+        if payload["requisition_id"] is not None:
+            await _get_requisition_or_404(db, tenant.id, payload["requisition_id"])
+        row.requisition_id = payload["requisition_id"]
+    if "offered_role" in payload and payload["offered_role"] is not None:
+        row.offered_role = payload["offered_role"].strip()
+    if "proposed_salary" in payload:
+        row.proposed_salary = payload["proposed_salary"]
+    if "currency" in payload and payload["currency"] is not None:
+        row.currency = payload["currency"].strip().upper()
+    if "joining_date" in payload:
+        row.joining_date = payload["joining_date"]
+    if "notes" in payload:
+        row.notes = payload["notes"].strip() if payload["notes"] else None
     await db.commit()
     await db.refresh(row)
     return _offer_to_response(row)

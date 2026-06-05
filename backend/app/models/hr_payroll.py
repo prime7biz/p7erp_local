@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,7 +19,7 @@ class PayrollComponent(Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     component_type: Mapped[str] = mapped_column(String(16), nullable=False, default="EARNING", index=True)
     calculation_type: Mapped[str] = mapped_column(String(24), nullable=False, default="FIXED")
-    default_amount: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
+    default_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     gl_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -57,7 +58,7 @@ class PayrollStructureLine(Base):
     component_id: Mapped[int] = mapped_column(
         ForeignKey("hr_payroll_components.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    amount: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     formula: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -91,9 +92,9 @@ class PayrollRun(Base):
     run_code: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
     run_date: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="DRAFT", index=True)
-    gross_total: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
-    deduction_total: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
-    net_total: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
+    gross_total: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    deduction_total: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    net_total: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     finalized_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -114,10 +115,10 @@ class PayrollRunLine(Base):
     structure_id: Mapped[int | None] = mapped_column(
         ForeignKey("hr_payroll_structures.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    gross_pay: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
-    deductions: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
-    net_pay: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
-    overtime_amount: Mapped[str] = mapped_column(String(16), nullable=False, default="0")
+    gross_pay: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    deductions: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    net_pay: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    overtime_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

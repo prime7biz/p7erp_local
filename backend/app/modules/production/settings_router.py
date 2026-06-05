@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.delete_guards import ensure_shift_deletable
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -294,6 +295,7 @@ async def delete_shift(
     row = await db.get(ProductionShift, shift_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(404, "Shift not found")
+    await ensure_shift_deletable(db, tenant.id, shift_id)
     await db.delete(row)
     await db.commit()
 

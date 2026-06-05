@@ -23,8 +23,10 @@ from app.modules.manufacturing.schemas import (
     OperationUpdate,
     RoutingStepCreate,
     RoutingStepResponse,
+    RoutingStepUpdate,
     RoutingTemplateCreate,
     RoutingTemplateResponse,
+    RoutingTemplateUpdate,
     WorkCenterCreate,
     WorkCenterResponse,
     WorkCenterUpdate,
@@ -288,6 +290,34 @@ async def create_routing_template(
     return _to_routing_response(row)
 
 
+@router.patch("/routing-templates/{routing_id}", response_model=RoutingTemplateResponse)
+async def update_routing_template(
+    routing_id: int,
+    body: RoutingTemplateUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(ManufacturingRoutingTemplate, routing_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Routing template not found")
+    payload = body.model_dump(exclude_unset=True)
+    if "routing_code" in payload and payload["routing_code"] is not None:
+        row.routing_code = payload["routing_code"].strip()
+    if "is_active" in payload and payload["is_active"] is not None:
+        row.is_active = payload["is_active"]
+    if "notes" in payload:
+        row.notes = payload["notes"].strip() if payload["notes"] else None
+    try:
+        await db.commit()
+    except IntegrityError:
+        await safe_async_session_rollback(db)
+        raise HTTPException(status_code=400, detail="Routing code/version already exists")
+    await db.refresh(row)
+    return _to_routing_response(row)
+
+
 @router.get("/routing-templates/{routing_id}/steps", response_model=list[RoutingStepResponse])
 async def list_routing_steps(
     routing_id: int,
@@ -335,6 +365,49 @@ async def add_routing_step(
             raise HTTPException(status_code=404, detail="Work center not found")
     row = ManufacturingRoutingStep(tenant_id=tenant.id, routing_id=routing_id, **body.model_dump())
     db.add(row)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await safe_async_session_rollback(db)
+        raise HTTPException(status_code=400, detail="Step number already exists for this routing")
+    await db.refresh(row)
+    return _to_routing_step_response(row)
+
+
+@router.patch("/routing-templates/{routing_id}/steps/{step_id}", response_model=RoutingStepResponse)
+async def update_routing_step(
+    routing_id: int,
+    step_id: int,
+    body: RoutingStepUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    routing = await db.get(ManufacturingRoutingTemplate, routing_id)
+    if not routing or routing.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Routing template not found")
+    row = await db.get(ManufacturingRoutingStep, step_id)
+    if not row or row.tenant_id != tenant.id or row.routing_id != routing_id:
+        raise HTTPException(status_code=404, detail="Routing step not found")
+    payload = body.model_dump(exclude_unset=True)
+    if "operation_id" in payload and payload["operation_id"] is not None:
+        op = await db.get(ManufacturingOperation, payload["operation_id"])
+        if not op or op.tenant_id != tenant.id:
+            raise HTTPException(status_code=404, detail="Operation not found")
+        row.operation_id = payload["operation_id"]
+    if "work_center_id" in payload:
+        if payload["work_center_id"] is not None:
+            wc = await db.get(ManufacturingWorkCenter, payload["work_center_id"])
+            if not wc or wc.tenant_id != tenant.id:
+                raise HTTPException(status_code=404, detail="Work center not found")
+        row.work_center_id = payload["work_center_id"]
+    if "step_no" in payload and payload["step_no"] is not None:
+        row.step_no = payload["step_no"]
+    if "std_minutes" in payload:
+        row.std_minutes = payload["std_minutes"]
+    if "qc_required" in payload and payload["qc_required"] is not None:
+        row.qc_required = payload["qc_required"]
     try:
         await db.commit()
     except IntegrityError:

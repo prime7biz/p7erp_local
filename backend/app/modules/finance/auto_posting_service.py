@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.orm_numeric import decimal_to_money_response, decimal_to_rate_response
 from app.models.finance import (
     AccountGroup,
     AccountingPeriod,
@@ -65,10 +66,10 @@ def _voucher_signature_payload(voucher: Voucher, lines: list[VoucherLine]) -> di
             "account_id": line.account_id,
             "cost_center_id": line.cost_center_id,
             "entry_type": line.entry_type,
-            "amount": line.amount,
-            "base_amount": line.base_amount,
+            "amount": decimal_to_money_response(line.amount),
+            "base_amount": decimal_to_money_response(line.base_amount),
             "currency": line.currency,
-            "exchange_rate": line.exchange_rate,
+            "exchange_rate": decimal_to_rate_response(line.exchange_rate),
             "notes": line.notes,
         }
         for line in lines
@@ -81,7 +82,7 @@ def _voucher_signature_payload(voucher: Voucher, lines: list[VoucherLine]) -> di
         "status": voucher.status,
         "currency": voucher.currency,
         "base_currency": voucher.base_currency,
-        "exchange_rate": voucher.exchange_rate,
+        "exchange_rate": decimal_to_rate_response(voucher.exchange_rate),
         "lines": serialized_lines,
     }
 

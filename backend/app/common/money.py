@@ -38,8 +38,12 @@ def parse_money(val: str | int | float | Decimal | None) -> Decimal | None:
         return None
 
 
-def format_money(val: Decimal | None, *, quantize: str = "0.0001") -> str | None:
+def format_money(val: Decimal | str | int | float | None, *, quantize: str = "0.0001") -> str | None:
     """Serialize Decimal to string for backward-compatible JSON (matches legacy string headers)."""
+    if val is None:
+        return None
+    if not isinstance(val, Decimal):
+        val = parse_money(val)
     if val is None:
         return None
     try:
@@ -49,7 +53,7 @@ def format_money(val: Decimal | None, *, quantize: str = "0.0001") -> str | None
         return None
 
 
-def format_rate(val: Decimal | None) -> str | None:
+def format_rate(val: Decimal | str | int | float | None) -> str | None:
     """FX / unit rates — 6 decimal places (RATE_PRECISION)."""
     return format_money(val, quantize="0.000001")
 

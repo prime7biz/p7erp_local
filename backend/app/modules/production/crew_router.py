@@ -8,6 +8,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.delete_guards import ensure_crew_role_deletable
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -483,6 +484,7 @@ async def delete_crew_role(
     row = await db.get(ProductionCrewRole, crew_role_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(404, "Crew role not found")
+    await ensure_crew_role_deletable(db, tenant.id, crew_role_id)
     await db.delete(row)
     await db.commit()
 

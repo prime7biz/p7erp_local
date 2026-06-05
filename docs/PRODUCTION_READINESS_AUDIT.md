@@ -103,6 +103,7 @@ Align with **production architecture** rules:
 
 ## 10. Module and business readiness
 
+- [ ] **Tenant-type checklist:** [`GO_LIVE_READINESS_BOTH_TENANT_TYPES.md`](./GO_LIVE_READINESS_BOTH_TENANT_TYPES.md) completed for `manufacturer`, `buying_house`, or `both`.
 - [ ] **Finance (if live):** Criteria in [`FINANCE_GO_LIVE_CRITERIA.md`](./FINANCE_GO_LIVE_CRITERIA.md) satisfied; UAT evidence stored.
 - [ ] **Inventory / merch / HR (as applicable):** Business owner sign-off on the workflows you are enabling in v1; training or quick-reference prepared.
 - [ ] **Cutover:** If migrating from another system, cutover steps and rollback are written (see finance cutover doc if finance is in scope: `FINANCE_CUTOVER_PLAN.md`).

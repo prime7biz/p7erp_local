@@ -8,6 +8,7 @@ from app.common.auth import get_current_user
 from app.common.pagination import clamp_page_size, safe_page, total_pages
 from app.common.codegen import next_tenant_code
 from app.common.db_errors import flush_handling_duplicate_document_code
+from app.common.delete_guards import ensure_order_deletable
 from app.common.tenant import require_tenant
 from app.common.workflow import (
   ORDER_TRANSITIONS,
@@ -847,6 +848,7 @@ async def delete_order(
   order = await db.get(Order, order_id)
   if not order or order.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+  await ensure_order_deletable(db, tenant.id, order_id)
   await db.delete(order)
   await db.flush()
 

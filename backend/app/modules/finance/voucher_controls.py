@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.codegen import next_tenant_code_entity_key
+from app.common.orm_numeric import decimal_to_money_response, decimal_to_rate_response
 from app.models import AccountGroup, ChartOfAccount, CostCenter, Voucher, VoucherLine
 
 
@@ -245,10 +246,10 @@ async def build_posted_snapshot_json(
                 "cost_center_id": line.cost_center_id,
                 "cost_center_label": cc_map.get(line.cost_center_id) if line.cost_center_id else None,
                 "entry_type": line.entry_type,
-                "amount": line.amount,
+                "amount": decimal_to_money_response(line.amount),
                 "currency": line.currency,
-                "exchange_rate": line.exchange_rate,
-                "base_amount": line.base_amount,
+                "exchange_rate": decimal_to_rate_response(line.exchange_rate),
+                "base_amount": decimal_to_money_response(line.base_amount),
                 "notes": line.notes,
             }
         )
@@ -262,7 +263,7 @@ async def build_posted_snapshot_json(
         "reference": voucher.reference,
         "currency": voucher.currency,
         "base_currency": voucher.base_currency,
-        "exchange_rate": voucher.exchange_rate,
+        "exchange_rate": decimal_to_rate_response(voucher.exchange_rate),
         "branch_code": voucher.branch_code,
         "fiscal_year": voucher.fiscal_year,
         "instrument_reference": voucher.instrument_reference,

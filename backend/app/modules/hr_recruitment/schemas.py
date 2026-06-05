@@ -15,6 +15,18 @@ class RequisitionCreate(BaseModel):
     description: str | None = None
 
 
+class RequisitionUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    department_id: int | None = None
+    hiring_manager_employee_id: int | None = None
+    vacancy_count: int | None = Field(default=None, ge=1, le=999)
+    employment_type: str | None = Field(None, max_length=32)
+    location: str | None = Field(None, max_length=255)
+    budget_min: float | None = Field(None, ge=0)
+    budget_max: float | None = Field(None, ge=0)
+    description: str | None = None
+
+
 class RequisitionStatusUpdate(BaseModel):
     status: str = Field(..., min_length=1, max_length=32)
 
@@ -42,6 +54,19 @@ class RequisitionResponse(BaseModel):
 class CandidateCreate(BaseModel):
     requisition_id: int | None = None
     full_name: str = Field(..., min_length=1, max_length=255)
+    email: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, max_length=32)
+    source: str | None = Field(None, max_length=64)
+    current_company: str | None = Field(None, max_length=255)
+    current_designation: str | None = Field(None, max_length=255)
+    expected_salary: float | None = Field(None, ge=0)
+    resume_url: str | None = Field(None, max_length=512)
+    notes: str | None = None
+
+
+class CandidateUpdate(BaseModel):
+    requisition_id: int | None = None
+    full_name: str | None = Field(default=None, min_length=1, max_length=255)
     email: str | None = Field(None, max_length=255)
     phone: str | None = Field(None, max_length=32)
     source: str | None = Field(None, max_length=64)
@@ -86,6 +111,14 @@ class InterviewCreate(BaseModel):
     location: str | None = Field(None, max_length=255)
 
 
+class InterviewUpdate(BaseModel):
+    requisition_id: int | None = None
+    interviewer_employee_id: int | None = None
+    scheduled_at: datetime | None = None
+    mode: str | None = Field(None, max_length=32)
+    location: str | None = Field(None, max_length=255)
+
+
 class InterviewStatusUpdate(BaseModel):
     status: str = Field(..., min_length=1, max_length=32)
     feedback: str | None = None
@@ -115,6 +148,15 @@ class OfferCreate(BaseModel):
     offered_role: str = Field(..., min_length=1, max_length=255)
     proposed_salary: float | None = Field(None, ge=0)
     currency: str = Field(default="BDT", min_length=1, max_length=8)
+    joining_date: date | None = None
+    notes: str | None = None
+
+
+class OfferUpdate(BaseModel):
+    requisition_id: int | None = None
+    offered_role: str | None = Field(default=None, min_length=1, max_length=255)
+    proposed_salary: float | None = Field(None, ge=0)
+    currency: str | None = Field(default=None, min_length=1, max_length=8)
     joining_date: date | None = None
     notes: str | None = None
 

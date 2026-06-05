@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, date
+from decimal import Decimal
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -154,8 +155,8 @@ class PurchaseOrderItem(Base):
     )
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
-    quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    unit_price: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     source_bom_id: Mapped[int | None] = mapped_column(
         ForeignKey("boms.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -240,7 +241,7 @@ class GoodsReceivingItem(Base):
     )
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
     warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False, index=True)
-    quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     lot_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
     purchase_order_line_id: Mapped[int | None] = mapped_column(
         ForeignKey("purchase_order_items.id", ondelete="SET NULL"), nullable=True, index=True
@@ -331,7 +332,7 @@ class StockMovement(Base):
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
     movement_type: Mapped[str] = mapped_column(String(16), nullable=False, index=True)  # IN|OUT|ADJUST
-    quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     reference_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     reference_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     movement_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -414,9 +415,9 @@ class InventoryCostLayer(Base):
     source_movement_id: Mapped[int] = mapped_column(
         ForeignKey("stock_movements.id", ondelete="CASCADE"), nullable=False, unique=True
     )
-    qty_original: Mapped[str] = mapped_column(String(32), nullable=False)
-    qty_remaining: Mapped[str] = mapped_column(String(32), nullable=False)
-    unit_cost: Mapped[str] = mapped_column(String(32), nullable=False)
+    qty_original: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    qty_remaining: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     layer_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
@@ -466,7 +467,7 @@ class PhysicalInventoryLine(Base):
         ForeignKey("physical_inventory_sessions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
-    expected_qty: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    expected_qty: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     counted_qty: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
@@ -503,7 +504,7 @@ class DeliveryChallanItem(Base):
     )
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
     warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False, index=True)
-    quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
@@ -576,10 +577,10 @@ class ProcessOrder(Base):
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True)
     input_item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
     output_item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
-    input_quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    expected_output_qty: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    input_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    expected_output_qty: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     actual_output_qty: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    processing_charges: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    processing_charges: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     process_stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -631,7 +632,7 @@ class ProcessOrderCostLine(Base):
     cost_type: Mapped[str] = mapped_column(String(64), nullable=False)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     vendor_id: Mapped[int | None] = mapped_column(ForeignKey("vendors.id", ondelete="SET NULL"), nullable=True, index=True)
-    amount: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -644,8 +645,8 @@ class ManufacturingOrder(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     mo_number: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     finished_item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
-    planned_quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
-    completed_quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    planned_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
+    completed_quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     current_stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft", index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -715,7 +716,7 @@ class WarehouseTransferLine(Base):
         ForeignKey("warehouse_transfers.id", ondelete="CASCADE"), nullable=False, index=True
     )
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
-    quantity: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
@@ -728,7 +729,7 @@ class StockAdjustment(Base):
     adjust_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False, index=True)
     item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
-    quantity: Mapped[str] = mapped_column(String(32), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     reason_code: Mapped[str] = mapped_column(String(32), nullable=False, default="OTHER")
     adjustment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
@@ -787,7 +788,7 @@ class ProductionMaterialIssueLine(Base):
     standard_qty_for_covered: Mapped[str | None] = mapped_column(String(32), nullable=True)
     planned_wastage_qty: Mapped[str | None] = mapped_column(String(32), nullable=True)
     planned_process_loss_qty: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    actual_issue_qty: Mapped[str] = mapped_column(String(32), nullable=False, default="0")
+    actual_issue_qty: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     variance_qty: Mapped[str | None] = mapped_column(String(32), nullable=True)
     variance_pct: Mapped[str | None] = mapped_column(String(32), nullable=True)
     variance_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

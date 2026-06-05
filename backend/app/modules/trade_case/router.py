@@ -241,6 +241,7 @@ async def create_trade_case(
     await _ensure_tenant_user(user, tenant)
     await _ensure_default_stages(db, tenant.id)
     payload = body.model_dump()
+    payload.pop("notes", None)
     payload["direction"] = str(payload.get("direction") or "EXPORT").strip().upper()
     payload["status"] = str(payload.get("status") or "DRAFT").strip().upper()
     payload["current_stage"] = str(payload.get("current_stage") or "DRAFT").strip().upper()

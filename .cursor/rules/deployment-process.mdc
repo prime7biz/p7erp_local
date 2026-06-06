@@ -89,7 +89,7 @@ git push origin vX.Y.Z
 
 Poll workflows where `head_branch` is the new tag until **Deploy** completes.
 
-- **Build success + SSH failure:** Images are on Docker Hub; give manual server commands:
+- **Build success + SSH failure:** Often `DEPLOY_USER` is `primeadmin` but only `root` has the SSH key — set `DEPLOY_USER=root` in GitHub secrets (`DEPLOY_PATH=/home/primeadmin/p7erp_local`). Workflow runs docker as `primeadmin` via `sudo`. Images are on Docker Hub; give manual server commands:
 
 ```bash
 cd <DEPLOY_PATH>

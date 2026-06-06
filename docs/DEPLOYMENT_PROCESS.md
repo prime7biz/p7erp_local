@@ -101,6 +101,17 @@ docker compose -f docker-compose.prod.yml exec -T backend alembic current
 
 ## If GitHub SSH deploy fails
 
+**Common cause (prime7erp.com):** GitHub secret `DEPLOY_USER` must be **`root`** (SSH login). Docker commands run as **`primeadmin`** via `sudo` inside `.github/workflows/deploy.yml`. Using `primeadmin` as `DEPLOY_USER` fails if that user has no SSH key.
+
+**GitHub secrets checklist:**
+
+| Secret | Example value |
+|--------|----------------|
+| `DEPLOY_HOST` | `188.245.156.127` |
+| `DEPLOY_USER` | `root` |
+| `DEPLOY_PATH` | `/home/primeadmin/p7erp_local` |
+| `DEPLOY_SSH_KEY` | Private key that can `ssh root@DEPLOY_HOST` |
+
 Docker images may still be built. Run manually on the server:
 
 ```bash

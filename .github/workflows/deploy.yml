@@ -65,20 +65,30 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Deploy with SSH
-        uses: appleboy/ssh-action@v1.0.0
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          command_timeout: 30m
           script: |
-            cd ${{ secrets.DEPLOY_PATH }}
-            git pull origin main
-            touch .env
-            # Clear old pins, then set explicit images (ref is the v* tag for this job, never :latest).
-            sed -i '/^BACKEND_IMAGE=/d;/^FRONTEND_IMAGE=/d;/^APP_VERSION=/d' .env
-            echo "BACKEND_IMAGE=prime7biz/p7erp-backend:${{ github.ref_name }}" >> .env
-            echo "FRONTEND_IMAGE=prime7biz/p7erp-frontend:${{ github.ref_name }}" >> .env
-            echo "APP_VERSION=${{ github.ref_name }}" >> .env
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
-            docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
+            set -euo pipefail
+            APP_DIR="${{ secrets.DEPLOY_PATH }}"
+            APP_RUN_USER="primeadmin"
+            TAG="${{ github.ref_name }}"
+            # SSH login is often root; docker compose runs as primeadmin on the live host.
+            sudo -u "${APP_RUN_USER}" -H bash -lc "
+              set -euo pipefail
+              cd \"${APP_DIR}\"
+              git pull origin main
+              touch .env
+              sed -i '/^BACKEND_IMAGE=/d;/^FRONTEND_IMAGE=/d;/^APP_VERSION=/d' .env
+              echo \"BACKEND_IMAGE=prime7biz/p7erp-backend:${TAG}\" >> .env
+              echo \"FRONTEND_IMAGE=prime7biz/p7erp-frontend:${TAG}\" >> .env
+              echo \"APP_VERSION=${TAG}\" >> .env
+              docker compose -f docker-compose.prod.yml pull
+              docker compose -f docker-compose.prod.yml up -d
+              docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
+              docker compose -f docker-compose.prod.yml exec -T backend alembic current
+            "

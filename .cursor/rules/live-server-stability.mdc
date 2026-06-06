@@ -1,11 +1,15 @@
 ---
-description: Live server stability — guard rails because every git push auto-deploys to production
+description: Live server stability — guard rails for production releases
 alwaysApply: true
 ---
 
 # Live server stability is non-negotiable
 
-Every push to **`main`** auto-deploys to the live server via Docker. Treat **every** change going to `main` like a production change. When in doubt, choose the safer, smaller, reversible option.
+**Deploy mechanics** (see `.github/workflows/deploy.yml` and `.cursor/rules/deployment-process.mdc`):
+- Push to **`main`** → CI + Docker image build/push only (does **not** SSH to production).
+- Push a **`v*` tag** → SSH production deploy + `alembic upgrade head`.
+
+When the user says **deploy**, follow the full checklist in `.cursor/rules/deployment-process.mdc`. Treat **every** change going to `main` like it may soon reach production. When in doubt, choose the safer, smaller, reversible option.
 
 ## Default posture for every change
 

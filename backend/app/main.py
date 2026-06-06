@@ -192,7 +192,7 @@ async def _run_trade_alert_scan_daily() -> None:
 
 async def _run_platform_daily_maintenance() -> None:
     """Daily: usage aggregation, overdue invoices, AI budget month reset, backup schedules."""
-    from app.database import AsyncSessionLocal
+    from app.database import AsyncSessionLocal, safe_async_session_rollback
     from app.modules.admin.tasks import run_platform_daily_maintenance
 
     while True:
@@ -202,8 +202,12 @@ async def _run_platform_daily_maintenance() -> None:
                 if not await try_acquire_background_lock(db, LOCK_PLATFORM_MAINTENANCE):
                     continue
                 try:
-                    await run_platform_daily_maintenance(db)
-                    await db.commit()
+                    try:
+                        await run_platform_daily_maintenance(db)
+                        await db.commit()
+                    except Exception:
+                        await safe_async_session_rollback(db)
+                        raise
                 finally:
                     await release_background_lock(db, LOCK_PLATFORM_MAINTENANCE)
                     await db.commit()

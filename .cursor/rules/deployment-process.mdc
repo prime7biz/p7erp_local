@@ -1,0 +1,145 @@
+---
+description: Standard production deploy workflow — run when user says deploy, release, or push to live
+alwaysApply: true
+---
+
+# Standard deployment process
+
+**Trigger:** When the user says **`deploy`**, **`release`**, or **`push to live`**, execute **all phases below end-to-end**. Do not stop after commit or after `git push origin main`.
+
+**How production deploy works** (see `.github/workflows/deploy.yml`):
+- Push to **`main`** → CI + Docker image build/push only (no SSH to live server).
+- Push **`v*` tag** → SSH deploy + `alembic upgrade head` on production.
+
+Human runbook mirror: `docs/DEPLOYMENT_PROCESS.md`. Cutover detail: `docs/GO_LIVE_CUTOVER_RUNBOOK.md`.
+
+---
+
+## Phase 0 — Pre-flight (local Docker)
+
+Run from repo root. **Stop deploy if any step fails.**
+
+```powershell
+docker compose exec backend pytest -q
+docker compose exec backend python -c "import app.main"
+docker compose exec backend alembic current
+cd frontend; npm run lint; npm run build
+```
+
+---
+
+## Phase 1 — Commit
+
+Follow git safety protocol (`git status`, `git diff`, `git log -5`). User saying **deploy** implies commit is OK.
+
+- Stage only `backend/`, `frontend/`, `docs/`.
+- **Never** stage: `__pycache__/`, `.pytest_cache/`, `backend/media/`, `frontend/dist/`, `.env`, credentials.
+- Use a clear commit message (feat/fix/chore + why).
+
+Skip if working tree is already clean.
+
+---
+
+## Phase 2 — Push main
+
+```powershell
+git push origin main
+```
+
+Tell the user: this builds images on GitHub; it does **not** update the live server yet.
+
+---
+
+## Phase 3 — Wait for CI on main
+
+Poll GitHub Actions until **CI**, **Deploy** (build job), and **Docker Hub Build** on `main` are `completed` / `success`. Retry every 60–90s; timeout ~15 min.
+
+**Windows:** Do not use host `gh` (npm shim breaks). Poll via Docker Python:
+
+```powershell
+docker compose exec -T backend python -c "import json,urllib.request; d=json.load(urllib.request.urlopen('https://api.github.com/repos/prime7biz/p7erp_local/actions/runs?per_page=8')); sha=open('.git/refs/heads/main').read().strip()[:7]; [print(r['name'], r['status'], r.get('conclusion')) for r in d['workflow_runs'] if r['head_sha'].startswith(sha)]"
+```
+
+**Hard stop** if CI fails. Do not tag.
+
+---
+
+## Phase 4 — Pre-tag gates
+
+1. **DB backup:** If the release includes new Alembic revisions, remind the user to confirm a **production PostgreSQL backup** before tagging. Hard stop until acknowledged.
+2. **Semver tag:** `git tag -l "v*" --sort=-v:refname` → pick next version:
+   - **patch** (v1.5.0 → v1.5.1): bug fixes, small single-module tweaks
+   - **minor** (v1.5.0 → v1.6.0): features, API additions, migrations, multi-module work
+   - **major:** ask user first
+   State chosen tag and **rollback pin** (previous tag) before creating the tag.
+3. **Migrations:** Warn that tag deploy runs `alembic upgrade head` on live.
+
+---
+
+## Phase 5 — Tag and push tag
+
+```powershell
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+---
+
+## Phase 6 — Monitor tag deploy
+
+Poll workflows where `head_branch` is the new tag until **Deploy** completes.
+
+- **Build success + SSH failure:** Images are on Docker Hub; give manual server commands:
+
+```bash
+cd <DEPLOY_PATH>
+git pull origin main
+touch .env
+sed -i '/^BACKEND_IMAGE=/d;/^FRONTEND_IMAGE=/d;/^APP_VERSION=/d' .env
+echo "BACKEND_IMAGE=prime7biz/p7erp-backend:vX.Y.Z" >> .env
+echo "FRONTEND_IMAGE=prime7biz/p7erp-frontend:vX.Y.Z" >> .env
+echo "APP_VERSION=vX.Y.Z" >> .env
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
+docker compose -f docker-compose.prod.yml exec -T backend alembic current
+```
+
+---
+
+## Phase 7 — Post-deploy smoke (within 15 min)
+
+| Check | Action |
+|-------|--------|
+| Health | `GET /api/health` or backend `/health` → 200 |
+| Login | Company code + user at https://prime7erp.com |
+| Customers | List loads |
+| Inventory | Stock summary or PO list |
+| Finance | Vouchers list; amounts as strings e.g. `"100.5000"` |
+| HR | Employees list |
+| Trade | Trade cases (buying_house / both tenant) |
+
+---
+
+## Phase 8 — Report
+
+Post a markdown table: each phase PASS / FAIL / SKIPPED, tag deployed, rollback:
+
+```bash
+# Rollback app (server .env):
+BACKEND_IMAGE=prime7biz/p7erp-backend:<previous-tag>
+FRONTEND_IMAGE=prime7biz/p7erp-frontend:<previous-tag>
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Migration rollback: `alembic downgrade -1` (repeat as needed) **or** restore DB snapshot + previous images.
+
+---
+
+## Hard stops (do not deploy)
+
+- Pre-flight local checks fail
+- CI on `main` fails
+- New migrations included but user has not acknowledged production DB backup
+- Staged files include `.env` or credentials

@@ -60,6 +60,7 @@ async def facility_alerts_for_party(db: AsyncSession, *, tenant_id: int, party_i
                 )
 
     out.extend(await order_lifecycle_alerts_for_party(db, tenant_id=tenant_id, party_id=party_id))
+    out.extend(await recovery_alerts_for_party(db, tenant_id=tenant_id, party_id=party_id))
     out.extend(await contract_command_alerts_for_party(db, tenant_id=tenant_id, party_id=party_id))
     return out
 
@@ -105,6 +106,62 @@ async def contract_command_alerts_for_party(db: AsyncSession, *, tenant_id: int,
                     "detail": f"Contract {ref}: cash ladder shows red weeks vs planned CM.",
                 }
             )
+    return out[:25]
+
+
+async def recovery_alerts_for_party(db: AsyncSession, *, tenant_id: int, party_id: int) -> list[dict]:
+    """Recovery coverage and stalled production signals."""
+    from app.external_access.financier_portal.recovery_outlook_service import build_recovery_outlook_rows
+    from app.external_access.financier_portal.visibility_service import build_production_row_for_order
+
+    try:
+        rows, _ = await build_recovery_outlook_rows(db, tenant_id=tenant_id, party_id=party_id)
+    except Exception:
+        await safe_async_session_rollback(db)
+        return []
+    out: list[dict] = []
+    today = date.today()
+    for r in rows[:40]:
+        code = r.get("order_code") or str(r.get("order_id"))
+        cov = r.get("coverage_ratio")
+        band = r.get("recovery_band")
+        oid = int(r.get("order_id") or 0)
+        o = await db.get(Order, oid) if oid else None
+        if cov is not None and cov < 1.0 and o and o.delivery_date:
+            days = (o.delivery_date - today).days
+            if days <= 45:
+                out.append(
+                    {
+                        "code": "RECOVERY_COVERAGE_LOW",
+                        "severity": "high" if cov < 0.7 else "medium",
+                        "title": "Loan recovery coverage below principal",
+                        "detail": f"Order {code}: coverage ratio {cov} with delivery in {max(days, 0)}d.",
+                        "category": "Recovery",
+                    }
+                )
+        if band == "at_risk":
+            out.append(
+                {
+                    "code": "RECOVERY_AT_RISK",
+                    "severity": "high",
+                    "title": "Order flagged at-risk for recovery",
+                    "detail": f"Order {code}: recovery score {r.get('recovery_score')}, drivers: {', '.join(r.get('drivers') or [])}.",
+                    "category": "Recovery",
+                }
+            )
+        if o and not o.shipped_at:
+            prod = await build_production_row_for_order(db, tenant_id=tenant_id, order=o)
+            sew_pct = float(prod.get("sewing_pct") or 0)
+            if sew_pct > 0 and sew_pct < 30 and o.delivery_date and (o.delivery_date - today).days <= 30:
+                out.append(
+                    {
+                        "code": "PRODUCTION_STALLED",
+                        "severity": "medium",
+                        "title": "Production progress lagging vs delivery",
+                        "detail": f"Order {code}: sewing {sew_pct}% with delivery within 30 days.",
+                        "category": "Recovery",
+                    }
+                )
     return out[:25]
 
 

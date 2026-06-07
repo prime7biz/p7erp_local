@@ -21,6 +21,15 @@ type Row = {
   actual_shipment_date: string | null;
 };
 
+function ProgressBar({ pct }: { pct: number }) {
+  const w = Math.min(100, Math.max(0, pct));
+  return (
+    <div className="mt-1 h-1.5 w-full min-w-[48px] rounded-full bg-surface-muted">
+      <div className="h-1.5 rounded-full bg-brand-primary" style={{ width: `${w}%` }} />
+    </div>
+  );
+}
+
 function stageBadge(status: string) {
   const s = status.toLowerCase();
   if (s.includes("complete")) return "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200";
@@ -83,20 +92,23 @@ export function FinancierProductionTrackerPage() {
                 </td>
                 <td className="px-2 py-2">{r.buyer_name ?? "—"}</td>
                 <td className="px-2 py-2 tabular-nums">{r.order_qty}</td>
-                <td className="px-2 py-2">
+                <td className="px-2 py-2 min-w-[88px]">
                   <span className={`rounded px-1.5 py-0.5 ${stageBadge(r.cutting_status)}`}>
                     {r.cutting_status} {r.cutting_pct}%
                   </span>
+                  <ProgressBar pct={r.cutting_pct} />
                 </td>
-                <td className="px-2 py-2">
+                <td className="px-2 py-2 min-w-[88px]">
                   <span className={`rounded px-1.5 py-0.5 ${stageBadge(r.sewing_status)}`}>
                     {r.sewing_status} {r.sewing_pct}%
                   </span>
+                  <ProgressBar pct={r.sewing_pct} />
                 </td>
-                <td className="px-2 py-2">
+                <td className="px-2 py-2 min-w-[88px]">
                   <span className={`rounded px-1.5 py-0.5 ${stageBadge(r.finishing_status)}`}>
                     {r.finishing_status} {r.finishing_pct}%
                   </span>
+                  <ProgressBar pct={r.finishing_pct} />
                 </td>
                 <td className="px-2 py-2">
                   <span className="text-text-primary">{r.inspection_status}</span>

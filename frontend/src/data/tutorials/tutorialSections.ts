@@ -1411,13 +1411,13 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 - **Roles** — \`/app/settings/roles\`
 - **Tenant** — \`/app/settings/tenant\`
 - **External access** — \`/app/settings/external-access\` (feature flags, invites, audit). **Customer portal** invites: open **Invite customer**, pick the **customer** from the dropdown (email and name pre-fill from the customer master; you can edit), choose **portal role**, then create the invite. Invites are sent by email with secure activation links (\`/portal/customer/accept-invite\`, \`/portal/financier/accept-invite\`), then users sign in on the **unified login** page (\`/login\`) choosing **Customer portal** or **Financier portal** (bookmark \`/login?role=customer\` or \`/login?role=financier\`; older \`/portal/*/login\` URLs redirect there). **Staff invitations** use \`/accept-invite?token=…\`. **Forgot password** for portals: \`/forgot-password?role=customer\` or \`/forgot-password?role=financier\` (legacy \`/portal/*/forgot-password\` redirects). Reset links still open \`/portal/*/reset-password\`. Staff can open portal shortcuts from **Portals** in the app header.
-- **Financier portal (credit monitoring scope)** — after sign-in, the top nav can include lender-focused views such as **Contracts** (\`/portal/financier/contracts\` — master contract command center: OTD, BTB maturity, cash/CM ladder, optional AI brief), **Credit lines** (\`/portal/financier/credit-lines\`), **Stock / collateral** (\`/portal/financier/stock-collateral\`), **BTB liabilities** (\`/portal/financier/btb-liabilities\`), **Inventory** (\`/portal/financier/inventory\` — valuation, category drill-down, item ledger with optional GL flags, accounting-style view), **Order finance** (\`/portal/financier/order-finance\`), **Raw materials** (\`/portal/financier/raw-materials\`), **Production** (\`/portal/financier/production\`), **Export finance** (\`/portal/financier/financial-visibility\`), **Business health** (\`/portal/financier/business-health\`), **AI confidence** (\`/portal/financier/ai-confidence\` — tenant dashboard with KPI widgets and advisory reports from live ERP data), plus **Alerts** and **Risk panel** (\`/portal/financier/risk-panel\`). Visibility depends on **financier access scope** and linked party / BTB data.
+- **Financier portal (credit monitoring scope)** — after sign-in, the top nav can include lender-focused views such as **Contracts** (\`/portal/financier/contracts\` — master contract command center: OTD, BTB maturity, cash/CM ladder, **Production** tab per contract, optional AI brief), **Credit lines** (\`/portal/financier/credit-lines\`), **Stock / collateral** (\`/portal/financier/stock-collateral\`), **BTB liabilities** (\`/portal/financier/btb-liabilities\`), **Inventory** (\`/portal/financier/inventory\`), **Order finance** (\`/portal/financier/order-finance\`), **Recovery outlook** (\`/portal/financier/recovery-outlook\` — coverage ratio and recovery band per financed order), **Raw materials** (\`/portal/financier/raw-materials\`), **Production** (\`/portal/financier/production\`), **Export finance** (\`/portal/financier/financial-visibility\`), **Business health**, **AI confidence**, **Reports** (\`/portal/financier/reports\` — JSON snapshots for recovery and production status), plus **Alerts** and **Risk panel** (includes **Recovery** signals). **Order book** (\`/portal/financier/order-book\`) lists **financed orders only** when you have credit monitoring scope; open an order for tabs: **Overview** (pipeline ribbon, export path), **Production** (floor % and 14-day sewing trend), **Finance & recovery**, **Materials**. Visibility depends on **financier access scope** and linked party / BTB data.
 
 ## Tips
 
 - Changes here can affect **who sees which sidebar items** and **feature flags** for the whole tenant.`,
         tags: ["settings", "users", "roles", "admin"],
-        lastUpdated: "2026-04-21",
+        lastUpdated: "2026-06-06",
         infographics: [
           {
             type: "highlight",
@@ -1444,9 +1444,13 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
           "/portal/financier/stock-collateral",
           "/portal/financier/btb-liabilities",
           "/portal/financier/inventory",
+          "/portal/financier/order-book",
+          "/portal/financier/orders",
           "/portal/financier/order-finance",
+          "/portal/financier/recovery-outlook",
           "/portal/financier/raw-materials",
           "/portal/financier/production",
+          "/portal/financier/reports",
           "/portal/financier/financial-visibility",
           "/portal/financier/business-health",
           "/portal/financier/ai-confidence",

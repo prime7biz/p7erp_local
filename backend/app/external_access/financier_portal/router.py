@@ -24,7 +24,11 @@ from app.external_access.constants import (
     SCOPE_TENANT_SUMMARY,
 )
 from app.external_access.deps import financier_max_scope, require_financier_external, require_financier_scope
-from app.external_access.feature_flags import is_financier_financial_summary_enabled, is_financier_projection_enabled
+from app.external_access.feature_flags import (
+    is_external_document_download_enabled,
+    is_financier_financial_summary_enabled,
+    is_financier_projection_enabled,
+)
 from app.external_access.financier_portal import selectors as sel
 from app.external_access.financier_portal import facility_selectors as fsel
 from app.external_access.financier_portal.dashboard_insights_service import build_financier_dashboard_party_insights
@@ -133,9 +137,24 @@ async def financier_order_book(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    financed_only: bool | None = Query(None),
 ):
     await _roles_ok(db, principal)
-    rows, total = await sel.order_book(db, principal.tenant_id, limit, offset)
+    tid = principal.tenant_id
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    max_scope = await financier_max_scope(db, principal)
+    use_financed = financed_only
+    if use_financed is None and max_scope and financier_scope_satisfies(SCOPE_CREDIT_MONITORING, max_scope) and party_id:
+        use_financed = True
+    if use_financed and party_id:
+        from app.external_access.financier_portal.visibility_service import build_financed_order_book_rows
+
+        raw_items, total = await build_financed_order_book_rows(
+            db, tenant_id=tid, party_id=party_id, limit=limit, offset=offset
+        )
+        items = [FinancierOrderBookRow(**x) for x in raw_items]
+        return FinancierOrderBookResponse(items=items, total=total)
+    rows, total = await sel.order_book(db, tid, limit, offset)
     items = [
         FinancierOrderBookRow(
             id=o.id,
@@ -243,9 +262,33 @@ async def financier_order_detail(
     order_id: int,
     principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_ORDERS_AND_PIPELINE))],
     db: AsyncSession = Depends(get_db),
+    include_production_detail: bool = Query(False),
 ):
     await _roles_ok(db, principal)
-    row = await sel.get_order_with_buyer(db, principal.tenant_id, order_id)
+    tid = principal.tenant_id
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    max_scope = await financier_max_scope(db, principal)
+    has_credit = bool(
+        max_scope and financier_scope_satisfies(SCOPE_CREDIT_MONITORING, max_scope) and party_id
+    )
+    if has_credit:
+        from app.external_access.financier_portal.recovery_outlook_service import build_recovery_outlook_for_order
+        from app.external_access.financier_portal.visibility_service import (
+            build_order_detail_enriched,
+            build_production_detail_for_order,
+        )
+
+        enriched = await build_order_detail_enriched(db, tenant_id=tid, party_id=party_id, order_id=order_id)
+        if not enriched:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not in your financed scope")
+        recovery = await build_recovery_outlook_for_order(db, tenant_id=tid, party_id=party_id, order_id=order_id)
+        enriched["recovery"] = recovery
+        if include_production_detail:
+            enriched["production_detail"] = await build_production_detail_for_order(
+                db, tenant_id=tid, party_id=party_id, order_id=order_id
+            )
+        return FinancierOrderDetail(**enriched)
+    row = await sel.get_order_with_buyer(db, tid, order_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     o, name = row
@@ -261,20 +304,114 @@ async def financier_order_detail(
     )
 
 
+@router.get("/orders/{order_id}/production-detail")
+async def financier_order_production_detail(
+    order_id: int,
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Financier party not linked")
+    from app.external_access.financier_portal.visibility_service import build_production_detail_for_order
+
+    payload = await build_production_detail_for_order(
+        db, tenant_id=principal.tenant_id, party_id=party_id, order_id=order_id
+    )
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not in your financed scope")
+    return payload
+
+
+@router.get("/orders/{order_id}/recovery-outlook")
+async def financier_order_recovery_outlook(
+    order_id: int,
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Financier party not linked")
+    from app.external_access.financier_portal.recovery_outlook_service import build_recovery_outlook_for_order
+
+    row = await build_recovery_outlook_for_order(
+        db, tenant_id=principal.tenant_id, party_id=party_id, order_id=order_id
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not in your financed scope")
+    return row
+
+
+@router.get("/orders/{order_id}/documents")
+async def financier_order_documents(
+    order_id: int,
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    tenant = await db.get(Tenant, principal.tenant_id)
+    if not tenant or not is_external_document_download_enabled(tenant):
+        return {"items": [], "downloads_enabled": False, "note": "Document downloads not enabled for this tenant."}
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        return {"items": [], "downloads_enabled": True, "note": "Financier party not linked."}
+    from app.external_access.financier_portal.visibility_service import build_order_documents_for_party
+
+    items = await build_order_documents_for_party(
+        db, tenant_id=principal.tenant_id, party_id=party_id, order_id=order_id
+    )
+    return {"items": items, "downloads_enabled": True, "note": None if items else "No documents on trade case."}
+
+
+@router.get("/recovery-outlook")
+async def financier_recovery_outlook_list(
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_CREDIT_MONITORING))],
+    db: AsyncSession = Depends(get_db),
+):
+    _require_advanced_portal()
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        return {"items": [], "note": "Link financier_party_id on your financier access."}
+    from app.external_access.financier_portal.recovery_outlook_service import build_recovery_outlook_rows
+
+    items, note = await build_recovery_outlook_rows(db, tenant_id=principal.tenant_id, party_id=party_id)
+    return {"items": items, "note": note}
+
+
 @router.get("/reports/{report_key}")
 async def financier_report_export(
     report_key: str,
     principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_FULL_FINANCIER_PORTAL))],
     db: AsyncSession = Depends(get_db),
 ):
-    """Placeholder for controlled exports (analyst role + full scope)."""
+    """Controlled read-only report snapshots (JSON rows for portal download)."""
     await _roles_ok(db, principal)
     from app.external_access.permissions import financier_can_export_reports
 
     codes = await get_role_codes(db, principal)
     if not financier_can_export_reports(codes):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Export not permitted")
-    return {"report_key": report_key, "status": "not_implemented", "message": "Use portal lists for now."}
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    if not party_id:
+        return {"report_key": report_key, "status": "empty", "items": [], "note": "Financier party not linked."}
+    tid = principal.tenant_id
+    if report_key == "recovery_summary":
+        from app.external_access.financier_portal.recovery_outlook_service import build_recovery_outlook_rows
+
+        items, note = await build_recovery_outlook_rows(db, tenant_id=tid, party_id=party_id)
+        return {"report_key": report_key, "status": "ok", "items": items, "note": note}
+    if report_key == "production_status":
+        from app.external_access.financier_portal.visibility_service import build_production_tracker_rows
+
+        items, note = await build_production_tracker_rows(db, tenant_id=tid, party_id=party_id)
+        return {"report_key": report_key, "status": "ok", "items": items, "note": note}
+    return {"report_key": report_key, "status": "not_implemented", "message": "Unknown report key."}
 
 
 def _require_advanced_portal() -> None:

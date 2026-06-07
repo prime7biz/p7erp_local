@@ -20,6 +20,7 @@ const navAll: FinancierNavItem[] = [
   { to: "/portal/financier/credit-lines", label: "Credit lines", minScope: "credit_monitoring" },
   { to: "/portal/financier/loan-portfolio", label: "Portfolio", minScope: "credit_monitoring" },
   { to: "/portal/financier/order-finance", label: "Order finance", minScope: "credit_monitoring" },
+  { to: "/portal/financier/recovery-outlook", label: "Recovery outlook", minScope: "credit_monitoring" },
   { to: "/portal/financier/procurement", label: "Procurement", minScope: "credit_monitoring" },
   { to: "/portal/financier/raw-materials", label: "Raw materials", minScope: "credit_monitoring" },
   { to: "/portal/financier/stock-collateral", label: "Stock", minScope: "credit_monitoring" },

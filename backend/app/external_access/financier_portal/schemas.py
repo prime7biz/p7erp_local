@@ -14,6 +14,10 @@ class FinancierOrderBookRow(BaseModel):
     planned_shipment: date | None
     expected_delivery: date | None
     execution_status: str | None = None
+    pipeline_status: str | None = None
+    sewing_pct: float | None = None
+    outstanding_finance: float | None = None
+    finance_currency: str | None = None
 
 
 class FinancierOrderBookResponse(BaseModel):
@@ -72,6 +76,16 @@ class FinancierDashboardNextDue(BaseModel):
     reference: str | None = None
 
 
+class FinancierDashboardRecoveryGlance(BaseModel):
+    """Rollup recovery signals for credit-monitoring dashboard strip."""
+
+    financed_orders_count: int = 0
+    at_risk_orders_count: int = 0
+    total_outstanding_principal: float | None = None
+    outstanding_currency: str | None = None
+    avg_coverage_ratio: float | None = None
+
+
 class FinancierDashboardPartyInsights(BaseModel):
     """Populated when the principal has credit monitoring scope and a linked financier party."""
 
@@ -81,6 +95,7 @@ class FinancierDashboardPartyInsights(BaseModel):
     sewing_planned_qty: float | None = None
     sewing_completed_qty: float | None = None
     sewing_progress_pct: float | None = None
+    recovery_glance: FinancierDashboardRecoveryGlance | None = None
     note: str | None = None
 
 
@@ -105,6 +120,29 @@ class FinancierOrderDetail(BaseModel):
     order_date: date | None
     delivery_date: date | None
     updated_at: datetime
+    pipeline: dict | None = None
+    production: dict | None = None
+    finance: dict | None = None
+    raw_materials: list[dict] | None = None
+    raw_material_summary: dict | None = None
+    commercial: dict | None = None
+    trade: dict | None = None
+    recovery: dict | None = None
+    production_detail: dict | None = None
+
+
+class FinancierRecoveryOutlookRow(BaseModel):
+    order_id: int
+    order_code: str
+    buyer_name: str | None = None
+    outstanding_principal: float | None = None
+    proceeds_proxy: float | None = None
+    coverage_ratio: float | None = None
+    recovery_score: float | None = None
+    recovery_band: str | None = None
+    drivers: list[str] = []
+    finance_currency: str | None = None
+    as_of: date | None = None
 
 
 class FinancierContractWhatIfBody(BaseModel):

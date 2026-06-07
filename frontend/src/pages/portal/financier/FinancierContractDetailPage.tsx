@@ -8,7 +8,7 @@ import { CashLadderChart } from "./contract-command/CashLadderChart";
 import { WhatIfPanel } from "./contract-command/WhatIfPanel";
 import { logApiError } from "@/utils/logApiError";
 
-type Tab = "overview" | "orders" | "cash" | "narrative";
+type Tab = "overview" | "orders" | "production" | "cash" | "narrative";
 
 export function FinancierContractDetailPage() {
   const { contractId } = useParams<{ contractId: string }>();
@@ -16,6 +16,7 @@ export function FinancierContractDetailPage() {
   const [tab, setTab] = useState<Tab>("overview");
   const [d, setD] = useState<Record<string, unknown> | null>(null);
   const [narrative, setNarrative] = useState<Record<string, unknown> | null>(null);
+  const [productionItems, setProductionItems] = useState<Record<string, unknown>[]>([]);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -42,6 +43,13 @@ export function FinancierContractDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (tab !== "production" || !Number.isFinite(id)) return;
+    void financierPortalApi.contractProduction(id).then((d) => {
+      setProductionItems((d.items as Record<string, unknown>[]) ?? []);
+    });
+  }, [tab, id]);
 
   if (!Number.isFinite(id)) return <PortalErrorState message="Invalid contract" />;
   if (err) return <PortalErrorState message={err} onRetry={() => void load()} />;
@@ -86,6 +94,7 @@ export function FinancierContractDetailPage() {
           [
             ["overview", "Overview"],
             ["orders", "Orders & risk"],
+            ["production", "Production"],
             ["cash", "Cash ladder"],
             ["narrative", "AI brief"],
           ] as const
@@ -124,19 +133,69 @@ export function FinancierContractDetailPage() {
                 <th className="px-3 py-2">OTD score</th>
                 <th className="px-3 py-2">Delay (d)</th>
                 <th className="px-3 py-2">RM %</th>
+                <th className="px-3 py-2">Cut %</th>
+                <th className="px-3 py-2">Sew %</th>
+                <th className="px-3 py-2">Blockers</th>
               </tr>
             </thead>
             <tbody>
               {ordersRisk.map((r) => (
                 <tr key={String(r.order_id)} className="border-t border-border">
-                  <td className="px-3 py-2">{String(r.order_code)}</td>
+                  <td className="px-3 py-2">
+                    <Link to={`/portal/financier/orders/${String(r.order_id)}`} className="text-brand-primary hover:underline">
+                      {String(r.order_code)}
+                    </Link>
+                  </td>
                   <td className="px-3 py-2 tabular-nums">{String(r.otd_score)}</td>
                   <td className="px-3 py-2 tabular-nums">{String(r.predicted_delay_days)}</td>
                   <td className="px-3 py-2 tabular-nums">{String(r.rm_received_pct)}</td>
+                  <td className="px-3 py-2 tabular-nums">{String(r.cut_pct ?? "—")}</td>
+                  <td className="px-3 py-2 tabular-nums">{String(r.sewing_pct ?? "—")}</td>
+                  <td className="px-3 py-2 text-xs text-text-muted">
+                    {Array.isArray(r.blockers) ? (r.blockers as string[]).join(", ") : "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      ) : null}
+
+      {tab === "production" ? (
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead className="bg-surface-subtle text-left text-xs text-text-muted">
+              <tr>
+                <th className="px-3 py-2">Order</th>
+                <th className="px-3 py-2">Cutting</th>
+                <th className="px-3 py-2">Sewing</th>
+                <th className="px-3 py-2">Finishing</th>
+                <th className="px-3 py-2">Ship target</th>
+              </tr>
+            </thead>
+            <tbody>
+              {productionItems.map((r) => (
+                <tr key={String(r.order_id)} className="border-t border-border">
+                  <td className="px-3 py-2">
+                    <Link to={`/portal/financier/orders/${String(r.order_id)}`} className="text-brand-primary hover:underline">
+                      {String(r.order_code)}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2">
+                    {String(r.cutting_status)} {String(r.cutting_pct)}%
+                  </td>
+                  <td className="px-3 py-2">
+                    {String(r.sewing_status)} {String(r.sewing_pct)}%
+                  </td>
+                  <td className="px-3 py-2">
+                    {String(r.finishing_status)} {String(r.finishing_pct)}%
+                  </td>
+                  <td className="px-3 py-2">{String(r.shipment_target_date ?? "—")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {productionItems.length === 0 ? <p className="p-4 text-sm text-text-muted">No production rows.</p> : null}
         </div>
       ) : null}
 

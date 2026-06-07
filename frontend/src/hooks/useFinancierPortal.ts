@@ -2,10 +2,12 @@ import { externalGet, externalPost } from "@/api/externalClient";
 
 export const financierPortalApi = {
   dashboard: () => externalGet<Record<string, unknown>>("/financier/dashboard"),
-  orderBook: (q?: { limit?: number; offset?: number }) => {
+  orderBook: (q?: { limit?: number; offset?: number; financed_only?: boolean }) => {
     const p = new URLSearchParams();
     if (q?.limit != null) p.set("limit", String(q.limit));
     if (q?.offset != null) p.set("offset", String(q.offset));
+    if (q?.financed_only === true) p.set("financed_only", "true");
+    if (q?.financed_only === false) p.set("financed_only", "false");
     const s = p.toString() ? `?${p.toString()}` : "";
     return externalGet<{ items: unknown[]; total: number }>(`/financier/order-book${s}`);
   },
@@ -17,6 +19,20 @@ export const financierPortalApi = {
     "/financier/alerts",
   ),
   order: (id: number) => externalGet<Record<string, unknown>>(`/financier/orders/${id}`),
+  orderDetail: (id: number, q?: { includeProductionDetail?: boolean }) => {
+    const p = new URLSearchParams();
+    if (q?.includeProductionDetail) p.set("include_production_detail", "true");
+    const s = p.toString() ? `?${p.toString()}` : "";
+    return externalGet<Record<string, unknown>>(`/financier/orders/${id}${s}`);
+  },
+  recoveryOutlook: () => externalGet<{ items: unknown[]; note?: string | null }>("/financier/recovery-outlook"),
+  orderRecoveryOutlook: (id: number) => externalGet<Record<string, unknown>>(`/financier/orders/${id}/recovery-outlook`),
+  orderProductionDetail: (id: number) => externalGet<Record<string, unknown>>(`/financier/orders/${id}/production-detail`),
+  orderDocuments: (id: number) =>
+    externalGet<{ items: unknown[]; downloads_enabled: boolean; note?: string | null }>(
+      `/financier/orders/${id}/documents`,
+    ),
+  contractProduction: (id: number) => externalGet<{ items: unknown[]; note?: string | null }>(`/financier/contracts/${id}/production`),
   creditLines: () => externalGet<Record<string, unknown>>("/financier/credit-lines"),
   loanPortfolio: () => externalGet<Record<string, unknown>>("/financier/loan-portfolio"),
   loanPortfolioDetail: (id: number) => externalGet<Record<string, unknown>>(`/financier/loan-portfolio/${id}`),

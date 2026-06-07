@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
@@ -16,7 +16,14 @@ from app.models.costing import Item, ItemCategory
 from app.models.merch import GarmentStyle
 from app.models.facility import FacilityUtilization, RepaymentScheduleLine
 from app.models.finance import FxReceipt
-from app.models.inventory import GoodsReceiving, GoodsReceivingItem, PurchaseOrder, PurchaseOrderItem, Warehouse
+from app.models.inventory import (
+    GoodsReceiving,
+    GoodsReceivingItem,
+    ProcessOrder,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    Warehouse,
+)
 from app.models.production import CutTicket, HourlyProductionEntry, ProductionQcCheck, SewingLineStyleConfig
 from app.models.trade import Shipment, TradeCase, TradeDocument
 
@@ -196,6 +203,133 @@ def _stage_from_pct(pct: float, has_activity: bool) -> tuple[str, float]:
     return "in_progress", pct
 
 
+async def build_production_row_for_order(
+    db: AsyncSession, *, tenant_id: int, order: Order, buyer_name: str | None = None
+) -> dict[str, Any]:
+    """Single-order production milestone block (cutting → shipment)."""
+    oid = order.id
+    oqty = float(order.quantity or 0) or 0.0
+
+    ctickets = list(
+        (await db.execute(select(CutTicket).where(CutTicket.tenant_id == tenant_id, CutTicket.order_id == oid)))
+        .scalars()
+        .all()
+    )
+    cut_pcs = sum(int(t.total_pcs_cut or 0) for t in ctickets)
+    cut_pct = round(100 * cut_pcs / oqty, 1) if oqty > 0 else 0.0
+    if not ctickets:
+        cutting_status, cutting_pct = "not_started", 0.0
+    elif all((t.status or "").lower() in ("completed", "closed", "posted") for t in ctickets):
+        cutting_status, cutting_pct = "completed", min(cut_pct, 100.0) if oqty else 100.0
+    else:
+        cutting_status = "in_progress"
+        cutting_pct = cut_pct
+
+    slcf = list(
+        (
+            await db.execute(
+                select(SewingLineStyleConfig).where(
+                    SewingLineStyleConfig.tenant_id == tenant_id, SewingLineStyleConfig.order_id == oid
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    sew_good = 0.0
+    sew_plan = 0.0
+    for c in slcf:
+        sew_good += float(c.completed_qty or 0)
+        sew_plan += float(c.planned_qty or 0)
+    if slcf:
+        denom = sew_plan or oqty or 1.0
+        sew_pct = round(100 * sew_good / denom, 1)
+        st = {x.status for x in slcf}
+        if all((s or "").lower() in ("completed", "closed", "done") for s in st):
+            sewing_status, sewing_pct = "completed", min(sew_pct, 100.0)
+        elif sew_good > 0:
+            sewing_status, sewing_pct = "in_progress", sew_pct
+        else:
+            sewing_status, sewing_pct = "in_progress", 0.0
+    else:
+        hsew = (
+            await db.execute(
+                select(func.coalesce(func.sum(HourlyProductionEntry.good_qty), 0)).where(
+                    HourlyProductionEntry.tenant_id == tenant_id,
+                    HourlyProductionEntry.order_id == oid,
+                    HourlyProductionEntry.department_type.ilike("%sew%"),
+                )
+            )
+        ).scalar_one()
+        g = float(hsew or 0)
+        sew_pct = round(100 * g / oqty, 1) if oqty > 0 else 0.0
+        sewing_status, sewing_pct = _stage_from_pct(sew_pct, g > 0)
+
+    hfin = (
+        await db.execute(
+            select(func.coalesce(func.sum(HourlyProductionEntry.good_qty), 0)).where(
+                HourlyProductionEntry.tenant_id == tenant_id,
+                HourlyProductionEntry.order_id == oid,
+                HourlyProductionEntry.department_type.ilike("%finish%"),
+            )
+        )
+    ).scalar_one()
+    g2 = float(hfin or 0)
+    fin_pct = round(100 * g2 / oqty, 1) if oqty > 0 else 0.0
+    finishing_status, finishing_pct = _stage_from_pct(fin_pct, g2 > 0)
+
+    qc_rows = list(
+        (
+            await db.execute(
+                select(ProductionQcCheck).where(
+                    ProductionQcCheck.tenant_id == tenant_id, ProductionQcCheck.order_id == oid
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if qc_rows:
+        chk = max(qc_rows, key=lambda x: x.production_date)
+        tot = int(chk.total_checked or 0)
+        passed = int(chk.pass_qty or 0)
+        rate = round(100 * passed / tot, 1) if tot > 0 else None
+        inspection_status = (chk.check_type or "qc") + (" ok" if (rate or 0) >= 95 else " review")
+    else:
+        rate = None
+        inspection_status = "not_started"
+
+    ship_tgt = order.delivery_date.isoformat() if order.delivery_date else None
+    ship_act = order.shipped_at.date().isoformat() if order.shipped_at else None
+    if not ship_act:
+        tc = (
+            await db.execute(
+                select(TradeCase).where(TradeCase.tenant_id == tenant_id, TradeCase.order_id == oid).limit(1)
+            )
+        ).scalar_one_or_none()
+        if tc:
+            sh = list((await db.execute(select(Shipment).where(Shipment.trade_case_id == tc.id))).scalars().all())
+            if sh and sh[0].etd:
+                ship_act = str(sh[0].etd)
+
+    return {
+        "order_id": oid,
+        "order_code": order.order_code,
+        "buyer_name": buyer_name,
+        "order_qty": int(order.quantity or 0),
+        "cutting_status": cutting_status,
+        "cutting_pct": cutting_pct,
+        "sewing_status": sewing_status,
+        "sewing_pct": sewing_pct,
+        "finishing_status": finishing_status,
+        "finishing_pct": finishing_pct,
+        "inspection_status": inspection_status,
+        "inspection_pass_rate": rate,
+        "shipment_target_date": ship_tgt,
+        "actual_shipment_date": ship_act,
+    }
+
+
 async def build_production_tracker_rows(
     db: AsyncSession, *, tenant_id: int, party_id: int
 ) -> tuple[list[dict[str, Any]], str | None]:
@@ -210,128 +344,7 @@ async def build_production_tracker_rows(
             continue
         cust = await db.get(Customer, o.customer_id)
         buyer = cust.name if cust else None
-        oqty = float(o.quantity or 0) or 0.0
-
-        ctickets = list(
-            (
-                await db.execute(select(CutTicket).where(CutTicket.tenant_id == tenant_id, CutTicket.order_id == oid))
-            ).scalars().all()
-        )
-        cut_pcs = sum(int(t.total_pcs_cut or 0) for t in ctickets)
-        cut_pct = round(100 * cut_pcs / oqty, 1) if oqty > 0 else 0.0
-        if not ctickets:
-            cutting_status, cutting_pct = "not_started", 0.0
-        elif all((t.status or "").lower() in ("completed", "closed", "posted") for t in ctickets):
-            cutting_status, cutting_pct = "completed", min(cut_pct, 100.0) if oqty else 100.0
-        else:
-            cutting_status = "in_progress"
-            cutting_pct = cut_pct
-
-        slcf = list(
-            (
-                await db.execute(
-                    select(SewingLineStyleConfig).where(
-                        SewingLineStyleConfig.tenant_id == tenant_id, SewingLineStyleConfig.order_id == oid
-                    )
-                )
-            ).scalars().all()
-        )
-        sew_good = 0.0
-        sew_plan = 0.0
-        for c in slcf:
-            sew_good += float(c.completed_qty or 0)
-            sew_plan += float(c.planned_qty or 0)
-        if slcf:
-            denom = sew_plan or oqty or 1.0
-            sew_pct = round(100 * sew_good / denom, 1)
-            st = {x.status for x in slcf}
-            if all((s or "").lower() in ("completed", "closed", "done") for s in st):
-                sewing_status, sewing_pct = "completed", min(sew_pct, 100.0)
-            elif sew_good > 0:
-                sewing_status, sewing_pct = "in_progress", sew_pct
-            else:
-                sewing_status, sewing_pct = "in_progress", 0.0
-        else:
-            hsew = (
-                await db.execute(
-                    select(func.coalesce(func.sum(HourlyProductionEntry.good_qty), 0)).where(
-                        HourlyProductionEntry.tenant_id == tenant_id,
-                        HourlyProductionEntry.order_id == oid,
-                        HourlyProductionEntry.department_type.ilike("%sew%"),
-                    )
-                )
-            ).scalar_one()
-            g = float(hsew or 0)
-            sew_pct = round(100 * g / oqty, 1) if oqty > 0 else 0.0
-            sewing_status, sewing_pct = _stage_from_pct(sew_pct, g > 0)
-
-        hfin = (
-            await db.execute(
-                select(func.coalesce(func.sum(HourlyProductionEntry.good_qty), 0)).where(
-                    HourlyProductionEntry.tenant_id == tenant_id,
-                    HourlyProductionEntry.order_id == oid,
-                    HourlyProductionEntry.department_type.ilike("%finish%"),
-                )
-            )
-        ).scalar_one()
-        g2 = float(hfin or 0)
-        fin_pct = round(100 * g2 / oqty, 1) if oqty > 0 else 0.0
-        finishing_status, finishing_pct = _stage_from_pct(fin_pct, g2 > 0)
-
-        qc_rows = list(
-            (
-                await db.execute(
-                    select(ProductionQcCheck).where(
-                        ProductionQcCheck.tenant_id == tenant_id, ProductionQcCheck.order_id == oid
-                    )
-                )
-            ).scalars().all()
-        )
-        if qc_rows:
-            chk = max(qc_rows, key=lambda x: x.production_date)
-            tot = int(chk.total_checked or 0)
-            passed = int(chk.pass_qty or 0)
-            rate = round(100 * passed / tot, 1) if tot > 0 else None
-            inspection_status = (chk.check_type or "qc") + (" ok" if (rate or 0) >= 95 else " review")
-        else:
-            rate = None
-            inspection_status = "not_started"
-
-        ship_tgt = o.delivery_date.isoformat() if o.delivery_date else None
-        ship_act = o.shipped_at.date().isoformat() if o.shipped_at else None
-        if not ship_act:
-            tc = (
-                await db.execute(
-                    select(TradeCase).where(TradeCase.tenant_id == tenant_id, TradeCase.order_id == oid).limit(1)
-                )
-            ).scalar_one_or_none()
-            if tc:
-                sh = list(
-                    (
-                        await db.execute(select(Shipment).where(Shipment.trade_case_id == tc.id))
-                    ).scalars().all()
-                )
-                if sh and sh[0].etd:
-                    ship_act = str(sh[0].etd)
-
-        items.append(
-            {
-                "order_id": oid,
-                "order_code": o.order_code,
-                "buyer_name": buyer,
-                "order_qty": int(o.quantity or 0),
-                "cutting_status": cutting_status,
-                "cutting_pct": cutting_pct,
-                "sewing_status": sewing_status,
-                "sewing_pct": sewing_pct,
-                "finishing_status": finishing_status,
-                "finishing_pct": finishing_pct,
-                "inspection_status": inspection_status,
-                "inspection_pass_rate": rate,
-                "shipment_target_date": ship_tgt,
-                "actual_shipment_date": ship_act,
-            }
-        )
+        items.append(await build_production_row_for_order(db, tenant_id=tenant_id, order=o, buyer_name=buyer))
     return items, None
 
 
@@ -485,3 +498,373 @@ async def build_btb_liabilities_rows(
             }
         )
     return items, None
+
+
+async def build_order_finance_for_order(
+    db: AsyncSession, *, tenant_id: int, party_id: int, order_id: int, order_btbs: dict[int, set[int]] | None = None
+) -> dict[str, Any] | None:
+    """Finance block for a single financed order."""
+    if order_btbs is None:
+        btb_rows = await fsel.party_btb_lc_rows(db, tenant_id, party_id)
+        order_btbs = await fsel.order_btb_links_for_party(db, tenant_id, btb_rows)
+    bset = order_btbs.get(order_id)
+    if not bset:
+        return None
+    orow = await db.get(Order, order_id)
+    if not orow or orow.tenant_id != tenant_id:
+        return None
+    q = await db.get(Quotation, orow.quotation_id) if orow.quotation_id else None
+    st = await db.get(GarmentStyle, q.style_id) if q and q.style_id else None
+    fob_val, fob_ccy = _fob_from_order(orow, q, st)
+    utils = await fsel.utilizations_for_party_btbs(db, tenant_id, party_id, list(bset))
+    if not utils:
+        return None
+    appr = sum(float(u.principal_amount or 0) for u in utils)
+    outst = sum(float(u.outstanding_principal or 0) for u in utils)
+    util_amt = max(appr - outst, 0.0)
+    cur = next((u.currency for u in utils if u.currency), None)
+    return {
+        "fob_value": round(fob_val, 4) if fob_val is not None else None,
+        "fob_currency": fob_ccy,
+        "approved_finance_amount": round(appr, 2),
+        "utilized_finance_amount": round(util_amt, 2),
+        "outstanding_finance_amount": round(outst, 2),
+        "finance_currency": cur,
+    }
+
+
+async def build_raw_material_rows_for_order(
+    db: AsyncSession, *, tenant_id: int, party_id: int, order_id: int
+) -> list[dict[str, Any]]:
+    """RM lines scoped to one order (party BTB chain)."""
+    all_rows, _ = await build_raw_material_rows(db, tenant_id=tenant_id, party_id=party_id)
+    orow = await db.get(Order, order_id)
+    code = orow.order_code if orow else None
+    out = [r for r in all_rows if r.get("order_code") == code]
+    if out:
+        return out
+    po_ids = set()
+    btb_ids = await fsel.linked_btb_lc_ids_for_party(db, tenant_id, party_id)
+    pos = await fsel.purchase_orders_for_btb_ids(db, tenant_id, btb_ids)
+    for po in pos:
+        if po.source_order_id == order_id:
+            po_ids.add(po.id)
+    return [r for r in all_rows if r.get("purchase_order_id") in po_ids]
+
+
+async def build_commercial_links_for_order(
+    db: AsyncSession, *, tenant_id: int, party_id: int, order_id: int, order_btbs: dict[int, set[int]] | None = None
+) -> dict[str, Any]:
+    """BTB LC and master contract refs linked to this financed order."""
+    if order_btbs is None:
+        btb_rows = await fsel.party_btb_lc_rows(db, tenant_id, party_id)
+        order_btbs = await fsel.order_btb_links_for_party(db, tenant_id, btb_rows)
+    bset = order_btbs.get(order_id, set())
+    btb_refs: list[dict[str, Any]] = []
+    mc_ref: dict[str, Any] | None = None
+    for bid in bset:
+        b = await db.get(BtbLc, bid)
+        if not b or b.tenant_id != tenant_id:
+            continue
+        btb_refs.append(
+            {
+                "btb_lc_id": b.id,
+                "reference": b.reference,
+                "status": b.status,
+                "amount": float(b.amount or 0),
+                "currency": b.currency,
+            }
+        )
+        if b.master_contract_id and not mc_ref:
+            mc = await db.get(MasterContract, b.master_contract_id)
+            if mc and mc.tenant_id == tenant_id:
+                mc_ref = {
+                    "master_contract_id": mc.id,
+                    "reference": mc.reference,
+                    "status": mc.status,
+                    "amount": float(mc.amount or 0) if mc.amount is not None else None,
+                    "currency": mc.currency,
+                    "expiry_date": mc.expiry_date.isoformat() if mc.expiry_date else None,
+                }
+    orow = await db.get(Order, order_id)
+    return {
+        "btb_lcs": btb_refs,
+        "master_contract": mc_ref,
+        "pi_issued_at": orow.pi_issued_at.isoformat() if orow and orow.pi_issued_at else None,
+        "lc_received_at": orow.lc_received_at.isoformat() if orow and orow.lc_received_at else None,
+        "rm_received_pct": float(orow.rm_received_pct or 0) if orow else None,
+    }
+
+
+async def build_trade_summary_for_order(db: AsyncSession, *, tenant_id: int, order_id: int) -> dict[str, Any] | None:
+    """Export / trade case stage for an order."""
+    tc = (
+        await db.execute(
+            select(TradeCase).where(TradeCase.tenant_id == tenant_id, TradeCase.order_id == order_id).limit(1)
+        )
+    ).scalar_one_or_none()
+    if not tc:
+        return None
+    doc_count = int(
+        (await db.execute(select(func.count()).select_from(TradeDocument).where(TradeDocument.trade_case_id == tc.id)))
+        .scalar()
+        or 0
+    )
+    shipments = list((await db.execute(select(Shipment).where(Shipment.trade_case_id == tc.id))).scalars().all())
+    etd = str(shipments[0].etd) if shipments and shipments[0].etd else None
+    eta = str(shipments[0].eta) if shipments and shipments[0].eta else None
+    fx_status = None
+    if tc.btb_lc_id:
+        btb = await db.get(BtbLc, tc.btb_lc_id)
+        ref = btb.reference if btb else None
+        if ref:
+            fx = (
+                await db.execute(
+                    select(FxReceipt)
+                    .where(FxReceipt.tenant_id == tenant_id, FxReceipt.source_ref.ilike(f"%{ref}%"))
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if fx:
+                fx_status = fx.status
+    return {
+        "trade_case_id": tc.id,
+        "current_stage": tc.current_stage,
+        "status": tc.status,
+        "document_count": doc_count,
+        "shipment_etd": etd,
+        "shipment_eta": eta,
+        "fx_receipt_status": fx_status,
+    }
+
+
+async def build_order_detail_enriched(
+    db: AsyncSession, *, tenant_id: int, party_id: int, order_id: int
+) -> dict[str, Any] | None:
+    """Full financed-order detail payload for external financier portal."""
+    from app.modules.orders.pipeline_service import build_milestone_payload
+
+    btb_rows = await fsel.party_btb_lc_rows(db, tenant_id, party_id)
+    order_btbs = await fsel.order_btb_links_for_party(db, tenant_id, btb_rows)
+    if order_id not in order_btbs:
+        return None
+    row = await db.execute(
+        select(Order, Customer.name)
+        .outerjoin(Customer, Order.customer_id == Customer.id)
+        .where(Order.tenant_id == tenant_id, Order.id == order_id)
+    )
+    fetched = row.first()
+    if not fetched:
+        return None
+    o, buyer_name = fetched[0], fetched[1]
+    pipeline = await build_milestone_payload(db, tenant_id=tenant_id, order_id=order_id)
+    production = await build_production_row_for_order(db, tenant_id=tenant_id, order=o, buyer_name=buyer_name)
+    finance = await build_order_finance_for_order(
+        db, tenant_id=tenant_id, party_id=party_id, order_id=order_id, order_btbs=order_btbs
+    )
+    raw_materials = await build_raw_material_rows_for_order(db, tenant_id=tenant_id, party_id=party_id, order_id=order_id)
+    commercial = await build_commercial_links_for_order(
+        db, tenant_id=tenant_id, party_id=party_id, order_id=order_id, order_btbs=order_btbs
+    )
+    trade = await build_trade_summary_for_order(db, tenant_id=tenant_id, order_id=order_id)
+    rm_summary = {"line_count": len(raw_materials), "in_house_status": "pending"}
+    if raw_materials:
+        statuses = {r.get("in_house_status") for r in raw_materials}
+        if statuses == {"fully_received"}:
+            rm_summary["in_house_status"] = "fully_received"
+        elif "partial" in statuses or "fully_received" in statuses:
+            rm_summary["in_house_status"] = "partial"
+    return {
+        "id": o.id,
+        "order_code": o.order_code,
+        "buyer_name": buyer_name,
+        "status": o.status,
+        "quantity": o.quantity,
+        "order_date": o.order_date,
+        "delivery_date": o.delivery_date,
+        "updated_at": o.updated_at,
+        "pipeline": pipeline,
+        "production": production,
+        "finance": finance,
+        "raw_materials": raw_materials,
+        "raw_material_summary": rm_summary,
+        "commercial": commercial,
+        "trade": trade,
+    }
+
+
+async def build_financed_order_book_rows(
+    db: AsyncSession, *, tenant_id: int, party_id: int, limit: int, offset: int
+) -> tuple[list[dict[str, Any]], int]:
+    """Paginated order book limited to party-financed orders with summary columns."""
+    btb_rows = await fsel.party_btb_lc_rows(db, tenant_id, party_id)
+    order_btbs = await fsel.order_btb_links_for_party(db, tenant_id, btb_rows)
+    oids = sorted(order_btbs.keys(), reverse=True)
+    total = len(oids)
+    page_ids = oids[offset : offset + limit]
+    items: list[dict[str, Any]] = []
+    for oid in page_ids:
+        row = await db.execute(
+            select(Order, Customer.name)
+            .outerjoin(Customer, Order.customer_id == Customer.id)
+            .where(Order.tenant_id == tenant_id, Order.id == oid)
+        )
+        fetched = row.first()
+        if not fetched:
+            continue
+        o, name = fetched[0], fetched[1]
+        prod = await build_production_row_for_order(db, tenant_id=tenant_id, order=o, buyer_name=name)
+        fin = await build_order_finance_for_order(
+            db, tenant_id=tenant_id, party_id=party_id, order_id=oid, order_btbs=order_btbs
+        )
+        items.append(
+            {
+                "id": o.id,
+                "order_code": o.order_code,
+                "buyer_name": name,
+                "status": o.status,
+                "quantity": o.quantity,
+                "planned_shipment": None,
+                "expected_delivery": o.delivery_date,
+                "execution_status": o.status,
+                "pipeline_status": o.pipeline_status,
+                "sewing_pct": prod.get("sewing_pct"),
+                "outstanding_finance": fin.get("outstanding_finance_amount") if fin else None,
+                "finance_currency": fin.get("finance_currency") if fin else None,
+            }
+        )
+    return items, total
+
+
+async def build_production_detail_for_order(
+    db: AsyncSession, *, tenant_id: int, party_id: int, order_id: int
+) -> dict[str, Any] | None:
+    """Deeper production drill-down: daily trend, line bookings, QC history, process orders."""
+    btb_rows = await fsel.party_btb_lc_rows(db, tenant_id, party_id)
+    order_btbs = await fsel.order_btb_links_for_party(db, tenant_id, btb_rows)
+    if order_id not in order_btbs:
+        return None
+    o = await db.get(Order, order_id)
+    if not o or o.tenant_id != tenant_id:
+        return None
+    today = date.today()
+    d0 = today - timedelta(days=13)
+    daily_rows = await db.execute(
+        select(HourlyProductionEntry.production_date, func.coalesce(func.sum(HourlyProductionEntry.good_qty), 0))
+        .where(
+            HourlyProductionEntry.tenant_id == tenant_id,
+            HourlyProductionEntry.order_id == order_id,
+            HourlyProductionEntry.production_date >= d0,
+            HourlyProductionEntry.department_type.ilike("%sew%"),
+        )
+        .group_by(HourlyProductionEntry.production_date)
+        .order_by(HourlyProductionEntry.production_date.asc())
+    )
+    sewing_daily = [{"date": str(r[0]), "good_qty": float(r[1] or 0)} for r in daily_rows.all()]
+    line_bookings = list(
+        (
+            await db.execute(
+                select(SewingLineStyleConfig).where(
+                    SewingLineStyleConfig.tenant_id == tenant_id, SewingLineStyleConfig.order_id == order_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    lines = [
+        {
+            "line_code": lb.line_code,
+            "reservation_status": lb.reservation_status,
+            "planned_qty": float(lb.planned_qty or 0),
+            "completed_qty": float(lb.completed_qty or 0),
+            "start_date": lb.start_date.isoformat() if lb.start_date else None,
+            "planned_end_date": lb.planned_end_date.isoformat() if lb.planned_end_date else None,
+            "actual_end_date": lb.actual_end_date.isoformat() if lb.actual_end_date else None,
+        }
+        for lb in line_bookings
+    ]
+    qc_rows = list(
+        (
+            await db.execute(
+                select(ProductionQcCheck)
+                .where(ProductionQcCheck.tenant_id == tenant_id, ProductionQcCheck.order_id == order_id)
+                .order_by(ProductionQcCheck.production_date.desc())
+                .limit(5)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    qc_history = []
+    for chk in qc_rows:
+        tot = int(chk.total_checked or 0)
+        passed = int(chk.pass_qty or 0)
+        rate = round(100 * passed / tot, 1) if tot > 0 else None
+        qc_history.append(
+            {
+                "production_date": str(chk.production_date) if chk.production_date else None,
+                "check_type": chk.check_type,
+                "pass_rate": rate,
+                "total_checked": tot,
+                "pass_qty": passed,
+            }
+        )
+    process_orders = list(
+        (
+            await db.execute(
+                select(ProcessOrder).where(ProcessOrder.tenant_id == tenant_id, ProcessOrder.source_order_id == order_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    po_payload = [
+        {
+            "id": p.id,
+            "process_number": p.process_number,
+            "status": p.status,
+            "process_stage": p.process_stage,
+            "process_type": p.process_type,
+            "qty_in": float(p.input_quantity or 0),
+            "qty_out": _float_qty(p.actual_output_qty),
+        }
+        for p in process_orders
+    ]
+    return {
+        "order_id": order_id,
+        "sewing_daily_last_14d": sewing_daily,
+        "line_bookings": lines,
+        "qc_history": qc_history,
+        "process_orders": po_payload,
+    }
+
+
+async def build_order_documents_for_party(
+    db: AsyncSession, *, tenant_id: int, party_id: int, order_id: int
+) -> list[dict[str, Any]]:
+    """Trade document metadata for a financed order (no file bytes; downloads gated by tenant flag)."""
+    btb_rows = await fsel.party_btb_lc_rows(db, tenant_id, party_id)
+    order_btbs = await fsel.order_btb_links_for_party(db, tenant_id, btb_rows)
+    if order_id not in order_btbs:
+        return []
+    tc = (
+        await db.execute(
+            select(TradeCase).where(TradeCase.tenant_id == tenant_id, TradeCase.order_id == order_id).limit(1)
+        )
+    ).scalar_one_or_none()
+    if not tc:
+        return []
+    docs = list(
+        (await db.execute(select(TradeDocument).where(TradeDocument.trade_case_id == tc.id).limit(50))).scalars().all()
+    )
+    return [
+        {
+            "id": d.id,
+            "document_type": d.document_type,
+            "file_name": d.file_name,
+            "version": d.version,
+            "linked_entity_type": d.linked_entity_type,
+        }
+        for d in docs
+    ]

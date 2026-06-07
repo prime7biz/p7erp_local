@@ -141,6 +141,11 @@ const FinancierAiConfidencePage = lazy(() =>
 const FinancierOrderFinancePage = lazy(() =>
   import("@/pages/portal/financier/FinancierOrderFinancePage").then((m) => ({ default: m.FinancierOrderFinancePage })),
 );
+const FinancierRecoveryOutlookPage = lazy(() =>
+  import("@/pages/portal/financier/FinancierRecoveryOutlookPage").then((m) => ({
+    default: m.FinancierRecoveryOutlookPage,
+  })),
+);
 const FinancierRawMaterialPage = lazy(() =>
   import("@/pages/portal/financier/FinancierRawMaterialPage").then((m) => ({ default: m.FinancierRawMaterialPage })),
 );
@@ -302,8 +307,10 @@ export function AppRouter() {
           <Route path="loan-portfolio/:utilizationId" element={<FinancierLoanDetailPage />} />
           <Route path="loan-portfolio" element={<FinancierLoanPortfolioPage />} />
           <Route path="order-finance" element={<FinancierOrderFinancePage />} />
+          <Route path="recovery-outlook" element={<FinancierRecoveryOutlookPage />} />
           <Route path="procurement" element={<FinancierProcurementTrackerPage />} />
           <Route path="raw-materials" element={<FinancierRawMaterialPage />} />
+          <Route path="production-tracker" element={<Navigate to="/portal/financier/production" replace />} />
           <Route path="production" element={<FinancierProductionTrackerPage />} />
           <Route path="stock-collateral" element={<FinancierStockCollateralPage />} />
           <Route path="btb-liabilities" element={<FinancierBtbLiabilitiesPage />} />

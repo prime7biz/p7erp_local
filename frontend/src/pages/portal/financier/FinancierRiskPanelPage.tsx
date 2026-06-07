@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { financierPortalApi } from "@/hooks/useFinancierPortal";
 import { PortalErrorState } from "@/components/external-access/PortalErrorState";
 
-type AlertItem = { code: string; severity: string; title: string; detail: string };
+type AlertItem = { code: string; severity: string; title: string; detail: string; category?: string };
 
-function categoryForCode(code: string): string {
+function categoryForCode(code: string, category?: string): string {
+  if (category) return category;
+  if (code.startsWith("RECOVERY_") || code === "PRODUCTION_STALLED") return "Recovery";
   if (code.startsWith("DELAYED_MATERIAL") || code.includes("MATERIAL")) return "Material & RM";
   if (code.startsWith("DELAYED_PRODUCTION")) return "Production";
   if (code.startsWith("DELAYED_SHIPMENT")) return "Shipment";
@@ -40,7 +42,7 @@ export function FinancierRiskPanelPage() {
   const summary = useMemo(() => {
     const m = new Map<string, number>();
     for (const a of items) {
-      const c = categoryForCode(a.code);
+      const c = categoryForCode(a.code, a.category);
       m.set(c, (m.get(c) ?? 0) + 1);
     }
     return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
@@ -49,7 +51,7 @@ export function FinancierRiskPanelPage() {
   const byCategory = useMemo(() => {
     const m = new Map<string, AlertItem[]>();
     for (const a of items) {
-      const c = categoryForCode(a.code);
+      const c = categoryForCode(a.code, a.category);
       if (!m.has(c)) m.set(c, []);
       m.get(c)!.push(a);
     }

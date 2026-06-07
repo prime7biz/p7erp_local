@@ -48,6 +48,14 @@ type PartyNextDue = {
   reference?: string | null;
 };
 
+type RecoveryGlance = {
+  financed_orders_count?: number;
+  at_risk_orders_count?: number;
+  total_outstanding_principal?: number | null;
+  outstanding_currency?: string | null;
+  avg_coverage_ratio?: number | null;
+};
+
 type PartyInsights = {
   next_emi?: PartyNextDue | null;
   next_btb_funding?: PartyNextDue | null;
@@ -55,6 +63,7 @@ type PartyInsights = {
   sewing_planned_qty?: number | null;
   sewing_completed_qty?: number | null;
   sewing_progress_pct?: number | null;
+  recovery_glance?: RecoveryGlance | null;
   note?: string | null;
 };
 
@@ -250,10 +259,15 @@ export function FinancierDashboardPage() {
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {[
-                ...(showCredit ? [{ to: "/portal/financier/contracts", label: "Contracts" }] : []),
+                ...(showCredit
+                  ? [
+                      { to: "/portal/financier/contracts", label: "Contracts" },
+                      { to: "/portal/financier/recovery-outlook", label: "Recovery" },
+                    ]
+                  : []),
                 { to: "/portal/financier/order-book", label: "Order book" },
                 { to: "/portal/financier/pipeline", label: "Pipeline detail" },
-                { to: "/portal/financier/production-tracker", label: "Production" },
+                { to: "/portal/financier/production", label: "Production" },
                 { to: "/portal/financier/alerts", label: "Alerts" },
                 ...(showCredit ? [{ to: "/portal/financier/ai-confidence", label: "AI insights" }] : []),
               ].map((l) => (
@@ -377,7 +391,7 @@ export function FinancierDashboardPage() {
             icon={Factory}
             shellClass="from-fuchsia-500/15 to-transparent border-fuchsia-300/40 dark:border-fuchsia-800/50"
             iconWrapClass="bg-fuchsia-500/20 text-fuchsia-800 dark:text-fuchsia-200"
-            href="/portal/financier/production-tracker"
+            href="/portal/financier/production"
             delay={0.26}
           />
         ) : null}
@@ -393,11 +407,53 @@ export function FinancierDashboardPage() {
             icon={Activity}
             shellClass="from-orange-500/15 to-transparent border-orange-300/40 dark:border-orange-800/50"
             iconWrapClass="bg-orange-500/20 text-orange-800 dark:text-orange-200"
-            href="/portal/financier/production-tracker"
+            href="/portal/financier/production"
             delay={0.3}
           />
         ) : null}
       </div>
+
+      {partyInsights?.recovery_glance && (partyInsights.recovery_glance.financed_orders_count ?? 0) > 0 ? (
+        <section className="rounded-2xl border border-rose-200/60 bg-gradient-to-r from-rose-500/5 via-orange-500/5 to-transparent p-5 dark:border-rose-900/40">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-text-primary">Recovery at a glance</h2>
+            <Link to="/portal/financier/recovery-outlook" className="text-xs font-semibold text-brand-primary hover:underline">
+              Full recovery outlook →
+            </Link>
+          </div>
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+            <div>
+              <dt className="text-text-muted">Financed orders</dt>
+              <dd className="font-semibold tabular-nums">{partyInsights.recovery_glance.financed_orders_count}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">At-risk / watch</dt>
+              <dd className="font-semibold tabular-nums text-amber-700 dark:text-amber-300">
+                {partyInsights.recovery_glance.at_risk_orders_count ?? 0}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Total outstanding</dt>
+              <dd className="font-semibold tabular-nums">
+                {partyInsights.recovery_glance.total_outstanding_principal != null
+                  ? formatMoney(
+                      partyInsights.recovery_glance.total_outstanding_principal,
+                      partyInsights.recovery_glance.outstanding_currency,
+                    )
+                  : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Avg coverage ratio</dt>
+              <dd className="font-semibold tabular-nums">
+                {partyInsights.recovery_glance.avg_coverage_ratio != null
+                  ? partyInsights.recovery_glance.avg_coverage_ratio.toFixed(2)
+                  : "—"}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      ) : null}
 
       {partyInsights &&
       (partyInsights.next_emi ||

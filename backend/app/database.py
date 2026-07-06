@@ -163,7 +163,13 @@ def _p7_do_orm_execute(orm_execute_state) -> None:
 
 settings = get_settings()
 # SQLAlchemy async needs postgresql+asyncpg
-db_url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+_effective_db_url = settings.database_url_pgbouncer if settings.use_pgbouncer else settings.database_url
+db_url = _effective_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+_connect_args: dict = {}
+if settings.use_pgbouncer:
+    # Required for PgBouncer transaction pooling with asyncpg prepared statements.
+    _connect_args["statement_cache_size"] = 0
 
 _pool_size = int(os.environ.get("DB_POOL_SIZE", "20"))
 _max_overflow = int(os.environ.get("DB_MAX_OVERFLOW", "30"))
@@ -178,6 +184,7 @@ engine = create_async_engine(
     max_overflow=_max_overflow,
     pool_timeout=_pool_timeout,
     pool_recycle=_pool_recycle,
+    connect_args=_connect_args,
 )
 
 AsyncSessionLocal = async_sessionmaker(

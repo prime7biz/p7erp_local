@@ -49,6 +49,8 @@ from app.modules.tna_unified.router import router as tna_unified_router
 from app.modules.trade_case.router import router as trade_case_router
 from app.modules.logistics.router import router as logistics_router
 from app.modules.control_tower.router import router as control_tower_router
+from app.modules.compliance.router import router as compliance_router
+from app.modules.data_migration.router import router as data_migration_router
 from app.modules.files.router import router as files_router
 from app.modules.admin.router import router as admin_router
 from app.modules.billing_lemonsqueezy.router import router as lemonsqueezy_api_router
@@ -439,6 +441,8 @@ app.include_router(
     dependencies=[Depends(require_internal_permission("trade.access"))],
 )
 app.include_router(control_tower_router, prefix=settings.api_v1_prefix)
+app.include_router(compliance_router, prefix=settings.api_v1_prefix)
+app.include_router(data_migration_router, prefix=settings.api_v1_prefix)
 app.include_router(admin_router, prefix=settings.api_v1_prefix + "/admin")
 app.include_router(announcements_router, prefix=settings.api_v1_prefix)
 app.include_router(tenant_support_router, prefix=settings.api_v1_prefix)

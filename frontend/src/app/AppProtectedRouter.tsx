@@ -157,6 +157,15 @@ const ConfigurationPage = lazy(() =>
 const BackupRestorePage = lazy(() =>
   import("@/pages/settings/BackupRestorePage").then((m) => ({ default: m.BackupRestorePage })),
 );
+const StatutoryCompliancePage = lazy(() =>
+  import("@/pages/settings/StatutoryCompliancePage").then((m) => ({ default: m.StatutoryCompliancePage })),
+);
+const DataImportPage = lazy(() =>
+  import("@/pages/settings/DataImportPage").then((m) => ({ default: m.DataImportPage })),
+);
+const BulkTenantOnboardingPage = lazy(() =>
+  import("@/pages/settings/BulkTenantOnboardingPage").then((m) => ({ default: m.BulkTenantOnboardingPage })),
+);
 const SettingsOverviewPage = lazy(() =>
   import("@/pages/settings/SettingsOverviewPage").then((m) => ({ default: m.SettingsOverviewPage })),
 );
@@ -829,6 +838,10 @@ export function AppProtectedRouter() {
             <Route path="audit" element={<AuditPage />} />
             <Route path="currency" element={<CurrencyManagementPage />} />
             <Route path="backup" element={<BackupRestorePage />} />
+            <Route path="statutory-compliance" element={<StatutoryCompliancePage />} />
+            <Route path="data-import" element={<DataImportPage />} />
+            <Route path="bulk-tenant-onboarding" element={<BulkTenantOnboardingPage />} />
+            <Route path="bgmea-bulk-onboarding" element={<Navigate to="/app/settings/bulk-tenant-onboarding" replace />} />
             <Route path="tenant" element={<TenantSettingsPage />} />
             <Route path="pricing" element={<PricingSettingsPage />} />
             <Route path="activity-logs" element={<AuditPage />} />

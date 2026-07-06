@@ -36,6 +36,21 @@ const cards = [
     description: "Trigger backups, review history, and start restore actions.",
     to: "/app/settings/backup",
   },
+  {
+    title: "Statutory compliance",
+    description: "Bangladesh VAT/VDS/TDS rates, bonded warehouse UD/UP, and payroll statutory.",
+    to: "/app/settings/statutory-compliance",
+  },
+  {
+    title: "Data import",
+    description: "CSV migration for customers, vendors, items, and chart of accounts.",
+    to: "/app/settings/data-import",
+  },
+  {
+    title: "Bulk tenant onboarding",
+    description: "Create customer factory tenants in batches with generated company codes.",
+    to: "/app/settings/bulk-tenant-onboarding",
+  },
 ];
 
 const defaultVariantId =

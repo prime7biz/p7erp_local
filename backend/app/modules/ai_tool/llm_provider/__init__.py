@@ -14,8 +14,8 @@ from app.modules.ai_tool.llm_provider.vllm_provider import VllmLlmProvider
 def get_llm_provider() -> BaseLlmProvider:
     """Primary provider for tier-1 gatekeeper routing.
 
-    Default: Ollama when enabled, then OpenRouter, then vLLM, then stub.
-    Set ``OPENROUTER_TIER1_PREFERRED=true`` to use OpenRouter before Ollama when both are configured.
+    Default: OpenRouter when configured, then Ollama, then vLLM, then stub.
+    Set ``OPENROUTER_TIER1_PREFERRED=false`` to use local Ollama before OpenRouter when both exist.
     """
     s = get_settings()
     ollama_ok = bool(s.ollama_enabled and (s.ollama_url or "").strip())

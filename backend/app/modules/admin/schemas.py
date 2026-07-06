@@ -53,6 +53,16 @@ class TenantCreateBody(BaseModel):
     domain: str | None = None
 
 
+class TenantBulkCreateItem(BaseModel):
+    name: str
+    tenant_type: TenantType = TenantType.manufacturer
+
+
+class TenantBulkCreateBody(BaseModel):
+    members: list[TenantBulkCreateItem]
+    plan_id: int | None = None
+
+
 class TenantUpdateBody(BaseModel):
     name: str | None = None
     domain: str | None = None

@@ -46,6 +46,7 @@ export const financierPortalApi = {
   snapshots: () => externalGet<Record<string, unknown>>("/financier/snapshots"),
   snapshot: (id: number) => externalGet<Record<string, unknown>>(`/financier/snapshots/${id}`),
   report: (key: string) => externalGet<Record<string, unknown>>(`/financier/reports/${encodeURIComponent(key)}`),
+  bankPortfolioExport: () => externalGet<Record<string, unknown>>("/financier/bank-exports/portfolio-summary"),
   orderFinance: () => externalGet<{ items: unknown[]; note?: string | null }>("/financier/order-finance"),
   rawMaterialTracker: () => externalGet<{ items: unknown[]; note?: string | null }>("/financier/raw-material-tracker"),
   productionTracker: () => externalGet<{ items: unknown[]; note?: string | null }>("/financier/production-tracker"),

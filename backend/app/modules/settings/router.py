@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user, hash_password
 from app.common.email_service import send_staff_welcome_email
+from app.common.plan_enforcer import assert_can_add_user
 from app.common.permissions import permissions_registry_api_payload, require_internal_permission
 from app.common.username import generate_unique_username_for_tenant
 from app.common.authz import ensure_user_is_tenant_admin
@@ -379,6 +380,7 @@ async def create_settings_user(
             detail="User with same email or username already exists",
         )
 
+    await assert_can_add_user(db, tenant.id)
     final_username = uname_in or await generate_unique_username_for_tenant(db, tenant.id, email_value)
     new_user = User(
         tenant_id=tenant.id,

@@ -10,6 +10,7 @@ services:
       -c effective_cache_size=768MB
       -c maintenance_work_mem=128MB
       -c random_page_cost=1.1
+      -c shared_preload_libraries=pg_stat_statements
     environment:
       POSTGRES_USER: p7erp
       POSTGRES_PASSWORD: p7erp
@@ -23,6 +24,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # Optional connection pooler (enable with USE_PGBOUNCER=true on backend). Local/staging only until validated.
+  pgbouncer:
+    image: edoburu/pgbouncer:1.22.1-p0
+    restart: always
+    environment:
+      DATABASE_URL: postgres://p7erp:p7erp@postgres:5432/p7erp
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 500
+      DEFAULT_POOL_SIZE: 25
+      AUTH_TYPE: scram-sha-256
+    ports:
+      - "6432:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # Required for backend REDIS_URL, /health (ping), and rate limits. Prefer full stack:
   #   docker compose up -d
@@ -65,6 +82,7 @@ services:
       - ollama_data:/root/.ollama
 
   backend:
+    image: p7erp_local-backend
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -72,6 +90,8 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       DATABASE_URL: postgresql://p7erp:p7erp@postgres:5432/p7erp
+      USE_PGBOUNCER: ${USE_PGBOUNCER:-false}
+      DATABASE_URL_PGBOUNCER: ${DATABASE_URL_PGBOUNCER:-postgresql://p7erp:p7erp@pgbouncer:5432/p7erp}
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
       TENANT_STRATEGY: header
@@ -85,8 +105,8 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       # More slugs: docs/OPENROUTER.md — nvidia/nemotron-3-super-120b-a12b:free, x-ai/grok-4.1-fast, Gemma :free variants
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-google/gemma-4-31b-it:free}
-      OPENROUTER_TIER1_PREFERRED: ${OPENROUTER_TIER1_PREFERRED:-false}
-      OPENROUTER_TENANT_TEXT_ENABLED: ${OPENROUTER_TENANT_TEXT_ENABLED:-false}
+      OPENROUTER_TIER1_PREFERRED: ${OPENROUTER_TIER1_PREFERRED:-true}
+      OPENROUTER_TENANT_TEXT_ENABLED: ${OPENROUTER_TENANT_TEXT_ENABLED:-true}
       OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       OPENROUTER_SITE_URL: ${OPENROUTER_SITE_URL:-}
       OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-P7 ERP}
@@ -122,6 +142,13 @@ services:
       LEMONSQUEEZY_WEBHOOK_SECRET: ${LEMONSQUEEZY_WEBHOOK_SECRET:-}
       LEMONSQUEEZY_API_BASE_URL: ${LEMONSQUEEZY_API_BASE_URL:-https://api.lemonsqueezy.com}
       LEMONSQUEEZY_CHECKOUT_SUCCESS_URL: ${LEMONSQUEEZY_CHECKOUT_SUCCESS_URL:-}
+      # Scaling phase 1 (defaults off — enable after validation)
+      PLATFORM_BULK_TENANT_ASYNC_ENABLED: ${PLATFORM_BULK_TENANT_ASYNC_ENABLED:-false}
+      DATA_MIGRATION_ASYNC_ENABLED: ${DATA_MIGRATION_ASYNC_ENABLED:-false}
+      API_CACHE_ENABLED: ${API_CACHE_ENABLED:-false}
+      API_CACHE_TAX_CONFIG_TTL_SECONDS: ${API_CACHE_TAX_CONFIG_TTL_SECONDS:-300}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
     ports:
       - "8000:8000"
     depends_on:
@@ -147,6 +174,27 @@ services:
     # Stable mode: avoid reload restarts (prevents intermittent 502s behind nginx).
     # Single worker on dev to reduce CPU contention with Ollama on low-spec hosts (4-core / 16GB RAM).
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+
+  worker:
+    image: p7erp_local-backend
+    restart: always
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: postgresql://p7erp:p7erp@postgres:5432/p7erp
+      USE_PGBOUNCER: ${USE_PGBOUNCER:-false}
+      DATABASE_URL_PGBOUNCER: ${DATABASE_URL_PGBOUNCER:-postgresql://p7erp:p7erp@pgbouncer:5432/p7erp}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: celery -A app.common.celery_app.celery_app worker --loglevel=info
 
   frontend:
     build:

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 # --- Settings ---
 class TenantProductionSettingsResponse(BaseModel):
     tenant_id: int
+    factory_profile: str | None = None
     enabled_optional_units: list[str] = Field(default_factory=list)
     weekend_days: list[str] = Field(default_factory=list)
     cm_alert_threshold_pct: float = 10.0
@@ -16,10 +17,19 @@ class TenantProductionSettingsResponse(BaseModel):
 
 
 class TenantProductionSettingsUpdate(BaseModel):
+    factory_profile: str | None = None
     enabled_optional_units: list[str] | None = None
     weekend_days: list[str] | None = None
     cm_alert_threshold_pct: float | None = None
     ai_provider_config: dict[str, Any] | None = None
+
+
+class FactoryProfileOptionResponse(BaseModel):
+    key: str
+    label: str
+    description: str
+    enabled_optional_units: list[str] = Field(default_factory=list)
+    feature_flags: dict[str, bool] = Field(default_factory=dict)
 
 
 # --- Planning pipeline / Gemini AI ---

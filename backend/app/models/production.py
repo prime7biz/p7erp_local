@@ -38,6 +38,8 @@ class TenantProductionSettings(Base):
         default=lambda: ["friday", "saturday"],
     )
     cm_alert_threshold_pct: Mapped[float] = mapped_column(Numeric(8, 2), nullable=False, default=10)
+    # Preset: woven | knit | sweater | denim | buying_house | hybrid (see factory_profile_service).
+    factory_profile: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Optional override: {"enabled": true, "model": "gemini-2.0-flash-lite"} — API key stays in server env (GEMINI_API_KEY).
     ai_provider_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)

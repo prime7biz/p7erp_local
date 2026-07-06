@@ -22,6 +22,9 @@ const links = [
   { to: "/app/settings/external-access", label: "External access" },
   { to: "/app/settings/activity-logs", label: "Activity logs" },
   { to: "/app/settings/backup", label: "Backup & Restore" },
+  { to: "/app/settings/statutory-compliance", label: "Statutory compliance" },
+  { to: "/app/settings/data-import", label: "Data import" },
+  { to: "/app/settings/bulk-tenant-onboarding", label: "Bulk tenant onboarding" },
   { to: "/app/settings/cheque-templates", label: "Cheque templates" },
 ];
 

@@ -32,12 +32,32 @@ type DepartmentMachine = Awaited<ReturnType<typeof api.listDepartmentMachines>>[
 
 const getUnitMachineKey = (unitKey: string, machineId: number) => `${unitKey}:${machineId}`;
 
+type ProductionSettingsState = {
+  factory_profile: string | null;
+  enabled_optional_units: string[];
+  weekend_days: string[];
+  cm_alert_threshold_pct: number;
+};
+
+function mapProductionSettings(
+  s: Awaited<ReturnType<typeof api.getProductionSettings>>,
+): ProductionSettingsState {
+  return {
+    factory_profile: s.factory_profile ?? null,
+    enabled_optional_units: s.enabled_optional_units ?? [],
+    weekend_days: s.weekend_days ?? [],
+    cm_alert_threshold_pct: s.cm_alert_threshold_pct ?? 10,
+  };
+}
+
 export function ProductionSetupPage() {
-  const [settings, setSettings] = useState<{
-    enabled_optional_units: string[];
-    weekend_days: string[];
-    cm_alert_threshold_pct: number;
-  } | null>(null);
+  const [settings, setSettings] = useState<ProductionSettingsState | null>(null);
+  const [factoryProfiles, setFactoryProfiles] = useState<
+    Array<{ key: string; label: string; description: string }>
+  >([]);
+  const [selectedFactoryProfile, setSelectedFactoryProfile] = useState("");
+  const [factoryProfileSaving, setFactoryProfileSaving] = useState(false);
+  const [factoryProfileMsg, setFactoryProfileMsg] = useState("");
   const [lines, setLines] = useState<SewingLine[]>([]);
   const [shifts, setShifts] = useState<Awaited<ReturnType<typeof api.listProductionShifts>>>([]);
   const [error, setError] = useState("");
@@ -129,17 +149,16 @@ export function ProductionSetupPage() {
   const load = useCallback(async () => {
     setError("");
     try {
-      const [s, l, sh, des] = await Promise.all([
+      const [s, l, sh, des, profiles] = await Promise.all([
         api.getProductionSettings(),
         api.listSewingLines(),
         api.listProductionShifts(),
         api.listHrDesignations({ active_only: true }),
+        api.listFactoryProfiles(),
       ]);
-      setSettings({
-        enabled_optional_units: s.enabled_optional_units ?? [],
-        weekend_days: s.weekend_days ?? [],
-        cm_alert_threshold_pct: s.cm_alert_threshold_pct ?? 10,
-      });
+      setSettings(mapProductionSettings(s));
+      setFactoryProfiles(profiles);
+      setSelectedFactoryProfile(s.factory_profile ?? "");
       setLines(l);
       setShifts(sh);
       setDesignations(des);
@@ -177,11 +196,7 @@ export function ProductionSetupPage() {
     else cur.add(day);
     try {
       const s = await api.updateProductionSettings({ weekend_days: [...cur] });
-      setSettings({
-        enabled_optional_units: s.enabled_optional_units ?? [],
-        weekend_days: s.weekend_days ?? [],
-        cm_alert_threshold_pct: s.cm_alert_threshold_pct ?? 10,
-      });
+      setSettings(mapProductionSettings(s));
     } catch (e) {
       logApiError(e, "ProductionSetupPage.toggleWeekendDay");
     }
@@ -191,13 +206,28 @@ export function ProductionSetupPage() {
     if (!settings) return;
     try {
       const s = await api.updateProductionSettings({ cm_alert_threshold_pct: pct });
-      setSettings({
-        enabled_optional_units: s.enabled_optional_units ?? [],
-        weekend_days: s.weekend_days ?? [],
-        cm_alert_threshold_pct: s.cm_alert_threshold_pct ?? 10,
-      });
+      setSettings(mapProductionSettings(s));
     } catch (e) {
       logApiError(e, "ProductionSetupPage.saveCmThreshold");
+    }
+  };
+
+  const saveFactoryProfile = async () => {
+    if (!selectedFactoryProfile) {
+      setFactoryProfileMsg("Choose a factory profile first.");
+      return;
+    }
+    setFactoryProfileSaving(true);
+    setFactoryProfileMsg("");
+    try {
+      const s = await api.updateProductionSettings({ factory_profile: selectedFactoryProfile });
+      setSettings(mapProductionSettings(s));
+      setFactoryProfileMsg("Factory profile applied. Optional units and feature flags were updated.");
+    } catch (e) {
+      logApiError(e, "ProductionSetupPage.saveFactoryProfile");
+      setFactoryProfileMsg(e instanceof Error ? e.message : "Could not apply factory profile.");
+    } finally {
+      setFactoryProfileSaving(false);
     }
   };
 
@@ -208,11 +238,7 @@ export function ProductionSetupPage() {
     else cur.add(key);
     try {
       const s = await api.updateProductionSettings({ enabled_optional_units: [...cur] });
-      setSettings({
-        enabled_optional_units: s.enabled_optional_units ?? [],
-        weekend_days: s.weekend_days ?? [],
-        cm_alert_threshold_pct: s.cm_alert_threshold_pct ?? 10,
-      });
+      setSettings(mapProductionSettings(s));
       window.dispatchEvent(new Event("production-optional-units-changed"));
     } catch (e) {
       logApiError(e, "ProductionSetupPage.toggleUnit");
@@ -714,11 +740,57 @@ export function ProductionSetupPage() {
       <div>
         <h1 className="text-xl font-semibold text-text-primary">Production setup</h1>
         <p className="text-sm text-text-secondary">
-          Configure optional production units, sewing lines (with machine counts), and shifts.
+          Choose a factory profile for quick setup, then fine-tune optional units, sewing lines, and shifts.
         </p>
       </div>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+      {settings ? (
+        <section className="rounded-lg border border-border-subtle bg-surface-elevated p-4">
+          <h2 className="mb-2 text-sm font-medium text-text-primary">Factory profile</h2>
+          <p className="mb-3 text-xs text-text-secondary">
+            Presets optional production units and related feature flags (for example knitting or trade). You can still
+            adjust optional units manually below.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="min-w-[220px] flex-1 text-xs text-text-secondary">
+              Profile
+              <select
+                className={inputCls}
+                value={selectedFactoryProfile}
+                onChange={(e) => setSelectedFactoryProfile(e.target.value)}
+              >
+                <option value="">Select profile…</option>
+                {factoryProfiles.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className={btnToggle}
+              disabled={factoryProfileSaving}
+              onClick={() => void saveFactoryProfile()}
+            >
+              {factoryProfileSaving ? "Applying…" : "Apply profile"}
+            </button>
+          </div>
+          {settings.factory_profile ? (
+            <p className="mt-2 text-xs text-text-secondary">
+              Current profile: <span className="font-medium text-text-primary">{settings.factory_profile}</span>
+            </p>
+          ) : null}
+          {selectedFactoryProfile ? (
+            <p className="mt-2 text-xs text-text-secondary">
+              {factoryProfiles.find((p) => p.key === selectedFactoryProfile)?.description}
+            </p>
+          ) : null}
+          {factoryProfileMsg ? <p className="mt-2 text-xs text-text-secondary">{factoryProfileMsg}</p> : null}
+        </section>
+      ) : null}
 
       {settings ? (
         <section className="rounded-lg border border-border-subtle bg-surface-elevated p-4">

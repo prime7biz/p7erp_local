@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, Up
 from fastapi.responses import Response as BytesResponse
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
-from app.common.money_schema import MoneyStrNonNeg, MoneyStrNonNegOpt, RateStrNonNeg, RateStrNonNegOpt
+from app.common.money_schema import MoneyLineStr, MoneyStrNonNeg, MoneyStrNonNegOpt, RateStrNonNeg, RateStrNonNegOpt
 from app.common.orm_numeric import decimal_to_money_response, decimal_to_rate_response
 from sqlalchemy import case, cast, func, Numeric, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -411,7 +411,7 @@ class ChartAccountBody(BaseModel):
 class ChartAccountOut(ChartAccountBody):
     id: int
     tenant_id: int
-    balance: str
+    balance: MoneyLineStr
     enable_bill_wise: bool
     version: int
     system_code: str | None = None

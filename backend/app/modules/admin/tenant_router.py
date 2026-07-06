@@ -3,31 +3,33 @@
 from __future__ import annotations
 
 import os
-import random
-import re
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.storage import get_media_root
-from app.common.system_roles import SYSTEM_ROLE_SEEDS
 from app.common.tenant_feature_keys import normalize_feature_flags
+from app.config import get_settings
+from app.common.celery_app import celery_app
 from app.database import get_db
-from app.models import AuditLog, Customer, Order, PlatformPlan, Role, Tenant, TenantSubscription, User
+from app.models import AuditLog, Customer, Order, PlatformBackgroundJob, PlatformPlan, Tenant, TenantSubscription, User
 from app.models.tenant import TenantType
 from app.modules.admin.auth import AdminContext, any_admin, client_ip, log_admin_action, super_only
 from app.modules.admin.schemas import (
     PaginatedMeta,
+    TenantBulkCreateBody,
     TenantCreateBody,
     TenantDetailResponse,
     TenantListItem,
     TenantStatsResponse,
     TenantUpdateBody,
 )
+from app.modules.admin.tenant_provisioning import provision_tenant_row
 from app.modules.audit.service import log_action
-from app.modules.finance.system_coa_seeding_service import seed_tenant_system_coa
+from app.common.platform_jobs import JOB_TYPE_BULK_TENANT
 
 router = APIRouter(prefix="/tenants", tags=["platform-admin-tenants"])
 
@@ -150,39 +152,13 @@ async def create_tenant_admin(
         existing = await db.execute(select(Tenant.id).where(Tenant.domain == domain))
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Domain already registered")
-    letters = re.sub(r"[^A-Za-z]", "", body.name)[:4].upper()
-    if len(letters) < 4:
-        letters = (letters + "XXXX")[:4]
-    company_code = None
-    for _ in range(100):
-        digits = str(random.randint(100000, 999999))
-        candidate = letters + digits
-        existing = await db.execute(select(Tenant.id).where(Tenant.company_code == candidate))
-        if existing.scalar_one_or_none() is None:
-            company_code = candidate
-            break
-    if not company_code:
-        raise HTTPException(status_code=500, detail="Could not generate unique company code")
-    tenant = Tenant(
-        name=body.name.strip(),
-        domain=domain,
+    tenant = await provision_tenant_row(
+        db,
+        name=body.name,
         tenant_type=body.tenant_type,
-        company_code=company_code,
+        domain=domain,
+        plan_id=None,
     )
-    db.add(tenant)
-    await db.flush()
-    for name, display in SYSTEM_ROLE_SEEDS:
-        db.add(
-            Role(
-                tenant_id=tenant.id,
-                name=name,
-                display_name=display,
-                permissions={},
-                is_system=True,
-            )
-        )
-    await db.flush()
-    await seed_tenant_system_coa(db, tenant.id)
     await log_action(db, tenant_id=tenant.id, action="TENANT_CREATE", resource="tenant", details=f"by_admin={ctx.admin.id}")
     await log_admin_action(
         db,
@@ -190,12 +166,103 @@ async def create_tenant_admin(
         action="ADMIN_TENANT_CREATE",
         target_tenant_id=tenant.id,
         resource="tenant",
-        details=company_code,
+        details=tenant.company_code,
         ip_address=client_ip(request),
     )
     await db.commit()
     await db.refresh(tenant)
     return {"id": tenant.id, "company_code": tenant.company_code, "name": tenant.name}
+
+
+@router.post("/bulk", status_code=status.HTTP_201_CREATED)
+async def bulk_create_tenants(
+    body: TenantBulkCreateBody,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(super_only),
+):
+    """Platform batch tenant onboarding: create many factories with optional plan assignment."""
+    if not body.members:
+        raise HTTPException(status_code=400, detail="members list is empty")
+    if len(body.members) > 200:
+        raise HTTPException(status_code=400, detail="Maximum 200 members per bulk request")
+
+    settings = get_settings()
+    if settings.platform_bulk_tenant_async_enabled:
+        job = PlatformBackgroundJob(
+            job_type=JOB_TYPE_BULK_TENANT,
+            status="pending",
+            admin_id=ctx.admin.id,
+            progress_json={"processed": 0, "total": len(body.members), "items": []},
+        )
+        db.add(job)
+        await db.flush()
+        members_payload = [
+            {"name": m.name, "tenant_type": m.tenant_type.value if hasattr(m.tenant_type, "value") else str(m.tenant_type)}
+            for m in body.members
+        ]
+        task = celery_app.send_task(
+            "platform.bulk_create_tenants",
+            args=[job.id, members_payload, body.plan_id, ctx.admin.id],
+        )
+        job.celery_task_id = task.id
+        await log_admin_action(
+            db,
+            admin_id=ctx.admin.id,
+            action="ADMIN_TENANT_BULK_CREATE_QUEUED",
+            target_tenant_id=None,
+            resource="tenant",
+            details=f"job_id={job.id} count={len(body.members)}",
+            ip_address=client_ip(request),
+        )
+        await db.commit()
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content={"job_id": job.id, "status": "pending"})
+
+    created: list[dict] = []
+    for item in body.members:
+        tenant = await provision_tenant_row(
+            db,
+            name=item.name,
+            tenant_type=item.tenant_type,
+            domain=None,
+            plan_id=body.plan_id,
+        )
+        created.append({"id": tenant.id, "company_code": tenant.company_code, "name": tenant.name})
+    await log_admin_action(
+        db,
+        admin_id=ctx.admin.id,
+        action="ADMIN_TENANT_BULK_CREATE",
+        target_tenant_id=None,
+        resource="tenant",
+        details=f"count={len(created)}",
+        ip_address=client_ip(request),
+    )
+    await db.commit()
+    return {"created_count": len(created), "items": created}
+
+
+@router.get("/bulk-status/{job_id}")
+async def bulk_create_job_status(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(super_only),
+):
+    job = await db.get(PlatformBackgroundJob, job_id)
+    if not job or job.job_type != JOB_TYPE_BULK_TENANT:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.admin_id and job.admin_id != ctx.admin.id and ctx.admin.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Not allowed to view this job")
+    return {
+        "job_id": job.id,
+        "job_type": job.job_type,
+        "status": job.status,
+        "celery_task_id": job.celery_task_id,
+        "progress": job.progress_json,
+        "result": job.result_json,
+        "error_message": job.error_message,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+    }
 
 
 @router.patch("/{tenant_id}")

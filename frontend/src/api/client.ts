@@ -282,6 +282,162 @@ export interface BackupHistoryRow {
   initiated_by_user_id: number | null;
 }
 
+export interface StatutoryTaxConfigRow {
+  id: number;
+  tenant_id: number;
+  tax_code: string;
+  rate_pct: string;
+  registration_no: string | null;
+  effective_from: string | null;
+  effective_to: string | null;
+  is_active: boolean;
+  notes: string | null;
+}
+
+export interface StatutoryTaxConfigListResponse {
+  items: StatutoryTaxConfigRow[];
+}
+
+export interface StatutoryTaxConfigBody {
+  tax_code: string;
+  rate_pct: string;
+  registration_no?: string | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  is_active?: boolean;
+  notes?: string | null;
+}
+
+export interface StatutoryTaxLineCalcBody {
+  line_amount: string;
+  apply_vat?: boolean;
+  apply_vds?: boolean;
+  apply_tds?: boolean;
+}
+
+export interface StatutoryTaxLineCalcResponse {
+  base_amount: string;
+  vat_amount: string;
+  vds_amount: string;
+  tds_amount: string;
+  total_tax: string;
+  gross_with_tax: string;
+  rates_used: Record<string, string>;
+}
+
+export interface BondedWarehouseEntryRow {
+  id: number;
+  tenant_id: number;
+  reference_no: string;
+  entry_type: string;
+  ud_no: string | null;
+  up_no: string | null;
+  trade_case_id: number | null;
+  btb_lc_id: number | null;
+  item_description: string | null;
+  quantity: string | null;
+  value_bdt: string | null;
+  status: string;
+  entry_date: string | null;
+  notes: string | null;
+}
+
+export interface BondedWarehouseListResponse {
+  items: BondedWarehouseEntryRow[];
+  limit: number;
+  offset: number;
+}
+
+export interface BondedWarehouseEntryBody {
+  reference_no: string;
+  entry_type?: string;
+  ud_no?: string | null;
+  up_no?: string | null;
+  trade_case_id?: number | null;
+  btb_lc_id?: number | null;
+  item_description?: string | null;
+  quantity?: string | null;
+  value_bdt?: string | null;
+  status?: string;
+  entry_date?: string | null;
+  notes?: string | null;
+}
+
+export interface PayrollStatutoryCalcBody {
+  gross_pay: string;
+  ait_rate_pct?: string;
+  pf_employee_rate_pct?: string;
+  pf_employer_rate_pct?: string;
+  period_year?: number | null;
+  period_month?: number | null;
+  payroll_run_id?: number | null;
+  persist?: boolean;
+}
+
+export interface PayrollStatutoryCalcResponse {
+  gross_total: string;
+  ait_total: string;
+  pf_employee_total: string;
+  pf_employer_total: string;
+  net_payable: string;
+  summary_id?: number;
+}
+
+export interface DataMigrationTemplateEntity {
+  entity_type: string;
+  required_columns: string[];
+}
+
+export interface DataMigrationTemplatesResponse {
+  entities: DataMigrationTemplateEntity[];
+}
+
+export interface DataMigrationImportRowResult {
+  row_number: number;
+  status: string;
+  message: string;
+  entity_id?: number | null;
+}
+
+export interface DataMigrationImportResponse {
+  entity_type: string;
+  dry_run: boolean;
+  total_rows?: number;
+  ok_count?: number;
+  skip_count?: number;
+  error_count?: number;
+  rows?: DataMigrationImportRowResult[];
+  errors?: string[];
+  message?: string;
+}
+
+export interface PlatformAdminTokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in_minutes: number;
+}
+
+export interface PlatformAdminTenantBulkCreateItem {
+  name: string;
+  tenant_type: TenantType;
+}
+
+export interface PlatformAdminTenantBulkCreateBody {
+  members: PlatformAdminTenantBulkCreateItem[];
+  plan_id?: number | null;
+}
+
+export interface PlatformAdminTenantCreatedRow {
+  id: number;
+  company_code: string | null;
+  name: string;
+}
+
+export interface PlatformAdminTenantBulkCreateResponse {
+  created_count: number;
+  items: PlatformAdminTenantCreatedRow[];
+}
+
 export interface SettingsAuditLogListResponse {
   items: AuditLogResponse[];
   total: number;
@@ -1206,6 +1362,31 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
+async function requestPlatformAdmin<T>(
+  path: string,
+  options: RequestInit & { adminToken?: string | null } = {},
+): Promise<T> {
+  const { adminToken, ...init } = options;
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+  const headers: Record<string, string> = {
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
+    ...(init.headers as Record<string, string>),
+  };
+  if (adminToken) headers["Authorization"] = `Bearer ${adminToken}`;
+  const res = await fetch(`${API_BASE}/api/v1/admin${path}`, { ...init, headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    const raw = err as { detail?: unknown; message?: string };
+    const parsed = parseFastApiErrorDetail(raw.detail);
+    const fallback = typeof raw.message === "string" ? raw.message : null;
+    const message = parsed.message !== "Request failed" ? parsed.message : fallback ?? "Request failed";
+    const requestId = res.headers.get("X-Request-Id");
+    throw new ApiError(message, res.status, requestId, parsed.code);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
 async function requestWithTotal<T>(
   path: string,
   options: RequestInit & { tenantId?: number | null } = {}
@@ -1807,6 +1988,25 @@ export const api = {
       body: JSON.stringify({ token: data.token.trim(), new_password: data.new_password }),
     });
   },
+  async platformAdminLogin(data: { username: string; password: string }): Promise<PlatformAdminTokenResponse> {
+    return requestPlatformAdmin<PlatformAdminTokenResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        username: data.username.trim(),
+        password: data.password,
+      }),
+    });
+  },
+  async platformAdminBulkCreateTenants(
+    adminToken: string,
+    body: PlatformAdminTenantBulkCreateBody,
+  ): Promise<PlatformAdminTenantBulkCreateResponse> {
+    return requestPlatformAdmin<PlatformAdminTenantBulkCreateResponse>("/tenants/bulk", {
+      method: "POST",
+      adminToken,
+      body: JSON.stringify(body),
+    });
+  },
   async createTenant(data: {
     name: string;
     tenant_type: TenantType;
@@ -2185,6 +2385,62 @@ export const api = {
   async triggerBackupRestore(backupLogId: number): Promise<BackupStatusResponse> {
     return request<BackupStatusResponse>(`/api/v1/settings/backup/restore/${backupLogId}`, {
       method: "POST",
+    });
+  },
+  async listStatutoryTaxConfig(): Promise<StatutoryTaxConfigListResponse> {
+    return request<StatutoryTaxConfigListResponse>("/api/v1/compliance/tax-config");
+  },
+  async upsertStatutoryTaxConfig(body: StatutoryTaxConfigBody): Promise<StatutoryTaxConfigRow> {
+    return request<StatutoryTaxConfigRow>("/api/v1/compliance/tax-config", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async calculateStatutoryTaxLine(body: StatutoryTaxLineCalcBody): Promise<StatutoryTaxLineCalcResponse> {
+    return request<StatutoryTaxLineCalcResponse>("/api/v1/compliance/tax/calculate-line", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async listBondedWarehouseEntries(params?: {
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<BondedWarehouseListResponse> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<BondedWarehouseListResponse>(`/api/v1/compliance/bonded-warehouse${suffix}`);
+  },
+  async createBondedWarehouseEntry(body: BondedWarehouseEntryBody): Promise<BondedWarehouseEntryRow> {
+    return request<BondedWarehouseEntryRow>("/api/v1/compliance/bonded-warehouse", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async calculatePayrollStatutory(body: PayrollStatutoryCalcBody): Promise<PayrollStatutoryCalcResponse> {
+    return request<PayrollStatutoryCalcResponse>("/api/v1/compliance/payroll/statutory-calculate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async listDataMigrationTemplates(): Promise<DataMigrationTemplatesResponse> {
+    return request<DataMigrationTemplatesResponse>("/api/v1/data-migration/templates");
+  },
+  async importDataMigrationCsv(params: {
+    entity_type: string;
+    dry_run: boolean;
+    file: File;
+  }): Promise<DataMigrationImportResponse> {
+    const form = new FormData();
+    form.append("entity_type", params.entity_type);
+    form.append("dry_run", params.dry_run ? "true" : "false");
+    form.append("file", params.file);
+    return request<DataMigrationImportResponse>("/api/v1/data-migration/import", {
+      method: "POST",
+      body: form,
     });
   },
   async getExternalAccessOverview(): Promise<ExternalAccessOverview> {
@@ -7565,8 +7821,20 @@ export const api = {
   },
 
   // ── Production (garment manufacturing) ──
+  async listFactoryProfiles(): Promise<
+    Array<{
+      key: string;
+      label: string;
+      description: string;
+      enabled_optional_units: string[];
+      feature_flags: Record<string, boolean>;
+    }>
+  > {
+    return request("/api/v1/production/factory-profiles");
+  },
   async getProductionSettings(): Promise<{
     tenant_id: number;
+    factory_profile?: string | null;
     enabled_optional_units: string[];
     weekend_days: string[];
     cm_alert_threshold_pct: number;
@@ -7575,12 +7843,14 @@ export const api = {
     return request("/api/v1/production/settings");
   },
   async updateProductionSettings(body: {
+    factory_profile?: string | null;
     enabled_optional_units?: string[];
     weekend_days?: string[];
     cm_alert_threshold_pct?: number;
     ai_provider_config?: Record<string, unknown> | null;
   }): Promise<{
     tenant_id: number;
+    factory_profile?: string | null;
     enabled_optional_units: string[];
     weekend_days: string[];
     cm_alert_threshold_pct: number;

@@ -21,6 +21,12 @@ const REPORTS: {
     available: true,
   },
   {
+    key: "bank_portfolio_summary",
+    title: "Bank portfolio summary",
+    description: "Bank-grade batch monitoring export with active orders, open BTB LCs, tenant, and financier scope.",
+    available: true,
+  },
+  {
     key: "lender_pack",
     title: "Lender pack",
     description: "Consolidated export of key credit and movement signals (coming later).",
@@ -46,8 +52,11 @@ export function FinancierReportsPage() {
     setErr("");
     setLoadingKey(key);
     try {
-      const data = await financierPortalApi.report(key);
-      if (data.status === "ok") {
+      const data =
+        key === "bank_portfolio_summary"
+          ? await financierPortalApi.bankPortfolioExport()
+          : await financierPortalApi.report(key);
+      if (!("status" in data) || data.status === "ok") {
         downloadJson(`${key}_${new Date().toISOString().slice(0, 10)}.json`, data);
       } else {
         setErr(typeof data.message === "string" ? data.message : "Export not available.");

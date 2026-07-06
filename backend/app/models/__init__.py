@@ -10,6 +10,7 @@ from app.models.platform_admin import (
     LemonsqueezyWebhookEvent,
     PlatformAdmin,
     PlatformAdminAuditLog,
+    PlatformBackgroundJob,
     PlatformAnnouncement,
     PlatformPlan,
     PlatformSettings,
@@ -292,6 +293,11 @@ from app.models.trade import (
     Shipment,
     TradeDocument,
 )
+from app.models.compliance import (
+    TenantStatutoryTaxConfig,
+    BondedWarehouseEntry,
+    PayrollStatutorySummary,
+)
 from app.models.production import (
     TenantProductionSettings,
     ProductionShift,
@@ -573,6 +579,9 @@ __all__ = [
     "TradeCaseStageLog",
     "Shipment",
     "TradeDocument",
+    "TenantStatutoryTaxConfig",
+    "BondedWarehouseEntry",
+    "PayrollStatutorySummary",
     "TenantProductionSettings",
     "ProductionShift",
     "FactoryCalendarOverride",
@@ -611,6 +620,7 @@ __all__ = [
     "CrewRosterWeekly",
     "PlatformAdmin",
     "PlatformAdminAuditLog",
+    "PlatformBackgroundJob",
     "ImpersonationSession",
     "AdminSession",
     "BackupJob",

@@ -1401,7 +1401,7 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
         title: "Settings and administration",
         content: `## Overview
 
-**Settings** covers configuration, users, roles, tenant profile, pricing, activity logs, currency, backup, cheque templates, and **external access** (customer / financier portals). The same **External access** link appears under **Settings** in the left sidebar; the **Portals** menu in the **top bar** jumps to stakeholder login pages.
+**Settings** covers configuration, users, roles, tenant profile, pricing, activity logs, currency, backup, **statutory compliance** (Bangladesh VAT/VDS/TDS, bonded warehouse, payroll statutory), **data import** (CSV migration), **bulk tenant onboarding**, cheque templates, and **external access** (customer / financier portals). The same **External access** link appears under **Settings** in the left sidebar; the **Portals** menu in the **top bar** jumps to stakeholder login pages.
 
 ## Common routes
 
@@ -1410,14 +1410,17 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 - **User Mgmt** — \`/app/settings/users\`
 - **Roles** — \`/app/settings/roles\`
 - **Tenant** — \`/app/settings/tenant\`
+- **Statutory compliance** — \`/app/settings/statutory-compliance\` (VAT/VDS/TDS rates, bonded warehouse UD/UP register, payroll statutory calculator)
+- **Data import** — \`/app/settings/data-import\` (CSV dry-run then commit for customers, vendors, items, chart of accounts)
+- **Bulk tenant onboarding** — \`/app/settings/bulk-tenant-onboarding\` (platform-admin batch tenant creation with generated company codes)
 - **External access** — \`/app/settings/external-access\` (feature flags, invites, audit). **Customer portal** invites: open **Invite customer**, pick the **customer** from the dropdown (email and name pre-fill from the customer master; you can edit), choose **portal role**, then create the invite. Invites are sent by email with secure activation links (\`/portal/customer/accept-invite\`, \`/portal/financier/accept-invite\`), then users sign in on the **unified login** page (\`/login\`) choosing **Customer portal** or **Financier portal** (bookmark \`/login?role=customer\` or \`/login?role=financier\`; older \`/portal/*/login\` URLs redirect there). **Staff invitations** use \`/accept-invite?token=…\`. **Forgot password** for portals: \`/forgot-password?role=customer\` or \`/forgot-password?role=financier\` (legacy \`/portal/*/forgot-password\` redirects). Reset links still open \`/portal/*/reset-password\`. Staff can open portal shortcuts from **Portals** in the app header.
-- **Financier portal (credit monitoring scope)** — after sign-in, the top nav can include lender-focused views such as **Contracts** (\`/portal/financier/contracts\` — master contract command center: OTD, BTB maturity, cash/CM ladder, **Production** tab per contract, optional AI brief), **Credit lines** (\`/portal/financier/credit-lines\`), **Stock / collateral** (\`/portal/financier/stock-collateral\`), **BTB liabilities** (\`/portal/financier/btb-liabilities\`), **Inventory** (\`/portal/financier/inventory\`), **Order finance** (\`/portal/financier/order-finance\`), **Recovery outlook** (\`/portal/financier/recovery-outlook\` — coverage ratio and recovery band per financed order), **Raw materials** (\`/portal/financier/raw-materials\`), **Production** (\`/portal/financier/production\`), **Export finance** (\`/portal/financier/financial-visibility\`), **Business health**, **AI confidence**, **Reports** (\`/portal/financier/reports\` — JSON snapshots for recovery and production status), plus **Alerts** and **Risk panel** (includes **Recovery** signals). **Order book** (\`/portal/financier/order-book\`) lists **financed orders only** when you have credit monitoring scope; open an order for tabs: **Overview** (pipeline ribbon, export path), **Production** (floor % and 14-day sewing trend), **Finance & recovery**, **Materials**. Visibility depends on **financier access scope** and linked party / BTB data.
+- **Financier portal (credit monitoring scope)** — after sign-in, the top nav can include lender-focused views such as **Contracts** (\`/portal/financier/contracts\` — master contract command center: OTD, BTB maturity, cash/CM ladder, **Production** tab per contract, optional AI brief), **Credit lines** (\`/portal/financier/credit-lines\`), **Stock / collateral** (\`/portal/financier/stock-collateral\`), **BTB liabilities** (\`/portal/financier/btb-liabilities\`), **Inventory** (\`/portal/financier/inventory\`), **Order finance** (\`/portal/financier/order-finance\`), **Recovery outlook** (\`/portal/financier/recovery-outlook\` — coverage ratio and recovery band per financed order), **Raw materials** (\`/portal/financier/raw-materials\`), **Production** (\`/portal/financier/production\`), **Export finance** (\`/portal/financier/financial-visibility\`), **Business health**, **AI confidence**, **Reports** (\`/portal/financier/reports\` — JSON snapshots for recovery, production status, and bank portfolio summary), plus **Alerts** and **Risk panel** (includes **Recovery** signals). **Order book** (\`/portal/financier/order-book\`) lists **financed orders only** when you have credit monitoring scope; open an order for tabs: **Overview** (pipeline ribbon, export path), **Production** (floor % and 14-day sewing trend), **Finance & recovery**, **Materials**. Visibility depends on **financier access scope** and linked party / BTB data.
 
 ## Tips
 
 - Changes here can affect **who sees which sidebar items** and **feature flags** for the whole tenant.`,
         tags: ["settings", "users", "roles", "admin"],
-        lastUpdated: "2026-06-06",
+        lastUpdated: "2026-06-28",
         infographics: [
           {
             type: "highlight",
@@ -1431,6 +1434,9 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
           "/app/settings/users",
           "/app/settings/roles",
           "/app/settings/tenant",
+          "/app/settings/statutory-compliance",
+          "/app/settings/data-import",
+          "/app/settings/bulk-tenant-onboarding",
           "/app/settings/external-access",
           "/app/settings/external-access/customers",
           "/app/settings/external-access/financiers",

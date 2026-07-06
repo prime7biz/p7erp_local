@@ -66,10 +66,10 @@ class Settings(BaseSettings):
     openrouter_site_url: str = ""
     openrouter_app_name: str = "P7 ERP"
     # When true with OpenRouter keys set, tier-1 chat / structured AI uses OpenRouter before local Ollama.
-    openrouter_tier1_preferred: bool = False
+    openrouter_tier1_preferred: bool = True
     # When true, tenant-scoped text features (dashboard brief, weekly report, planning narrative, etc.)
     # call OpenRouter first via generate_text_for_tenant, then fall back to Gemini if configured.
-    openrouter_tenant_text_enabled: bool = False
+    openrouter_tenant_text_enabled: bool = True
     # 0 = unlimited; otherwise max Gemini API calls per calendar month (process-wide, persisted in media/)
     ai_monthly_budget_limit: int = 0
     # Tier-1 local routing model (Docker service name by default)
@@ -158,6 +158,21 @@ class Settings(BaseSettings):
     perf_session_statement_timeout_ms: int = 0
     # Per-request DB session: SET LOCAL lock_timeout (ms). 0 = disabled.
     perf_session_lock_timeout_ms: int = 0
+
+    # Subscription plan enforcement: when True, block user creation over plan max_users and inactive subscriptions.
+    plan_enforcement_enabled: bool = False
+
+    # Optional PgBouncer: when True, use database_url_pgbouncer (transaction pooling; asyncpg needs statement_cache_size=0).
+    use_pgbouncer: bool = False
+    database_url_pgbouncer: str = "postgresql://p7erp:p7erp@pgbouncer:5432/p7erp"
+
+    # Async platform jobs (Celery). Off by default for safe rollout.
+    platform_bulk_tenant_async_enabled: bool = False
+    data_migration_async_enabled: bool = False
+
+    # Redis-backed API response cache for stable read endpoints.
+    api_cache_enabled: bool = False
+    api_cache_tax_config_ttl_seconds: int = 300
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

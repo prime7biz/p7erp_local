@@ -23,6 +23,11 @@ from app.modules.production.holiday_import_service import (
     filter_holidays_by_dates,
     get_country_holidays_for_year,
 )
+from app.modules.production.factory_profile_service import (
+    apply_factory_profile_to_tenant,
+    list_factory_profile_options,
+    normalize_factory_profile,
+)
 from app.modules.production.schemas import (
     CountryHolidayPreviewItem,
     CountryHolidaysPreviewResponse,
@@ -30,6 +35,7 @@ from app.modules.production.schemas import (
     FactoryCalendarImportHolidaysResponse,
     FactoryCalendarOverrideCreate,
     FactoryCalendarOverrideResponse,
+    FactoryProfileOptionResponse,
     ProductionShiftCreate,
     ProductionShiftResponse,
     ProductionShiftUpdate,
@@ -143,6 +149,26 @@ async def _remove_hr_if_factory_synced(
         await db.delete(hr)
 
 
+async def _settings_response(s: TenantProductionSettings, tenant_id: int) -> TenantProductionSettingsResponse:
+    return TenantProductionSettingsResponse(
+        tenant_id=tenant_id,
+        factory_profile=s.factory_profile,
+        enabled_optional_units=list(s.enabled_optional_units or []),
+        weekend_days=list(s.weekend_days or []),
+        cm_alert_threshold_pct=float(s.cm_alert_threshold_pct or 10),
+        ai_provider_config=s.ai_provider_config if isinstance(s.ai_provider_config, dict) else None,
+    )
+
+
+@router.get("/factory-profiles", response_model=list[FactoryProfileOptionResponse])
+async def list_factory_profiles(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+):
+    _ensure(user, tenant)
+    return [FactoryProfileOptionResponse(**item) for item in list_factory_profile_options()]
+
+
 @router.get("/settings", response_model=TenantProductionSettingsResponse)
 async def get_production_settings(
     tenant: Tenant = Depends(require_tenant),
@@ -151,13 +177,7 @@ async def get_production_settings(
 ):
     _ensure(user, tenant)
     s = await _get_or_create_settings(db, tenant.id)
-    return TenantProductionSettingsResponse(
-        tenant_id=tenant.id,
-        enabled_optional_units=list(s.enabled_optional_units or []),
-        weekend_days=list(s.weekend_days or []),
-        cm_alert_threshold_pct=float(s.cm_alert_threshold_pct or 10),
-        ai_provider_config=s.ai_provider_config if isinstance(s.ai_provider_config, dict) else None,
-    )
+    return await _settings_response(s, tenant.id)
 
 
 @router.put("/settings", response_model=TenantProductionSettingsResponse)
@@ -169,7 +189,21 @@ async def update_production_settings(
 ):
     _ensure(user, tenant)
     s = await _get_or_create_settings(db, tenant.id)
-    if body.enabled_optional_units is not None:
+    t = await db.get(Tenant, tenant.id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    if body.factory_profile is not None:
+        try:
+            normalized = normalize_factory_profile(body.factory_profile)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        s.factory_profile = normalized
+        if normalized:
+            preset = await apply_factory_profile_to_tenant(db, tenant=t, profile=normalized)
+            s.enabled_optional_units = list(preset["enabled_optional_units"])
+
+    if body.enabled_optional_units is not None and body.factory_profile is None:
         s.enabled_optional_units = body.enabled_optional_units
     if body.weekend_days is not None:
         s.weekend_days = body.weekend_days
@@ -179,13 +213,7 @@ async def update_production_settings(
         s.ai_provider_config = body.ai_provider_config
     await db.commit()
     await db.refresh(s)
-    return TenantProductionSettingsResponse(
-        tenant_id=tenant.id,
-        enabled_optional_units=list(s.enabled_optional_units or []),
-        weekend_days=list(s.weekend_days or []),
-        cm_alert_threshold_pct=float(s.cm_alert_threshold_pct or 10),
-        ai_provider_config=s.ai_provider_config if isinstance(s.ai_provider_config, dict) else None,
-    )
+    return await _settings_response(s, tenant.id)
 
 
 @router.get("/shifts", response_model=list[ProductionShiftResponse])

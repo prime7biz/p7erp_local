@@ -30,4 +30,5 @@ celery_app = make_celery()
 
 # Register tasks (decorators need celery_app defined above).
 from app.workers import forecast_worker as _forecast_worker  # noqa: E402, F401
+from app.workers import platform_worker as _platform_worker  # noqa: E402, F401
 from app.workers import task_worker as _task_worker  # noqa: E402, F401

@@ -1156,3 +1156,41 @@ async def financier_contract_what_if(
         etd_shift_days=body.etd_shift_days,
         rm_accel_pct=body.rm_accel_pct,
     )
+
+
+@router.get("/bank-exports/portfolio-summary")
+async def financier_bank_portfolio_export(
+    principal: Annotated[ExternalPrincipal, Depends(require_financier_scope(SCOPE_FINANCIAL_SUMMARY))],
+    db: AsyncSession = Depends(get_db),
+):
+    """Bank-grade portfolio summary for loan monitoring exports."""
+    await _roles_ok(db, principal)
+    party_id = await fsel.financier_party_id_for_principal(db, principal)
+    tenant = await db.get(Tenant, principal.tenant_id)
+    order_count = int(
+        (await db.execute(select(func.count()).select_from(Order).where(Order.tenant_id == principal.tenant_id))).scalar()
+        or 0
+    )
+    open_lcs = int(
+        (
+            await db.execute(
+                select(func.count()).select_from(BtbLc).where(
+                    BtbLc.tenant_id == principal.tenant_id,
+                    BtbLc.status.in_(["OPEN", "ACTIVE", "DOCUMENTS_ACCEPTED"]),
+                )
+            )
+        ).scalar()
+        or 0
+    )
+    return {
+        "tenant_id": principal.tenant_id,
+        "tenant_name": tenant.name if tenant else None,
+        "financier_party_id": party_id,
+        "as_of": date.today().isoformat(),
+        "metrics": {
+            "active_orders": order_count,
+            "open_btb_lcs": open_lcs,
+        },
+        "export_format": "json",
+        "note": "Use financier portal reports for drill-down; this endpoint is for bank batch monitoring.",
+    }

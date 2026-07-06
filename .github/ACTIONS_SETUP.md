@@ -57,11 +57,14 @@ Triggered on push to `main` or when a tag is pushed (e.g., `v1.0.0`).
 
 To use the deploy workflow, set these secrets in your GitHub repo:
 
-1. **DEPLOY_HOST** – Production server IP/domain
-2. **DEPLOY_USER** – SSH user on production server
-3. **DEPLOY_PATH** – Absolute path to app directory (e.g., `/var/www/p7erp`)
-4. **DEPLOY_SSH_KEY** – Private SSH key (generate with `ssh-keygen -t ed25519`)
-5. **VITE_API_BASE_URL** – Frontend API URL for production (e.g., `https://api.yourdomain.com`)
+1. **DEPLOY_HOST** – Production server IP/domain (e.g. `188.245.156.127`)
+2. **DEPLOY_USER** – SSH login user; use **`root`** on prime7erp.com (docker runs as `primeadmin` via `sudo` in the workflow)
+3. **DEPLOY_PATH** – App directory on the server (e.g. `/home/primeadmin/p7erp_local`)
+4. **DEPLOY_SSH_KEY** – Private SSH key for `DEPLOY_USER`
+5. **VITE_API_BASE_URL** – Frontend API URL baked at build time (production domain)
+6. **DOCKERHUB_TOKEN** – Docker Hub push token
+
+Re-deploy without a new tag: GitHub → Actions → **Deploy** → **Run workflow** → enter tag (e.g. `v1.7.1`).
 
 **Optional:** Set up a deploy key on the production server instead of password auth:
 ```bash

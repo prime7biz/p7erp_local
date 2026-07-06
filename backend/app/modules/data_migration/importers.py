@@ -63,18 +63,22 @@ def validate_columns(entity_type: str, rows: list[dict[str, str]]) -> list[str]:
 async def _ensure_default_masters(db: AsyncSession, tenant_id: int) -> tuple[int | None, int | None]:
     cat = (
         await db.execute(
-            select(ItemCategory).where(ItemCategory.tenant_id == tenant_id, ItemCategory.code == "MIG-DEF")
+            select(ItemCategory).where(
+                ItemCategory.tenant_id == tenant_id, ItemCategory.category_code == "MIG-DEF"
+            )
         )
     ).scalar_one_or_none()
     if not cat:
-        cat = ItemCategory(tenant_id=tenant_id, code="MIG-DEF", name="Migration Default")
+        cat = ItemCategory(tenant_id=tenant_id, category_code="MIG-DEF", name="Migration Default")
         db.add(cat)
         await db.flush()
     unit = (
-        await db.execute(select(ItemUnit).where(ItemUnit.tenant_id == tenant_id, ItemUnit.code == "PCS"))
+        await db.execute(
+            select(ItemUnit).where(ItemUnit.tenant_id == tenant_id, ItemUnit.unit_code == "PCS")
+        )
     ).scalar_one_or_none()
     if not unit:
-        unit = ItemUnit(tenant_id=tenant_id, code="PCS", name="Pieces")
+        unit = ItemUnit(tenant_id=tenant_id, unit_code="PCS", name="Pieces")
         db.add(unit)
         await db.flush()
     return cat.id, unit.id
@@ -174,7 +178,7 @@ async def import_items(
             result.rows.append(ImportRowResult(i, "error", "code and name required"))
             continue
         existing = (
-            await db.execute(select(Item).where(Item.tenant_id == tenant.id, Item.code == code))
+            await db.execute(select(Item).where(Item.tenant_id == tenant.id, Item.item_code == code))
         ).scalar_one_or_none()
         if existing:
             result.skip_count += 1
@@ -186,7 +190,7 @@ async def import_items(
             continue
         item = Item(
             tenant_id=tenant.id,
-            code=code,
+            item_code=code,
             name=name,
             category_id=cat_id,
             unit_id=unit_id,

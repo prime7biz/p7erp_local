@@ -27,7 +27,7 @@ if str(backend) not in sys.path:
 
 from app.database import AsyncSessionLocal  # noqa: E402
 from app.models import PlatformPlan, Tenant  # noqa: E402
-from app.modules.admin.tenant_router import _provision_tenant_row  # noqa: E402
+from app.modules.admin.tenant_provisioning import provision_tenant_row  # noqa: E402
 from app.models.tenant import TenantType  # noqa: E402
 
 
@@ -70,7 +70,7 @@ async def main() -> None:
             if args.dry_run:
                 created.append({"name": name, "tenant_type": tt.value, "dry_run": True})
                 continue
-            tenant = await _provision_tenant_row(
+            tenant = await provision_tenant_row(
                 db,
                 name=name,
                 tenant_type=tt,

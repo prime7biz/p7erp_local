@@ -1,4 +1,4 @@
-# Semantic versioning: production deploy (SSH) runs on v* tags; server .env pins to ${{ github.ref_name }}.
+# Semantic versioning: production deploy (SSH) runs on v* tags; server .env pins to release tag.
 name: Deploy
 
 on:
@@ -7,6 +7,12 @@ on:
       - main
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to deploy (e.g. v1.7.0)'
+        required: true
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,6 +36,15 @@ jobs:
           username: prime7biz
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push backend
         uses: docker/build-push-action@v5
         with:
@@ -37,7 +52,7 @@ jobs:
           push: true
           tags: |
             prime7biz/p7erp-backend:latest
-            prime7biz/p7erp-backend:${{ github.ref_name }}
+            prime7biz/p7erp-backend:${{ steps.tag.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -49,10 +64,10 @@ jobs:
           push: true
           tags: |
             prime7biz/p7erp-frontend:latest
-            prime7biz/p7erp-frontend:${{ github.ref_name }}
+            prime7biz/p7erp-frontend:${{ steps.tag.outputs.value }}
           build-args: |
             VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
-            VITE_APP_VERSION=${{ github.ref_name }}
+            VITE_APP_VERSION=${{ steps.tag.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -60,35 +75,69 @@ jobs:
     name: Deploy to Production
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy with SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          RELEASE_TAG: ${{ steps.tag.outputs.value }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script_stop: true
+          port: 22
+          timeout: 60s
           command_timeout: 30m
+          script_stop: true
+          envs: DEPLOY_PATH,RELEASE_TAG
           script: |
             set -euo pipefail
-            APP_DIR="${{ secrets.DEPLOY_PATH }}"
-            APP_RUN_USER="primeadmin"
-            TAG="${{ github.ref_name }}"
-            # SSH login is often root; docker compose runs as primeadmin on the live host.
-            sudo -u "${APP_RUN_USER}" -H bash -lc "
+            echo "SSH connected as $(whoami) on $(hostname)"
+            if [[ -z "${DEPLOY_PATH:-}" ]]; then
+              echo "ERROR: DEPLOY_PATH secret is empty" >&2
+              exit 1
+            fi
+            if [[ -z "${RELEASE_TAG:-}" ]]; then
+              echo "ERROR: RELEASE_TAG is empty" >&2
+              exit 1
+            fi
+            if [[ ! -d "${DEPLOY_PATH}" ]]; then
+              echo "ERROR: DEPLOY_PATH does not exist: ${DEPLOY_PATH}" >&2
+              exit 1
+            fi
+            deploy_body() {
               set -euo pipefail
-              cd \"${APP_DIR}\"
-              git pull origin main
-              touch .env
-              sed -i '/^BACKEND_IMAGE=/d;/^FRONTEND_IMAGE=/d;/^APP_VERSION=/d' .env
-              echo \"BACKEND_IMAGE=prime7biz/p7erp-backend:${TAG}\" >> .env
-              echo \"FRONTEND_IMAGE=prime7biz/p7erp-frontend:${TAG}\" >> .env
-              echo \"APP_VERSION=${TAG}\" >> .env
-              docker compose -f docker-compose.prod.yml pull
-              docker compose -f docker-compose.prod.yml up -d
-              docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
-              docker compose -f docker-compose.prod.yml exec -T backend alembic current
-            "
+              cd "${DEPLOY_PATH}"
+              git fetch origin main
+              git checkout main
+              git pull --ff-only origin main
+              chmod +x scripts/deploy_production_remote.sh
+              DEPLOY_PATH="${DEPLOY_PATH}" bash scripts/deploy_production_remote.sh "${RELEASE_TAG}"
+            }
+            # DEPLOY_USER should be root; docker/git run as primeadmin on the live host.
+            if id primeadmin >/dev/null 2>&1; then
+              sudo -u primeadmin -H env DEPLOY_PATH="${DEPLOY_PATH}" RELEASE_TAG="${RELEASE_TAG}" bash -s <<'EOS'
+            set -euo pipefail
+            cd "${DEPLOY_PATH}"
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+            chmod +x scripts/deploy_production_remote.sh
+            DEPLOY_PATH="${DEPLOY_PATH}" bash scripts/deploy_production_remote.sh "${RELEASE_TAG}"
+            EOS
+            else
+              echo "WARN: primeadmin user missing; running deploy as $(whoami)"
+              deploy_body
+            fi

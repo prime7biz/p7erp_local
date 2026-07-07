@@ -37,36 +37,33 @@ The CI workflow automatically:
 
 ## 2. Deploy Workflow (`.github/workflows/deploy.yml`)
 
-Triggered on push to `main` or when a tag is pushed (e.g., `v1.0.0`).
+Triggered on push to `main` or when a `v*` tag is pushed.
 
-### Jobs
+### Job: Build and Push
 
-**Build and Push**
 - Builds backend and frontend Docker images
-- Pushes to GitHub Container Registry (`ghcr.io`)
-- Auto-tags images with branch name, semantic version, and commit SHA
+- Pushes to Docker Hub (`prime7biz/p7erp-backend`, `prime7biz/p7erp-frontend`)
+- Tags: `latest` plus branch/tag name (`main` or `vX.Y.Z`)
+- **Does not SSH to the live server** — production updates are manual
 
-**Deploy** (runs only on tag)
-- SSH into production server
-- Pulls latest compose files
-- Pulls updated images
-- Runs `docker compose up -d` 
-- Runs Alembic migrations
+### Live server (manual)
 
-### Prerequisites
+After images are on Docker Hub, SSH to the server and run:
 
-To use the deploy workflow, set these secrets in your GitHub repo:
+```bash
+cd /home/primeadmin/p7erp_local
+git pull --ff-only origin main
+DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z
+```
 
-1. **DEPLOY_HOST** – Production server IP/domain (e.g. `188.245.156.127`)
-2. **DEPLOY_USER** – SSH login user; use **`root`** on prime7erp.com (docker runs as `primeadmin` via `sudo` in the workflow)
-3. **DEPLOY_PATH** – App directory on the server (e.g. `/home/primeadmin/p7erp_local`)
-4. **DEPLOY_SSH_KEY** – Private SSH key for `DEPLOY_USER`
-5. **VITE_API_BASE_URL** – Frontend API URL baked at build time (production domain)
-6. **DOCKERHUB_TOKEN** – Docker Hub push token
+### Prerequisites (GitHub secrets for image build)
 
-Re-deploy without a new tag: GitHub → Actions → **Deploy** → **Run workflow** → enter tag (e.g. `v1.7.1`).
+1. **DOCKERHUB_TOKEN** – Docker Hub push token
+2. **VITE_API_BASE_URL** – Frontend API URL baked at build time (production domain)
 
-**Optional:** Set up a deploy key on the production server instead of password auth:
+Optional for manual server deploy (not stored in GitHub workflow): SSH access to `root@` your server and path `/home/primeadmin/p7erp_local`.
+
+**Optional:** Set up a deploy key on the production server for manual SSH:
 ```bash
 # On your local machine
 ssh-keygen -t ed25519 -f deploy_key -N ""
@@ -109,14 +106,13 @@ act
 - Backend: May timeout waiting for Postgres. Increase `health-retries` or `health-timeout` in `ci.yml`.
 - Frontend: If `npm ci` fails, check `package-lock.json` is committed.
 
-**Docker build fails:**  
+**Image build fails:**  
+- Check Docker Hub token (`DOCKERHUB_TOKEN`) and `VITE_API_BASE_URL` secret.
 - Check that Dockerfiles don't reference files outside their context (backend build needs `backend/`).
 - For frontend: Ensure `Dockerfile.prod` exists and `nginx.prod.conf` is present.
 
-**Deploy fails:**  
-- SSH key must have newlines preserved. Use `echo -e "..."` in GitHub secrets if needed.
-- Ensure app directory exists on server: `ssh user@host mkdir -p /path/to/app`
-- Production server must have Docker and Docker Compose installed.
+**Live server not updated after tag:**  
+- Expected — GitHub only builds images. SSH to the server and run `scripts/deploy_production_remote.sh vX.Y.Z` (see `docs/DEPLOYMENT_PROCESS.md`).
 
 ## Next Steps
 
@@ -124,6 +120,7 @@ act
 2. **Enable Actions** in repo settings if not already enabled
 3. **For CI only:** Push to your default branch and watch **Actions** tab for results
 4. **For deployment:** 
-   - Add secrets to your GitHub repo settings
-   - Test with a tag: `git tag v0.1.0 && git push origin v0.1.0`
+   - Add `DOCKERHUB_TOKEN` and `VITE_API_BASE_URL` to GitHub secrets
+   - Tag a release: `git tag v0.1.0 && git push origin v0.1.0` (builds images only)
+   - Manually SSH to production when ready: `scripts/deploy_production_remote.sh v0.1.0`
 5. **Monitor logs** in the Actions tab; click a failed job for details

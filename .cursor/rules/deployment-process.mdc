@@ -8,8 +8,9 @@ alwaysApply: true
 **Trigger:** When the user says **`deploy`**, **`release`**, or **`push to live`**, execute **all phases below end-to-end**. Do not stop after commit or after `git push origin main`.
 
 **How production deploy works** (see `.github/workflows/deploy.yml`):
-- Push to **`main`** → CI + Docker image build/push only (no SSH to live server).
-- Push **`v*` tag** → SSH deploy + `alembic upgrade head` on production.
+- Push to **`main`** → CI + Docker image build/push only (no live server update).
+- Push **`v*` tag** → Docker image build/push only (images tagged `vX.Y.Z` on Docker Hub).
+- **Live server** → manual SSH only (`scripts/deploy_production_remote.sh` or commands in `docs/DEPLOYMENT_PROCESS.md`). GitHub does **not** SSH to production.
 
 Human runbook mirror: `docs/DEPLOYMENT_PROCESS.md`. Cutover detail: `docs/GO_LIVE_CUTOVER_RUNBOOK.md`.
 
@@ -72,7 +73,7 @@ docker compose exec -T backend python -c "import json,urllib.request; d=json.loa
    - **minor** (v1.5.0 → v1.6.0): features, API additions, migrations, multi-module work
    - **major:** ask user first
    State chosen tag and **rollback pin** (previous tag) before creating the tag.
-3. **Migrations:** Warn that tag deploy runs `alembic upgrade head` on live.
+3. **Migrations:** Warn that **manual** live deploy runs `alembic upgrade head` on the server (not via GitHub).
 
 ---
 
@@ -85,24 +86,23 @@ git push origin vX.Y.Z
 
 ---
 
-## Phase 6 — Monitor tag deploy
+## Phase 6 — Wait for tag image build + manual live deploy
 
-Poll workflows where `head_branch` is the new tag until **Deploy** completes.
+Poll workflows where `head_branch` is the new tag until **Deploy** (build-and-push) completes successfully (~10–15 min).
 
-- **Build success + SSH failure:** Often `DEPLOY_USER` is `primeadmin` but only `root` has the SSH key — set `DEPLOY_USER=root` in GitHub secrets (`DEPLOY_PATH=/home/primeadmin/p7erp_local`). Workflow runs docker as `primeadmin` via `sudo`. Images are on Docker Hub; give manual server commands:
+Then update production **manually** (SSH). Example:
 
 ```bash
-cd <DEPLOY_PATH>
+ssh root@<DEPLOY_HOST>
+sudo -u primeadmin -H bash -lc 'cd /home/primeadmin/p7erp_local && git pull --ff-only origin main && DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z'
+```
+
+Or step-by-step:
+
+```bash
+cd /home/primeadmin/p7erp_local
 git pull origin main
-touch .env
-sed -i '/^BACKEND_IMAGE=/d;/^FRONTEND_IMAGE=/d;/^APP_VERSION=/d' .env
-echo "BACKEND_IMAGE=prime7biz/p7erp-backend:vX.Y.Z" >> .env
-echo "FRONTEND_IMAGE=prime7biz/p7erp-frontend:vX.Y.Z" >> .env
-echo "APP_VERSION=vX.Y.Z" >> .env
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
-docker compose -f docker-compose.prod.yml exec -T backend alembic current
+DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z
 ```
 
 ---

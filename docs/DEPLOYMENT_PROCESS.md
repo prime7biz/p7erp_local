@@ -12,10 +12,11 @@
 
 | Action | What happens |
 |--------|----------------|
-| `git push origin main` | GitHub CI runs tests + builds Docker images. **Live server is NOT updated.** |
-| `git push origin vX.Y.Z` | GitHub builds images, SSHs to server, pulls images, restarts containers, runs `alembic upgrade head`. **This updates production.** |
+| `git push origin main` | GitHub CI runs tests + builds Docker images (`:main` + `:latest`). **Live server is NOT updated.** |
+| `git push origin vX.Y.Z` | GitHub builds images tagged `vX.Y.Z` on Docker Hub. **Live server is NOT updated automatically.** |
+| **Manual SSH** (you choose when) | Pull images on server, restart containers, run migrations. See `scripts/deploy_production_remote.sh`. |
 
-Workflow file: `.github/workflows/deploy.yml`
+Workflow file: `.github/workflows/deploy.yml` (build/push only — no GitHub SSH to production).
 
 ---
 
@@ -99,34 +100,21 @@ docker compose -f docker-compose.prod.yml exec -T backend alembic current
 
 ---
 
-## If GitHub SSH deploy fails
+## Manual live deploy (after images are built)
 
-**Common cause (prime7erp.com):** GitHub secret `DEPLOY_USER` must be **`root`** (SSH login). Docker commands run as **`primeadmin`** via `sudo` inside `.github/workflows/deploy.yml`. Using `primeadmin` as `DEPLOY_USER` fails if that user has no SSH key.
-
-**Second common cause:** `DEPLOY_SSH_KEY` does not match any key in `root`’s `~/.ssh/authorized_keys` on the server. The private key on your PC that works with `ssh root@DEPLOY_HOST` must be pasted **verbatim** into GitHub → Settings → Secrets → `DEPLOY_SSH_KEY` (include `-----BEGIN` / `-----END` lines and newlines).
-
-**GitHub secrets checklist:**
-
-| Secret | Example value |
-|--------|----------------|
-| `DEPLOY_HOST` | `188.245.156.127` |
-| `DEPLOY_USER` | `root` |
-| `DEPLOY_PATH` | `/home/primeadmin/p7erp_local` |
-| `DEPLOY_SSH_KEY` | Private key that can `ssh root@DEPLOY_HOST` |
-
-Docker images may still be built. Run manually on the server:
+GitHub only builds and pushes Docker images. When you are ready to update production, SSH to the server:
 
 ```bash
-cd <DEPLOY_PATH>
-git pull origin main
-touch .env
-sed -i '/^BACKEND_IMAGE=/d;/^FRONTEND_IMAGE=/d;/^APP_VERSION=/d' .env
-echo "BACKEND_IMAGE=prime7biz/p7erp-backend:vX.Y.Z" >> .env
-echo "FRONTEND_IMAGE=prime7biz/p7erp-frontend:vX.Y.Z" >> .env
-echo "APP_VERSION=vX.Y.Z" >> .env
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
+ssh root@<DEPLOY_HOST>
+sudo -u primeadmin -H bash -lc 'cd /home/primeadmin/p7erp_local && git pull --ff-only origin main && DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z'
+```
+
+Or on the server directly:
+
+```bash
+cd /home/primeadmin/p7erp_local
+git pull --ff-only origin main
+DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z
 ```
 
 ---

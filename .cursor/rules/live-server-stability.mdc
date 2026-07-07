@@ -7,7 +7,7 @@ alwaysApply: true
 
 **Deploy mechanics** (see `.github/workflows/deploy.yml` and `.cursor/rules/deployment-process.mdc`):
 - Push to **`main`** → CI + Docker image build/push only (does **not** SSH to production).
-- Push a **`v*` tag** → SSH production deploy + `alembic upgrade head`.
+- Push a **`v*` tag** → Docker image build/push only on GitHub; **manual SSH** to production when you choose (`scripts/deploy_production_remote.sh`).
 
 When the user says **deploy**, follow the full checklist in `.cursor/rules/deployment-process.mdc`. Treat **every** change going to `main` like it may soon reach production. When in doubt, choose the safer, smaller, reversible option.
 

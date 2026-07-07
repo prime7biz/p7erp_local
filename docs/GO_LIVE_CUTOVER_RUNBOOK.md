@@ -1,7 +1,7 @@
 # Go-Live Cutover Runbook
 
 **Target:** Full big-bang production cutover  
-**Deploy mechanism:** Git tag `v*` → `.github/workflows/deploy.yml` (build images, SSH, migrate, `docker compose -f docker-compose.prod.yml up -d`)
+**Deploy mechanism:** Git tag `v*` → GitHub builds/pushes Docker images → **manual SSH** to server (`scripts/deploy_production_remote.sh`)
 
 ---
 
@@ -44,7 +44,11 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-This triggers deploy workflow: build/push images → SSH to server → `alembic upgrade head` → `docker compose -f docker-compose.prod.yml up -d`.
+This triggers the deploy workflow: build/push images to Docker Hub (~10–15 min). Then **manually** SSH to production and run:
+
+```bash
+sudo -u primeadmin -H bash -lc 'cd /home/primeadmin/p7erp_local && git pull --ff-only origin main && DEPLOY_PATH=/home/primeadmin/p7erp_local bash scripts/deploy_production_remote.sh vX.Y.Z'
+```
 
 ### 3. Post-deploy checks (within 15 minutes)
 

@@ -128,15 +128,15 @@ jobs:
             }
             # DEPLOY_USER should be root; docker/git run as primeadmin on the live host.
             if id primeadmin >/dev/null 2>&1; then
-              sudo -u primeadmin -H env DEPLOY_PATH="${DEPLOY_PATH}" RELEASE_TAG="${RELEASE_TAG}" bash -s <<'EOS'
-            set -euo pipefail
-            cd "${DEPLOY_PATH}"
-            git fetch origin main
-            git checkout main
-            git pull --ff-only origin main
-            chmod +x scripts/deploy_production_remote.sh
-            DEPLOY_PATH="${DEPLOY_PATH}" bash scripts/deploy_production_remote.sh "${RELEASE_TAG}"
-            EOS
+              sudo -u primeadmin -H bash -lc "
+                set -euo pipefail
+                cd \"${DEPLOY_PATH}\"
+                git fetch origin main
+                git checkout main
+                git pull --ff-only origin main
+                chmod +x scripts/deploy_production_remote.sh
+                DEPLOY_PATH=\"${DEPLOY_PATH}\" bash scripts/deploy_production_remote.sh \"${RELEASE_TAG}\"
+              "
             else
               echo "WARN: primeadmin user missing; running deploy as $(whoami)"
               deploy_body

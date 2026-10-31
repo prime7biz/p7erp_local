@@ -1,6 +1,7 @@
 """Shared Gemini text generation (used by production planning, ai_tool, dashboard, etc.)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -174,7 +175,10 @@ async def generate_text_for_tenant(
         return None
     if not await allow_gemini_for_tenant(db, tenant_id):
         return None
-    text, model_name, pt, ct, tt = _raw_generate_text_sync(prompt, model_override=model_override)
+    # The Gemini SDK is blocking (network call, seconds); run it off the event loop.
+    text, model_name, pt, ct, tt = await asyncio.to_thread(
+        _raw_generate_text_sync, prompt, model_override=model_override
+    )
     if text:
         await record_gemini_usage(
             db,
@@ -271,8 +275,8 @@ async def generate_multimodal_for_tenant(
         return None
     if not await allow_gemini_for_tenant(db, tenant_id):
         return None
-    text, model_name, pt, ct, tt = _raw_multimodal_sync(
-        prompt, file_bytes, mime_type, model_override=model_override
+    text, model_name, pt, ct, tt = await asyncio.to_thread(
+        _raw_multimodal_sync, prompt, file_bytes, mime_type, model_override=model_override
     )
     if text:
         await record_gemini_usage(

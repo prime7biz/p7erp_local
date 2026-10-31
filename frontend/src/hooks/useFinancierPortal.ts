@@ -81,7 +81,7 @@ export const financierPortalApi = {
     if (q.date_to) p.set("date_to", q.date_to);
     if (q.limit != null) p.set("limit", String(q.limit));
     if (q.offset != null) p.set("offset", String(q.offset));
-    if (q.include_gl === false) p.set("include_gl", "false");
+    if (q.include_gl != null) p.set("include_gl", q.include_gl ? "true" : "false");
     return externalGet<Record<string, unknown>>(`/financier/inventory-ledger?${p.toString()}`);
   },
   inventoryReconciliation: () => externalGet<Record<string, unknown>>("/financier/inventory-reconciliation"),

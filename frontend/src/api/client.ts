@@ -1,6 +1,8 @@
 import type {
   CustomerExtractionResponse,
   InquiryExtractionResponse,
+  LcExtractionResponse,
+  ShippingDocExtractionResponse,
   VendorExtractionResponse,
 } from "../types/extraction";
 import type {
@@ -12,30 +14,8 @@ import type {
   ExternalPrincipalListResponse,
 } from "@/types/externalAccess";
 import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
+import { API_BASE } from "@/api/apiBase";
 
-/**
- * Docker main UI is served on :5173 with nginx proxying `/api` to the backend. If an older build
- * inlined `http://localhost:8000`, the browser would cross-call :8000 and often show a misleading
- * CORS error when the connection drops. Force same-origin `/api` for that case.
- */
-function resolveApiBase(): string {
-  const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? "";
-  if (typeof window === "undefined") return configured;
-  const { hostname, port } = window.location;
-  if ((hostname !== "localhost" && hostname !== "127.0.0.1") || port !== "5173") return configured;
-  if (!configured) return configured;
-  try {
-    const u = new URL(configured);
-    if ((u.hostname === "localhost" || u.hostname === "127.0.0.1") && u.port === "8000") {
-      return "";
-    }
-  } catch {
-    if (configured.startsWith("/")) return configured;
-  }
-  return configured;
-}
-
-const API_BASE = resolveApiBase();
 export const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev";
 
 export type TenantType = "manufacturer" | "buying_house" | "both";
@@ -622,6 +602,120 @@ export interface HrEmployeeStatusHistoryCreate {
   remarks?: string | null;
 }
 
+export interface HrComplianceFramework {
+  id: number;
+  tenant_id: number | null;
+  framework_name: string;
+  version: string | null;
+  is_system: boolean;
+  is_active: boolean;
+  created_at?: string | null;
+  /** Present on system templates: tenant copy id after Activate, else null. */
+  activated_tenant_framework_id?: number | null;
+}
+
+export interface HrComplianceRequirement {
+  id: number;
+  tenant_id: number | null;
+  framework_id: number;
+  requirement_code: string;
+  title: string;
+  description: string | null;
+  category: string;
+  verification_method: string | null;
+  required_documents: string[] | null;
+  is_active: boolean;
+}
+
+export interface HrEmployeeComplianceRecord {
+  id: number;
+  tenant_id: number;
+  employee_id: number;
+  requirement_id: number;
+  status: string;
+  evidence_document_id: number | null;
+  verified_by: number | null;
+  verified_at: string | null;
+  notes: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface HrComplianceScore {
+  framework_id: number;
+  framework_name: string;
+  total_requirements: number;
+  compliant_count: number;
+  non_compliant_count: number;
+  pending_count: number;
+  score_percent: number;
+  employee_count: number;
+  weighted_score_percent: number | null;
+}
+
+export interface HrAuditReadinessGap {
+  employee_id: number;
+  employee_code: string | null;
+  employee_name: string | null;
+  requirement_id: number;
+  requirement_code: string;
+  title: string;
+  status: string;
+  missing_documents: string[];
+  evidence_document_id: number | null;
+}
+
+export interface HrAuditReadiness {
+  framework_id: number;
+  framework_name: string;
+  score_percent: number;
+  gaps: HrAuditReadinessGap[];
+  non_compliant_summary: Record<string, unknown>[];
+  action_plan: string[];
+}
+
+export interface HrAgeVerification {
+  id: number;
+  tenant_id: number;
+  employee_id: number;
+  verification_method: string;
+  document_id: number | null;
+  date_of_birth: string;
+  age_at_verification: number;
+  status: string;
+  is_bsci_compliant: boolean;
+  verified_by: number;
+  verified_at: string;
+  notes: string | null;
+}
+
+export interface HrMedicalRecord {
+  id: number;
+  tenant_id: number;
+  employee_id: number;
+  certificate_number: string | null;
+  examination_date: string;
+  expiry_date: string | null;
+  doctor_name: string | null;
+  doctor_registration: string | null;
+  hospital_clinic: string | null;
+  fitness_status: string;
+  conditions: string[] | null;
+  restrictions: string[] | null;
+  document_id: number | null;
+  reminder_sent: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface HrDocExtractionResponse {
+  success: boolean;
+  document_type: string;
+  fields: Record<string, unknown>;
+  unmapped_text: string[];
+  warnings: string[];
+}
+
 export interface HrDashboardData {
   total_employees: number;
   active_employees: number;
@@ -1034,8 +1128,92 @@ export interface HrPayrollRunLineResponse {
   net_pay: string;
   overtime_amount: string;
   remarks: string | null;
+  calculation_source?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface HrPayrollAssignmentCreate {
+  employee_id: number;
+  structure_id: number;
+  effective_from: string;
+  effective_to?: string | null;
+  base_salary?: string | null;
+  component_overrides?: Record<string, string | { amount: string | number; formula_type?: string }> | null;
+}
+
+export interface HrPayrollAssignmentResponse {
+  id: number;
+  tenant_id: number;
+  employee_id: number;
+  structure_id: number;
+  effective_from: string;
+  effective_to: string | null;
+  base_salary: string | null;
+  component_overrides: Record<string, unknown> | null;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HrPayrollAutoCalcComponent {
+  component_id: number;
+  component_code: string;
+  component_name: string;
+  component_type: string;
+  calculation_type: string;
+  amount: string;
+  source_amount: string;
+  is_statutory?: boolean;
+  statutory_kind?: string | null;
+}
+
+export interface HrPayrollAutoCalcEmployee {
+  employee_id: number;
+  employee_code: string;
+  employee_name?: string;
+  structure_id: number | null;
+  assignment_id: number | null;
+  base_salary: string;
+  days_present: string;
+  absent_days?: string;
+  late_days?: string;
+  ot_hours: string;
+  paid_leave_days: string;
+  unpaid_leave_days: string;
+  gross_pay: string;
+  deductions: string;
+  net_pay: string;
+  overtime_amount: string;
+  components: HrPayrollAutoCalcComponent[];
+  warnings: string[];
+  skipped: boolean;
+  skip_reason: string | null;
+  status?: string;
+  has_manual_override?: boolean;
+  calculation_source?: string;
+}
+
+export interface HrPayrollAutoCalcPreview {
+  run_id: number;
+  period_id: number;
+  as_of: string;
+  existing_line_count: number;
+  requires_overwrite_confirm: boolean;
+  employees: HrPayrollAutoCalcEmployee[];
+  missing_assignment_employee_ids: number[];
+  warnings: string[];
+}
+
+export interface HrPayrollAutoCalcApplyResult {
+  run_id: number;
+  applied: number;
+  skipped: number;
+  gross_total: string;
+  deduction_total: string;
+  net_total: string;
+  preview_warnings?: string[];
+  missing_assignment_employee_ids?: number[];
 }
 
 export interface HrPayrollStructureLineResponse {
@@ -1724,6 +1902,37 @@ export interface AiForecastSummaryResponse {
   }>;
 }
 
+export interface AiFinanceForecastResponse {
+  success: boolean;
+  source: string;
+  horizon_days: number;
+  projection: {
+    forecast_points?: Array<Record<string, unknown>>;
+    history?: Array<Record<string, unknown>>;
+    assumptions?: Record<string, unknown>;
+    confidence_score?: number | null;
+  };
+  narrative: string;
+  narrative_source: string;
+  limitations: string[];
+  forecast?: Record<string, Record<string, number>>;
+  break_even?: { monthly_revenue_required?: number; current_runway_months?: number };
+  risks?: Array<{ severity?: string; description?: string; mitigation?: string }>;
+  budget_variance_insights?: Array<{
+    category?: string;
+    message?: string;
+    recommended_action?: string;
+  }>;
+}
+
+export interface PredictiveHeuristicResponse {
+  success: boolean;
+  source: string;
+  lookback_days: number;
+  items: Array<Record<string, unknown>>;
+  limitations: string[];
+}
+
 export interface AiKnowledgeSourceReference {
   document_code: string;
   document_title: string;
@@ -2234,6 +2443,16 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  async aiFinanceForecast(data?: {
+    horizon_days?: number;
+    from_date?: string | null;
+    to_date?: string | null;
+  }): Promise<AiFinanceForecastResponse> {
+    return request<AiFinanceForecastResponse>("/api/v1/ai-tool/finance/forecast", {
+      method: "POST",
+      body: JSON.stringify(data ?? {}),
+    });
+  },
   async aiKnowledgeQuery(data: { query: string; top_k?: number }): Promise<AiKnowledgeQueryResponse> {
     return request<AiKnowledgeQueryResponse>("/api/v1/ai-tool/knowledge/query", {
       method: "POST",
@@ -2361,6 +2580,17 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     });
+  },
+  async resetPhase1Demo(): Promise<{
+    ok: boolean;
+    status?: string;
+    order_code?: string;
+    narrative?: string;
+    credentials?: Record<string, string>;
+    summary?: Record<string, unknown>;
+    counts?: Record<string, number>;
+  }> {
+    return request("/api/v1/settings/demo/reset", { method: "POST", body: JSON.stringify({}) });
   },
   async getSettingsPricing(): Promise<SettingsPricingResponse> {
     return request<SettingsPricingResponse>("/api/v1/settings/pricing");
@@ -3455,6 +3685,150 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  async listHrComplianceFrameworks(): Promise<HrComplianceFramework[]> {
+    return request<HrComplianceFramework[]>("/api/v1/hr/compliance/frameworks");
+  },
+  async activateHrComplianceFramework(id: number): Promise<HrComplianceFramework> {
+    return request<HrComplianceFramework>(`/api/v1/hr/compliance/frameworks/${id}/activate`, { method: "POST" });
+  },
+  async listHrComplianceRequirements(frameworkId: number): Promise<HrComplianceRequirement[]> {
+    return request<HrComplianceRequirement[]>(
+      `/api/v1/hr/compliance/requirements?framework_id=${encodeURIComponent(String(frameworkId))}`,
+    );
+  },
+  async listHrComplianceRecords(params?: {
+    employee_id?: number;
+    requirement_id?: number;
+    framework_id?: number;
+  }): Promise<HrEmployeeComplianceRecord[]> {
+    const q = new URLSearchParams();
+    if (params?.employee_id != null) q.set("employee_id", String(params.employee_id));
+    if (params?.requirement_id != null) q.set("requirement_id", String(params.requirement_id));
+    if (params?.framework_id != null) q.set("framework_id", String(params.framework_id));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<HrEmployeeComplianceRecord[]>(`/api/v1/hr/compliance/records${suffix}`);
+  },
+  async createHrComplianceRecord(data: {
+    employee_id: number;
+    requirement_id: number;
+    status?: string;
+    evidence_document_id?: number | null;
+    notes?: string | null;
+  }): Promise<HrEmployeeComplianceRecord> {
+    return request<HrEmployeeComplianceRecord>("/api/v1/hr/compliance/records", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateHrComplianceRecord(
+    id: number,
+    data: { status?: string; evidence_document_id?: number | null; notes?: string | null },
+  ): Promise<HrEmployeeComplianceRecord> {
+    return request<HrEmployeeComplianceRecord>(`/api/v1/hr/compliance/records/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async getHrComplianceScore(frameworkId: number): Promise<HrComplianceScore> {
+    return request<HrComplianceScore>(`/api/v1/hr/compliance/score/${frameworkId}`);
+  },
+  async getHrAuditReadiness(frameworkId: number): Promise<HrAuditReadiness> {
+    return request<HrAuditReadiness>(`/api/v1/hr/compliance/audit-readiness/${frameworkId}`);
+  },
+  async listHrAgeVerifications(employeeId: number): Promise<HrAgeVerification[]> {
+    return request<HrAgeVerification[]>(`/api/v1/hr/compliance/employees/${employeeId}/age-verifications`);
+  },
+  async createHrAgeVerification(
+    employeeId: number,
+    data: { verification_method: string; date_of_birth: string; document_id?: number | null; notes?: string | null },
+  ): Promise<HrAgeVerification> {
+    return request<HrAgeVerification>(`/api/v1/hr/compliance/employees/${employeeId}/age-verifications`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async listHrMedicalRecords(employeeId: number): Promise<HrMedicalRecord[]> {
+    return request<HrMedicalRecord[]>(`/api/v1/hr/compliance/employees/${employeeId}/medical-records`);
+  },
+  async createHrMedicalRecord(
+    employeeId: number,
+    data: {
+      examination_date: string;
+      fitness_status?: string;
+      certificate_number?: string | null;
+      expiry_date?: string | null;
+      doctor_name?: string | null;
+      doctor_registration?: string | null;
+      hospital_clinic?: string | null;
+      conditions?: string[] | null;
+      restrictions?: string[] | null;
+      document_id?: number | null;
+    },
+  ): Promise<HrMedicalRecord> {
+    return request<HrMedicalRecord>(`/api/v1/hr/compliance/employees/${employeeId}/medical-records`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateHrMedicalRecord(
+    employeeId: number,
+    recordId: number,
+    data: Partial<{
+      examination_date: string;
+      fitness_status: string;
+      certificate_number: string | null;
+      expiry_date: string | null;
+      doctor_name: string | null;
+      doctor_registration: string | null;
+      hospital_clinic: string | null;
+      conditions: string[] | null;
+      restrictions: string[] | null;
+      document_id: number | null;
+    }>,
+  ): Promise<HrMedicalRecord> {
+    return request<HrMedicalRecord>(
+      `/api/v1/hr/compliance/employees/${employeeId}/medical-records/${recordId}`,
+      { method: "PATCH", body: JSON.stringify(data) },
+    );
+  },
+  async generateHrIdCard(employeeId: number): Promise<Blob> {
+    return requestBlob(`/api/v1/hr/employees/${employeeId}/documents/id-card`, { method: "POST" });
+  },
+  async generateHrAppointmentLetter(employeeId: number): Promise<Blob> {
+    return requestBlob(`/api/v1/hr/employees/${employeeId}/documents/appointment-letter`, { method: "POST" });
+  },
+  async generateHrAgeVerificationCert(employeeId: number): Promise<Blob> {
+    return requestBlob(`/api/v1/hr/employees/${employeeId}/documents/age-verification-cert`, { method: "POST" });
+  },
+  async generateHrPayslipPdf(employeeId: number, runId: number): Promise<Blob> {
+    return requestBlob(
+      `/api/v1/hr/employees/${employeeId}/documents/payslip?run_id=${encodeURIComponent(String(runId))}`,
+      { method: "POST" },
+    );
+  },
+  async generateHrBulkIdCards(): Promise<Blob> {
+    return requestBlob("/api/v1/hr/employees/bulk-documents/id-cards", { method: "POST" });
+  },
+  async getHrAttendanceAnalysis(params?: { department_id?: number; days?: number }): Promise<Record<string, unknown>> {
+    const q = new URLSearchParams();
+    if (params?.department_id != null) q.set("department_id", String(params.department_id));
+    if (params?.days != null) q.set("days", String(params.days));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<Record<string, unknown>>(`/api/v1/ai-tool/hr/attendance-analysis${suffix}`);
+  },
+  async getHrTurnoverRisk(): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>("/api/v1/ai-tool/hr/turnover-risk");
+  },
+  async getHrPayrollAnomalies(runId: number): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>(
+      `/api/v1/ai-tool/hr/payroll-anomalies?run_id=${encodeURIComponent(String(runId))}`,
+    );
+  },
+  async getHrComplianceRisk(frameworkId: number): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>(
+      `/api/v1/ai-tool/hr/compliance-risk?framework_id=${encodeURIComponent(String(frameworkId))}`,
+    );
+  },
   async listHrPerformanceCycles(): Promise<HrPerformanceCycleResponse[]> {
     return request<HrPerformanceCycleResponse[]>("/api/v1/hr/performance/cycles");
   },
@@ -3850,6 +4224,61 @@ export const api = {
   async listHrPayrollRunLines(runId: number): Promise<HrPayrollRunLineResponse[]> {
     return request<HrPayrollRunLineResponse[]>(`/api/v1/hr/payroll/runs/${runId}/lines`);
   },
+  async listHrPayrollAssignments(params?: { employee_id?: number }): Promise<HrPayrollAssignmentResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.employee_id != null) q.set("employee_id", String(params.employee_id));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<HrPayrollAssignmentResponse[]>(`/api/v1/hr/payroll/assignments${suffix}`);
+  },
+  async createHrPayrollAssignment(data: HrPayrollAssignmentCreate): Promise<HrPayrollAssignmentResponse> {
+    return request<HrPayrollAssignmentResponse>("/api/v1/hr/payroll/assignments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async endHrPayrollAssignment(
+    assignmentId: number,
+    body?: { effective_to?: string | null }
+  ): Promise<HrPayrollAssignmentResponse> {
+    return request<HrPayrollAssignmentResponse>(`/api/v1/hr/payroll/assignments/${assignmentId}/end`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    });
+  },
+  async previewHrPayrollAutoCalculate(runId: number): Promise<HrPayrollAutoCalcPreview> {
+    return request<HrPayrollAutoCalcPreview>(`/api/v1/hr/payroll/runs/${runId}/auto-calculate/preview`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  },
+  async getPayrollStatutoryConfig(): Promise<PayrollStatutoryConfigResponse> {
+    return request<PayrollStatutoryConfigResponse>("/api/v1/hr/payroll/statutory-config");
+  },
+  async updatePayrollStatutoryConfig(
+    data: PayrollStatutoryConfigBody,
+  ): Promise<PayrollStatutoryConfigResponse> {
+    return request<PayrollStatutoryConfigResponse>("/api/v1/hr/payroll/statutory-config", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+  async previewPayrollStatutoryConfig(
+    data: PayrollStatutoryPreviewBody,
+  ): Promise<PayrollStatutoryPreviewResponse> {
+    return request<PayrollStatutoryPreviewResponse>("/api/v1/hr/payroll/statutory-config/preview", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async applyHrPayrollAutoCalculate(
+    runId: number,
+    body?: { employee_ids?: number[] | null; force?: boolean; overwrite_confirm?: boolean }
+  ): Promise<HrPayrollAutoCalcApplyResult> {
+    return request<HrPayrollAutoCalcApplyResult>(`/api/v1/hr/payroll/runs/${runId}/auto-calculate/apply`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    });
+  },
   async upsertHrPayrollRunLine(runId: number, data: HrPayrollRunLineUpsert): Promise<HrPayrollRunLineResponse> {
     return request<HrPayrollRunLineResponse>(`/api/v1/hr/payroll/runs/${runId}/lines/upsert`, {
       method: "POST",
@@ -3861,6 +4290,12 @@ export const api = {
   },
   async approveHrPayrollRun(runId: number, body?: { note?: string | null }): Promise<HrPayrollRunResponse> {
     return request<HrPayrollRunResponse>(`/api/v1/hr/payroll/runs/${runId}/approve`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    });
+  },
+  async rejectHrPayrollRun(runId: number, body?: { note?: string | null }): Promise<HrPayrollRunResponse> {
+    return request<HrPayrollRunResponse>(`/api/v1/hr/payroll/runs/${runId}/reject`, {
       method: "POST",
       body: JSON.stringify(body ?? {}),
     });
@@ -3984,7 +4419,7 @@ export const api = {
     return request<HrEssProfileResponse>("/api/v1/hr/ess/my-profile");
   },
   async updateHrEssMyProfile(data: HrEssProfileUpdate): Promise<HrEssProfileResponse> {
-    return request<HrEssProfileResponse>("/api/v1/hr/ess/my-profile/preferences", {
+    return request<HrEssProfileResponse>("/api/v1/hr/ess/my-profile", {
       method: "PATCH",
       body: JSON.stringify(data),
     });
@@ -4269,6 +4704,38 @@ export const api = {
   },
   async getOrderCommercialAlignment(orderId: number): Promise<OrderCommercialAlignmentResponse> {
     return request<OrderCommercialAlignmentResponse>(`/api/v1/orders/${orderId}/commercial-alignment`);
+  },
+  async getOrderCostVariance(orderId: number): Promise<OrderCostVarianceResponse> {
+    return request<OrderCostVarianceResponse>(`/api/v1/orders/${orderId}/cost-variance`);
+  },
+  async getOrdersProfitabilitySummary(params?: {
+    status?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<OrderProfitabilitySummaryPage> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.page != null) q.set("page", String(params.page));
+    if (params?.page_size != null) q.set("page_size", String(params.page_size));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<OrderProfitabilitySummaryPage>(`/api/v1/orders/profitability-summary${suffix}`);
+  },
+  async getPendingPriceVerifications(params?: { limit?: number }): Promise<PendingPriceVerificationItem[]> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<PendingPriceVerificationItem[]>(`/api/v1/orders/pending-price-verifications${suffix}`);
+  },
+  /** Dashboard-shaped owner cost alerts (wraps the same variance scan). */
+  async getDashboardPendingPriceVerifications(params?: {
+    limit?: number;
+  }): Promise<DashboardPendingPriceVerificationsResponse> {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<DashboardPendingPriceVerificationsResponse>(
+      `/api/v1/dashboard/pending-price-verifications${suffix}`,
+    );
   },
   async getOrderPromiseSummary(params?: { statuses?: string; limit?: number }): Promise<OrderPromiseSummaryResponse> {
     const q = new URLSearchParams();
@@ -4659,6 +5126,91 @@ export const api = {
   async deleteStockGroup(id: number): Promise<void> {
     return request<void>(`/api/v1/inventory/stock-groups/${id}`, { method: "DELETE" });
   },
+
+  // --- Sprint 2: stock hierarchy / batches / godown ---
+  async getStockGroupsTree(): Promise<StockGroupTreeNode[]> {
+    return request<StockGroupTreeNode[]>("/api/v1/inventory/stock-groups/tree");
+  },
+  async listStockGroupItems(groupId: number): Promise<StockItemListRow[]> {
+    return request<StockItemListRow[]>(`/api/v1/inventory/stock-groups/${groupId}/items`);
+  },
+  async listStockItemsEnhanced(params?: {
+    group_id?: number;
+    search?: string;
+    low_stock?: boolean;
+    expiry_nearing?: boolean;
+    page?: number;
+    page_size?: number;
+  }): Promise<StockItemListResponse> {
+    const q = new URLSearchParams();
+    if (params?.group_id != null) q.set("group_id", String(params.group_id));
+    if (params?.search) q.set("search", params.search);
+    if (params?.low_stock) q.set("low_stock", "true");
+    if (params?.expiry_nearing) q.set("expiry_nearing", "true");
+    if (params?.page) q.set("page", String(params.page));
+    if (params?.page_size) q.set("page_size", String(params.page_size));
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<StockItemListResponse>(`/api/v1/inventory/stock-items${suffix}`);
+  },
+  async getStockItemDetail(id: number): Promise<StockItemDetailResponse> {
+    return request<StockItemDetailResponse>(`/api/v1/inventory/stock-items/${id}`);
+  },
+  async createStockItemEnhanced(data: StockItemCreateBody): Promise<InventoryItemResponse> {
+    return request<InventoryItemResponse>("/api/v1/inventory/stock-items", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async putStockItemPrices(
+    itemId: number,
+    prices: StockItemPriceUpsert[],
+  ): Promise<{ ok: boolean; count: number }> {
+    return request(`/api/v1/inventory/stock-items/${itemId}/prices`, {
+      method: "PUT",
+      body: JSON.stringify({ prices }),
+    });
+  },
+  async listStockItemBatches(
+    itemId: number,
+    godownId?: number,
+  ): Promise<StockBatchRow[]> {
+    const q = godownId != null ? `?godown_id=${godownId}` : "";
+    return request<StockBatchRow[]>(`/api/v1/inventory/stock-items/${itemId}/batches${q}`);
+  },
+  async listExpiringBatches(days = 30): Promise<StockBatchRow[]> {
+    return request<StockBatchRow[]>(`/api/v1/inventory/stock-batches/expiring?days=${days}`);
+  },
+  async getGodownStock(godownId: number): Promise<GodownStockResponse> {
+    return request<GodownStockResponse>(`/api/v1/inventory/godowns/${godownId}/stock`);
+  },
+  async getStockByGodownMatrix(params?: {
+    group_id?: number;
+    godown_id?: number;
+  }): Promise<StockByGodownMatrixResponse> {
+    const q = new URLSearchParams();
+    if (params?.group_id != null) q.set("group_id", String(params.group_id));
+    if (params?.godown_id != null) q.set("godown_id", String(params.godown_id));
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<StockByGodownMatrixResponse>(`/api/v1/inventory/stock-by-godown${suffix}`);
+  },
+  async createStockTransfer(data: StockTransferCreateBody): Promise<StockTransferResult> {
+    return request<StockTransferResult>("/api/v1/inventory/stock-transfers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async getStockItemValuation(
+    itemId: number,
+    params?: { godown_id?: number; method?: string; as_of_date?: string },
+  ): Promise<StockValuationResult> {
+    const q = new URLSearchParams();
+    if (params?.godown_id != null) q.set("godown_id", String(params.godown_id));
+    if (params?.method) q.set("method", params.method);
+    if (params?.as_of_date) q.set("as_of_date", params.as_of_date);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<StockValuationResult>(`/api/v1/inventory/stock-items/${itemId}/valuation${suffix}`);
+  },
+
   async getPurchaseOrder(id: number): Promise<PurchaseOrderResponse> {
     return request<PurchaseOrderResponse>(`/api/v1/inventory/purchase-orders/${id}`);
   },
@@ -4668,6 +5220,7 @@ export const api = {
     date_to?: string;
     source_bom_id?: number;
     vendor_id?: number;
+    order_id?: number;
     exclude_po_linked_to_proforma?: number;
     exclude_linked_to_proforma_invoice_id?: number;
   }): Promise<PurchaseOrderResponse[]> {
@@ -4678,6 +5231,7 @@ export const api = {
       if (params?.date_to) q.set("date_to", params.date_to);
       if (params?.source_bom_id != null) q.set("source_bom_id", String(params.source_bom_id));
       if (params?.vendor_id != null) q.set("vendor_id", String(params.vendor_id));
+      if (params?.order_id != null) q.set("order_id", String(params.order_id));
       if (params?.exclude_po_linked_to_proforma != null) {
         q.set("exclude_po_linked_to_proforma", String(params.exclude_po_linked_to_proforma));
       }
@@ -4698,6 +5252,7 @@ export const api = {
     date_to?: string;
     source_bom_id?: number;
     vendor_id?: number;
+    order_id?: number;
     exclude_po_linked_to_proforma?: number;
     exclude_linked_to_proforma_invoice_id?: number;
     page?: number;
@@ -4709,6 +5264,7 @@ export const api = {
     if (params?.date_to) q.set("date_to", params.date_to);
     if (params?.source_bom_id != null) q.set("source_bom_id", String(params.source_bom_id));
     if (params?.vendor_id != null) q.set("vendor_id", String(params.vendor_id));
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
     if (params?.exclude_po_linked_to_proforma != null) {
       q.set("exclude_po_linked_to_proforma", String(params.exclude_po_linked_to_proforma));
     }
@@ -4793,8 +5349,11 @@ export const api = {
   async getGoodsReceivingPrintData(id: number): Promise<InventoryDocumentPrintPayload & Record<string, unknown>> {
     return request<InventoryDocumentPrintPayload & Record<string, unknown>>(`/api/v1/inventory/goods-receiving/${id}/print-data`);
   },
-  async bulkPurchaseOrderStatus(ids: number[], status: string): Promise<{ updated: number }> {
-    return request<{ updated: number }>("/api/v1/inventory/purchase-orders/bulk-status", {
+  async bulkPurchaseOrderStatus(
+    ids: number[],
+    status: string,
+  ): Promise<{ updated: number; skipped?: { id: number; detail: string }[] }> {
+    return request<{ updated: number; skipped?: { id: number; detail: string }[] }>("/api/v1/inventory/purchase-orders/bulk-status", {
       method: "POST",
       body: JSON.stringify({ ids, status }),
     });
@@ -4927,11 +5486,17 @@ export const api = {
     const q = new URLSearchParams({ lot_number: lotNumber });
     return request<LotTraceResponse>(`/api/v1/inventory/lot-trace?${q.toString()}`);
   },
-  async listDeliveryChallans(params?: { status_filter?: string; date_from?: string; date_to?: string }): Promise<DeliveryChallanResponse[]> {
+  async listDeliveryChallans(params?: {
+    status_filter?: string;
+    date_from?: string;
+    date_to?: string;
+    order_id?: number;
+  }): Promise<DeliveryChallanResponse[]> {
     const q = new URLSearchParams();
     if (params?.status_filter) q.set("status_filter", params.status_filter);
     if (params?.date_from) q.set("date_from", params.date_from);
     if (params?.date_to) q.set("date_to", params.date_to);
+    if (params?.order_id) q.set("order_id", String(params.order_id));
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<DeliveryChallanResponse[]>(`/api/v1/inventory/delivery-challans${suffix}`);
   },
@@ -5059,6 +5624,389 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+
+  // --- Sprint I1 MRP / IDT / process loss ---
+  async runMrp(data: {
+    order_ids?: number[] | null;
+    item_ids?: number[] | null;
+    horizon_days?: number;
+    as_of_date?: string | null;
+  }): Promise<MrpRunResult> {
+    return request<MrpRunResult>("/api/v1/inventory/mrp/run", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async listPlannedOrders(params?: {
+    status?: string;
+    item_id?: number;
+    date_from?: string;
+    date_to?: string;
+  }): Promise<PlannedOrderResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.item_id != null) q.set("item_id", String(params.item_id));
+    if (params?.date_from) q.set("date_from", params.date_from);
+    if (params?.date_to) q.set("date_to", params.date_to);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<PlannedOrderResponse[]>(`/api/v1/inventory/mrp/planned-orders${suffix}`);
+  },
+  async firmPlannedOrder(id: number): Promise<PlannedOrderResponse> {
+    return request<PlannedOrderResponse>(`/api/v1/inventory/mrp/planned-orders/${id}/firm`, {
+      method: "POST",
+    });
+  },
+  async releasePlannedOrder(id: number): Promise<PlannedOrderReleaseResult> {
+    return request<PlannedOrderReleaseResult>(`/api/v1/inventory/mrp/planned-orders/${id}/release`, {
+      method: "POST",
+    });
+  },
+  async listReorderSuggestions(params?: {
+    status?: string;
+    item_id?: number;
+    warehouse_id?: number;
+  }): Promise<ReorderSuggestionResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.item_id != null) q.set("item_id", String(params.item_id));
+    if (params?.warehouse_id != null) q.set("warehouse_id", String(params.warehouse_id));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<ReorderSuggestionResponse[]>(`/api/v1/inventory/reorder-suggestions${suffix}`);
+  },
+  async checkReorderAll(warehouseId?: number): Promise<ReorderCheckResult> {
+    const q = warehouseId != null ? `?warehouse_id=${warehouseId}` : "";
+    return request<ReorderCheckResult>(`/api/v1/inventory/reorder/check-all${q}`, { method: "POST" });
+  },
+  async approveReorderSuggestion(id: number): Promise<ReorderSuggestionResponse> {
+    return request<ReorderSuggestionResponse>(`/api/v1/inventory/reorder-suggestions/${id}/approve`, {
+      method: "POST",
+    });
+  },
+  async rejectReorderSuggestion(id: number): Promise<ReorderSuggestionResponse> {
+    return request<ReorderSuggestionResponse>(`/api/v1/inventory/reorder-suggestions/${id}/reject`, {
+      method: "POST",
+    });
+  },
+  async convertReorderSuggestion(id: number): Promise<ReorderConvertResult> {
+    return request<ReorderConvertResult>(`/api/v1/inventory/reorder-suggestions/${id}/convert`, {
+      method: "POST",
+    });
+  },
+  async bulkConvertReorderSuggestions(suggestionIds: number[]): Promise<ReorderConvertResult[]> {
+    return request<ReorderConvertResult[]>("/api/v1/inventory/reorder-suggestions/bulk-convert", {
+      method: "POST",
+      body: JSON.stringify({ suggestion_ids: suggestionIds }),
+    });
+  },
+  async listInterDepartmentTransfers(params?: {
+    status?: string;
+    process_name?: string;
+    from_warehouse?: number;
+    to_warehouse?: number;
+    date_from?: string;
+    date_to?: string;
+  }): Promise<InterDepartmentTransferResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.process_name) q.set("process_name", params.process_name);
+    if (params?.from_warehouse != null) q.set("from_warehouse", String(params.from_warehouse));
+    if (params?.to_warehouse != null) q.set("to_warehouse", String(params.to_warehouse));
+    if (params?.date_from) q.set("date_from", params.date_from);
+    if (params?.date_to) q.set("date_to", params.date_to);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<InterDepartmentTransferResponse[]>(
+      `/api/v1/inventory/inter-department-transfers${suffix}`,
+    );
+  },
+  async getInterDepartmentTransfer(id: number): Promise<InterDepartmentTransferResponse> {
+    return request<InterDepartmentTransferResponse>(`/api/v1/inventory/inter-department-transfers/${id}`);
+  },
+  async createInterDepartmentTransfer(
+    data: InterDepartmentTransferCreate,
+  ): Promise<InterDepartmentTransferResponse> {
+    return request<InterDepartmentTransferResponse>("/api/v1/inventory/inter-department-transfers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async receiveInterDepartmentTransfer(
+    id: number,
+    data: { target_qty_received: string; target_batch_number?: string; notes?: string },
+  ): Promise<InterDepartmentTransferResponse> {
+    return request<InterDepartmentTransferResponse>(
+      `/api/v1/inventory/inter-department-transfers/${id}/receive`,
+      { method: "POST", body: JSON.stringify(data) },
+    );
+  },
+  async listProcessLossStandards(): Promise<ProcessLossStandardResponse[]> {
+    return request<ProcessLossStandardResponse[]>("/api/v1/inventory/process-loss-standards");
+  },
+  async createProcessLossStandard(data: {
+    process_name: string;
+    standard_loss_percent: string;
+    warning_threshold_percent?: string;
+    item_category_id?: number | null;
+    is_active?: boolean;
+  }): Promise<ProcessLossStandardResponse> {
+    return request<ProcessLossStandardResponse>("/api/v1/inventory/process-loss-standards", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async getProcessLossReport(params: {
+    from_date: string;
+    to_date: string;
+    process_name?: string;
+  }): Promise<ProcessLossReportResponse> {
+    const q = new URLSearchParams({ from_date: params.from_date, to_date: params.to_date });
+    if (params.process_name) q.set("process_name", params.process_name);
+    return request<ProcessLossReportResponse>(`/api/v1/inventory/reports/process-loss?${q}`);
+  },
+  async getPostCostingReport(orderId: number): Promise<PostCostingReportResponse> {
+    return request<PostCostingReportResponse>(
+      `/api/v1/inventory/reports/post-costing?order_id=${orderId}`,
+    );
+  },
+
+  async listGrnQcPending(grnId: number): Promise<GrnQualityInspection[]> {
+    return request<GrnQualityInspection[]>(`/api/v1/inventory/grn/${grnId}/qc-pending`);
+  },
+  async submitGrnInspection(
+    grnId: number,
+    data: {
+      lines: Array<{
+        grn_item_id: number;
+        accepted_qty: string;
+        rejected_qty: string;
+        hold_qty: string;
+        parameters?: Record<string, unknown> | null;
+        notes?: string | null;
+        photos?: string[] | null;
+        inspection_date?: string | null;
+      }>;
+    },
+  ): Promise<GrnQualityInspection[]> {
+    return request<GrnQualityInspection[]>(`/api/v1/inventory/grn/${grnId}/inspect`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async listQualityInspections(params?: {
+    status?: string;
+    result?: string;
+    vendor_id?: number;
+    limit?: number;
+  }): Promise<GrnQualityInspection[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.result) q.set("result", params.result);
+    if (params?.vendor_id != null) q.set("vendor_id", String(params.vendor_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<GrnQualityInspection[]>(`/api/v1/inventory/quality/inspections${suffix}`);
+  },
+  async getInventoryQualityDashboard(): Promise<InventoryQualityDashboardResponse> {
+    return request<InventoryQualityDashboardResponse>("/api/v1/inventory/quality/dashboard");
+  },
+  async getVendorQualityScorecard(days = 90): Promise<VendorScorecardRow[]> {
+    return request<VendorScorecardRow[]>(`/api/v1/inventory/quality/vendor-scorecard?days=${days}`);
+  },
+  async getVendorQcRejectionRate(
+    vendorId: number,
+    days = 90,
+  ): Promise<{ vendor_id: number; rejection_rate_pct: number | null; days: number }> {
+    return request(`/api/v1/inventory/quality/vendors/${vendorId}/rejection-rate?days=${days}`);
+  },
+
+  async runAbcAnalysis(periodMonths = 12): Promise<AbcAnalysisReport> {
+    return request<AbcAnalysisReport>("/api/v1/inventory/abc-analysis/run", {
+      method: "POST",
+      body: JSON.stringify({ period_months: periodMonths }),
+    });
+  },
+  async getAbcAnalysisReport(params?: {
+    abc_class?: string;
+    category_id?: number;
+  }): Promise<AbcAnalysisReport> {
+    const q = new URLSearchParams();
+    if (params?.abc_class) q.set("abc_class", params.abc_class);
+    if (params?.category_id != null) q.set("category_id", String(params.category_id));
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<AbcAnalysisReport>(`/api/v1/inventory/abc-analysis/report${suffix}`);
+  },
+  abcAnalysisExportUrl(params?: { abc_class?: string; category_id?: number }): string {
+    const q = new URLSearchParams({ export: "csv" });
+    if (params?.abc_class) q.set("abc_class", params.abc_class);
+    if (params?.category_id != null) q.set("category_id", String(params.category_id));
+    return `/api/v1/inventory/abc-analysis/report?${q}`;
+  },
+  async getItemEoq(itemId: number): Promise<EoqResult> {
+    return request<EoqResult>(`/api/v1/inventory/items/${itemId}/eoq`);
+  },
+  async getEoqReport(limit = 200): Promise<EoqResult[]> {
+    return request<EoqResult[]>(`/api/v1/inventory/eoq/report?limit=${limit}`);
+  },
+  async getStockAgingReport(params?: {
+    item_id?: number;
+    warehouse_id?: number;
+    bucket?: string;
+  }): Promise<StockAgingReport> {
+    const q = new URLSearchParams();
+    if (params?.item_id != null) q.set("item_id", String(params.item_id));
+    if (params?.warehouse_id != null) q.set("warehouse_id", String(params.warehouse_id));
+    if (params?.bucket) q.set("bucket", params.bucket);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<StockAgingReport>(`/api/v1/inventory/reports/stock-aging${suffix}`);
+  },
+  async listCycleCountSchedule(params?: {
+    for_date?: string;
+    status?: string;
+    history_days?: number;
+    generate?: boolean;
+  }): Promise<CycleCountTask[]> {
+    const q = new URLSearchParams();
+    if (params?.for_date) q.set("for_date", params.for_date);
+    if (params?.status) q.set("status", params.status);
+    if (params?.history_days != null) q.set("history_days", String(params.history_days));
+    if (params?.generate) q.set("generate", "true");
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<CycleCountTask[]>(`/api/v1/inventory/cycle-count/schedule${suffix}`);
+  },
+  async generateCycleCountSchedule(data?: {
+    frequency?: string;
+    for_date?: string;
+    force_all_due?: boolean;
+  }): Promise<{ created: number; tasks: CycleCountTask[] }> {
+    return request("/api/v1/inventory/cycle-count/generate", {
+      method: "POST",
+      body: JSON.stringify(data ?? {}),
+    });
+  },
+  async submitCycleCount(
+    taskId: number,
+    data: { counted_qty: string; notes?: string; create_adjustment?: boolean },
+  ): Promise<CycleCountTask> {
+    return request<CycleCountTask>(`/api/v1/inventory/cycle-count/${taskId}/submit`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async listStockSerials(params?: {
+    item_id?: number;
+    status?: string;
+    q?: string;
+    limit?: number;
+  }): Promise<StockSerialRow[]> {
+    const q = new URLSearchParams();
+    if (params?.item_id != null) q.set("item_id", String(params.item_id));
+    if (params?.status) q.set("status", params.status);
+    if (params?.q) q.set("q", params.q);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<StockSerialRow[]>(`/api/v1/inventory/serials${suffix}`);
+  },
+  async traceStockSerial(serialNumber: string): Promise<SerialTrace> {
+    return request<SerialTrace>(
+      `/api/v1/inventory/serials/trace?serial_number=${encodeURIComponent(serialNumber)}`,
+    );
+  },
+  async issueStockSerials(data: {
+    serial_ids: number[];
+    status?: string;
+    dc_item_id?: number;
+  }): Promise<StockSerialRow[]> {
+    return request<StockSerialRow[]>("/api/v1/inventory/serials/issue", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async importStockSerials(
+    rows: Array<{ item_id: number; serial_number: string; warehouse_id?: number }>,
+  ): Promise<{ created: number; errors: string[] }> {
+    return request("/api/v1/inventory/serials/import", {
+      method: "POST",
+      body: JSON.stringify({ rows }),
+    });
+  },
+  async listItemKits(): Promise<ItemKitResponse[]> {
+    return request<ItemKitResponse[]>("/api/v1/inventory/kits");
+  },
+  async createItemKit(data: {
+    kit_code?: string;
+    name: string;
+    kit_price: string;
+    notes?: string;
+    components: Array<{ item_id: number; quantity: string }>;
+  }): Promise<ItemKitResponse> {
+    return request<ItemKitResponse>("/api/v1/inventory/kits", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateItemKit(
+    kitId: number,
+    data: {
+      name?: string;
+      kit_price?: string;
+      is_active?: boolean;
+      notes?: string;
+      components?: Array<{ item_id: number; quantity: string }>;
+    },
+  ): Promise<ItemKitResponse> {
+    return request<ItemKitResponse>(`/api/v1/inventory/kits/${kitId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async explodeItemKit(data: {
+    kit_id: number;
+    qty: string;
+    warehouse_id: number;
+  }): Promise<Record<string, unknown>> {
+    return request("/api/v1/inventory/kits/explode", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async listConsignmentStock(vendorId?: number): Promise<ConsignmentStockRow[]> {
+    const suffix = vendorId != null ? `?vendor_id=${vendorId}` : "";
+    return request<ConsignmentStockRow[]>(`/api/v1/inventory/consignment${suffix}`);
+  },
+  async receiveConsignment(data: {
+    vendor_id: number;
+    item_id: number;
+    warehouse_id: number;
+    qty: string;
+    unit_cost?: string;
+    notes?: string;
+  }): Promise<ConsignmentStockRow> {
+    return request<ConsignmentStockRow>("/api/v1/inventory/consignment/receive", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async consumeConsignment(data: {
+    consignment_id?: number;
+    item_id?: number;
+    warehouse_id?: number;
+    qty: string;
+  }): Promise<ConsignmentStockRow> {
+    return request<ConsignmentStockRow>("/api/v1/inventory/consignment/consume", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async settleConsignment(data: {
+    vendor_id: number;
+    consignment_id?: number;
+  }): Promise<{ purchase_order_id: number; po_code: string; message?: string }> {
+    return request("/api/v1/inventory/consignment/settle", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
   async listProductionMaterialIssues(params?: { limit?: number; offset?: number }): Promise<ProductionMaterialIssueResponse[]> {
     const q = new URLSearchParams();
     if (params?.limit != null) q.set("limit", String(params.limit));
@@ -5141,6 +6089,18 @@ export const api = {
     return request<MfgWorkOrderResponse[]>(`/api/v1/manufacturing/planning/production-plans/${planId}/generate-work-orders`, {
       method: "POST",
     });
+  },
+  async releaseWorkOrdersToShopFloor(body: {
+    plan_id?: number;
+    order_ids?: number[];
+  }): Promise<{ released: number; work_order_ids: number[]; message?: string }> {
+    return request<{ released: number; work_order_ids: number[]; message?: string }>(
+      "/api/v1/production/planning/release-work-orders",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
   },
   async listMfgWorkOrders(params?: { status_filter?: string }): Promise<MfgWorkOrderResponse[]> {
     const q = new URLSearchParams();
@@ -5867,6 +6827,14 @@ export const api = {
     return request(`/api/v1/merch/order-boms/${bomId}/generate-purchase-orders-bulk`, {
       method: "POST",
       body: JSON.stringify({ line_ids: lineIds ?? null }),
+    });
+  },
+  /** Inventory alias for BOM → PO one-click (same backend as merch bulk generate). */
+  async generatePurchaseOrdersFromBom(
+    bomId: number,
+  ): Promise<{ created: Array<{ id: number; po_code: string; line_count: number }> }> {
+    return request(`/api/v1/inventory/purchase-orders/generate-from-bom/${bomId}`, {
+      method: "POST",
     });
   },
   async getSuggestedVendorsForOrderBomLine(lineId: number): Promise<{
@@ -6629,8 +7597,18 @@ export const api = {
   async getDashboardAiProfitability(): Promise<AiProfitabilityResponse> {
     return request<AiProfitabilityResponse>("/api/v1/dashboard/ai-profitability");
   },
-  async getDashboardProductionTrends(): Promise<DashboardProductionPoint[]> {
-    return request<DashboardProductionPoint[]>("/api/v1/dashboard/production-trends");
+  async getDashboardAttentionSummary(): Promise<DashboardAttentionSummary> {
+    return request<DashboardAttentionSummary>("/api/v1/dashboard/attention-summary");
+  },
+  async getDashboardProductionTrends(params?: {
+    from_date?: string;
+    to_date?: string;
+  }): Promise<DashboardProductionPoint[]> {
+    const q = new URLSearchParams();
+    if (params?.from_date) q.set("from_date", params.from_date);
+    if (params?.to_date) q.set("to_date", params.to_date);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<DashboardProductionPoint[]>(`/api/v1/dashboard/production-trends${suffix}`);
   },
   async getDashboardRecentOrders(): Promise<DashboardRecentOrder[]> {
     return request<DashboardRecentOrder[]>("/api/v1/dashboard/recent-orders");
@@ -6644,8 +7622,15 @@ export const api = {
   async getDashboardPayrollSummary(): Promise<DashboardPayrollRow[]> {
     return request<DashboardPayrollRow[]>("/api/v1/dashboard/payroll-summary");
   },
-  async getDashboardRevenueTrend(): Promise<DashboardRevenueTrend> {
-    return request<DashboardRevenueTrend>("/api/v1/dashboard/revenue-trend");
+  async getDashboardRevenueTrend(params?: {
+    from_date?: string;
+    to_date?: string;
+  }): Promise<DashboardRevenueTrend> {
+    const q = new URLSearchParams();
+    if (params?.from_date) q.set("from_date", params.from_date);
+    if (params?.to_date) q.set("to_date", params.to_date);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<DashboardRevenueTrend>(`/api/v1/dashboard/revenue-trend${suffix}`);
   },
   /** Phase 18 — read-only executive brief (requires EXECUTIVE_AI_DASHBOARD_ENABLED + tenant flag). */
   async getExecutiveAiBrief(): Promise<Record<string, unknown>> {
@@ -6792,6 +7777,8 @@ export const api = {
   async listChartOfAccounts(params?: { active_only?: boolean }): Promise<ChartOfAccountResponse[]> {
     const q = new URLSearchParams();
     if (params?.active_only === false) q.set("active_only", "false");
+    // Dropdown helper: the API default (100) silently drops accounts on larger charts.
+    q.set("limit", "1000");
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<ChartOfAccountResponse[]>(`/api/v1/finance/chart-of-accounts${suffix}`);
   },
@@ -6893,14 +7880,40 @@ export const api = {
       method: "DELETE",
     });
   },
-  async updateVoucherStatus(id: number, status: string): Promise<VoucherResponse> {
+  async updateVoucherStatus(
+    id: number,
+    status: string,
+    opts?: { budget_override?: boolean; budget_override_reason?: string | null },
+  ): Promise<VoucherResponse> {
     return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/status`, {
       method: "POST",
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({
+        status,
+        ...(opts?.budget_override ? { budget_override: true } : {}),
+        ...(opts?.budget_override_reason
+          ? { budget_override_reason: opts.budget_override_reason }
+          : {}),
+      }),
     });
   },
-  async postVoucher(id: number): Promise<VoucherResponse> {
-    return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/post`, { method: "POST" });
+  async voucherPostPreflight(id: number): Promise<VoucherPostPreflightResponse> {
+    return request<VoucherPostPreflightResponse>(`/api/v1/finance/vouchers/${id}/post-preflight`, {
+      method: "POST",
+    });
+  },
+  async postVoucher(
+    id: number,
+    opts?: { budget_override?: boolean; budget_override_reason?: string | null },
+  ): Promise<VoucherResponse> {
+    return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/post`, {
+      method: "POST",
+      body: JSON.stringify({
+        budget_override: Boolean(opts?.budget_override),
+        ...(opts?.budget_override_reason
+          ? { budget_override_reason: opts.budget_override_reason }
+          : {}),
+      }),
+    });
   },
   async reverseVoucher(id: number, body: { reason: string }): Promise<VoucherResponse> {
     return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/reverse`, {
@@ -6948,6 +7961,15 @@ export const api = {
   async getVoucherAvailableActions(voucherId: number): Promise<{ voucher_id: number; status: string; actions: string[] }> {
     return request<{ voucher_id: number; status: string; actions: string[] }>(`/api/v1/finance/vouchers/${voucherId}/available-actions`);
   },
+
+  async getVoucherAvailableActionsBatch(
+    voucherIds: number[],
+  ): Promise<{ items: { voucher_id: number; status: string; actions: string[] }[] }> {
+    return request<{ items: { voucher_id: number; status: string; actions: string[] }[] }>(
+      `/api/v1/finance/vouchers/available-actions-batch`,
+      { method: "POST", body: JSON.stringify({ voucher_ids: voucherIds }) },
+    );
+  },
   async getDayBook(params?: {
     from_date?: string;
     to_date?: string;
@@ -6987,6 +8009,57 @@ export const api = {
     if (params?.to_date) q.set("to_date", params.to_date);
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<CashFlowStatementResponse>(`/api/v1/finance/reports/cash-flow-statement${suffix}`);
+  },
+  async getMisHealth(): Promise<MisHealthResponse> {
+    return request<MisHealthResponse>("/api/v1/finance/reports/mis-health");
+  },
+  async getFundFlowReport(params?: { from_date?: string; to_date?: string }): Promise<FundFlowResponse> {
+    const q = new URLSearchParams();
+    if (params?.from_date) q.set("from_date", params.from_date);
+    if (params?.to_date) q.set("to_date", params.to_date);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<FundFlowResponse>(`/api/v1/finance/reports/fund-flow${suffix}`);
+  },
+  async getMisRatioAnalysis(params?: { as_of_date?: string }): Promise<MisRatioAnalysisResponse> {
+    const q = new URLSearchParams();
+    if (params?.as_of_date) q.set("as_of_date", params.as_of_date);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<MisRatioAnalysisResponse>(`/api/v1/finance/reports/ratio-analysis${suffix}`);
+  },
+  async getMisRatioTrend(params: { ratio_name: string; months?: number }): Promise<MisRatioTrendResponse> {
+    const q = new URLSearchParams();
+    q.set("ratio_name", params.ratio_name);
+    if (params.months != null) q.set("months", String(params.months));
+    return request<MisRatioTrendResponse>(`/api/v1/finance/reports/ratio-analysis/trend?${q.toString()}`);
+  },
+  async getComparativeBalanceSheet(params: { year1: number; year2: number }): Promise<ComparativeStatementResponse> {
+    const q = new URLSearchParams();
+    q.set("year1", String(params.year1));
+    q.set("year2", String(params.year2));
+    return request<ComparativeStatementResponse>(
+      `/api/v1/finance/reports/comparative-balance-sheet?${q.toString()}`,
+    );
+  },
+  async getComparativePl(params: { year1: number; year2: number }): Promise<ComparativeStatementResponse> {
+    const q = new URLSearchParams();
+    q.set("year1", String(params.year1));
+    q.set("year2", String(params.year2));
+    return request<ComparativeStatementResponse>(`/api/v1/finance/reports/comparative-pl?${q.toString()}`);
+  },
+  async getCashScenarioAnalysis(): Promise<CashScenarioAnalysisResponse> {
+    return request<CashScenarioAnalysisResponse>("/api/v1/finance/cash-flow/scenario-analysis");
+  },
+  async postCashSensitivity(body: { variable?: string; change_percent: number }): Promise<CashSensitivityResponse> {
+    return request<CashSensitivityResponse>("/api/v1/finance/cash-flow/sensitivity", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async getCashBreakEven(): Promise<CashBreakEvenResponse> {
+    return request<CashBreakEvenResponse>("/api/v1/finance/cash-flow/break-even");
+  },
+  async getCashRunway(): Promise<CashRunwayResponse> {
+    return request<CashRunwayResponse>("/api/v1/finance/cash-flow/runway");
   },
   async getLedgerActivity(params: { account_id: number; from_date?: string; to_date?: string }): Promise<LedgerActivityResponse> {
     const q = new URLSearchParams();
@@ -7237,6 +8310,406 @@ export const api = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<BillsAgingResponse>(`/api/v1/finance/bills/aging${suffix}`);
   },
+
+  // --- Party ledger (bill-wise AR/AP) ---
+  async listPartyLedgers(params?: {
+    party_type?: string;
+    search?: string;
+    is_active?: boolean;
+    balance_type?: string;
+    overdue_only?: boolean;
+    page?: number;
+    page_size?: number;
+  }): Promise<PartyLedgerListResponse> {
+    const q = new URLSearchParams();
+    if (params?.party_type) q.set("party_type", params.party_type);
+    if (params?.search) q.set("search", params.search);
+    if (params?.is_active === false) q.set("is_active", "false");
+    if (params?.balance_type) q.set("balance_type", params.balance_type);
+    if (params?.overdue_only) q.set("overdue_only", "true");
+    if (params?.page) q.set("page", String(params.page));
+    if (params?.page_size) q.set("page_size", String(params.page_size));
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<PartyLedgerListResponse>(`/api/v1/finance/party-ledgers${suffix}`);
+  },
+
+  // --- Sprint 3: GST / tax ledgers ---
+  async listTaxLedgers(params?: { active_only?: boolean }): Promise<TaxLedgerResponse[]> {
+    const q = new URLSearchParams();
+    if (params?.active_only === false) q.set("active_only", "false");
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<TaxLedgerResponse[]>(`/api/v1/finance/tax-ledgers${suffix}`);
+  },
+  async getTaxLedger(id: number): Promise<TaxLedgerResponse> {
+    return request<TaxLedgerResponse>(`/api/v1/finance/tax-ledgers/${id}`);
+  },
+  async createTaxLedger(data: TaxLedgerCreate): Promise<TaxLedgerResponse> {
+    return request<TaxLedgerResponse>("/api/v1/finance/tax-ledgers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateTaxLedger(id: number, data: TaxLedgerUpdate): Promise<TaxLedgerResponse> {
+    return request<TaxLedgerResponse>(`/api/v1/finance/tax-ledgers/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async deactivateTaxLedger(id: number): Promise<{ ok: boolean }> {
+    return request(`/api/v1/finance/tax-ledgers/${id}`, { method: "DELETE" });
+  },
+  async previewTax(data: TaxPreviewRequest): Promise<TaxPreviewResponse> {
+    return request<TaxPreviewResponse>("/api/v1/finance/tax/preview", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async calculateVoucherTax(
+    voucherId: number,
+    data?: {
+      apply?: boolean;
+      place_of_supply_state?: string;
+      direction?: "OUTWARD" | "INWARD";
+      taxable_lines?: { taxable_amount: string | number; gst_rate: string | number; hsn_code?: string }[];
+    },
+  ): Promise<TaxPreviewResponse> {
+    return request<TaxPreviewResponse>(`/api/v1/finance/vouchers/${voucherId}/calculate-tax`, {
+      method: "POST",
+      body: JSON.stringify(data || {}),
+    });
+  },
+  async getVoucherTaxLines(voucherId: number): Promise<VoucherTaxLineResponse[]> {
+    return request(`/api/v1/finance/vouchers/${voucherId}/tax-lines`);
+  },
+  async getGstSettings(): Promise<GstSettings> {
+    return request<GstSettings>("/api/v1/finance/gst/settings");
+  },
+  async updateGstSettings(data: GstSettings): Promise<GstSettings> {
+    return request<GstSettings>("/api/v1/finance/gst/settings", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+  async getGstr1(params: { from_date: string; to_date: string }): Promise<GstReturnPayload> {
+    return request(`/api/v1/finance/gst/gstr1?from_date=${params.from_date}&to_date=${params.to_date}`);
+  },
+  async getGstr2(params: { from_date: string; to_date: string }): Promise<GstReturnPayload> {
+    return request(`/api/v1/finance/gst/gstr2?from_date=${params.from_date}&to_date=${params.to_date}`);
+  },
+  async getGstr3b(params: { from_date: string; to_date: string }): Promise<GstReturnPayload> {
+    return request(`/api/v1/finance/gst/gstr3b?from_date=${params.from_date}&to_date=${params.to_date}`);
+  },
+  async getGstItcSummary(params: { from_date: string; to_date: string }): Promise<GstReturnPayload> {
+    return request(`/api/v1/finance/gst/itc-summary?from_date=${params.from_date}&to_date=${params.to_date}`);
+  },
+  async exportGstr1(params: {
+    from_date: string;
+    to_date: string;
+    format?: "json" | "excel";
+  }): Promise<Record<string, unknown>> {
+    const format = params.format || "json";
+    return request(
+      `/api/v1/finance/gst/export-gstr1?from_date=${params.from_date}&to_date=${params.to_date}&format=${format}`,
+      { method: "POST" },
+    );
+  },
+
+  // --- Sprint 5: TDS ---
+  async listTdsSections(): Promise<TdsSectionsListResponse> {
+    return request<TdsSectionsListResponse>("/api/v1/finance/tds/sections");
+  },
+  async createTdsSection(data: TdsSectionBody): Promise<TdsSectionResponse> {
+    return request<TdsSectionResponse>("/api/v1/finance/tds/sections", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateTdsSection(id: number, data: TdsSectionBody): Promise<TdsSectionResponse> {
+    return request<TdsSectionResponse>(`/api/v1/finance/tds/sections/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+  async getTdsSettings(): Promise<TdsSettingsResponse> {
+    return request<TdsSettingsResponse>("/api/v1/finance/tds/settings");
+  },
+  async updateTdsSettings(data: TdsSettingsBody): Promise<TdsSettingsResponse> {
+    return request<TdsSettingsResponse>("/api/v1/finance/tds/settings", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+  async assignPartyLedgerTdsSection(
+    partyLedgerId: number,
+    tdsSectionId: number | null,
+  ): Promise<{ id: number; tds_section_id: number | null }> {
+    return request(`/api/v1/finance/party-ledgers/${partyLedgerId}/tds-section`, {
+      method: "PUT",
+      body: JSON.stringify({ tds_section_id: tdsSectionId }),
+    });
+  },
+  async calculateTds(data: TdsCalcBody): Promise<TdsCalcResponse> {
+    return request<TdsCalcResponse>("/api/v1/finance/tds/calculate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async listTdsDeductions(params?: {
+    party_ledger_id?: number;
+    status?: string;
+  }): Promise<TdsDeductionsListResponse> {
+    const q = new URLSearchParams();
+    if (params?.party_ledger_id != null) q.set("party_ledger_id", String(params.party_ledger_id));
+    if (params?.status) q.set("status", params.status);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request<TdsDeductionsListResponse>(`/api/v1/finance/tds/deductions${suffix}`);
+  },
+  async getTdsReturn(params: {
+    year: number;
+    quarter: number;
+    form?: "26Q" | "24Q";
+  }): Promise<TdsReturnResponse> {
+    const q = new URLSearchParams({
+      year: String(params.year),
+      quarter: String(params.quarter),
+      form: params.form || "26Q",
+    });
+    return request<TdsReturnResponse>(`/api/v1/finance/tds/returns?${q}`);
+  },
+  async exportTdsReturn(params: {
+    year: number;
+    quarter: number;
+    form?: "26Q" | "24Q";
+  }): Promise<TdsReturnExportResponse> {
+    const q = new URLSearchParams({
+      year: String(params.year),
+      quarter: String(params.quarter),
+      form: params.form || "26Q",
+    });
+    return request<TdsReturnExportResponse>(`/api/v1/finance/tds/returns/export?${q}`, { method: "POST" });
+  },
+
+  // --- Sprint 4: advanced vouchers ---
+  async listAdvancedVoucherTypes(): Promise<AdvancedVoucherTypesResponse> {
+    return request<AdvancedVoucherTypesResponse>("/api/v1/finance/voucher-types/advanced");
+  },
+  async patchAdvancedVoucherType(
+    id: number,
+    data: Partial<{
+      is_active: boolean;
+      is_credit_note: boolean;
+      is_debit_note: boolean;
+      is_memorandum: boolean;
+      is_optional: boolean;
+      is_post_dated: boolean;
+      is_stock_transfer: boolean;
+      voucher_class_id: number | null;
+    }>,
+  ): Promise<AdvancedVoucherTypeRow> {
+    return request<AdvancedVoucherTypeRow>(`/api/v1/finance/voucher-types/advanced/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async listVoucherClasses(params?: { voucher_type?: string }): Promise<{ rows: VoucherClassResponse[] }> {
+    const q = new URLSearchParams();
+    if (params?.voucher_type) q.set("voucher_type", params.voucher_type);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request(`/api/v1/finance/voucher-classes${suffix}`);
+  },
+  async getVoucherClass(id: number): Promise<VoucherClassResponse> {
+    return request<VoucherClassResponse>(`/api/v1/finance/voucher-classes/${id}`);
+  },
+  async createVoucherClass(data: VoucherClassBody): Promise<VoucherClassResponse> {
+    return request<VoucherClassResponse>("/api/v1/finance/voucher-classes", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateVoucherClass(id: number, data: VoucherClassBody): Promise<VoucherClassResponse> {
+    return request<VoucherClassResponse>(`/api/v1/finance/voucher-classes/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+  async deleteVoucherClass(id: number): Promise<{ ok: boolean }> {
+    return request(`/api/v1/finance/voucher-classes/${id}`, { method: "DELETE" });
+  },
+  async listRecurringVouchers(): Promise<{ rows: RecurringVoucherResponse[] }> {
+    return request("/api/v1/finance/recurring-vouchers");
+  },
+  async createRecurringVoucher(data: RecurringVoucherBody): Promise<RecurringVoucherResponse> {
+    return request<RecurringVoucherResponse>("/api/v1/finance/recurring-vouchers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateRecurringVoucher(id: number, data: RecurringVoucherBody): Promise<RecurringVoucherResponse> {
+    return request<RecurringVoucherResponse>(`/api/v1/finance/recurring-vouchers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+  async deleteRecurringVoucher(id: number): Promise<{ ok: boolean }> {
+    return request(`/api/v1/finance/recurring-vouchers/${id}`, { method: "DELETE" });
+  },
+  async generateRecurringVoucher(id: number): Promise<{
+    voucher_id: number;
+    voucher_number: string;
+    template: RecurringVoucherResponse;
+  }> {
+    return request(`/api/v1/finance/recurring-vouchers/${id}/generate`, { method: "POST" });
+  },
+  async getRecurringVoucherHistory(id: number): Promise<{ rows: RecurringVoucherHistoryRow[] }> {
+    return request(`/api/v1/finance/recurring-vouchers/${id}/history`);
+  },
+  async createCreditNote(data: CreditDebitNoteBody): Promise<CreditDebitNoteResult> {
+    return request<CreditDebitNoteResult>("/api/v1/finance/credit-notes", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async createDebitNote(data: CreditDebitNoteBody): Promise<CreditDebitNoteResult> {
+    return request<CreditDebitNoteResult>("/api/v1/finance/debit-notes", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async createFinanceStockTransferVoucher(data: FinanceStockTransferVoucherBody): Promise<Record<string, unknown>> {
+    return request("/api/v1/finance/stock-transfer-vouchers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async listPostDatedRegister(): Promise<{ rows: PostDatedRegisterRow[] }> {
+    return request("/api/v1/finance/registers/post-dated");
+  },
+  async activateDuePostDated(): Promise<{ activated_ids: number[]; count: number }> {
+    return request("/api/v1/finance/registers/post-dated/activate-due", { method: "POST" });
+  },
+  async listMemorandumRegister(): Promise<{ rows: MemorandumRegisterRow[] }> {
+    return request("/api/v1/finance/registers/memorandum");
+  },
+  async convertMemorandumVoucher(voucherId: number): Promise<Record<string, unknown>> {
+    return request(`/api/v1/finance/vouchers/${voucherId}/convert-memorandum`, { method: "POST" });
+  },
+
+  async getPartyLedger(id: number): Promise<PartyLedgerResponse> {
+    return request<PartyLedgerResponse>(`/api/v1/finance/party-ledgers/${id}`);
+  },
+  async getPartyLedgerByParty(
+    partyType: "CUSTOMER" | "VENDOR",
+    partyId: number,
+  ): Promise<PartyLedgerResponse | null> {
+    return request<PartyLedgerResponse | null>(
+      `/api/v1/finance/party-ledgers/by-party/${partyType}/${partyId}`,
+    );
+  },
+  async createPartyLedger(data: PartyLedgerCreate): Promise<PartyLedgerResponse> {
+    return request<PartyLedgerResponse>(`/api/v1/finance/party-ledgers`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async updatePartyLedger(
+    id: number,
+    data: Partial<{
+      credit_limit: string | number | null;
+      credit_days: number | null;
+      interest_rate_monthly: string | number | null;
+      is_active: boolean;
+      bill_wise_tracking: boolean;
+    }>,
+  ): Promise<PartyLedgerResponse> {
+    return request<PartyLedgerResponse>(`/api/v1/finance/party-ledgers/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async deletePartyLedger(id: number): Promise<{ id: number; soft_deleted?: boolean; deleted?: boolean }> {
+    return request(`/api/v1/finance/party-ledgers/${id}`, { method: "DELETE" });
+  },
+  async listPartyLedgerBills(
+    ledgerId: number,
+    params?: { status?: string; from_date?: string; to_date?: string; bill_type?: string; page?: number },
+  ): Promise<{ items: PartyLedgerBillResponse[]; page: number; page_size: number }> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.from_date) q.set("from_date", params.from_date);
+    if (params?.to_date) q.set("to_date", params.to_date);
+    if (params?.bill_type) q.set("bill_type", params.bill_type);
+    if (params?.page) q.set("page", String(params.page));
+    const suffix = q.toString() ? `?${q}` : "";
+    return request(`/api/v1/finance/party-ledgers/${ledgerId}/bills${suffix}`);
+  },
+  async listPartyLedgerPendingBills(ledgerId: number): Promise<PartyLedgerBillResponse[]> {
+    return request(`/api/v1/finance/party-ledgers/${ledgerId}/bills/pending`);
+  },
+  async getPartyLedgerBill(ledgerId: number, billId: number): Promise<PartyLedgerBillResponse> {
+    return request(`/api/v1/finance/party-ledgers/${ledgerId}/bills/${billId}`);
+  },
+  async allocatePartyLedgerBill(
+    ledgerId: number,
+    billId: number,
+    data: { voucher_id: number; allocated_amount: string | number; notes?: string; allocated_date?: string },
+  ): Promise<PartyLedgerAllocationResponse> {
+    return request(`/api/v1/finance/party-ledgers/${ledgerId}/bills/${billId}/allocate`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async getPartyLedgerStatement(
+    ledgerId: number,
+    params?: { from_date?: string; to_date?: string },
+  ): Promise<PartyLedgerStatementResponse> {
+    const q = new URLSearchParams();
+    if (params?.from_date) q.set("from_date", params.from_date);
+    if (params?.to_date) q.set("to_date", params.to_date);
+    const suffix = q.toString() ? `?${q}` : "";
+    return request(`/api/v1/finance/party-ledgers/${ledgerId}/statement${suffix}`);
+  },
+  async getPartyLedgerAging(params?: {
+    party_type?: string;
+    as_of_date?: string;
+    party_ledger_id?: number;
+  }): Promise<PartyLedgerAgingResponse> {
+    const q = new URLSearchParams();
+    if (params?.party_type) q.set("party_type", params.party_type);
+    if (params?.as_of_date) q.set("as_of_date", params.as_of_date);
+    if (params?.party_ledger_id) q.set("party_ledger_id", String(params.party_ledger_id));
+    const suffix = q.toString() ? `?${q}` : "";
+    return request(`/api/v1/finance/party-ledgers/aging-report${suffix}`);
+  },
+  async listPartyLedgerAllocations(ledgerId: number): Promise<PartyLedgerAllocationResponse[]> {
+    return request(`/api/v1/finance/party-ledgers/${ledgerId}/allocations`);
+  },
+  async autoAllocatePartyLedger(data: {
+    party_ledger_id: number;
+    voucher_id: number;
+    method?: "FIFO" | "LIFO" | "MANUAL";
+    bill_ids?: number[];
+  }): Promise<PartyLedgerAllocationResponse[]> {
+    return request(`/api/v1/finance/party-ledgers/auto-allocate`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async markPartyLedgerOverdue(as_of_date?: string): Promise<Record<string, unknown>> {
+    return request(`/api/v1/finance/party-ledgers/mark-overdue`, {
+      method: "POST",
+      body: JSON.stringify({ as_of_date: as_of_date ?? null }),
+    });
+  },
+  async calculatePartyLedgerInterest(
+    ledgerId: number,
+    as_of_date?: string,
+  ): Promise<{ bills_calculated: number; total_interest_accrued: string; bills: unknown[] }> {
+    return request(`/api/v1/finance/party-ledgers/${ledgerId}/calculate-interest`, {
+      method: "POST",
+      body: JSON.stringify({ as_of_date: as_of_date ?? null }),
+    });
+  },
+
   async listCostCenters(params?: { active_only?: boolean }): Promise<CostCenterResponse[]> {
     const q = new URLSearchParams();
     if (params?.active_only === false) q.set("active_only", "false");
@@ -7514,8 +8987,27 @@ export const api = {
   },
 
   // Commercial
-  async listExportCases(): Promise<ExportCaseRow[]> {
-    return request<ExportCaseRow[]>("/api/v1/commercial/export-cases");
+  async listExportCases(params?: { status?: string; order_id?: number }): Promise<ExportCaseRow[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<ExportCaseRow[]>(`/api/v1/commercial/export-cases${suffix}`);
+  },
+  async getExportCase(id: number): Promise<ExportCaseRow> {
+    return request<ExportCaseRow>(`/api/v1/commercial/export-cases/${id}`);
+  },
+  async createExportCase(body: ExportCaseCreate): Promise<ExportCaseRow> {
+    return request<ExportCaseRow>("/api/v1/commercial/export-cases", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async updateExportCase(id: number, body: ExportCaseUpdate): Promise<ExportCaseRow> {
+    return request<ExportCaseRow>(`/api/v1/commercial/export-cases/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
   },
   async listProformaInvoices(params?: {
     status?: string;
@@ -7558,6 +9050,72 @@ export const api = {
   },
   async finalizeProformaInvoice(id: number): Promise<ProformaInvoiceRow> {
     return request<ProformaInvoiceRow>(`/api/v1/commercial/proforma-invoices/${id}/finalize`, { method: "POST" });
+  },
+  async getProformaPaymentSummary(id: number): Promise<ProformaPaymentSummary> {
+    return request<ProformaPaymentSummary>(`/api/v1/commercial/proforma-invoices/${id}/payment-summary`);
+  },
+  async createProformaReceipt(
+    id: number,
+    body: ProformaCreateReceiptBody,
+  ): Promise<ProformaCreateReceiptResponse> {
+    return request<ProformaCreateReceiptResponse>(`/api/v1/commercial/proforma-invoices/${id}/create-receipt`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async listCommercialInvoices(params?: {
+    status?: string;
+    customer_id?: number;
+    order_id?: number;
+    challan_id?: number;
+    date_from?: string;
+    date_to?: string;
+    page?: number;
+    page_size?: number;
+    limit?: number;
+  }): Promise<CommercialInvoiceListResponse> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.customer_id != null) q.set("customer_id", String(params.customer_id));
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    if (params?.challan_id != null) q.set("challan_id", String(params.challan_id));
+    if (params?.date_from) q.set("date_from", params.date_from);
+    if (params?.date_to) q.set("date_to", params.date_to);
+    if (params?.page != null) q.set("page", String(params.page));
+    const pageSize = params?.page_size ?? params?.limit;
+    if (pageSize != null) q.set("page_size", String(pageSize));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<CommercialInvoiceListResponse>(`/api/v1/commercial/invoices${suffix}`);
+  },
+  async getCommercialInvoice(id: number): Promise<CommercialInvoiceRow> {
+    return request<CommercialInvoiceRow>(`/api/v1/commercial/invoices/${id}`);
+  },
+  async createCommercialInvoiceFromChallan(
+    challanId: number,
+    body: CommercialInvoiceFromChallanBody,
+  ): Promise<CommercialInvoiceFromChallanResponse> {
+    return request<CommercialInvoiceFromChallanResponse>(
+      `/api/v1/commercial/invoices/from-delivery-challan/${challanId}`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  },
+  async issueCommercialInvoice(id: number): Promise<CommercialInvoiceRow> {
+    return request<CommercialInvoiceRow>(`/api/v1/commercial/invoices/${id}/issue`, { method: "POST" });
+  },
+  async cancelCommercialInvoice(id: number): Promise<CommercialInvoiceRow> {
+    return request<CommercialInvoiceRow>(`/api/v1/commercial/invoices/${id}/cancel`, { method: "POST" });
+  },
+  async getCommercialInvoicePaymentSummary(id: number): Promise<CommercialInvoicePaymentSummary> {
+    return request<CommercialInvoicePaymentSummary>(`/api/v1/commercial/invoices/${id}/payment-summary`);
+  },
+  async createCommercialInvoiceReceipt(
+    id: number,
+    body: ProformaCreateReceiptBody,
+  ): Promise<CommercialInvoiceCreateReceiptResponse> {
+    return request<CommercialInvoiceCreateReceiptResponse>(
+      `/api/v1/commercial/invoices/${id}/create-receipt`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
   },
   async deleteProformaInvoice(id: number): Promise<void> {
     return request<void>(`/api/v1/commercial/proforma-invoices/${id}`, { method: "DELETE" });
@@ -7768,6 +9326,73 @@ export const api = {
       body: JSON.stringify(body),
     });
   },
+  async listPackingLists(params?: {
+    order_id?: number;
+    shipment_id?: number;
+    delivery_challan_id?: number;
+    limit?: number;
+  }): Promise<PackingListRow[]> {
+    const q = new URLSearchParams();
+    if (params?.order_id != null) q.set("order_id", String(params.order_id));
+    if (params?.shipment_id != null) q.set("shipment_id", String(params.shipment_id));
+    if (params?.delivery_challan_id != null) q.set("delivery_challan_id", String(params.delivery_challan_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<PackingListRow[]>(`/api/v1/logistics/packing-lists${suffix}`);
+  },
+  async getPackingList(id: number): Promise<PackingListRow> {
+    return request<PackingListRow>(`/api/v1/logistics/packing-lists/${id}`);
+  },
+  async createPackingList(body: PackingListCreate): Promise<PackingListRow> {
+    return request<PackingListRow>("/api/v1/logistics/packing-lists", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async updatePackingList(id: number, body: PackingListUpdate): Promise<PackingListRow> {
+    return request<PackingListRow>(`/api/v1/logistics/packing-lists/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+  async finalizePackingList(id: number): Promise<PackingListRow> {
+    return request<PackingListRow>(`/api/v1/logistics/packing-lists/${id}/finalize`, {
+      method: "PUT",
+    });
+  },
+  async addPackingListContainer(
+    packingListId: number,
+    body: PackingListContainerCreate,
+  ): Promise<ShipmentContainerRow> {
+    return request<ShipmentContainerRow>(`/api/v1/logistics/packing-lists/${packingListId}/containers`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async listShipmentContainers(params?: {
+    shipment_id?: number;
+    packing_list_id?: number;
+    limit?: number;
+  }): Promise<ShipmentContainerRow[]> {
+    const q = new URLSearchParams();
+    if (params?.shipment_id != null) q.set("shipment_id", String(params.shipment_id));
+    if (params?.packing_list_id != null) q.set("packing_list_id", String(params.packing_list_id));
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<ShipmentContainerRow[]>(`/api/v1/logistics/containers${suffix}`);
+  },
+  async createShipmentContainer(body: ShipmentContainerCreate): Promise<ShipmentContainerRow> {
+    return request<ShipmentContainerRow>("/api/v1/logistics/containers", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async updateShipmentContainer(id: number, body: ShipmentContainerUpdate): Promise<ShipmentContainerRow> {
+    return request<ShipmentContainerRow>(`/api/v1/logistics/containers/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
 
   // ── Bill-Wise Tracking ──
   async listBillReferences(params?: { bill_type?: string; status_filter?: string; account_id?: number; search?: string }): Promise<BillReferenceRow[]> {
@@ -7815,6 +9440,52 @@ export const api = {
     const fd = new FormData();
     fd.append("file", file);
     return request<InquiryExtractionResponse>("/api/v1/ai-extract/inquiry-form", {
+      method: "POST",
+      body: fd,
+    });
+  },
+  async extractLcDocument(file: File): Promise<LcExtractionResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<LcExtractionResponse>("/api/v1/ai-extract/lc", {
+      method: "POST",
+      body: fd,
+    });
+  },
+  async extractShippingDocument(
+    file: File,
+    opts?: { type?: "bl" | "awb" | "packing_list" },
+  ): Promise<ShippingDocExtractionResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    const q = opts?.type ? `?type=${encodeURIComponent(opts.type)}` : "";
+    return request<ShippingDocExtractionResponse>(`/api/v1/ai-extract/shipping-doc${q}`, {
+      method: "POST",
+      body: fd,
+    });
+  },
+  async extractHrCv(file: File): Promise<HrDocExtractionResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<HrDocExtractionResponse>("/api/v1/ai-extract/hr/cv", { method: "POST", body: fd });
+  },
+  async extractHrNationalId(file: File): Promise<HrDocExtractionResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<HrDocExtractionResponse>("/api/v1/ai-extract/hr/national-id", { method: "POST", body: fd });
+  },
+  async extractHrMedicalCertificate(file: File): Promise<HrDocExtractionResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<HrDocExtractionResponse>("/api/v1/ai-extract/hr/medical-certificate", {
+      method: "POST",
+      body: fd,
+    });
+  },
+  async extractHrBirthCertificate(file: File): Promise<HrDocExtractionResponse> {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<HrDocExtractionResponse>("/api/v1/ai-extract/hr/birth-certificate", {
       method: "POST",
       body: fd,
     });
@@ -8501,6 +10172,18 @@ export const api = {
   }> {
     return request("/api/v1/production/planning/ai/efficiency-forecast");
   },
+  async getPredictiveDefectRisk(lookbackDays?: number): Promise<PredictiveHeuristicResponse> {
+    const q = lookbackDays != null ? `?lookback_days=${lookbackDays}` : "";
+    return request<PredictiveHeuristicResponse>(`/api/v1/production/planning/predictive/defect-risk${q}`);
+  },
+  async getPredictiveLineBalance(lookbackDays?: number): Promise<PredictiveHeuristicResponse> {
+    const q = lookbackDays != null ? `?lookback_days=${lookbackDays}` : "";
+    return request<PredictiveHeuristicResponse>(`/api/v1/production/planning/predictive/line-balance${q}`);
+  },
+  async getPredictiveMaintenance(lookbackDays?: number): Promise<PredictiveHeuristicResponse> {
+    const q = lookbackDays != null ? `?lookback_days=${lookbackDays}` : "";
+    return request<PredictiveHeuristicResponse>(`/api/v1/production/planning/predictive/maintenance${q}`);
+  },
   async getAiPlanningSettings(): Promise<{
     effective_enabled: boolean;
     effective_model: string;
@@ -8797,6 +10480,27 @@ export interface DashboardKpi {
   id: string;
   label: string;
   value: number;
+  /** Optional hint under the KPI value (e.g. "From quotations (not GL)"). */
+  subtitle?: string;
+}
+
+export interface DashboardAttentionSummary {
+  pending_approvals: number;
+  tna_open: number;
+  tna_overdue: number;
+  critical_alerts: number;
+  total_alerts: number;
+  promise_blocked: number;
+  commercial_pending: number;
+  post_dated_due_today?: number;
+  links: {
+    pending_approvals: string;
+    tna_overdue: string;
+    critical_alerts: string;
+    promise_blocked: string;
+    commercial_pending: string;
+    post_dated_due_today?: string;
+  };
 }
 
 export interface OrderStatusSummary {
@@ -8821,6 +10525,10 @@ export interface DashboardProductionPoint {
   output: number;
   target: number;
   efficiency: number;
+  /** Honest count of orders created in the bucket (same as output when backend is honest). */
+  orders_created?: number;
+  /** Optional series label, e.g. "Orders created". */
+  label?: string;
 }
 
 export interface DashboardRecentOrder {
@@ -10462,6 +12170,426 @@ export interface InventoryItemResponse {
   stock_group_id?: number | null;
   default_cost: string;
   is_active: boolean;
+  base_unit?: string | null;
+  alternate_unit?: string | null;
+  conversion_factor?: string | null;
+  standard_price?: string | null;
+  current_stock?: string;
+  current_value?: string;
+  avg_cost?: string;
+  batch_tracking?: boolean;
+  expiry_tracking?: boolean;
+  gst_applicable?: boolean;
+  gst_rate?: string | null;
+  hsn_code?: string | null;
+  default_valuation_method?: string | null;
+  reorder_level?: string | null;
+  auto_reorder_enabled?: boolean;
+  reorder_qty?: string | null;
+  safety_stock?: string | null;
+  lead_time_days?: number | null;
+  lot_size_method?: string | null;
+  fixed_lot_size?: string | null;
+  preferred_vendor_id?: number | null;
+  planning_time_fence_days?: number | null;
+  abc_class?: string | null;
+}
+
+/** Sprint I1 MRP / IDT types */
+export interface PlannedOrderResponse {
+  id: number;
+  planned_order_number: string;
+  source_type: string;
+  source_order_id?: number | null;
+  source_bom_id?: number | null;
+  item_id: number;
+  required_qty: string;
+  planned_qty: string;
+  requirement_date: string;
+  release_date: string;
+  action: string;
+  status: string;
+  generated_po_id?: number | null;
+  generated_mo_id?: number | null;
+  created_at?: string | null;
+}
+
+export interface MrpRunResult {
+  planned_orders: PlannedOrderResponse[];
+  exceptions: {
+    severity: string;
+    code: string;
+    message: string;
+    item_id?: number | null;
+    order_id?: number | null;
+  }[];
+  explosion: {
+    level: number;
+    item_id: number;
+    item_code?: string | null;
+    parent_item_id?: number | null;
+    qty_per: string;
+    required_qty: string;
+    bom_id?: number | null;
+    source_order_id?: number | null;
+  }[];
+}
+
+export interface PlannedOrderReleaseResult {
+  planned_order: PlannedOrderResponse;
+  generated_po_id?: number | null;
+  generated_mo_id?: number | null;
+  document_type?: string | null;
+  document_number?: string | null;
+}
+
+export interface ReorderSuggestionResponse {
+  id: number;
+  item_id: number;
+  warehouse_id?: number | null;
+  current_stock: string;
+  reorder_level: string;
+  suggested_qty: string;
+  preferred_vendor_id?: number | null;
+  estimated_cost?: string | null;
+  status: string;
+  generated_po_id?: number | null;
+  created_at?: string | null;
+}
+
+export interface ReorderCheckResult {
+  suggestions_created: number;
+  items_checked: number;
+  suggestions: ReorderSuggestionResponse[];
+}
+
+export interface ReorderConvertResult {
+  suggestion: ReorderSuggestionResponse;
+  purchase_order_id: number;
+  po_code?: string | null;
+}
+
+export interface InterDepartmentTransferResponse {
+  id: number;
+  idt_number: string;
+  idt_date: string;
+  from_warehouse_id: number;
+  to_warehouse_id: number;
+  process_name: string;
+  source_item_id: number;
+  source_qty_issued: string;
+  source_qty_unit: string;
+  source_batch_id?: number | null;
+  target_item_id: number;
+  target_qty_expected: string;
+  target_qty_received?: string | null;
+  target_qty_unit: string;
+  process_loss_qty?: string | null;
+  process_loss_percent?: string | null;
+  standard_process_loss_percent?: string | null;
+  loss_exception: boolean;
+  is_job_work: boolean;
+  job_work_vendor_id?: number | null;
+  job_work_cost_per_unit?: string | null;
+  job_work_total_cost?: string | null;
+  transport_cost: string;
+  other_charges: string;
+  status: string;
+  source_item_cost?: string | null;
+  target_item_value?: string | null;
+  linked_order_id?: number | null;
+  narration?: string | null;
+  lines: {
+    id: number;
+    source_item_id: number;
+    source_qty: string;
+    source_batch_id?: number | null;
+    source_unit_cost?: string | null;
+  }[];
+  created_at?: string | null;
+}
+
+export interface InterDepartmentTransferCreate {
+  from_warehouse_id: number;
+  to_warehouse_id: number;
+  process_name: string;
+  source_item_id: number;
+  source_qty: string;
+  source_qty_unit?: string;
+  target_item_id: number;
+  target_qty_expected: string;
+  target_qty_unit?: string;
+  idt_date?: string | null;
+  is_job_work?: boolean;
+  job_work_vendor_id?: number | null;
+  job_work_cost_per_unit?: string | null;
+  transport_cost?: string | null;
+  other_charges?: string | null;
+  linked_order_id?: number | null;
+  narration?: string | null;
+}
+
+export interface ProcessLossStandardResponse {
+  id: number;
+  process_name: string;
+  standard_loss_percent: string;
+  warning_threshold_percent: string;
+  item_category_id?: number | null;
+  is_active: boolean;
+}
+
+export interface ProcessLossReportResponse {
+  from_date: string;
+  to_date: string;
+  rows: {
+    process_name: string;
+    total_issued: string;
+    total_received: string;
+    total_loss: string;
+    loss_percent: string;
+    standard_percent: string;
+    variance_percent: string;
+    status: string;
+    exception_count: number;
+  }[];
+}
+
+export interface PostCostingReportResponse {
+  order_id: number;
+  order_code?: string | null;
+  order_qty?: number | null;
+  stages: {
+    stage: string;
+    input_qty?: string | null;
+    output_qty?: string | null;
+    loss_percent?: string | null;
+    input_cost?: string | null;
+    job_work?: string | null;
+    output_cost_per_unit?: string | null;
+    idt_id?: number | null;
+    loss_exception: boolean;
+  }[];
+  final_unit_cost?: string | null;
+  standard_unit_cost?: string | null;
+  cost_variance?: string | null;
+  cost_variance_pct?: string | null;
+  variance_drivers: string[];
+}
+
+export interface GrnQualityInspection {
+  id: number;
+  grn_id: number;
+  grn_item_id: number;
+  item_id?: number | null;
+  item_code?: string | null;
+  item_name?: string | null;
+  lot_number?: string | null;
+  grn_code?: string | null;
+  vendor_id?: number | null;
+  inspection_date?: string | null;
+  inspected_by?: number | null;
+  received_qty: string;
+  accepted_qty: string;
+  rejected_qty: string;
+  hold_qty: string;
+  parameters?: Record<string, unknown> | null;
+  result?: string | null;
+  status: string;
+  notes?: string | null;
+  photos?: string[] | Record<string, unknown> | null;
+  target_warehouse_id?: number | null;
+  quarantine_warehouse_id?: number | null;
+  rejected_warehouse_id?: number | null;
+  debit_note_suggested?: boolean;
+  created_at?: string | null;
+}
+
+export interface VendorScorecardRow {
+  vendor_id: number;
+  vendor_name?: string | null;
+  inspection_count: number;
+  received_qty: string;
+  rejected_qty: string;
+  accepted_qty: string;
+  rejection_rate_pct: number;
+  alert: boolean;
+}
+
+export interface InventoryQualityDashboardResponse {
+  pending_count: number;
+  pass_rate_pct: number;
+  fail_rate_pct: number;
+  completed_last_30_days: number;
+  top_rejected_items: {
+    item_id: number;
+    item_code?: string | null;
+    item_name?: string | null;
+    rejected_qty: string;
+  }[];
+  vendor_alerts: VendorScorecardRow[];
+}
+
+export interface AbcAnalysisItemRow {
+  item_id: number;
+  item_code?: string | null;
+  item_name?: string | null;
+  category_id?: number | null;
+  consumption_qty: string;
+  avg_cost: string;
+  consumption_value: string;
+  abc_class: string;
+  pct_of_total: number;
+  cumulative_pct?: number;
+}
+
+export interface AbcAnalysisReport {
+  period_months?: number | null;
+  cutoff_date?: string | null;
+  total_items: number;
+  total_value: string;
+  classes: Record<
+    string,
+    { class: string; item_count: number; total_value: string; items: AbcAnalysisItemRow[] }
+  >;
+  items: AbcAnalysisItemRow[];
+}
+
+export interface EoqResult {
+  item_id: number;
+  item_code?: string | null;
+  item_name?: string | null;
+  abc_class?: string | null;
+  unit_cost: string;
+  holding_cost_rate: number;
+  current_order_qty: string;
+  differs_significantly: boolean;
+  estimated_annual_savings: string;
+  eoq: string;
+  annual_demand: string;
+  ordering_cost: string;
+  holding_cost_per_unit: string;
+  order_frequency_per_year: number;
+  orders_per_year: number;
+  total_annual_cost: string;
+}
+
+export interface StockAgingReport {
+  as_of: string;
+  line_count: number;
+  total_value: string;
+  slow_moving_value_180_plus: string;
+  over_365_value: string;
+  alert?: string | null;
+  buckets: { bucket: string; batch_count: number; qty: string; value: string }[];
+  lines: {
+    batch_id: number;
+    item_id: number;
+    item_code?: string | null;
+    item_name?: string | null;
+    warehouse_id?: number | null;
+    warehouse_name?: string | null;
+    batch_number: string;
+    receipt_date: string;
+    days_in_stock: number;
+    qty: string;
+    unit_cost: string;
+    value: string;
+    bucket: string;
+  }[];
+}
+
+export interface CycleCountTask {
+  id: number;
+  item_id: number;
+  item_code?: string | null;
+  item_name?: string | null;
+  warehouse_id: number;
+  warehouse_name?: string | null;
+  scheduled_date?: string | null;
+  status: string;
+  system_qty: string;
+  counted_qty?: string | null;
+  variance_qty?: string | null;
+  variance_value?: string | null;
+  abc_class?: string | null;
+  adjustment_suggested?: boolean;
+  notes?: string | null;
+  counted_by?: number | null;
+  counted_at?: string | null;
+  adjustment_href?: string | null;
+}
+
+export interface StockSerialRow {
+  id: number;
+  serial_number: string;
+  status: string;
+  item_id: number;
+  item_code?: string | null;
+  item_name?: string | null;
+  warehouse_id?: number | null;
+  warehouse_name?: string | null;
+  grn_item_id?: number | null;
+  grn_code?: string | null;
+  dc_item_id?: number | null;
+  dc_code?: string | null;
+  warranty_start?: string | null;
+  warranty_end?: string | null;
+  created_at?: string | null;
+}
+
+export interface SerialTrace extends StockSerialRow {
+  grn_id?: number | null;
+  dc_id?: number | null;
+  movements?: Array<{
+    id: number;
+    movement_type: string;
+    quantity: string;
+    movement_date?: string | null;
+    reference_type?: string | null;
+    movement_kind?: string | null;
+  }>;
+  lifecycle?: Array<{ event: string; at?: string | null; ref?: string | null }>;
+}
+
+export interface ItemKitResponse {
+  id: number;
+  kit_code: string;
+  name: string;
+  kit_price: string;
+  is_active: boolean;
+  notes?: string | null;
+  component_cost: string;
+  margin: string;
+  margin_pct: number;
+  components: Array<{
+    id?: number;
+    item_id: number;
+    quantity: string;
+    item_code?: string | null;
+    item_name?: string | null;
+    unit_cost?: string | null;
+  }>;
+}
+
+export interface ConsignmentStockRow {
+  id: number;
+  vendor_id: number;
+  vendor_name?: string | null;
+  item_id: number;
+  item_code?: string | null;
+  item_name?: string | null;
+  warehouse_id: number;
+  warehouse_name?: string | null;
+  consigned_qty: string;
+  consumed_qty: string;
+  remaining_qty: string;
+  billed_qty: string;
+  unbilled_consumed_qty: string;
+  is_billed: boolean;
+  unit_cost?: string | null;
+  agreement_date?: string | null;
+  settlement_terms_days?: number | null;
+  notes?: string | null;
 }
 
 export interface InventoryItemCreate {
@@ -10476,6 +12604,26 @@ export interface InventoryItemCreate {
   stock_group_id?: number | null;
   default_cost?: string;
   is_active?: boolean;
+  base_unit?: string | null;
+  alternate_unit?: string | null;
+  conversion_factor?: string | null;
+  standard_price?: string | null;
+  batch_tracking?: boolean;
+  expiry_tracking?: boolean;
+  gst_applicable?: boolean;
+  gst_rate?: string | null;
+  hsn_code?: string | null;
+  default_valuation_method?: string | null;
+  reorder_level?: string | null;
+  auto_reorder_enabled?: boolean;
+  reorder_qty?: string | null;
+  safety_stock?: string | null;
+  lead_time_days?: number | null;
+  lot_size_method?: string | null;
+  fixed_lot_size?: string | null;
+  preferred_vendor_id?: number | null;
+  planning_time_fence_days?: number | null;
+  abc_class?: string | null;
 }
 
 /** PATCH /inventory/items — codes are immutable after create. */
@@ -10489,6 +12637,26 @@ export interface InventoryItemUpdate {
   stock_group_id?: number | null;
   default_cost?: string;
   is_active?: boolean;
+  base_unit?: string | null;
+  alternate_unit?: string | null;
+  conversion_factor?: string | null;
+  standard_price?: string | null;
+  batch_tracking?: boolean;
+  expiry_tracking?: boolean;
+  gst_applicable?: boolean;
+  gst_rate?: string | null;
+  hsn_code?: string | null;
+  default_valuation_method?: string | null;
+  reorder_level?: string | null;
+  auto_reorder_enabled?: boolean;
+  reorder_qty?: string | null;
+  safety_stock?: string | null;
+  lead_time_days?: number | null;
+  lot_size_method?: string | null;
+  fixed_lot_size?: string | null;
+  preferred_vendor_id?: number | null;
+  planning_time_fence_days?: number | null;
+  abc_class?: string | null;
 }
 
 export interface WarehouseResponse {
@@ -10498,6 +12666,10 @@ export interface WarehouseResponse {
   name: string;
   address: string | null;
   is_active: boolean;
+  is_production_floor?: boolean;
+  is_store?: boolean;
+  is_rejected?: boolean;
+  is_quarantine?: boolean;
 }
 
 export interface WarehouseCreate {
@@ -10506,12 +12678,20 @@ export interface WarehouseCreate {
   name: string;
   address?: string;
   is_active?: boolean;
+  is_production_floor?: boolean;
+  is_store?: boolean;
+  is_rejected?: boolean;
+  is_quarantine?: boolean;
 }
 
 export interface WarehouseUpdate {
   name?: string;
   address?: string | null;
   is_active?: boolean;
+  is_production_floor?: boolean;
+  is_store?: boolean;
+  is_rejected?: boolean;
+  is_quarantine?: boolean;
 }
 
 export interface StockGroupResponse {
@@ -10526,6 +12706,9 @@ export interface StockGroupResponse {
   cogs_account_id?: number | null;
   adjustment_account_id?: number | null;
   grni_account_id?: number | null;
+  sales_account_id?: number | null;
+  purchase_account_id?: number | null;
+  default_valuation_method?: string;
 }
 
 export interface StockGroupCreate {
@@ -10539,6 +12722,9 @@ export interface StockGroupCreate {
   cogs_account_id?: number | null;
   adjustment_account_id?: number | null;
   grni_account_id?: number | null;
+  sales_account_id?: number | null;
+  purchase_account_id?: number | null;
+  default_valuation_method?: string;
 }
 
 /** PATCH /inventory/stock-groups — group_code is immutable. */
@@ -10551,6 +12737,190 @@ export interface StockGroupUpdate {
   cogs_account_id?: number | null;
   adjustment_account_id?: number | null;
   grni_account_id?: number | null;
+  sales_account_id?: number | null;
+  purchase_account_id?: number | null;
+  default_valuation_method?: string;
+}
+
+export interface StockGroupTreeNode {
+  id: number;
+  group_code: string;
+  name: string;
+  parent_id: number | null;
+  is_active: boolean;
+  default_valuation_method: string;
+  inventory_account_id?: number | null;
+  sales_account_id?: number | null;
+  purchase_account_id?: number | null;
+  item_count: number;
+  total_stock_value: string;
+  children: StockGroupTreeNode[];
+}
+
+export interface StockItemListRow {
+  id: number;
+  item_code: string;
+  name: string;
+  stock_group_id?: number | null;
+  stock_group_name?: string | null;
+  base_unit?: string | null;
+  current_stock: string;
+  avg_cost: string;
+  standard_price?: string | null;
+  batch_tracking?: boolean;
+  reorder_level?: string | null;
+}
+
+export interface StockItemListResponse {
+  items: StockItemListRow[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface StockItemPriceRow {
+  id: number;
+  price_list_name: string;
+  price: string;
+  currency: string;
+  effective_from: string | null;
+  effective_to: string | null;
+  is_active: boolean;
+}
+
+export interface StockItemPriceUpsert {
+  price_list_name: string;
+  price: string | number;
+  currency?: string;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  is_active?: boolean;
+}
+
+export interface StockBatchRow {
+  id?: number;
+  batch_id?: number;
+  stock_item_id?: number;
+  batch_number?: string;
+  current_qty: string;
+  cost_per_unit?: string;
+  godown_id?: number | null;
+  godown_name?: string | null;
+  expiry_date?: string | null;
+  manufacturing_date?: string | null;
+  status?: string;
+  item_code?: string;
+  item_name?: string;
+}
+
+export interface StockItemDetailResponse {
+  id: number;
+  item_code: string;
+  name: string;
+  stock_group_id: number | null;
+  base_unit: string | null;
+  alternate_unit: string | null;
+  conversion_factor: string | null;
+  standard_price: string | null;
+  current_stock: string;
+  current_value: string;
+  avg_cost: string;
+  batch_tracking: boolean;
+  expiry_tracking: boolean;
+  gst_applicable: boolean;
+  gst_rate: string | null;
+  hsn_code: string | null;
+  default_valuation_method: string | null;
+  reorder_level: string | null;
+  valuation: StockValuationResult;
+  batches: StockBatchRow[];
+  prices: StockItemPriceRow[];
+  godown_stock: { godown_id: number | null; godown_name: string | null; qty: string }[];
+  ledger: {
+    id: number;
+    date: string | null;
+    type: string;
+    qty: string;
+    warehouse_id: number | null;
+    batch_id: number | null;
+    lot_number: string | null;
+    reference_type: string | null;
+    reference_id: number | null;
+    notes: string | null;
+  }[];
+}
+
+export interface StockItemCreateBody {
+  name: string;
+  category_id: number;
+  unit_id: number;
+  stock_group_id?: number | null;
+  item_code?: string;
+  description?: string;
+  subcategory_id?: number | null;
+  default_warehouse_id?: number | null;
+  default_cost?: string;
+  base_unit?: string | null;
+  alternate_unit?: string | null;
+  conversion_factor?: string | null;
+  standard_price?: string | null;
+  batch_tracking?: boolean;
+  expiry_tracking?: boolean;
+  gst_applicable?: boolean;
+  gst_rate?: string | null;
+  hsn_code?: string | null;
+  default_valuation_method?: string | null;
+  reorder_level?: string | null;
+  is_active?: boolean;
+}
+
+export interface GodownStockResponse {
+  godown_id: number;
+  godown_name: string;
+  items: { item_id: number; item_code: string | null; name: string | null; qty: string }[];
+}
+
+export interface StockByGodownMatrixResponse {
+  godowns: {
+    id: number;
+    code: string;
+    name: string;
+    is_store?: boolean;
+    is_production_floor?: boolean;
+    is_rejected?: boolean;
+  }[];
+  rows: {
+    item_id: number;
+    item_code: string;
+    name: string;
+    stock_group_id: number | null;
+    cells: Record<string, string>;
+  }[];
+}
+
+export interface StockTransferCreateBody {
+  from_godown_id: number;
+  to_godown_id: number;
+  items: { stock_item_id: number; batch_id?: number | null; qty: string | number }[];
+  notes?: string | null;
+  auto_fifo?: boolean;
+}
+
+export interface StockTransferResult {
+  id: number;
+  transfer_code: string;
+  from_godown_id: number;
+  to_godown_id: number;
+  status: string;
+  lines: { item_id: number; qty: string; batch_allocations: unknown[] }[];
+}
+
+export interface StockValuationResult {
+  method?: string;
+  qty?: string;
+  unit_cost?: string;
+  total_value?: string;
+  [key: string]: unknown;
 }
 
 export interface PurchaseOrderItemCreate {
@@ -10732,6 +13102,7 @@ export interface PurchaseOrderResponse {
   status: string;
   notes: string | null;
   items: PurchaseOrderItemResponse[];
+  vendor_qc_rejection_rate_pct?: number | null;
 }
 
 export interface GoodsReceivingItemCreate {
@@ -11103,6 +13474,8 @@ export interface WarehouseTransferLineResponse {
   transfer_id: number;
   item_id: number;
   quantity: string;
+  item_code?: string | null;
+  item_name?: string | null;
 }
 
 export interface WarehouseTransferResponse {
@@ -11140,6 +13513,8 @@ export interface StockAdjustmentResponse {
   adjustment_date: string | null;
   status: string;
   notes: string | null;
+  item_code?: string | null;
+  item_name?: string | null;
 }
 
 export interface StockAdjustmentCreate {
@@ -11281,6 +13656,10 @@ export interface ProcessOrderResponse {
   verification_id?: string | null;
   signature_hash?: string | null;
   signed_at?: string | null;
+  input_item_code?: string | null;
+  input_item_name?: string | null;
+  output_item_code?: string | null;
+  output_item_name?: string | null;
 }
 
 export interface ProductionMaterialIssueLineCreate {
@@ -12362,6 +14741,17 @@ export interface OrderResponse {
   quotation_code?: string | null;
   financial_status?: OrderFinancialStatusOut | null;
   sewing_line_summary?: OrderSewingLineSummaryOut | null;
+  related_counts?: {
+    bom_exists?: boolean;
+    po_count?: number;
+    production_plan_exists?: boolean;
+    delivery_challan_count?: number;
+    invoice_count?: number;
+    packing_list_count?: number;
+    tna_actions_count?: number;
+    export_case_count?: number;
+    export_case_id?: number | null;
+  } | null;
 }
 
 /** GET /api/v1/control-tower/summary */
@@ -12457,6 +14847,14 @@ export interface OrderMilestonesResponse {
   tna_warnings: string[];
   pipeline_na_steps: string[];
   order_type: string | null;
+  next_required_action?: {
+    kind: string;
+    label: string;
+    href?: string | null;
+    planned_date?: string | null;
+    pipeline_stage?: string | null;
+    action_id?: number | null;
+  } | null;
 }
 
 export interface OrderListPageResponse {
@@ -12476,6 +14874,126 @@ export interface OrderCommercialAlignmentResponse {
   discrepancies: Array<{ code: string; message: string }>;
   quotation_commercially_locked: boolean;
   quotation_status: string | null;
+}
+
+export interface CostVarianceRow {
+  line_key: string;
+  description: string | null;
+  item_code: string | null;
+  item_id: number | null;
+  bom_line_id: number | null;
+  quotation_line_id: number | null;
+  tentative_cost: number | null;
+  actual_cost: number | null;
+  variance_amount: number | null;
+  variance_pct: number | null;
+  status: string;
+  source_tentative: string;
+  source_actual: string;
+}
+
+export interface CostVarianceTotals {
+  tentative_cost: number;
+  actual_cost: number;
+  variance_amount: number | null;
+  variance_pct: number | null;
+  status: string;
+}
+
+export interface CostVarianceMarginImpact {
+  snapshot_total_cost: number | null;
+  snapshot_quoted_price: number | null;
+  snapshot_profit_percentage: number | null;
+  tentative_material_total: number;
+  actual_material_total: number;
+  variance_amount: number | null;
+  variance_pct: number | null;
+  overall_status: string;
+  estimated_margin_at_quote: number | null;
+  estimated_margin_with_actuals: number | null;
+  margin_quoted_percent?: number | null;
+  margin_actual_percent?: number | null;
+}
+
+export interface VoucherPostPreflightResponse {
+  ok: boolean;
+  mode: string;
+  remaining: number | null;
+  warnings: string[];
+  has_budget?: boolean;
+  budget_amount?: number | null;
+  used_amount?: number | null;
+  pending_amount?: number | null;
+  projected?: number | null;
+  status?: string;
+  enforcement_mode?: string;
+  can_post?: boolean;
+  warning_message?: string | null;
+}
+
+export interface DashboardPendingPriceAlert {
+  id: string;
+  type: string;
+  severity: "warning" | "critical" | string;
+  message: string;
+  entity_type: string;
+  entity_id: number | null;
+  order_id: number | null;
+  link: string;
+  created_at: string | null;
+  order_code?: string;
+  variance_pct?: number | null;
+  href?: string;
+}
+
+export interface DashboardPendingPriceVerificationsResponse {
+  total_alerts: number;
+  alerts: DashboardPendingPriceAlert[];
+}
+
+export interface OrderCostVarianceResponse {
+  order_id: number;
+  order_code: string;
+  order_status: string;
+  bom_id: number | null;
+  quotation_id: number | null;
+  rows: CostVarianceRow[];
+  totals: CostVarianceTotals;
+  margin_impact: CostVarianceMarginImpact;
+  thresholds: Record<string, number>;
+}
+
+export interface OrderProfitabilitySummaryItem {
+  order_id: number;
+  order_code: string;
+  order_status: string;
+  status: string;
+  tentative_cost: number | null;
+  actual_cost: number | null;
+  variance_pct: number | null;
+  margin_impact: CostVarianceMarginImpact | null;
+  quoted_margin_percent?: number | null;
+  actual_margin_percent?: number | null;
+  sparkline_data?: number[];
+}
+
+export interface OrderProfitabilitySummaryPage {
+  items: OrderProfitabilitySummaryItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface PendingPriceVerificationItem {
+  order_id: number;
+  order_code: string;
+  order_status: string;
+  status: string;
+  tentative_cost: number | null;
+  actual_cost: number | null;
+  variance_pct: number | null;
+  href: string;
 }
 
 export interface OrderCreate {
@@ -12973,6 +15491,9 @@ export interface OrderDrivenBomLine {
   remarks: string | null;
   sort_order: number;
   procurement_status: BomLineProcurementStatus;
+  /** Sprint 2: from item master cache when available */
+  current_stock?: string | null;
+  avg_cost?: string | null;
 }
 
 export interface OrderDrivenBomSummary {
@@ -13815,6 +16336,8 @@ export interface MerchControlTowerSummaryResponse {
   planning_risk: number;
   sample_pending: number;
   sample_overdue_target: number;
+  otd_at_risk?: number;
+  otd_overdue?: number;
 }
 
 /** Stable index of merchandising KPI/report surfaces (GET /merch/reports/catalog). */
@@ -14401,6 +16924,123 @@ export interface CashFlowStatementResponse {
   };
 }
 
+/** Sprint 6 MIS reports */
+export interface MisRatioItem {
+  name: string;
+  label: string;
+  category: string;
+  value: number | null;
+  benchmark: number | null;
+  status: string;
+  formula: string;
+}
+
+export interface MisRatioAnalysisResponse {
+  as_of_date: string;
+  prior_date: string;
+  ratios: MisRatioItem[];
+  by_category: Record<string, MisRatioItem[]>;
+  snapshot: Record<string, number>;
+}
+
+export interface MisRatioTrendResponse {
+  ratio_name: string;
+  months: number;
+  points: Array<{ date: string; value: number | null }>;
+}
+
+export interface FundFlowLineItem {
+  item: string;
+  amount: number;
+  percent_of_total: number;
+}
+
+export interface FundFlowResponse {
+  from_date: string;
+  to_date: string;
+  sources: FundFlowLineItem[];
+  total_sources: number;
+  applications: FundFlowLineItem[];
+  total_application: number;
+  net_change: number;
+}
+
+export interface ComparativeStatementRow {
+  particulars: string;
+  year1: number;
+  year2: number;
+  absolute_change: number;
+  percent_change: number;
+  significant: boolean;
+}
+
+export interface ComparativeStatementResponse {
+  statement: string;
+  year1: number;
+  year2: number;
+  rows: ComparativeStatementRow[];
+  significant_count: number;
+}
+
+export interface CashScenarioItem {
+  name: string;
+  monthly_inflow: number;
+  monthly_outflow: number;
+  net_monthly: number;
+  ending_cash_12m: number;
+  runway_months: number | null;
+  runway_label: string;
+}
+
+export interface CashScenarioAnalysisResponse {
+  as_of: string;
+  current_cash: number;
+  baseline: Record<string, number>;
+  scenarios: CashScenarioItem[];
+  narrative: string;
+}
+
+export interface CashSensitivityResponse {
+  variable: string;
+  change_percent: number;
+  baseline: CashScenarioItem;
+  adjusted: {
+    monthly_inflow: number;
+    monthly_outflow: number;
+    net_monthly: number;
+    runway_months: number | null;
+    ending_cash_12m: number;
+  };
+}
+
+export interface CashBreakEvenResponse {
+  monthly_fixed_costs_est: number;
+  contribution_margin_ratio: number;
+  break_even_monthly_revenue: number | null;
+  current_monthly_revenue_est: number;
+  gap: number | null;
+  snapshot_expense: number;
+}
+
+export interface CashRunwayResponse {
+  current_cash: number;
+  net_monthly: number;
+  runway_months: number | null;
+  runway_label: string;
+  narrative: string;
+}
+
+export interface MisHealthResponse {
+  enabled: boolean;
+  net_profit?: number;
+  current_ratio?: MisRatioItem;
+  cash?: number;
+  ar?: number;
+  receivables_turnover?: MisRatioItem;
+  runway_months?: number | null;
+  links?: Record<string, string>;
+}
+
 export interface FxReceiptCreate {
   receipt_no?: string;
   receipt_date: string;
@@ -14495,6 +17135,519 @@ export interface BillsAgingResponse {
     overdue_days: number;
     bucket: string;
   }>;
+}
+
+export interface PartyLedgerResponse {
+  id: number;
+  party_type: "CUSTOMER" | "VENDOR" | string;
+  customer_id: number | null;
+  vendor_id: number | null;
+  party_name: string;
+  ledger_account_id: number;
+  ledger_account_name: string | null;
+  ledger_account_number: string | null;
+  credit_limit: string | null;
+  credit_days: number | null;
+  interest_rate_monthly: string | null;
+  opening_balance: string;
+  opening_balance_type: string;
+  opening_balance_date: string | null;
+  current_balance: string;
+  current_balance_type: string;
+  total_dr_amount: string;
+  total_cr_amount: string;
+  available_credit: string | null;
+  overdue_amount: string;
+  bill_wise_tracking: boolean;
+  is_active: boolean;
+  tds_section_id?: number | null;
+  bill_summary?: Record<string, number>;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface PartyLedgerListResponse {
+  items: PartyLedgerResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface PartyLedgerCreate {
+  party_type: "CUSTOMER" | "VENDOR";
+  customer_id?: number | null;
+  vendor_id?: number | null;
+  ledger_account_id?: number | null;
+  credit_limit?: string | number | null;
+  credit_days?: number;
+  interest_rate_monthly?: string | number | null;
+  opening_balance?: string | number;
+  opening_balance_type?: "DR" | "CR";
+  opening_balance_date?: string | null;
+  bill_wise_tracking?: boolean;
+}
+
+export interface TaxLedgerResponse {
+  id: number;
+  tenant_id: number;
+  chart_account_id: number;
+  tax_type: string;
+  tax_rate: string;
+  gst_type: string;
+  nature_of_transaction: string | null;
+  is_active: boolean;
+  effective_from: string | null;
+  effective_to: string | null;
+}
+
+export interface TaxLedgerCreate {
+  chart_account_id: number;
+  tax_type: string;
+  tax_rate: string | number;
+  gst_type?: string;
+  nature_of_transaction?: string | null;
+  is_active?: boolean;
+  effective_from?: string | null;
+  effective_to?: string | null;
+}
+
+export interface TaxLedgerUpdate {
+  chart_account_id?: number | null;
+  nature_of_transaction?: string | null;
+  is_active?: boolean;
+  effective_from?: string | null;
+  effective_to?: string | null;
+}
+
+export interface TaxPreviewRequest {
+  taxable_lines: { taxable_amount: string | number; gst_rate: string | number; hsn_code?: string | null }[];
+  place_of_supply_state?: string | null;
+  direction?: "OUTWARD" | "INWARD";
+  is_union_territory?: boolean;
+}
+
+export interface TaxPreviewResponse {
+  supply_kind?: string;
+  direction?: string;
+  taxable_total?: string;
+  tax_total?: string;
+  grand_total?: string;
+  lines?: {
+    tax_type: string;
+    tax_rate: string;
+    taxable_amount: string;
+    tax_amount: string;
+    hsn_code?: string | null;
+    tax_ledger_id?: number | null;
+  }[];
+  missing_tax_ledgers?: string[];
+  warnings?: string[];
+  applied?: boolean;
+  [key: string]: unknown;
+}
+
+export interface VoucherTaxLineResponse {
+  id: number;
+  voucher_id: number;
+  tax_ledger_id: number;
+  taxable_amount: string;
+  tax_amount: string;
+  tax_rate_applied: string;
+  hsn_code: string | null;
+  is_itc_eligible: boolean;
+  direction: string;
+  tax_type?: string | null;
+}
+
+export interface GstSettings {
+  registration_type?: "Regular" | "Composition" | "SEZ" | string | null;
+  gstin?: string | null;
+  state_code?: string | null;
+  state?: string | null;
+  default_place_of_supply?: string | null;
+  is_union_territory?: boolean;
+  default_gst_rate?: string | null;
+  reverse_charge_enabled?: boolean;
+}
+
+export interface PtSlabRow {
+  from: number;
+  to: number | null;
+  amount: number;
+}
+
+export interface PayrollStatutoryConfigResponse {
+  id: number;
+  pf_employee_rate: string;
+  pf_employer_rate: string;
+  esi_employee_rate: string;
+  esi_employer_rate: string;
+  pf_wage_ceiling: string;
+  esi_wage_ceiling: string;
+  pt_state: string | null;
+  pt_slabs: PtSlabRow[];
+  gratuity_days_per_year: string;
+  is_active: boolean;
+}
+
+export interface PayrollStatutoryConfigBody {
+  pf_employee_rate?: string | number;
+  pf_employer_rate?: string | number;
+  esi_employee_rate?: string | number;
+  esi_employer_rate?: string | number;
+  pf_wage_ceiling?: string | number;
+  esi_wage_ceiling?: string | number;
+  pt_state?: string | null;
+  pt_slabs?: PtSlabRow[];
+  gratuity_days_per_year?: string | number;
+  is_active?: boolean;
+}
+
+export interface PayrollStatutoryPreviewBody {
+  basic_salary: string | number;
+  gross_salary: string | number;
+  years_of_service?: string | number | null;
+}
+
+export interface PayrollStatutoryPreviewResponse {
+  pf: Record<string, string>;
+  esi: Record<string, string>;
+  pt_amount: string;
+  pt_state: string | null;
+  gratuity: string;
+  employee_statutory_deductions: string;
+  employer_contributions: string;
+}
+
+export interface TdsSectionResponse {
+  id: number;
+  section_code: string;
+  description: string | null;
+  threshold_amount: string;
+  tds_rate: string;
+  rate_company: string | null;
+  rate_non_company: string | null;
+  is_active: boolean;
+}
+
+export interface TdsSectionsListResponse {
+  rows: TdsSectionResponse[];
+}
+
+export interface TdsSectionBody {
+  section_code: string;
+  description?: string | null;
+  threshold_amount?: string | number;
+  tds_rate?: string | number;
+  rate_company?: string | number | null;
+  rate_non_company?: string | number | null;
+  is_active?: boolean;
+}
+
+export interface TdsSettingsResponse {
+  tds_payable_account_id: number | null;
+}
+
+export interface TdsSettingsBody {
+  tds_payable_account_id?: number | null;
+}
+
+export interface TdsCalcBody {
+  party_ledger_id: number;
+  payment_amount: string | number;
+  section_code?: string | null;
+  is_company?: boolean;
+}
+
+export interface TdsCalcResponse {
+  party_ledger_id: number;
+  tds_section_id?: number | null;
+  section_code: string | null;
+  threshold_amount?: string;
+  tds_rate?: string;
+  taxable_amount: string;
+  tds_amount: string;
+  net_payment: string;
+  applicable: boolean;
+  message?: string;
+}
+
+export interface TdsDeductionResponse {
+  id: number;
+  party_ledger_id: number;
+  voucher_id: number | null;
+  tds_section_id: number;
+  taxable_amount: string;
+  tds_amount: string;
+  net_payment: string | null;
+  tds_liability_voucher_id: number | null;
+  certificate_number: string | null;
+  certificate_date: string | null;
+  status: string;
+  deduction_date: string | null;
+}
+
+export interface TdsDeductionsListResponse {
+  rows: TdsDeductionResponse[];
+}
+
+export interface TdsReturnLine {
+  deduction_id: number;
+  deduction_date: string | null;
+  section_code: string;
+  party_ledger_id: number;
+  party_type: string;
+  taxable_amount: string;
+  tds_amount: string;
+  status: string;
+  certificate_number: string | null;
+  voucher_id: number | null;
+}
+
+export interface TdsReturnResponse {
+  form: string;
+  year: number;
+  quarter: number;
+  from_date: string;
+  to_date: string;
+  rows: TdsReturnLine[];
+  summary: {
+    count: number;
+    total_taxable: string;
+    total_tds: string;
+    pending_count: number;
+    deposited_count: number;
+  };
+}
+
+export interface TdsReturnExportResponse extends TdsReturnResponse {
+  format: string;
+  filename: string;
+}
+
+export interface AdvancedVoucherFeatureFlags {
+  credit_debit_note_enabled: boolean;
+  stock_transfer_voucher_enabled: boolean;
+  memorandum_voucher_enabled: boolean;
+  optional_voucher_enabled: boolean;
+  post_dated_voucher_enabled: boolean;
+  recurring_voucher_enabled: boolean;
+  voucher_class_enabled: boolean;
+}
+
+export interface AdvancedVoucherTypeRow {
+  id: number;
+  code: string;
+  name: string;
+  is_active: boolean;
+  is_system?: boolean;
+  is_credit_note: boolean;
+  is_debit_note: boolean;
+  is_memorandum: boolean;
+  is_optional: boolean;
+  is_post_dated: boolean;
+  is_stock_transfer: boolean;
+  voucher_class_id: number | null;
+}
+
+export interface AdvancedVoucherTypesResponse {
+  rows: AdvancedVoucherTypeRow[];
+  feature_flags: AdvancedVoucherFeatureFlags;
+}
+
+export interface VoucherClassLineTemplate {
+  account_id: number;
+  entry_type: "DEBIT" | "CREDIT";
+  amount: string | number;
+  notes?: string | null;
+}
+
+export interface VoucherClassBody {
+  name: string;
+  voucher_type: string;
+  default_ledger_id?: number | null;
+  default_narration?: string | null;
+  default_cost_center_id?: number | null;
+  line_templates?: VoucherClassLineTemplate[];
+  auto_tax?: boolean;
+  auto_round_off?: boolean;
+  auto_bill_allocation?: boolean;
+  is_active?: boolean;
+}
+
+export interface VoucherClassResponse extends VoucherClassBody {
+  id: number;
+  line_templates: VoucherClassLineTemplate[];
+  auto_tax: boolean;
+  auto_round_off: boolean;
+  auto_bill_allocation: boolean;
+  is_active: boolean;
+}
+
+export type RecurringFrequency = "DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
+
+export interface RecurringVoucherBody {
+  name: string;
+  voucher_type: string;
+  voucher_class_id?: number | null;
+  frequency: RecurringFrequency;
+  start_date: string;
+  end_date?: string | null;
+  next_due_date?: string | null;
+  voucher_template: Record<string, unknown>;
+  generate_as_status?: "DRAFT" | "POSTED";
+  is_active?: boolean;
+}
+
+export interface RecurringVoucherResponse extends RecurringVoucherBody {
+  id: number;
+  last_generated_date: string | null;
+  is_active: boolean;
+  generate_as_status: "DRAFT" | "POSTED";
+}
+
+export interface RecurringVoucherHistoryRow {
+  id: number;
+  voucher_number: string;
+  voucher_date: string;
+  status: string;
+  description: string | null;
+}
+
+export interface PostDatedRegisterRow {
+  id: number;
+  voucher_number: string;
+  voucher_date: string;
+  voucher_type: string;
+  status: string;
+  description: string | null;
+  amount: string;
+  days_until_active: number;
+}
+
+export interface MemorandumRegisterRow {
+  id: number;
+  voucher_number: string;
+  voucher_date: string;
+  status: string;
+  description: string | null;
+  voucher_type: string;
+}
+
+export interface CreditDebitNoteBody {
+  voucher_date: string;
+  description?: string;
+  party_ledger_id: number;
+  original_bill_id: number;
+  amount: string | number;
+  revenue_or_purchase_account_id: number;
+  party_account_id?: number | null;
+  tax_account_id?: number | null;
+  tax_amount?: string | number;
+  currency?: string;
+  post?: boolean;
+}
+
+export interface CreditDebitNoteResult {
+  id: number;
+  voucher_number: string;
+  voucher_type: string;
+  status: string;
+  original_party_bill_id: number | null;
+}
+
+export interface FinanceStockTransferVoucherBody {
+  from_godown_id: number;
+  to_godown_id: number;
+  items: { stock_item_id: number; qty: string | number; batch_id?: number | null }[];
+  notes?: string | null;
+  auto_fifo?: boolean;
+}
+
+export interface GstReturnPayload {
+  period_from?: string;
+  period_to?: string;
+  supplies?: Record<string, unknown>[];
+  lines?: Record<string, unknown>[];
+  summary?: Record<string, unknown>;
+  validations?: string[];
+  outward_tax?: string;
+  inward_itc?: string;
+  net_tax_payable?: string;
+  [key: string]: unknown;
+}
+
+export interface PartyLedgerBillResponse {
+  id: number;
+  party_ledger_id: number;
+  bill_number: string;
+  bill_date: string | null;
+  bill_type: string;
+  original_amount: string;
+  amount_type: string;
+  pending_amount: string;
+  settled_amount: string;
+  status: string;
+  due_date: string | null;
+  days_overdue: number | null;
+  interest_accrued: string;
+  narration: string | null;
+  voucher_id: number | null;
+  commercial_invoice_id?: number | null;
+  vendor_bill_id?: number | null;
+  allocations?: PartyLedgerAllocationResponse[];
+}
+
+export interface PartyLedgerAllocationResponse {
+  id: number;
+  bill_id: number;
+  voucher_id: number;
+  allocated_amount: string;
+  allocated_date: string | null;
+  bill_balance_after: string;
+  notes: string | null;
+  bill_number?: string | null;
+  voucher_number?: string | null;
+}
+
+export interface PartyLedgerStatementResponse {
+  party_ledger_id: number;
+  party_name: string;
+  party_type: string;
+  from_date: string;
+  to_date: string;
+  opening_balance: string;
+  opening_balance_type: string;
+  transactions: Array<{
+    date: string;
+    bill_number: string;
+    bill_type: string;
+    narration: string;
+    debit: string;
+    credit: string;
+    balance: string;
+    balance_type: string;
+  }>;
+  closing_balance: string;
+  closing_balance_type: string;
+}
+
+export interface PartyLedgerAgingResponse {
+  as_of_date: string;
+  parties: Array<{
+    party_ledger_id: number;
+    party_name: string;
+    party_type: string;
+    current_balance: string;
+    balance_type: string;
+    not_due: string;
+    days_1_30: string;
+    days_31_60: string;
+    days_61_90: string;
+    days_91_plus: string;
+    total_overdue: string;
+  }>;
+  grand_total: Record<string, string>;
 }
 
 export interface CostCenterCreate {
@@ -14898,6 +18051,38 @@ export interface ExportCaseRow {
   [key: string]: unknown;
 }
 
+export interface ExportCaseCreate {
+  reference: string;
+  status?: string | null;
+  case_date?: string | null;
+  amount?: number | null;
+  trade_case_id?: number | null;
+  order_id?: number | null;
+  export_license_number?: string | null;
+  destination_country?: string | null;
+  shipping_mode?: string | null;
+  incoterms?: string | null;
+  expected_shipment_date?: string | null;
+  actual_shipment_date?: string | null;
+  customs_agent?: string | null;
+}
+
+export interface ExportCaseUpdate {
+  reference?: string | null;
+  status?: string | null;
+  case_date?: string | null;
+  amount?: number | null;
+  trade_case_id?: number | null;
+  order_id?: number | null;
+  export_license_number?: string | null;
+  destination_country?: string | null;
+  shipping_mode?: string | null;
+  incoterms?: string | null;
+  expected_shipment_date?: string | null;
+  actual_shipment_date?: string | null;
+  customs_agent?: string | null;
+}
+
 export interface ProformaInvoiceRow {
   id: number;
   reference?: string;
@@ -14970,6 +18155,149 @@ export interface ProformaInvoiceCreate {
 }
 
 export type ProformaInvoiceUpdate = Partial<ProformaInvoiceCreate>;
+
+export interface ProformaReceiptAllocationRow {
+  id: number;
+  proforma_invoice_id: number;
+  voucher_id: number;
+  order_id?: number | null;
+  allocated_amount: number;
+  allocated_base_amount: number;
+  currency?: string | null;
+  exchange_rate_to_base?: number | null;
+  status: string;
+  idempotency_key?: string | null;
+  voucher_number?: string | null;
+  voucher_status?: string | null;
+  created_at: string;
+}
+
+export interface ProformaPaymentSummary {
+  pi_id: number;
+  pi_amount: number;
+  currency?: string | null;
+  paid_active: number;
+  paid_posted: number;
+  outstanding_for_new: number;
+  outstanding_posted: number;
+  allocations: ProformaReceiptAllocationRow[];
+}
+
+export interface ProformaCreateReceiptBody {
+  amount: number;
+  receipt_date?: string | null;
+  bank_ledger_id: number;
+  receivable_ledger_id: number;
+  currency?: string | null;
+  exchange_rate_to_base: number;
+  idempotency_key: string;
+}
+
+export interface ProformaCreateReceiptResponse {
+  voucher_id: number;
+  voucher_number?: string | null;
+  allocation_id: number;
+  remaining_balance: number;
+  paid_so_far: number;
+  pi_amount: number;
+  was_created: boolean;
+}
+
+export interface CommercialInvoiceLineRow {
+  id: number;
+  order_id: number;
+  order_code?: string | null;
+  item_id?: number | null;
+  delivery_challan_item_id?: number | null;
+  description?: string | null;
+  quantity: number;
+  unit_price: number;
+  line_amount: number;
+  currency?: string | null;
+  price_source: string;
+  price_source_ref?: Record<string, unknown> | unknown[] | null;
+  sort_order: number;
+}
+
+export interface CommercialInvoiceRow {
+  id: number;
+  invoice_code: string;
+  status: string;
+  customer_id: number;
+  customer_name?: string | null;
+  source_delivery_challan_id?: number | null;
+  challan_code?: string | null;
+  primary_order_id?: number | null;
+  primary_order_code?: string | null;
+  invoice_date?: string | null;
+  currency?: string | null;
+  exchange_rate_to_base?: number | null;
+  total_amount: number;
+  base_total_amount: number;
+  ar_voucher_id?: number | null;
+  price_review_required: boolean;
+  notes?: string | null;
+  lines: CommercialInvoiceLineRow[];
+  issued_at?: string | null;
+  cancelled_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommercialInvoiceListResponse {
+  items: CommercialInvoiceRow[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface CommercialInvoiceFromChallanBody {
+  idempotency_key: string;
+  exchange_rate_to_base?: number;
+  confirm_quotation_fallback?: boolean;
+  allow_split?: boolean;
+  invoice_date?: string | null;
+}
+
+export interface CommercialInvoiceFromChallanResponse {
+  invoices: CommercialInvoiceRow[];
+  was_created: boolean;
+}
+
+export interface CommercialInvoicePaymentSummary {
+  invoice_id: number;
+  invoice_amount: number;
+  currency?: string | null;
+  paid_active: number;
+  paid_posted: number;
+  outstanding_for_new: number;
+  outstanding_posted: number;
+  allocations: Array<{
+    id: number;
+    commercial_invoice_id: number;
+    voucher_id: number;
+    order_id?: number | null;
+    allocated_amount: number;
+    allocated_base_amount: number;
+    currency?: string | null;
+    exchange_rate_to_base?: number | null;
+    status: string;
+    voucher_number?: string | null;
+    voucher_status?: string | null;
+    created_at: string;
+  }>;
+}
+
+export interface CommercialInvoiceCreateReceiptResponse {
+  voucher_id: number;
+  voucher_number?: string | null;
+  allocation_id: number;
+  remaining_balance: number;
+  paid_so_far: number;
+  invoice_amount: number;
+  was_created: boolean;
+}
 
 export interface ProformaInvoiceForPrintOrder {
   id: number;
@@ -15280,6 +18608,89 @@ export interface ShipmentCreate {
 }
 
 export type ShipmentUpdate = Partial<ShipmentCreate>;
+
+export interface PackingListRow {
+  id: number;
+  tenant_id: number;
+  packing_list_number: string;
+  shipment_id?: number | null;
+  shipment_reference?: string | null;
+  order_id?: number | null;
+  order_code?: string | null;
+  delivery_challan_id?: number | null;
+  challan_code?: string | null;
+  packing_date?: string | null;
+  total_cartons: number;
+  gross_weight?: number | null;
+  net_weight?: number | null;
+  gross_weight_kg?: number | null;
+  net_weight_kg?: number | null;
+  status: string;
+  notes?: string | null;
+  container_count?: number;
+  containers?: ShipmentContainerRow[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PackingListCreate {
+  packing_list_number?: string | null;
+  shipment_id?: number | null;
+  order_id?: number | null;
+  delivery_challan_id?: number | null;
+  packing_date?: string | null;
+  total_cartons?: number;
+  gross_weight?: number | null;
+  net_weight?: number | null;
+  gross_weight_kg?: number | null;
+  net_weight_kg?: number | null;
+  status?: string | null;
+  notes?: string | null;
+}
+
+export type PackingListUpdate = Partial<PackingListCreate>;
+
+export interface PackingListContainerCreate {
+  container_number: string;
+  container_type?: string | null;
+  seal_number?: string | null;
+  tare_weight_kg?: number | null;
+  max_weight_kg?: number | null;
+  loading_status?: string | null;
+  notes?: string | null;
+}
+
+export interface ShipmentContainerRow {
+  id: number;
+  tenant_id: number;
+  shipment_id: number;
+  packing_list_id?: number | null;
+  container_number: string;
+  container_type?: string | null;
+  seal_number?: string | null;
+  tare_weight_kg?: number | null;
+  max_weight_kg?: number | null;
+  remaining_capacity_kg?: number | null;
+  loading_status: string;
+  loaded_at?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShipmentContainerCreate {
+  shipment_id: number;
+  packing_list_id?: number | null;
+  container_number: string;
+  container_type?: string | null;
+  seal_number?: string | null;
+  tare_weight_kg?: number | null;
+  max_weight_kg?: number | null;
+  loading_status?: string | null;
+  notes?: string | null;
+}
+
+export type ShipmentContainerUpdate = Partial<Omit<ShipmentContainerCreate, "shipment_id">>;
 
 export interface TradeDocumentRow {
   id: number;

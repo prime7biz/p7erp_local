@@ -10,27 +10,42 @@ type AppPageHeaderProps = {
   /** Optional KPI / summary strip below title row */
   belowTitle?: ReactNode;
   className?: string;
+  /** Compact ERP density (default). Use `comfortable` for marketing-like pages. */
+  density?: "compact" | "comfortable";
 };
 
 /**
  * Unified page header for CRM / operational modules (dense ERP layout).
  */
-export function AppPageHeader({ title, description, backTo, actions, belowTitle, className = "" }: AppPageHeaderProps) {
+export function AppPageHeader({
+  title,
+  description,
+  backTo,
+  actions,
+  belowTitle,
+  className = "",
+  density = "compact",
+}: AppPageHeaderProps) {
+  const titleClass =
+    density === "comfortable"
+      ? "text-2xl font-bold tracking-tight text-text-primary sm:text-3xl"
+      : "text-lg font-semibold tracking-tight text-text-primary sm:text-xl";
+
   return (
-    <header className={`space-y-3 ${className}`}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <header className={`space-y-2 ${className}`}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           {backTo ? (
             <Link
               to={backTo.to}
-              className="mb-1 inline-flex items-center gap-1 text-sm font-medium text-text-secondary hover:text-brand-primary"
+              className="mb-0.5 inline-flex items-center gap-1 text-xs font-medium text-text-secondary hover:text-brand-primary"
             >
-              <ArrowLeft className="h-4 w-4 shrink-0" />
+              <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
               {backTo.label}
             </Link>
           ) : null}
-          <h1 className="text-2xl font-bold tracking-tight text-text-primary sm:text-3xl">{title}</h1>
-          {description ? <p className="mt-1 max-w-3xl text-sm text-text-muted">{description}</p> : null}
+          <h1 className={titleClass}>{title}</h1>
+          {description ? <p className="mt-0.5 max-w-3xl text-sm text-text-muted">{description}</p> : null}
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </div>

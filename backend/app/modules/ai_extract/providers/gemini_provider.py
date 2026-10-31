@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import re
@@ -84,6 +85,107 @@ _confidences: object mapping each filled field name to 0.0-1.0,
 _unmapped_text: array of short snippets you could not map,
 _warnings: array of short notes.
 Do not invent internal order numbers or system IDs. Never output tenant_id, order_code, or database IDs."""
+
+_LC_PROMPT = """You extract Letter of Credit / master export LC / sales contract data for a garment ERP (P7) from the attached image or PDF.
+Return ONLY a single JSON object (no markdown fences) with these keys where applicable (null if unknown):
+reference (LC / contract reference), lc_number, issuing_bank, contract_type (EXPORT_LC or SALES_CONTRACT),
+amount (string number), currency (3-letter), buyer_name, bank_name (issuing bank),
+issue_date (YYYY-MM-DD), expiry_date (YYYY-MM-DD), shipment_date (YYYY-MM-DD),
+applicant, beneficiary, port_of_loading, port_of_discharge,
+partial_shipment_allowed (YES/NO), transshipment_allowed (YES/NO),
+documents_required (string or list joined by comma), special_instructions, incoterms, notes,
+_confidences: object mapping each filled field name to 0.0-1.0,
+_unmapped_text: array of short snippets you could not map,
+_warnings: array of short notes.
+Do not invent internal IDs. Leave unknown fields null."""
+
+_SHIPPING_DOC_PROMPT = """You extract shipping document data (BL, AWB, booking note) for a garment ERP (P7) from the attached image or PDF.
+Return ONLY a single JSON object (no markdown fences) with these keys where applicable (null if unknown):
+reference, carrier, shipping_line, booking_ref, bl_awb, bl_number, awb_number, vessel_name,
+airline, flight_number, etd (YYYY-MM-DD), eta (YYYY-MM-DD),
+origin_port, dest_port, port_of_loading, port_of_discharge, destination, container_number,
+freight_terms (PREPAID or COLLECT), notify_party, consignee, shipper, weight_kg, charges, notes,
+_confidences: object mapping each filled field name to 0.0-1.0,
+_unmapped_text: array of short snippets you could not map,
+_warnings: array of short notes.
+Do not invent internal shipment IDs. Leave unknown fields null."""
+
+_PACKING_LIST_PROMPT = """You extract packing list data for a garment ERP (P7) from the attached image or PDF.
+Return ONLY a single JSON object (no markdown fences) with these keys where applicable (null if unknown):
+reference, carton_numbers, total_cartons, quantities_per_carton, total_quantity,
+style_breakdown, net_weight_kg, gross_weight_kg, dimensions_cm, notes,
+_confidences: object mapping each filled field name to 0.0-1.0,
+_unmapped_text: array of short snippets you could not map,
+_warnings: array of short notes.
+Do not invent internal order IDs. Leave unknown fields null."""
+
+_HR_CV_PROMPT = """Extract structured employee information from this CV/resume/biodata for a garment ERP (P7).
+Return ONLY JSON with keys: full_name, first_name, last_name, date_of_birth (YYYY-MM-DD), gender (MALE|FEMALE|OTHER),
+national_id, passport_number, phone, email, address_line, city, country,
+education (array of {degree, institution, year, grade}),
+work_experience (array of {company, position, from_date, to_date, responsibilities}),
+skills (array), languages (array),
+_confidences, _unmapped_text, _warnings. Use null if unknown."""
+
+_HR_NID_PROMPT = """Extract Bangladesh National ID / Smart Card data for a garment ERP (P7).
+Return ONLY JSON: name, name_bangla, father_name, mother_name, date_of_birth (YYYY-MM-DD),
+national_id, address, blood_group, issue_date (YYYY-MM-DD),
+_confidences, _unmapped_text, _warnings. Use null if unknown."""
+
+_HR_MEDICAL_PROMPT = """Extract medical fitness certificate data for a garment ERP (P7).
+Return ONLY JSON: employee_name, examination_date (YYYY-MM-DD), expiry_date (YYYY-MM-DD),
+fitness_status (FIT|FIT_WITH_RESTRICTIONS|UNFIT|PENDING), conditions (array), restrictions (array),
+doctor_name, doctor_registration, hospital_clinic, height_cm, weight_kg, blood_pressure, vision, hearing,
+_confidences, _unmapped_text, _warnings. Use null if unknown."""
+
+_HR_BIRTH_PROMPT = """Extract birth certificate data for a garment ERP (P7).
+Return ONLY JSON: name, date_of_birth (YYYY-MM-DD), father_name, mother_name,
+birth_registration_number, place_of_birth, issue_date (YYYY-MM-DD),
+_confidences, _unmapped_text, _warnings. Use null if unknown."""
+
+
+def _soft_stub_lc_raw() -> dict[str, Any]:
+    """Schema-compatible soft stub when multimodal AI is unavailable (Phase 4 MVP)."""
+    return {
+        "reference": None,
+        "lc_number": None,
+        "contract_type": "EXPORT_LC",
+        "amount": None,
+        "currency": "USD",
+        "buyer_name": None,
+        "bank_name": None,
+        "issue_date": None,
+        "expiry_date": None,
+        "applicant": None,
+        "beneficiary": None,
+        "incoterms": None,
+        "notes": None,
+        "_confidences": {"currency": 0.4, "contract_type": 0.4},
+        "_unmapped_text": [],
+        "_warnings": [
+            "AI multimodal extraction unavailable. Soft stub returned — enter LC fields manually or retry when Gemini/OpenRouter is configured.",
+        ],
+    }
+
+
+def _soft_stub_shipping_raw() -> dict[str, Any]:
+    return {
+        "reference": None,
+        "carrier": None,
+        "booking_ref": None,
+        "bl_awb": None,
+        "etd": None,
+        "eta": None,
+        "origin_port": None,
+        "dest_port": None,
+        "container_number": None,
+        "notes": None,
+        "_confidences": {},
+        "_unmapped_text": [],
+        "_warnings": [
+            "AI multimodal extraction unavailable. Soft stub returned — enter shipping fields manually or retry when Gemini/OpenRouter is configured.",
+        ],
+    }
 
 
 def _openrouter_message_text(data: dict[str, Any]) -> str | None:
@@ -236,6 +338,11 @@ def _tiered_multimodal_sync(prompt: str, file_bytes: bytes, mime_type: str) -> s
     return generate_multimodal_sync(prompt, file_bytes, mime_type)
 
 
+async def _tiered_multimodal(prompt: str, file_bytes: bytes, mime_type: str) -> str | None:
+    """Blocking provider chain (httpx.Client / Gemini SDK, up to ~20s+) kept off the event loop."""
+    return await asyncio.to_thread(_tiered_multimodal_sync, prompt, file_bytes, mime_type)
+
+
 def _extraction_unavailable_raw(*, inquiry: bool) -> dict[str, Any]:
     """
     Return empty extraction when Gemini produced no text, the response was not valid JSON,
@@ -260,7 +367,7 @@ def _extraction_unavailable_raw(*, inquiry: bool) -> dict[str, Any]:
 class GeminiExtractionProvider(BaseExtractionProvider):
     async def extract_customer_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
         ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
-        text = _tiered_multimodal_sync(_CUSTOMER_PROMPT, file_bytes, ct)
+        text = await _tiered_multimodal(_CUSTOMER_PROMPT, file_bytes, ct)
         parsed = _parse_json_object(text or "") if text else None
         if isinstance(parsed, dict) and parsed:
             return parsed
@@ -268,7 +375,7 @@ class GeminiExtractionProvider(BaseExtractionProvider):
 
     async def extract_inquiry_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
         ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
-        text = _tiered_multimodal_sync(_INQUIRY_PROMPT, file_bytes, ct)
+        text = await _tiered_multimodal(_INQUIRY_PROMPT, file_bytes, ct)
         parsed = _parse_json_object(text or "") if text else None
         if isinstance(parsed, dict) and parsed:
             return parsed
@@ -276,7 +383,7 @@ class GeminiExtractionProvider(BaseExtractionProvider):
 
     async def extract_vendor_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
         ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
-        text = _tiered_multimodal_sync(_VENDOR_PROMPT, file_bytes, ct)
+        text = await _tiered_multimodal(_VENDOR_PROMPT, file_bytes, ct)
         parsed = _parse_json_object(text or "") if text else None
         if isinstance(parsed, dict) and parsed:
             return parsed
@@ -284,7 +391,7 @@ class GeminiExtractionProvider(BaseExtractionProvider):
 
     async def extract_order_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
         ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
-        text = _tiered_multimodal_sync(_ORDER_PROMPT, file_bytes, ct)
+        text = await _tiered_multimodal(_ORDER_PROMPT, file_bytes, ct)
         parsed = _parse_json_object(text or "") if text else None
         if isinstance(parsed, dict) and parsed:
             # Normalize ex_factory_date → delivery_date for downstream allowlist
@@ -292,3 +399,96 @@ class GeminiExtractionProvider(BaseExtractionProvider):
                 parsed["delivery_date"] = parsed.get("ex_factory_date")
             return parsed
         return _extraction_unavailable_raw(inquiry=False)
+
+    async def extract_lc_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
+        try:
+            text = await _tiered_multimodal(_LC_PROMPT, file_bytes, ct)
+            parsed = _parse_json_object(text or "") if text else None
+            if isinstance(parsed, dict) and parsed:
+                return parsed
+        except Exception:
+            pass
+        return _soft_stub_lc_raw()
+
+    async def extract_shipping_doc_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
+        try:
+            text = await _tiered_multimodal(_SHIPPING_DOC_PROMPT, file_bytes, ct)
+            parsed = _parse_json_object(text or "") if text else None
+            if isinstance(parsed, dict) and parsed:
+                return parsed
+        except Exception:
+            pass
+        return _soft_stub_shipping_raw()
+
+    async def extract_packing_list_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
+        try:
+            text = await _tiered_multimodal(_PACKING_LIST_PROMPT, file_bytes, ct)
+            parsed = _parse_json_object(text or "") if text else None
+            if isinstance(parsed, dict) and parsed:
+                return parsed
+        except Exception:
+            pass
+        return {
+            "reference": None,
+            "carton_numbers": None,
+            "total_cartons": None,
+            "quantities_per_carton": None,
+            "total_quantity": None,
+            "style_breakdown": None,
+            "net_weight_kg": None,
+            "gross_weight_kg": None,
+            "dimensions_cm": None,
+            "notes": None,
+            "_confidences": {},
+            "_unmapped_text": [],
+            "_warnings": [
+                "AI packing-list extraction unavailable — enter fields manually or retry when multimodal AI is configured.",
+            ],
+        }
+
+    async def extract_hr_cv_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
+        try:
+            text = await _tiered_multimodal(_HR_CV_PROMPT, file_bytes, ct)
+            parsed = _parse_json_object(text or "") if text else None
+            if isinstance(parsed, dict) and parsed:
+                return parsed
+        except Exception:
+            pass
+        return {"_confidences": {}, "_unmapped_text": [], "_warnings": ["CV extraction unavailable"]}
+
+    async def extract_hr_national_id_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
+        try:
+            text = await _tiered_multimodal(_HR_NID_PROMPT, file_bytes, ct)
+            parsed = _parse_json_object(text or "") if text else None
+            if isinstance(parsed, dict) and parsed:
+                return parsed
+        except Exception:
+            pass
+        return {"_confidences": {}, "_unmapped_text": [], "_warnings": ["National ID extraction unavailable"]}
+
+    async def extract_hr_medical_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
+        try:
+            text = await _tiered_multimodal(_HR_MEDICAL_PROMPT, file_bytes, ct)
+            parsed = _parse_json_object(text or "") if text else None
+            if isinstance(parsed, dict) and parsed:
+                return parsed
+        except Exception:
+            pass
+        return {"_confidences": {}, "_unmapped_text": [], "_warnings": ["Medical certificate extraction unavailable"]}
+
+    async def extract_hr_birth_certificate_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        ct = (content_type or "application/octet-stream").lower().split(";")[0].strip()
+        try:
+            text = await _tiered_multimodal(_HR_BIRTH_PROMPT, file_bytes, ct)
+            parsed = _parse_json_object(text or "") if text else None
+            if isinstance(parsed, dict) and parsed:
+                return parsed
+        except Exception:
+            pass
+        return {"_confidences": {}, "_unmapped_text": [], "_warnings": ["Birth certificate extraction unavailable"]}

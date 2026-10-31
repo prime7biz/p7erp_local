@@ -77,6 +77,8 @@ class ExternalPrincipalPatchRequest(BaseModel):
     customer_ids: list[int] | None = None
     access_scope: str | None = None
     financier_party_id: int | None = None
+    # When true, clear locked_at + failed_login_count (admin unlock).
+    clear_lock: bool | None = None
 
 
 class ExternalAuditRow(BaseModel):

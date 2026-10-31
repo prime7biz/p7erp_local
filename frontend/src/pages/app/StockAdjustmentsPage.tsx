@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api,
-  type InventoryItemResponse,
   type StockAdjustmentCreate,
   type StockAdjustmentResponse,
   type WarehouseResponse,
 } from "@/api/client";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import {
   InventoryEmptyState,
   InventoryErrorPanel,
@@ -17,13 +18,14 @@ import {
   touchFieldClass,
 } from "@/components/inventory/InventoryMobileList";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
+import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
 
 const REASONS = ["COUNT", "DAMAGE", "SYSTEM", "OTHER"] as const;
 
 export function StockAdjustmentsPage() {
   const [rows, setRows] = useState<StockAdjustmentResponse[]>([]);
-  const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
+  const [itemLabels, setItemLabels] = useState<Record<number, string>>({});
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
@@ -42,20 +44,23 @@ export function StockAdjustmentsPage() {
     setError("");
     setLoading(true);
     try {
-      const [adj, itm, wh] = await Promise.all([
+      const [adj, wh] = await Promise.all([
         api.listStockAdjustments(),
-        api.listInventoryItems(),
         api.listWarehouses(),
       ]);
       setRows(adj);
-      setItems(itm);
+      setItemLabels((prev) => {
+        const next = { ...prev };
+        for (const r of adj) {
+          if (r.item_name) next[r.item_id] = `${r.item_code ?? ""} ${r.item_name}`.trim();
+        }
+        return next;
+      });
       setWarehouses(wh);
       const firstWh = wh[0];
-      const firstIt = itm[0];
       setForm((prev) => ({
         ...prev,
         warehouse_id: prev.warehouse_id || firstWh?.id || 0,
-        item_id: prev.item_id || firstIt?.id || 0,
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load adjustments");
@@ -78,12 +83,19 @@ export function StockAdjustmentsPage() {
     [warehouses],
   );
   const itemLabel = useCallback(
-    (id: number) => {
-      const it = items.find((i) => i.id === id);
-      return it ? `${it.item_code} — ${it.name}` : `#${id}`;
-    },
-    [items],
+    (id: number) => itemLabels[id] ?? `#${id}`,
+    [itemLabels],
   );
+
+  const postAdjustment = async (id: number) => {
+    setError("");
+    try {
+      await api.postStockAdjustment(id);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Post failed");
+    }
+  };
 
   return (
     <div className="min-w-0 space-y-6">
@@ -137,18 +149,21 @@ export function StockAdjustmentsPage() {
             </option>
           ))}
         </select>
-        <select
+        <RemoteSearchSelect
           className="rounded border border-border px-2 py-2 text-sm"
-          value={form.item_id || ""}
-          onChange={(e) => setForm((p) => ({ ...p, item_id: Number(e.target.value) }))}
-        >
-          <option value={0}>Item…</option>
-          {items.map((it) => (
-            <option key={it.id} value={it.id}>
-              {it.item_code}
-            </option>
-          ))}
-        </select>
+          placeholder="Search item…"
+          value={form.item_id > 0 ? form.item_id : ""}
+          onChange={(next, opt) => {
+            const id = next === "" ? 0 : Number(next);
+            if (opt?.label && id > 0) {
+              setItemLabels((prev) => ({ ...prev, [id]: opt.label }));
+            }
+            setForm((p) => ({ ...p, item_id: id }));
+          }}
+          fetchPage={fetchInventoryItemPage}
+          hydrateById={hydrateInventoryItem}
+          allowClear
+        />
         <input
           className="rounded border border-border px-2 py-2 text-sm"
           placeholder="Qty (+ or −)"
@@ -207,39 +222,13 @@ export function StockAdjustmentsPage() {
                   </div>
                 </div>
                 {row.status === "DRAFT" ? (
-                  <div className="relative inline-block shrink-0">
-                    <button
-                      type="button"
-                      className="min-h-[44px] min-w-[88px] touch-manipulation rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:min-w-0 sm:px-2.5 sm:py-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenActionsId((id) => (id === row.id ? null : row.id));
-                      }}
-                    >
-                      Actions
-                    </button>
-                    {openActionsId === row.id && (
-                      <div className="absolute right-0 z-10 mt-1 w-44 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                        <button
-                          type="button"
-                          className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            setOpenActionsId(null);
-                            setError("");
-                            try {
-                              await api.postStockAdjustment(row.id);
-                              await load();
-                            } catch (err) {
-                              setError(err instanceof Error ? err.message : "Post failed");
-                            }
-                          }}
-                        >
-                          Post to stock
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <RowActionsMenu
+                    className="shrink-0"
+                    rowId={row.id}
+                    openId={openActionsId}
+                    onOpenChange={(id) => setOpenActionsId(id as number | null)}
+                    items={[{ key: "post", label: "Post to stock", onClick: () => void postAdjustment(row.id) }]}
+                  />
                 ) : (
                   <span className="text-xs text-text-muted">—</span>
                 )}
@@ -274,39 +263,12 @@ export function StockAdjustmentsPage() {
                   <td className="px-3 py-2 text-sm">{row.status}</td>
                   <td className="px-3 py-2 text-right">
                     {row.status === "DRAFT" ? (
-                      <div className="relative inline-block text-left">
-                        <button
-                          type="button"
-                          className="min-h-[44px] min-w-[88px] touch-manipulation rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:min-w-0 sm:px-2.5 sm:py-1"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenActionsId((id) => (id === row.id ? null : row.id));
-                          }}
-                        >
-                          Actions
-                        </button>
-                        {openActionsId === row.id && (
-                          <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                            <button
-                              type="button"
-                              className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                setOpenActionsId(null);
-                                setError("");
-                                try {
-                                  await api.postStockAdjustment(row.id);
-                                  await load();
-                                } catch (err) {
-                                  setError(err instanceof Error ? err.message : "Post failed");
-                                }
-                              }}
-                            >
-                              Post to stock
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      <RowActionsMenu
+                        rowId={row.id}
+                        openId={openActionsId}
+                        onOpenChange={(id) => setOpenActionsId(id as number | null)}
+                        items={[{ key: "post", label: "Post to stock", onClick: () => void postAdjustment(row.id) }]}
+                      />
                     ) : (
                       "—"
                     )}

@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.tenant import require_tenant
-from app.database import get_db
+from app.common.tenant_feature_keys import is_require_order_id_on_shop_floor
+from app.database import get_db, safe_async_session_rollback
 from app.models import HourlyProductionEntry, OperationBulletin, SewingLineStyleConfig, Tenant, User
 from app.modules.production.schemas import HourlyEntryUpsert
 
@@ -21,6 +22,44 @@ def _ensure(user: User, tenant: Tenant) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
 
+async def _default_target_from_line_plan(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    order_id: int | None,
+    line_id: int | None,
+    line_style_config_id: int | None,
+) -> float | None:
+    """Prefill hourly target from line plan: planned_qty / working days heuristic."""
+    cfg: SewingLineStyleConfig | None = None
+    if line_style_config_id:
+        cfg = await db.get(SewingLineStyleConfig, line_style_config_id)
+        if cfg and cfg.tenant_id != tenant_id:
+            cfg = None
+    if cfg is None and order_id and line_id:
+        r = await db.execute(
+            select(SewingLineStyleConfig)
+            .where(
+                SewingLineStyleConfig.tenant_id == tenant_id,
+                SewingLineStyleConfig.order_id == order_id,
+                SewingLineStyleConfig.line_id == line_id,
+            )
+            .order_by(SewingLineStyleConfig.id.desc())
+            .limit(1)
+        )
+        cfg = r.scalar_one_or_none()
+    if not cfg:
+        return None
+    planned = float(cfg.planned_qty or 0)
+    if planned <= 0:
+        return None
+    days = 1
+    if cfg.start_date and cfg.planned_end_date and cfg.planned_end_date >= cfg.start_date:
+        days = max(1, (cfg.planned_end_date - cfg.start_date).days + 1)
+    # Spread planned qty across shift hours (approx 8) for hourly target
+    return round(planned / days / 8.0, 3)
+
+
 @router.post("/upsert")
 async def upsert_hourly(
     body: HourlyEntryUpsert,
@@ -29,7 +68,23 @@ async def upsert_hourly(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure(user, tenant)
+    if is_require_order_id_on_shop_floor(tenant.feature_flags) and not body.order_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="order_id is required when require_order_id_on_shop_floor is enabled",
+        )
     d = date.fromisoformat(body.production_date)
+    target_qty = body.target_qty
+    if target_qty is None or float(target_qty or 0) == 0:
+        pref = await _default_target_from_line_plan(
+            db,
+            tenant_id=tenant.id,
+            order_id=body.order_id,
+            line_id=body.line_id,
+            line_style_config_id=body.line_style_config_id,
+        )
+        if pref is not None:
+            target_qty = pref
     # find existing similar row (best-effort match)
     q = select(HourlyProductionEntry).where(
         HourlyProductionEntry.tenant_id == tenant.id,
@@ -48,7 +103,7 @@ async def upsert_hourly(
     r = await db.execute(q.limit(1))
     row = r.scalar_one_or_none()
     if row:
-        row.target_qty = body.target_qty
+        row.target_qty = target_qty
         row.good_qty = body.good_qty
         row.reject_qty = body.reject_qty
         row.rework_qty = body.rework_qty
@@ -73,7 +128,7 @@ async def upsert_hourly(
             shift_id=body.shift_id,
             production_date=d,
             hour_slot=body.hour_slot,
-            target_qty=body.target_qty,
+            target_qty=target_qty,
             good_qty=body.good_qty,
             reject_qty=body.reject_qty,
             rework_qty=body.rework_qty,
@@ -86,6 +141,33 @@ async def upsert_hourly(
         db.add(row)
     await db.commit()
     await db.refresh(row)
+
+    if body.order_id:
+        try:
+            from app.modules.merch.constants import TNA_EVENT_CUTTING_START, TNA_EVENT_SEWING_START
+            from app.modules.merch.followup_sync_service import maybe_sync_followup
+            from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+            await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=int(body.order_id))
+            dept = (body.department_type or "").lower()
+            if "cut" in dept:
+                event = TNA_EVENT_CUTTING_START
+            elif "sew" in dept:
+                event = TNA_EVENT_SEWING_START
+            else:
+                event = None
+            if event:
+                await maybe_sync_followup(
+                    db,
+                    tenant=tenant,
+                    order_id=int(body.order_id),
+                    event_key=event,
+                    user_id=user.id,
+                    note=f"[auto-sync] Hourly {dept} production logged",
+                )
+            await db.commit()
+        except Exception:
+            await safe_async_session_rollback(db)
     return {"id": row.id}
 
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, FileText, Printer, Send, Save } from "lucide-react";
 import {
   api,
@@ -12,6 +12,7 @@ import {
   type PurchaseOrderResponse,
 } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
+import { ProformaPaymentPanel } from "@/components/commercial/ProformaPaymentPanel";
 
 const INCOTERMS_OPTIONS = ["EXW", "FCA", "FAS", "FOB", "CFR", "CIF", "CIP", "DAP", "DPU", "DDP"] as const;
 const PAYMENT_TERM_OPTIONS = [
@@ -77,6 +78,7 @@ const defaultForm = (): FormState => ({
 export function ProformaInvoiceFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isEdit = id != null && id !== "new";
   const numericId = isEdit ? Number(id) : 0;
 
@@ -186,6 +188,32 @@ export function ProformaInvoiceFormPage() {
             shipper_bank_address: "",
             shipper_bank_swift: "",
           });
+        } else {
+          const prefillOrderId = Number(searchParams.get("order_id") || 0) || null;
+          const prefillCustomerId = Number(searchParams.get("customer_id") || 0) || null;
+          if (prefillOrderId) {
+            let list = ordersList;
+            if (!list.some((o) => o.id === prefillOrderId)) {
+              const one = await api.getOrder(prefillOrderId).catch((e) => {
+                logApiError("ProformaInvoiceFormPage.prefillOrder", e);
+                return null;
+              });
+              if (one) {
+                list = [one, ...list];
+                setOrders(list);
+              }
+            }
+            const order = list.find((o) => o.id === prefillOrderId);
+            const buyer = customersList.find((c) => c.id === (prefillCustomerId ?? order?.customer_id));
+            if (order) {
+              setForm((prev) => ({
+                ...prev,
+                direction: "EXPORT",
+                order_ids: [order.id],
+                buyer_name: prev.buyer_name || buyer?.name || order.customer_name || "",
+              }));
+            }
+          }
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load form data");
@@ -194,7 +222,7 @@ export function ProformaInvoiceFormPage() {
       }
     };
     void load();
-  }, [isEdit, numericId]);
+  }, [isEdit, numericId, searchParams]);
 
   useEffect(() => {
     if (form.direction !== "IMPORT" || !form.vendor_id) {
@@ -438,6 +466,14 @@ export function ProformaInvoiceFormPage() {
         <div className="rounded-xl border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
           {error}
         </div>
+      )}
+
+      {isEdit && numericId > 0 && String(form.status || "").toUpperCase() === "ISSUED" && (
+        <ProformaPaymentPanel
+          piId={numericId}
+          defaultCurrency={form.currency}
+          direction={form.direction}
+        />
       )}
 
       <form onSubmit={handleSaveDraft} className="space-y-8">

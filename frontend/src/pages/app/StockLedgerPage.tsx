@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type InventoryItemResponse, type StockLedgerRow, type WarehouseResponse } from "@/api/client";
+import { api, type StockLedgerRow, type WarehouseResponse } from "@/api/client";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { Button } from "@/components/ui/button";
 import {
   InventoryEmptyState,
@@ -12,6 +13,7 @@ import {
   touchFieldClass,
 } from "@/components/inventory/InventoryMobileList";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
+import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
 
 const PAGE_SIZE = 50;
 
@@ -23,7 +25,6 @@ function fmtQty(n: number) {
 export function StockLedgerPage() {
   const [rows, setRows] = useState<StockLedgerRow[]>([]);
   const [total, setTotal] = useState(0);
-  const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
   const [itemId, setItemId] = useState<number | "">("");
   const [warehouseId, setWarehouseId] = useState<number | "">("");
@@ -47,7 +48,7 @@ export function StockLedgerPage() {
     setError("");
     try {
       const offset = (page - 1) * PAGE_SIZE;
-      const [ledgerRes, itm, wh] = await Promise.all([
+      const [ledgerRes, wh] = await Promise.all([
         api.getStockLedger({
           item_id: itemId === "" ? undefined : itemId,
           warehouse_id: warehouseId === "" ? undefined : warehouseId,
@@ -56,12 +57,10 @@ export function StockLedgerPage() {
           limit: PAGE_SIZE,
           offset,
         }),
-        api.listInventoryItems(),
         api.listWarehouses(),
       ]);
       setRows(ledgerRes.items);
       setTotal(ledgerRes.total);
-      setItems(itm);
       setWarehouses(wh);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load stock ledger");
@@ -108,21 +107,18 @@ export function StockLedgerPage() {
             }}
           />
         </label>
-        <select
+        <RemoteSearchSelect
           className={`w-full rounded border border-border px-3 py-2 text-sm sm:w-auto ${touchFieldClass}`}
-          value={itemId}
-          onChange={(e) => {
-            setItemId(e.target.value ? Number(e.target.value) : "");
+          placeholder="Search item…"
+          value={itemId === "" ? "" : itemId}
+          onChange={(next) => {
+            setItemId(next === "" ? "" : Number(next));
             setPage(1);
           }}
-        >
-          <option value="">All items</option>
-          {items.map((it) => (
-            <option key={it.id} value={it.id}>
-              {it.item_code}
-            </option>
-          ))}
-        </select>
+          fetchPage={fetchInventoryItemPage}
+          hydrateById={hydrateInventoryItem}
+          allowClear
+        />
         <select
           className={`w-full rounded border border-border px-3 py-2 text-sm sm:w-auto ${touchFieldClass}`}
           value={warehouseId}

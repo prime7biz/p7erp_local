@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMarketingCurrency } from "@/hooks/useMarketingCurrency";
 import { Link } from "react-router-dom";
 import { ArrowRight, Check, X, ChevronDown, Star, Zap, Shield, Headphones, HelpCircle, Globe } from "lucide-react";
 
@@ -50,7 +51,7 @@ const faqs = [
 
 export function PricingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [currency, setCurrency] = useState("BDT");
+  const [currency, setCurrency] = useMarketingCurrency();
   const rate = exchangeRates[currency] ?? 1;
   const starterPrice = Math.round(basePricesBDT.starter * rate);
   const growthPrice = Math.round(basePricesBDT.growth * rate);

@@ -777,22 +777,30 @@ async def bulk_create_entries(
 ):
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
     n = 0
     for r in body.rows:
         await _employee_or_404(db, tenant.id, r.employee_id)
-        entry = AttendanceEntry(
-            tenant_id=tenant.id,
-            employee_id=r.employee_id,
-            attendance_date=r.attendance_date,
-            in_time=r.in_time,
-            out_time=r.out_time,
-            status=r.status,
-            source=r.source or "MANUAL",
-            overtime_minutes=r.overtime_minutes,
-            remarks=r.remarks,
-            created_by=user.id,
+        values = {
+            "tenant_id": tenant.id,
+            "employee_id": r.employee_id,
+            "attendance_date": r.attendance_date,
+            "in_time": r.in_time,
+            "out_time": r.out_time,
+            "status": (r.status or "PRESENT").strip().upper(),
+            "source": (r.source or "MANUAL").strip().upper(),
+            "overtime_minutes": r.overtime_minutes,
+            "remarks": r.remarks,
+            "created_by": user.id,
+        }
+        # Re-importing a day updates it instead of failing the whole batch on the unique key.
+        stmt = pg_insert(AttendanceEntry).values(**values)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_hr_attendance_entries_employee_date",
+            set_={k: stmt.excluded[k] for k in ("in_time", "out_time", "status", "source", "overtime_minutes", "remarks")},
         )
-        db.add(entry)
+        await db.execute(stmt)
         n += 1
     await db.commit()
     return {"ok": True, "created": n}

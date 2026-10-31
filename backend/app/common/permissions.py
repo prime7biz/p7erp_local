@@ -24,6 +24,112 @@ PERMISSION_INVENTORY_OVER_RECEIPT_APPROVE = "inventory.over_receipt_approve"
 PERMISSION_INVENTORY_OVER_ISSUE_APPROVE = "inventory.over_issue_approve"
 PERMISSION_INVENTORY_PROCESS_ORDER_APPROVE = "inventory.process_order_approve"
 PERMISSION_FINANCE_AP_POSTING_APPROVE = "finance.ap_posting_approve"
+PERMISSION_FINANCE_RECEIPT_FROM_PROFORMA = "finance.receipt_from_proforma"
+PERMISSION_FINANCE_BUDGET_OVERRIDE = "finance.budget_override"
+PERMISSION_PARTY_LEDGER_VIEW = "finance.party_ledger.view"
+PERMISSION_PARTY_LEDGER_CREATE = "finance.party_ledger.create"
+PERMISSION_PARTY_LEDGER_EDIT = "finance.party_ledger.edit"
+PERMISSION_PARTY_LEDGER_DELETE = "finance.party_ledger.delete"
+PERMISSION_PARTY_LEDGER_ALLOCATE = "finance.party_ledger.allocate"
+PERMISSION_PARTY_LEDGER_STATEMENT = "finance.party_ledger.statement"
+PERMISSION_PARTY_LEDGER_AGING = "finance.party_ledger.aging"
+PERMISSION_PARTY_LEDGER_INTEREST = "finance.party_ledger.interest"
+PERMISSION_TAX_LEDGER_VIEW = "finance.tax_ledger.view"
+PERMISSION_TAX_LEDGER_CREATE = "finance.tax_ledger.create"
+PERMISSION_TAX_LEDGER_EDIT = "finance.tax_ledger.edit"
+PERMISSION_TAX_LEDGER_DELETE = "finance.tax_ledger.delete"
+PERMISSION_GST_RETURN_VIEW = "finance.gst_return.view"
+PERMISSION_GST_RETURN_EXPORT = "finance.gst_return.export"
+PERMISSION_TAX_SETTINGS_VIEW = "finance.tax_settings.view"
+PERMISSION_TAX_SETTINGS_EDIT = "finance.tax_settings.edit"
+PERMISSION_VOUCHER_TYPE_CONFIG = "finance.voucher_type.config"
+PERMISSION_VOUCHER_CLASS_VIEW = "finance.voucher_class.view"
+PERMISSION_VOUCHER_CLASS_CREATE = "finance.voucher_class.create"
+PERMISSION_VOUCHER_CLASS_EDIT = "finance.voucher_class.edit"
+PERMISSION_VOUCHER_CLASS_DELETE = "finance.voucher_class.delete"
+PERMISSION_RECURRING_VOUCHER_VIEW = "finance.recurring_voucher.view"
+PERMISSION_RECURRING_VOUCHER_CREATE = "finance.recurring_voucher.create"
+PERMISSION_RECURRING_VOUCHER_EDIT = "finance.recurring_voucher.edit"
+PERMISSION_RECURRING_VOUCHER_DELETE = "finance.recurring_voucher.delete"
+PERMISSION_CREDIT_NOTE_CREATE = "finance.credit_note.create"
+PERMISSION_DEBIT_NOTE_CREATE = "finance.debit_note.create"
+PERMISSION_STOCK_TRANSFER_VOUCHER_CREATE = "finance.stock_transfer.create"
+PERMISSION_TDS_VIEW = "finance.tds.view"
+PERMISSION_TDS_CREATE = "finance.tds.create"
+PERMISSION_TDS_EDIT = "finance.tds.edit"
+PERMISSION_TDS_RETURN_EXPORT = "finance.tds_return.export"
+PERMISSION_HR_PAYROLL_STATUTORY_VIEW = "hr.payroll.statutory.view"
+PERMISSION_HR_PAYROLL_STATUTORY_EDIT = "hr.payroll.statutory.edit"
+PERMISSION_MIS_REPORT_VIEW = "finance.mis_report.view"
+PERMISSION_MIS_REPORT_EXPORT = "finance.mis_report.export"
+PERMISSION_SCENARIO_ANALYSIS_VIEW = "finance.scenario_analysis.view"
+PERMISSION_INVENTORY_STOCK_GROUP_VIEW = "inventory.stock_group.view"
+PERMISSION_INVENTORY_STOCK_GROUP_CREATE = "inventory.stock_group.create"
+PERMISSION_INVENTORY_STOCK_GROUP_EDIT = "inventory.stock_group.edit"
+PERMISSION_INVENTORY_STOCK_GROUP_DELETE = "inventory.stock_group.delete"
+PERMISSION_INVENTORY_STOCK_ITEM_VIEW = "inventory.stock_item.view"
+PERMISSION_INVENTORY_STOCK_ITEM_CREATE = "inventory.stock_item.create"
+PERMISSION_INVENTORY_STOCK_ITEM_EDIT = "inventory.stock_item.edit"
+PERMISSION_INVENTORY_STOCK_ITEM_DELETE = "inventory.stock_item.delete"
+PERMISSION_INVENTORY_BATCH_VIEW = "inventory.batch.view"
+PERMISSION_INVENTORY_BATCH_CREATE = "inventory.batch.create"
+PERMISSION_INVENTORY_BATCH_EDIT = "inventory.batch.edit"
+PERMISSION_INVENTORY_GODOWN_VIEW = "inventory.godown.view"
+PERMISSION_INVENTORY_GODOWN_CREATE = "inventory.godown.create"
+PERMISSION_INVENTORY_GODOWN_EDIT = "inventory.godown.edit"
+PERMISSION_INVENTORY_GODOWN_DELETE = "inventory.godown.delete"
+PERMISSION_INVENTORY_STOCK_TRANSFER_VIEW = "inventory.stock_transfer.view"
+PERMISSION_INVENTORY_STOCK_TRANSFER_CREATE = "inventory.stock_transfer.create"
+# Sprint I1 MRP / IDT / process loss
+PERMISSION_INVENTORY_MRP_RUN = "inventory.mrp.run"
+PERMISSION_INVENTORY_PLANNED_ORDER_VIEW = "inventory.planned_order.view"
+PERMISSION_INVENTORY_PLANNED_ORDER_FIRM = "inventory.planned_order.firm"
+PERMISSION_INVENTORY_PLANNED_ORDER_RELEASE = "inventory.planned_order.release"
+PERMISSION_INVENTORY_REORDER_SUGGESTION_VIEW = "inventory.reorder_suggestion.view"
+PERMISSION_INVENTORY_REORDER_SUGGESTION_APPROVE = "inventory.reorder_suggestion.approve"
+PERMISSION_INVENTORY_REORDER_SUGGESTION_CONVERT = "inventory.reorder_suggestion.convert"
+PERMISSION_INVENTORY_IDT_VIEW = "inventory.idt.view"
+PERMISSION_INVENTORY_IDT_CREATE = "inventory.idt.create"
+PERMISSION_INVENTORY_IDT_RECEIVE = "inventory.idt.receive"
+PERMISSION_INVENTORY_PROCESS_LOSS_VIEW = "inventory.process_loss.view"
+PERMISSION_INVENTORY_PROCESS_LOSS_CONFIG = "inventory.process_loss.config"
+PERMISSION_INVENTORY_POST_COSTING_VIEW = "inventory.post_costing.view"
+PERMISSION_INVENTORY_QC_INSPECT = "inventory.qc.inspect"
+PERMISSION_INVENTORY_QC_VIEW = "inventory.qc.view"
+PERMISSION_INVENTORY_VENDOR_SCORECARD_VIEW = "inventory.vendor_scorecard.view"
+PERMISSION_INVENTORY_ABC_ANALYSIS_VIEW = "inventory.abc_analysis.view"
+PERMISSION_INVENTORY_ABC_ANALYSIS_RUN = "inventory.abc_analysis.run"
+PERMISSION_INVENTORY_EOQ_VIEW = "inventory.eoq.view"
+PERMISSION_INVENTORY_STOCK_AGING_VIEW = "inventory.stock_aging.view"
+PERMISSION_INVENTORY_CYCLE_COUNT_VIEW = "inventory.cycle_count.view"
+PERMISSION_INVENTORY_CYCLE_COUNT_PERFORM = "inventory.cycle_count.perform"
+PERMISSION_INVENTORY_SERIAL_VIEW = "inventory.serial.view"
+PERMISSION_INVENTORY_SERIAL_CREATE = "inventory.serial.create"
+PERMISSION_INVENTORY_KIT_VIEW = "inventory.kit.view"
+PERMISSION_INVENTORY_KIT_CREATE = "inventory.kit.create"
+PERMISSION_INVENTORY_KIT_EDIT = "inventory.kit.edit"
+PERMISSION_INVENTORY_CONSIGNMENT_VIEW = "inventory.consignment.view"
+PERMISSION_INVENTORY_CONSIGNMENT_CREATE = "inventory.consignment.create"
+PERMISSION_INVENTORY_CONSIGNMENT_SETTLE = "inventory.consignment.settle"
+PERMISSION_COMMERCIAL_INVOICE_CREATE = "commercial.invoice.create"
+PERMISSION_COMMERCIAL_INVOICE_ISSUE = "commercial.invoice.issue"
+PERMISSION_COMMERCIAL_EXPORT_CASE_CREATE = "commercial.export_case.create"
+PERMISSION_COMMERCIAL_EXPORT_CASE_EDIT = "commercial.export_case.edit"
+PERMISSION_HR_PAYROLL_AUTO_CALCULATE = "hr.payroll.auto_calculate"
+PERMISSION_HR_COMPLIANCE_VIEW = "hr.compliance.view"
+PERMISSION_HR_COMPLIANCE_MANAGE = "hr.compliance.manage"
+PERMISSION_HR_OCR_USE = "hr.ocr.use"
+PERMISSION_HR_AI_INSIGHTS_VIEW = "hr.ai.insights.view"
+PERMISSION_HR_DOCUMENTS_GENERATE = "hr.documents.generate"
+PERMISSION_HR_AGE_VERIFY = "hr.age_verification.verify"
+PERMISSION_HR_MEDICAL_MANAGE = "hr.medical.manage"
+PERMISSION_AI_HR_EXTRACT = "ai.hr_extract"
+PERMISSION_AI_LC_EXTRACT = "ai.lc_extract"
+PERMISSION_AI_SHIPPING_EXTRACT = "ai.shipping_extract"
+PERMISSION_AI_FINANCE_FORECAST = "ai.finance_forecast"
+PERMISSION_AI_DEFECT_PREDICT = "ai.defect_predict"
+PERMISSION_AI_MAINTENANCE_PREDICT = "ai.maintenance_predict"
+PERMISSION_AI_LINE_BALANCE = "ai.line_balance"
 
 MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
     {
@@ -55,6 +161,526 @@ MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
         "key": PERMISSION_FINANCE_AP_POSTING_APPROVE,
         "label": "Post vendor bills to AP (book GRNI clearing)",
         "group": "Finance",
+    },
+    {
+        "key": PERMISSION_FINANCE_RECEIPT_FROM_PROFORMA,
+        "label": "Record payment from export proforma invoice",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_FINANCE_BUDGET_OVERRIDE,
+        "label": "Override budget block when posting vouchers over budget",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_PARTY_LEDGER_VIEW,
+        "label": "View party ledgers, bills, and balances",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_PARTY_LEDGER_CREATE,
+        "label": "Create party ledgers",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_PARTY_LEDGER_EDIT,
+        "label": "Edit party ledger credit terms and settings",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_PARTY_LEDGER_DELETE,
+        "label": "Deactivate party ledgers",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_PARTY_LEDGER_ALLOCATE,
+        "label": "Allocate receipts/payments against party bills",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_PARTY_LEDGER_STATEMENT,
+        "label": "View party ledger statements",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_PARTY_LEDGER_AGING,
+        "label": "View party ledger aging reports",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_PARTY_LEDGER_INTEREST,
+        "label": "Calculate interest on overdue party bills",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_TAX_LEDGER_VIEW,
+        "label": "View tax ledgers",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_TAX_LEDGER_CREATE,
+        "label": "Create tax ledgers",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_TAX_LEDGER_EDIT,
+        "label": "Edit tax ledgers",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_TAX_LEDGER_DELETE,
+        "label": "Deactivate tax ledgers",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_GST_RETURN_VIEW,
+        "label": "View GST returns (GSTR1/2/3B/ITC)",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_GST_RETURN_EXPORT,
+        "label": "Export GST returns for portal upload",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_TAX_SETTINGS_VIEW,
+        "label": "View GST/tax settings",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_TAX_SETTINGS_EDIT,
+        "label": "Edit GST/tax settings",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_VOUCHER_TYPE_CONFIG,
+        "label": "Configure advanced voucher types",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_VOUCHER_CLASS_VIEW,
+        "label": "View voucher classes",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_VOUCHER_CLASS_CREATE,
+        "label": "Create voucher classes",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_VOUCHER_CLASS_EDIT,
+        "label": "Edit voucher classes",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_VOUCHER_CLASS_DELETE,
+        "label": "Delete voucher classes",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_RECURRING_VOUCHER_VIEW,
+        "label": "View recurring voucher templates",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_RECURRING_VOUCHER_CREATE,
+        "label": "Create recurring voucher templates",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_RECURRING_VOUCHER_EDIT,
+        "label": "Edit recurring voucher templates",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_RECURRING_VOUCHER_DELETE,
+        "label": "Delete recurring voucher templates",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_CREDIT_NOTE_CREATE,
+        "label": "Create credit notes",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_DEBIT_NOTE_CREATE,
+        "label": "Create debit notes",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_STOCK_TRANSFER_VOUCHER_CREATE,
+        "label": "Create stock transfer vouchers",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_TDS_VIEW,
+        "label": "View TDS sections and deductions",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_TDS_CREATE,
+        "label": "Create TDS sections and deductions",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_TDS_EDIT,
+        "label": "Edit TDS sections and deductions",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_TDS_RETURN_EXPORT,
+        "label": "Export TDS returns (Form 26Q/24Q)",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_HR_PAYROLL_STATUTORY_VIEW,
+        "label": "View payroll statutory config",
+        "group": "HR",
+    },
+    {
+        "key": PERMISSION_HR_PAYROLL_STATUTORY_EDIT,
+        "label": "Edit payroll statutory config",
+        "group": "HR",
+    },
+    {
+        "key": PERMISSION_HR_COMPLIANCE_VIEW,
+        "label": "View BSCI/WRAP/SEDEX compliance dashboard",
+        "group": "HR",
+    },
+    {
+        "key": PERMISSION_HR_COMPLIANCE_MANAGE,
+        "label": "Manage compliance requirements and evidence",
+        "group": "HR",
+    },
+    {
+        "key": PERMISSION_HR_OCR_USE,
+        "label": "Upload and OCR HR documents (CV, NID, medical)",
+        "group": "HR",
+    },
+    {
+        "key": PERMISSION_HR_AI_INSIGHTS_VIEW,
+        "label": "View HR AI insights (attendance, turnover, anomalies)",
+        "group": "HR",
+    },
+    {
+        "key": PERMISSION_HR_DOCUMENTS_GENERATE,
+        "label": "Generate HR PDFs (ID card, letters, payslip)",
+        "group": "HR",
+    },
+    {
+        "key": PERMISSION_HR_AGE_VERIFY,
+        "label": "Verify employee age for child-labor compliance",
+        "group": "HR",
+    },
+    {
+        "key": PERMISSION_HR_MEDICAL_MANAGE,
+        "label": "Track employee medical certificates",
+        "group": "HR",
+    },
+    {
+        "key": PERMISSION_MIS_REPORT_VIEW,
+        "label": "View MIS reports (fund flow, ratios, comparative)",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_MIS_REPORT_EXPORT,
+        "label": "Export MIS reports",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_SCENARIO_ANALYSIS_VIEW,
+        "label": "View cash-flow scenario analysis",
+        "group": "Finance",
+    },
+    {
+        "key": PERMISSION_INVENTORY_STOCK_GROUP_VIEW,
+        "label": "View stock groups hierarchy",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_STOCK_GROUP_CREATE,
+        "label": "Create stock groups",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_STOCK_GROUP_EDIT,
+        "label": "Edit stock groups",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_STOCK_GROUP_DELETE,
+        "label": "Delete stock groups",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_STOCK_ITEM_VIEW,
+        "label": "View stock items and valuation",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_STOCK_ITEM_CREATE,
+        "label": "Create stock items",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_STOCK_ITEM_EDIT,
+        "label": "Edit stock items and price lists",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_STOCK_ITEM_DELETE,
+        "label": "Delete / deactivate stock items",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_BATCH_VIEW,
+        "label": "View stock batches",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_BATCH_CREATE,
+        "label": "Create stock batches",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_BATCH_EDIT,
+        "label": "Edit stock batches",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_GODOWN_VIEW,
+        "label": "View godown / warehouse stock",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_GODOWN_CREATE,
+        "label": "Create godowns / warehouses",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_GODOWN_EDIT,
+        "label": "Edit godowns / warehouses",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_GODOWN_DELETE,
+        "label": "Delete godowns / warehouses",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_STOCK_TRANSFER_VIEW,
+        "label": "View stock transfers",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_STOCK_TRANSFER_CREATE,
+        "label": "Create stock transfers",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_MRP_RUN,
+        "label": "Run inventory MRP engine",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_PLANNED_ORDER_VIEW,
+        "label": "View planned orders",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_PLANNED_ORDER_FIRM,
+        "label": "Firm planned orders",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_PLANNED_ORDER_RELEASE,
+        "label": "Release planned orders to PO/MO",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_REORDER_SUGGESTION_VIEW,
+        "label": "View reorder suggestions",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_REORDER_SUGGESTION_APPROVE,
+        "label": "Approve reorder suggestions",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_REORDER_SUGGESTION_CONVERT,
+        "label": "Convert reorder suggestions to PO",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_IDT_VIEW,
+        "label": "View inter-department transfers",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_IDT_CREATE,
+        "label": "Create / issue inter-department transfers",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_IDT_RECEIVE,
+        "label": "Receive inter-department transfers",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_PROCESS_LOSS_VIEW,
+        "label": "View process loss reports",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_PROCESS_LOSS_CONFIG,
+        "label": "Configure process loss standards",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_POST_COSTING_VIEW,
+        "label": "View post-costing reports",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_QC_VIEW,
+        "label": "View GRN quality inspections",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_QC_INSPECT,
+        "label": "Perform GRN quality inspections",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_VENDOR_SCORECARD_VIEW,
+        "label": "View vendor quality scorecard",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_ABC_ANALYSIS_VIEW,
+        "label": "View ABC analysis report",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_ABC_ANALYSIS_RUN,
+        "label": "Run ABC analysis and update item classes",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_EOQ_VIEW,
+        "label": "View EOQ calculations",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_STOCK_AGING_VIEW,
+        "label": "View stock aging report",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_CYCLE_COUNT_VIEW,
+        "label": "View cycle count schedule",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_CYCLE_COUNT_PERFORM,
+        "label": "Perform and submit cycle counts",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_SERIAL_VIEW,
+        "label": "View stock serial numbers",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_SERIAL_CREATE,
+        "label": "Create and assign stock serial numbers",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_KIT_VIEW,
+        "label": "View item kits",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_KIT_CREATE,
+        "label": "Create item kits",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_KIT_EDIT,
+        "label": "Edit item kits",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_CONSIGNMENT_VIEW,
+        "label": "View consignment stock",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_CONSIGNMENT_CREATE,
+        "label": "Receive and consume consignment stock",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_INVENTORY_CONSIGNMENT_SETTLE,
+        "label": "Settle consignment stock (create PO)",
+        "group": "Inventory",
+    },
+    {
+        "key": PERMISSION_COMMERCIAL_INVOICE_CREATE,
+        "label": "Create commercial invoice from delivery challan",
+        "group": "Commercial",
+    },
+    {
+        "key": PERMISSION_COMMERCIAL_INVOICE_ISSUE,
+        "label": "Issue commercial invoice (creates draft AR voucher)",
+        "group": "Commercial",
+    },
+    {
+        "key": PERMISSION_COMMERCIAL_EXPORT_CASE_CREATE,
+        "label": "Create export cases",
+        "group": "Commercial",
+    },
+    {
+        "key": PERMISSION_COMMERCIAL_EXPORT_CASE_EDIT,
+        "label": "Edit export cases",
+        "group": "Commercial",
+    },
+    {
+        "key": PERMISSION_HR_PAYROLL_AUTO_CALCULATE,
+        "label": "Auto-calculate payroll run lines from structure assignments",
+        "group": "HR",
+    },
+    {
+        "key": PERMISSION_AI_LC_EXTRACT,
+        "label": "Extract Letter of Credit fields from uploaded documents",
+        "group": "AI",
+    },
+    {
+        "key": PERMISSION_AI_SHIPPING_EXTRACT,
+        "label": "Extract BL / AWB / packing list fields from shipping documents",
+        "group": "AI",
+    },
+    {
+        "key": PERMISSION_AI_FINANCE_FORECAST,
+        "label": "Run AI finance cash-flow / P&L forecast",
+        "group": "AI",
+    },
+    {
+        "key": PERMISSION_AI_DEFECT_PREDICT,
+        "label": "View defect-risk predictive suggestions",
+        "group": "AI",
+    },
+    {
+        "key": PERMISSION_AI_MAINTENANCE_PREDICT,
+        "label": "View predictive maintenance risk alerts",
+        "group": "AI",
+    },
+    {
+        "key": PERMISSION_AI_LINE_BALANCE,
+        "label": "View AI line-balancing suggestions",
+        "group": "AI",
     },
 ]
 
@@ -142,6 +768,12 @@ PERMISSION_REGISTRY: dict[str, Any] = {
         "access_key": "ai.access",
         "submodules": {
             "all": {"label": "AI features", "levels": ["read", "write"]},
+            "lc_extract": {"label": "LC document extract", "levels": ["read", "write"]},
+            "shipping_extract": {"label": "Shipping document extract", "levels": ["read", "write"]},
+            "finance_forecast": {"label": "Finance forecast", "levels": ["read", "write"]},
+            "defect_predict": {"label": "Defect prediction", "levels": ["read"]},
+            "maintenance_predict": {"label": "Maintenance prediction", "levels": ["read"]},
+            "line_balance": {"label": "Line balance suggestions", "levels": ["read"]},
         },
     },
     "facility": {
@@ -212,6 +844,38 @@ async def assert_delegate_manager_or_permission(
         status_code=status.HTTP_403_FORBIDDEN,
         detail=f"Requires admin/manager role or permission '{permission_key}'",
     )
+
+
+def soft_permission_denied(*, role: Role | None, permission_key: str) -> bool:
+    """Soft-deny convention: missing key ⇒ allow; explicit False ⇒ deny.
+
+    Also deny when a broader deny is not used; wildcards ``*`` / ``hr.*`` as True
+    still allow. Admin role always allowed.
+    """
+    if role is None:
+        return False
+    if (role.name or "").strip().lower() == "admin":
+        return False
+    perms = role.permissions if isinstance(role.permissions, dict) else {}
+    if perms.get(permission_key) is False:
+        return True
+    return False
+
+
+async def assert_soft_permission_allowed(
+    db: AsyncSession,
+    user: User,
+    tenant_id: int,
+    *,
+    permission_key: str,
+) -> None:
+    """Raise 403 only when role.permissions explicitly sets permission_key to false."""
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
+    if soft_permission_denied(role=role, permission_key=permission_key):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Missing permission: {permission_key}",
+        )
 
 
 async def get_user_role_for_tenant(db: AsyncSession, user: User, tenant_id: int) -> Role | None:

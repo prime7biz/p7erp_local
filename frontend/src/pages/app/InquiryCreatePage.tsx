@@ -12,6 +12,7 @@ import {
 import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel";
 import { ExtractionStatusBanner } from "@/components/ai-extract/ExtractionStatusBanner";
 import { FileImportCard } from "@/components/ai-extract/FileImportCard";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import {
   COMMISSION_MODE_OPTIONS,
   COMMISSION_TYPE_OPTIONS,
@@ -21,6 +22,7 @@ import {
 import { InquiryCreateSidebar } from "@/features/inquiries/create/InquiryCreateSidebar";
 import { canSubmitInquiry } from "@/features/merch/workflow";
 import { cn } from "@/lib/utils";
+import { fetchCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
 import type {
   ConflictResolutionChoice,
   ExtractionStatus,
@@ -64,14 +66,14 @@ const emptyForm = (): InquiryCreate => ({
 });
 
 const INQ_INPUT =
-  "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring";
+  "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0";
 
 /** Labels and shells for fields that must be set before save (customer + style). */
 const REQUIRED_LABEL =
   "block text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1";
 function requiredSelectShell(filled: boolean): string {
   return cn(
-    "w-full rounded-lg px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring",
+    "w-full rounded-lg px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0",
     filled
       ? "border border-border-strong"
       : "border-2 border-amber-400/90 bg-amber-50/60 dark:border-amber-600 dark:bg-amber-950/35",
@@ -92,7 +94,7 @@ export function InquiryCreatePage() {
 
   const [form, setForm] = useState<InquiryCreate>(emptyForm());
   const [styles, setStyles] = useState<StyleResponse[]>([]);
-  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
+  const [selectedCustomerName, setSelectedCustomerName] = useState("-");
   const [allLinks, setAllLinks] = useState<CustomerIntermediaryLinkResponse[]>([]);
   const [currencies, setCurrencies] = useState<CurrencyMasterResponse[]>([]);
   const [tenantDefaultCommissionMode, setTenantDefaultCommissionMode] = useState<string>("");
@@ -138,8 +140,6 @@ export function InquiryCreatePage() {
     return allLinks.filter((l) => l.customer_id === form.customer_id);
   }, [allLinks, form.customer_id]);
   const currencyOptions = currencies.length > 0 ? currencies.map((c) => c.code) : ["USD", "BDT", "EUR", "GBP", "JPY"];
-  const selectedCustomerName =
-    customers.find((customer) => customer.id === form.customer_id)?.name ?? "-";
   const selectedIntermediaryLabel =
     customerLinks.find((link) => link.id === form.customer_intermediary_id)?.intermediary_name ??
     customerLinks.find((link) => link.id === form.customer_intermediary_id)?.intermediary_code ??
@@ -158,15 +158,13 @@ export function InquiryCreatePage() {
       setLoading(true);
       setError("");
       try {
-        const [styleRows, customerRows, linkRows, settings, currencyRows] = await Promise.all([
+        const [styleRows, linkRows, settings, currencyRows] = await Promise.all([
           api.listStyles({ status: "ACTIVE" }),
-          api.listCustomers(),
           api.listCustomerIntermediaryLinks(),
           api.getSettingsConfig(),
           api.listCurrencies(),
         ]);
         setStyles(styleRows);
-        setCustomers(customerRows);
         setAllLinks(linkRows);
         setCurrencies(currencyRows.filter((c) => c.is_active));
         setTenantDefaultCommissionMode(settings.default_commission_mode ?? "");
@@ -178,6 +176,7 @@ export function InquiryCreatePage() {
           const inquiry = await api.getInquiry(Number(id));
           setCurrentInquiryCode(inquiry.inquiry_code);
           setWorkflowStatus(inquiry.status ?? "");
+          setSelectedCustomerName(inquiry.customer_name ?? "-");
           setForm({
             customer_id: inquiry.customer_id,
             style_id: inquiry.style_id ?? undefined,
@@ -234,11 +233,17 @@ export function InquiryCreatePage() {
     });
   };
 
-  const onCustomerChange = (customerId: number) => {
+  const onCustomerChange = (customerId: number, customerName?: string) => {
     const firstPrimaryLink =
       allLinks.find((l) => l.customer_id === customerId && l.is_primary) ??
       allLinks.find((l) => l.customer_id === customerId) ??
       null;
+
+    if (customerName != null) {
+      setSelectedCustomerName(customerName || "-");
+    } else if (!customerId) {
+      setSelectedCustomerName("-");
+    }
 
     setForm((prev) => ({
       ...prev,
@@ -971,7 +976,7 @@ export function InquiryCreatePage() {
                   <button
                     key={m.id}
                     type="button"
-                    onClick={() => onCustomerChange(m.id)}
+                    onClick={() => onCustomerChange(m.id, m.name)}
                     className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-primary hover:bg-surface-subtle"
                   >
                     {m.name}{" "}
@@ -1050,18 +1055,18 @@ export function InquiryCreatePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className={REQUIRED_LABEL}>Customer **</label>
-                <select
-                  value={form.customer_id || ""}
-                  onChange={(e) => onCustomerChange(Number(e.target.value) || 0)}
+                <RemoteSearchSelect<CustomerResponse>
                   className={requiredSelectShell(Boolean(form.customer_id))}
-                >
-                  <option value="">Select customer...</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Search customer…"
+                  value={form.customer_id > 0 ? form.customer_id : ""}
+                  onChange={(next, opt) => {
+                    const id = typeof next === "number" && next > 0 ? next : 0;
+                    onCustomerChange(id, opt?.meta?.name ?? (id ? opt?.label : "-"));
+                  }}
+                  fetchPage={fetchCustomerPage}
+                  hydrateById={hydrateCustomer}
+                  allowClear
+                />
               </div>
               <div>
                 <label className={REQUIRED_LABEL}>Style **</label>

@@ -3,11 +3,11 @@ import {
   api,
   type InventoryDocumentPrintPayload,
   type InventoryGlPostingDetail,
-  type InventoryItemResponse,
   type WarehouseResponse,
   type WarehouseTransferCreate,
   type WarehouseTransferResponse,
 } from "@/api/client";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { GlPostingsPanel } from "@/components/inventory/GlPostingsPanel";
 import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocumentPrintSheets";
 import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
@@ -23,11 +23,12 @@ import {
   touchFieldClass,
 } from "@/components/inventory/InventoryMobileList";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
+import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
 
 export function WarehouseTransfersPage() {
   const [rows, setRows] = useState<WarehouseTransferResponse[]>([]);
-  const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
+  const [itemLabels, setItemLabels] = useState<Record<number, string>>({});
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
@@ -53,26 +54,27 @@ export function WarehouseTransfersPage() {
     setError("");
     setLoading(true);
     try {
-      const [tr, itm, wh] = await Promise.all([
+      const [tr, wh] = await Promise.all([
         api.listWarehouseTransfers(),
-        api.listInventoryItems(),
         api.listWarehouses(),
       ]);
       setRows(tr);
-      setItems(itm);
+      setItemLabels((prev) => {
+        const next = { ...prev };
+        for (const t of tr) {
+          for (const l of t.items) {
+            if (l.item_name) next[l.item_id] = `${l.item_code ?? ""} ${l.item_name}`.trim();
+          }
+        }
+        return next;
+      });
       setWarehouses(wh);
       const firstWh = wh[0];
-      const firstIt = itm[0];
       setForm((prev) => ({
         ...prev,
         from_warehouse_id: prev.from_warehouse_id || firstWh?.id || 0,
         to_warehouse_id: prev.to_warehouse_id || (wh[1]?.id ?? firstWh?.id ?? 0),
-        items: prev.items.length
-          ? prev.items.map((line) => ({
-              ...line,
-              item_id: line.item_id || firstIt?.id || 0,
-            }))
-          : [{ item_id: firstIt?.id ?? 0, quantity: "1" }],
+        items: prev.items.length ? prev.items : [{ item_id: 0, quantity: "1" }],
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load transfers");
@@ -101,11 +103,8 @@ export function WarehouseTransfersPage() {
     [warehouses],
   );
   const itemLabel = useCallback(
-    (id: number) => {
-      const it = items.find((i) => i.id === id);
-      return it ? `${it.item_code} — ${it.name}` : `#${id}`;
-    },
-    [items],
+    (id: number) => itemLabels[id] ?? `#${id}`,
+    [itemLabels],
   );
 
   return (
@@ -200,24 +199,24 @@ export function WarehouseTransfersPage() {
         <div className="space-y-2">
           {form.items.map((line, idx) => (
             <div key={idx} className="flex flex-wrap items-end gap-2">
-              <select
+              <RemoteSearchSelect
                 className="min-w-[200px] flex-1 rounded border border-border px-2 py-2 text-sm"
-                value={line.item_id || ""}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
+                placeholder="Search item…"
+                value={line.item_id > 0 ? line.item_id : ""}
+                onChange={(next, opt) => {
+                  const v = next === "" ? 0 : Number(next);
+                  if (opt?.label && v > 0) {
+                    setItemLabels((prev) => ({ ...prev, [v]: opt.label }));
+                  }
                   setForm((p) => ({
                     ...p,
                     items: p.items.map((row, i) => (i === idx ? { ...row, item_id: v } : row)),
                   }));
                 }}
-              >
-                <option value={0}>Item…</option>
-                {items.map((it) => (
-                  <option key={it.id} value={it.id}>
-                    {it.item_code} — {it.name}
-                  </option>
-                ))}
-              </select>
+                fetchPage={fetchInventoryItemPage}
+                hydrateById={hydrateInventoryItem}
+                allowClear
+              />
               <input
                 className="w-28 rounded border border-border px-2 py-2 text-sm"
                 placeholder="Qty"
@@ -242,7 +241,7 @@ export function WarehouseTransfersPage() {
           <button
             type="button"
             className="rounded border border-dashed border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle"
-            onClick={() => setForm((p) => ({ ...p, items: [...p.items, { item_id: items[0]?.id ?? 0, quantity: "1" }] }))}
+            onClick={() => setForm((p) => ({ ...p, items: [...p.items, { item_id: 0, quantity: "1" }] }))}
           >
             + Add line
           </button>

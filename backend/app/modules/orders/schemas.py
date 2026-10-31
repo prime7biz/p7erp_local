@@ -67,6 +67,20 @@ class OrderSewingLineSummaryOut(BaseModel):
   extra_allocation_count: int = 0
 
 
+class OrderRelatedCountsOut(BaseModel):
+    """Linked document counts for Order Detail navigation chips (Phase 5)."""
+
+    bom_exists: bool = False
+    po_count: int = 0
+    production_plan_exists: bool = False
+    delivery_challan_count: int = 0
+    invoice_count: int = 0
+    packing_list_count: int = 0
+    tna_actions_count: int = 0
+    export_case_count: int = 0
+    export_case_id: int | None = None
+
+
 class OrderResponse(BaseModel):
   id: int
   tenant_id: int
@@ -101,6 +115,7 @@ class OrderResponse(BaseModel):
   quotation_code: str | None = None
   financial_status: OrderFinancialStatusOut | None = None
   sewing_line_summary: OrderSewingLineSummaryOut | None = None
+  related_counts: OrderRelatedCountsOut | None = None
 
   class Config:
     from_attributes = True
@@ -127,6 +142,95 @@ class OrderCommercialAlignmentOut(BaseModel):
   quotation_status: str | None = None
 
 
+class CostVarianceRowOut(BaseModel):
+  """One material line: tentative (quote/BOM) vs actual (PO/GRN)."""
+
+  line_key: str
+  description: str | None = None
+  item_code: str | None = None
+  item_id: int | None = None
+  bom_line_id: int | None = None
+  quotation_line_id: int | None = None
+  tentative_cost: float | None = None
+  actual_cost: float | None = None
+  variance_amount: float | None = None
+  variance_pct: float | None = None
+  status: str = "unknown"
+  source_tentative: str = "none"
+  source_actual: str = "none"
+
+
+class CostVarianceTotalsOut(BaseModel):
+  tentative_cost: float = 0
+  actual_cost: float = 0
+  variance_amount: float | None = None
+  variance_pct: float | None = None
+  status: str = "unknown"
+
+
+class CostVarianceMarginImpactOut(BaseModel):
+  snapshot_total_cost: float | None = None
+  snapshot_quoted_price: float | None = None
+  snapshot_profit_percentage: float | None = None
+  tentative_material_total: float = 0
+  actual_material_total: float = 0
+  variance_amount: float | None = None
+  variance_pct: float | None = None
+  overall_status: str = "unknown"
+  estimated_margin_at_quote: float | None = None
+  estimated_margin_with_actuals: float | None = None
+  margin_quoted_percent: float | None = None
+  margin_actual_percent: float | None = None
+
+
+class OrderCostVarianceOut(BaseModel):
+  """Owner cost visibility for a single order."""
+
+  order_id: int
+  order_code: str
+  order_status: str
+  bom_id: int | None = None
+  quotation_id: int | None = None
+  rows: list[CostVarianceRowOut] = Field(default_factory=list)
+  totals: CostVarianceTotalsOut
+  margin_impact: CostVarianceMarginImpactOut
+  thresholds: dict[str, float] = Field(default_factory=dict)
+
+
+class OrderProfitabilitySummaryItemOut(BaseModel):
+  order_id: int
+  order_code: str
+  order_status: str
+  status: str = "unknown"
+  tentative_cost: float | None = None
+  actual_cost: float | None = None
+  variance_pct: float | None = None
+  margin_impact: CostVarianceMarginImpactOut | None = None
+  quoted_margin_percent: float | None = None
+  actual_margin_percent: float | None = None
+  # Quote→actual margin path (7 points). Not calendar history — no daily cost snapshots yet.
+  sparkline_data: list[float] = Field(default_factory=list)
+
+
+class OrderProfitabilitySummaryPageOut(BaseModel):
+  items: list[OrderProfitabilitySummaryItemOut]
+  total: int
+  page: int
+  page_size: int
+  total_pages: int
+
+
+class PendingPriceVerificationItemOut(BaseModel):
+  order_id: int
+  order_code: str
+  order_status: str
+  status: str = "red"
+  tentative_cost: float | None = None
+  actual_cost: float | None = None
+  variance_pct: float | None = None
+  href: str
+
+
 class PromiseCheckLine(BaseModel):
   item_id: int
   item_code: str
@@ -151,6 +255,15 @@ class OrderMilestoneStepOut(BaseModel):
   rm_pct: float | None = None
 
 
+class OrderNextRequiredActionOut(BaseModel):
+  kind: str
+  label: str
+  href: str | None = None
+  planned_date: str | None = None
+  pipeline_stage: str | None = None
+  action_id: int | None = None
+
+
 class OrderMilestonesOut(BaseModel):
   pipeline_status: str
   rm_inhouse_pct: float
@@ -158,6 +271,7 @@ class OrderMilestonesOut(BaseModel):
   tna_warnings: list[str] = Field(default_factory=list)
   pipeline_na_steps: list[str] = Field(default_factory=list)
   order_type: str | None = None
+  next_required_action: OrderNextRequiredActionOut | None = None
 
 
 class OrderPipelineSettingsPatch(BaseModel):

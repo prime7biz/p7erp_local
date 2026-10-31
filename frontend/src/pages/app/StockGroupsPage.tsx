@@ -66,6 +66,9 @@ const emptyGroupForm: StockGroupCreate = {
   cogs_account_id: null,
   adjustment_account_id: null,
   grni_account_id: null,
+  sales_account_id: null,
+  purchase_account_id: null,
+  default_valuation_method: "FIFO",
 };
 
 function CoaSelect(props: {
@@ -99,6 +102,9 @@ function CoaSelect(props: {
 
 export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
   const [items, setItems] = useState<StockGroupResponse[]>([]);
+  const [treeMetrics, setTreeMetrics] = useState<
+    Map<number, { item_count: number; total_stock_value: string }>
+  >(new Map());
   const [coaRows, setCoaRows] = useState<ChartOfAccountResponse[]>([]);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<StockGroupCreate>({ ...emptyGroupForm });
@@ -134,6 +140,20 @@ export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
       ]);
       setItems(gr);
       setCoaRows(coa);
+      try {
+        const tree = await api.getStockGroupsTree();
+        const m = new Map<number, { item_count: number; total_stock_value: string }>();
+        const walk = (nodes: typeof tree) => {
+          for (const n of nodes) {
+            m.set(n.id, { item_count: n.item_count, total_stock_value: n.total_stock_value });
+            if (n.children?.length) walk(n.children);
+          }
+        };
+        walk(tree);
+        setTreeMetrics(m);
+      } catch {
+        setTreeMetrics(new Map());
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load stock groups");
     }
@@ -158,6 +178,9 @@ export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
     cogs_account_id: row.cogs_account_id ?? null,
     adjustment_account_id: row.adjustment_account_id ?? null,
     grni_account_id: row.grni_account_id ?? null,
+    sales_account_id: row.sales_account_id ?? null,
+    purchase_account_id: row.purchase_account_id ?? null,
+    default_valuation_method: row.default_valuation_method ?? "FIFO",
   });
 
   const openGroupModal = (row: StockGroupResponse, mode: "view" | "edit") => {
@@ -346,6 +369,12 @@ export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                     Name
                   </th>
+                  <th className="w-20 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-text-muted">
+                    Items
+                  </th>
+                  <th className="w-28 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-text-muted">
+                    Stock value
+                  </th>
                   <th className="w-20 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                     Active
                   </th>
@@ -363,12 +392,14 @@ export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
               <tbody className="divide-y divide-border-subtle">
                 {orderedRows.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-text-muted">
+                    <td colSpan={8} className="px-4 py-10 text-center text-sm text-text-muted">
                       No stock groups yet. Add one using the form above.
                     </td>
                   </tr>
                 )}
-                {orderedRows.map((row) => (
+                {orderedRows.map((row) => {
+                  const metrics = treeMetrics.get(row.id);
+                  return (
                   <tr
                     key={row.id}
                     role="button"
@@ -389,6 +420,12 @@ export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
                       {row.group_code}
                     </td>
                     <td className="px-4 py-3 text-sm text-text-secondary">{row.name}</td>
+                    <td className="px-4 py-3 text-right text-sm tabular-nums text-text-secondary">
+                      {metrics?.item_count ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm tabular-nums text-text-secondary">
+                      {metrics?.total_stock_value ?? "—"}
+                    </td>
                     <td className="px-4 py-3 text-sm text-text-secondary">
                       {row.is_active ? "Yes" : "No"}
                     </td>
@@ -406,7 +443,18 @@ export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
                           Actions
                         </button>
                         {openActionsId === row.id && (
-                          <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                          <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border border-border bg-surface-raised p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setForm((p) => ({ ...p, parent_id: row.id, name: "" }));
+                                setOpenActionsId(null);
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                              }}
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                            >
+                              Add child group
+                            </button>
                             <button
                               type="button"
                               onClick={() => { openGroupModal(row, "edit"); setOpenActionsId(null); }}
@@ -426,7 +474,8 @@ export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

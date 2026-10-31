@@ -26,13 +26,27 @@ export function ExportCasesPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const close = () => setOpenActionsId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, []);
+
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary">Export Cases</h1>
-        <p className="text-text-muted text-sm mt-0.5">
-          View and manage export cases linked to orders and documentation.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary">Export Cases</h1>
+          <p className="text-text-muted text-sm mt-0.5">
+            View and manage export cases linked to orders and documentation.
+          </p>
+        </div>
+        <Link
+          to="/app/commercial/export-cases/new"
+          className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-medium text-brand-primary-foreground hover:opacity-90"
+        >
+          Create Export Case
+        </Link>
       </header>
 
       {error && (
@@ -45,7 +59,12 @@ export function ExportCasesPage() {
         {loading ? (
           <div className="p-12 text-center text-text-muted">Loading export cases…</div>
         ) : items.length === 0 ? (
-          <div className="p-12 text-center text-text-muted">No data</div>
+          <div className="p-12 text-center text-text-muted">
+            No data.{" "}
+            <Link to="/app/commercial/export-cases/new" className="text-brand-primary hover:underline">
+              Create the first export case
+            </Link>
+          </div>
         ) : (
           <div className="overflow-x-auto overflow-y-visible">
             <table className="min-w-full text-sm">
@@ -88,13 +107,26 @@ export function ExportCasesPage() {
                     <td className="relative py-2 px-4 text-right">
                       <button
                         type="button"
-                        onClick={() => setOpenActionsId((prev) => (prev === row.id ? null : row.id))}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenActionsId((prev) => (prev === row.id ? null : row.id));
+                        }}
                         className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
                       >
                         Actions
                       </button>
                       {openActionsId === row.id && (
-                        <div className="absolute right-4 z-10 mt-1 w-40 rounded-lg border border-border bg-white p-1 shadow-lg">
+                        <div
+                          className="absolute right-4 z-10 mt-1 w-40 rounded-lg border border-border bg-white p-1 shadow-lg"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Link
+                            to={`/app/commercial/export-cases/${row.id}/edit`}
+                            onClick={() => setOpenActionsId(null)}
+                            className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                          >
+                            Edit
+                          </Link>
                           {row.order_id != null && (
                             <Link
                               to={`/app/orders/${row.order_id}`}

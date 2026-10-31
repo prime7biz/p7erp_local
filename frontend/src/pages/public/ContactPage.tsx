@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { MapPin, Mail, Phone, MessageCircle, Clock, Send, Loader2, Building2, ArrowRight } from "lucide-react";
+import { API_BASE } from "@/api/apiBase";
 
 const companySizes = [
   { value: "1-10", label: "1–10 employees" },
@@ -19,6 +20,7 @@ const contactInfo = [
 export function ContactPage() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -26,6 +28,7 @@ export function ContactPage() {
     phone: "",
     message: "",
     companySize: "",
+    website: "",
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -36,11 +39,35 @@ export function ContactPage() {
     e.preventDefault();
     if (!form.name.trim() || !form.email.trim() || !form.message.trim()) return;
     setLoading(true);
+    setError("");
     try {
-      // Replace with your API when ready: await fetch("/api/leads", { method: "POST", body: JSON.stringify(form) });
-      await new Promise((r) => setTimeout(r, 800));
+      const res = await fetch(`${API_BASE}/api/v1/public/leads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          company: form.company || null,
+          phone: form.phone || null,
+          company_size: form.companySize || null,
+          message: form.message,
+          source_page: typeof window !== "undefined" ? window.location.pathname : null,
+          website: form.website || null,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(
+          res.status === 429
+            ? "Too many submissions. Please wait a minute and try again."
+            : res.status === 422
+              ? "Please check your email address and required fields."
+              : "We could not send your message. Please try again or contact us on WhatsApp.",
+        );
+      }
       setSubmitted(true);
-      setForm({ name: "", email: "", company: "", phone: "", message: "", companySize: "" });
+      setForm({ name: "", email: "", company: "", phone: "", message: "", companySize: "", website: "" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "We could not send your message.");
     } finally {
       setLoading(false);
     }
@@ -195,6 +222,22 @@ export function ContactPage() {
                       <label htmlFor="message" className="block text-sm font-medium text-text-secondary mb-1">Message **</label>
                       <textarea id="message" name="message" required rows={5} value={form.message} onChange={handleChange} placeholder="Tell us about your requirements..." className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none" />
                     </div>
+                    {/* Honeypot: hidden from people and screen readers; bots fill it. */}
+                    <input
+                      type="text"
+                      name="website"
+                      value={form.website}
+                      onChange={handleChange}
+                      tabIndex={-1}
+                      autoComplete="off"
+                      aria-hidden="true"
+                      className="hidden"
+                    />
+                    {error ? (
+                      <p role="alert" className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">
+                        {error}
+                      </p>
+                    ) : null}
                     <button type="submit" disabled={loading} className="w-full py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary/90 disabled:opacity-60 flex items-center justify-center gap-2 transition-colors">
                       {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending...</> : <><Send className="h-4 w-4" /> Send Message</>}
                     </button>

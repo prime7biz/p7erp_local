@@ -81,3 +81,51 @@ TNA_DEFAULT_TEMPLATE_SEED: list[tuple[str, str, str, int | None, int]] = [
     ("shipment_docs", "Shipping docs / BL", "commercial", 3, 145),
     ("shipment_confirmation", "Shipment confirmation to buyer", "commercial", 0, 150),
 ]
+
+# Event keys for followup_sync_service → milestone_type / template.code values.
+TNA_EVENT_GRN_FABRIC = "grn_fabric_in_house"
+TNA_EVENT_GRN_TRIMS = "grn_accessories_in_house"
+TNA_EVENT_GRN = "grn_received"
+TNA_EVENT_SAMPLE_APPROVED = "sample_approved"
+TNA_EVENT_CHALLAN_POSTED = "delivery_challan_posted"
+TNA_EVENT_CUTTING_START = "cutting_start"
+TNA_EVENT_SEWING_START = "sewing_start"
+TNA_EVENT_LINE_ALLOCATED = "line_allocated"
+
+# Map sync event_key → one or more milestone codes (template.code / milestone_type).
+TNA_EVENT_MILESTONE_MAP: dict[str, tuple[str, ...]] = {
+    TNA_EVENT_GRN_FABRIC: ("fabric_in_house",),
+    TNA_EVENT_GRN_TRIMS: ("accessories_in_house",),
+    TNA_EVENT_GRN: ("fabric_in_house", "accessories_in_house"),
+    TNA_EVENT_CHALLAN_POSTED: ("shipment_confirmation", "ex_factory"),
+    TNA_EVENT_CUTTING_START: ("cutting_start",),
+    TNA_EVENT_SEWING_START: ("sewing_start",),
+    TNA_EVENT_LINE_ALLOCATED: ("sewing_start",),  # soft: allocation unlocks sewing prep
+}
+
+# Merch sample_type → approval / submit milestone codes to complete on sample approve.
+TNA_SAMPLE_TYPE_MILESTONES: dict[str, tuple[str, ...]] = {
+    "proto": ("proto_sample_submit",),
+    "fit": ("fit_sample_submit", "fit_sample_approval"),
+    "size_set": ("size_set_submit",),
+    "pp": ("pp_sample_submit", "pp_approval"),
+    "sms": ("pp_approval",),
+    "wash": ("lab_dip_approval",),
+    "development": ("lab_dip_approval",),
+}
+
+# Approval milestones that can gate bulk fabric PO when sample_approval_gates_for_po is on.
+TNA_PO_GATE_MILESTONES: tuple[str, ...] = (
+    "lab_dip_approval",
+    "pp_approval",
+    "bulk_fabric_approval",
+)
+
+
+def milestones_for_event(event_key: str, *, sample_type: str | None = None) -> tuple[str, ...]:
+    """Resolve milestone codes for a sync event."""
+    key = (event_key or "").strip().lower()
+    if key == TNA_EVENT_SAMPLE_APPROVED:
+        st = (sample_type or "").strip().lower()
+        return TNA_SAMPLE_TYPE_MILESTONES.get(st, ())
+    return TNA_EVENT_MILESTONE_MAP.get(key, ())

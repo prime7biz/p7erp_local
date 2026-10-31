@@ -46,3 +46,8 @@ class MerchControlTowerSummaryOut(BaseModel):
         0,
         description="Merch samples with target_date before today still open (requested/in_progress/submitted)",
     )
+    otd_at_risk: int = Field(
+        0,
+        description="Open orders with delivery_date within 14 days (or overdue) not yet shipped — OTD risk",
+    )
+    otd_overdue: int = Field(0, description="Open orders with delivery_date before today still not shipped")

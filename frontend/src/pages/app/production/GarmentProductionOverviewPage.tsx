@@ -2,30 +2,56 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api } from "@/api/client";
+import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+type WipJournalRow = {
+  id: number;
+  from_department?: string | null;
+  to_department?: string | null;
+  order_id?: number | null;
+  total_value?: number;
+  voucher_id?: number | null;
+  journal_date?: string;
+};
+
 export function GarmentProductionOverviewPage() {
+  const { me } = useAuth();
   const [date, setDate] = useState(todayISO());
   const [optSettings, setOptSettings] = useState<Awaited<ReturnType<typeof api.getProductionSettings>> | null>(null);
   const [lines, setLines] = useState<Awaited<ReturnType<typeof api.listSewingLines>>>([]);
   const [shifts, setShifts] = useState<Awaited<ReturnType<typeof api.listProductionShifts>>>([]);
   const [kpi, setKpi] = useState<Awaited<ReturnType<typeof api.getProductionDashboard>> | null>(null);
+  const [wipJournals, setWipJournals] = useState<WipJournalRow[]>([]);
   const [error, setError] = useState("");
+  const [maintenanceItems, setMaintenanceItems] = useState<Array<Record<string, unknown>>>([]);
+
+  const autoPostWip =
+    me?.feature_flags?.auto_post_wip_journal === false
+      ? false
+      : me?.feature_flags?.auto_post_wip_journal == null
+        ? true
+        : Boolean(me.feature_flags.auto_post_wip_journal);
 
   const loadBase = useCallback(async () => {
     try {
-      const [s, l, sh] = await Promise.all([
+      const [s, l, sh, wip] = await Promise.all([
         api.getProductionSettings(),
         api.listSewingLines(),
         api.listProductionShifts(),
+        api.listWipJournals().catch((e) => {
+          logApiError(e, "GarmentProductionOverviewPage.listWipJournals");
+          return { items: [] as unknown[] };
+        }),
       ]);
       setOptSettings(s);
       setLines(l);
       setShifts(sh);
+      setWipJournals((wip.items as WipJournalRow[]) ?? []);
     } catch (e) {
       logApiError(e, "GarmentProductionOverviewPage.loadBase");
       setError("Could not load production settings.");
@@ -51,6 +77,13 @@ export function GarmentProductionOverviewPage() {
     void loadKpi();
   }, [loadKpi]);
 
+  useEffect(() => {
+    api
+      .getPredictiveMaintenance(30)
+      .then((r) => setMaintenanceItems((r.items || []).filter((i) => Number(i.breakdown_probability ?? 0) >= 31)))
+      .catch((e) => logApiError(e, "GarmentProductionOverviewPage.maintenance"));
+  }, []);
+
   const firstRun = useMemo(
     () => lines.length === 0 && shifts.length === 0,
     [lines.length, shifts.length],
@@ -64,6 +97,28 @@ export function GarmentProductionOverviewPage() {
       </div>
 
       {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
+
+      {maintenanceItems.length > 0 ? (
+        <div className="space-y-2">
+          {maintenanceItems.slice(0, 3).map((m, i) => (
+            <div
+              key={String(m.machine_id ?? i)}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-status-warning/40 bg-status-warning-subtle/50 px-3 py-2 text-sm text-status-warning-foreground"
+            >
+              <span>
+                Machine {String(m.machine_id ?? m.machine_code ?? "?")}: {String(m.breakdown_probability ?? "?")}%
+                breakdown risk. {String(m.recommended_action ?? "Schedule maintenance?")}
+              </span>
+              <Link
+                className="rounded border border-border bg-surface-raised px-2 py-1 text-xs text-text-secondary hover:bg-state-hover"
+                to="/app/production/setup"
+              >
+                Open setup
+              </Link>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {firstRun ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
@@ -206,6 +261,72 @@ export function GarmentProductionOverviewPage() {
             </p>
           ) : null}
         </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold text-text-secondary">WIP Journal Vouchers</div>
+            <p className="text-xs text-text-muted">
+              Auto-post WIP journals:{" "}
+              <span className="font-medium text-text-primary">{autoPostWip ? "On" : "Off"}</span>
+              {" · "}
+              <Link to="/app/settings/config" className="text-status-info hover:underline">
+                Change in Settings
+              </Link>
+            </p>
+          </div>
+          <Link to="/app/production/costs" className="text-xs font-medium text-status-info hover:underline">
+            Production costs
+          </Link>
+        </div>
+        <table className="min-w-full text-sm">
+          <thead className="bg-surface-subtle text-left text-text-secondary">
+            <tr>
+              <th className="px-4 py-2">Date</th>
+              <th className="px-4 py-2">From → To</th>
+              <th className="px-4 py-2">Order</th>
+              <th className="px-4 py-2">Amount</th>
+              <th className="px-4 py-2">Voucher</th>
+            </tr>
+          </thead>
+          <tbody>
+            {wipJournals.slice(0, 12).map((row) => (
+              <tr key={row.id} className="border-t">
+                <td className="px-4 py-2">{row.journal_date ?? "—"}</td>
+                <td className="px-4 py-2">
+                  {(row.from_department || "—") + " → " + (row.to_department || "—")}
+                </td>
+                <td className="px-4 py-2">
+                  {row.order_id ? (
+                    <Link className="text-status-info hover:underline" to={`/app/orders/${row.order_id}`}>
+                      #{row.order_id}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="px-4 py-2 tabular-nums">{Number(row.total_value || 0).toLocaleString()}</td>
+                <td className="px-4 py-2">
+                  {row.voucher_id ? (
+                    <Link className="text-status-info hover:underline" to={`/app/accounts/vouchers/${row.voucher_id}`}>
+                      #{row.voucher_id}
+                    </Link>
+                  ) : (
+                    <span className="text-text-muted">Not linked</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {wipJournals.length === 0 ? (
+              <tr>
+                <td className="px-4 py-6 text-center text-text-muted" colSpan={5}>
+                  No WIP journals yet. Issues / FG receipts create them when auto-post is on.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -99,6 +99,65 @@ async def count_pending_approvals_for_orders(db: AsyncSession, tenant_id: int, o
 
 async def pending_approvals_for_order(db: AsyncSession, tenant_id: int, order_id: int) -> int:
     return await count_pending_approvals_for_orders(db, tenant_id, [order_id])
+
+
+async def pending_approvals_by_order(db: AsyncSession, tenant_id: int, order_ids: list[int]) -> dict[int, int]:
+    """Batch form of ``pending_approvals_for_order`` (one GROUP BY for a whole list page)."""
+    if not order_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(OrderFollowupAction.order_id, func.count())
+            .where(
+                OrderFollowupAction.tenant_id == tenant_id,
+                OrderFollowupAction.order_id.in_(order_ids),
+                func.lower(OrderFollowupAction.status).in_(("pending", "in_progress", "submitted")),
+            )
+            .group_by(OrderFollowupAction.order_id)
+        )
+    ).all()
+    return {int(oid): int(n) for oid, n in rows}
+
+
+async def production_summary_by_order(
+    db: AsyncSession, tenant_id: int, order_ids: list[int]
+) -> dict[int, tuple[int, int, int]]:
+    """Batch form of ``production_summary_for_order``: {order_id: (work_orders, ops_done, ops_total)}."""
+    if not order_ids:
+        return {}
+    done_expr = func.sum(
+        case((func.lower(ManufacturingWorkOrderOperation.status).in_(("done", "completed")), 1), else_=0)
+    )
+    wo_counts = (
+        await db.execute(
+            select(ManufacturingProductionPlanLine.order_id, func.count(func.distinct(ManufacturingWorkOrder.id)))
+            .join(ManufacturingProductionPlanLine, ManufacturingWorkOrder.plan_line_id == ManufacturingProductionPlanLine.id)
+            .where(
+                ManufacturingWorkOrder.tenant_id == tenant_id,
+                ManufacturingProductionPlanLine.order_id.in_(order_ids),
+            )
+            .group_by(ManufacturingProductionPlanLine.order_id)
+        )
+    ).all()
+    op_counts = (
+        await db.execute(
+            select(ManufacturingProductionPlanLine.order_id, func.count(ManufacturingWorkOrderOperation.id), done_expr)
+            .join(ManufacturingWorkOrder, ManufacturingWorkOrderOperation.work_order_id == ManufacturingWorkOrder.id)
+            .join(ManufacturingProductionPlanLine, ManufacturingWorkOrder.plan_line_id == ManufacturingProductionPlanLine.id)
+            .where(
+                ManufacturingWorkOrderOperation.tenant_id == tenant_id,
+                ManufacturingWorkOrder.tenant_id == tenant_id,
+                ManufacturingProductionPlanLine.order_id.in_(order_ids),
+            )
+            .group_by(ManufacturingProductionPlanLine.order_id)
+        )
+    ).all()
+    ops = {int(oid): (int(tot or 0), int(done or 0)) for oid, tot, done in op_counts}
+    out: dict[int, tuple[int, int, int]] = {}
+    for oid, wo in wo_counts:
+        tot, done = ops.get(int(oid), (0, 0))
+        out[int(oid)] = (int(wo or 0), done, tot)
+    return out
 
 
 async def list_pending_approvals_all(

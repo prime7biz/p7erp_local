@@ -132,6 +132,9 @@ export function FinancierDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
   const showCredit = financierScopeAtLeast(me.financier_access_scope, "credit_monitoring");
+  const canPipeline = financierScopeAtLeast(me.financier_access_scope, "orders_and_pipeline");
+  /** Only link cards to pages this scope can open (others 403). */
+  const linkIf = (allowed: boolean, href: string) => (allowed ? href : undefined);
   const [creditLines, setCreditLines] = useState<{ items: CreditLineItem[]; note?: string } | null>(null);
   const [loanPortfolio, setLoanPortfolio] = useState<{ items: LoanItem[] } | null>(null);
   const [healthScore, setHealthScore] = useState<number | null>(null);
@@ -326,7 +329,7 @@ export function FinancierDashboardPage() {
           icon={Package}
           shellClass="from-sky-500/15 to-transparent border-sky-300/40 dark:border-sky-800/50"
           iconWrapClass="bg-sky-500/20 text-sky-700 dark:text-sky-200"
-          href="/portal/financier/order-book"
+          href={linkIf(canPipeline, "/portal/financier/order-book")}
           delay={0.02}
         />
         <FinancierGradientMetricCard
@@ -336,7 +339,7 @@ export function FinancierDashboardPage() {
           icon={LineChart}
           shellClass="from-emerald-500/15 to-transparent border-emerald-300/40 dark:border-emerald-800/50"
           iconWrapClass="bg-emerald-500/20 text-emerald-700 dark:text-emerald-200"
-          href="/portal/financier/order-book"
+          href={linkIf(canPipeline, "/portal/financier/order-book")}
           delay={0.06}
         />
         <FinancierGradientMetricCard
@@ -346,7 +349,7 @@ export function FinancierDashboardPage() {
           icon={Ship}
           shellClass="from-amber-500/15 to-transparent border-amber-300/40 dark:border-amber-800/50"
           iconWrapClass="bg-amber-500/20 text-amber-800 dark:text-amber-200"
-          href="/portal/financier/goods-movement"
+          href={linkIf(canPipeline, "/portal/financier/goods-movement")}
           delay={0.1}
         />
         <FinancierGradientMetricCard
@@ -368,7 +371,7 @@ export function FinancierDashboardPage() {
           icon={BarChart3}
           shellClass="from-violet-500/15 to-transparent border-violet-300/40 dark:border-violet-800/50"
           iconWrapClass="bg-violet-500/20 text-violet-700 dark:text-violet-200"
-          href="/portal/financier/projections"
+          href={linkIf(canPipeline, "/portal/financier/projections")}
           delay={0.18}
         />
         <FinancierGradientMetricCard
@@ -380,7 +383,7 @@ export function FinancierDashboardPage() {
           icon={CalendarClock}
           shellClass="from-cyan-500/15 to-transparent border-cyan-300/40 dark:border-cyan-800/50"
           iconWrapClass="bg-cyan-500/20 text-cyan-800 dark:text-cyan-200"
-          href="/portal/financier/btb-liabilities"
+          href={linkIf(showCredit, "/portal/financier/btb-liabilities")}
           delay={0.22}
         />
         {partyInsights?.financed_orders_open != null ? (

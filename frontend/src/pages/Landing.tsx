@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { motion, useInView } from "framer-motion";
 import {
@@ -28,7 +29,6 @@ import {
   BeforeAfterSection,
   HeroEnhancedSection,
   InteractiveProcessFlowSection,
-  LandingTestimonialPlaceholder,
   LandingTrustHighlights,
   LandingTrustLogoStrip,
   StickyCtaBar,
@@ -37,15 +37,16 @@ import {
 } from "@/components/public/landing/LandingEnhancements";
 
 const modules = [
-  { icon: Palette, title: "Merchandising & Styles", description: "Manage style libraries, tech packs, BOMs, and buyer requirements in a centralized hub.", href: "/features" },
-  { icon: FileText, title: "Order & Commercial", description: "Handle purchase orders, LC documentation, amendments, and commercial correspondence seamlessly.", href: "/features" },
-  { icon: Package, title: "Inventory & Warehouse", description: "Real-time stock tracking, lot traceability, GRN processing, and multi-warehouse management.", href: "/features" },
-  { icon: Factory, title: "Production & WIP", description: "Track cutting, sewing, finishing, and packing with real-time WIP visibility across lines.", href: "/features" },
-  { icon: Calculator, title: "Accounting & Finance", description: "Double-entry bookkeeping, voucher management, financial statements, and tax compliance.", href: "/features" },
-  { icon: Users, title: "HR & Payroll", description: "Employee records, attendance, leave management, and automated payroll with compliance.", href: "/features" },
-  { icon: ShieldCheck, title: "Quality Management", description: "Inline, endline, and final inspections with AQL standards, CAPA tracking, and audit reports.", href: "/features" },
-  { icon: Brain, title: "AI Analytics", description: "Demand forecasting, anomaly detection, smart recommendations powered by machine learning.", href: "/features" },
-  { icon: Landmark, title: "Bank Reconciliation", description: "Automated bank statement matching, reconciliation reports, and cash flow monitoring.", href: "/features" },
+  // Anchors match FeaturesPage section ids (title lowercased, non-letters → "-").
+  { icon: Palette, title: "Merchandising & Styles", description: "Manage style libraries, tech packs, BOMs, and buyer requirements in a centralized hub.", href: "/features#merchandising" },
+  { icon: FileText, title: "Order & Commercial", description: "Handle purchase orders, LC documentation, amendments, and commercial correspondence seamlessly.", href: "/features#commercial---lc" },
+  { icon: Package, title: "Inventory & Warehouse", description: "Real-time stock tracking, lot traceability, GRN processing, and multi-warehouse management.", href: "/features#inventory-management" },
+  { icon: Factory, title: "Production & WIP", description: "Track cutting, sewing, finishing, and packing with real-time WIP visibility across lines.", href: "/features#production---wip" },
+  { icon: Calculator, title: "Accounting & Finance", description: "Double-entry bookkeeping, voucher management, financial statements, and tax compliance.", href: "/features#accounting---finance" },
+  { icon: Users, title: "HR & Payroll", description: "Employee records, attendance, leave management, and automated payroll with compliance.", href: "/features#hr---payroll" },
+  { icon: ShieldCheck, title: "Quality Management", description: "Inline, endline, and final inspections with AQL standards, CAPA tracking, and audit reports.", href: "/features#quality-management" },
+  { icon: Brain, title: "AI Analytics", description: "Demand forecasting, anomaly detection, smart recommendations powered by machine learning.", href: "/features#ai---analytics" },
+  { icon: Landmark, title: "Bank Reconciliation", description: "Automated bank statement matching, reconciliation reports, and cash flow monitoring.", href: "/features#banking---reconciliation" },
 ];
 
 const faqs = [
@@ -59,10 +60,11 @@ const faqs = [
 function FAQItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border border-border rounded-xl overflow-hidden hover:border-primary/25 transition-colors">
+    <div className="border border-border rounded-xl overflow-hidden hover:border-brand-primary/25 transition-colors">
       <button
         type="button"
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
         className="w-full flex items-center justify-between px-4 py-4 text-left hover:bg-surface-subtle/50 transition-colors sm:px-6 sm:py-5"
       >
         <span className="font-semibold text-text-primary pr-4">{q}</span>
@@ -93,7 +95,7 @@ function DashboardSection() {
     <section ref={ref} className="py-20 lg:py-28 bg-surface-subtle" aria-labelledby="dashboard-heading">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <p className="text-sm font-medium text-brand-primary uppercase tracking-wide mb-3 text-center">Your command center</p>
-        <h2 id="dashboard-heading" className="text-3xl sm:text-4xl font-bold text-text-primary mb-5 text-center">Prime7 ERP Dashboard</h2>
+        <h2 id="dashboard-heading" className="text-2xl sm:text-3xl font-bold text-text-primary mb-5 text-center">Prime7 ERP Dashboard</h2>
         <p className="text-lg text-text-secondary max-w-2xl mx-auto text-center mb-12 leading-relaxed">
           Live production snapshots, line efficiency, and unified insights across operations, finance, and planning — in one place.
         </p>
@@ -101,7 +103,7 @@ function DashboardSection() {
           initial={{ opacity: 0, y: 24 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="rounded-2xl overflow-hidden border border-border bg-surface-raised shadow-xl shadow-border/60 hover:shadow-2xl hover:shadow-primary/10 transition-shadow duration-500"
+          className="rounded-2xl overflow-hidden border border-border bg-surface-raised shadow-xl shadow-border/60 hover:shadow-2xl hover:shadow-brand-primary/10 transition-shadow duration-500"
           style={{ boxShadow: isInView ? "0 25px 50px -12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)" : undefined }}
         >
           <motion.div
@@ -110,14 +112,17 @@ function DashboardSection() {
             transition={{ duration: 0.6, ease: "easeOut" }}
             className="relative"
           >
-            <img
-              src="/images/prime7-dashboard.png"
-              alt="Prime7 ERP Dashboard showing live production snapshot and line efficiency"
-              width={1200}
-              height={720}
-              className="w-full h-auto"
-              loading="lazy"
-            />
+            <picture>
+              <source srcSet="/images/prime7-dashboard.webp" type="image/webp" />
+              <img
+                src="/images/prime7-dashboard.png"
+                alt="Prime7 ERP Dashboard showing live production snapshot and line efficiency"
+                width={1200}
+                height={720}
+                className="w-full h-auto"
+                loading="lazy"
+              />
+            </picture>
           </motion.div>
         </motion.div>
       </div>
@@ -143,7 +148,7 @@ export function Landing() {
         <div className="bg-brand-primary text-brand-primary-foreground py-2.5 px-4 text-center text-sm relative">
           <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 flex-wrap">
             <span>🇧🇩 Browsing from Bangladesh?</span>
-            <Link to="/features" className="underline font-semibold hover:text-white/90">
+            <Link to="/erp-bangladesh" className="underline font-semibold hover:text-white/90">
               View Bangladesh-specific ERP features →
             </Link>
             <button
@@ -153,9 +158,9 @@ export function Landing() {
                 sessionStorage.setItem("bd_banner_dismissed", "1");
               }}
               className="text-white/70 hover:text-white sm:absolute sm:right-3 sm:top-1/2 sm:-translate-y-1/2"
-              aria-label="Dismiss"
+              aria-label="Dismiss Bangladesh banner"
             >
-              ✕
+              <span aria-hidden="true">✕</span>
             </button>
           </div>
         </div>
@@ -163,7 +168,6 @@ export function Landing() {
 
       <HeroEnhancedSection />
       <LandingTrustLogoStrip />
-      <LandingTestimonialPlaceholder />
       <TrustBadgesBar />
       <BeforeAfterSection />
 
@@ -174,12 +178,19 @@ export function Landing() {
       <section className="py-20 lg:py-28 bg-surface-raised" aria-labelledby="demo-heading">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-sm font-medium text-brand-primary uppercase tracking-wide mb-3">See it in action</p>
-          <h2 id="demo-heading" className="text-3xl sm:text-4xl font-bold text-text-primary mb-5">See Prime7 ERP in Action</h2>
+          <h2 id="demo-heading" className="text-2xl sm:text-3xl font-bold text-text-primary mb-5">See Prime7 ERP in Action</h2>
           <p className="text-lg text-text-secondary mb-10 max-w-2xl mx-auto leading-relaxed">
             A short walkthrough of how garment manufacturers run their operation — from order to shipment — in one platform.
           </p>
           <div className="relative bg-surface-inverse rounded-2xl overflow-hidden aspect-video shadow-2xl border border-border">
-            <video className="w-full h-full object-contain" controls playsInline poster="">
+            {/* preload="metadata" avoids downloading the ~11 MB file until the visitor presses play. */}
+            <video
+              className="w-full h-full object-contain"
+              controls
+              playsInline
+              preload="metadata"
+              poster="/images/prime7-dashboard.webp"
+            >
               <source src="/demo-intro.mp4" type="video/mp4" />
               Your browser does not support the video tag.
             </video>
@@ -192,7 +203,7 @@ export function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <p className="text-sm font-medium text-brand-primary uppercase tracking-wide mb-2">Why choose Prime7</p>
-            <h2 id="why-prime7-heading" className="text-3xl sm:text-4xl font-bold text-text-primary">Why Garment Factories Choose Prime7</h2>
+            <h2 id="why-prime7-heading" className="text-2xl sm:text-3xl font-bold text-text-primary">Why Garment Factories Choose Prime7</h2>
             <p className="mt-4 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">
               We understand the unique challenges of the garment industry and built solutions that address them head-on.
             </p>
@@ -245,7 +256,7 @@ export function Landing() {
                     <div>
                       <h4 className="font-semibold text-text-primary">
                         {item.link ? (
-                          <Link to={item.link} className="text-primary hover:underline">{item.title}</Link>
+                          <Link to={item.link} className="text-brand-primary hover:underline">{item.title}</Link>
                         ) : (
                           item.title
                         )}
@@ -265,12 +276,12 @@ export function Landing() {
       {/* Core Modules Grid — value: integrated platform */}
       <section className="relative py-20 lg:py-24 bg-gradient-to-b from-primary/5 to-surface-subtle overflow-hidden" aria-labelledby="modules-heading">
         <div className="absolute inset-0 pointer-events-none opacity-40" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.06) 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
-        <div className="absolute -top-20 -right-20 w-96 h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 -left-20 w-80 h-80 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-20 -right-20 w-96 h-96 bg-brand-primary/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 -left-20 w-80 h-80 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <p className="text-sm font-medium text-primary uppercase tracking-wide mb-2">Integrated platform</p>
-            <h2 id="modules-heading" className="text-3xl sm:text-4xl font-bold text-text-primary">Everything You Need, All in One Place</h2>
+            <p className="text-sm font-medium text-brand-primary uppercase tracking-wide mb-2">Integrated platform</p>
+            <h2 id="modules-heading" className="text-2xl sm:text-3xl font-bold text-text-primary">Everything You Need, All in One Place</h2>
             <p className="mt-4 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">
               9 integrated modules covering every aspect of garment manufacturing and export operations.
             </p>
@@ -278,13 +289,13 @@ export function Landing() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {modules.map((mod) => (
               <Link key={mod.title} to={mod.href}>
-                <div className="bg-surface-raised rounded-xl p-6 border border-border-subtle hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 group cursor-pointer h-full">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/15 transition-colors">
-                    <mod.icon className="h-6 w-6 text-primary" />
+                <div className="bg-surface-raised rounded-xl p-6 border-0 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1 group cursor-pointer h-full">
+                  <div className="h-12 w-12 rounded-xl bg-brand-primary/10 flex items-center justify-center mb-4 group-hover:bg-brand-primary/15 transition-colors">
+                    <mod.icon className="h-6 w-6 text-brand-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-text-primary">{mod.title}</h3>
                   <p className="mt-2 text-sm text-text-muted leading-relaxed">{mod.description}</p>
-                  <span className="inline-flex items-center gap-1 mt-3 text-sm text-primary font-medium group-hover:underline">
+                  <span className="inline-flex items-center gap-1 mt-3 text-sm text-brand-primary font-medium group-hover:underline">
                     Learn more <ArrowRight className="h-3.5 w-3.5" />
                   </span>
                 </div>
@@ -294,9 +305,9 @@ export function Landing() {
           <div className="mt-12 text-center">
             <p className="text-sm text-text-muted mb-4">Learn more from our resources</p>
             <div className="flex flex-wrap justify-center gap-3">
-              <Link to="/features" className="text-sm text-primary hover:underline">What is Garment ERP? →</Link>
-              <Link to="/features" className="text-sm text-primary hover:underline">5 Signs You Need ERP →</Link>
-              <Link to="/features" className="text-sm text-primary hover:underline">AI in Apparel Industry →</Link>
+              <Link to="/features" className="text-sm text-brand-primary hover:underline">What is Garment ERP? →</Link>
+              <Link to="/features" className="text-sm text-brand-primary hover:underline">5 Signs You Need ERP →</Link>
+              <Link to="/features" className="text-sm text-brand-primary hover:underline">AI in Apparel Industry →</Link>
             </div>
           </div>
         </div>
@@ -313,16 +324,16 @@ export function Landing() {
       {/* AI Highlights */}
       <section className="relative py-16 lg:py-24 bg-gradient-to-br from-surface-inverse via-surface-inverse to-surface-inverse text-text-inverse overflow-hidden">
         <div className="absolute inset-0 pointer-events-none opacity-[0.07]" style={{ backgroundImage: "url(/images/tech-pattern.svg)", backgroundSize: "cover", backgroundPosition: "center" }} />
-        <div className="absolute top-10 left-[10%] w-2 h-2 bg-primary/50 rounded-full pointer-events-none animate-pulse" />
-        <div className="absolute top-[30%] right-[8%] w-2.5 h-2.5 bg-primary/40 rounded-full pointer-events-none animate-pulse" style={{ animationDelay: "1s" }} />
+        <div className="absolute top-10 left-[10%] w-2 h-2 bg-brand-primary/50 rounded-full pointer-events-none animate-pulse" />
+        <div className="absolute top-[30%] right-[8%] w-2.5 h-2.5 bg-brand-primary/40 rounded-full pointer-events-none animate-pulse" style={{ animationDelay: "1s" }} />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center mb-16">
             <div>
-              <div className="inline-flex items-center gap-2 bg-primary/15 border border-primary/20 rounded-full px-4 py-1.5 mb-6">
-                <Brain className="h-4 w-4 text-primary" />
-                <span className="text-sm text-primary/90 font-medium">Artificial Intelligence</span>
+              <div className="inline-flex items-center gap-2 bg-brand-primary/15 border border-brand-primary/20 rounded-full px-4 py-1.5 mb-6">
+                <Brain className="h-4 w-4 text-brand-primary" />
+                <span className="text-sm text-brand-primary/90 font-medium">Artificial Intelligence</span>
               </div>
-              <h2 className="text-3xl sm:text-4xl font-semibold">AI That Understands Your Business</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold">AI That Understands Your Business</h2>
               <p className="mt-4 text-lg text-text-inverse/90 max-w-xl leading-relaxed">
                 Leverage machine learning trained on garment industry data to make smarter, faster decisions.
               </p>
@@ -341,7 +352,7 @@ export function Landing() {
               { icon: Lightbulb, title: "Smart Recommendations", description: "Get actionable suggestions to optimize inventory levels, production scheduling, and cash flow management." },
             ].map((item) => (
               <div key={item.title} className="bg-surface-raised/5 backdrop-blur-sm border border-white/10 rounded-xl p-8 hover:bg-surface-raised/10 transition-all duration-300">
-                <div className="h-14 w-14 rounded-xl bg-primary flex items-center justify-center mb-6 shadow-lg">
+                <div className="h-14 w-14 rounded-xl bg-brand-primary flex items-center justify-center mb-6 shadow-lg">
                   <item.icon className="h-7 w-7 text-white" />
                 </div>
                 <h3 className="text-xl font-semibold mb-3">{item.title}</h3>
@@ -358,7 +369,7 @@ export function Landing() {
       <section className="py-20 lg:py-24 bg-surface-raised">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-text-primary">Enterprise-Grade Security</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold text-text-primary">Enterprise-Grade Security</h2>
             <p className="mt-4 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">
               Your business data is protected with industry-leading security measures at every layer.
             </p>
@@ -371,8 +382,8 @@ export function Landing() {
               { icon: Server, title: "Multi-Tenant Isolation", desc: "Complete data separation between organizations guaranteed." },
             ].map((item) => (
               <div key={item.title} className="text-center p-6 rounded-xl bg-surface-subtle border border-border">
-                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <item.icon className="h-6 w-6 text-primary" />
+                <div className="h-12 w-12 rounded-xl bg-brand-primary/10 flex items-center justify-center mx-auto mb-4">
+                  <item.icon className="h-6 w-6 text-brand-primary" />
                 </div>
                 <h3 className="font-semibold text-text-primary mb-2">{item.title}</h3>
                 <p className="text-sm text-text-secondary">{item.desc}</p>
@@ -386,7 +397,7 @@ export function Landing() {
       <section className="py-20 lg:py-28 bg-surface-subtle">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-text-primary">Simple, Transparent Pricing</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-text-primary">Simple, Transparent Pricing</h2>
             <p className="mt-5 text-lg text-text-secondary max-w-2xl mx-auto leading-relaxed">
               Choose the plan that fits your factory. No hidden fees — no long-term contracts.
             </p>
@@ -419,7 +430,7 @@ export function Landing() {
                 <ul className="mt-6 space-y-3 flex-1">
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-center gap-3 text-sm">
-                      <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-primary" />
                       <span className="text-text-secondary">{f}</span>
                     </li>
                   ))}
@@ -427,7 +438,7 @@ export function Landing() {
                 <Link
                   to="/pricing"
                   className={`block w-full mt-8 rounded-lg text-center font-semibold py-3 transition-colors ${
-                    plan.highlighted ? "bg-brand-primary text-brand-primary-foreground hover:bg-brand-primary/90" : "bg-primary text-white hover:bg-primary/90"
+                    plan.highlighted ? "bg-brand-primary text-brand-primary-foreground hover:bg-brand-primary/90" : "bg-brand-primary text-white hover:bg-brand-hover"
                   }`}
                 >
                   {plan.name === "Enterprise" ? "Contact Sales" : "Get Started"}
@@ -436,7 +447,7 @@ export function Landing() {
             ))}
           </div>
           <div className="text-center mt-10">
-            <Link to="/pricing" className="inline-flex items-center gap-2 rounded-lg border border-primary/20 px-5 py-2.5 text-text-secondary font-medium hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors">
+            <Link to="/pricing" className="inline-flex items-center gap-2 rounded-lg border border-brand-primary/20 px-5 py-2.5 text-text-secondary font-medium hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-colors">
               View Full Pricing
               <ArrowRight className="h-4 w-4" />
             </Link>
@@ -444,11 +455,24 @@ export function Landing() {
         </div>
       </section>
 
+      <Helmet>
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: faqs.map((f) => ({
+              "@type": "Question",
+              name: f.q,
+              acceptedAnswer: { "@type": "Answer", text: f.a },
+            })),
+          })}
+        </script>
+      </Helmet>
       {/* FAQ */}
       <section className="py-20 lg:py-24 bg-surface-raised">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-text-primary">Frequently Asked Questions</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold text-text-primary">Frequently Asked Questions</h2>
             <p className="mt-4 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">Common questions from garment manufacturers considering Prime7 ERP.</p>
           </div>
           <div className="space-y-4">
@@ -463,19 +487,19 @@ export function Landing() {
       <section className="py-20 lg:py-24 bg-surface-subtle border-t border-border-subtle">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8">
-            <h2 className="text-xl sm:text-2xl font-bold text-text-primary">Explore More</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold text-text-primary">Explore More</h2>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
-            <Link to="/garments-erp" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-primary/20 text-sm font-medium text-text-secondary hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors shadow-sm">
+            <Link to="/garments-erp" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-brand-primary/20 text-sm font-medium text-text-secondary hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-colors shadow-sm">
               Garments ERP <ArrowRight className="h-3.5 w-3.5" />
             </Link>
-            <Link to="/buying-house-erp" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-primary/20 text-sm font-medium text-text-secondary hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors shadow-sm">
+            <Link to="/buying-house-erp" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-brand-primary/20 text-sm font-medium text-text-secondary hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-colors shadow-sm">
               Buying House ERP <ArrowRight className="h-3.5 w-3.5" />
             </Link>
-            <Link to="/features" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-primary/20 text-sm font-medium text-text-secondary hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors shadow-sm">
+            <Link to="/features" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-brand-primary/20 text-sm font-medium text-text-secondary hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-colors shadow-sm">
               All Features <ArrowRight className="h-3.5 w-3.5" />
             </Link>
-            <Link to="/features" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-primary/20 text-sm font-medium text-text-secondary hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors shadow-sm">
+            <Link to="/features" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-brand-primary/20 text-sm font-medium text-text-secondary hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-colors shadow-sm">
               Blog & Resources <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -489,15 +513,15 @@ export function Landing() {
         <div className="absolute top-10 -left-32 w-80 h-80 bg-brand-primary/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-10 -right-32 w-80 h-80 bg-brand-primary/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-sm font-medium text-primary/90 uppercase tracking-wide mb-2">Get started</p>
+          <p className="text-sm font-medium text-brand-primary/90 uppercase tracking-wide mb-2">Get started</p>
           <h2 id="cta-heading" className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight">
             Ready to Transform Your Garment Business?
           </h2>
           <p className="mt-6 text-lg text-text-inverse/90 max-w-2xl mx-auto">
-            Join hundreds of garment manufacturers worldwide who have streamlined their operations with Prime7 ERP.
+            Replace disconnected spreadsheets with one system for merchandising, production, commercial and finance — set up with local support in Bangladesh.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/signup" className={`${btnPrimary} px-8 py-4 bg-primary shadow-xl shadow-primary/30`}>
+            <Link to="/signup" className={`${btnPrimary} px-8 py-4 bg-brand-primary shadow-xl shadow-brand-primary/30`}>
               Start Free Trial
               <ArrowRight className="ml-2 h-5 w-5" />
             </Link>
@@ -507,11 +531,11 @@ export function Landing() {
           </div>
           <div className="mt-10 flex flex-col items-center justify-center gap-3 text-sm text-text-inverse/80 sm:flex-row sm:gap-8">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-primary" />
+              <CheckCircle2 className="h-4 w-4 text-brand-primary" />
               <span>No credit card required</span>
             </div>
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-primary" />
+              <Clock className="h-4 w-4 text-brand-primary" />
               <span>Setup in minutes</span>
             </div>
           </div>

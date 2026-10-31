@@ -125,10 +125,13 @@ async def customer_orders(
 ):
     await _roles_ok(db, principal)
     rows, total = await sel.list_orders(db, principal, limit=limit, offset=offset, search=search)
+    order_ids = [o.id for o in rows]
+    pending_map = await sel.pending_approvals_by_order(db, principal.tenant_id, order_ids)
+    prod_map = await sel.production_summary_by_order(db, principal.tenant_id, order_ids)
     items: list[CustomerOrderListItem] = []
     for o in rows:
-        pend = await sel.pending_approvals_for_order(db, principal.tenant_id, o.id)
-        wo, done, tot = await sel.production_summary_for_order(db, principal.tenant_id, o.id)
+        pend = pending_map.get(o.id, 0)
+        wo, done, tot = prod_map.get(o.id, (0, 0, 0))
         items.append(
             CustomerOrderListItem(
                 id=o.id,

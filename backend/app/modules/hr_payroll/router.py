@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse, Response
@@ -12,6 +12,13 @@ from app.common.auth import get_current_user
 from app.common.orm_numeric import api_money_to_decimal, decimal_to_money_response
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
+from app.common.permissions import (
+    PERMISSION_HR_PAYROLL_AUTO_CALCULATE,
+    PERMISSION_HR_PAYROLL_STATUTORY_EDIT,
+    PERMISSION_HR_PAYROLL_STATUTORY_VIEW,
+    assert_delegate_manager_or_permission,
+    assert_soft_permission_allowed,
+)
 from app.common.tenant import require_tenant
 from app.database import get_db, safe_async_session_rollback
 from app.models import (
@@ -23,6 +30,7 @@ from app.models import (
     PayrollAccountingConfig,
     PayrollApproval,
     PayrollComponent,
+    PayrollEmployeeStructureAssignment,
     PayrollPayslip,
     PayrollPeriod,
     PayrollPosting,
@@ -37,9 +45,17 @@ from app.models import (
 )
 from app.modules.hr_payroll.schemas import (
     PayrollApproveBody,
+    PayrollAssignmentCreate,
+    PayrollAssignmentEndBody,
+    PayrollAssignmentOut,
+    PayrollAutoCalculateApplyBody,
+    PayrollAutoCalculateApplyOut,
+    PayrollAutoCalculatePreviewOut,
+    PayrollComponentCalcOut,
     PayrollComponentCreate,
     PayrollComponentOut,
     PayrollComponentUpdate,
+    PayrollEmployeeCalcPreviewOut,
     PayrollPeriodCreate,
     PayrollPeriodOut,
     PayrollPostBody,
@@ -53,6 +69,7 @@ from app.modules.hr_payroll.schemas import (
     PayrollStructureLineOut,
     PayrollStructureOut,
 )
+from app.modules.hr_payroll import service as payroll_service
 
 router = APIRouter(prefix="/hr/payroll", tags=["hr-payroll"])
 
@@ -74,6 +91,31 @@ def _to_float(value: str | None) -> float:
         return float(value or "0")
     except (TypeError, ValueError):
         return 0.0
+
+
+PERMISSION_HR_PAYSLIPS_VIEW_ALL = "hr.payroll.payslips.view_all"
+
+
+async def _own_employee_id_or_all(db: AsyncSession, user: User, tenant_id: int) -> int | None:
+    """None = may see every payslip (admin/manager or delegated); else the caller's own employee id.
+
+    Raises 403 when the caller is neither privileged nor linked to an employee record.
+    """
+    try:
+        await assert_delegate_manager_or_permission(
+            db, user, tenant_id, permission_key=PERMISSION_HR_PAYSLIPS_VIEW_ALL
+        )
+        return None
+    except HTTPException:
+        pass
+    own = (
+        await db.execute(
+            select(Employee.id).where(Employee.tenant_id == tenant_id, Employee.user_id == user.id).limit(1)
+        )
+    ).scalar_one_or_none()
+    if own is None:
+        raise HTTPException(status_code=403, detail="You can only view your own payslips")
+    return int(own)
 
 
 async def _employee_or_404(db: AsyncSession, tenant_id: int, employee_id: int) -> Employee:
@@ -203,6 +245,7 @@ def _run_line_out(row: PayrollRunLine) -> PayrollRunLineOut:
         net_pay=decimal_to_money_response(row.net_pay),
         overtime_amount=decimal_to_money_response(getattr(row, "overtime_amount", None)),
         remarks=row.remarks,
+        calculation_source=getattr(row, "calculation_source", None) or "MANUAL",
         created_at=row.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
     )
@@ -219,6 +262,126 @@ def _posting_out(row: PayrollPosting) -> PayrollPostingOut:
         posted_by=row.posted_by,
         note=row.note,
     )
+
+
+async def _create_statutory_remittance_voucher(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    run_id: int,
+    payment_date: date,
+    user_id: int | None,
+) -> int | None:
+    """Combine PF+ESI+PT employer/employee dues into one remittance JOURNAL if accounts exist."""
+    from decimal import Decimal
+
+    from app.models.hr_payroll import PayrollAccountingConfig, PayrollCalculationSnapshot
+    from app.modules.finance.voucher_controls import allocate_series_voucher_number, fiscal_year_calendar
+
+    acct_cfg = (
+        await db.execute(
+            select(PayrollAccountingConfig).where(PayrollAccountingConfig.tenant_id == tenant_id).limit(1)
+        )
+    ).scalar_one_or_none()
+    if not acct_cfg or not acct_cfg.bank_account_id:
+        return None
+
+    snaps = list(
+        (
+            await db.execute(
+                select(PayrollCalculationSnapshot)
+                .join(PayrollRunLine, PayrollRunLine.id == PayrollCalculationSnapshot.payroll_run_line_id)
+                .where(
+                    PayrollCalculationSnapshot.tenant_id == tenant_id,
+                    PayrollRunLine.run_id == run_id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    pf_total = Decimal("0")
+    esi_total = Decimal("0")
+    pt_total = Decimal("0")
+    for snap in snaps:
+        trace = snap.trace_json or {}
+        statutory = trace.get("statutory") or {}
+        pf = statutory.get("pf") or {}
+        esi = statutory.get("esi") or {}
+        try:
+            pf_total += Decimal(str(pf.get("employee_pf") or 0)) + Decimal(str(pf.get("employer_pf") or 0))
+            esi_total += Decimal(str(esi.get("employee_esi") or 0)) + Decimal(str(esi.get("employer_esi") or 0))
+            pt_total += Decimal(str(statutory.get("pt_amount") or 0))
+        except Exception:
+            continue
+
+    total = (pf_total + esi_total + pt_total).quantize(Decimal("0.01"))
+    if total <= 0:
+        return None
+
+    # Prefer liability accounts; fall back to payable for missing ESI/PT
+    pf_acct = acct_cfg.pf_payable_account_id or acct_cfg.tax_payable_account_id
+    esi_acct = getattr(acct_cfg, "esi_payable_account_id", None) or acct_cfg.tax_payable_account_id
+    pt_acct = getattr(acct_cfg, "pt_payable_account_id", None) or acct_cfg.tax_payable_account_id
+    bank = acct_cfg.bank_account_id
+    if not bank:
+        return None
+
+    voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
+        db,
+        tenant_id=tenant_id,
+        voucher_date=payment_date,
+        voucher_type="JOURNAL",
+        branch_code="MAIN",
+    )
+    voucher = Voucher(
+        tenant_id=tenant_id,
+        voucher_number=voucher_number,
+        voucher_type="JOURNAL",
+        voucher_date=payment_date,
+        status="POSTED",
+        description=f"Statutory remittance payroll run {run_id}",
+        reference=f"STAT_REM_{run_id}",
+        fiscal_year=fy or fiscal_year_calendar(payment_date),
+        series_sequence=series_seq,
+        number_series_key=series_key,
+        source_module="PAYROLL_STATUTORY",
+        source_module_ref=str(run_id),
+        books_applied=True,
+        created_by=user_id,
+    )
+    db.add(voucher)
+    await db.flush()
+
+    def _add_dr(account_id: int | None, amount: Decimal, note: str) -> None:
+        if not account_id or amount <= 0:
+            return
+        db.add(
+            VoucherLine(
+                tenant_id=tenant_id,
+                voucher_id=voucher.id,
+                account_id=account_id,
+                entry_type="DEBIT",
+                amount=f"{amount:.2f}",
+                notes=note,
+            )
+        )
+
+    _add_dr(pf_acct, pf_total, "PF remittance")
+    _add_dr(esi_acct, esi_total, "ESI remittance")
+    _add_dr(pt_acct, pt_total, "PT remittance")
+    db.add(
+        VoucherLine(
+            tenant_id=tenant_id,
+            voucher_id=voucher.id,
+            account_id=bank,
+            entry_type="CREDIT",
+            amount=f"{total:.2f}",
+            notes="Statutory remittance bank",
+        )
+    )
+    await db.flush()
+    return voucher.id
 
 
 @router.get("/components", response_model=list[PayrollComponentOut])
@@ -492,6 +655,24 @@ async def create_run(
         raise HTTPException(status_code=400, detail="Payroll period is locked")
     if body.run_date < period.start_date or body.run_date > period.end_date:
         raise HTTPException(status_code=400, detail="run_date must be inside payroll period")
+    # Serialize run creation per period so two clicks cannot create two salary runs.
+    await db.execute(
+        select(PayrollPeriod.id).where(PayrollPeriod.id == period.id).with_for_update()
+    )
+    existing_run = (
+        await db.execute(
+            select(PayrollRun.run_code).where(
+                PayrollRun.tenant_id == tenant.id,
+                PayrollRun.period_id == period.id,
+                PayrollRun.status.not_in(("REJECTED", "CANCELLED")),
+            ).limit(1)
+        )
+    ).scalar_one_or_none()
+    if existing_run:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Payroll run {existing_run} already exists for this period; reject it before creating another",
+        )
     if body.run_code:
         run_code = body.run_code.strip().upper()
     else:
@@ -568,6 +749,7 @@ async def upsert_run_line(
         existing.deductions = body.deductions
         existing.net_pay = body.net_pay
         existing.remarks = body.remarks.strip() if body.remarks else None
+        existing.calculation_source = "MANUAL"
         await db.commit()
         await db.refresh(existing)
         return _run_line_out(existing)
@@ -580,6 +762,7 @@ async def upsert_run_line(
         deductions=body.deductions,
         net_pay=body.net_pay,
         remarks=body.remarks.strip() if body.remarks else None,
+        calculation_source="MANUAL",
     )
     db.add(row)
     await db.commit()
@@ -639,6 +822,44 @@ async def approve_run(
             tenant_id=tenant.id,
             payroll_run_id=run.id,
             action="APPROVED",
+            action_by=user.id,
+            note=body.note.strip() if body.note else None,
+        )
+    )
+    await db.commit()
+    await db.refresh(run)
+    return _run_out(run)
+
+
+@router.post("/runs/{run_id}/reject", response_model=PayrollRunOut)
+async def reject_run(
+    run_id: int,
+    body: PayrollApproveBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a finalized/approved (not yet posted) run back; frees the period for a corrected run."""
+    _ensure_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    run = (
+        await db.execute(
+            select(PayrollRun)
+            .where(PayrollRun.id == run_id, PayrollRun.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
+    if run.status not in {"FINALIZED", "CHECKED", "APPROVED"}:
+        raise HTTPException(status_code=400, detail=f"Cannot reject a {run.status} payroll run")
+    run.status = "REJECTED"
+    db.add(
+        PayrollApproval(
+            tenant_id=tenant.id,
+            payroll_run_id=run.id,
+            action="REJECTED",
             action_by=user.id,
             note=body.note.strip() if body.note else None,
         )
@@ -783,9 +1004,32 @@ async def post_run(
     )
     db.add(posting)
     run.status = "POSTED"
+
+    remittance_voucher_id = None
+    from app.common.tenant_feature_keys import is_statutory_payroll_enabled
+
+    if is_statutory_payroll_enabled(tenant.feature_flags):
+        try:
+            remittance_voucher_id = await _create_statutory_remittance_voucher(
+                db,
+                tenant_id=tenant.id,
+                run_id=run.id,
+                payment_date=period.payment_date,
+                user_id=user.id,
+            )
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("statutory remittance skipped run=%s", run.id)
+
     await db.commit()
     await db.refresh(posting)
-    return _posting_out(posting)
+    out = _posting_out(posting)
+    if remittance_voucher_id and hasattr(out, "model_dump"):
+        data = out.model_dump()
+        data["statutory_remittance_voucher_id"] = remittance_voucher_id
+        return data
+    return out
 
 
 @router.post("/runs/{run_id}/generate-payslips")
@@ -874,7 +1118,23 @@ async def decide_approval(
     approval = await db.get(PayrollApproval, approval_id)
     if not approval or approval.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Payroll approval not found")
-    run = await _run_or_404(db, tenant.id, approval.payroll_run_id)
+    run = (
+        await db.execute(
+            select(PayrollRun)
+            .where(PayrollRun.id == approval.payroll_run_id, PayrollRun.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
+    # A POSTED run already hit the ledger; flipping it to APPROVED/REJECTED would let it post twice.
+    allowed_from = {"FINALIZED", "CHECKED"} if decision == "APPROVED" else {"FINALIZED", "CHECKED", "APPROVED"}
+    if (run.status or "").upper() not in allowed_from:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot mark a {run.status} payroll run as {decision}",
+        )
     run.status = "APPROVED" if decision == "APPROVED" else "REJECTED"
     approval.action = decision
     approval.action_by = user.id
@@ -902,19 +1162,21 @@ async def list_payslips(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    own_employee_id = await _own_employee_id_or_all(db, user, tenant.id)
     stmt = (
         select(PayrollPayslip, PayrollRunLine)
         .join(PayrollRunLine, PayrollRunLine.id == PayrollPayslip.payroll_run_line_id)
         .where(PayrollPayslip.tenant_id == tenant.id, PayrollRunLine.tenant_id == tenant.id)
-        .order_by(PayrollPayslip.generated_at.desc())
-        .offset(offset)
-        .limit(limit)
     )
-    rows = (await db.execute(stmt)).all()
+    if own_employee_id is not None:
+        stmt = stmt.where(PayrollRunLine.employee_id == own_employee_id)
+    # Filter in SQL (not after LIMIT) so pages are not silently short.
     if run_id is not None:
-        rows = [x for x in rows if x[1].run_id == run_id]
+        stmt = stmt.where(PayrollRunLine.run_id == run_id)
     if employee_id is not None:
-        rows = [x for x in rows if x[1].employee_id == employee_id]
+        stmt = stmt.where(PayrollRunLine.employee_id == employee_id)
+    stmt = stmt.order_by(PayrollPayslip.generated_at.desc()).offset(offset).limit(limit)
+    rows = (await db.execute(stmt)).all()
     return [
         {
             "id": payslip.id,
@@ -947,6 +1209,8 @@ async def get_payroll_accounting_config(
             "cash_account_id": None,
             "tax_payable_account_id": None,
             "pf_payable_account_id": None,
+            "esi_payable_account_id": None,
+            "pt_payable_account_id": None,
             "advance_receivable_account_id": None,
         }
     return {
@@ -956,6 +1220,8 @@ async def get_payroll_accounting_config(
         "cash_account_id": row.cash_account_id,
         "tax_payable_account_id": row.tax_payable_account_id,
         "pf_payable_account_id": row.pf_payable_account_id,
+        "esi_payable_account_id": getattr(row, "esi_payable_account_id", None),
+        "pt_payable_account_id": getattr(row, "pt_payable_account_id", None),
         "advance_receivable_account_id": row.advance_receivable_account_id,
     }
 
@@ -982,6 +1248,8 @@ async def upsert_payroll_accounting_config(
         "cash_account_id",
         "tax_payable_account_id",
         "pf_payable_account_id",
+        "esi_payable_account_id",
+        "pt_payable_account_id",
         "advance_receivable_account_id",
     ):
         if key in body:
@@ -1101,17 +1369,29 @@ async def download_payslip_pdf(
     if not slip or slip.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Payslip not found")
     line = await db.get(PayrollRunLine, slip.payroll_run_line_id)
-    if not line:
+    if not line or line.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Payroll line not found")
+    own_employee_id = await _own_employee_id_or_all(db, user, tenant.id)
+    if own_employee_id is not None and line.employee_id != own_employee_id:
+        raise HTTPException(status_code=404, detail="Payslip not found")
     emp = await db.get(Employee, line.employee_id)
-    name = f"{emp.first_name} {emp.last_name}".strip() if emp and emp.last_name else (emp.first_name if emp else "")
-    text = (
-        f"PAYSLIP {slip.slip_number}\n"
-        f"Employee: {name} ({emp.employee_code if emp else ''})\n"
-        f"Gross: {line.gross_pay}  Deductions: {line.deductions}  Net: {line.net_pay}\n"
-        f"OT: {getattr(line, 'overtime_amount', '0')}\n"
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    run = await db.get(PayrollRun, line.run_id)
+    from app.modules.hr.hr_document_generator_service import generate_payslip_pdf
+
+    pdf = generate_payslip_pdf(
+        emp,
+        run=run,
+        line=line,
+        payslip=slip,
+        company_name=getattr(tenant, "name", None) or "Company",
     )
-    return PlainTextResponse(text, media_type="text/plain")
+    return Response(
+        pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="payslip-{slip.slip_number or payslip_id}.pdf"'},
+    )
 
 
 @router.get("/runs/{run_id}/bank-file")
@@ -1137,4 +1417,282 @@ async def download_bank_file(
         content=content,
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="payroll_run_{run.id}_bank.csv"'},
+    )
+
+
+def _assignment_out(row: PayrollEmployeeStructureAssignment) -> PayrollAssignmentOut:
+    return PayrollAssignmentOut(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        employee_id=row.employee_id,
+        structure_id=row.structure_id,
+        effective_from=row.effective_from,
+        effective_to=row.effective_to,
+        base_salary=decimal_to_money_response(row.base_salary) if row.base_salary is not None else None,
+        component_overrides=row.component_overrides if isinstance(row.component_overrides, dict) else None,
+        created_by=row.created_by,
+        created_at=row.created_at.isoformat(),
+        updated_at=row.updated_at.isoformat(),
+    )
+
+
+@router.get("/assignments", response_model=list[PayrollAssignmentOut])
+async def list_assignments(
+    employee_id: int | None = Query(default=None),
+    limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    rows = await payroll_service.list_structure_assignments(
+        db, tenant_id=tenant.id, employee_id=employee_id, limit=limit, offset=offset
+    )
+    return [_assignment_out(x) for x in rows]
+
+
+@router.post("/assignments", response_model=PayrollAssignmentOut, status_code=status.HTTP_201_CREATED)
+async def create_assignment(
+    body: PayrollAssignmentCreate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await payroll_service.create_structure_assignment(
+        db,
+        tenant_id=tenant.id,
+        employee_id=body.employee_id,
+        structure_id=body.structure_id,
+        effective_from=body.effective_from,
+        effective_to=body.effective_to,
+        base_salary=body.base_salary,
+        component_overrides=body.component_overrides,
+        created_by=user.id,
+    )
+    return _assignment_out(row)
+
+
+@router.post("/assignments/{assignment_id}/end", response_model=PayrollAssignmentOut)
+async def end_assignment(
+    assignment_id: int,
+    body: PayrollAssignmentEndBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await payroll_service.end_structure_assignment(
+        db,
+        tenant_id=tenant.id,
+        assignment_id=assignment_id,
+        effective_to=body.effective_to,
+    )
+    return _assignment_out(row)
+
+
+@router.post("/runs/{run_id}/auto-calculate/preview", response_model=PayrollAutoCalculatePreviewOut)
+async def auto_calculate_preview(
+    run_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Read-only preview. Requires feature flag + soft RBAC permission."""
+    _ensure_tenant(user, tenant)
+    await assert_soft_permission_allowed(
+        db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_AUTO_CALCULATE
+    )
+    preview = await payroll_service.preview_auto_calculate(db, tenant=tenant, run_id=run_id)
+    return PayrollAutoCalculatePreviewOut(
+        run_id=preview.run_id,
+        period_id=preview.period_id,
+        as_of=preview.as_of,
+        existing_line_count=preview.existing_line_count,
+        requires_overwrite_confirm=preview.requires_overwrite_confirm,
+        missing_assignment_employee_ids=preview.missing_assignment_employee_ids,
+        warnings=preview.warnings,
+        employees=[
+            PayrollEmployeeCalcPreviewOut(
+                employee_id=e.employee_id,
+                employee_code=e.employee_code,
+                employee_name=e.employee_name,
+                structure_id=e.structure_id,
+                assignment_id=e.assignment_id,
+                base_salary=e.base_salary,
+                days_present=e.days_present,
+                absent_days=e.absent_days,
+                late_days=e.late_days,
+                ot_hours=e.ot_hours,
+                paid_leave_days=e.paid_leave_days,
+                unpaid_leave_days=e.unpaid_leave_days,
+                gross_pay=e.gross_pay,
+                deductions=e.deductions,
+                net_pay=e.net_pay,
+                overtime_amount=e.overtime_amount,
+                warnings=e.warnings,
+                skipped=e.skipped,
+                skip_reason=e.skip_reason,
+                status=e.status,
+                has_manual_override=e.has_manual_override,
+                calculation_source=e.calculation_source,
+                components=[
+                    PayrollComponentCalcOut(
+                        component_id=c.component_id,
+                        component_code=c.component_code,
+                        component_name=c.component_name,
+                        component_type=c.component_type,
+                        calculation_type=c.calculation_type,
+                        amount=c.amount,
+                        source_amount=c.source_amount,
+                    )
+                    for c in e.components
+                ],
+            )
+            for e in preview.employees
+        ],
+    )
+
+
+@router.post("/runs/{run_id}/auto-calculate/apply", response_model=PayrollAutoCalculateApplyOut)
+async def auto_calculate_apply(
+    run_id: int,
+    body: PayrollAutoCalculateApplyBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Persist previewed lines. Requires feature flag + soft RBAC permission."""
+    _ensure_tenant(user, tenant)
+    await assert_soft_permission_allowed(
+        db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_AUTO_CALCULATE
+    )
+    result = await payroll_service.apply_auto_calculate(
+        db,
+        tenant=tenant,
+        run_id=run_id,
+        employee_ids=body.employee_ids,
+        force=body.force,
+        overwrite_confirm=body.overwrite_confirm,
+        created_by=user.id,
+    )
+    return PayrollAutoCalculateApplyOut(**result)
+
+
+@router.get("/statutory-config")
+async def get_statutory_config(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    from app.common.tenant_feature_keys import is_statutory_payroll_enabled
+    from app.models.payroll_statutory import PayrollStatutoryConfig
+    from app.modules.hr_payroll.statutory_calculation_service import (
+        DEFAULT_MH_PT_SLABS,
+        statutory_config_out,
+    )
+
+    if not is_statutory_payroll_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=404, detail="Enable statutory_payroll_enabled feature flag")
+    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_HR_PAYROLL_STATUTORY_VIEW)
+    row = (
+        await db.execute(
+            select(PayrollStatutoryConfig).where(PayrollStatutoryConfig.tenant_id == tenant.id).limit(1)
+        )
+    ).scalar_one_or_none()
+    if not row:
+        return {
+            "pf_employee_rate": "12",
+            "pf_employer_rate": "12",
+            "esi_employee_rate": "0.75",
+            "esi_employer_rate": "3.25",
+            "pf_wage_ceiling": "15000",
+            "esi_wage_ceiling": "21000",
+            "pt_state": "Maharashtra",
+            "pt_slabs": DEFAULT_MH_PT_SLABS,
+            "gratuity_days_per_year": "15",
+            "is_active": True,
+        }
+    return statutory_config_out(row)
+
+
+@router.put("/statutory-config")
+async def put_statutory_config(
+    body: dict,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    from decimal import Decimal
+
+    from app.common.tenant_feature_keys import is_statutory_payroll_enabled
+    from app.models.payroll_statutory import PayrollStatutoryConfig
+    from app.modules.hr_payroll.statutory_calculation_service import statutory_config_out
+
+    if not is_statutory_payroll_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=404, detail="Enable statutory_payroll_enabled feature flag")
+    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_HR_PAYROLL_STATUTORY_EDIT)
+    row = (
+        await db.execute(
+            select(PayrollStatutoryConfig).where(PayrollStatutoryConfig.tenant_id == tenant.id).limit(1)
+        )
+    ).scalar_one_or_none()
+    if not row:
+        row = PayrollStatutoryConfig(tenant_id=tenant.id)
+        db.add(row)
+    for key in (
+        "pf_employee_rate",
+        "pf_employer_rate",
+        "esi_employee_rate",
+        "esi_employer_rate",
+        "pf_wage_ceiling",
+        "esi_wage_ceiling",
+        "gratuity_days_per_year",
+    ):
+        if key in body and body[key] is not None:
+            setattr(row, key, Decimal(str(body[key])))
+    if "pt_state" in body:
+        row.pt_state = body["pt_state"]
+    if "pt_slabs" in body:
+        row.pt_slabs = body["pt_slabs"]
+    if "is_active" in body:
+        row.is_active = bool(body["is_active"])
+    await db.commit()
+    await db.refresh(row)
+    return statutory_config_out(row)
+
+
+@router.post("/statutory-config/preview")
+async def preview_statutory(
+    body: dict,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    from decimal import Decimal
+
+    from app.common.tenant_feature_keys import is_statutory_payroll_enabled
+    from app.models.payroll_statutory import PayrollStatutoryConfig
+    from app.modules.hr_payroll.statutory_calculation_service import calculate_all_statutory
+
+    if not is_statutory_payroll_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=404, detail="Enable statutory_payroll_enabled feature flag")
+    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_HR_PAYROLL_STATUTORY_VIEW)
+    row = (
+        await db.execute(
+            select(PayrollStatutoryConfig).where(PayrollStatutoryConfig.tenant_id == tenant.id).limit(1)
+        )
+    ).scalar_one_or_none()
+    basic = Decimal(str(body.get("basic_salary") or 0))
+    gross = Decimal(str(body.get("gross_salary") or basic))
+    years = body.get("years_of_service")
+    return calculate_all_statutory(
+        basic_salary=basic,
+        gross_salary=gross,
+        config=row,
+        years_of_service=Decimal(str(years)) if years is not None else None,
     )

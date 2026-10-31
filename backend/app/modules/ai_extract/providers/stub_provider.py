@@ -129,6 +129,109 @@ class StubExtractionProvider(BaseExtractionProvider):
             "_warnings": ["Confirm ex-factory vs delivery date with buyer."],
         }
 
+    async def extract_lc_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        del file_bytes
+        is_pdf = "pdf" in content_type.lower()
+        return {
+            "reference": "ELC-2026-DEMO-001",
+            "lc_number": "ELC-2026-DEMO-001",
+            "issuing_bank": "Demo Issuing Bank Ltd",
+            "contract_type": "EXPORT_LC",
+            "amount": "50000.00",
+            "currency": "USD",
+            "buyer_name": "Nordic Apparel AB",
+            "bank_name": "Demo Issuing Bank Ltd",
+            "issue_date": "2026-01-15",
+            "expiry_date": "2026-08-15",
+            "shipment_date": "2026-08-20",
+            "applicant": "Nordic Apparel AB",
+            "beneficiary": "Prime Garments Ltd",
+            "port_of_loading": "Chittagong",
+            "port_of_discharge": "Hamburg",
+            "partial_shipment_allowed": "YES",
+            "transshipment_allowed": "NO",
+            "documents_required": "Commercial invoice, Packing list, BL, Certificate of origin",
+            "special_instructions": "3rd party inspection required before shipment.",
+            "incoterms": "FOB",
+            "notes": "Stub LC extract — Transshipment not allowed. Confirm against original SWIFT/MT700.",
+            "order_value_hint": "52000",
+            "order_delivery_date_hint": "2026-08-20",
+            "_confidences": {
+                "reference": 0.9,
+                "lc_number": 0.9,
+                "amount": 0.88,
+                "currency": 0.95,
+                "buyer_name": 0.82,
+                "bank_name": 0.8,
+                "expiry_date": 0.85,
+                "shipment_date": 0.8,
+            },
+            "_unmapped_text": ["Partial shipment allowed" if is_pdf else "Scanned LC footer"],
+            "_warnings": ["Soft stub extraction — review all fields before saving."],
+        }
+
+    async def extract_shipping_doc_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        del file_bytes
+        is_pdf = "pdf" in content_type.lower()
+        return {
+            "reference": "SHIP-2026-DEMO-01",
+            "carrier": "Maersk Demo Line",
+            "shipping_line": "Maersk Demo Line",
+            "booking_ref": "BK-778899",
+            "bl_awb": "MAEU1234567890",
+            "bl_number": "MAEU1234567890",
+            "vessel_name": "MAERSK DEMO",
+            "etd": "2026-04-10",
+            "eta": "2026-05-02",
+            "origin_port": "Chittagong",
+            "dest_port": "Hamburg",
+            "port_of_loading": "Chittagong",
+            "port_of_discharge": "Hamburg",
+            "container_number": "MSCU1234567",
+            "freight_terms": "PREPAID",
+            "notify_party": "Nordic Apparel AB",
+            "consignee": "Nordic Apparel AB",
+            "notes": "Stub shipping extract — verify against BL/AWB.",
+            "_confidences": {
+                "reference": 0.86,
+                "carrier": 0.8,
+                "booking_ref": 0.84,
+                "bl_awb": 0.91,
+                "etd": 0.78,
+                "eta": 0.76,
+                "origin_port": 0.88,
+                "dest_port": 0.87,
+                "container_number": 0.9,
+            },
+            "_unmapped_text": ["Freight prepaid" if is_pdf else "Stamp unclear"],
+            "_warnings": ["Soft stub extraction — review all fields before saving."],
+        }
+
+    async def extract_packing_list_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        del file_bytes
+        del content_type
+        return {
+            "reference": "PL-2026-DEMO-01",
+            "carton_numbers": "1-120",
+            "total_cartons": "120",
+            "quantities_per_carton": "4",
+            "total_quantity": "500",
+            "style_breakdown": "S-DEMO: 500 pcs",
+            "net_weight_kg": "480",
+            "gross_weight_kg": "520",
+            "dimensions_cm": "60x40x40",
+            "order_quantity_hint": "480",
+            "header_cartons_hint": "120",
+            "notes": "Stub packing list extract.",
+            "_confidences": {
+                "total_cartons": 0.9,
+                "total_quantity": 0.88,
+                "net_weight_kg": 0.8,
+            },
+            "_unmapped_text": [],
+            "_warnings": ["Soft stub packing list — validate against order qty."],
+        }
+
     async def extract_vendor_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
         del file_bytes
         is_pdf = "pdf" in content_type.lower()
@@ -174,4 +277,89 @@ class StubExtractionProvider(BaseExtractionProvider):
             },
             "_unmapped_text": ["ISO certificate mentioned but number unclear"],
             "_warnings": ["Verify SWIFT with finance before first payment."],
+        }
+
+    async def extract_hr_cv_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        del file_bytes, content_type
+        return {
+            "full_name": "Karim Rahman",
+            "first_name": "Karim",
+            "last_name": "Rahman",
+            "date_of_birth": "1990-05-15",
+            "gender": "MALE",
+            "national_id": "1990123456789",
+            "phone": "+8801712345678",
+            "email": "karim.rahman@example.com",
+            "address_line": "House 10, Road 5, Mirpur",
+            "city": "Dhaka",
+            "country": "Bangladesh",
+            "education": [{"degree": "BSc", "institution": "DU", "year": "2012", "grade": "3.5"}],
+            "work_experience": [
+                {
+                    "company": "Demo Garments",
+                    "position": "Supervisor",
+                    "from_date": "2018-01",
+                    "to_date": "2024-12",
+                    "responsibilities": "Line supervision",
+                }
+            ],
+            "skills": ["sewing", "quality"],
+            "languages": ["Bengali", "English"],
+            "_confidences": {"full_name": 0.95, "date_of_birth": 0.9, "national_id": 0.88},
+            "_unmapped_text": [],
+            "_warnings": [],
+        }
+
+    async def extract_hr_national_id_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        del file_bytes, content_type
+        return {
+            "name": "Karim Rahman",
+            "name_bangla": "করিম রহমান",
+            "father_name": "Abdul Rahman",
+            "mother_name": "Fatema Begum",
+            "date_of_birth": "1990-05-15",
+            "national_id": "1990123456789",
+            "address": "Mirpur, Dhaka",
+            "blood_group": "B+",
+            "issue_date": "2018-01-01",
+            "_confidences": {"national_id": 0.96, "date_of_birth": 0.94},
+            "_unmapped_text": [],
+            "_warnings": [],
+        }
+
+    async def extract_hr_medical_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        del file_bytes, content_type
+        return {
+            "employee_name": "Karim Rahman",
+            "examination_date": "2026-01-10",
+            "expiry_date": "2027-01-10",
+            "fitness_status": "FIT",
+            "conditions": [],
+            "restrictions": [],
+            "doctor_name": "Dr. A. Hossain",
+            "doctor_registration": "BMDC-12345",
+            "hospital_clinic": "City Clinic",
+            "height_cm": 170,
+            "weight_kg": 68,
+            "blood_pressure": "120/80",
+            "vision": "6/6",
+            "hearing": "NORMAL",
+            "_confidences": {"fitness_status": 0.92, "examination_date": 0.9},
+            "_unmapped_text": [],
+            "_warnings": [],
+        }
+
+    async def extract_hr_birth_certificate_fields(self, file_bytes: bytes, content_type: str) -> dict[str, Any]:
+        del file_bytes, content_type
+        return {
+            "name": "Karim Rahman",
+            "date_of_birth": "1990-05-15",
+            "father_name": "Abdul Rahman",
+            "mother_name": "Fatema Begum",
+            "birth_registration_number": "BR-1990-001234",
+            "place_of_birth": "Dhaka",
+            "issue_date": "1990-06-01",
+            "_confidences": {"date_of_birth": 0.97, "birth_registration_number": 0.85},
+            "_unmapped_text": [],
+            "_warnings": [],
         }

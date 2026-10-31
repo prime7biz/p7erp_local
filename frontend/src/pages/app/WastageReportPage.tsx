@@ -837,7 +837,7 @@ export function WastageReportPage() {
                         {drawerDetail.linked_alert_ids.map((aid) => (
                           <li key={aid}>
                             <Link
-                              to={`${PREFIX}/merchandising/critical-alerts?alert=${aid}`}
+                              to={`${PREFIX}/merchandising/alerts?alert=${aid}`}
                               className="text-brand-primary hover:underline"
                             >
                               Alert #{aid}

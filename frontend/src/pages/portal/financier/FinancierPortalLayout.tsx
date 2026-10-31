@@ -16,7 +16,7 @@ const navAll: FinancierNavItem[] = [
   { to: "/portal/financier/pipeline", label: "Pipeline", minScope: "orders_and_pipeline" },
   { to: "/portal/financier/goods-movement", label: "Goods movement", minScope: "orders_and_pipeline" },
   { to: "/portal/financier/financial-summary", label: "Financial summary", minScope: "financial_summary" },
-  { to: "/portal/financier/projections", label: "Projections", minScope: "financial_summary" },
+  { to: "/portal/financier/projections", label: "Projections", minScope: "orders_and_pipeline" },
   { to: "/portal/financier/credit-lines", label: "Credit lines", minScope: "credit_monitoring" },
   { to: "/portal/financier/loan-portfolio", label: "Portfolio", minScope: "credit_monitoring" },
   { to: "/portal/financier/order-finance", label: "Order finance", minScope: "credit_monitoring" },

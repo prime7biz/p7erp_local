@@ -5,7 +5,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -500,6 +500,56 @@ async def ai_efficiency_forecast(
     return await build_efficiency_forecast(db, tenant.id)
 
 
+@router.get("/planning/predictive/defect-risk")
+async def predictive_defect_risk(
+    lookback_days: int = Query(default=14, ge=3, le=90),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Heuristic defect-risk suggestions from recent QC / hourly reject ratios (Phase 4 MVP)."""
+    _ensure(user, tenant)
+    from app.common.permissions import PERMISSION_AI_DEFECT_PREDICT, assert_soft_permission_allowed
+    from app.modules.production.predictive_heuristic_service import build_defect_risk_suggestions
+
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_AI_DEFECT_PREDICT)
+    return await build_defect_risk_suggestions(db, tenant_id=tenant.id, lookback_days=lookback_days)
+
+
+@router.get("/planning/predictive/line-balance")
+async def predictive_line_balance(
+    lookback_days: int = Query(default=7, ge=3, le=60),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Heuristic line-balance suggestions from hourly efficiency variance (Phase 4 MVP)."""
+    _ensure(user, tenant)
+    from app.common.permissions import PERMISSION_AI_LINE_BALANCE, assert_soft_permission_allowed
+    from app.modules.production.predictive_heuristic_service import build_line_balance_suggestions
+
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_AI_LINE_BALANCE)
+    return await build_line_balance_suggestions(db, tenant_id=tenant.id, lookback_days=lookback_days)
+
+
+@router.get("/planning/predictive/maintenance")
+async def predictive_maintenance(
+    lookback_days: int = Query(default=30, ge=7, le=120),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Heuristic maintenance risk from machines + MACHINE downtime (Phase 4 MVP)."""
+    _ensure(user, tenant)
+    from app.common.permissions import PERMISSION_AI_MAINTENANCE_PREDICT, assert_soft_permission_allowed
+    from app.modules.production.predictive_heuristic_service import build_maintenance_risk_suggestions
+
+    await assert_soft_permission_allowed(
+        db, user, tenant.id, permission_key=PERMISSION_AI_MAINTENANCE_PREDICT
+    )
+    return await build_maintenance_risk_suggestions(db, tenant_id=tenant.id, lookback_days=lookback_days)
+
+
 class PlanningAdvisoryWindowBody(BaseModel):
     from_date: date
     to_date: date
@@ -590,3 +640,103 @@ async def put_ai_planning_settings(
         effective_model=eff_model,
         tenant_override=cfg if cfg else None,
     )
+
+
+class ReleaseWorkOrdersBody(BaseModel):
+    plan_id: int | None = Field(default=None, gt=0)
+    order_ids: list[int] | None = None
+
+
+@router.post("/planning/release-work-orders")
+async def release_work_orders(
+    body: ReleaseWorkOrdersBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bulk-update manufacturing work orders from planned → released (shop floor)."""
+    _ensure(user, tenant)
+    if body.plan_id is None and not body.order_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide plan_id and/or order_ids",
+        )
+
+    from app.models import ManufacturingProductionPlan, ManufacturingProductionPlanLine, ManufacturingWorkOrder
+
+    stmt = select(ManufacturingWorkOrder).where(
+        ManufacturingWorkOrder.tenant_id == tenant.id,
+        ManufacturingWorkOrder.status == "planned",
+    )
+
+    if body.plan_id is not None:
+        plan = await db.get(ManufacturingProductionPlan, body.plan_id)
+        if not plan or plan.tenant_id != tenant.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Production plan not found")
+        line_ids_r = await db.execute(
+            select(ManufacturingProductionPlanLine.id).where(
+                ManufacturingProductionPlanLine.tenant_id == tenant.id,
+                ManufacturingProductionPlanLine.plan_id == body.plan_id,
+            )
+        )
+        line_ids = [int(x) for x in line_ids_r.scalars().all()]
+        if not line_ids:
+            return {"released": 0, "work_order_ids": [], "message": "Plan has no lines"}
+        stmt = stmt.where(ManufacturingWorkOrder.plan_line_id.in_(line_ids))
+
+    if body.order_ids:
+        order_ids = [int(x) for x in body.order_ids if int(x) > 0]
+        if not order_ids:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="order_ids must be positive")
+        stmt = stmt.where(ManufacturingWorkOrder.order_id.in_(order_ids))
+
+    result = await db.execute(stmt)
+    rows = list(result.scalars().all())
+    released_ids: list[int] = []
+    order_ids_touched: set[int] = set()
+    for row in rows:
+        row.status = "released"
+        released_ids.append(int(row.id))
+        if getattr(row, "order_id", None):
+            order_ids_touched.add(int(row.order_id))
+    material_estimate = 0
+    if released_ids:
+        # Best-effort material line estimate from linked order BOMs (advisory for UI modal/toast).
+        try:
+            from app.models import Bom, BomItem
+
+            for oid in order_ids_touched:
+                bom_id = (
+                    await db.execute(
+                        select(Bom.id).where(Bom.tenant_id == tenant.id, Bom.order_id == oid).limit(1)
+                    )
+                ).scalar_one_or_none()
+                if bom_id:
+                    material_estimate += int(
+                        (
+                            await db.execute(
+                                select(func.count())
+                                .select_from(BomItem)
+                                .where(BomItem.tenant_id == tenant.id, BomItem.bom_id == bom_id)
+                            )
+                        ).scalar_one()
+                        or 0
+                    )
+        except Exception:
+            material_estimate = 0
+        await db.commit()
+        # Soft pipeline nudge only — does not replace existing pipeline rules.
+        try:
+            from app.modules.orders.pipeline_service import auto_advance_order_pipeline
+
+            for oid in order_ids_touched:
+                await auto_advance_order_pipeline(db, tenant_id=tenant.id, order_id=oid)
+            await db.commit()
+        except Exception:
+            pass
+    return {
+        "released": len(released_ids),
+        "work_order_ids": released_ids,
+        "material_count_estimate": material_estimate,
+        "message": f"Released {len(released_ids)} work order(s) to shop floor",
+    }

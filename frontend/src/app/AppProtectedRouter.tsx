@@ -16,6 +16,9 @@ const AiWeeklyReportsPage = lazy(() =>
 );
 const CommercialPage = lazy(() => import("@/pages/app/commercial/CommercialPage").then((m) => ({ default: m.CommercialPage })));
 const ExportCasesPage = lazy(() => import("@/pages/app/commercial/ExportCasesPage").then((m) => ({ default: m.ExportCasesPage })));
+const ExportCaseFormPage = lazy(() =>
+  import("@/pages/app/commercial/ExportCaseFormPage").then((m) => ({ default: m.ExportCaseFormPage })),
+);
 const ProformaInvoicesPage = lazy(() =>
   import("@/pages/app/commercial/ProformaInvoicesPage").then((m) => ({ default: m.ProformaInvoicesPage })),
 );
@@ -24,6 +27,9 @@ const MasterContractsPage = lazy(() =>
   import("@/pages/app/commercial/MasterContractsPage").then((m) => ({ default: m.MasterContractsPage })),
 );
 const LogisticsPage = lazy(() => import("@/pages/app/logistics/LogisticsPage").then((m) => ({ default: m.LogisticsPage })));
+const PackingListDetailPage = lazy(() =>
+  import("@/pages/app/logistics/PackingListDetailPage").then((m) => ({ default: m.PackingListDetailPage })),
+);
 const TradeCasesPage = lazy(() => import("@/pages/app/trade/TradeCasesPage").then((m) => ({ default: m.TradeCasesPage })));
 const TradeCaseDetailPage = lazy(() =>
   import("@/pages/app/trade/TradeCaseDetailPage").then((m) => ({ default: m.TradeCaseDetailPage })),
@@ -78,10 +84,29 @@ const MerchCriticalAlertsPage = lazy(() =>
 const ConsumptionReconciliationPage = lazy(() =>
   import("@/pages/app/ConsumptionReconciliationPage").then((m) => ({ default: m.ConsumptionReconciliationPage })),
 );
+const OrderProfitabilityPage = lazy(() =>
+  import("@/pages/app/merch/OrderProfitabilityPage").then((m) => ({ default: m.OrderProfitabilityPage })),
+);
 const WastageReportPage = lazy(() => import("@/pages/app/WastageReportPage").then((m) => ({ default: m.WastageReportPage })));
 const InventoryItemsPage = lazy(() => import("@/pages/app/InventoryItemsPage").then((m) => ({ default: m.InventoryItemsPage })));
 const VendorsPage = lazy(() => import("@/pages/app/VendorsPage").then((m) => ({ default: m.VendorsPage })));
 const StockGroupsPage = lazy(() => import("@/pages/app/StockGroupsPage").then((m) => ({ default: m.StockGroupsPage })));
+const StockItemsHierarchyPage = lazy(() =>
+  import("@/pages/app/inventory/stock-hierarchy/StockItemsPage").then((m) => ({ default: m.StockItemsPage })),
+);
+const StockItemDetailPage = lazy(() =>
+  import("@/pages/app/inventory/stock-hierarchy/StockItemDetailPage").then((m) => ({
+    default: m.StockItemDetailPage,
+  })),
+);
+const StockTransferHierarchyPage = lazy(() =>
+  import("@/pages/app/inventory/stock-hierarchy/StockTransferPage").then((m) => ({
+    default: m.StockTransferPage,
+  })),
+);
+const GodownStockPage = lazy(() =>
+  import("@/pages/app/inventory/stock-hierarchy/GodownStockPage").then((m) => ({ default: m.GodownStockPage })),
+);
 const PurchaseOrdersPage = lazy(() =>
   import("@/pages/app/PurchaseOrdersPage").then((m) => ({ default: m.PurchaseOrdersPage })),
 );
@@ -101,6 +126,83 @@ const GatePassDetailPage = lazy(() =>
   import("@/pages/app/GatePassDetailPage").then((m) => ({ default: m.GatePassDetailPage })),
 );
 const ProcessOrdersPage = lazy(() => import("@/pages/app/ProcessOrdersPage").then((m) => ({ default: m.ProcessOrdersPage })));
+const MRPRunPage = lazy(() =>
+  import("@/pages/app/inventory/mrp-idt/MRPRunPage").then((m) => ({ default: m.MRPRunPage })),
+);
+const ReorderSuggestionsPage = lazy(() =>
+  import("@/pages/app/inventory/mrp-idt/ReorderSuggestionsPage").then((m) => ({
+    default: m.ReorderSuggestionsPage,
+  })),
+);
+const InterDepartmentTransferPage = lazy(() =>
+  import("@/pages/app/inventory/mrp-idt/InterDepartmentTransferPage").then((m) => ({
+    default: m.InterDepartmentTransferPage,
+  })),
+);
+const IDTReceivePage = lazy(() =>
+  import("@/pages/app/inventory/mrp-idt/IDTReceivePage").then((m) => ({ default: m.IDTReceivePage })),
+);
+const ProcessLossReportPage = lazy(() =>
+  import("@/pages/app/inventory/mrp-idt/ProcessLossReportPage").then((m) => ({
+    default: m.ProcessLossReportPage,
+  })),
+);
+const PostCostingPage = lazy(() =>
+  import("@/pages/app/inventory/mrp-idt/PostCostingPage").then((m) => ({ default: m.PostCostingPage })),
+);
+const ProcessLossSettingsPage = lazy(() =>
+  import("@/pages/app/inventory/mrp-idt/ProcessLossSettingsPage").then((m) => ({
+    default: m.ProcessLossSettingsPage,
+  })),
+);
+const GrnInspectionPage = lazy(() =>
+  import("@/pages/app/inventory/quality/GrnInspectionPage").then((m) => ({
+    default: m.GrnInspectionPage,
+  })),
+);
+const InventoryQualityDashboardPage = lazy(() =>
+  import("@/pages/app/inventory/quality/QualityDashboardPage").then((m) => ({
+    default: m.QualityDashboardPage,
+  })),
+);
+const VendorScorecardPage = lazy(() =>
+  import("@/pages/app/inventory/quality/VendorScorecardPage").then((m) => ({
+    default: m.VendorScorecardPage,
+  })),
+);
+const ABCAnalysisPage = lazy(() =>
+  import("@/pages/app/inventory/analytics/ABCAnalysisPage").then((m) => ({
+    default: m.ABCAnalysisPage,
+  })),
+);
+const EOQPage = lazy(() =>
+  import("@/pages/app/inventory/analytics/EOQPage").then((m) => ({ default: m.EOQPage })),
+);
+const StockAgingPage = lazy(() =>
+  import("@/pages/app/inventory/analytics/StockAgingPage").then((m) => ({
+    default: m.StockAgingPage,
+  })),
+);
+const CycleCountPage = lazy(() =>
+  import("@/pages/app/inventory/analytics/CycleCountPage").then((m) => ({
+    default: m.CycleCountPage,
+  })),
+);
+const SerialTrackingPage = lazy(() =>
+  import("@/pages/app/inventory/serial-kit/SerialTrackingPage").then((m) => ({
+    default: m.SerialTrackingPage,
+  })),
+);
+const KitBuilderPage = lazy(() =>
+  import("@/pages/app/inventory/serial-kit/KitBuilderPage").then((m) => ({
+    default: m.KitBuilderPage,
+  })),
+);
+const ConsignmentStockPage = lazy(() =>
+  import("@/pages/app/inventory/serial-kit/ConsignmentStockPage").then((m) => ({
+    default: m.ConsignmentStockPage,
+  })),
+);
 const ConsumptionControlPage = lazy(() =>
   import("@/pages/app/ConsumptionControlPage").then((m) => ({ default: m.ConsumptionControlPage })),
 );
@@ -125,6 +227,12 @@ const QuotationPrintPage = lazy(() =>
   import("@/pages/print/QuotationPrintPage").then((m) => ({ default: m.QuotationPrintPage })),
 );
 const CustomerPrintPage = lazy(() => import("@/pages/print/CustomerPrintPage").then((m) => ({ default: m.CustomerPrintPage })));
+const PurchaseOrderPrintPage = lazy(() =>
+  import("@/pages/print/PurchaseOrderPrintPage").then((m) => ({ default: m.PurchaseOrderPrintPage })),
+);
+const GoodsReceivingPrintPage = lazy(() =>
+  import("@/pages/print/GoodsReceivingPrintPage").then((m) => ({ default: m.GoodsReceivingPrintPage })),
+);
 const InquiryPrintPage = lazy(() => import("@/pages/print/InquiryPrintPage").then((m) => ({ default: m.InquiryPrintPage })));
 const OrderPrintPage = lazy(() => import("@/pages/print/OrderPrintPage").then((m) => ({ default: m.OrderPrintPage })));
 const StylePrintPage = lazy(() => import("@/pages/print/StylePrintPage").then((m) => ({ default: m.StylePrintPage })));
@@ -133,6 +241,14 @@ const ProformaInvoicePrintPage = lazy(() =>
 );
 const ProformaInvoiceFormPage = lazy(() =>
   import("@/pages/app/commercial/ProformaInvoiceFormPage").then((m) => ({ default: m.ProformaInvoiceFormPage })),
+);
+const CommercialInvoicesPage = lazy(() =>
+  import("@/pages/app/commercial/CommercialInvoicesPage").then((m) => ({ default: m.CommercialInvoicesPage })),
+);
+const CommercialInvoiceDetailPage = lazy(() =>
+  import("@/pages/app/commercial/CommercialInvoiceDetailPage").then((m) => ({
+    default: m.CommercialInvoiceDetailPage,
+  })),
 );
 
 const SettingsLayout = lazy(() => import("@/pages/settings/SettingsLayout").then((m) => ({ default: m.SettingsLayout })));
@@ -341,6 +457,94 @@ const GroupSummaryPage = lazy(() =>
 const ArApAgingReportPage = lazy(() =>
   import("@/pages/app/ArApAgingReportPage").then((m) => ({ default: m.ArApAgingReportPage })),
 );
+const PartyLedgersPage = lazy(() =>
+  import("@/pages/app/finance/party-ledger/PartyLedgersPage").then((m) => ({ default: m.PartyLedgersPage })),
+);
+const PartyLedgerCreatePage = lazy(() =>
+  import("@/pages/app/finance/party-ledger/PartyLedgerCreatePage").then((m) => ({
+    default: m.PartyLedgerCreatePage,
+  })),
+);
+const PartyLedgerDetailPage = lazy(() =>
+  import("@/pages/app/finance/party-ledger/PartyLedgerDetailPage").then((m) => ({
+    default: m.PartyLedgerDetailPage,
+  })),
+);
+const TaxLedgersPage = lazy(() =>
+  import("@/pages/app/finance/gst/TaxLedgersPage").then((m) => ({ default: m.TaxLedgersPage })),
+);
+const GstReturnsPage = lazy(() =>
+  import("@/pages/app/finance/gst/GstReturnsPage").then((m) => ({ default: m.GstReturnsPage })),
+);
+const TaxSettingsPage = lazy(() =>
+  import("@/pages/app/finance/gst/TaxSettingsPage").then((m) => ({ default: m.TaxSettingsPage })),
+);
+const VoucherTypeConfigPage = lazy(() =>
+  import("@/pages/app/finance/advanced-vouchers/VoucherTypeConfigPage").then((m) => ({
+    default: m.VoucherTypeConfigPage,
+  })),
+);
+const VoucherClassPage = lazy(() =>
+  import("@/pages/app/finance/advanced-vouchers/VoucherClassPage").then((m) => ({ default: m.VoucherClassPage })),
+);
+const RecurringVouchersPage = lazy(() =>
+  import("@/pages/app/finance/advanced-vouchers/RecurringVouchersPage").then((m) => ({
+    default: m.RecurringVouchersPage,
+  })),
+);
+const PostDatedRegisterPage = lazy(() =>
+  import("@/pages/app/finance/advanced-vouchers/PostDatedRegisterPage").then((m) => ({
+    default: m.PostDatedRegisterPage,
+  })),
+);
+const MemorandumRegisterPage = lazy(() =>
+  import("@/pages/app/finance/advanced-vouchers/MemorandumRegisterPage").then((m) => ({
+    default: m.MemorandumRegisterPage,
+  })),
+);
+const CreditNoteCreatePage = lazy(() =>
+  import("@/pages/app/finance/advanced-vouchers/CreditNoteCreatePage").then((m) => ({
+    default: m.CreditNoteCreatePage,
+  })),
+);
+const DebitNoteCreatePage = lazy(() =>
+  import("@/pages/app/finance/advanced-vouchers/DebitNoteCreatePage").then((m) => ({
+    default: m.DebitNoteCreatePage,
+  })),
+);
+const StockTransferCreatePage = lazy(() =>
+  import("@/pages/app/finance/advanced-vouchers/StockTransferCreatePage").then((m) => ({
+    default: m.StockTransferCreatePage,
+  })),
+);
+const TdsSettingsPage = lazy(() =>
+  import("@/pages/app/finance/tds/TdsSettingsPage").then((m) => ({ default: m.TdsSettingsPage })),
+);
+const TdsReportsPage = lazy(() =>
+  import("@/pages/app/finance/tds/TdsReportsPage").then((m) => ({ default: m.TdsReportsPage })),
+);
+const FinancialDashboardPage = lazy(() =>
+  import("@/pages/app/finance/mis/FinancialDashboardPage").then((m) => ({ default: m.FinancialDashboardPage })),
+);
+const FundFlowPage = lazy(() =>
+  import("@/pages/app/finance/mis/FundFlowPage").then((m) => ({ default: m.FundFlowPage })),
+);
+const RatioAnalysisMisPage = lazy(() =>
+  import("@/pages/app/finance/mis/RatioAnalysisMisPage").then((m) => ({ default: m.RatioAnalysisMisPage })),
+);
+const ComparativeStatementsPage = lazy(() =>
+  import("@/pages/app/finance/mis/ComparativeStatementsPage").then((m) => ({
+    default: m.ComparativeStatementsPage,
+  })),
+);
+const CashFlowScenarioPage = lazy(() =>
+  import("@/pages/app/finance/mis/CashFlowScenarioPage").then((m) => ({ default: m.CashFlowScenarioPage })),
+);
+const PayrollStatutoryConfigPage = lazy(() =>
+  import("@/pages/app/hr/payroll/PayrollStatutoryConfigPage").then((m) => ({
+    default: m.PayrollStatutoryConfigPage,
+  })),
+);
 const LedgerActivityPage = lazy(() =>
   import("@/pages/app/LedgerActivityPage").then((m) => ({ default: m.LedgerActivityPage })),
 );
@@ -384,6 +588,11 @@ const HrSalaryStructuresPage = lazy(() =>
 );
 const HrPayrollRunsPage = lazy(() =>
   import("@/pages/app/hr/payroll/HrPayrollRunsPage").then((m) => ({ default: m.HrPayrollRunsPage })),
+);
+const PayrollEmployeeAssignmentPage = lazy(() =>
+  import("@/pages/app/hr/payroll/PayrollEmployeeAssignmentPage").then((m) => ({
+    default: m.PayrollEmployeeAssignmentPage,
+  })),
 );
 const HrPayrollApprovalsPage = lazy(() =>
   import("@/pages/app/hr/payroll/HrPayrollApprovalsPage").then((m) => ({ default: m.HrPayrollApprovalsPage })),
@@ -456,6 +665,12 @@ const SupportTicketDetailPage = lazy(() =>
   import("@/pages/app/support/SupportTicketDetailPage").then((m) => ({ default: m.SupportTicketDetailPage })),
 );
 const HrCompliancePage = lazy(() => import("@/pages/app/hr/HrCompliancePage").then((m) => ({ default: m.HrCompliancePage })));
+const AiEmployeeOnboardingPage = lazy(() =>
+  import("@/pages/app/hr/AiEmployeeOnboardingPage").then((m) => ({ default: m.AiEmployeeOnboardingPage })),
+);
+const HrAiInsightsPage = lazy(() =>
+  import("@/pages/app/hr/HrAiInsightsPage").then((m) => ({ default: m.HrAiInsightsPage })),
+);
 const GarmentProductionOverviewPage = lazy(() =>
   import("@/pages/app/production/GarmentProductionOverviewPage").then((m) => ({ default: m.GarmentProductionOverviewPage })),
 );
@@ -585,6 +800,10 @@ export function AppProtectedRouter() {
         <Route path="orders/:id/print" element={<OrderPrintPage />} />
         <Route path="merchandising/styles/:id/print" element={<StylePrintPage />} />
         <Route path="commercial/proforma-invoices/:id/print" element={<ProformaInvoicePrintPage />} />
+      <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.inventory} />}>
+        <Route path="inventory/purchase-orders/:id/print" element={<PurchaseOrderPrintPage />} />
+        <Route path="inventory/goods-receiving/:id/print" element={<GoodsReceivingPrintPage />} />
+      </Route>
       <Route
         element={
           <Suspense fallback={<div className="min-h-[40vh] flex items-center justify-center text-sm text-text-muted">Loading module...</div>}>
@@ -596,32 +815,36 @@ export function AppProtectedRouter() {
         <Route path="support/tickets" element={<SupportTicketsPage />} />
         <Route path="support/tickets/new" element={<SupportNewTicketPage />} />
         <Route path="support/tickets/:id" element={<SupportTicketDetailPage />} />
-        <Route path="customers/new" element={<CustomerCreatePage />} />
-        <Route path="customers/:id/edit" element={<CustomerEditPage />} />
-        <Route path="customers/:id" element={<CustomerDetailPage />} />
-        <Route path="customers" element={<CustomersPage />} />
-        <Route path="inquiries" element={<InquiriesPage />} />
-        <Route path="inquiries/new" element={<InquiryCreatePage />} />
-        <Route path="inquiries/:id/edit" element={<InquiryCreatePage />} />
-        <Route path="inquiries/:id" element={<InquiryDetailPage />} />
-        <Route path="quotations" element={<QuotationsPage />} />
-        <Route path="quotations/new" element={<QuotationDetailPage />} />
-        <Route path="quotations/:id" element={<QuotationDetailPage />} />
-        <Route path="orders" element={<OrdersPage />} />
-        <Route path="orders/new" element={<OrderCreatePage />} />
-        <Route path="orders/:id" element={<OrderDetailPage />} />
-        <Route path="merchandising/styles" element={<StylesPage />} />
-        <Route path="merchandising/styles/:id" element={<StyleDetailPage />} />
-        <Route path="bom" element={<BomBuilderPage />} />
-        <Route path="bom/orders" element={<ConsumptionPlansPage />} />
-        <Route path="merchandising/control-tower" element={<MerchControlTowerPage />} />
-        <Route path="merchandising/samples" element={<MerchSamplesPage />} />
-        <Route path="merchandising/samples/:id" element={<MerchSampleDetailPage />} />
-        <Route path="merchandising/pipeline" element={<MerchPipelinePage />} />
-        <Route path="merchandising/pipeline-analytics" element={<PipelineAnalyticsPage />} />
-        <Route path="merchandising/alerts" element={<MerchCriticalAlertsPage />} />
-        <Route path="merchandising/wastage-report" element={<WastageReportPage />} />
-        <Route path="merchandising/consumption-reconciliation" element={<ConsumptionReconciliationPage />} />
+        <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.merch} />}>
+          <Route path="customers/new" element={<CustomerCreatePage />} />
+          <Route path="customers/:id/edit" element={<CustomerEditPage />} />
+          <Route path="customers/:id" element={<CustomerDetailPage />} />
+          <Route path="customers" element={<CustomersPage />} />
+          <Route path="inquiries" element={<InquiriesPage />} />
+          <Route path="inquiries/new" element={<InquiryCreatePage />} />
+          <Route path="inquiries/:id/edit" element={<InquiryCreatePage />} />
+          <Route path="inquiries/:id" element={<InquiryDetailPage />} />
+          <Route path="quotations" element={<QuotationsPage />} />
+          <Route path="quotations/new" element={<QuotationDetailPage />} />
+          <Route path="quotations/:id" element={<QuotationDetailPage />} />
+          <Route path="orders" element={<OrdersPage />} />
+          <Route path="orders/new" element={<OrderCreatePage />} />
+          <Route path="orders/:id" element={<OrderDetailPage />} />
+          <Route path="merchandising/styles" element={<StylesPage />} />
+          <Route path="merchandising/styles/:id" element={<StyleDetailPage />} />
+          <Route path="bom" element={<BomBuilderPage />} />
+          <Route path="bom/orders" element={<ConsumptionPlansPage />} />
+          <Route path="merchandising/control-tower" element={<MerchControlTowerPage />} />
+          <Route path="merchandising/samples" element={<MerchSamplesPage />} />
+          <Route path="merchandising/samples/:id" element={<MerchSampleDetailPage />} />
+          <Route path="merchandising/pipeline" element={<MerchPipelinePage />} />
+          <Route path="merchandising/pipeline-analytics" element={<PipelineAnalyticsPage />} />
+          <Route path="merchandising/alerts" element={<MerchCriticalAlertsPage />} />
+          <Route path="merchandising/wastage-report" element={<WastageReportPage />} />
+          <Route path="merchandising/consumption-reconciliation" element={<ConsumptionReconciliationPage />} />
+          <Route path="merch/order-profitability" element={<OrderProfitabilityPage />} />
+          <Route path="merch/profitability" element={<OrderProfitabilityPage />} />
+        </Route>
         <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.inventory} />}>
           <Route path="inventory" element={<InventoryItemsPage />} />
           <Route path="inventory/items" element={<InventoryItemsPage />} />
@@ -631,6 +854,10 @@ export function AppProtectedRouter() {
           <Route path="inventory/vendors" element={<VendorsPage />} />
           <Route path="inventory/warehouses" element={<Navigate to="/app/inventory?tab=warehouses" replace />} />
           <Route path="inventory/stock-groups" element={<StockGroupsPage />} />
+          <Route path="inventory/stock-items" element={<StockItemsHierarchyPage />} />
+          <Route path="inventory/stock-items/:id" element={<StockItemDetailPage />} />
+          <Route path="inventory/stock-transfers" element={<StockTransferHierarchyPage />} />
+          <Route path="inventory/godown-stock" element={<GodownStockPage />} />
           <Route path="inventory/stock-dashboard" element={<StockDashboardPage />} />
           <Route path="inventory/stock-valuation" element={<StockValuationPage />} />
           <Route path="inventory/stock-adjustments" element={<StockAdjustmentsPage />} />
@@ -644,17 +871,36 @@ export function AppProtectedRouter() {
           <Route path="inventory/enhanced-gate-passes/:gatePassId" element={<GatePassDetailPage />} />
           <Route path="inventory/enhanced-gate-passes" element={<EnhancedGatePassesPage />} />
           <Route path="inventory/process-orders" element={<ProcessOrdersPage />} />
+          <Route path="inventory/mrp" element={<MRPRunPage />} />
+          <Route path="inventory/reorder-suggestions" element={<ReorderSuggestionsPage />} />
+          <Route path="inventory/idt" element={<InterDepartmentTransferPage />} />
+          <Route path="inventory/idt-receive" element={<IDTReceivePage />} />
+          <Route path="inventory/process-loss-report" element={<ProcessLossReportPage />} />
+          <Route path="inventory/post-costing" element={<PostCostingPage />} />
+          <Route path="inventory/process-loss-settings" element={<ProcessLossSettingsPage />} />
+          <Route path="inventory/grn-inspection" element={<GrnInspectionPage />} />
+          <Route path="inventory/quality-dashboard" element={<InventoryQualityDashboardPage />} />
+          <Route path="inventory/vendor-scorecard" element={<VendorScorecardPage />} />
+          <Route path="inventory/abc-analysis" element={<ABCAnalysisPage />} />
+          <Route path="inventory/eoq" element={<EOQPage />} />
+          <Route path="inventory/stock-aging" element={<StockAgingPage />} />
+          <Route path="inventory/cycle-count" element={<CycleCountPage />} />
+          <Route path="inventory/serials" element={<SerialTrackingPage />} />
+          <Route path="inventory/kits" element={<KitBuilderPage />} />
+          <Route path="inventory/consignment" element={<ConsignmentStockPage />} />
           <Route path="inventory/manufacturing-orders" element={<Navigate to="/app/production/manufacturing-orders" replace />} />
         </Route>
         <Route path="samples" element={<Navigate to="/app/samples/requests" replace />} />
         <Route path="samples/:id" element={<Navigate to="/app/samples/requests" replace />} />
-        <Route path="samples/requests" element={<SamplesRequestsPage />} />
         <Route path="time-action" element={<Navigate to="/app/tna/dashboard" replace />} />
-        <Route path="tna/dashboard" element={<TnaDashboardPage />} />
-        <Route path="tna/templates" element={<TnaTemplatesPage />} />
-        <Route path="tna/plans" element={<TnaPlansPage />} />
-        <Route path="tna/plans/:planId" element={<TnaPlanDetailPage />} />
+        <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.merch} />}>
+          <Route path="tna/dashboard" element={<TnaDashboardPage />} />
+          <Route path="tna/templates" element={<TnaTemplatesPage />} />
+          <Route path="tna/plans" element={<TnaPlansPage />} />
+          <Route path="tna/plans/:planId" element={<TnaPlanDetailPage />} />
+        </Route>
         <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.production} />}>
+          <Route path="samples/requests" element={<SamplesRequestsPage />} />
           <Route path="production" element={<GarmentProductionOverviewPage />} />
           <Route path="production/manufacturing-orders" element={<ManufacturingOrdersPage />} />
           <Route path="production/setup" element={<ProductionSetupPage />} />
@@ -700,20 +946,31 @@ export function AppProtectedRouter() {
           <Route path="inventory/stock-inventory-summary" element={<StockInventorySummaryPage />} />
           <Route path="inventory/stock-ledger" element={<StockLedgerPage />} />
         </Route>
-        <Route path="commercial" element={<CommercialPage />} />
-        <Route path="commercial/export-cases" element={<ExportCasesPage />} />
-        <Route path="commercial/master-contracts" element={<MasterContractsPage />} />
-        <Route path="commercial/proforma-invoices" element={<ProformaInvoicesPage />} />
-        <Route path="commercial/proforma-invoices/new" element={<ProformaInvoiceFormPage />} />
-        <Route path="commercial/proforma-invoices/:id/edit" element={<ProformaInvoiceFormPage />} />
-        <Route path="commercial/btb-lcs" element={<BtbLcsPage />} />
+        <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.merch} />}>
+          <Route path="commercial" element={<CommercialPage />} />
+          <Route path="commercial/export-cases" element={<ExportCasesPage />} />
+          <Route path="commercial/export-cases/new" element={<ExportCaseFormPage />} />
+          <Route path="commercial/export-cases/:id/edit" element={<ExportCaseFormPage />} />
+          <Route path="commercial/master-contracts" element={<MasterContractsPage />} />
+          <Route path="commercial/proforma-invoices" element={<ProformaInvoicesPage />} />
+          <Route path="commercial/proforma-invoices/new" element={<ProformaInvoiceFormPage />} />
+          <Route path="commercial/proforma-invoices/:id/edit" element={<ProformaInvoiceFormPage />} />
+          <Route path="commercial/invoices" element={<CommercialInvoicesPage />} />
+          <Route path="commercial/invoices/:id" element={<CommercialInvoiceDetailPage />} />
+          <Route path="commercial/btb-lcs" element={<BtbLcsPage />} />
+        </Route>
         <Route path="operations/control-tower" element={<ControlTowerPage />} />
         <Route element={<TradeFeatureRouteGuard />}>
-          <Route path="trade/cases" element={<TradeCasesPage />} />
-          <Route path="trade/cases/:caseId" element={<TradeCaseDetailPage />} />
-          <Route path="trade/dashboard" element={<TradeDashboardPage />} />
-          <Route path="logistics" element={<LogisticsPage />} />
-          <Route path="reports/trade-overview" element={<ReportTradeOverviewPage />} />
+          <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.trade} />}>
+            <Route path="trade/cases" element={<TradeCasesPage />} />
+            <Route path="trade/cases/:caseId" element={<TradeCaseDetailPage />} />
+            <Route path="trade/dashboard" element={<TradeDashboardPage />} />
+            <Route path="logistics" element={<LogisticsPage />} />
+            <Route path="logistics/packing-lists/:id" element={<PackingListDetailPage />} />
+          </Route>
+          <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.reports} />}>
+            <Route path="reports/trade-overview" element={<ReportTradeOverviewPage />} />
+          </Route>
         </Route>
         <Route path="followup" element={<FollowupPage />} />
         <Route path="parties" element={<PartiesPage />} />
@@ -761,6 +1018,27 @@ export function AppProtectedRouter() {
           <Route path="accounts/reports/trial-balance" element={<TrialBalancePage />} />
           <Route path="accounts/reports/financial-statements" element={<FinancialStatementsPage />} />
           <Route path="accounts/reports/ar-ap-aging" element={<ArApAgingReportPage />} />
+          <Route path="finance/party-ledgers" element={<PartyLedgersPage />} />
+          <Route path="finance/party-ledgers/new" element={<PartyLedgerCreatePage />} />
+          <Route path="finance/party-ledgers/:id" element={<PartyLedgerDetailPage />} />
+          <Route path="finance/tax-ledgers" element={<TaxLedgersPage />} />
+          <Route path="finance/gst/returns" element={<GstReturnsPage />} />
+          <Route path="finance/gst/settings" element={<TaxSettingsPage />} />
+          <Route path="finance/voucher-types" element={<VoucherTypeConfigPage />} />
+          <Route path="finance/voucher-classes" element={<VoucherClassPage />} />
+          <Route path="finance/recurring-vouchers" element={<RecurringVouchersPage />} />
+          <Route path="finance/registers/post-dated" element={<PostDatedRegisterPage />} />
+          <Route path="finance/registers/memorandum" element={<MemorandumRegisterPage />} />
+          <Route path="finance/credit-notes/new" element={<CreditNoteCreatePage />} />
+          <Route path="finance/debit-notes/new" element={<DebitNoteCreatePage />} />
+          <Route path="finance/stock-transfer-vouchers/new" element={<StockTransferCreatePage />} />
+          <Route path="finance/tds" element={<TdsSettingsPage />} />
+          <Route path="finance/tds/reports" element={<TdsReportsPage />} />
+          <Route path="finance/mis" element={<FinancialDashboardPage />} />
+          <Route path="finance/mis/fund-flow" element={<FundFlowPage />} />
+          <Route path="finance/mis/ratios" element={<RatioAnalysisMisPage />} />
+          <Route path="finance/mis/comparative" element={<ComparativeStatementsPage />} />
+          <Route path="finance/mis/cash-scenarios" element={<CashFlowScenarioPage />} />
           <Route path="accounts/reports/ledger-activity" element={<LedgerActivityPage />} />
           <Route path="accounts/reports/voucher-analytics" element={<VoucherAnalyticsPage />} />
           <Route path="accounts/reports/group-summary" element={<GroupSummaryPage />} />
@@ -788,6 +1066,7 @@ export function AppProtectedRouter() {
           <Route path="hr/designations" element={<HrDesignationsPage />} />
           <Route path="hr/sections" element={<HrSectionsPage />} />
           <Route path="hr/employees" element={<HrEmployeesPage />} />
+          <Route path="hr/employees/ai-onboard" element={<AiEmployeeOnboardingPage />} />
           <Route path="hr/employees/:employeeId" element={<HrEmployeeDetailPage />} />
           <Route path="hr/attendance/shifts" element={<HrShiftsPage />} />
           <Route path="hr/attendance/holidays" element={<HrAttendanceHolidaysPage />} />
@@ -806,10 +1085,12 @@ export function AppProtectedRouter() {
           <Route path="hr/payroll/components" element={<HrPayrollComponentsPage />} />
           <Route path="hr/payroll/periods" element={<HrPayrollPeriodsPage />} />
           <Route path="hr/payroll/salary-structures" element={<HrSalaryStructuresPage />} />
+          <Route path="hr/payroll/assignments" element={<PayrollEmployeeAssignmentPage />} />
           <Route path="hr/payroll/runs" element={<HrPayrollRunsPage />} />
           <Route path="hr/payroll/advances" element={<HrPayrollAdvancesPage />} />
           <Route path="hr/payroll/bonuses" element={<HrPayrollBonusesPage />} />
           <Route path="hr/payroll/accounting-config" element={<HrPayrollAccountingConfigPage />} />
+          <Route path="hr/payroll/statutory" element={<PayrollStatutoryConfigPage />} />
           <Route path="hr/payroll/approvals" element={<HrPayrollApprovalsPage />} />
           <Route path="hr/payroll/payslips" element={<HrPayslipsPage />} />
           <Route path="hr/performance/cycles" element={<HrPerformanceCyclesPage />} />
@@ -826,6 +1107,7 @@ export function AppProtectedRouter() {
           <Route path="hr/ess/payslips" element={<HrMyPayslipsPage />} />
           <Route path="hr/ess/tickets" element={<HrEssTicketsPage />} />
           <Route path="hr/compliance" element={<HrCompliancePage />} />
+          <Route path="hr/ai-insights" element={<HrAiInsightsPage />} />
           <Route path="hr/reports" element={<HrReportsDashboardPage />} />
         </Route>
         <Route path="approvals" element={<AllApprovalsPage />} />

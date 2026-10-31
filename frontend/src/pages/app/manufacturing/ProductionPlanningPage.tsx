@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 
 import { api, type InventoryItemResponse, type MfgProductionPlanCreate, type MfgMrpRunCreate } from "@/api/client";
@@ -7,6 +7,7 @@ import { AIInsightsBar } from "@/components/production/planning/AIInsightsBar";
 import { AISuggestionModal } from "@/components/production/planning/AISuggestionModal";
 import { CapacityHeatmap } from "@/components/production/planning/CapacityHeatmap";
 import { ChainStatusPills } from "@/components/production/planning/ChainStatusPills";
+import { PredictiveManufacturingCard } from "@/components/production/planning/PredictiveManufacturingCard";
 import { ReadinessDetailPanel } from "@/components/production/planning/ReadinessDetailPanel";
 import { useAIPlanningInsights } from "@/hooks/useAIPlanningInsights";
 import { useProductionPipeline, type PipelineViewMode } from "@/hooks/useProductionPipeline";
@@ -38,7 +39,7 @@ function matchesFilter(
   if (statusFilter === "allocated" && lineSt !== "ready") return false;
 
   if (q.trim()) {
-    const hay = `${row.order_code} ${row.style_ref ?? ""} ${r.style_code ?? ""} ${r.style_name ?? ""}`.toLowerCase();
+    const hay = `${row.order_id} ${row.order_code} ${row.style_ref ?? ""} ${r.style_code ?? ""} ${r.style_name ?? ""}`.toLowerCase();
     if (!hay.includes(q.trim().toLowerCase())) return false;
   }
 
@@ -49,16 +50,18 @@ function matchesFilter(
 }
 
 export function ProductionPlanningPage() {
+  const [searchParams] = useSearchParams();
+  const orderIdFromUrl = Number(searchParams.get("order_id") || 0) || null;
   const [tab, setTab] = useState<TabKey>("pipeline");
   const [view, setView] = useState<PipelineViewMode>("order");
   const { loading, error, orderRows, styleGroups, reload } = useProductionPipeline(view);
   const { summary, loading: aiLoading, refresh: refreshAi } = useAIPlanningInsights();
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [searchQ, setSearchQ] = useState("");
+  const [searchQ, setSearchQ] = useState(() => (orderIdFromUrl ? String(orderIdFromUrl) : ""));
   const [deliveryFrom, setDeliveryFrom] = useState<string | null>(null);
   const [deliveryTo, setDeliveryTo] = useState<string | null>(null);
-  const [expandedOrder, setExpandedOrder] = useState<number | null>(null); // null = none expanded
+  const [expandedOrder, setExpandedOrder] = useState<number | null>(orderIdFromUrl);
   const [selectedChainKey, setSelectedChainKey] = useState<string | null>(null);
 
   const [suggestOpen, setSuggestOpen] = useState(false);
@@ -91,6 +94,11 @@ export function ProductionPlanningPage() {
   const [plans, setPlans] = useState<Awaited<ReturnType<typeof api.listMfgProductionPlans>>>([]);
   const [histError, setHistError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [releaseConfirmPlanId, setReleaseConfirmPlanId] = useState<number | null>(null);
+  const [releaseBusy, setReleaseBusy] = useState(false);
+  const [releasePreview, setReleasePreview] = useState<{ woCount: number; materialCount: number } | null>(null);
+  const [releaseToast, setReleaseToast] = useState("");
+  const [workOrders, setWorkOrders] = useState<Awaited<ReturnType<typeof api.listMfgWorkOrders>>>([]);
   const [form, setForm] = useState<MfgProductionPlanCreate>({
     period_start: todayIso(),
     period_end: todayIso(),
@@ -101,9 +109,14 @@ export function ProductionPlanningPage() {
   const loadHistory = useCallback(async () => {
     setHistError("");
     try {
-      const [itemRows, planRows] = await Promise.all([api.listInventoryItems(), api.listMfgProductionPlans()]);
+      const [itemRows, planRows, woRows] = await Promise.all([
+        api.listInventoryItems(),
+        api.listMfgProductionPlans(),
+        api.listMfgWorkOrders().catch(() => []),
+      ]);
       setItems(itemRows);
       setPlans(planRows);
+      setWorkOrders(woRows);
       if (itemRows[0]) {
         const firstItem = itemRows[0];
         setLine((prev) => (!prev.item_id && firstItem ? { ...prev, item_id: firstItem.id } : prev));
@@ -247,6 +260,45 @@ export function ProductionPlanningPage() {
     }
   };
 
+  const releaseToShopFloor = async (planIdRelease: number) => {
+    setReleaseBusy(true);
+    setHistError("");
+    try {
+      // Generation is idempotent and may report "already generated"; release below is the source of truth.
+      await api.generateMfgWorkOrders(planIdRelease).catch((e) => logApiError("ProductionPlanningPage.generateWorkOrders", e));
+      const res = await api.releaseWorkOrdersToShopFloor({ plan_id: planIdRelease });
+      setReleaseConfirmPlanId(null);
+      setReleasePreview(null);
+      await loadHistory();
+      if (!res.released) {
+        setHistError(res.message || "No planned work orders to release for this plan.");
+      } else {
+        const mat = Number((res as { material_count_estimate?: number }).material_count_estimate ?? 0);
+        setReleaseToast(
+          `${res.released} work order(s) released${mat ? `. ~${mat} material line(s) linked to order BOM(s).` : "."}`,
+        );
+        window.setTimeout(() => setReleaseToast(""), 6000);
+      }
+    } catch (e) {
+      setHistError(e instanceof Error ? e.message : "Failed to release work orders");
+      setReleaseConfirmPlanId(null);
+      setReleasePreview(null);
+    } finally {
+      setReleaseBusy(false);
+    }
+  };
+
+  const planReleaseStatus = (plan: (typeof plans)[number]) => {
+    const lineIds = new Set(plan.lines.map((l) => l.id));
+    const related = workOrders.filter((w) => w.plan_line_id != null && lineIds.has(w.plan_line_id));
+    const released = related.filter((w) => (w.status || "").toLowerCase() === "released").length;
+    const planned = related.filter((w) => (w.status || "").toLowerCase() === "planned").length;
+    const status = (plan.status || "").toLowerCase();
+    if (released > 0 && planned === 0 && related.length > 0) return { label: "Released", tone: "green" as const, planned, released };
+    if (status === "approved" || planned > 0) return { label: "Ready to Release", tone: "yellow" as const, planned, released };
+    return { label: "Not Ready", tone: "gray" as const, planned, released };
+  };
+
   return (
     <div className="space-y-6">
       <AppPageHeader
@@ -278,6 +330,7 @@ export function ProductionPlanningPage() {
       {tab === "pipeline" ? (
         <>
           <AIInsightsBar summary={summary} loading={aiLoading} onRefresh={() => void refreshAi()} />
+          <PredictiveManufacturingCard />
 
           <div className="rounded-xl border border-border bg-surface-raised p-4">
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -758,38 +811,90 @@ export function ProductionPlanningPage() {
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
+            {releaseToast ? (
+              <div className="border-b border-status-success/30 bg-status-success-subtle px-4 py-2 text-sm text-status-success-foreground">
+                {releaseToast}
+              </div>
+            ) : null}
             <table className="min-w-full text-sm">
               <thead className="bg-surface-subtle text-left text-text-secondary">
                 <tr>
                   <th className="px-4 py-2">Plan Code</th>
                   <th className="px-4 py-2">Period</th>
                   <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">Release Status</th>
                   <th className="px-4 py-2">Lines</th>
                   <th className="px-4 py-2">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {plans.map((row) => (
+                {plans.map((row) => {
+                  const rel = planReleaseStatus(row);
+                  const canRelease =
+                    (row.status || "").toLowerCase() === "approved" || rel.planned > 0 || rel.tone === "yellow";
+                  return (
                   <tr key={row.id} className="border-t">
                     <td className="px-4 py-2 font-medium">{row.plan_code}</td>
                     <td className="px-4 py-2">
                       {row.period_start} to {row.period_end}
                     </td>
                     <td className="px-4 py-2">{row.status}</td>
+                    <td className="px-4 py-2">
+                      <span
+                        className={
+                          rel.tone === "green"
+                            ? "rounded-full bg-status-success-subtle px-2 py-0.5 text-xs text-status-success-foreground"
+                            : rel.tone === "yellow"
+                              ? "rounded-full bg-status-warning-subtle px-2 py-0.5 text-xs text-status-warning-foreground"
+                              : "rounded-full bg-surface-subtle px-2 py-0.5 text-xs text-text-muted"
+                        }
+                      >
+                        {rel.label}
+                      </span>
+                    </td>
                     <td className="px-4 py-2">{row.lines.length}</td>
                     <td className="px-4 py-2">
-                      <button
-                        className="rounded border px-2 py-1 text-xs"
-                        onClick={() => void generateWorkOrders(row.id)}
-                      >
-                        Generate WOs
-                      </button>
+                      <div className="flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          className="rounded border px-2 py-1 text-xs"
+                          onClick={() => void generateWorkOrders(row.id)}
+                        >
+                          Generate WOs
+                        </button>
+                        <button
+                          type="button"
+                          className={
+                            canRelease
+                              ? "rounded border border-status-success bg-status-success-subtle px-2 py-1 text-xs font-semibold text-status-success-foreground"
+                              : "rounded border border-border px-2 py-1 text-xs text-text-muted"
+                          }
+                          disabled={!canRelease}
+                          onClick={() => {
+                            const lineIds = new Set(row.lines.map((l) => l.id));
+                            const planned = workOrders.filter(
+                              (w) =>
+                                w.plan_line_id != null &&
+                                lineIds.has(w.plan_line_id) &&
+                                (w.status || "").toLowerCase() === "planned",
+                            ).length;
+                            setReleasePreview({
+                              woCount: planned || row.lines.length,
+                              materialCount: row.lines.length,
+                            });
+                            setReleaseConfirmPlanId(row.id);
+                          }}
+                        >
+                          Release to Shop Floor
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {plans.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-8 text-center text-text-muted" colSpan={5}>
+                    <td className="px-4 py-8 text-center text-text-muted" colSpan={6}>
                       No production plans found.
                     </td>
                   </tr>
@@ -811,6 +916,52 @@ export function ProductionPlanningPage() {
           window.location.href = "/app/production/line-plan";
         }}
       />
+
+      {releaseConfirmPlanId != null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !releaseBusy && setReleaseConfirmPlanId(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-border bg-surface-raised p-4 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-text-primary">Release to Shop Floor?</h3>
+            <p className="mt-2 text-sm text-text-secondary">
+              This will release {releasePreview?.woCount ?? "?"} work order(s) to shop floor.
+              {releasePreview?.materialCount
+                ? ` About ${releasePreview.materialCount} plan line material(s) may need WIP issue.`
+                : ""}{" "}
+              Proceed?
+            </p>
+            <p className="mt-1 text-sm text-text-muted">
+              Generates any missing work orders for plan #{releaseConfirmPlanId}, then sets planned work orders to{" "}
+              <strong>released</strong> so the shop floor can start them.
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border px-3 py-1.5 text-sm"
+                disabled={releaseBusy}
+                onClick={() => {
+                  setReleaseConfirmPlanId(null);
+                  setReleasePreview(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-status-success px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                disabled={releaseBusy}
+                onClick={() => void releaseToShopFloor(releaseConfirmPlanId)}
+              >
+                {releaseBusy ? "Releasing…" : "Confirm release"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

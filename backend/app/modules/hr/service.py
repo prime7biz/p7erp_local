@@ -62,6 +62,7 @@ async def export_employees_excel(db: AsyncSession, tenant_id: int) -> bytes:
         "joining_date",
         "employment_type",
         "is_active",
+        "date_of_birth",
     ]
     ws.append(headers)
     result = await db.execute(select(Employee).where(Employee.tenant_id == tenant_id).order_by(Employee.employee_code))
@@ -80,6 +81,7 @@ async def export_employees_excel(db: AsyncSession, tenant_id: int) -> bytes:
                 emp.joining_date.isoformat() if emp.joining_date else "",
                 emp.employment_type or "",
                 "Y" if emp.is_active else "N",
+                emp.date_of_birth.isoformat() if emp.date_of_birth else "",
             ]
         )
     buf = io.BytesIO()
@@ -87,9 +89,28 @@ async def export_employees_excel(db: AsyncSession, tenant_id: int) -> bytes:
     return buf.getvalue()
 
 
+def _parse_excel_date(raw: Any) -> date | None:
+    if raw in (None, ""):
+        return None
+    if isinstance(raw, datetime):
+        return raw.date()
+    if isinstance(raw, date):
+        return raw
+    from datetime import datetime as dtmod
+
+    try:
+        return dtmod.fromisoformat(str(raw)[:10]).date()
+    except ValueError:
+        return None
+
+
 async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, file: UploadFile) -> dict[str, Any]:
     from openpyxl import load_workbook
 
+    from app.common.tenant_feature_keys import is_age_verification_required
+    from app.modules.hr_compliance.service import assert_dob_allowed
+
+    age_required = is_age_verification_required(tenant.feature_flags)
     raw = await file.read()
     wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
     ws = wb.active
@@ -128,23 +149,19 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
                 if not s or s.tenant_id != tenant.id:
                     sec_id = None
             cat = str(row[8] or "").strip() or None
-            join_raw = row[9]
-            join_date: date | None = None
-            if join_raw:
-                if isinstance(join_raw, datetime):
-                    join_date = join_raw.date()
-                elif isinstance(join_raw, date):
-                    join_date = join_raw
-                else:
-                    from datetime import datetime as dtmod
+            join_date = _parse_excel_date(row[9] if len(row) > 9 else None)
+            emp_type = str(row[10] or "").strip() or None if len(row) > 10 else None
+            active = str(row[11] or "Y").upper() in {"Y", "YES", "TRUE", "1"} if len(row) > 11 else True
+            dob_raw = row[12] if len(row) > 12 else None
+            dob = _parse_excel_date(dob_raw)
 
-                    try:
-                        join_date = dtmod.fromisoformat(str(join_raw)[:10]).date()
-                    except ValueError:
-                        join_date = None
-            emp_type = str(row[10] or "").strip() or None
-            active = str(row[11] or "Y").upper() in {"Y", "YES", "TRUE", "1"}
             if existing:
+                dob_for_gate = dob if dob is not None else existing.date_of_birth
+                try:
+                    assert_dob_allowed(dob_for_gate, required=age_required)
+                except HTTPException as he:
+                    errors.append(f"Row {idx}: {he.detail}")
+                    continue
                 existing.first_name = first_name
                 existing.last_name = str(row[2] or "").strip() or None
                 existing.email = str(row[3] or "").strip() or None
@@ -156,8 +173,15 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
                 existing.joining_date = join_date
                 existing.employment_type = emp_type
                 existing.is_active = active
+                if dob is not None:
+                    existing.date_of_birth = dob
                 updated += 1
             else:
+                try:
+                    assert_dob_allowed(dob, required=age_required)
+                except HTTPException as he:
+                    errors.append(f"Row {idx}: {he.detail}")
+                    continue
                 db.add(
                     Employee(
                         tenant_id=tenant.id,
@@ -173,6 +197,7 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
                         joining_date=join_date,
                         employment_type=emp_type,
                         is_active=active,
+                        date_of_birth=dob,
                     )
                 )
                 created += 1

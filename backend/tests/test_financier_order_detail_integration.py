@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -112,7 +112,7 @@ async def test_enriched_order_detail_and_recovery_after_demo_seed(db_session_int
         pipeline_status="ORDER_CONFIRMED",
         master_contract_id=mc.id,
         order_date=today,
-        delivery_date=today.replace(month=((today.month % 12) + 1)),
+        delivery_date=today + timedelta(days=30),
         quantity=1000,
         commercial_snapshot_json={"target_fob": "12.5", "currency": "USD"},
     )

@@ -96,7 +96,12 @@ def normalize_numeric_string(value: str | int | float | None) -> str | None:
         return None
     try:
         d = Decimal(s.replace(",", ""))
-        return format(d.normalize(), "f").rstrip("0").rstrip(".") if "." in format(d, "f") else str(int(d))
+        # Format without scientific notation; only strip fractional trailing zeros
+        # (do not call normalize() first — "50000.00" → 5E+4 → rstrip("0") → "5").
+        formatted = format(d, "f")
+        if "." in formatted:
+            formatted = formatted.rstrip("0").rstrip(".")
+        return formatted
     except (InvalidOperation, ValueError):
         return None
 

@@ -141,39 +141,20 @@ async def build_merch_control_tower_summary(db: AsyncSession, *, tenant_id: int)
         or 0
     )
 
-    # BOM status buckets (case-insensitive)
-    bom_draft = int(
-        await db.scalar(
-            select(func.count())
+    # BOM status buckets — one GROUP BY instead of four COUNT queries
+    bom_rows = (
+        await db.execute(
+            select(func.upper(Bom.status), func.count())
             .select_from(Bom)
-            .where(Bom.tenant_id == tenant_id, Bom.is_active.is_(True), func.upper(Bom.status) == "DRAFT")
+            .where(Bom.tenant_id == tenant_id, Bom.is_active.is_(True))
+            .group_by(func.upper(Bom.status))
         )
-        or 0
-    )
-    bom_sub = int(
-        await db.scalar(
-            select(func.count())
-            .select_from(Bom)
-            .where(Bom.tenant_id == tenant_id, Bom.is_active.is_(True), func.upper(Bom.status) == "SUBMITTED")
-        )
-        or 0
-    )
-    bom_app = int(
-        await db.scalar(
-            select(func.count())
-            .select_from(Bom)
-            .where(Bom.tenant_id == tenant_id, Bom.is_active.is_(True), func.upper(Bom.status) == "APPROVED")
-        )
-        or 0
-    )
-    bom_fr = int(
-        await db.scalar(
-            select(func.count())
-            .select_from(Bom)
-            .where(Bom.tenant_id == tenant_id, Bom.is_active.is_(True), func.upper(Bom.status) == "FROZEN")
-        )
-        or 0
-    )
+    ).all()
+    bom_map = {str(st or ""): int(cnt or 0) for st, cnt in bom_rows}
+    bom_draft = bom_map.get("DRAFT", 0)
+    bom_sub = bom_map.get("SUBMITTED", 0)
+    bom_app = bom_map.get("APPROVED", 0)
+    bom_fr = bom_map.get("FROZEN", 0)
 
     tna_all = int(
         await db.scalar(
@@ -249,6 +230,35 @@ async def build_merch_control_tower_summary(db: AsyncSession, *, tenant_id: int)
         or 0
     )
 
+    otd_at_risk = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(Order)
+            .where(
+                Order.tenant_id == tenant_id,
+                Order.delivery_date.isnot(None),
+                Order.delivery_date <= soon,
+                Order.pipeline_status.notin_(_PIPELINE_DONE),
+                Order.status.notin_(("CANCELLED",)),
+            )
+        )
+        or 0
+    )
+    otd_overdue = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(Order)
+            .where(
+                Order.tenant_id == tenant_id,
+                Order.delivery_date.isnot(None),
+                Order.delivery_date < today,
+                Order.pipeline_status.notin_(_PIPELINE_DONE),
+                Order.status.notin_(("CANCELLED",)),
+            )
+        )
+        or 0
+    )
+
     return MerchControlTowerSummaryOut(
         generated_at=_utc_now(),
         inquiries_needing_action=CountAndDate(count=inq_count, oldest_date=oldest_day),
@@ -269,4 +279,6 @@ async def build_merch_control_tower_summary(db: AsyncSession, *, tenant_id: int)
         planning_risk=planning,
         sample_pending=sample_pending,
         sample_overdue_target=sample_overdue_target,
+        otd_at_risk=otd_at_risk,
+        otd_overdue=otd_overdue,
     )

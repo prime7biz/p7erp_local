@@ -54,6 +54,23 @@ export interface InquiryExtractionResponse {
   warnings: string[];
 }
 
+/** LC / master-contract document extraction — same field map shape as customer + Phase 4 alerts. */
+export interface LcExtractionResponse extends Omit<CustomerExtractionResponse, "duplicate_warnings"> {
+  alerts?: Array<{ severity?: string; code?: string; message?: string }>;
+  suggest_create_master_contract?: boolean;
+  duplicate_warnings?: DuplicateWarning[];
+}
+
+/** Shipping document (BL/AWB/packing list) extraction. */
+export interface ShippingDocExtractionResponse extends Omit<CustomerExtractionResponse, "duplicate_warnings"> {
+  alerts?: Array<{ severity?: string; code?: string; message?: string }>;
+  suggested_status?: string | null;
+  matched_shipment_id?: number | null;
+  matched_shipment_reference?: string | null;
+  match_hint?: string | null;
+  duplicate_warnings?: DuplicateWarning[];
+}
+
 export type ExtractionStatus = "idle" | "uploading" | "extracted" | "partial" | "failed";
 
 export type ConflictResolutionChoice = "keep" | "use_extracted" | "merge";

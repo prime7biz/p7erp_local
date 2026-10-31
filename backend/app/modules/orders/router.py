@@ -52,17 +52,26 @@ from app.modules.orders.commercial_snapshot_service import (
 from app.modules.orders.order_list_summary_service import build_order_list_summaries
 from app.modules.orders.schemas import (
   OrderCommercialAlignmentOut,
+  OrderCostVarianceOut,
   OrderCreate,
   OrderFinancialStatusOut,
   OrderListPageResponse,
   OrderMilestoneStepOut,
   OrderMilestonesOut,
+  OrderNextRequiredActionOut,
   OrderPipelineSettingsPatch,
+  OrderProfitabilitySummaryPageOut,
   OrderResponse,
   OrderSewingLineSummaryOut,
   OrderUpdate,
+  PendingPriceVerificationItemOut,
   PromiseCheckLine,
   PromiseCheckOut,
+)
+from app.modules.merch.costing_variance_service import (
+  build_order_cost_variance,
+  list_order_profitability_summary,
+  list_pending_price_verifications,
 )
 from app.modules.orders.commercial_change_authz import require_commercial_capability
 from app.modules.orders.commercial_fields import list_order_commercial_patch_violations
@@ -126,6 +135,7 @@ def _to_order_response(
   quotation_code: str | None = None,
   financial_status: OrderFinancialStatusOut | None = None,
   sewing_line_summary: OrderSewingLineSummaryOut | None = None,
+  related_counts: dict | None = None,
 ) -> OrderResponse:
   commission_value = float(order.commission_value) if order.commission_value is not None else None
   snap = order.commercial_snapshot_json if isinstance(order.commercial_snapshot_json, dict) else None
@@ -135,6 +145,11 @@ def _to_order_response(
     book = resolve_commercial_book_currency(tenant, doc_ccy)
   rm_pct = getattr(order, "rm_received_pct", None)
   rm_out = float(rm_pct) if rm_pct is not None else None
+  from app.modules.orders.schemas import OrderRelatedCountsOut
+
+  rc = None
+  if related_counts is not None:
+    rc = OrderRelatedCountsOut.model_validate(related_counts)
   return OrderResponse(
     id=order.id,
     tenant_id=order.tenant_id,
@@ -167,6 +182,7 @@ def _to_order_response(
     quotation_code=quotation_code,
     financial_status=financial_status,
     sewing_line_summary=sewing_line_summary,
+    related_counts=rc,
   )
 
 
@@ -261,6 +277,7 @@ async def _auto_generate_followup_actions_if_missing(
         is_active=template.is_active,
         planned_date=planned_date,
         status="pending",
+        milestone_type=template.code,
       )
     )
 
@@ -647,6 +664,44 @@ async def get_planning_grounding_summary(
   return await compute_planning_grounding_summaries(db, tenant_id=tenant.id, order_ids=ids)
 
 
+@router.get("/profitability-summary", response_model=OrderProfitabilitySummaryPageOut)
+async def get_orders_profitability_summary(
+  status_filter: str | None = Query(default=None, alias="status", description="Optional order status filter"),
+  page: int = Query(default=1, ge=1),
+  page_size: int = Query(default=25, ge=1, le=100),
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  """Paginated owner cost visibility summary (tentative vs actual material cost)."""
+  if user.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+  page_size = clamp_page_size(page_size)
+  page = max(1, page)
+  payload = await list_order_profitability_summary(
+    db,
+    tenant_id=tenant.id,
+    status_filter=status_filter,
+    page=page,
+    page_size=page_size,
+  )
+  return OrderProfitabilitySummaryPageOut.model_validate(payload)
+
+
+@router.get("/pending-price-verifications", response_model=list[PendingPriceVerificationItemOut])
+async def get_pending_price_verifications(
+  limit: int = Query(default=50, ge=1, le=100),
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  """Orders with red (>10%) cost variance — owner should verify purchase prices."""
+  if user.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+  items = await list_pending_price_verifications(db, tenant_id=tenant.id, limit=limit)
+  return [PendingPriceVerificationItemOut.model_validate(x) for x in items]
+
+
 @router.get("/{order_id}/materials")
 async def get_order_materials(
   order_id: int,
@@ -691,6 +746,10 @@ async def get_order(
       or 0
     )
 
+  from app.modules.orders.related_counts_service import build_order_related_counts
+
+  related_counts = await build_order_related_counts(db, tenant_id=tenant.id, order_id=order.id)
+
   return _to_order_response(
     order,
     ai_indicators=compute_order_ai_indicators(
@@ -700,6 +759,7 @@ async def get_order(
     if ai_indicators
     else None,
     tenant=tenant,
+    related_counts=related_counts,
   )
 
 
@@ -723,6 +783,22 @@ async def get_order_commercial_alignment(
       live_q = None
   payload = build_commercial_alignment_payload(tenant=tenant, order=order, live_quotation=live_q)
   return OrderCommercialAlignmentOut.model_validate(payload)
+
+
+@router.get("/{order_id}/cost-variance", response_model=OrderCostVarianceOut)
+async def get_order_cost_variance(
+  order_id: int,
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  """Tentative (quote/BOM) vs actual (PO/GRN) material cost variance for an order."""
+  if user.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+  payload = await build_order_cost_variance(db, tenant_id=tenant.id, order_id=order_id)
+  if not payload:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+  return OrderCostVarianceOut.model_validate(payload)
 
 
 @router.get("/{order_id}/promise-check", response_model=PromiseCheckOut)
@@ -946,6 +1022,7 @@ async def get_order_milestones(
   payload = await build_milestone_payload(db, tenant_id=tenant.id, order_id=order_id)
   steps_raw = payload.get("steps") or []
   steps = [OrderMilestoneStepOut(**s) for s in steps_raw]
+  nra = payload.get("next_required_action")
   return OrderMilestonesOut(
     pipeline_status=payload.get("pipeline_status") or order.pipeline_status,
     rm_inhouse_pct=float(payload.get("rm_inhouse_pct") or 0),
@@ -953,6 +1030,7 @@ async def get_order_milestones(
     tna_warnings=payload.get("tna_warnings") or [],
     pipeline_na_steps=payload.get("pipeline_na_steps") or [],
     order_type=payload.get("order_type"),
+    next_required_action=OrderNextRequiredActionOut(**nra) if isinstance(nra, dict) else None,
   )
 
 
@@ -980,6 +1058,7 @@ async def patch_order_pipeline_settings(
   await db.refresh(order)
   payload = await build_milestone_payload(db, tenant_id=tenant.id, order_id=order_id)
   steps = [OrderMilestoneStepOut(**s) for s in (payload.get("steps") or [])]
+  nra = payload.get("next_required_action")
   return OrderMilestonesOut(
     pipeline_status=payload.get("pipeline_status") or order.pipeline_status,
     rm_inhouse_pct=float(payload.get("rm_inhouse_pct") or 0),
@@ -987,6 +1066,7 @@ async def patch_order_pipeline_settings(
     tna_warnings=payload.get("tna_warnings") or [],
     pipeline_na_steps=payload.get("pipeline_na_steps") or [],
     order_type=payload.get("order_type"),
+    next_required_action=OrderNextRequiredActionOut(**nra) if isinstance(nra, dict) else None,
   )
 
 

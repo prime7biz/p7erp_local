@@ -10,6 +10,8 @@ import {
   type InventoryGlPostingDetail,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { LinkedRecordsSection } from "@/components/app/LinkedRecordsSection";
+import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
 import { GlPostingsPanel } from "@/components/inventory/GlPostingsPanel";
 import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocumentPrintSheets";
 import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
@@ -200,6 +202,23 @@ export function GatePassDetailPage() {
       <AppPageHeader
         title={row.gate_pass_code}
         description={`${row.status} · ${row.purpose}`}
+        belowTitle={
+          <WorkflowSummaryStrip
+            items={[
+              { label: "Status", value: row.status },
+              { label: "Purpose", value: row.purpose || "—" },
+              ...(row.challan_id
+                ? [
+                    {
+                      label: "Challan",
+                      value: `#${row.challan_id}`,
+                      to: `/app/inventory/delivery-challans/${row.challan_id}`,
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        }
         actions={
           <div className="flex flex-wrap gap-2">
             <button
@@ -217,6 +236,25 @@ export function GatePassDetailPage() {
             </Link>
           </div>
         }
+      />
+
+      <LinkedRecordsSection
+        title="Linked records"
+        columns={[
+          {
+            title: "Delivery challans",
+            rows: row.challan_id
+              ? [
+                  {
+                    id: row.challan_id,
+                    label: challans.find((c) => c.id === row.challan_id)?.challan_code ?? `Challan #${row.challan_id}`,
+                    sub: challans.find((c) => c.id === row.challan_id)?.customer_name ?? undefined,
+                    to: `/app/inventory/delivery-challans/${row.challan_id}`,
+                  },
+                ]
+              : [],
+          },
+        ]}
       />
 
       {row.verification_id && vUrl ? (

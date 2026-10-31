@@ -50,5 +50,22 @@ def decimal_to_rate_response(value: Any) -> str:
     return format_rate(value) or "1.000000"
 
 
+def decimal_money_passthrough(value: Any) -> Any:
+    """Pydantic before-validator for str money fields fed from Numeric ORM columns.
+
+    Only Decimal/float inputs are formatted; strings and None pass through unchanged
+    so routes that already pre-format keep their exact output.
+    """
+    if isinstance(value, (Decimal, float)):
+        return decimal_to_money_response(value)
+    return value
+
+
+def decimal_rate_passthrough(value: Any) -> Any:
+    if isinstance(value, (Decimal, float)):
+        return decimal_to_rate_response(value)
+    return value
+
+
 def decimal_to_pct_response(value: Any) -> str:
     return format_pct(parse_money(value)) or "0.0000"

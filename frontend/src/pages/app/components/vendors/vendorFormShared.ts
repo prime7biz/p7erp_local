@@ -9,7 +9,7 @@ import type { VendorCreate, VendorResponse, VendorUpdate } from "@/api/client";
 export type VendorFormSnapshot = Record<string, string | null>;
 
 export const VENDOR_FORM_BASE_INPUT =
-  "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring";
+  "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0";
 
 function s(v: string | null | undefined): string | null {
   if (v == null) return null;

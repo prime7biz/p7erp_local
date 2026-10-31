@@ -163,7 +163,7 @@ async def ai_analyze_server(
         f"METRICS_JSON:\n{json.dumps(payload, default=str)}"
     )
 
-    raw = generate_text_sync(prompt)
+    raw = await asyncio.to_thread(generate_text_sync, prompt)
     if not raw:
         raise HTTPException(
             status_code=503,

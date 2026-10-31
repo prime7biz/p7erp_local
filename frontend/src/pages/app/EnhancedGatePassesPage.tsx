@@ -5,6 +5,9 @@ import {
   type EnhancedGatePassResponse,
   type InventoryDocumentPrintPayload,
 } from "@/api/client";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { listPageRootClass } from "@/components/app/listPageLayout";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import {
   InventoryEmptyState,
   InventoryErrorPanel,
@@ -21,7 +24,7 @@ export function EnhancedGatePassesPage() {
   const [rows, setRows] = useState<EnhancedGatePassResponse[]>([]);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
   const [loading, setLoading] = useState(true);
   const [printOpen, setPrintOpen] = useState(false);
   const [printData, setPrintData] = useState<InventoryDocumentPrintPayload | null>(null);
@@ -39,12 +42,6 @@ export function EnhancedGatePassesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    const close = () => setOpenActionsId(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
   }, []);
 
   useEffect(() => {
@@ -80,19 +77,19 @@ export function EnhancedGatePassesPage() {
   }
 
   return (
-    <div className="min-w-0 space-y-6 touch-manipulation">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-brand-primary">Enhanced Gate Passes</h1>
-          <p className="text-sm text-text-muted">Yard release with approval, guard acknowledgement & verified print.</p>
-        </div>
-        <Link
-          to="/app/inventory/enhanced-gate-passes/new"
-          className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-brand-primary px-4 py-3 text-base font-semibold text-brand-primary-foreground hover:opacity-95 sm:text-sm"
-        >
-          New gate pass
-        </Link>
-      </div>
+    <div className={`${listPageRootClass} touch-manipulation`}>
+      <AppPageHeader
+        title="Enhanced Gate Passes"
+        description="Yard release with approval, guard acknowledgement & verified print."
+        actions={
+          <Link
+            to="/app/inventory/enhanced-gate-passes/new"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-brand-primary px-4 py-3 text-base font-semibold text-brand-primary-foreground hover:opacity-95 sm:text-sm"
+          >
+            New gate pass
+          </Link>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {["DRAFT", "SUBMITTED", "APPROVED", "RELEASED", "REJECTED"].map((s) => (
@@ -148,40 +145,15 @@ export function EnhancedGatePassesPage() {
                     {row.challan_id ? `#${row.challan_id}` : "—"}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <div className="relative inline-block text-left">
-                      <button
-                        type="button"
-                        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenActionsId((id) => (id === row.id ? null : row.id));
-                        }}
-                      >
-                        Actions
-                      </button>
-                      {openActionsId === row.id ? (
-                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                          <Link
-                            to={`/app/inventory/enhanced-gate-passes/${row.id}`}
-                            className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            onClick={() => setOpenActionsId(null)}
-                          >
-                            View
-                          </Link>
-                          <button
-                            type="button"
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenActionsId(null);
-                              void openPrintForRow(row);
-                            }}
-                          >
-                            Print
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
+                    <RowActionsMenu
+                      rowId={row.id}
+                      openId={openActionsId}
+                      onOpenChange={setOpenActionsId}
+                      items={[
+                        { key: "view", label: "View", href: `/app/inventory/enhanced-gate-passes/${row.id}` },
+                        { key: "print", label: "Print", onClick: () => void openPrintForRow(row) },
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}

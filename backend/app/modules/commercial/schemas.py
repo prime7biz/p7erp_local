@@ -85,6 +85,13 @@ class ExportCaseCreate(BaseModel):
     amount: float | None = Field(None, ge=0)
     trade_case_id: int | None = None
     order_id: int | None = None
+    export_license_number: str | None = Field(default=None, max_length=64)
+    destination_country: str | None = Field(default=None, max_length=64)
+    shipping_mode: str | None = Field(default=None, max_length=16)
+    incoterms: str | None = Field(default=None, max_length=16)
+    expected_shipment_date: date | None = None
+    actual_shipment_date: date | None = None
+    customs_agent: str | None = Field(default=None, max_length=255)
 
 
 class ExportCaseUpdate(BaseModel):
@@ -94,6 +101,13 @@ class ExportCaseUpdate(BaseModel):
     amount: float | None = Field(None, ge=0)
     trade_case_id: int | None = None
     order_id: int | None = None
+    export_license_number: str | None = Field(default=None, max_length=64)
+    destination_country: str | None = Field(default=None, max_length=64)
+    shipping_mode: str | None = Field(default=None, max_length=16)
+    incoterms: str | None = Field(default=None, max_length=16)
+    expected_shipment_date: date | None = None
+    actual_shipment_date: date | None = None
+    customs_agent: str | None = Field(default=None, max_length=255)
 
 
 class ExportCaseResponse(BaseModel):
@@ -105,6 +119,13 @@ class ExportCaseResponse(BaseModel):
     amount: float | None
     trade_case_id: int | None = None
     order_id: int | None = None
+    export_license_number: str | None = None
+    destination_country: str | None = None
+    shipping_mode: str | None = None
+    incoterms: str | None = None
+    expected_shipment_date: str | None = None
+    actual_shipment_date: str | None = None
+    customs_agent: str | None = None
     created_at: str
     updated_at: str
 
@@ -227,6 +248,53 @@ class ProformaInvoiceResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ProformaCreateReceiptBody(BaseModel):
+    amount: float = Field(..., gt=0)
+    receipt_date: date | None = None
+    bank_ledger_id: int = Field(..., description="Chart of account id for bank/cash debit")
+    receivable_ledger_id: int = Field(..., description="Chart of account id for AR credit")
+    currency: str | None = Field(None, max_length=10)
+    exchange_rate_to_base: float = Field(1.0, gt=0)
+    idempotency_key: str = Field(..., min_length=1, max_length=128)
+
+
+class ProformaReceiptAllocationOut(BaseModel):
+    id: int
+    proforma_invoice_id: int
+    voucher_id: int
+    order_id: int | None = None
+    allocated_amount: float
+    allocated_base_amount: float
+    currency: str | None = None
+    exchange_rate_to_base: float | None = None
+    status: str
+    idempotency_key: str | None = None
+    voucher_number: str | None = None
+    voucher_status: str | None = None
+    created_at: str
+
+
+class ProformaCreateReceiptResponse(BaseModel):
+    voucher_id: int
+    voucher_number: str | None = None
+    allocation_id: int
+    remaining_balance: float
+    paid_so_far: float
+    pi_amount: float
+    was_created: bool
+
+
+class ProformaPaymentSummaryResponse(BaseModel):
+    pi_id: int
+    pi_amount: float
+    currency: str | None = None
+    paid_active: float
+    paid_posted: float
+    outstanding_for_new: float
+    outstanding_posted: float
+    allocations: list[ProformaReceiptAllocationOut] = Field(default_factory=list)
 
 
 class IssuedExportProformaOrderIdsResponse(BaseModel):
@@ -448,3 +516,117 @@ class BtbLcRecordRealizationBody(BaseModel):
     )
     description: str | None = Field(default=None, max_length=512)
     reference: str | None = Field(default=None, max_length=128)
+
+
+# --- Commercial invoices (Phase 1.2) ---
+
+
+class CommercialInvoiceFromChallanBody(BaseModel):
+    idempotency_key: str = Field(..., min_length=1, max_length=128)
+    exchange_rate_to_base: float = Field(1.0, gt=0)
+    confirm_quotation_fallback: bool = False
+    allow_split: bool = False
+    invoice_date: date | None = None
+
+
+class CommercialInvoiceLineOut(BaseModel):
+    id: int
+    order_id: int
+    order_code: str | None = None
+    item_id: int | None = None
+    delivery_challan_item_id: int | None = None
+    description: str | None = None
+    quantity: float
+    unit_price: float
+    line_amount: float
+    currency: str | None = None
+    price_source: str
+    price_source_ref: dict | list | None = None
+    sort_order: int
+
+    class Config:
+        from_attributes = True
+
+
+class CommercialInvoiceOut(BaseModel):
+    id: int
+    invoice_code: str
+    status: str
+    customer_id: int
+    customer_name: str | None = None
+    source_delivery_challan_id: int | None = None
+    challan_code: str | None = None
+    primary_order_id: int | None = None
+    primary_order_code: str | None = None
+    invoice_date: str | None = None
+    currency: str | None = None
+    exchange_rate_to_base: float | None = None
+    total_amount: float
+    base_total_amount: float
+    ar_voucher_id: int | None = None
+    price_review_required: bool
+    notes: str | None = None
+    lines: list[CommercialInvoiceLineOut] = Field(default_factory=list)
+    issued_at: str | None = None
+    cancelled_at: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class CommercialInvoiceListResponse(BaseModel):
+    items: list[CommercialInvoiceOut]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class CommercialInvoiceFromChallanResponse(BaseModel):
+    invoices: list[CommercialInvoiceOut]
+    was_created: bool
+
+
+class CommercialInvoiceCreateReceiptBody(BaseModel):
+    amount: float = Field(..., gt=0)
+    receipt_date: date | None = None
+    bank_ledger_id: int
+    receivable_ledger_id: int
+    currency: str | None = Field(None, max_length=10)
+    exchange_rate_to_base: float = Field(1.0, gt=0)
+    idempotency_key: str = Field(..., min_length=1, max_length=128)
+
+
+class CommercialInvoiceCreateReceiptResponse(BaseModel):
+    voucher_id: int
+    voucher_number: str | None = None
+    allocation_id: int
+    remaining_balance: float
+    paid_so_far: float
+    invoice_amount: float
+    was_created: bool
+
+
+class CommercialInvoiceReceiptAllocationOut(BaseModel):
+    id: int
+    commercial_invoice_id: int
+    voucher_id: int
+    order_id: int | None = None
+    allocated_amount: float
+    allocated_base_amount: float
+    currency: str | None = None
+    exchange_rate_to_base: float | None = None
+    status: str
+    voucher_number: str | None = None
+    voucher_status: str | None = None
+    created_at: str
+
+
+class CommercialInvoicePaymentSummaryResponse(BaseModel):
+    invoice_id: int
+    invoice_amount: float
+    currency: str | None = None
+    paid_active: float
+    paid_posted: float
+    outstanding_for_new: float
+    outstanding_posted: float
+    allocations: list[CommercialInvoiceReceiptAllocationOut] = Field(default_factory=list)

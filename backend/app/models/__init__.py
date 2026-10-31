@@ -25,6 +25,7 @@ from app.models.platform_admin import (
 from app.models.tenant import CommissionMode, Tenant, TenantType
 from app.models.user import User, Role
 from app.models.staff_invitation import StaffInvitation
+from app.models.marketing import MarketingLead
 from app.models.external_access import (
     ExternalAuditLog,
     ExternalCustomerAccess,
@@ -101,6 +102,8 @@ from app.models.inventory import (
     StockBalanceSnapshot,
     StockReservation,
     InventoryCostLayer,
+    StockItemPrice,
+    StockBatch,
     InventoryGlPosting,
     DeliveryChallan,
     DeliveryChallanItem,
@@ -118,6 +121,17 @@ from app.models.inventory import (
     ProductionMaterialIssueLine,
     PhysicalInventorySession,
     PhysicalInventoryLine,
+    PlannedOrder,
+    ReorderSuggestion,
+    InterDepartmentTransfer,
+    InterDepartmentTransferLine,
+    ProcessLossStandard,
+    GrnQualityInspection,
+    CycleCountTask,
+    StockSerial,
+    ItemKit,
+    ItemKitComponent,
+    ConsignmentStock,
 )
 from app.models.manufacturing import (
     ManufacturingWorkCenter,
@@ -172,6 +186,15 @@ from app.models.finance import (
     BillAllocation,
     AccountingPeriod,
 )
+from app.models.party_ledger import (
+    PartyLedger,
+    PartyLedgerBill,
+    PartyLedgerBillAllocation,
+)
+from app.models.gst_tax import TaxLedger, VoucherTaxLine
+from app.models.advanced_vouchers import RecurringVoucherTemplate, VoucherClass
+from app.models.tds import TdsDeduction, TdsSection
+from app.models.payroll_statutory import PayrollStatutoryConfig
 from app.models.facility import (
     Facility,
     FacilityUtilization,
@@ -232,17 +255,31 @@ from app.models.hr_payroll import (
     PayrollPayslip,
     BonusDeclaration,
     EmployeeAdvance,
+    PayrollEmployeeStructureAssignment,
+    PayrollCalculationSnapshot,
     PayrollAccountingConfig,
 )
 from app.models.hr_compliance import ComplianceCheck
+from app.models.hr_compliance_framework import (
+    ComplianceFramework,
+    ComplianceRequirement,
+    EmployeeAgeVerification,
+    EmployeeComplianceRecord,
+    EmployeeMedicalRecord,
+    HrAiAnalysisResult,
+)
 from app.models.commercial import (
     BtbLc,
     BtbLcAccounting,
     BtbMaturityTranche,
+    CommercialInvoice,
+    CommercialInvoiceLine,
+    CommercialInvoiceReceiptAllocation,
     ExportCase,
     MasterContract,
     ProformaInvoice,
     ProformaInvoiceOrder,
+    ProformaReceiptAllocation,
 )
 from app.models.parties import Intermediary, CustomerIntermediary
 from app.models.ai_tool import (
@@ -293,6 +330,7 @@ from app.models.trade import (
     Shipment,
     TradeDocument,
 )
+from app.models.logistics_packing import PackingList, ShipmentContainer
 from app.models.compliance import (
     TenantStatutoryTaxConfig,
     BondedWarehouseEntry,
@@ -417,6 +455,8 @@ __all__ = [
     "StockBalanceSnapshot",
     "StockReservation",
     "InventoryCostLayer",
+    "StockItemPrice",
+    "StockBatch",
     "InventoryGlPosting",
     "DeliveryChallan",
     "DeliveryChallanItem",
@@ -434,6 +474,17 @@ __all__ = [
     "ConsumptionChangeRequest",
     "ProductionMaterialIssue",
     "ProductionMaterialIssueLine",
+    "PlannedOrder",
+    "ReorderSuggestion",
+    "InterDepartmentTransfer",
+    "InterDepartmentTransferLine",
+    "ProcessLossStandard",
+    "GrnQualityInspection",
+    "CycleCountTask",
+    "StockSerial",
+    "ItemKit",
+    "ItemKitComponent",
+    "ConsignmentStock",
     "ManufacturingWorkCenter",
     "ManufacturingOperation",
     "ManufacturingRoutingTemplate",
@@ -483,6 +534,16 @@ __all__ = [
     "BillReference",
     "BillAllocation",
     "AccountingPeriod",
+    "PartyLedger",
+    "PartyLedgerBill",
+    "PartyLedgerBillAllocation",
+    "TaxLedger",
+    "VoucherTaxLine",
+    "VoucherClass",
+    "RecurringVoucherTemplate",
+    "TdsSection",
+    "TdsDeduction",
+    "PayrollStatutoryConfig",
     "Facility",
     "FacilityUtilization",
     "RepaymentScheduleLine",
@@ -528,12 +589,24 @@ __all__ = [
     "PayrollPayslip",
     "BonusDeclaration",
     "EmployeeAdvance",
+    "PayrollEmployeeStructureAssignment",
+    "PayrollCalculationSnapshot",
     "PayrollAccountingConfig",
     "ComplianceCheck",
+    "ComplianceFramework",
+    "ComplianceRequirement",
+    "EmployeeComplianceRecord",
+    "EmployeeAgeVerification",
+    "EmployeeMedicalRecord",
+    "HrAiAnalysisResult",
     "ExportCase",
     "MasterContract",
+    "CommercialInvoice",
+    "CommercialInvoiceLine",
+    "CommercialInvoiceReceiptAllocation",
     "ProformaInvoice",
     "ProformaInvoiceOrder",
+    "ProformaReceiptAllocation",
     "BtbLc",
     "BtbLcAccounting",
     "BtbMaturityTranche",
@@ -578,6 +651,8 @@ __all__ = [
     "TradeCaseStage",
     "TradeCaseStageLog",
     "Shipment",
+    "PackingList",
+    "ShipmentContainer",
     "TradeDocument",
     "TenantStatutoryTaxConfig",
     "BondedWarehouseEntry",

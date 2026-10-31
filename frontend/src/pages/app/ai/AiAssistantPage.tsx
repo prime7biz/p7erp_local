@@ -11,6 +11,7 @@ import {
   type AiQuickAction,
   type AiReportRunResponse,
 } from "@/api/client";
+import { logApiError } from "@/utils/logApiError";
 import { AiArtifactsPanel } from "@/pages/app/ai/components/AiArtifactsPanel";
 import { AiChatThread } from "@/pages/app/ai/components/AiChatThread";
 import { AiAutomationPanel } from "@/pages/app/ai/components/AiAutomationPanel";
@@ -189,30 +190,13 @@ export function AiAssistantPage() {
       await new Promise((resolve) => window.setTimeout(resolve, 10));
     }
     await sendMessage(prompt);
-    try {
-      const rows = await api.aiListReportRuns({ limit: 12 });
-      setReportRuns(rows);
-    } catch {
-      // ignore report list refresh errors
-    }
-    try {
-      const rows = await api.aiListForecastRuns({ limit: 12 });
-      setForecastRuns(rows);
-    } catch {
-      // ignore forecast list refresh errors
-    }
-    try {
-      const rows = await api.aiListActionRuns({ limit: 20 });
-      setActionRuns(rows);
-    } catch {
-      // ignore action list refresh errors
-    }
-    try {
-      const rows = await api.aiListAnomalyEvents({ limit: 30 });
-      setAnomalyEvents(rows);
-    } catch {
-      // ignore anomaly list refresh errors
-    }
+    // Side-panel refreshes are best-effort; the chat reply already succeeded.
+    await Promise.all([
+      api.aiListReportRuns({ limit: 12 }).then(setReportRuns).catch((e) => logApiError("AiAssistantPage.reportRuns", e)),
+      api.aiListForecastRuns({ limit: 12 }).then(setForecastRuns).catch((e) => logApiError("AiAssistantPage.forecastRuns", e)),
+      api.aiListActionRuns({ limit: 20 }).then(setActionRuns).catch((e) => logApiError("AiAssistantPage.actionRuns", e)),
+      api.aiListAnomalyEvents({ limit: 30 }).then(setAnomalyEvents).catch((e) => logApiError("AiAssistantPage.anomalies", e)),
+    ]);
   };
 
   const runForecast = async (input: { prompt: string; horizonDays: number; fromDate?: string; toDate?: string }) => {

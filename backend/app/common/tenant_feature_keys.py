@@ -23,6 +23,145 @@ SINGLE_SESSION_ENFORCED = "single_session_enforced"
 # When true, read stock summary rows from `inventory_stock_balance_snapshots` if populated (see stock_snapshot_service).
 STOCK_SNAPSHOT_READS = "stock_snapshot_reads"
 
+# Order execution spine (default off — additive / reversible).
+TNA_EVENT_SYNC = "tna_event_sync"
+REQUIRE_ORDER_ID_ON_SHOP_FLOOR = "require_order_id_on_shop_floor"
+LINE_ALLOCATION_CONFIRM_ENABLED = "line_allocation_confirm_enabled"
+SAMPLE_APPROVAL_GATES_FOR_PO = "sample_approval_gates_for_po"
+CAPA_BLOCKS_CHALLAN = "capa_blocks_challan"
+
+# When true, payroll run auto-calculate apply is allowed (default off — strict True check).
+PAYROLL_AUTO_CALCULATE_ENABLED = "payroll_auto_calculate_enabled"
+
+# Phase 1.5 demo mode banner + seed marker (seed writes marker object; banner uses bool).
+DEMO_MODE_ENABLED = "demo_mode_enabled"
+DEMO_SEED_PHASE1_V1 = "demo_seed_phase1_v1"
+
+# Budget posting enforcement: "off" | "warn" | "block" (default off).
+BUDGET_ENFORCEMENT_MODE = "budget_enforcement_mode"
+BUDGET_MODE_OFF: Literal["off"] = "off"
+BUDGET_MODE_WARN: Literal["warn"] = "warn"
+BUDGET_MODE_BLOCK: Literal["block"] = "block"
+BUDGET_ENFORCEMENT_MODES: tuple[str, str, str] = (BUDGET_MODE_OFF, BUDGET_MODE_WARN, BUDGET_MODE_BLOCK)
+
+# When not explicitly false, auto-post WIP journals from inventory/manufacturing paths (default on).
+AUTO_POST_WIP_JOURNAL = "auto_post_wip_journal"
+
+# Bill-wise party ledger (Sprint 1) — master flag default off.
+PARTY_LEDGER_ENABLED = "party_ledger_enabled"
+# When parent enabled: auto-allocate RECEIPT/PAYMENT FIFO unless explicitly false.
+PARTY_LEDGER_AUTO_ALLOCATE = "party_ledger_auto_allocate"
+# Interest accrual on overdue bills (default off).
+PARTY_LEDGER_INTEREST_CALC = "party_ledger_interest_calc"
+
+# Sprint 2 stock hierarchy / batch / godown (default off).
+STOCK_HIERARCHY_ENABLED = "stock_hierarchy_enabled"
+BATCH_TRACKING_ENABLED = "batch_tracking_enabled"
+
+# Sprint 3 GST / tax ledger (default off).
+GST_SYSTEM_ENABLED = "gst_system_enabled"
+AUTO_TAX_CALCULATION = "auto_tax_calculation"
+GST_SETTINGS_KEY = "gst_settings"
+
+# Sprint 4 advanced vouchers (all default off).
+CREDIT_DEBIT_NOTE_ENABLED = "credit_debit_note_enabled"
+STOCK_TRANSFER_VOUCHER_ENABLED = "stock_transfer_voucher_enabled"
+MEMORANDUM_VOUCHER_ENABLED = "memorandum_voucher_enabled"
+OPTIONAL_VOUCHER_ENABLED = "optional_voucher_enabled"
+POST_DATED_VOUCHER_ENABLED = "post_dated_voucher_enabled"
+RECURRING_VOUCHER_ENABLED = "recurring_voucher_enabled"
+VOUCHER_CLASS_ENABLED = "voucher_class_enabled"
+
+# Sprint 5 statutory compliance (default off).
+TDS_SYSTEM_ENABLED = "tds_system_enabled"
+STATUTORY_PAYROLL_ENABLED = "statutory_payroll_enabled"
+
+# Sprint H1 compliance / OCR / AI / documents (all default off).
+COMPLIANCE_TRACKING_ENABLED = "compliance_tracking_enabled"
+AGE_VERIFICATION_REQUIRED = "age_verification_required"
+MEDICAL_CERTIFICATE_TRACKING_ENABLED = "medical_certificate_tracking_enabled"
+OCR_CV_EXTRACTION_ENABLED = "ocr_cv_extraction_enabled"
+OCR_ID_EXTRACTION_ENABLED = "ocr_id_extraction_enabled"
+OCR_MEDICAL_EXTRACTION_ENABLED = "ocr_medical_extraction_enabled"
+AI_ATTENDANCE_ANALYSIS_ENABLED = "ai_attendance_analysis_enabled"
+AI_TURNOVER_PREDICTION_ENABLED = "ai_turnover_prediction_enabled"
+AI_PAYROLL_ANOMALY_DETECTION_ENABLED = "ai_payroll_anomaly_detection_enabled"
+AI_COMPLIANCE_RISK_PREDICTION_ENABLED = "ai_compliance_risk_prediction_enabled"
+AUTO_DOCUMENT_GENERATION_ENABLED = "auto_document_generation_enabled"
+
+# Sprint 6 MIS reports (default ON — read-only).
+MIS_REPORTS_ENABLED = "mis_reports_enabled"
+
+# Sprint I1 MRP / IDT / process loss (all default off).
+MRP_ENGINE_ENABLED = "mrp_engine_enabled"
+AUTO_REORDER_ENABLED = "auto_reorder_enabled"
+INTER_DEPARTMENT_TRANSFER_ENABLED = "inter_department_transfer_enabled"
+PROCESS_LOSS_TRACKING_ENABLED = "process_loss_tracking_enabled"
+JOB_WORK_COSTING_ENABLED = "job_work_costing_enabled"
+
+# Sprint I2 GRN quality inspection (default off).
+GRN_QUALITY_INSPECTION_ENABLED = "grn_quality_inspection_enabled"
+
+# Sprint I3 ABC / EOQ / aging / cycle count.
+# ABC, EOQ, aging default ON when flag missing; cycle counting defaults OFF.
+ABC_ANALYSIS_ENABLED = "abc_analysis_enabled"
+EOQ_CALCULATION_ENABLED = "eoq_calculation_enabled"
+STOCK_AGING_ENABLED = "stock_aging_enabled"
+CYCLE_COUNTING_ENABLED = "cycle_counting_enabled"
+# Optional numeric EOQ settings stored in feature_flags JSON
+EOQ_ORDERING_COST = "eoq_ordering_cost"
+EOQ_HOLDING_COST_RATE = "eoq_holding_cost_rate"
+
+# Sprint I4 serial / kit / consignment (all default off).
+SERIAL_TRACKING_ENABLED = "serial_tracking_enabled"
+KITTING_ENABLED = "kitting_enabled"
+CONSIGNMENT_STOCK_ENABLED = "consignment_stock_enabled"
+
+
+def _flag_true(feature_flags: Any, key: str) -> bool:
+    if not isinstance(feature_flags, dict):
+        return False
+    return feature_flags.get(key) is True
+
+
+def _flag_default_true(feature_flags: Any, key: str) -> bool:
+    """Enabled unless explicitly set to False (Sprint I3 read-mostly flags)."""
+    if not isinstance(feature_flags, dict):
+        return True
+    if key not in feature_flags:
+        return True
+    return feature_flags.get(key) is not False
+
+
+def is_tna_event_sync_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, TNA_EVENT_SYNC)
+
+
+def is_require_order_id_on_shop_floor(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, REQUIRE_ORDER_ID_ON_SHOP_FLOOR)
+
+
+def is_line_allocation_confirm_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, LINE_ALLOCATION_CONFIRM_ENABLED)
+
+
+def is_sample_approval_gates_for_po(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, SAMPLE_APPROVAL_GATES_FOR_PO)
+
+
+def is_capa_blocks_challan(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, CAPA_BLOCKS_CHALLAN)
+
+
+def is_payroll_auto_calculate_enabled(feature_flags: Any) -> bool:
+    """Strict: only explicit True enables apply (missing / false / other → off)."""
+    return _flag_true(feature_flags, PAYROLL_AUTO_CALCULATE_ENABLED)
+
+
+def is_demo_mode_enabled(feature_flags: Any) -> bool:
+    """Show Demo Mode banner when flag is explicitly true."""
+    return _flag_true(feature_flags, DEMO_MODE_ENABLED)
+
 
 def get_tenant_rbac_mode(feature_flags: Any) -> Literal["off", "shadow", "enforce"]:
     """Return normalized RBAC mode from tenant feature flags (safe default: off)."""
@@ -50,6 +189,237 @@ def is_stock_snapshot_reads_enabled(feature_flags: Any) -> bool:
     return feature_flags.get(STOCK_SNAPSHOT_READS) is True
 
 
+def get_budget_enforcement_mode(feature_flags: Any) -> Literal["off", "warn", "block"]:
+    """Return budget enforcement mode from tenant feature flags (safe default: off)."""
+    if not isinstance(feature_flags, dict):
+        return BUDGET_MODE_OFF
+    raw = feature_flags.get(BUDGET_ENFORCEMENT_MODE)
+    if isinstance(raw, str):
+        normalized = raw.strip().lower()
+        if normalized in BUDGET_ENFORCEMENT_MODES:
+            return normalized  # type: ignore[return-value]
+    return BUDGET_MODE_OFF
+
+
+def is_auto_post_wip_journal_enabled(feature_flags: Any) -> bool:
+    """WIP→GL auto-post is on unless the flag is explicitly False (missing key ⇒ True)."""
+    if not isinstance(feature_flags, dict):
+        return True
+    return feature_flags.get(AUTO_POST_WIP_JOURNAL) is not False
+
+
+def is_party_ledger_enabled(feature_flags: Any) -> bool:
+    """Strict: only explicit True enables party ledger (default off)."""
+    return _flag_true(feature_flags, PARTY_LEDGER_ENABLED)
+
+
+def is_party_ledger_auto_allocate(feature_flags: Any) -> bool:
+    """FIFO auto-allocate when party ledger is enabled, unless auto_allocate is explicitly False."""
+    if not is_party_ledger_enabled(feature_flags):
+        return False
+    if not isinstance(feature_flags, dict):
+        return True
+    return feature_flags.get(PARTY_LEDGER_AUTO_ALLOCATE) is not False
+
+
+def is_party_ledger_interest_calc(feature_flags: Any) -> bool:
+    """Interest calc only when both master flag and interest flag are True."""
+    return is_party_ledger_enabled(feature_flags) and _flag_true(feature_flags, PARTY_LEDGER_INTEREST_CALC)
+
+
+def is_stock_hierarchy_enabled(feature_flags: Any) -> bool:
+    """Strict: only explicit True enables stock hierarchy / godown matrix APIs (default off)."""
+    return _flag_true(feature_flags, STOCK_HIERARCHY_ENABLED)
+
+
+def is_batch_tracking_enabled(feature_flags: Any) -> bool:
+    """Physical batch create/allocate on GRN/DC (default off). Independent of hierarchy flag."""
+    return _flag_true(feature_flags, BATCH_TRACKING_ENABLED)
+
+
+def is_gst_system_enabled(feature_flags: Any) -> bool:
+    """Strict: only explicit True enables GST/tax ledger APIs (default off)."""
+    return _flag_true(feature_flags, GST_SYSTEM_ENABLED)
+
+
+def is_auto_tax_calculation(feature_flags: Any) -> bool:
+    """Auto tax on voucher create/update when GST is enabled, unless explicitly False."""
+    if not is_gst_system_enabled(feature_flags):
+        return False
+    if not isinstance(feature_flags, dict):
+        return True
+    return feature_flags.get(AUTO_TAX_CALCULATION) is not False
+
+
+def get_gst_settings(feature_flags: Any) -> dict[str, Any]:
+    """Tenant GST registration settings stored under feature_flags.gst_settings."""
+    if not isinstance(feature_flags, dict):
+        return {}
+    raw = feature_flags.get(GST_SETTINGS_KEY)
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def is_credit_debit_note_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, CREDIT_DEBIT_NOTE_ENABLED)
+
+
+def is_stock_transfer_voucher_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, STOCK_TRANSFER_VOUCHER_ENABLED)
+
+
+def is_memorandum_voucher_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MEMORANDUM_VOUCHER_ENABLED)
+
+
+def is_optional_voucher_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, OPTIONAL_VOUCHER_ENABLED)
+
+
+def is_post_dated_voucher_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, POST_DATED_VOUCHER_ENABLED)
+
+
+def is_recurring_voucher_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, RECURRING_VOUCHER_ENABLED)
+
+
+def is_voucher_class_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, VOUCHER_CLASS_ENABLED)
+
+
+def is_tds_system_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, TDS_SYSTEM_ENABLED)
+
+
+def is_statutory_payroll_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, STATUTORY_PAYROLL_ENABLED)
+
+
+def is_compliance_tracking_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, COMPLIANCE_TRACKING_ENABLED)
+
+
+def is_age_verification_required(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, AGE_VERIFICATION_REQUIRED)
+
+
+def is_medical_certificate_tracking_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MEDICAL_CERTIFICATE_TRACKING_ENABLED)
+
+
+def is_ocr_cv_extraction_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, OCR_CV_EXTRACTION_ENABLED)
+
+
+def is_ocr_id_extraction_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, OCR_ID_EXTRACTION_ENABLED)
+
+
+def is_ocr_medical_extraction_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, OCR_MEDICAL_EXTRACTION_ENABLED)
+
+
+def is_ai_attendance_analysis_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, AI_ATTENDANCE_ANALYSIS_ENABLED)
+
+
+def is_ai_turnover_prediction_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, AI_TURNOVER_PREDICTION_ENABLED)
+
+
+def is_ai_payroll_anomaly_detection_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, AI_PAYROLL_ANOMALY_DETECTION_ENABLED)
+
+
+def is_ai_compliance_risk_prediction_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, AI_COMPLIANCE_RISK_PREDICTION_ENABLED)
+
+
+def is_auto_document_generation_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, AUTO_DOCUMENT_GENERATION_ENABLED)
+
+
+def is_mis_reports_enabled(feature_flags: Any) -> bool:
+    """MIS reports are on unless explicitly set to False (missing key ⇒ True)."""
+    if not isinstance(feature_flags, dict):
+        return True
+    return feature_flags.get(MIS_REPORTS_ENABLED) is not False
+
+
+def is_mrp_engine_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, MRP_ENGINE_ENABLED)
+
+
+def is_auto_reorder_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, AUTO_REORDER_ENABLED)
+
+
+def is_inter_department_transfer_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, INTER_DEPARTMENT_TRANSFER_ENABLED)
+
+
+def is_process_loss_tracking_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, PROCESS_LOSS_TRACKING_ENABLED)
+
+
+def is_job_work_costing_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, JOB_WORK_COSTING_ENABLED)
+
+
+def is_grn_quality_inspection_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, GRN_QUALITY_INSPECTION_ENABLED)
+
+
+def is_abc_analysis_enabled(feature_flags: Any) -> bool:
+    return _flag_default_true(feature_flags, ABC_ANALYSIS_ENABLED)
+
+
+def is_eoq_calculation_enabled(feature_flags: Any) -> bool:
+    return _flag_default_true(feature_flags, EOQ_CALCULATION_ENABLED)
+
+
+def is_stock_aging_enabled(feature_flags: Any) -> bool:
+    return _flag_default_true(feature_flags, STOCK_AGING_ENABLED)
+
+
+def is_cycle_counting_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, CYCLE_COUNTING_ENABLED)
+
+
+def is_serial_tracking_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, SERIAL_TRACKING_ENABLED)
+
+
+def is_kitting_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, KITTING_ENABLED)
+
+
+def is_consignment_stock_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, CONSIGNMENT_STOCK_ENABLED)
+
+
+def get_eoq_ordering_cost(feature_flags: Any, default: float = 100.0) -> float:
+    if not isinstance(feature_flags, dict):
+        return default
+    raw = feature_flags.get(EOQ_ORDERING_COST)
+    try:
+        v = float(raw)
+        return v if v > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+def get_eoq_holding_cost_rate(feature_flags: Any, default: float = 0.10) -> float:
+    if not isinstance(feature_flags, dict):
+        return default
+    raw = feature_flags.get(EOQ_HOLDING_COST_RATE)
+    try:
+        v = float(raw)
+        return v if v > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
 # --- Write-time validation -------------------------------------------------
 # Whitelist of feature_flag keys whose value is an enum string. Writes go
 # through ``normalize_feature_flags`` so the canonical form (``strip().lower()``)
@@ -58,6 +428,7 @@ def is_stock_snapshot_reads_enabled(feature_flags: Any) -> bool:
 # backward compatibility, but new writes must be canonical.
 ENUM_FEATURE_FLAG_VALUES: dict[str, frozenset[str]] = {
     RBAC_ENFORCEMENT: frozenset(RBAC_MODES),
+    BUDGET_ENFORCEMENT_MODE: frozenset(BUDGET_ENFORCEMENT_MODES),
 }
 
 

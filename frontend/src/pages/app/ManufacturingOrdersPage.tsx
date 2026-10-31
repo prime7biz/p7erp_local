@@ -186,7 +186,7 @@ export function ManufacturingOrdersPage() {
         description="Production execution · Stage progress tied to inventory KPIs (open PO/GRN, consumption changes, low stock). Use Planning for pipeline readiness."
         actions={
           <Link
-            to="/app/manufacturing/planning"
+            to="/app/production/planning"
             className="rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
           >
             Production planning

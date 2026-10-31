@@ -12,6 +12,8 @@ import {
   type PurchaseOrderResponse,
   type VendorResponse,
 } from "@/api/client";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { listPageRootClass } from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
 
 const STATUS_OPTIONS = ["DRAFT", "OPEN", "AMENDED", "CLOSED"] as const;
@@ -421,13 +423,11 @@ export function BtbLcsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-text-primary">BTB LCs</h1>
-        <p className="text-text-muted text-sm mt-0.5">
-          Open back-to-back LCs against a parent Master Contract/LC, with vendor PI and PO linkage.
-        </p>
-      </header>
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="BTB LCs"
+        description="Open back-to-back LCs against a parent Master Contract/LC, with vendor PI and PO linkage."
+      />
 
       {error && (
         <div className="rounded-lg bg-status-danger-subtle border border-status-danger/20 px-4 py-3 text-sm text-status-danger-foreground">

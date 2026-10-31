@@ -28,6 +28,9 @@ from app.models import Tenant, User
 from app.models.commercial import (
     BtbLc,
     BtbLcAccounting,
+    CommercialInvoice,
+    CommercialInvoiceLine,
+    CommercialInvoiceReceiptAllocation,
     ExportCase,
     MasterContract,
     ProformaInvoice,
@@ -50,6 +53,15 @@ from app.modules.commercial.schemas import (
     BtbLcRecordRealizationBody,
     BtbLcUpdate,
     BtbLcResponse,
+    CommercialInvoiceCreateReceiptBody,
+    CommercialInvoiceCreateReceiptResponse,
+    CommercialInvoiceFromChallanBody,
+    CommercialInvoiceFromChallanResponse,
+    CommercialInvoiceLineOut,
+    CommercialInvoiceListResponse,
+    CommercialInvoiceOut,
+    CommercialInvoicePaymentSummaryResponse,
+    CommercialInvoiceReceiptAllocationOut,
     CustomerForPrint,
     ExportCaseCreate,
     ExportCaseResponse,
@@ -58,13 +70,31 @@ from app.modules.commercial.schemas import (
     MasterContractUpdate,
     MasterContractResponse,
     IssuedExportProformaOrderIdsResponse,
+    ProformaCreateReceiptBody,
+    ProformaCreateReceiptResponse,
     ProformaInvoiceCreate,
     ProformaInvoiceForPrint,
     ProformaInvoiceOrderForPrint,
     ProformaInvoiceResponse,
     ProformaInvoiceUpdate,
+    ProformaPaymentSummaryResponse,
+    ProformaReceiptAllocationOut,
     ProformaVerifyResponse,
     ShipperBankForPrint,
+)
+from app.modules.commercial.proforma_receipt_service import (
+    create_receipt_from_proforma,
+    get_proforma_outstanding,
+    list_allocations_for_pi,
+    load_pi_with_orders,
+)
+from app.modules.commercial.commercial_invoice_service import (
+    cancel_commercial_invoice,
+    create_invoices_from_delivery_challan,
+    create_receipt_from_commercial_invoice,
+    get_ci_outstanding,
+    issue_commercial_invoice,
+    load_commercial_invoice,
 )
 
 router = APIRouter(prefix="/commercial", tags=["commercial"])
@@ -145,9 +175,38 @@ def _export_case_to_response(r: ExportCase) -> ExportCaseResponse:
         amount=float(r.amount) if r.amount is not None else None,
         trade_case_id=r.trade_case_id,
         order_id=r.order_id,
+        export_license_number=getattr(r, "export_license_number", None),
+        destination_country=getattr(r, "destination_country", None),
+        shipping_mode=getattr(r, "shipping_mode", None),
+        incoterms=getattr(r, "incoterms", None),
+        expected_shipment_date=r.expected_shipment_date.isoformat()
+        if getattr(r, "expected_shipment_date", None)
+        else None,
+        actual_shipment_date=r.actual_shipment_date.isoformat()
+        if getattr(r, "actual_shipment_date", None)
+        else None,
+        customs_agent=getattr(r, "customs_agent", None),
         created_at=r.created_at.isoformat(),
         updated_at=r.updated_at.isoformat(),
     )
+
+
+def _validate_export_case_dates(
+    *,
+    expected: date | None,
+    actual: date | None,
+    order_delivery: date | None,
+) -> None:
+    if expected and order_delivery and expected > order_delivery:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Expected shipment date must be on or before the order delivery date",
+        )
+    if expected and actual and actual < expected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Actual shipment date must be on or after the expected shipment date",
+        )
 
 
 async def _linked_order_id_for_master_contract(
@@ -457,6 +516,7 @@ async def _resolve_btb_realization_payment_account_id(
 @router.get("/export-cases", response_model=list[ExportCaseResponse], tags=["export-cases"])
 async def list_export_cases(
     status_filter: str | None = Query(default=None, alias="status"),
+    order_id: int | None = Query(default=None, ge=1),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
@@ -468,6 +528,8 @@ async def list_export_cases(
     stmt = select(ExportCase).where(ExportCase.tenant_id == tenant.id)
     if status_filter:
         stmt = stmt.where(ExportCase.status == status_filter)
+    if order_id is not None:
+        stmt = stmt.where(ExportCase.order_id == order_id)
     stmt = stmt.order_by(ExportCase.created_at.desc()).limit(limit).offset(offset)
     result = await db.execute(stmt)
     rows = result.scalars().all()
@@ -503,6 +565,25 @@ async def create_export_case(
 ):
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    from app.common.permissions import (
+        PERMISSION_COMMERCIAL_EXPORT_CASE_CREATE,
+        assert_soft_permission_allowed,
+    )
+
+    await assert_soft_permission_allowed(
+        db, user, tenant.id, permission_key=PERMISSION_COMMERCIAL_EXPORT_CASE_CREATE
+    )
+    order_delivery = None
+    if body.order_id:
+        order = await db.get(Order, body.order_id)
+        if not order or order.tenant_id != tenant.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order not found")
+        order_delivery = order.delivery_date
+    _validate_export_case_dates(
+        expected=body.expected_shipment_date,
+        actual=body.actual_shipment_date,
+        order_delivery=order_delivery,
+    )
     row = ExportCase(
         tenant_id=tenant.id,
         reference=body.reference,
@@ -511,9 +592,16 @@ async def create_export_case(
         amount=body.amount,
         trade_case_id=body.trade_case_id,
         order_id=body.order_id,
+        export_license_number=body.export_license_number,
+        destination_country=body.destination_country,
+        shipping_mode=(body.shipping_mode or None) and body.shipping_mode.upper(),
+        incoterms=(body.incoterms or None) and body.incoterms.upper(),
+        expected_shipment_date=body.expected_shipment_date,
+        actual_shipment_date=body.actual_shipment_date,
+        customs_agent=body.customs_agent,
     )
     db.add(row)
-    await db.flush()
+    await db.commit()
     await db.refresh(row)
     return _export_case_to_response(row)
 
@@ -532,10 +620,33 @@ async def update_export_case(
 ):
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    from app.common.permissions import (
+        PERMISSION_COMMERCIAL_EXPORT_CASE_EDIT,
+        assert_soft_permission_allowed,
+    )
+
+    await assert_soft_permission_allowed(
+        db, user, tenant.id, permission_key=PERMISSION_COMMERCIAL_EXPORT_CASE_EDIT
+    )
     row = await db.get(ExportCase, case_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export case not found")
-    for key, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    if "shipping_mode" in data and data["shipping_mode"]:
+        data["shipping_mode"] = str(data["shipping_mode"]).upper()
+    if "incoterms" in data and data["incoterms"]:
+        data["incoterms"] = str(data["incoterms"]).upper()
+    order_id = data.get("order_id", row.order_id)
+    order_delivery = None
+    if order_id:
+        order = await db.get(Order, order_id)
+        if not order or order.tenant_id != tenant.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order not found")
+        order_delivery = order.delivery_date
+    expected = data.get("expected_shipment_date", row.expected_shipment_date)
+    actual = data.get("actual_shipment_date", row.actual_shipment_date)
+    _validate_export_case_dates(expected=expected, actual=actual, order_delivery=order_delivery)
+    for key, value in data.items():
         setattr(row, key, value)
     await db.commit()
     await db.refresh(row)
@@ -1215,6 +1326,556 @@ async def finalize_proforma_invoice(
     await _sync_order_pipeline_from_proforma(db, tenant_id=tenant.id, pi=row)
     await db.flush()
     return _proforma_invoice_to_response(row)
+
+
+def _allocation_out(alloc, voucher=None) -> ProformaReceiptAllocationOut:
+    return ProformaReceiptAllocationOut(
+        id=alloc.id,
+        proforma_invoice_id=alloc.proforma_invoice_id,
+        voucher_id=alloc.voucher_id,
+        order_id=alloc.order_id,
+        allocated_amount=float(alloc.allocated_amount or 0),
+        allocated_base_amount=float(alloc.allocated_base_amount or 0),
+        currency=alloc.currency,
+        exchange_rate_to_base=float(alloc.exchange_rate_to_base)
+        if alloc.exchange_rate_to_base is not None
+        else None,
+        status=alloc.status,
+        idempotency_key=alloc.idempotency_key,
+        voucher_number=getattr(voucher, "voucher_number", None) if voucher else None,
+        voucher_status=getattr(voucher, "status", None) if voucher else None,
+        created_at=alloc.created_at.isoformat() if alloc.created_at else "",
+    )
+
+
+@router.get(
+    "/proforma-invoices/{invoice_id}/payment-summary",
+    response_model=ProformaPaymentSummaryResponse,
+    tags=["proforma-invoices"],
+)
+async def get_proforma_payment_summary(
+    invoice_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    pi = await load_pi_with_orders(db, tenant_id=tenant.id, pi_id=invoice_id)
+    if not pi:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proforma invoice not found")
+    outstanding = await get_proforma_outstanding(db, tenant_id=tenant.id, pi=pi)
+    allocations = await list_allocations_for_pi(db, tenant_id=tenant.id, pi_id=pi.id)
+    voucher_ids = [a.voucher_id for a in allocations]
+    vouchers_by_id: dict[int, object] = {}
+    if voucher_ids:
+        from app.models import Voucher
+
+        rows = (
+            await db.execute(
+                select(Voucher).where(Voucher.tenant_id == tenant.id, Voucher.id.in_(voucher_ids))
+            )
+        ).scalars().all()
+        vouchers_by_id = {v.id: v for v in rows}
+    return ProformaPaymentSummaryResponse(
+        pi_id=pi.id,
+        pi_amount=float(outstanding.pi_amount),
+        currency=outstanding.currency,
+        paid_active=float(outstanding.allocated_active),
+        paid_posted=float(outstanding.allocated_posted),
+        outstanding_for_new=float(outstanding.outstanding_for_new),
+        outstanding_posted=float(outstanding.outstanding_posted),
+        allocations=[_allocation_out(a, vouchers_by_id.get(a.voucher_id)) for a in allocations],
+    )
+
+
+@router.post(
+    "/proforma-invoices/{invoice_id}/create-receipt",
+    response_model=ProformaCreateReceiptResponse,
+    tags=["proforma-invoices"],
+)
+async def create_proforma_receipt(
+    invoice_id: int,
+    body: ProformaCreateReceiptBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    from decimal import Decimal
+
+    from app.common.authz import get_user_role_scoped_to_tenant
+    from app.common.permissions import PERMISSION_FINANCE_RECEIPT_FROM_PROFORMA
+
+    # Soft RBAC: missing key ⇒ allow; explicit false ⇒ deny (same convention as merch.*).
+    role = await get_user_role_scoped_to_tenant(db, user, tenant.id)
+    perms = role.permissions if role and isinstance(role.permissions, dict) else {}
+    if perms.get(PERMISSION_FINANCE_RECEIPT_FROM_PROFORMA) is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission '{PERMISSION_FINANCE_RECEIPT_FROM_PROFORMA}' denied",
+        )
+
+    pi = await load_pi_with_orders(db, tenant_id=tenant.id, pi_id=invoice_id)
+    if not pi:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proforma invoice not found")
+
+    # Validate ledgers belong to tenant
+    bank = await db.get(ChartOfAccount, body.bank_ledger_id)
+    recv = await db.get(ChartOfAccount, body.receivable_ledger_id)
+    if not bank or bank.tenant_id != tenant.id:
+        raise HTTPException(status_code=400, detail="bank_ledger_id not found for tenant")
+    if not recv or recv.tenant_id != tenant.id:
+        raise HTTPException(status_code=400, detail="receivable_ledger_id not found for tenant")
+
+    receipt_date = body.receipt_date or date.today()
+    allocation, voucher, outstanding, was_created = await create_receipt_from_proforma(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        pi=pi,
+        amount=Decimal(str(body.amount)),
+        receipt_date=receipt_date,
+        bank_ledger_id=body.bank_ledger_id,
+        receivable_ledger_id=body.receivable_ledger_id,
+        currency=body.currency,
+        exchange_rate_to_base=Decimal(str(body.exchange_rate_to_base)),
+        idempotency_key=body.idempotency_key,
+    )
+    await db.commit()
+    return ProformaCreateReceiptResponse(
+        voucher_id=voucher.id,
+        voucher_number=voucher.voucher_number,
+        allocation_id=allocation.id,
+        remaining_balance=float(outstanding.outstanding_for_new),
+        paid_so_far=float(outstanding.allocated_active),
+        pi_amount=float(outstanding.pi_amount),
+        was_created=was_created,
+    )
+
+
+def _ci_line_out(
+    line: CommercialInvoiceLine,
+    *,
+    order_code: str | None = None,
+) -> CommercialInvoiceLineOut:
+    return CommercialInvoiceLineOut(
+        id=line.id,
+        order_id=line.order_id,
+        order_code=order_code,
+        item_id=line.item_id,
+        delivery_challan_item_id=line.delivery_challan_item_id,
+        description=line.description,
+        quantity=float(line.quantity or 0),
+        unit_price=float(line.unit_price or 0),
+        line_amount=float(line.line_amount or 0),
+        currency=line.currency,
+        price_source=line.price_source,
+        price_source_ref=line.price_source_ref,
+        sort_order=int(line.sort_order or 0),
+    )
+
+
+async def _ci_out_enriched(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    inv: CommercialInvoice,
+) -> CommercialInvoiceOut:
+    lines = list(getattr(inv, "lines", None) or [])
+    order_ids = {ln.order_id for ln in lines if ln.order_id}
+    order_codes: dict[int, str] = {}
+    if order_ids:
+        rows = (
+            await db.execute(
+                select(Order.id, Order.order_code).where(
+                    Order.tenant_id == tenant_id,
+                    Order.id.in_(list(order_ids)),
+                )
+            )
+        ).all()
+        order_codes = {int(r[0]): str(r[1]) for r in rows}
+
+    customer_name = None
+    cust = await db.get(Customer, inv.customer_id)
+    if cust is not None and cust.tenant_id == tenant_id:
+        customer_name = cust.name
+
+    challan_code = None
+    if inv.source_delivery_challan_id:
+        from app.models.inventory import DeliveryChallan
+
+        challan = await db.get(DeliveryChallan, inv.source_delivery_challan_id)
+        if challan is not None and challan.tenant_id == tenant_id:
+            challan_code = challan.challan_code
+
+    primary_order_id = lines[0].order_id if lines else None
+    primary_order_code = order_codes.get(primary_order_id) if primary_order_id else None
+
+    return CommercialInvoiceOut(
+        id=inv.id,
+        invoice_code=inv.invoice_code,
+        status=inv.status,
+        customer_id=inv.customer_id,
+        customer_name=customer_name,
+        source_delivery_challan_id=inv.source_delivery_challan_id,
+        challan_code=challan_code,
+        primary_order_id=primary_order_id,
+        primary_order_code=primary_order_code,
+        invoice_date=inv.invoice_date.isoformat() if inv.invoice_date else None,
+        currency=inv.currency,
+        exchange_rate_to_base=float(inv.exchange_rate_to_base) if inv.exchange_rate_to_base is not None else None,
+        total_amount=float(inv.total_amount or 0),
+        base_total_amount=float(inv.base_total_amount or 0),
+        ar_voucher_id=inv.ar_voucher_id,
+        price_review_required=bool(inv.price_review_required),
+        notes=inv.notes,
+        lines=[_ci_line_out(ln, order_code=order_codes.get(ln.order_id)) for ln in lines],
+        issued_at=inv.issued_at.isoformat() if getattr(inv, "issued_at", None) else None,
+        cancelled_at=inv.cancelled_at.isoformat() if getattr(inv, "cancelled_at", None) else None,
+        created_at=inv.created_at.isoformat() if inv.created_at else "",
+        updated_at=inv.updated_at.isoformat() if inv.updated_at else "",
+    )
+
+
+def _ci_out(inv: CommercialInvoice) -> CommercialInvoiceOut:
+    """Sync fallback without display enrichments (prefer _ci_out_enriched)."""
+    lines = list(getattr(inv, "lines", None) or [])
+    return CommercialInvoiceOut(
+        id=inv.id,
+        invoice_code=inv.invoice_code,
+        status=inv.status,
+        customer_id=inv.customer_id,
+        source_delivery_challan_id=inv.source_delivery_challan_id,
+        invoice_date=inv.invoice_date.isoformat() if inv.invoice_date else None,
+        currency=inv.currency,
+        exchange_rate_to_base=float(inv.exchange_rate_to_base) if inv.exchange_rate_to_base is not None else None,
+        total_amount=float(inv.total_amount or 0),
+        base_total_amount=float(inv.base_total_amount or 0),
+        ar_voucher_id=inv.ar_voucher_id,
+        price_review_required=bool(inv.price_review_required),
+        notes=inv.notes,
+        lines=[_ci_line_out(ln) for ln in lines],
+        issued_at=inv.issued_at.isoformat() if getattr(inv, "issued_at", None) else None,
+        cancelled_at=inv.cancelled_at.isoformat() if getattr(inv, "cancelled_at", None) else None,
+        created_at=inv.created_at.isoformat() if inv.created_at else "",
+        updated_at=inv.updated_at.isoformat() if inv.updated_at else "",
+    )
+
+
+async def _assert_soft_perm(db, user: User, tenant_id: int, key: str) -> None:
+    from app.common.authz import get_user_role_scoped_to_tenant
+
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
+    perms = role.permissions if role and isinstance(role.permissions, dict) else {}
+    if perms.get(key) is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission '{key}' denied",
+        )
+
+
+@router.get("/invoices", response_model=CommercialInvoiceListResponse, tags=["commercial-invoices"])
+async def list_commercial_invoices(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    status_filter: str | None = Query(None, alias="status"),
+    customer_id: int | None = Query(None),
+    order_id: int | None = Query(None),
+    challan_id: int | None = Query(None),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    from app.common.pagination import clamp_page_size, total_pages as calc_total_pages
+
+    size = clamp_page_size(page_size)
+    filters = [CommercialInvoice.tenant_id == tenant.id]
+    if status_filter:
+        filters.append(CommercialInvoice.status == status_filter.strip().upper())
+    if customer_id is not None:
+        filters.append(CommercialInvoice.customer_id == customer_id)
+    if challan_id is not None:
+        filters.append(CommercialInvoice.source_delivery_challan_id == challan_id)
+    if date_from is not None:
+        filters.append(CommercialInvoice.invoice_date >= date_from)
+    if date_to is not None:
+        filters.append(CommercialInvoice.invoice_date <= date_to)
+    if order_id is not None:
+        filters.append(
+            CommercialInvoice.id.in_(
+                select(CommercialInvoiceLine.commercial_invoice_id).where(
+                    CommercialInvoiceLine.tenant_id == tenant.id,
+                    CommercialInvoiceLine.order_id == order_id,
+                )
+            )
+        )
+
+    total = int(
+        (
+            await db.execute(select(func.count()).select_from(CommercialInvoice).where(*filters))
+        ).scalar()
+        or 0
+    )
+    pages = calc_total_pages(total, size)
+    offset = (page - 1) * size
+    rows = list(
+        (
+            await db.execute(
+                select(CommercialInvoice)
+                .where(*filters)
+                .options(selectinload(CommercialInvoice.lines))
+                .order_by(CommercialInvoice.id.desc())
+                .offset(offset)
+                .limit(size)
+            )
+        ).scalars().all()
+    )
+    items = [await _ci_out_enriched(db, tenant_id=tenant.id, inv=r) for r in rows]
+    return CommercialInvoiceListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=size,
+        total_pages=pages,
+    )
+
+
+@router.get("/invoices/{invoice_id}", response_model=CommercialInvoiceOut, tags=["commercial-invoices"])
+async def get_commercial_invoice(
+    invoice_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    inv = await load_commercial_invoice(db, tenant_id=tenant.id, invoice_id=invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Commercial invoice not found")
+    return await _ci_out_enriched(db, tenant_id=tenant.id, inv=inv)
+
+
+@router.post(
+    "/invoices/from-delivery-challan/{challan_id}",
+    response_model=CommercialInvoiceFromChallanResponse,
+    tags=["commercial-invoices"],
+)
+async def create_commercial_invoice_from_challan(
+    challan_id: int,
+    body: CommercialInvoiceFromChallanBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    from decimal import Decimal
+
+    from app.common.permissions import PERMISSION_COMMERCIAL_INVOICE_CREATE
+
+    await _assert_soft_perm(db, user, tenant.id, PERMISSION_COMMERCIAL_INVOICE_CREATE)
+    invoices, was_created = await create_invoices_from_delivery_challan(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        challan_id=challan_id,
+        idempotency_key=body.idempotency_key,
+        exchange_rate_to_base=Decimal(str(body.exchange_rate_to_base)),
+        confirm_quotation_fallback=body.confirm_quotation_fallback,
+        invoice_date=body.invoice_date,
+        allow_split=bool(body.allow_split),
+    )
+    await db.commit()
+    loaded: list[CommercialInvoice] = []
+    for inv in invoices:
+        full = await load_commercial_invoice(db, tenant_id=tenant.id, invoice_id=inv.id)
+        if full:
+            loaded.append(full)
+    return CommercialInvoiceFromChallanResponse(
+        invoices=[await _ci_out_enriched(db, tenant_id=tenant.id, inv=i) for i in loaded],
+        was_created=was_created,
+    )
+
+
+@router.post(
+    "/invoices/{invoice_id}/issue",
+    response_model=CommercialInvoiceOut,
+    tags=["commercial-invoices"],
+)
+async def issue_commercial_invoice_endpoint(
+    invoice_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    from app.common.permissions import PERMISSION_COMMERCIAL_INVOICE_ISSUE
+
+    await _assert_soft_perm(db, user, tenant.id, PERMISSION_COMMERCIAL_INVOICE_ISSUE)
+    inv = await load_commercial_invoice(db, tenant_id=tenant.id, invoice_id=invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Commercial invoice not found")
+    await issue_commercial_invoice(db, tenant_id=tenant.id, user_id=user.id, invoice=inv)
+    await db.commit()
+    full = await load_commercial_invoice(db, tenant_id=tenant.id, invoice_id=invoice_id)
+    return await _ci_out_enriched(db, tenant_id=tenant.id, inv=full)  # type: ignore[arg-type]
+
+
+@router.post(
+    "/invoices/{invoice_id}/cancel",
+    response_model=CommercialInvoiceOut,
+    tags=["commercial-invoices"],
+)
+async def cancel_commercial_invoice_endpoint(
+    invoice_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    from app.common.permissions import PERMISSION_COMMERCIAL_INVOICE_ISSUE
+
+    await _assert_soft_perm(db, user, tenant.id, PERMISSION_COMMERCIAL_INVOICE_ISSUE)
+    inv = await load_commercial_invoice(db, tenant_id=tenant.id, invoice_id=invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Commercial invoice not found")
+    await cancel_commercial_invoice(db, tenant_id=tenant.id, invoice=inv)
+    await db.commit()
+    full = await load_commercial_invoice(db, tenant_id=tenant.id, invoice_id=invoice_id)
+    return await _ci_out_enriched(db, tenant_id=tenant.id, inv=full)  # type: ignore[arg-type]
+
+
+@router.get(
+    "/invoices/{invoice_id}/payment-summary",
+    response_model=CommercialInvoicePaymentSummaryResponse,
+    tags=["commercial-invoices"],
+)
+async def get_commercial_invoice_payment_summary(
+    invoice_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    inv = await load_commercial_invoice(db, tenant_id=tenant.id, invoice_id=invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Commercial invoice not found")
+    outstanding = await get_ci_outstanding(db, tenant_id=tenant.id, invoice=inv)
+    allocs = list(
+        (
+            await db.execute(
+                select(CommercialInvoiceReceiptAllocation)
+                .where(
+                    CommercialInvoiceReceiptAllocation.tenant_id == tenant.id,
+                    CommercialInvoiceReceiptAllocation.commercial_invoice_id == inv.id,
+                )
+                .order_by(CommercialInvoiceReceiptAllocation.id.desc())
+            )
+        ).scalars().all()
+    )
+    from app.models import Voucher
+
+    voucher_ids = [a.voucher_id for a in allocs]
+    vouchers_by_id: dict[int, object] = {}
+    if voucher_ids:
+        rows = (
+            await db.execute(
+                select(Voucher).where(Voucher.tenant_id == tenant.id, Voucher.id.in_(voucher_ids))
+            )
+        ).scalars().all()
+        vouchers_by_id = {v.id: v for v in rows}
+    out_allocs: list[CommercialInvoiceReceiptAllocationOut] = []
+    for a in allocs:
+        v = vouchers_by_id.get(a.voucher_id)
+        out_allocs.append(
+            CommercialInvoiceReceiptAllocationOut(
+                id=a.id,
+                commercial_invoice_id=a.commercial_invoice_id,
+                voucher_id=a.voucher_id,
+                order_id=a.order_id,
+                allocated_amount=float(a.allocated_amount or 0),
+                allocated_base_amount=float(a.allocated_base_amount or 0),
+                currency=a.currency,
+                exchange_rate_to_base=float(a.exchange_rate_to_base) if a.exchange_rate_to_base is not None else None,
+                status=a.status,
+                voucher_number=getattr(v, "voucher_number", None) if v else None,
+                voucher_status=getattr(v, "status", None) if v else None,
+                created_at=a.created_at.isoformat() if a.created_at else "",
+            )
+        )
+    return CommercialInvoicePaymentSummaryResponse(
+        invoice_id=inv.id,
+        invoice_amount=float(outstanding.total_amount),
+        currency=outstanding.currency,
+        paid_active=float(outstanding.allocated_active),
+        paid_posted=float(outstanding.allocated_posted),
+        outstanding_for_new=float(outstanding.outstanding_for_new),
+        outstanding_posted=float(outstanding.outstanding_posted),
+        allocations=out_allocs,
+    )
+
+
+@router.post(
+    "/invoices/{invoice_id}/create-receipt",
+    response_model=CommercialInvoiceCreateReceiptResponse,
+    tags=["commercial-invoices"],
+)
+async def create_commercial_invoice_receipt(
+    invoice_id: int,
+    body: CommercialInvoiceCreateReceiptBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user.tenant_id != tenant.id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+    from decimal import Decimal
+
+    from app.common.permissions import PERMISSION_FINANCE_RECEIPT_FROM_PROFORMA
+
+    # Reuse soft receipt permission (same cash application role).
+    await _assert_soft_perm(db, user, tenant.id, PERMISSION_FINANCE_RECEIPT_FROM_PROFORMA)
+    inv = await load_commercial_invoice(db, tenant_id=tenant.id, invoice_id=invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Commercial invoice not found")
+    bank = await db.get(ChartOfAccount, body.bank_ledger_id)
+    recv = await db.get(ChartOfAccount, body.receivable_ledger_id)
+    if not bank or bank.tenant_id != tenant.id:
+        raise HTTPException(status_code=400, detail="bank_ledger_id not found for tenant")
+    if not recv or recv.tenant_id != tenant.id:
+        raise HTTPException(status_code=400, detail="receivable_ledger_id not found for tenant")
+    allocation, voucher, outstanding, was_created = await create_receipt_from_commercial_invoice(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        invoice=inv,
+        amount=Decimal(str(body.amount)),
+        receipt_date=body.receipt_date or date.today(),
+        bank_ledger_id=body.bank_ledger_id,
+        receivable_ledger_id=body.receivable_ledger_id,
+        currency=body.currency,
+        exchange_rate_to_base=Decimal(str(body.exchange_rate_to_base)),
+        idempotency_key=body.idempotency_key,
+    )
+    await db.commit()
+    return CommercialInvoiceCreateReceiptResponse(
+        voucher_id=voucher.id,
+        voucher_number=voucher.voucher_number,
+        allocation_id=allocation.id,
+        remaining_balance=float(outstanding.outstanding_for_new),
+        paid_so_far=float(outstanding.allocated_active),
+        invoice_amount=float(outstanding.total_amount),
+        was_created=was_created,
+    )
 
 
 @router.get(

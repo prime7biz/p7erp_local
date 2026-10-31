@@ -9,8 +9,9 @@ ENV VITE_APP_VERSION=${VITE_APP_VERSION}
 
 WORKDIR /app
 COPY package*.json ./
+# Build needs tsx/typescript (devDependencies). Force include even if NODE_ENV=production.
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+    npm ci --include=dev
 COPY . .
 RUN npm run build
 

@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.common.permissions import require_internal_permission
 from app.modules.manufacturing.costing_hooks_router import router as costing_hooks_router
 from app.modules.manufacturing.execution_router import router as execution_router
 from app.modules.manufacturing.master_data_router import router as master_data_router
@@ -8,7 +9,7 @@ from app.modules.manufacturing.quality_router import router as quality_router
 from app.modules.manufacturing.samples_router import router as samples_router
 from app.modules.manufacturing.tna_router import router as tna_router
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_internal_permission("production.access"))])
 
 router.include_router(master_data_router)
 router.include_router(planning_router)

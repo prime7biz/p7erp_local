@@ -613,6 +613,22 @@ async def update_sample(
     row.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(row)
+    if (row.status or "").lower() == "approved" and row.order_id:
+        from app.modules.merch.constants import TNA_EVENT_SAMPLE_APPROVED
+        from app.modules.merch.followup_sync_service import maybe_sync_followup
+
+        await maybe_sync_followup(
+            db,
+            tenant=tenant,
+            order_id=row.order_id,
+            event_key=TNA_EVENT_SAMPLE_APPROVED,
+            sample_type=row.sample_type,
+            merch_sample_request_id=row.id,
+            user_id=user.id,
+            note=f"[auto-sync] Sample {row.sample_code} approved",
+        )
+        await db.commit()
+        await db.refresh(row)
     return await _enrich_sample_out(db, tenant.id, row)
 
 

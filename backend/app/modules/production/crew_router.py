@@ -44,6 +44,9 @@ from app.modules.production.schemas import (
 
 router = APIRouter(prefix="/production", tags=["production-crew"])
 
+# Workers physically on the line that day (late arrivals included).
+_ON_FLOOR_STATUSES = ("PRESENT", "LATE", "HALF_DAY")
+
 OPTIONAL_DEPARTMENTS = {"knitting", "dyeing", "printing", "aop", "embroidery", "elastic", "washing"}
 
 
@@ -1323,7 +1326,7 @@ async def sync_crew_actual_present(db: AsyncSession, *, tenant_id: int, producti
                             AttendanceEntry.tenant_id == tenant_id,
                             AttendanceEntry.attendance_date == production_date,
                             AttendanceEntry.employee_id == daily.employee_id,
-                            AttendanceEntry.status == "PRESENT",
+                            AttendanceEntry.status.in_(_ON_FLOOR_STATUSES),
                         )
                     )
                 ).scalar_one()
@@ -1340,7 +1343,7 @@ async def sync_crew_actual_present(db: AsyncSession, *, tenant_id: int, producti
                             AttendanceEntry.tenant_id == tenant_id,
                             AttendanceEntry.attendance_date == production_date,
                             AttendanceEntry.employee_id.in_(ids),
-                            AttendanceEntry.status == "PRESENT",
+                            AttendanceEntry.status.in_(_ON_FLOOR_STATUSES),
                         )
                     )
                 ).scalar_one()
@@ -1361,7 +1364,7 @@ async def sync_crew_actual_present(db: AsyncSession, *, tenant_id: int, producti
                             AttendanceEntry.tenant_id == tenant_id,
                             AttendanceEntry.attendance_date == production_date,
                             AttendanceEntry.employee_id == daily.employee_id,
-                            AttendanceEntry.status == "PRESENT",
+                            AttendanceEntry.status.in_(_ON_FLOOR_STATUSES),
                         )
                     )
                 ).scalar_one()
@@ -1378,7 +1381,7 @@ async def sync_crew_actual_present(db: AsyncSession, *, tenant_id: int, producti
                             AttendanceEntry.tenant_id == tenant_id,
                             AttendanceEntry.attendance_date == production_date,
                             AttendanceEntry.employee_id.in_(ids),
-                            AttendanceEntry.status == "PRESENT",
+                            AttendanceEntry.status.in_(_ON_FLOOR_STATUSES),
                         )
                     )
                 ).scalar_one()

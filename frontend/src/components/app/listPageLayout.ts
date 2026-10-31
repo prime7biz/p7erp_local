@@ -4,19 +4,19 @@
  */
 
 /** Root wrapper directly under AppPageHeader */
-export const listPageRootClass = "min-w-0 space-y-6";
+export const listPageRootClass = "min-w-0 space-y-4";
 
 /** Search / filter toolbar (single row on sm+) */
 export const listPageFilterBarClass =
-  "flex flex-col flex-wrap gap-2 rounded-xl border border-border bg-surface-raised p-3 shadow-sm sm:flex-row sm:items-center";
+  "flex flex-col flex-wrap gap-2 rounded-lg border border-border bg-surface-raised p-2.5 sm:flex-row sm:items-center";
 
 /** Larger filter panel (e.g. Customers AI + grid filters) */
 export const listPageFilterPanelClass =
-  "rounded-xl border border-border bg-surface-raised p-4 shadow-sm space-y-3";
+  "rounded-lg border border-border bg-surface-raised p-3 space-y-3";
 
 /** Compact panel wrapping a custom filter component (e.g. Vendors filter bar) */
 export const listPagePanelClass =
-  "rounded-xl border border-border bg-surface-raised p-3 shadow-sm";
+  "rounded-lg border border-border bg-surface-raised p-2.5";
 
 /** Primary search input in the list toolbar */
 /**
@@ -53,18 +53,18 @@ export const listPageKpiGridClass = "grid grid-cols-1 gap-3 sm:grid-cols-4";
 export const listPageKpiGridClass3 = "grid grid-cols-1 gap-3 sm:grid-cols-3";
 
 export const listPageKpiCardClass =
-  "rounded-xl border border-border bg-surface-raised p-4 shadow-sm";
+  "rounded-lg border border-border bg-surface-raised p-3";
 
 export const listPageKpiLabelClass =
   "text-xs font-semibold uppercase tracking-wide text-text-muted";
 
 /** Inline error banner under filters */
 export const listPageErrorClass =
-  "rounded-xl border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground";
+  "rounded-lg border border-status-danger/20 bg-status-danger-subtle px-3 py-2.5 text-sm text-status-danger-foreground";
 
 /** Outer card around scrollable table + pagination */
 export const listPageTableCardClass =
-  "rounded-xl border border-border bg-surface-raised overflow-hidden shadow-sm";
+  "rounded-lg border border-border bg-surface-raised overflow-hidden";
 
 export const listPageEmptyClass = "p-12 text-center text-text-muted";
 

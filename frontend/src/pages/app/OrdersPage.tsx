@@ -11,6 +11,8 @@ import {
   type OrderSewingLineSummaryOut,
 } from "@/api/client";
 import { useListPagination } from "@/hooks/useListPagination";
+import { useDebouncedValue, useLatestRequest } from "@/hooks/useDebouncedValue";
+import { logApiError } from "@/utils/logApiError";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import {
@@ -168,17 +170,22 @@ export function OrdersPage() {
   const [listTotal, setListTotal] = useState(0);
   const [groundingByOrderId, setGroundingByOrderId] = useState<Record<number, PlanningGroundingSummaryRow>>({});
 
+  const debouncedSearch = useDebouncedValue(search);
+  const latest = useLatestRequest();
+
   const load = async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
       const res = await api.listOrdersPaginated({
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         status: statusFilter || undefined,
         ai_indicators: 1,
         page,
         page_size: pageSize,
       });
+      if (!latest.isCurrent(token)) return;
       setItems(res.items);
       setListTotal(res.total);
       if (res.page !== page) setPage(res.page);
@@ -187,15 +194,18 @@ export function OrdersPage() {
         try {
           const summary = await api.getOrdersPlanningGroundingSummary(res.items.map((x) => x.id));
           gmap = Object.fromEntries(summary.map((s) => [s.order_id, s]));
-        } catch {
+        } catch (e) {
+          logApiError("OrdersPage.groundingSummary", e);
           gmap = {};
         }
       }
+      if (!latest.isCurrent(token)) return;
       setGroundingByOrderId(gmap);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load orders");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -216,7 +226,7 @@ export function OrdersPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, page, pageSize]);
+  }, [debouncedSearch, statusFilter, page, pageSize]);
 
   useEffect(() => {
     if (!modalOpen || !editing) return;

@@ -19,12 +19,21 @@ class EssPreferenceResponse(BaseModel):
     push_notifications: bool
 
 
+class MyProfileUpdate(BaseModel):
+    email: str | None = None
+    phone: str | None = None
+    address_line: str | None = None
+
+
 class MyProfileResponse(BaseModel):
     employee_id: int
     employee_code: str
     full_name: str
     email: str | None
     phone: str | None
+    address_line: str | None
+    department: str | None
+    designation: str | None
     department_id: int | None
     designation_id: int | None
     joining_date: date | None

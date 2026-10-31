@@ -33,9 +33,9 @@ const features = [
 ];
 
 const stats = [
-  { value: "500+", label: "Styles Managed" },
-  { value: "99.9%", label: "Uptime" },
-  { value: "50+", label: "Companies Trust Us" },
+  { value: "2-4 weeks", label: "Typical setup time" },
+  { value: "9 modules", label: "Unified platform" },
+  { value: "24/7", label: "Support coverage" },
 ];
 
 export function UnifiedLoginPage() {

@@ -59,7 +59,7 @@ const CARDS: Array<{
   {
     title: "Vouchers & voucher types",
     description: "Create vouchers; voucher type lists are driven from posted data and day book filters.",
-    href: `${PREFIX}/vouchers`,
+    href: `${PREFIX}/accounts/vouchers`,
     icon: <FileSpreadsheet className="h-8 w-8 text-brand-primary" />,
   },
   {

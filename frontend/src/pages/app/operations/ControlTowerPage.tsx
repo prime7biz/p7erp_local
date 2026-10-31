@@ -121,7 +121,7 @@ export function ControlTowerPage() {
           <p className="font-medium">Control Tower is disabled for this tenant.</p>
           <p className="mt-2 text-text-secondary dark:text-amber-100/80">
             Ask an admin to enable <code className="rounded bg-white/60 px-1 dark:bg-black/20">control_tower_enabled</code> in{" "}
-            <Link className="text-status-info underline" to="/app/settings/configuration">
+            <Link className="text-status-info underline" to="/app/settings/config">
               Settings → Configuration
             </Link>
             .

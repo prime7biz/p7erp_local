@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion, useInView } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowRight,
   ArrowUp,
@@ -21,12 +21,18 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const trustStats = [
-  { label: "Active Users", value: 500, suffix: "+" },
-  { label: "Uptime", value: 99.9, suffix: "%" },
-  { label: "Processed", value: 50, prefix: "$", suffix: "M+" },
-  { label: "Support", value: 24, suffix: "/7" },
+/** Verifiable product facts only — no invented usage numbers. */
+const productFacts = [
+  { label: "Inquiry → shipment", value: "One workflow" },
+  { label: "Merch · Production · Finance · HR", value: "One platform" },
+  { label: "Every voucher & document", value: "Audit trail" },
+  { label: "Office hours (BST)", value: "Local support" },
 ] as const;
+
+/** Controls the product actually enforces (not certifications we have not earned). */
+const securityControls = ["Tenant data isolation", "Login lockout & rate limits", "Role-based permissions"] as const;
+
+export const DEMO_VIDEO_SRC = "/demo-intro.mp4";
 
 const processSteps = [
   {
@@ -51,34 +57,44 @@ const processSteps = [
   },
 ];
 
-function useCountUp(target: number, shouldRun: boolean, durationMs = 1300) {
-  const [value, setValue] = useState(0);
-
+/** Accessible video dialog for the product demo (Escape / backdrop closes). */
+export function DemoVideoDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   useEffect(() => {
-    if (!shouldRun) return;
-    let frame = 0;
-    const start = performance.now();
-
-    const tick = (now: number) => {
-      const progress = Math.min((now - start) / durationMs, 1);
-      const next = target * progress;
-      setValue(next);
-      if (progress < 1) frame = requestAnimationFrame(tick);
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
     };
-
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [target, shouldRun, durationMs]);
-
-  return value;
-}
-
-function formatCounter(value: number, hasDecimal = false) {
-  if (hasDecimal) return value.toFixed(1);
-  return Math.round(value).toString();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Prime7 ERP product demo"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={onClose}
+    >
+      <div className="relative w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -top-10 right-0 rounded-lg px-2 py-1 text-sm text-white hover:bg-white/10"
+          aria-label="Close demo video"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <video src={DEMO_VIDEO_SRC} controls autoPlay playsInline className="w-full rounded-xl bg-black shadow-2xl">
+          Your browser does not support embedded video.
+        </video>
+      </div>
+    </div>
+  );
 }
 
 export function HeroEnhancedSection() {
+  const [demoOpen, setDemoOpen] = useState(false);
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-surface-inverse via-surface-inverse to-surface-inverse text-text-inverse">
       {/* Background layers */}
@@ -103,15 +119,18 @@ export function HeroEnhancedSection() {
                   <ArrowRight className="ml-2 h-4 w-4 shrink-0" />
                 </Button>
               </Link>
-              <Link to="/contact" className="w-full sm:w-auto inline-flex justify-center">
-                <motion.div animate={{ y: [0, -2, 0] }} transition={{ repeat: Number.POSITIVE_INFINITY, duration: 2.2 }} className="w-full sm:w-auto">
-                  <Button variant="outline" size="lg" className="w-full sm:w-auto whitespace-nowrap bg-white/10 border-white/35 text-white hover:bg-white/20">
-                  <PlayCircle className="mr-2 h-5 w-5 text-brand-primary shrink-0" />
-                    Watch Demo
-                  </Button>
-                </motion.div>
-              </Link>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={() => setDemoOpen(true)}
+                className="w-full sm:w-auto whitespace-nowrap bg-white/10 border-white/35 text-white hover:bg-white/20"
+              >
+                <PlayCircle className="mr-2 h-5 w-5 text-brand-primary shrink-0" />
+                Watch Demo
+              </Button>
             </div>
+            <DemoVideoDialog open={demoOpen} onClose={() => setDemoOpen(false)} />
           </div>
 
           <motion.div
@@ -130,19 +149,23 @@ export function HeroEnhancedSection() {
                   <span className="ml-2 sm:ml-3 text-xs font-medium text-text-muted">Prime7 ERP Dashboard</span>
                 </div>
                 <div className="relative aspect-video sm:aspect-[16/10] bg-gradient-to-br from-surface-inverse to-surface-inverse">
-                  <img
-                    src="/images/prime7-dashboard.png"
-                    alt="Prime7 ERP Dashboard"
-                    className="absolute inset-0 w-full h-full object-cover object-top"
-                    loading="eager"
-                    width={800}
-                    height={500}
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                      const placeholder = e.currentTarget.nextElementSibling as HTMLElement;
-                      if (placeholder) placeholder.classList.remove("hidden");
-                    }}
-                  />
+                  <picture className="contents">
+                    <source srcSet="/images/prime7-dashboard.webp" type="image/webp" />
+                    <img
+                      src="/images/prime7-dashboard.png"
+                      alt="Prime7 ERP Dashboard"
+                      className="absolute inset-0 w-full h-full object-cover object-top"
+                      loading="eager"
+                      fetchPriority="high"
+                      width={800}
+                      height={500}
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                        const placeholder = e.currentTarget.parentElement?.nextElementSibling as HTMLElement | null;
+                        if (placeholder) placeholder.classList.remove("hidden");
+                      }}
+                    />
+                  </picture>
                   <div className="absolute inset-0 hidden flex items-center justify-center bg-gradient-to-br from-surface-inverse to-surface-inverse" aria-hidden="true">
                     <span className="text-sm font-medium text-text-inverse/80">Dashboard preview</span>
                   </div>
@@ -160,8 +183,8 @@ export function HeroEnhancedSection() {
                 <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-white/80 truncate">Live Production Snapshot</p>
-                <p className="text-sm font-semibold text-white">Line Efficiency 92%</p>
+                <p className="text-xs text-white/80 truncate">Sample dashboard view</p>
+                <p className="text-sm font-semibold text-white">Hourly line efficiency</p>
               </div>
             </motion.div>
           </motion.div>
@@ -171,85 +194,33 @@ export function HeroEnhancedSection() {
   );
 }
 
-/** Muted grayscale placeholder logos for "Trusted by innovative garment manufacturers". */
-const TRUST_LOGOS = [
-  { id: 1, name: "Partner 1" },
-  { id: 2, name: "Partner 2" },
-  { id: 3, name: "Partner 3" },
-  { id: 4, name: "Partner 4" },
-  { id: 5, name: "Partner 5" },
-];
-
+/** Text social proof — no fake partner logo boxes. */
 export function LandingTrustLogoStrip() {
   return (
-    <section className="py-10 sm:py-12 bg-white border-b border-border-subtle" aria-label="Trusted by">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <p className="text-center text-sm font-medium text-text-muted mb-8 sm:mb-10">
-          Trusted by leading garment manufacturers
+    <section className="py-8 bg-surface-raised border-b border-border-subtle" aria-label="Trusted by">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <p className="text-text-muted text-sm">
+          Trusted by garment manufacturers across Bangladesh, Vietnam, and India
         </p>
-        <div className="flex flex-wrap items-center justify-center gap-10 sm:gap-14 lg:gap-20">
-          {TRUST_LOGOS.map((logo) => (
-            <div
-              key={logo.id}
-              className="h-9 sm:h-10 w-28 sm:w-32 rounded-lg bg-surface-subtle flex items-center justify-center grayscale opacity-60"
-              aria-hidden="true"
-            >
-              <span className="text-xs text-text-inverse/80 font-medium">{logo.name}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/** Placeholder for a customer testimonial (LC expiry / costing errors). */
-export function LandingTestimonialPlaceholder() {
-  return (
-    <section className="py-20 lg:py-28 bg-surface-subtle/80 border-b border-border-subtle" aria-labelledby="testimonial-heading">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h2 id="testimonial-heading" className="sr-only">What our customers say</h2>
-        <blockquote className="text-center">
-          <p className="text-lg sm:text-xl text-text-secondary leading-relaxed italic">
-            &ldquo;Prime7&rsquo;s TNA alerts helped us avoid an LC expiry that would have cost us six figures. We fixed costing errors across three seasons after moving from Excel — everything is now in one place.&rdquo;
-          </p>
-          <footer className="mt-8">
-            <p className="text-sm font-semibold text-text-primary">Operations Director</p>
-            <p className="text-sm text-text-secondary mt-0.5">Export-oriented apparel manufacturer</p>
-          </footer>
-        </blockquote>
       </div>
     </section>
   );
 }
 
 export function TrustBadgesBar() {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const isInView = useInView(ref, { once: true, amount: 0.4 });
-  const counterValues = [
-    useCountUp(trustStats[0].value, isInView),
-    useCountUp(trustStats[1].value, isInView),
-    useCountUp(trustStats[2].value, isInView),
-    useCountUp(trustStats[3].value, isInView),
-  ];
-
   return (
-    <section ref={ref} className="bg-surface-inverse text-text-inverse py-6">
+    <section className="bg-surface-inverse text-text-inverse py-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {trustStats.map((stat, index) => (
-            <div key={stat.label} className="rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-center">
-              <p className="text-2xl font-bold text-brand-primary">
-                {"prefix" in stat ? stat.prefix : ""}
-                {formatCounter(counterValues[index] ?? 0, stat.value % 1 !== 0)}
-                {stat.suffix ?? ""}
-              </p>
-              <p className="text-xs sm:text-sm text-white/80">{stat.label}</p>
+          {productFacts.map((fact) => (
+            <div key={fact.label} className="rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-center">
+              <p className="text-xl font-bold text-brand-primary">{fact.value}</p>
+              <p className="text-xs sm:text-sm text-white/80">{fact.label}</p>
             </div>
           ))}
         </div>
         <div className="mt-4 flex flex-wrap justify-center items-center gap-2 text-xs">
-          {["ISO 27001 Ready", "SOC 2 Practices", "GDPR Aligned"].map((item) => (
+          {securityControls.map((item) => (
             <span key={item} className="inline-flex items-center gap-1 rounded-full bg-white/12 border border-white/20 px-3 py-1">
               <ShieldCheck className="h-3.5 w-3.5 text-brand-primary" />
               {item}
@@ -366,10 +337,12 @@ export function InteractiveProcessFlowSection() {
     <section className="py-20 lg:py-24 bg-surface-subtle">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
-          <h2 className="text-3xl sm:text-4xl font-bold text-text-primary">Interactive Process Flow</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-text-primary">Interactive Process Flow</h2>
           <p className="mt-4 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">Hover or tap each stage to view how Prime7 ERP keeps teams aligned from first inquiry to shipment.</p>
         </div>
-        <div className="grid lg:grid-cols-5 gap-4">
+        <div className="relative">
+          <div className="absolute top-4 left-0 right-0 h-0.5 bg-brand-primary/30 hidden lg:block" aria-hidden />
+          <div className="grid lg:grid-cols-5 gap-4 relative">
           {processSteps.map((step, idx) => {
             const active = idx === activeIndex;
             return (
@@ -384,9 +357,6 @@ export function InteractiveProcessFlowSection() {
                 }`}
                 whileTap={{ scale: 0.99 }}
               >
-                {idx < processSteps.length - 1 && (
-                  <span className="hidden lg:block absolute -right-2 top-1/2 -translate-y-1/2 h-0.5 w-4 bg-gradient-to-r from-brand-primary/50 to-brand-primary/40" />
-                )}
                 <div className="flex items-center gap-2">
                   <span className={`h-7 w-7 rounded-full text-xs font-bold flex items-center justify-center ${active ? "bg-brand-primary text-brand-primary-foreground" : "bg-surface-subtle text-text-secondary"}`}>
                     {idx + 1}
@@ -403,6 +373,7 @@ export function InteractiveProcessFlowSection() {
               </motion.button>
             );
           })}
+          </div>
         </div>
       </div>
     </section>

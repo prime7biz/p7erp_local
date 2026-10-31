@@ -18,6 +18,7 @@ from app.models import (
     BomItem,
     Customer,
     GarmentStyle,
+    Item,
     Order,
     PurchaseOrder,
     PurchaseOrderItem,
@@ -97,7 +98,13 @@ def _bom_to_dict(bom: Bom) -> dict:
     }
 
 
-def _line_to_dict(line: BomItem, procurement_status: str) -> dict:
+def _line_to_dict(
+    line: BomItem,
+    procurement_status: str,
+    *,
+    current_stock: str | None = None,
+    avg_cost: str | None = None,
+) -> dict:
     def n(v):
         return float(v) if v is not None else None
 
@@ -137,6 +144,8 @@ def _line_to_dict(line: BomItem, procurement_status: str) -> dict:
         "remarks": line.remarks,
         "sort_order": line.sort_order,
         "procurement_status": procurement_status,
+        "current_stock": current_stock,
+        "avg_cost": avg_cost,
     }
 
 
@@ -158,6 +167,13 @@ async def _load_bom_detail(db: AsyncSession, tenant: Tenant, bom: Bom) -> dict:
         .order_by(BomItem.sort_order, BomItem.id)
     )
     lines = list(lr.scalars().all())
+    item_ids = [ln.item_id for ln in lines if ln.item_id]
+    stock_by_id: dict[int, Item] = {}
+    if item_ids:
+        stock_rows = (
+            await db.execute(select(Item).where(Item.tenant_id == tenant.id, Item.id.in_(item_ids)))
+        ).scalars().all()
+        stock_by_id = {it.id: it for it in stock_rows}
     items = []
     sq = bom.order_qty_snapshot or 0
     total_quoted = 0.0
@@ -167,7 +183,15 @@ async def _load_bom_detail(db: AsyncSession, tenant: Tenant, bom: Bom) -> dict:
     procured = 0
     for line in lines:
         st = await proc_svc.get_line_procurement_status(db, tenant.id, line)
-        items.append(_line_to_dict(line, st))
+        it = stock_by_id.get(line.item_id) if line.item_id else None
+        items.append(
+            _line_to_dict(
+                line,
+                st,
+                current_stock=str(it.current_stock) if it is not None else None,
+                avg_cost=str(it.avg_cost) if it is not None else None,
+            )
+        )
         if line.quoted_total_cost is not None:
             total_quoted += float(line.quoted_total_cost)
         if line.bom_expected_total_cost is not None:
@@ -601,6 +625,9 @@ async def create_po_from_line(
     if (bom.status or "").upper() not in GOVERNED_SET:
         raise HTTPException(status_code=400, detail="BOM must be APPROVED or FROZEN to create PO")
     try:
+        from app.modules.merch.execution_gates import assert_sample_approvals_for_po
+
+        await assert_sample_approvals_for_po(db, tenant=tenant, order_id=bom.order_id)
         po, _poi, warnings = await proc_svc.create_po_from_bom_line(
             db,
             tenant_id=tenant.id,
@@ -637,6 +664,12 @@ async def bulk_generate_pos(
         raise HTTPException(status_code=404, detail="BOM not found")
     if (bom.status or "").upper() not in GOVERNED_SET:
         raise HTTPException(status_code=400, detail="BOM must be APPROVED or FROZEN")
+    try:
+        from app.modules.merch.execution_gates import assert_sample_approvals_for_po
+
+        await assert_sample_approvals_for_po(db, tenant=tenant, order_id=bom.order_id)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     q = select(BomItem).where(BomItem.bom_id == bom_id, BomItem.tenant_id == tenant.id)
     if body.line_ids:
         q = q.where(BomItem.id.in_(body.line_ids))

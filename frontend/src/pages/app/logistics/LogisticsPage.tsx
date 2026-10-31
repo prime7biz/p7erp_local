@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Download } from "lucide-react";
 
-import { api, type ShipmentCreate, type ShipmentRow, type TradeCaseRow } from "@/api/client";
+import { api, type PackingListCreate, type PackingListRow, type ShipmentContainerRow, type ShipmentCreate, type ShipmentRow, type TradeCaseRow } from "@/api/client";
+import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel";
+import { ExtractionAlertsBanner } from "@/components/ai-extract/ExtractionAlertsBanner";
+import { FileImportCard } from "@/components/ai-extract/FileImportCard";
+import { useCommercialDocExtraction } from "@/hooks/useCommercialDocExtraction";
+import type { ConflictResolutionChoice, FieldApplyState } from "@/types/extraction";
+import { buildShippingFieldApplyStates } from "@/utils/extractionHelpers";
+import { logApiError } from "@/utils/logApiError";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 const EMPTY_FORM: ShipmentCreate = {
   trade_case_id: 0,
@@ -19,8 +27,17 @@ const EMPTY_FORM: ShipmentCreate = {
 };
 
 export function LogisticsPage() {
-  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const preselectedTradeCaseId = Number(params.get("trade_case_id") || 0);
+  const preselectedOrderId = Number(params.get("order_id") || 0);
+  const preselectedChallanId = Number(params.get("delivery_challan_id") || 0);
+  const activeTab = (params.get("tab") || (preselectedOrderId || preselectedChallanId ? "packing" : "shipments")).toLowerCase();
+  const setTab = (tab: "shipments" | "packing") => {
+    const next = new URLSearchParams(params);
+    next.set("tab", tab);
+    setParams(next, { replace: true });
+  };
 
   const [items, setItems] = useState<ShipmentRow[]>([]);
   const [tradeCases, setTradeCases] = useState<TradeCaseRow[]>([]);
@@ -39,31 +56,124 @@ export function LogisticsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [packingLists, setPackingLists] = useState<PackingListRow[]>([]);
+  const [containers, setContainers] = useState<ShipmentContainerRow[]>([]);
+  const [packForm, setPackForm] = useState<PackingListCreate>({
+    order_id: preselectedOrderId || null,
+    delivery_challan_id: preselectedChallanId || null,
+    shipment_id: null,
+    total_cartons: 0,
+    status: "DRAFT",
+  });
+  const [containerForm, setContainerForm] = useState({
+    shipment_id: 0,
+    container_number: "",
+    container_type: "40HC",
+    seal_number: "",
+    loading_status: "EMPTY",
+  });
+  const [packSaving, setPackSaving] = useState(false);
+  const shippingExtract = useCommercialDocExtraction("shipping");
+  const [shippingReviewRows, setShippingReviewRows] = useState<FieldApplyState[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [shipments, cases] = await Promise.all([
+      const [shipments, cases, packs, conts] = await Promise.all([
         api.listShipments({
           trade_case_id: filterTradeCaseId,
           status: filterStatus || undefined,
         }),
         api.listTradeCases({ limit: 500 }),
+        api.listPackingLists({
+          order_id: preselectedOrderId || undefined,
+          limit: 100,
+        }),
+        api.listShipmentContainers({ limit: 100 }),
       ]);
       setItems(shipments);
       setTradeCases(cases);
+      setPackingLists(packs);
+      setContainers(conts);
     } catch (e) {
       setItems([]);
       setError(e instanceof Error ? e.message : "Failed to load logistics data");
     } finally {
       setLoading(false);
     }
-  }, [filterTradeCaseId, filterStatus]);
+  }, [filterTradeCaseId, filterStatus, preselectedOrderId]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!shippingExtract.response) {
+      setShippingReviewRows([]);
+      return;
+    }
+    const current: Record<string, string> = {
+      reference: form.reference ?? "",
+      carrier: form.carrier ?? "",
+      booking_ref: form.booking_ref ?? "",
+      bl_awb: form.bl_awb ?? "",
+      etd: form.etd ?? "",
+      eta: form.eta ?? "",
+      origin_port: form.origin_port ?? "",
+      dest_port: form.dest_port ?? "",
+      notes: form.notes ?? "",
+    };
+    setShippingReviewRows(buildShippingFieldApplyStates(shippingExtract.response, current));
+    const status = shippingExtract.response.suggested_status;
+    if (status) {
+      setForm((prev) => ({ ...prev, status: status as ShipmentCreate["status"] }));
+    }
+    const matchId = shippingExtract.response.matched_shipment_id;
+    if (matchId) {
+      const matched = items.find((s) => s.id === matchId);
+      if (matched) {
+        setEditingId(matched.id);
+        setForm({
+          trade_case_id: matched.trade_case_id,
+          reference: matched.reference,
+          status: (status as ShipmentCreate["status"]) || matched.status || "IN_TRANSIT",
+          carrier: matched.carrier || "",
+          booking_ref: matched.booking_ref || "",
+          bl_awb: matched.bl_awb || "",
+          etd: matched.etd || "",
+          eta: matched.eta || "",
+          origin_port: matched.origin_port || "",
+          dest_port: matched.dest_port || "",
+          notes: matched.notes || "",
+        });
+      }
+    }
+  }, [shippingExtract.response]); // eslint-disable-line react-hooks/exhaustive-deps -- snapshot once per extraction
+
+  const applyShippingField = (fieldKey: string) => {
+    const row = shippingReviewRows.find((r) => r.fieldKey === fieldKey);
+    if (!row || row.skipped) return;
+    if (row.hasConflict && row.conflictResolution !== "use_extracted" && row.conflictResolution !== "merge") return;
+    setForm((prev) => {
+      const next = { ...prev };
+      if (fieldKey === "reference") next.reference = row.extractedValue;
+      else if (fieldKey === "carrier") next.carrier = row.extractedValue;
+      else if (fieldKey === "booking_ref") next.booking_ref = row.extractedValue;
+      else if (fieldKey === "bl_awb") next.bl_awb = row.extractedValue;
+      else if (fieldKey === "etd") next.etd = row.extractedValue;
+      else if (fieldKey === "eta") next.eta = row.extractedValue;
+      else if (fieldKey === "origin_port") next.origin_port = row.extractedValue;
+      else if (fieldKey === "dest_port") next.dest_port = row.extractedValue;
+      else if (fieldKey === "notes" || fieldKey === "container_number") {
+        const noteLine =
+          fieldKey === "container_number" ? `Container: ${row.extractedValue}` : row.extractedValue;
+        next.notes = fieldKey === "notes" ? row.extractedValue : [prev.notes, noteLine].filter(Boolean).join("\n");
+      }
+      return next;
+    });
+    setShippingReviewRows((prev) => prev.map((r) => (r.fieldKey === fieldKey ? { ...r, applied: true } : r)));
+  };
 
   const filteredItems = useMemo(() => {
     if (!etdFrom && !etdTo) return items;
@@ -168,9 +278,83 @@ export function LogisticsPage() {
         <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">{error}</div>
       )}
 
+      <div className="flex gap-2 border-b border-border">
+        <button
+          type="button"
+          onClick={() => setTab("shipments")}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${
+            activeTab === "shipments"
+              ? "border-brand-primary text-brand-primary"
+              : "border-transparent text-text-muted hover:text-text-secondary"
+          }`}
+        >
+          Shipments
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("packing")}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${
+            activeTab === "packing"
+              ? "border-brand-primary text-brand-primary"
+              : "border-transparent text-text-muted hover:text-text-secondary"
+          }`}
+        >
+          Packing Lists
+        </button>
+      </div>
+
+      {activeTab === "shipments" ? (
+      <>
       <section className="rounded-xl border border-border bg-surface-raised shadow-sm">
         <div className="border-b border-border bg-surface-subtle px-5 py-3">
           <h2 className="text-base font-semibold text-text-primary">{editingId ? "Update Shipment" : "Create Shipment"}</h2>
+        </div>
+        <div className="space-y-4 border-b border-border p-5">
+          <FileImportCard
+            title="Extract from shipping document"
+            subtitle="Upload BL, AWB, or packing list (PDF/image). Review fields before saving — nothing is auto-saved."
+            status={shippingExtract.status}
+            error={shippingExtract.error}
+            onExtract={(file) => {
+              void shippingExtract.extract(file).catch((e) => logApiError("LogisticsPage.shippingExtract", e));
+            }}
+            onClear={() => {
+              shippingExtract.clear();
+              setShippingReviewRows([]);
+            }}
+          />
+          {shippingExtract.response ? (
+            <ExtractionAlertsBanner
+              alerts={shippingExtract.response.alerts}
+              matchHint={
+                shippingExtract.response.match_hint ||
+                (shippingExtract.response.matched_shipment_reference
+                  ? `Linked candidate: ${shippingExtract.response.matched_shipment_reference}`
+                  : null)
+              }
+              suggestedStatus={shippingExtract.response.suggested_status}
+            />
+          ) : null}
+          {shippingReviewRows.length > 0 ? (
+            <AutofillReviewPanel
+              title="Review shipping extracted fields"
+              fields={shippingReviewRows}
+              onApply={applyShippingField}
+              onApplyAllHigh={() => {
+                shippingReviewRows
+                  .filter((r) => r.confidenceLevel === "high" && !r.applied && !r.skipped && !r.hasConflict)
+                  .forEach((r) => applyShippingField(r.fieldKey));
+              }}
+              onSkip={(k) =>
+                setShippingReviewRows((prev) => prev.map((r) => (r.fieldKey === k ? { ...r, skipped: true } : r)))
+              }
+              onResolveConflict={(k, choice: ConflictResolutionChoice) =>
+                setShippingReviewRows((prev) =>
+                  prev.map((r) => (r.fieldKey === k ? { ...r, conflictResolution: choice } : r)),
+                )
+              }
+            />
+          ) : null}
         </div>
         <form onSubmit={submit} className="grid grid-cols-1 gap-4 p-5 md:grid-cols-4">
           <div>
@@ -446,6 +630,271 @@ export function LogisticsPage() {
           </div>
         )}
       </section>
+      </>
+      ) : null}
+
+      {activeTab === "packing" ? (
+      <>
+      <section className="space-y-4 rounded-xl border border-border bg-surface-raised p-4">
+        <div>
+          <h2 className="text-sm font-semibold text-text-primary">Packing lists</h2>
+          <p className="text-xs text-text-muted mt-0.5">
+            Create packing list headers (carton/weight totals). Line-level size/color packing comes later.
+            {preselectedOrderId ? ` Prefill order #${preselectedOrderId}.` : ""}
+            {preselectedChallanId ? ` Prefill challan #${preselectedChallanId}.` : ""}
+          </p>
+        </div>
+        <form
+          className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setPackSaving(true);
+            setError("");
+            try {
+              const created = await api.createPackingList({
+                ...packForm,
+                order_id: packForm.order_id || preselectedOrderId || null,
+                delivery_challan_id: packForm.delivery_challan_id || preselectedChallanId || null,
+                shipment_id: packForm.shipment_id || null,
+                total_cartons: Number(packForm.total_cartons || 0),
+              });
+              setPackForm({
+                order_id: preselectedOrderId || null,
+                delivery_challan_id: preselectedChallanId || null,
+                shipment_id: null,
+                total_cartons: 0,
+                status: "DRAFT",
+              });
+              await load();
+              if (created?.id) {
+                navigate(`/app/logistics/packing-lists/${created.id}`);
+              }
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Packing list create failed");
+            } finally {
+              setPackSaving(false);
+            }
+          }}
+        >
+          <label className="text-xs space-y-1">
+            <span>Order ID</span>
+            <input
+              type="number"
+              value={packForm.order_id ?? ""}
+              onChange={(e) =>
+                setPackForm((p) => ({ ...p, order_id: e.target.value ? Number(e.target.value) : null }))
+              }
+              className="w-full rounded-lg border border-border bg-surface-base px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-xs space-y-1">
+            <span>Shipment</span>
+            <select
+              value={packForm.shipment_id ?? ""}
+              onChange={(e) =>
+                setPackForm((p) => ({ ...p, shipment_id: e.target.value ? Number(e.target.value) : null }))
+              }
+              className="w-full rounded-lg border border-border bg-surface-base px-3 py-2 text-sm"
+            >
+              <option value="">Optional…</option>
+              {items.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.reference}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs space-y-1">
+            <span>Total cartons</span>
+            <input
+              type="number"
+              min={0}
+              value={packForm.total_cartons ?? 0}
+              onChange={(e) => setPackForm((p) => ({ ...p, total_cartons: Number(e.target.value) || 0 }))}
+              className="w-full rounded-lg border border-border bg-surface-base px-3 py-2 text-sm"
+            />
+          </label>
+          <div className="sm:col-span-3">
+            <button
+              type="submit"
+              disabled={packSaving}
+              className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {packSaving ? "Saving…" : "Create packing list"}
+            </button>
+          </div>
+        </form>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-text-muted border-b border-border">
+                <th className="py-1.5 pr-3">Number</th>
+                <th className="py-1.5 pr-3">Shipment</th>
+                <th className="py-1.5 pr-3">Order</th>
+                <th className="py-1.5 pr-3">Cartons</th>
+                <th className="py-1.5 pr-3">Status</th>
+                <th className="py-1.5 pr-3">Date</th>
+                <th className="py-1.5">Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              {packingLists.map((p) => (
+                <tr key={p.id} className="border-b border-border-subtle/60">
+                  <td className="py-1.5 pr-3 font-medium">{p.packing_list_number}</td>
+                  <td className="py-1.5 pr-3">{p.shipment_reference || p.shipment_id || "—"}</td>
+                  <td className="py-1.5 pr-3">{p.order_code || p.order_id || "—"}</td>
+                  <td className="py-1.5 pr-3">{p.total_cartons}</td>
+                  <td className="py-1.5 pr-3">{p.status}</td>
+                  <td className="py-1.5 pr-3">{p.packing_date ?? "—"}</td>
+                  <td className="py-1.5">
+                    <Link
+                      to={`/app/logistics/packing-lists/${p.id}`}
+                      className="text-xs font-medium text-accent-secondary hover:underline"
+                    >
+                      Open
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+              {!packingLists.length ? (
+                <tr>
+                  <td colSpan={7} className="py-4">
+                    <EmptyState
+                      headline="No packing lists yet"
+                      description="Create a packing list header above to track cartons and weights."
+                      className="border-0 bg-transparent py-6 shadow-none"
+                    />
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="space-y-4 rounded-xl border border-border bg-surface-raised p-4">
+        <div>
+          <h2 className="text-sm font-semibold text-text-primary">Containers</h2>
+          <p className="text-xs text-text-muted mt-0.5">Track container numbers and loading status per shipment.</p>
+        </div>
+        <form
+          className="grid grid-cols-1 gap-3 sm:grid-cols-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!containerForm.shipment_id || !containerForm.container_number.trim()) {
+              setError("Shipment and container number are required");
+              return;
+            }
+            setPackSaving(true);
+            setError("");
+            try {
+              await api.createShipmentContainer({
+                shipment_id: containerForm.shipment_id,
+                container_number: containerForm.container_number.trim(),
+                container_type: containerForm.container_type || null,
+                seal_number: containerForm.seal_number || null,
+                loading_status: containerForm.loading_status,
+              });
+              setContainerForm((p) => ({ ...p, container_number: "", seal_number: "" }));
+              await load();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Container create failed");
+            } finally {
+              setPackSaving(false);
+            }
+          }}
+        >
+          <label className="text-xs space-y-1">
+            <span>Shipment</span>
+            <select
+              value={containerForm.shipment_id || ""}
+              onChange={(e) =>
+                setContainerForm((p) => ({ ...p, shipment_id: Number(e.target.value) || 0 }))
+              }
+              className="w-full rounded-lg border border-border bg-surface-base px-3 py-2 text-sm"
+              required
+            >
+              <option value="">Select…</option>
+              {items.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.reference}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs space-y-1">
+            <span>Container #</span>
+            <input
+              value={containerForm.container_number}
+              onChange={(e) => setContainerForm((p) => ({ ...p, container_number: e.target.value }))}
+              className="w-full rounded-lg border border-border bg-surface-base px-3 py-2 text-sm"
+              required
+            />
+          </label>
+          <label className="text-xs space-y-1">
+            <span>Type</span>
+            <input
+              value={containerForm.container_type}
+              onChange={(e) => setContainerForm((p) => ({ ...p, container_type: e.target.value }))}
+              className="w-full rounded-lg border border-border bg-surface-base px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-xs space-y-1">
+            <span>Loading status</span>
+            <select
+              value={containerForm.loading_status}
+              onChange={(e) => setContainerForm((p) => ({ ...p, loading_status: e.target.value }))}
+              className="w-full rounded-lg border border-border bg-surface-base px-3 py-2 text-sm"
+            >
+              {["EMPTY", "LOADING", "LOADED", "CLOSED"].map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="sm:col-span-4">
+            <button
+              type="submit"
+              disabled={packSaving}
+              className="rounded-lg border border-brand-primary/40 bg-brand-subtle px-3 py-2 text-sm font-semibold text-brand-primary disabled:opacity-60"
+            >
+              Add container
+            </button>
+          </div>
+        </form>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-text-muted border-b border-border">
+                <th className="py-1.5 pr-3">Container</th>
+                <th className="py-1.5 pr-3">Shipment</th>
+                <th className="py-1.5 pr-3">Type</th>
+                <th className="py-1.5">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {containers.map((c) => (
+                <tr key={c.id} className="border-b border-border-subtle/60">
+                  <td className="py-1.5 pr-3 font-medium">{c.container_number}</td>
+                  <td className="py-1.5 pr-3">{c.shipment_id}</td>
+                  <td className="py-1.5 pr-3">{c.container_type ?? "—"}</td>
+                  <td className="py-1.5">{c.loading_status}</td>
+                </tr>
+              ))}
+              {!containers.length ? (
+                <tr>
+                  <td colSpan={4} className="py-3 text-text-muted">
+                    No containers yet.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      </>
+      ) : null}
     </div>
   );
 }

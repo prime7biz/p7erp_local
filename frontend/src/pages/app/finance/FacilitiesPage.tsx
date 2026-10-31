@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type FacilityRow } from "@/api/client";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { listPageRootClass } from "@/components/app/listPageLayout";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { logApiError } from "@/utils/logApiError";
 
 export function FacilitiesPage() {
   const [rows, setRows] = useState<FacilityRow[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -26,12 +29,6 @@ export function FacilitiesPage() {
     void load();
   }, []);
 
-  useEffect(() => {
-    const close = () => setOpenActionsId(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
-
   async function removeDraft(id: number) {
     if (!window.confirm("Delete this draft facility?")) return;
     try {
@@ -44,27 +41,27 @@ export function FacilitiesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-text-primary">Loans &amp; facilities</h1>
-          <p className="text-sm text-text-muted">Sanctioned limits linked to financiers (external principals).</p>
-        </div>
-        <div className="flex gap-2">
-          <Link
-            to="/app/finance/facilities/dashboard"
-            className="rounded-lg border border-border px-3 py-2 text-sm text-text-primary hover:bg-surface-base"
-          >
-            Dashboard
-          </Link>
-          <Link
-            to="/app/finance/facilities/new"
-            className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            New facility
-          </Link>
-        </div>
-      </div>
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Loans & facilities"
+        description="Sanctioned limits linked to financiers (external principals)."
+        actions={
+          <>
+            <Link
+              to="/app/finance/facilities/dashboard"
+              className="rounded-lg border border-border px-3 py-2 text-sm text-text-primary hover:bg-surface-base"
+            >
+              Dashboard
+            </Link>
+            <Link
+              to="/app/finance/facilities/new"
+              className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              New facility
+            </Link>
+          </>
+        }
+      />
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {loading ? (
         <p className="text-sm text-text-muted">Loading…</p>
@@ -98,45 +95,30 @@ export function FacilitiesPage() {
                   <td className="px-3 py-2">
                     {typeof r.utilized_amount === "number" ? r.utilized_amount.toLocaleString() : "—"}
                   </td>
-                  <td className="px-3 py-2 relative">
-                    <button
-                      type="button"
-                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenActionsId((id) => (id === r.id ? null : r.id));
-                      }}
-                    >
-                      Actions
-                    </button>
-                    {openActionsId === r.id ? (
-                      <div
-                        className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Link
-                          to={`/app/finance/facilities/${r.id}`}
-                          className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                        >
-                          View
-                        </Link>
-                        <Link
-                          to={`/app/finance/facilities/${r.id}/utilizations/new`}
-                          className="block rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                        >
-                          New utilization
-                        </Link>
-                        {String(r.status) === "draft" ? (
-                          <button
-                            type="button"
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
-                            onClick={() => void removeDraft(r.id)}
-                          >
-                            Delete
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
+                  <td className="px-3 py-2">
+                    <RowActionsMenu
+                      rowId={r.id}
+                      openId={openActionsId}
+                      onOpenChange={setOpenActionsId}
+                      items={[
+                        { key: "view", label: "View", href: `/app/finance/facilities/${r.id}` },
+                        {
+                          key: "util",
+                          label: "New utilization",
+                          href: `/app/finance/facilities/${r.id}/utilizations/new`,
+                        },
+                        ...(String(r.status) === "draft"
+                          ? [
+                              {
+                                key: "delete",
+                                label: "Delete",
+                                danger: true as const,
+                                onClick: () => void removeDraft(r.id),
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}

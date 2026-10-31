@@ -212,7 +212,7 @@ export function TradeCaseDetailPage() {
             </Link>
           ) : null}
           <Link
-            to="/app/finance/vouchers"
+            to="/app/accounts/vouchers"
             className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
           >
             View vouchers
@@ -264,7 +264,7 @@ export function TradeCaseDetailPage() {
             </Link>
           ) : null}
           <Link
-            to="/app/finance/vouchers"
+            to="/app/accounts/vouchers"
             className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
           >
             Finance vouchers

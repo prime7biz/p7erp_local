@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -69,6 +70,13 @@ class ExportCase(Base):
     order_id: Mapped[int | None] = mapped_column(
         ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    export_license_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    destination_country: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    shipping_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)  # AIR | SEA | ROAD
+    incoterms: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    expected_shipment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    actual_shipment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    customs_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
@@ -273,3 +281,208 @@ class BtbLcAccounting(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
+
+
+class ProformaReceiptAllocation(Base):
+    """Partial payment allocation: EXPORT proforma invoice ↔ RECEIPT voucher."""
+
+    __tablename__ = "proforma_receipt_allocations"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "proforma_invoice_id",
+            "voucher_id",
+            name="uq_pi_receipt_alloc_tenant_pi_voucher",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "proforma_invoice_id",
+            "idempotency_key",
+            name="uq_pi_receipt_alloc_tenant_pi_idempotency",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    proforma_invoice_id: Mapped[int] = mapped_column(
+        ForeignKey("proforma_invoices.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    voucher_id: Mapped[int] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    allocated_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    allocated_base_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    exchange_rate_to_base: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
+    # PENDING (draft voucher) | POSTED | REVERSED
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING", index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+
+class CommercialInvoice(Base):
+    """Sales/commercial invoice — typically created from a POSTED delivery challan."""
+
+    __tablename__ = "commercial_invoices"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "invoice_code", name="uq_commercial_invoices_tenant_code"),
+        UniqueConstraint(
+            "tenant_id",
+            "source_delivery_challan_id",
+            "customer_id",
+            "currency",
+            "idempotency_key",
+            name="uq_ci_from_challan_idempotency",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    invoice_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT", index=True)
+    customer_id: Mapped[int] = mapped_column(
+        ForeignKey("customers.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    source_delivery_challan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("delivery_challans.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    exchange_rate_to_base: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
+    total_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    base_total_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    ar_voucher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    price_review_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    issued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    lines: Mapped[list["CommercialInvoiceLine"]] = relationship(
+        "CommercialInvoiceLine",
+        back_populates="invoice",
+        cascade="all, delete-orphan",
+        order_by="CommercialInvoiceLine.sort_order",
+    )
+
+
+class CommercialInvoiceLine(Base):
+    __tablename__ = "commercial_invoice_lines"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    commercial_invoice_id: Mapped[int] = mapped_column(
+        ForeignKey("commercial_invoices.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("orders.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("items.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    delivery_challan_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("delivery_challan_items.id", ondelete="SET NULL"), nullable=True
+    )
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    quantity: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    unit_price: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    line_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    price_source: Mapped[str] = mapped_column(String(32), nullable=False, default="MISSING")
+    price_source_ref: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(JSON, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    invoice: Mapped["CommercialInvoice"] = relationship("CommercialInvoice", back_populates="lines")
+
+
+class CommercialInvoiceReceiptAllocation(Base):
+    """Partial payment allocation: commercial invoice ↔ RECEIPT voucher."""
+
+    __tablename__ = "commercial_invoice_receipt_allocations"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "commercial_invoice_id",
+            "voucher_id",
+            name="uq_ci_receipt_alloc_tenant_ci_voucher",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "commercial_invoice_id",
+            "idempotency_key",
+            name="uq_ci_receipt_alloc_tenant_ci_idempotency",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    commercial_invoice_id: Mapped[int] = mapped_column(
+        ForeignKey("commercial_invoices.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    voucher_id: Mapped[int] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    allocated_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    allocated_base_amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    exchange_rate_to_base: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING", index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+

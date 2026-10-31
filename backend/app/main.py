@@ -27,9 +27,20 @@ from app.modules.costing.router import router as costing_router
 from app.modules.currency.router import router as currency_router
 from app.modules.merch.routers import router as merch_router
 from app.modules.inventory.router import router as inventory_router
+from app.modules.inventory.stock_hierarchy_router import router as stock_hierarchy_router
+from app.modules.inventory.mrp_idt_router import router as mrp_idt_router
+from app.modules.inventory.grn_qc_router import router as grn_qc_router
+from app.modules.inventory.inventory_analytics_router import router as inventory_analytics_router
+from app.modules.inventory.serial_kit_consignment_router import router as serial_kit_consignment_router
 from app.modules.finance.router import router as finance_router
+from app.modules.finance.party_ledger_router import router as party_ledger_router
+from app.modules.finance.gst_tax_router import router as gst_tax_router
+from app.modules.finance.advanced_voucher_router import router as advanced_voucher_router
+from app.modules.finance.tds_router import router as tds_router
+from app.modules.finance.mis_reports_router import router as mis_reports_router
 from app.modules.facility.router import router as facility_router
 from app.modules.manufacturing.router import router as manufacturing_router
+from app.modules.marketing.router import router as marketing_public_router
 from app.modules.production.router import router as production_router
 from app.modules.hr.router import router as hr_router
 from app.modules.hr_attendance.router import router as hr_attendance_router
@@ -39,6 +50,7 @@ from app.modules.hr_performance.router import router as hr_performance_router
 from app.modules.hr_recruitment.router import router as hr_recruitment_router
 from app.modules.hr_ess.router import router as hr_ess_router
 from app.modules.hr_reports.router import router as hr_reports_router
+from app.modules.hr_compliance.router import router as hr_compliance_router
 from app.modules.settings.router import router as settings_router
 from app.modules.commercial.router import router as commercial_router
 from app.modules.parties.router import router as parties_router
@@ -64,19 +76,11 @@ from app.modules.mcp_server import mount_mcp
 from app.common.external_audit_middleware import ExternalAuditMiddleware
 from app.common.request_logger import RequestLoggingMiddleware
 from app.common.rate_limiter import TenantRateLimitMiddleware
-from app.common.background_lock import (
-    LOCK_MERCH_ALERT_SCAN,
-    LOCK_PLATFORM_MAINTENANCE,
-    LOCK_TRADE_ALERT_SCAN,
-    LOCK_WEEKLY_AI_REPORTS,
-    try_acquire_background_lock,
-    release_background_lock,
-)
-
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-# Local Vite dev servers: unioned with CORS_ORIGINS when that list is non-empty and/or APP_ENV is dev-like.
+# Local Vite origins: only merged in dev-like envs (or when FRONTEND_URL itself is localhost).
+# Production must use explicit CORS_ORIGINS only — never auto-union localhost.
 _DEFAULT_LOCAL_VITE_ORIGINS = [
     "http://localhost:5173", "http://127.0.0.1:5173",
     "http://localhost:5174", "http://127.0.0.1:5174",
@@ -95,179 +99,71 @@ _configured_cors = [o.strip() for o in settings.cors_origins.split(",") if o.str
 _app_env = settings.app_env.lower()
 _dev_like_app_env = _app_env in {"dev", "development", "local", "test", "testing"}
 _merge_local_vite = _dev_like_app_env or _frontend_looks_local(settings.frontend_url)
-if _configured_cors or _merge_local_vite:
-    # Union default Vite origins whenever CORS_ORIGINS is set and/or we are in a dev-like setup,
-    # so a strict production-style allowlist in backend/.env still allows http://localhost:5173.
+if _merge_local_vite:
     origins = list(dict.fromkeys(_configured_cors + _DEFAULT_LOCAL_VITE_ORIGINS))
+elif _configured_cors:
+    origins = list(dict.fromkeys(_configured_cors))
 else:
-    origins = list(_DEFAULT_LOCAL_VITE_ORIGINS)
+    origins = []
 
 
-async def _run_alert_scan_all_tenants() -> None:
-    """Background: run merch alert scan for all tenants every 15 min."""
-    from app.database import AsyncSessionLocal, safe_async_session_rollback
-    from app.modules.merch.alert_engine import run_scan, get_tenant_ids
+async def _every(name: str, job, *, first_delay: float, interval: float) -> None:
+    """In-process scheduler loop: run ``job`` after ``first_delay`` s, then every ``interval`` s."""
+    await asyncio.sleep(first_delay)
     while True:
-        await asyncio.sleep(60)  # wait 1 min after startup, then first run
         try:
-            async with AsyncSessionLocal() as db:
-                if not await try_acquire_background_lock(db, LOCK_MERCH_ALERT_SCAN):
-                    continue
-                try:
-                    tenant_ids = await get_tenant_ids(db)
-                    for tid in tenant_ids:
-                        try:
-                            await run_scan(db, tid, trigger="scheduled")
-                            await db.commit()
-                        except Exception:
-                            await safe_async_session_rollback(db)
-                finally:
-                    await release_background_lock(db, LOCK_MERCH_ALERT_SCAN)
-                    await db.commit()
+            await job()
         except asyncio.CancelledError:
-            break
+            raise
         except Exception:
-            logger.exception("Scheduled merch alert scan failed")
-        await asyncio.sleep(60 * 14)  # 15 min total between runs
-
-
-async def _run_weekly_ai_reports() -> None:
-    """Background: generate weekly Gemini executive report per tenant (Sundays UTC)."""
-    from app.database import AsyncSessionLocal, safe_async_session_rollback
-    from app.modules.ai_tool.weekly_report_service import generate_and_store_weekly_report
-    from app.modules.merch.alert_engine import get_tenant_ids
-
-    while True:
-        await asyncio.sleep(86400)  # daily
-        try:
-            from datetime import datetime, timezone
-
-            if datetime.now(timezone.utc).weekday() != 6:
-                continue
-            async with AsyncSessionLocal() as db:
-                if not await try_acquire_background_lock(db, LOCK_WEEKLY_AI_REPORTS):
-                    continue
-                try:
-                    tenant_ids = await get_tenant_ids(db)
-                    for tid in tenant_ids:
-                        try:
-                            await generate_and_store_weekly_report(db, tid)
-                            await db.commit()
-                        except Exception:
-                            await safe_async_session_rollback(db)
-                finally:
-                    await release_background_lock(db, LOCK_WEEKLY_AI_REPORTS)
-                    await db.commit()
-        except asyncio.CancelledError:
-            break
-        except Exception:
-            logger.exception("Weekly AI report job failed")
-
-
-async def _run_trade_alert_scan_daily() -> None:
-    """Background: run trade-only alert rules for all tenants once per day."""
-    from app.database import AsyncSessionLocal, safe_async_session_rollback
-    from app.modules.merch.alert_engine import run_scan_trade_rules_only, get_tenant_ids
-    while True:
-        await asyncio.sleep(60 * 5)  # wait 5 min after startup, then first run
-        try:
-            async with AsyncSessionLocal() as db:
-                if not await try_acquire_background_lock(db, LOCK_TRADE_ALERT_SCAN):
-                    continue
-                try:
-                    tenant_ids = await get_tenant_ids(db)
-                    for tid in tenant_ids:
-                        try:
-                            await run_scan_trade_rules_only(db, tid, trigger="scheduled_daily")
-                            await db.commit()
-                        except Exception:
-                            await safe_async_session_rollback(db)
-                finally:
-                    await release_background_lock(db, LOCK_TRADE_ALERT_SCAN)
-                    await db.commit()
-        except asyncio.CancelledError:
-            break
-        except Exception:
-            logger.exception("Scheduled trade alert scan failed")
-        await asyncio.sleep(86400)  # next run in 24h
-
-
-async def _run_platform_daily_maintenance() -> None:
-    """Daily: usage aggregation, overdue invoices, AI budget month reset, backup schedules."""
-    from app.database import AsyncSessionLocal, safe_async_session_rollback
-    from app.modules.admin.tasks import run_platform_daily_maintenance
-
-    while True:
-        await asyncio.sleep(3600)  # hourly; internal tasks gate by day/month
-        try:
-            async with AsyncSessionLocal() as db:
-                if not await try_acquire_background_lock(db, LOCK_PLATFORM_MAINTENANCE):
-                    continue
-                try:
-                    try:
-                        await run_platform_daily_maintenance(db)
-                        await db.commit()
-                    except Exception:
-                        await safe_async_session_rollback(db)
-                        raise
-                finally:
-                    await release_background_lock(db, LOCK_PLATFORM_MAINTENANCE)
-                    await db.commit()
-        except asyncio.CancelledError:
-            break
-        except Exception:
-            logger.exception("Platform daily maintenance failed")
+            logger.exception("Scheduled job %s failed", name)
+        await asyncio.sleep(interval)
 
 
 async def _seed_system_coa_startup() -> None:
     """Self-heal: ensure system groups/ledgers/mappings exist for every tenant (idempotent)."""
-    from app.database import AsyncSessionLocal
-    from app.modules.finance.system_coa_seeding_service import seed_all_tenants_system_coa
+    from app.common.scheduled_jobs import seed_system_coa_once
 
     try:
-        async with AsyncSessionLocal() as db:
-            await seed_all_tenants_system_coa(db)
-            await db.commit()
+        await seed_system_coa_once()
     except Exception:
         logger.exception("System COA startup seed failed")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.common import scheduled_jobs as jobs
+
     await _seed_system_coa_startup()
-    scan_task = asyncio.create_task(_run_alert_scan_all_tenants())
-    trade_scan_task = asyncio.create_task(_run_trade_alert_scan_daily())
-    weekly_ai_task = asyncio.create_task(_run_weekly_ai_reports())
-    platform_maint_task = asyncio.create_task(_run_platform_daily_maintenance())
+    tasks: list[asyncio.Task] = []
+    # Set INPROCESS_SCHEDULERS_ENABLED=false once the Celery beat service runs these instead.
+    if get_settings().inprocess_schedulers_enabled:
+        tasks = [
+            asyncio.create_task(_every("merch_alert_scan", jobs.run_merch_alert_scan_once, first_delay=60, interval=60 * 15)),
+            asyncio.create_task(_every("trade_alert_scan", jobs.run_trade_alert_scan_once, first_delay=60 * 5, interval=86400)),
+            asyncio.create_task(_every("weekly_ai_reports", jobs.run_weekly_ai_reports_once, first_delay=86400, interval=86400)),
+            asyncio.create_task(_every("platform_maintenance", jobs.run_platform_maintenance_once, first_delay=3600, interval=3600)),
+        ]
     try:
         yield
     finally:
-        scan_task.cancel()
-        trade_scan_task.cancel()
-        weekly_ai_task.cancel()
-        platform_maint_task.cancel()
-        try:
-            await scan_task
-        except asyncio.CancelledError:
-            pass
-        try:
-            await trade_scan_task
-        except asyncio.CancelledError:
-            pass
-        try:
-            await weekly_ai_task
-        except asyncio.CancelledError:
-            pass
-        try:
-            await platform_maint_task
-        except asyncio.CancelledError:
-            pass
+        for t in tasks:
+            t.cancel()
+        for t in tasks:
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(
     title="P7 ERP API",
     version="0.1.0",
     lifespan=lifespan,
+    # Hide OpenAPI surface in non-dev to reduce recon / abuse surface.
+    docs_url="/docs" if _dev_like_app_env else None,
+    redoc_url="/redoc" if _dev_like_app_env else None,
+    openapi_url="/openapi.json" if _dev_like_app_env else None,
 )
 
 app.add_middleware(RequestLoggingMiddleware)
@@ -291,6 +187,7 @@ app.include_router(external_customer_router, prefix="/api/external")
 app.include_router(external_financier_router, prefix="/api/external")
 
 app.include_router(files_router, prefix=settings.api_v1_prefix)
+app.include_router(marketing_public_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(tenant_router, prefix=settings.api_v1_prefix)
 app.include_router(
@@ -355,7 +252,17 @@ app.include_router(
     dependencies=[Depends(require_internal_permission("merch.access"))],
 )
 app.include_router(inventory_router, prefix=settings.api_v1_prefix)
+app.include_router(stock_hierarchy_router, prefix=settings.api_v1_prefix)
+app.include_router(mrp_idt_router, prefix=settings.api_v1_prefix)
+app.include_router(grn_qc_router, prefix=settings.api_v1_prefix)
+app.include_router(inventory_analytics_router, prefix=settings.api_v1_prefix)
+app.include_router(serial_kit_consignment_router, prefix=settings.api_v1_prefix)
 app.include_router(finance_router, prefix=settings.api_v1_prefix)
+app.include_router(party_ledger_router, prefix=settings.api_v1_prefix)
+app.include_router(gst_tax_router, prefix=settings.api_v1_prefix)
+app.include_router(advanced_voucher_router, prefix=settings.api_v1_prefix)
+app.include_router(tds_router, prefix=settings.api_v1_prefix)
+app.include_router(mis_reports_router, prefix=settings.api_v1_prefix)
 app.include_router(facility_router, prefix=settings.api_v1_prefix)
 app.include_router(manufacturing_router, prefix=settings.api_v1_prefix)
 app.include_router(production_router, prefix=settings.api_v1_prefix)
@@ -391,6 +298,11 @@ app.include_router(
 )
 app.include_router(
     hr_ess_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("hr.access"))],
+)
+app.include_router(
+    hr_compliance_router,
     prefix=settings.api_v1_prefix,
     dependencies=[Depends(require_internal_permission("hr.access"))],
 )
@@ -486,11 +398,14 @@ async def health():
     else:
         components["redis"] = "disabled"
 
-    return {
+    payload: dict = {
         "status": overall_status,
-        "environment": settings.app_env,
         "version": os.getenv("APP_VERSION", "dev"),
         "components": components,
         "latency_ms": round((time.perf_counter() - started_at) * 1000, 2),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+    # Do not leak APP_ENV on production /health.
+    if _dev_like_app_env:
+        payload["environment"] = settings.app_env
+    return payload

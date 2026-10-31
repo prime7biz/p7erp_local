@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import { api } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
 import { AiForecastRequestPanel } from "@/pages/app/ai/components/AiForecastRequestPanel";
@@ -17,6 +17,13 @@ import { usePollWhilePending } from "@/pages/app/ai/predictions/hooks/usePolling
 import type { AiForecastRunResponse } from "@/api/client";
 import type { ForecastTemplateInfo } from "@/pages/app/ai/predictions/utils/templatesStatic";
 import { RefreshCw, TrendingUp } from "lucide-react";
+import { MapSkeletonCard } from "@/components/dashboard/DashboardMemoParts";
+
+const FinanceForecastTab = lazy(() =>
+  import("@/pages/app/ai/predictions/components/FinanceForecastTab").then((m) => ({
+    default: m.FinanceForecastTab,
+  })),
+);
 
 const ACTIVE = new Set(["PENDING", "RUNNING"]);
 
@@ -51,7 +58,7 @@ export function AiPredictionsPage() {
     api
       .getDashboardAiProfitability()
       .then((r) => setProfitNarrative(r.narrative))
-      .catch((e) => logApiError("AiPredictions.profitability", e))
+      .catch((e: unknown) => logApiError("AiPredictions.profitability", e))
       .finally(() => setProfitLoading(false));
   }, []);
 
@@ -61,7 +68,12 @@ export function AiPredictionsPage() {
     refreshProfitability();
   }, [refresh, refreshSummary, refreshProfitability]);
 
-  const onGenerateCustom = async (input: { prompt: string; horizonDays: number; fromDate?: string; toDate?: string }) => {
+  const onGenerateCustom = async (input: {
+    prompt: string;
+    horizonDays: number;
+    fromDate?: string;
+    toDate?: string;
+  }) => {
     try {
       const created = await generate(input);
       if (created && ACTIVE.has(String(created.status).toUpperCase())) {
@@ -90,7 +102,11 @@ export function AiPredictionsPage() {
     <div className="space-y-6">
       <HubHeader onRefreshAll={refreshAll} refreshing={runsLoading || profitLoading || summaryLoading} />
       {runsError ? (
-        <div className="rounded-lg border border-status-danger-subtle bg-status-danger-subtle p-3 text-xs text-status-danger-foreground">
+        <div
+          className="rounded-lg border border-status-danger-subtle bg-status-danger-subtle p-3 text-xs text-status-danger-foreground"
+          role="alert"
+          aria-live="polite"
+        >
           {runsError}
           <button type="button" className="ml-2 underline" onClick={() => setRunsError(null)}>
             dismiss
@@ -98,6 +114,11 @@ export function AiPredictionsPage() {
         </div>
       ) : null}
       <PredictionsKpiStrip summary={summary} loading={summaryLoading} />
+
+      <Suspense fallback={<MapSkeletonCard height={220} />}>
+        <FinanceForecastTab />
+      </Suspense>
+
       <section className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <AiForecastRequestPanel disabled={generating} onGenerate={onGenerateCustom} />
@@ -115,16 +136,17 @@ export function AiPredictionsPage() {
           <div className="rounded-xl border border-border bg-surface-raised p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-status-success-foreground" />
+                <TrendingUp className="h-4 w-4 text-status-success-foreground" aria-hidden />
                 <h2 className="text-sm font-semibold text-text-primary">Profitability (Gemini)</h2>
               </div>
               <button
                 type="button"
                 onClick={refreshProfitability}
                 disabled={profitLoading}
-                className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 disabled:opacity-50"
+                aria-label="Refresh profitability narrative"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${profitLoading ? "animate-spin" : ""}`} /> Refresh
+                <RefreshCw className={`h-3.5 w-3.5 ${profitLoading ? "animate-spin" : ""}`} aria-hidden /> Refresh
               </button>
             </div>
             {profitNarrative ? (

@@ -46,6 +46,7 @@ async def compute_items_availability(
     warehouse_id: int | None = None,
     include_in_transit_po: bool = True,
     exclude_reserved: bool = True,
+    exclude_non_available_warehouses: bool = True,
 ) -> dict[int, ItemAvailability]:
     """Batch availability for many items (single round-trip per sub-query where possible)."""
     if not item_ids:
@@ -54,16 +55,29 @@ async def compute_items_availability(
     unique_ids = list({int(i) for i in item_ids})
     on_hand: dict[int, float] = defaultdict(float)
 
+    # Quarantine / rejected stock is not available for MRP, IDT, or ATP
+    non_available_wh: set[int] = set()
+    if exclude_non_available_warehouses and warehouse_id is None:
+        try:
+            from app.modules.inventory.grn_qc_service import get_non_available_warehouse_ids
+
+            non_available_wh = await get_non_available_warehouse_ids(db, tenant_id)
+        except Exception:
+            non_available_wh = set()
+
     mov_stmt = select(
         StockMovement.item_id,
         StockMovement.movement_type,
         StockMovement.quantity,
+        StockMovement.warehouse_id,
     ).where(StockMovement.tenant_id == tenant_id, StockMovement.item_id.in_(unique_ids))
     if warehouse_id is not None:
         mov_stmt = mov_stmt.where(StockMovement.warehouse_id == warehouse_id)
 
     mov_rows = (await db.execute(mov_stmt)).all()
-    for item_id, movement_type, quantity in mov_rows:
+    for item_id, movement_type, quantity, wh_id in mov_rows:
+        if non_available_wh and wh_id is not None and int(wh_id) in non_available_wh:
+            continue
         q = _parse_qty(quantity)
         mt = (movement_type or "").upper()
         if mt == "IN":

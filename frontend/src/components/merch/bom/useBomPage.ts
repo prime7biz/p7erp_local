@@ -167,7 +167,9 @@ export function useBomPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await api.bulkGeneratePurchaseOrdersFromOrderBom(bomId, lineIds);
+      const res = lineIds?.length
+        ? await api.bulkGeneratePurchaseOrdersFromOrderBom(bomId, lineIds)
+        : await api.generatePurchaseOrdersFromBom(bomId);
       await refreshDetail(bomId);
       setSuccess(`Created ${res.created.length} draft PO(s).`);
     } catch (e) {

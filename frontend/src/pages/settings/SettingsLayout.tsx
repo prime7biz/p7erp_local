@@ -31,22 +31,28 @@ const links = [
 export function SettingsLayout() {
   const location = useLocation();
   return (
-    <div>
-      <h1 style={{ marginTop: 0 }}>Settings</h1>
-      <nav style={{ display: "flex", gap: 16, marginBottom: 24, borderBottom: "1px solid #e2e8f0", paddingBottom: 8 }}>
-        {links.map(({ to, label }) => (
-          <Link
-            key={to}
-            to={to}
-            style={{
-              color: isSettingsNavActive(location.pathname, to) ? "#0f172a" : "#64748b",
-              fontWeight: isSettingsNavActive(location.pathname, to) ? 600 : 400,
-              textDecoration: "none",
-            }}
-          >
-            {label}
-          </Link>
-        ))}
+    <div className="min-w-0 space-y-4">
+      <h1 className="text-xl font-semibold tracking-tight text-text-primary">Settings</h1>
+      <nav
+        className="flex flex-wrap gap-x-4 gap-y-2 border-b border-border-subtle pb-2"
+        aria-label="Settings sections"
+      >
+        {links.map(({ to, label }) => {
+          const active = isSettingsNavActive(location.pathname, to);
+          return (
+            <Link
+              key={to}
+              to={to}
+              className={`text-sm no-underline transition-colors ${
+                active
+                  ? "font-semibold text-text-primary"
+                  : "font-normal text-text-muted hover:text-text-secondary"
+              }`}
+            >
+              {label}
+            </Link>
+          );
+        })}
       </nav>
       <Outlet />
     </div>

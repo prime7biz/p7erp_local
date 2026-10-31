@@ -42,6 +42,9 @@ export function BomBuilderPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectComment, setRejectComment] = useState("");
   const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [poPreviewRows, setPoPreviewRows] = useState<
+    Array<{ lineId: number; vendorId: number | null; vendorLabel: string; item: string; qty: string; unitPrice: string }>
+  >([]);
   const [existingOrderInput, setExistingOrderInput] = useState("");
   const [manualDesc, setManualDesc] = useState("");
   const [manualNet, setManualNet] = useState("0");
@@ -222,9 +225,26 @@ export function BomBuilderPage() {
                 type="button"
                 disabled={loading}
                 className="rounded-lg border border-brand-primary px-3 py-1.5 text-sm font-medium text-brand-primary disabled:opacity-50"
-                onClick={() => setBulkConfirm(true)}
+                onClick={() => {
+                  const lines = detail?.items ?? [];
+                  setPoPreviewRows(
+                    lines
+                      .filter((ln) => ln.item_id && Number(ln.required_gross_qty || 0) > 0)
+                      .map((ln) => ({
+                        lineId: ln.id,
+                        vendorId: ln.preferred_vendor_id,
+                        vendorLabel: ln.preferred_vendor_id
+                          ? `Vendor #${ln.preferred_vendor_id}`
+                          : "No vendor",
+                        item: ln.item_code || ln.description || `Line #${ln.id}`,
+                        qty: String(ln.required_gross_qty ?? 0),
+                        unitPrice: String(ln.bom_expected_unit_price ?? 0),
+                      })),
+                  );
+                  setBulkConfirm(true);
+                }}
               >
-                Bulk generate POs (by vendor)
+                Generate Purchase Orders
               </button>
             )}
             {bom.order_id ? (
@@ -385,9 +405,70 @@ export function BomBuilderPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           onClick={() => !loading && setBulkConfirm(false)}
         >
-          <div className="w-full max-w-md rounded-xl border border-border bg-surface-raised p-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-semibold text-text-primary">Bulk generate draft POs?</h3>
-            <p className="mt-1 text-sm text-text-muted">Creates one draft PO per preferred vendor for lines that are not yet procured.</p>
+          <div
+            className="w-full max-w-3xl max-h-[85vh] overflow-auto rounded-xl border border-border bg-surface-raised p-4 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-text-primary">Generate Purchase Orders</h3>
+            <p className="mt-1 text-sm text-text-muted">
+              This will create draft POs from {new Set(poPreviewRows.map((r) => r.vendorId ?? -1)).size} vendor
+              group(s) / {poPreviewRows.length} line(s). Edit quantities and prices before creating (updates BOM
+              lines, then generates).
+            </p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead className="bg-surface-subtle text-left text-text-secondary">
+                  <tr>
+                    <th className="px-2 py-1">Vendor</th>
+                    <th className="px-2 py-1">Item</th>
+                    <th className="px-2 py-1">Qty</th>
+                    <th className="px-2 py-1">Unit Price</th>
+                    <th className="px-2 py-1">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {poPreviewRows.map((row, idx) => {
+                    const total = Number(row.qty || 0) * Number(row.unitPrice || 0);
+                    return (
+                      <tr key={row.lineId} className="border-t">
+                        <td className="px-2 py-1">{row.vendorLabel}</td>
+                        <td className="px-2 py-1">{row.item}</td>
+                        <td className="px-2 py-1">
+                          <input
+                            className="w-20 rounded border px-1 py-0.5"
+                            value={row.qty}
+                            onChange={(e) =>
+                              setPoPreviewRows((prev) =>
+                                prev.map((r, i) => (i === idx ? { ...r, qty: e.target.value } : r)),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <input
+                            className="w-24 rounded border px-1 py-0.5"
+                            value={row.unitPrice}
+                            onChange={(e) =>
+                              setPoPreviewRows((prev) =>
+                                prev.map((r, i) => (i === idx ? { ...r, unitPrice: e.target.value } : r)),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-1 tabular-nums">{total.toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                  {poPreviewRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-2 py-4 text-center text-text-muted">
+                        No procurable lines found.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
             <div className="mt-3 flex justify-end gap-2">
               <button type="button" className="rounded-lg border px-3 py-1.5 text-sm" onClick={() => setBulkConfirm(false)} disabled={loading}>
                 Cancel
@@ -395,13 +476,21 @@ export function BomBuilderPage() {
               <button
                 type="button"
                 className="rounded-lg bg-brand-primary px-3 py-1.5 text-sm font-medium text-brand-primary-foreground disabled:opacity-50"
-                disabled={loading}
+                disabled={loading || poPreviewRows.length === 0}
                 onClick={async () => {
+                  for (const row of poPreviewRows) {
+                    await updateLine(bom.id, row.lineId, {
+                      bom_expected_unit_price: Number(row.unitPrice) || null,
+                    });
+                  }
                   setBulkConfirm(false);
-                  await bulkPos(bom.id);
+                  await bulkPos(
+                    bom.id,
+                    poPreviewRows.map((r) => r.lineId),
+                  );
                 }}
               >
-                Generate
+                Create POs
               </button>
             </div>
           </div>

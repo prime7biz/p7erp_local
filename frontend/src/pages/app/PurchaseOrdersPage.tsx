@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   api,
   type GoodsReceivingResponse,
@@ -41,6 +41,8 @@ import { cn } from "@/lib/utils";
 
 export function PurchaseOrdersPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const orderIdFilter = Number(searchParams.get("order_id") || 0) || undefined;
   const [orders, setOrders] = useState<PurchaseOrderResponse[]>([]);
   const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
@@ -61,6 +63,7 @@ export function PurchaseOrdersPage() {
     items: [],
   });
   const [line, setLine] = useState<PurchaseOrderItemCreate>({ item_id: 0, warehouse_id: null, quantity: "0", unit_price: "0" });
+  const [lineHint, setLineHint] = useState("");
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const { pageSize, setPageSize } = useListPagination();
@@ -94,6 +97,7 @@ export function PurchaseOrdersPage() {
       const [poRes, itmRes, wh, vndRes] = await Promise.all([
         api.listPurchaseOrdersPaginated({
           status_filter: statusFilter.trim() || undefined,
+          order_id: orderIdFilter,
           page: poPage,
           page_size: pageSize,
         }),
@@ -123,16 +127,16 @@ export function PurchaseOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, poPage, pageSize]);
+  }, [statusFilter, poPage, pageSize, orderIdFilter]);
 
   useEffect(() => {
     setPoPage(1);
-  }, [statusFilter, pageSize]);
+  }, [statusFilter, pageSize, orderIdFilter]);
 
   const openPoTrace = useCallback(async (po: PurchaseOrderResponse) => {
     setPoTrace({ po, progress: null, grns: [], loading: true, error: "", vendorBillBusyId: null });
     try {
-      const [progress, grnPage] = await Promise.all([
+      const [progress, grnPage, poDetail] = await Promise.all([
         api.getPurchaseOrderReceiptProgress(po.id),
         api.listGoodsReceivingPaginated({
           purchase_order_id: po.id,
@@ -140,10 +144,11 @@ export function PurchaseOrdersPage() {
           page: 1,
           page_size: 50,
         }),
+        api.getPurchaseOrder(po.id).catch(() => po),
       ]);
       setPoTrace((prev) =>
         prev && prev.po.id === po.id
-          ? { ...prev, progress, grns: grnPage.items, loading: false, error: "" }
+          ? { ...prev, po: poDetail, progress, grns: grnPage.items, loading: false, error: "" }
           : prev,
       );
     } catch (e) {
@@ -206,7 +211,7 @@ export function PurchaseOrdersPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
-              to="/app/vendors"
+              to="/app/inventory/vendors"
               className="rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
             >
               Vendors
@@ -355,7 +360,36 @@ export function PurchaseOrdersPage() {
                 ...p,
                 item_id: itemId,
                 warehouse_id: it?.default_warehouse_id ?? p.warehouse_id ?? fallbackWh,
+                unit_price:
+                  it?.standard_price && Number(it.standard_price) > 0
+                    ? String(it.standard_price)
+                    : p.unit_price,
               }));
+              const groupLabel =
+                it?.stock_group_id != null ? `Group #${it.stock_group_id}` : "No stock group";
+              setLineHint(
+                it
+                  ? `${groupLabel} · stock ${it.current_stock ?? it.default_cost ?? "—"} · avg ${it.avg_cost ?? "—"}`
+                  : "",
+              );
+              if (it?.id) {
+                void api
+                  .getStockItemDetail(it.id)
+                  .then((detail) => {
+                    const wholesale = detail.prices.find(
+                      (pr) => pr.price_list_name.toLowerCase() === "wholesale" && pr.is_active,
+                    );
+                    if (wholesale) {
+                      setLine((p) => ({ ...p, unit_price: wholesale.price }));
+                      setLineHint(
+                        `${detail.stock_group_id != null ? `Group #${detail.stock_group_id}` : "No group"} · Wholesale ${wholesale.price} · stock ${detail.current_stock}`,
+                      );
+                    }
+                  })
+                  .catch(() => {
+                    /* hierarchy flag may be off */
+                  });
+              }
             }}
           >
             {items.map((it) => (
@@ -373,6 +407,7 @@ export function PurchaseOrdersPage() {
             Add Line
           </button>
         </div>
+        {lineHint ? <p className="text-xs text-text-muted">{lineHint}</p> : null}
         {form.items.length > 0 && (
           <div className="text-xs text-text-secondary">
             {form.items.map((ln, i) => (
@@ -697,6 +732,22 @@ export function PurchaseOrdersPage() {
             <p className="mt-1 text-xs text-text-muted">
               Ordered vs accepted-received vs pending (per PO line). Create a finance vendor bill draft from a received GRN.
             </p>
+            {poTrace.po.vendor_qc_rejection_rate_pct != null ? (
+              <p
+                className={`mt-2 text-sm ${
+                  poTrace.po.vendor_qc_rejection_rate_pct > 5
+                    ? "text-status-danger-foreground"
+                    : "text-text-secondary"
+                }`}
+              >
+                Vendor QC rejection rate (90d): {poTrace.po.vendor_qc_rejection_rate_pct}%
+                {poTrace.po.vendor_qc_rejection_rate_pct > 5 ? " — alert (&gt;5%)" : ""}
+                {" · "}
+                <Link to="/app/inventory/vendor-scorecard" className="underline">
+                  Scorecard
+                </Link>
+              </p>
+            ) : null}
             {poTrace.error ? (
               <div className="mt-2 rounded border border-status-danger/20 bg-status-danger-subtle p-2 text-sm text-status-danger-foreground">
                 {poTrace.error}

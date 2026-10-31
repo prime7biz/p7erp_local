@@ -5,6 +5,9 @@ import {
   type AccountGroupResponse,
   type AccountGroupHierarchyNode,
 } from "@/api/client";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { listPageRootClass } from "@/components/app/listPageLayout";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { logApiError } from "@/utils/logApiError";
 
 const NATURES = ["Asset", "Liability", "Income", "Expense", "Equity"] as const;
@@ -19,6 +22,7 @@ export function AccountGroupsPage() {
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showAdvancedForm, setShowAdvancedForm] = useState(false);
   const [selectedGroupIdForImpact, setSelectedGroupIdForImpact] = useState<number | null>(null);
@@ -195,38 +199,36 @@ export function AccountGroupsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Account Groups</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Manage chart of accounts hierarchy: Group → Type → Main Account. Use Standard form for daily use; Advanced for reporting and governance.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void seedDefaults()}
-            className="rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm font-medium text-text-secondary shadow-sm hover:bg-surface-subtle"
-          >
-            Seed default groups
-          </button>
-          <div className="flex rounded-lg border border-border bg-surface-subtle p-0.5">
-            {(["list", "hierarchy", "design"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setViewMode(mode)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize ${
-                  viewMode === mode ? "bg-surface-raised text-text-primary shadow" : "text-text-secondary hover:text-text-primary"
-                }`}
-              >
-                {mode === "design" ? "Advance design" : mode}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Account Groups"
+        description="Manage chart of accounts hierarchy: Group → Type → Main Account. Use Standard form for daily use; Advanced for reporting and governance."
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => void seedDefaults()}
+              className="rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm font-medium text-text-secondary shadow-sm hover:bg-surface-subtle"
+            >
+              Seed default groups
+            </button>
+            <div className="flex rounded-lg border border-border bg-surface-subtle p-0.5">
+              {(["list", "hierarchy", "design"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setViewMode(mode)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize ${
+                    viewMode === mode ? "bg-surface-raised text-text-primary shadow" : "text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  {mode === "design" ? "Advance design" : mode}
+                </button>
+              ))}
+            </div>
+          </>
+        }
+      />
 
       {error && (
         <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-3 text-sm text-status-danger-foreground">
@@ -464,22 +466,15 @@ export function AccountGroupsPage() {
                       {r.is_active ? "Active" : "Inactive"}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => startEdit(r)}
-                          className="rounded border border-border px-2 py-1 text-xs font-medium text-text-secondary hover:bg-surface-subtle"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void remove(r.id)}
-                          className="rounded border border-status-danger/20 px-2 py-1 text-xs font-medium text-status-danger-foreground hover:bg-status-danger-subtle"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      <RowActionsMenu
+                        rowId={r.id}
+                        openId={openActionsId}
+                        onOpenChange={setOpenActionsId}
+                        items={[
+                          { key: "edit", label: "Edit", onClick: () => startEdit(r) },
+                          { key: "delete", label: "Delete", danger: true, onClick: () => void remove(r.id) },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))
@@ -508,6 +503,8 @@ export function AccountGroupsPage() {
                     if (r) startEdit(r);
                   }}
                   onDelete={(id) => void remove(id)}
+                  openActionsId={openActionsId}
+                  onOpenChange={setOpenActionsId}
                 />
               ))}
             </ul>
@@ -541,6 +538,8 @@ export function AccountGroupsPage() {
                     onDelete={(id) => void remove(id)}
                     onReparent={(id, parentId, sortOrder) => void reparentGroup(id, parentId, sortOrder)}
                     onViewImpact={(id) => setSelectedGroupIdForImpact(id)}
+                    openActionsId={openActionsId}
+                    onOpenChange={setOpenActionsId}
                     showAdvanced
                     showAccountCount
                   />
@@ -620,6 +619,8 @@ interface TreeNodeProps {
   onDelete: (id: number) => void;
   onReparent?: (id: number, parentId: number | null, sortOrder: number) => void;
   onViewImpact?: (id: number) => void;
+  openActionsId: number | string | null;
+  onOpenChange: (id: number | string | null) => void;
   showAccountCount?: boolean;
   showAdvanced?: boolean;
 }
@@ -632,6 +633,8 @@ function TreeNode({
   onDelete,
   onReparent,
   onViewImpact,
+  openActionsId,
+  onOpenChange,
   showAccountCount,
   showAdvanced,
 }: TreeNodeProps) {
@@ -719,20 +722,15 @@ function TreeNode({
               View impact
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => onEdit(node.id)}
-            className="rounded px-2 py-0.5 text-xs text-brand-primary hover:bg-brand-primary/10"
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(node.id)}
-            className="rounded px-2 py-0.5 text-xs text-status-danger-foreground hover:bg-status-danger-subtle"
-          >
-            Delete
-          </button>
+          <RowActionsMenu
+            rowId={node.id}
+            openId={openActionsId}
+            onOpenChange={onOpenChange}
+            items={[
+              { key: "edit", label: "Edit", onClick: () => onEdit(node.id) },
+              { key: "delete", label: "Delete", danger: true, onClick: () => onDelete(node.id) },
+            ]}
+          />
         </div>
       </div>
       {open && hasChildren && (
@@ -747,6 +745,8 @@ function TreeNode({
               onDelete={onDelete}
               onReparent={onReparent}
               onViewImpact={onViewImpact}
+              openActionsId={openActionsId}
+              onOpenChange={onOpenChange}
               showAccountCount={showAccountCount}
               showAdvanced={showAdvanced}
             />

@@ -163,6 +163,13 @@ export function MerchControlTowerPage() {
             href="/app/merchandising/samples"
             severity={data.sample_overdue_target > 0 ? "danger" : "neutral"}
           />
+          <StatCard
+            title="OTD at risk"
+            value={data.otd_at_risk ?? 0}
+            subtitle={`Overdue delivery: ${data.otd_overdue ?? 0} · delivery ≤ 14d not shipped`}
+            href="/app/orders"
+            severity={(data.otd_overdue ?? 0) > 0 ? "danger" : (data.otd_at_risk ?? 0) > 0 ? "warn" : "neutral"}
+          />
         </div>
       ) : null}
 

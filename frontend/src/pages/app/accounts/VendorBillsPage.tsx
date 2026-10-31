@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, type VendorBillDetailResponse, type VendorBillSummary } from "@/api/client";
+import { PartyLedgerSummaryCard } from "@/pages/app/finance/party-ledger/PartyLedgerSummaryCard";
 
 /**
  * Finance-owned vendor bills (AP) matched to GRN accepted quantities.
@@ -181,6 +183,23 @@ export function VendorBillsPage() {
             Non-PO: {selected.is_non_po_receipt ? "Yes" : "No"} · PO #{selected.purchase_order_id ?? "—"} · Order #
             {selected.source_order_id ?? "—"}
           </p>
+          {selected.goods_receiving_id ? (
+            <p className="text-sm">
+              <Link
+                to={`/app/inventory/grn-inspection?grn_id=${selected.goods_receiving_id}`}
+                className="text-brand-primary underline"
+              >
+                Open GRN QC inspection
+              </Link>
+              {" · "}
+              <Link to="/app/inventory/quality-dashboard" className="text-text-secondary underline">
+                Quality dashboard
+              </Link>
+            </p>
+          ) : null}
+          <div className="max-w-sm">
+            <PartyLedgerSummaryCard partyType="VENDOR" partyId={selected.vendor_id} title="Vendor party ledger" />
+          </div>
           <div className="flex flex-wrap gap-2 items-end">
             <div>
               <label className="block text-xs text-text-muted">Vendor invoice ref</label>

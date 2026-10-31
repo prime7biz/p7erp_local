@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, type OrderMilestonesResponse } from "@/api/client";
 import { PIPELINE_STAGES, humanizePipelineStatus } from "@/features/merch/workflow";
 import { logApiError } from "@/utils/logApiError";
@@ -125,6 +126,21 @@ export function OrderMilestoneTracker({ orderId, variant, className = "", onLoad
           Refresh
         </button>
       </div>
+      {data.next_required_action && (
+        <div className="rounded-lg border border-status-info/30 bg-status-info-subtle px-3 py-2 text-xs text-status-info-foreground">
+          <span className="font-medium">Next required action: </span>
+          {data.next_required_action.href ? (
+            <Link to={data.next_required_action.href} className="underline">
+              {data.next_required_action.label}
+            </Link>
+          ) : (
+            <span>{data.next_required_action.label}</span>
+          )}
+          {data.next_required_action.planned_date && (
+            <span className="ml-2 text-text-muted">due {data.next_required_action.planned_date}</span>
+          )}
+        </div>
+      )}
       {data.tna_warnings?.length > 0 && (
         <div className="rounded-lg border border-status-warning/30 bg-status-warning-subtle px-3 py-2 text-xs text-status-warning-foreground">
           <span className="font-medium">TNA (soft gates): </span>

@@ -27,6 +27,8 @@ import {
   hydrateTradeCase,
 } from "@/lib/remoteSelectFetchers";
 import { logApiError } from "@/utils/logApiError";
+import { useAuth } from "@/context/AuthContext";
+import type { TaxPreviewResponse } from "@/api/client";
 
 const CTL =
   "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
@@ -49,6 +51,8 @@ function makeLine(accountId: number, currency: string, exchangeRate: string, ent
 }
 
 export function VouchersPage() {
+  const { me } = useAuth();
+  const gstEnabled = me?.feature_flags?.gst_system_enabled === true;
   const { page, setPage, pageSize, setPageSize, offset, limit, allowedSizes } = useListPagination();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -76,6 +80,10 @@ export function VouchersPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [pendingWorkflowAction, setPendingWorkflowAction] = useState<{ voucherId: number; action: string } | null>(null);
   const [periodLock, setPeriodLock] = useState<{ locked: boolean; reason?: string; period_name?: string } | null>(null);
+  const [taxPreview, setTaxPreview] = useState<TaxPreviewResponse | null>(null);
+  const [taxPreviewError, setTaxPreviewError] = useState("");
+  const [taxDirection, setTaxDirection] = useState<"OUTWARD" | "INWARD">("OUTWARD");
+  const [taxPos, setTaxPos] = useState("");
 
   // Multi-currency
   const [multiCurrency, setMultiCurrency] = useState(false);
@@ -755,6 +763,120 @@ export function VouchersPage() {
               </table>
             </div>
           </div>
+
+          {gstEnabled ? (
+            <div className="rounded-xl border border-border bg-surface-raised p-5">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-text-primary">Tax Preview</h3>
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="text-xs text-text-muted">
+                    Direction
+                    <select
+                      className={`${CTL} mt-1`}
+                      value={taxDirection}
+                      onChange={(e) => setTaxDirection(e.target.value as "OUTWARD" | "INWARD")}
+                    >
+                      <option value="OUTWARD">Outward (sales)</option>
+                      <option value="INWARD">Inward (purchase / ITC)</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-text-muted">
+                    Place of supply
+                    <input
+                      className={`${CTL} mt-1`}
+                      placeholder="State code e.g. 27"
+                      value={taxPos}
+                      onChange={(e) => setTaxPos(e.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-border-strong px-3 py-1.5 text-xs hover:bg-surface-subtle"
+                    onClick={() => {
+                      const taxable = form.lines
+                        .filter((ln) => {
+                          const notes = ln.notes || "";
+                          return /HSN[:\s=]/i.test(notes) || /GST_RATE[:\s=]/i.test(notes);
+                        })
+                        .map((ln) => {
+                          const notes = ln.notes || "";
+                          const hsn = notes.match(/HSN[:\s=]*([A-Za-z0-9]+)/i)?.[1];
+                          const rate = notes.match(/GST_RATE[:\s=]*([0-9.]+)/i)?.[1] || "18";
+                          return {
+                            taxable_amount: ln.amount || "0",
+                            gst_rate: rate,
+                            hsn_code: hsn,
+                          };
+                        });
+                      if (!taxable.length) {
+                        setTaxPreviewError("Add HSN:xxxx and GST_RATE:18 in line notes to preview tax.");
+                        setTaxPreview(null);
+                        return;
+                      }
+                      setTaxPreviewError("");
+                      void api
+                        .previewTax({
+                          taxable_lines: taxable,
+                          place_of_supply_state: taxPos || undefined,
+                          direction: taxDirection,
+                        })
+                        .then(setTaxPreview)
+                        .catch((e) => {
+                          logApiError("VouchersPage.taxPreview", e);
+                          setTaxPreviewError((e as Error).message);
+                          setTaxPreview(null);
+                        });
+                    }}
+                  >
+                    Calculate tax
+                  </button>
+                </div>
+              </div>
+              {taxPreviewError ? (
+                <p className="text-xs text-status-danger-foreground">{taxPreviewError}</p>
+              ) : null}
+              {taxPreview ? (
+                <div className="space-y-2 text-sm">
+                  <p className="text-text-secondary">
+                    Supply: <span className="font-medium">{String(taxPreview.supply_kind)}</span>
+                    {" · "}Taxable {String(taxPreview.taxable_total)}
+                    {" · "}Tax {String(taxPreview.tax_total)}
+                    {" · "}Grand {String(taxPreview.grand_total)}
+                  </p>
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-surface-subtle text-left text-text-muted">
+                      <tr>
+                        <th className="px-2 py-1">Type</th>
+                        <th className="px-2 py-1 text-right">Rate</th>
+                        <th className="px-2 py-1 text-right">Taxable</th>
+                        <th className="px-2 py-1 text-right">Tax</th>
+                        <th className="px-2 py-1">HSN</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(taxPreview.lines || []).map((ln, i) => (
+                        <tr key={i} className="border-t border-border">
+                          <td className="px-2 py-1">{ln.tax_type}</td>
+                          <td className="px-2 py-1 text-right tabular-nums">{ln.tax_rate}%</td>
+                          <td className="px-2 py-1 text-right tabular-nums">{ln.taxable_amount}</td>
+                          <td className="px-2 py-1 text-right tabular-nums">{ln.tax_amount}</td>
+                          <td className="px-2 py-1">{ln.hsn_code || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {(taxPreview.warnings || []).length ? (
+                    <p className="text-xs text-amber-700">{(taxPreview.warnings || []).join(" ")}</p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-xs text-text-muted">
+                  Tip: put <code className="text-[11px]">HSN:6109 GST_RATE:18</code> in a sales/purchase line note, then
+                  Calculate tax before posting.
+                </p>
+              )}
+            </div>
+          ) : null}
 
           {/* Card: Totals & Actions */}
           <div className="sticky bottom-0 z-20 rounded-xl border border-border bg-surface-raised p-5 shadow-lg md:static md:shadow-none">

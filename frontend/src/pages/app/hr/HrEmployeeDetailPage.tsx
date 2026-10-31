@@ -2,17 +2,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   api,
+  type HrAgeVerification,
   type HrDepartmentResponse,
   type HrDesignationResponse,
   type HrEmployeeDocumentCreate,
   type HrEmployeeResponse,
   type HrEmployeeStatusHistoryCreate,
   type HrEmployeeUpdate,
+  type HrMedicalRecord,
   type HrSectionResponse,
 } from "@/api/client";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { useAuth } from "@/context/AuthContext";
 
-type Tab = "personal" | "job" | "documents" | "history" | "salary" | "production";
+type Tab = "personal" | "job" | "documents" | "age" | "medical" | "history" | "salary" | "production";
 
 const PREFIX = "/app/hr";
 const CAT_OPTS = ["WORKER", "STAFF", "MANAGEMENT"] as const;
@@ -20,6 +23,11 @@ const CAT_OPTS = ["WORKER", "STAFF", "MANAGEMENT"] as const;
 export function HrEmployeeDetailPage() {
   const { employeeId } = useParams();
   const navigate = useNavigate();
+  const { me } = useAuth();
+  const ageEnabled =
+    me?.feature_flags?.age_verification_required === true ||
+    me?.feature_flags?.compliance_tracking_enabled === true;
+  const medicalEnabled = me?.feature_flags?.medical_certificate_tracking_enabled === true;
   const employeeIdNum = Number(employeeId);
 
   const [tab, setTab] = useState<Tab>("personal");
@@ -51,6 +59,24 @@ export function HrEmployeeDetailPage() {
   });
 
   const [prodProfile, setProdProfile] = useState<Awaited<ReturnType<typeof api.getEmployeeProductionProfile>> | null>(null);
+  const [ageVerifications, setAgeVerifications] = useState<HrAgeVerification[]>([]);
+  const [medicalRecords, setMedicalRecords] = useState<HrMedicalRecord[]>([]);
+  const [openDocActions, setOpenDocActions] = useState(false);
+  const [docGenerating, setDocGenerating] = useState(false);
+
+  const [ageForm, setAgeForm] = useState({
+    verification_method: "DOCUMENT",
+    date_of_birth: "",
+    notes: "",
+  });
+  const [medicalForm, setMedicalForm] = useState({
+    examination_date: "",
+    fitness_status: "FIT",
+    certificate_number: "",
+    expiry_date: "",
+    doctor_name: "",
+    hospital_clinic: "",
+  });
 
   const designationOptions = useMemo(() => {
     if (!form.department_id) return designations;
@@ -140,6 +166,55 @@ export function HrEmployeeDetailPage() {
     }
   }, [employee]);
 
+  const loadAgeVerifications = useCallback(async () => {
+    if (!employee) return;
+    try {
+      setAgeVerifications(await api.listHrAgeVerifications(employee.id));
+    } catch {
+      setAgeVerifications([]);
+    }
+  }, [employee]);
+
+  const loadMedicalRecords = useCallback(async () => {
+    if (!employee) return;
+    try {
+      setMedicalRecords(await api.listHrMedicalRecords(employee.id));
+    } catch {
+      setMedicalRecords([]);
+    }
+  }, [employee]);
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const generateDocument = async (kind: "id-card" | "appointment-letter" | "age-cert") => {
+    if (!employee) return;
+    setDocGenerating(true);
+    setOpenDocActions(false);
+    setError("");
+    try {
+      const blob =
+        kind === "id-card"
+          ? await api.generateHrIdCard(employee.id)
+          : kind === "appointment-letter"
+            ? await api.generateHrAppointmentLetter(employee.id)
+            : await api.generateHrAgeVerificationCert(employee.id);
+      const ext = blob.type.includes("pdf") ? "pdf" : "bin";
+      downloadBlob(blob, `${employee.employee_code}-${kind}.${ext}`);
+      setSuccess("Document downloaded.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Document generation failed");
+    } finally {
+      setDocGenerating(false);
+    }
+  };
+
   useEffect(() => {
     void loadCore();
   }, [loadCore]);
@@ -149,7 +224,9 @@ export function HrEmployeeDetailPage() {
       void loadDocs();
       void loadHistory();
     }
-  }, [employee, tab, loadDocs, loadHistory]);
+    if (employee && tab === "age") void loadAgeVerifications();
+    if (employee && tab === "medical") void loadMedicalRecords();
+  }, [employee, tab, loadDocs, loadHistory, loadAgeVerifications, loadMedicalRecords]);
 
   const saveJob = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,6 +332,58 @@ export function HrEmployeeDetailPage() {
     }
   };
 
+  const addAgeVerification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!employee || !ageForm.date_of_birth) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api.createHrAgeVerification(employee.id, {
+        verification_method: ageForm.verification_method,
+        date_of_birth: ageForm.date_of_birth,
+        notes: ageForm.notes.trim() || null,
+      });
+      setAgeForm({ verification_method: "DOCUMENT", date_of_birth: "", notes: "" });
+      await loadAgeVerifications();
+      setSuccess("Age verification recorded.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addMedicalRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!employee || !medicalForm.examination_date) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api.createHrMedicalRecord(employee.id, {
+        examination_date: medicalForm.examination_date,
+        fitness_status: medicalForm.fitness_status,
+        certificate_number: medicalForm.certificate_number.trim() || null,
+        expiry_date: medicalForm.expiry_date || null,
+        doctor_name: medicalForm.doctor_name.trim() || null,
+        hospital_clinic: medicalForm.hospital_clinic.trim() || null,
+      });
+      setMedicalForm({
+        examination_date: "",
+        fitness_status: "FIT",
+        certificate_number: "",
+        expiry_date: "",
+        doctor_name: "",
+        hospital_clinic: "",
+      });
+      await loadMedicalRecords();
+      setSuccess("Medical record added.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const toggleActive = async () => {
     if (!employee) return;
     setSaving(true);
@@ -292,6 +421,8 @@ export function HrEmployeeDetailPage() {
     { id: "personal", label: "Personal" },
     { id: "job", label: "Job" },
     { id: "documents", label: "Documents" },
+    ...(ageEnabled ? [{ id: "age" as const, label: "Age verification" }] : []),
+    ...(medicalEnabled ? [{ id: "medical" as const, label: "Medical records" }] : []),
     { id: "history", label: "Status history" },
     { id: "production", label: "Production" },
     { id: "salary", label: "Salary" },
@@ -305,14 +436,51 @@ export function HrEmployeeDetailPage() {
           description={`${employee.employee_code} · ${employee.is_active ? "Active" : "Inactive"}`}
           breadcrumbs={[{ label: "HR", href: PREFIX }, { label: "Employees", href: `${PREFIX}/employees` }, { label: employee.employee_code }]}
         />
-        <button
-          type="button"
-          disabled={saving}
-          onClick={toggleActive}
-          className="rounded border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary disabled:opacity-60"
-        >
-          {employee.is_active ? "Deactivate" : "Activate"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <button
+              type="button"
+              disabled={docGenerating}
+              onClick={() => setOpenDocActions((v) => !v)}
+              className="rounded-lg border border-border-strong px-2.5 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-60"
+            >
+              {docGenerating ? "Generating..." : "Generate document"}
+            </button>
+            {openDocActions && (
+              <div className="absolute right-0 z-10 mt-1 w-44 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => void generateDocument("id-card")}
+                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                >
+                  ID card (PDF)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void generateDocument("appointment-letter")}
+                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                >
+                  Appointment letter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void generateDocument("age-cert")}
+                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                >
+                  Age verification cert
+                </button>
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={toggleActive}
+            className="rounded border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary disabled:opacity-60"
+          >
+            {employee.is_active ? "Deactivate" : "Activate"}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-border pb-2">
@@ -461,6 +629,139 @@ export function HrEmployeeDetailPage() {
                     <td className="px-4 py-2">{d.document_type}</td>
                     <td className="px-4 py-2">{d.document_number ?? "—"}</td>
                     <td className="px-4 py-2">{d.expiry_date ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === "age" && (
+        <div className="space-y-4">
+          <form onSubmit={addAgeVerification} className="rounded-xl border border-border bg-surface-raised p-4 grid gap-2 sm:grid-cols-2">
+            <select
+              className="rounded border px-2 py-1 text-sm"
+              value={ageForm.verification_method}
+              onChange={(e) => setAgeForm((p) => ({ ...p, verification_method: e.target.value }))}
+            >
+              <option value="DOCUMENT">Document</option>
+              <option value="BIRTH_CERTIFICATE">Birth certificate</option>
+              <option value="NID">National ID</option>
+            </select>
+            <input
+              type="date"
+              className="rounded border px-2 py-1 text-sm"
+              value={ageForm.date_of_birth}
+              onChange={(e) => setAgeForm((p) => ({ ...p, date_of_birth: e.target.value }))}
+              required
+            />
+            <input
+              className="sm:col-span-2 rounded border px-2 py-1 text-sm"
+              placeholder="Notes"
+              value={ageForm.notes}
+              onChange={(e) => setAgeForm((p) => ({ ...p, notes: e.target.value }))}
+            />
+            <div className="sm:col-span-2">
+              <button type="submit" disabled={saving} className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white">
+                Add verification
+              </button>
+            </div>
+          </form>
+          <div className="rounded-xl border border-border overflow-hidden">
+            <table className="min-w-full text-sm">
+              <thead className="bg-surface-subtle">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs uppercase">Method</th>
+                  <th className="px-4 py-2 text-left text-xs uppercase">DOB</th>
+                  <th className="px-4 py-2 text-left text-xs uppercase">Age</th>
+                  <th className="px-4 py-2 text-left text-xs uppercase">Status</th>
+                  <th className="px-4 py-2 text-left text-xs uppercase">BSCI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ageVerifications.map((v) => (
+                  <tr key={v.id} className="border-t border-border">
+                    <td className="px-4 py-2">{v.verification_method}</td>
+                    <td className="px-4 py-2">{v.date_of_birth}</td>
+                    <td className="px-4 py-2">{v.age_at_verification}</td>
+                    <td className="px-4 py-2">{v.status}</td>
+                    <td className="px-4 py-2">{v.is_bsci_compliant ? "Yes" : "No"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === "medical" && (
+        <div className="space-y-4">
+          <form onSubmit={addMedicalRecord} className="rounded-xl border border-border bg-surface-raised p-4 grid gap-2 sm:grid-cols-2">
+            <input
+              type="date"
+              className="rounded border px-2 py-1 text-sm"
+              value={medicalForm.examination_date}
+              onChange={(e) => setMedicalForm((p) => ({ ...p, examination_date: e.target.value }))}
+              required
+            />
+            <select
+              className="rounded border px-2 py-1 text-sm"
+              value={medicalForm.fitness_status}
+              onChange={(e) => setMedicalForm((p) => ({ ...p, fitness_status: e.target.value }))}
+            >
+              <option value="FIT">Fit</option>
+              <option value="UNFIT">Unfit</option>
+              <option value="PENDING">Pending</option>
+              <option value="RESTRICTED">Restricted</option>
+            </select>
+            <input
+              className="rounded border px-2 py-1 text-sm"
+              placeholder="Certificate number"
+              value={medicalForm.certificate_number}
+              onChange={(e) => setMedicalForm((p) => ({ ...p, certificate_number: e.target.value }))}
+            />
+            <input
+              type="date"
+              className="rounded border px-2 py-1 text-sm"
+              value={medicalForm.expiry_date}
+              onChange={(e) => setMedicalForm((p) => ({ ...p, expiry_date: e.target.value }))}
+            />
+            <input
+              className="rounded border px-2 py-1 text-sm"
+              placeholder="Doctor name"
+              value={medicalForm.doctor_name}
+              onChange={(e) => setMedicalForm((p) => ({ ...p, doctor_name: e.target.value }))}
+            />
+            <input
+              className="rounded border px-2 py-1 text-sm"
+              placeholder="Hospital / clinic"
+              value={medicalForm.hospital_clinic}
+              onChange={(e) => setMedicalForm((p) => ({ ...p, hospital_clinic: e.target.value }))}
+            />
+            <div className="sm:col-span-2">
+              <button type="submit" disabled={saving} className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white">
+                Add medical record
+              </button>
+            </div>
+          </form>
+          <div className="rounded-xl border border-border overflow-hidden">
+            <table className="min-w-full text-sm">
+              <thead className="bg-surface-subtle">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs uppercase">Exam date</th>
+                  <th className="px-4 py-2 text-left text-xs uppercase">Fitness</th>
+                  <th className="px-4 py-2 text-left text-xs uppercase">Certificate</th>
+                  <th className="px-4 py-2 text-left text-xs uppercase">Expiry</th>
+                </tr>
+              </thead>
+              <tbody>
+                {medicalRecords.map((m) => (
+                  <tr key={m.id} className="border-t border-border">
+                    <td className="px-4 py-2">{m.examination_date}</td>
+                    <td className="px-4 py-2">{m.fitness_status}</td>
+                    <td className="px-4 py-2">{m.certificate_number ?? "—"}</td>
+                    <td className="px-4 py-2">{m.expiry_date ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

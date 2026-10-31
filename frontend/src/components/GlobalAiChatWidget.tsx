@@ -3,9 +3,12 @@ import { useLocation } from "react-router-dom";
 import { AiChatThread } from "@/pages/app/ai/components/AiChatThread";
 import { AiPromptInput } from "@/pages/app/ai/components/AiPromptInput";
 import { useAiChatContext } from "@/context/AiChatContext";
+import { useAuth } from "@/context/AuthContext";
 
 export function GlobalAiChatWidget() {
   const location = useLocation();
+  const { me } = useAuth();
+  const appShellV2 = me?.feature_flags?.app_shell_v2 === true;
   const {
     messages,
     loadingMessages,
@@ -29,16 +32,16 @@ export function GlobalAiChatWidget() {
 
   return (
     <>
-      {/* FAB only when closed; when open it overlapped Send and duplicated header close. */}
-      {!widgetOpen ? (
-        <div className="fixed bottom-6 right-6 z-[90]">
+      {/* Desktop FAB — hidden when app_shell_v2 (use top-bar AI). Mobile always uses top bar. */}
+      {!widgetOpen && !appShellV2 ? (
+        <div className="fixed bottom-6 right-6 z-[90] hidden lg:block">
           <button
             type="button"
             onClick={toggleWidget}
-            className="group flex h-14 w-14 items-center justify-center rounded-full bg-brand-primary text-brand-primary-foreground shadow-xl ring-1 ring-brand-primary/20 transition hover:scale-[1.03] hover:shadow-2xl"
+            className="group flex h-12 w-12 items-center justify-center rounded-full bg-brand-primary text-brand-primary-foreground shadow-lg ring-1 ring-brand-primary/20 transition hover:scale-[1.03] hover:shadow-xl"
             title="Open AI assistant"
           >
-            <Sparkles className="h-6 w-6" />
+            <Sparkles className="h-5 w-5" />
           </button>
         </div>
       ) : null}

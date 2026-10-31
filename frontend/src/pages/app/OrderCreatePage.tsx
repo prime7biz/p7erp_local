@@ -14,6 +14,7 @@ import {
   type OrderExtractionResponse,
   type QuotationResponse,
 } from "@/api/client";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { OrderAiPanel } from "@/components/orders/OrderAiPanel";
 import { useOrderAi } from "@/hooks/useOrderAi";
 import { logApiError } from "@/utils/logApiError";
@@ -24,6 +25,7 @@ import {
   withLegacyOption,
 } from "@/lib/commercialTerms";
 import { isQuotationOpenForOrderLink } from "@/features/merch/workflow";
+import { fetchCustomerPage, hydrateCustomer } from "@/lib/remoteSelectFetchers";
 
 const ORDER_AI_MERGE_KEYS = new Set([
   "style_ref",
@@ -92,7 +94,7 @@ export function OrderCreatePage() {
   const navigate = useNavigate();
   const orderAi = useOrderAi();
   const [form, setForm] = useState<OrderCreate>({ customer_id: 0 });
-  const [customers, setCustomers] = useState<CustomerResponse[]>([]);
+  const [selectedCustomerName, setSelectedCustomerName] = useState<string | null>(null);
   const [quotations, setQuotations] = useState<QuotationResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -122,10 +124,6 @@ export function OrderCreatePage() {
     () => new Map<number, QuotationResponse>(quotations.map((row) => [row.id, row])),
     [quotations]
   );
-  const selectedCustomer = useMemo(
-    () => customers.find((row) => row.id === form.customer_id) ?? null,
-    [customers, form.customer_id]
-  );
   const selectedQuotation = useMemo(
     () => (form.quotation_id ? quotationsById.get(form.quotation_id) ?? null : null),
     [form.quotation_id, quotationsById]
@@ -136,11 +134,7 @@ export function OrderCreatePage() {
       setLoading(true);
       setError("");
       try {
-        const [customersData, quotationsData] = await Promise.all([
-          api.listCustomers(),
-          api.listQuotations({ limit: 200, offset: 0 }),
-        ]);
-        setCustomers(customersData);
+        const quotationsData = await api.listQuotations({ limit: 200, offset: 0 });
         setQuotations(quotationsData.filter(isQuotationOpenForOrderLink));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load order form data");
@@ -219,47 +213,47 @@ export function OrderCreatePage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">Customer</label>
-                <select
-                  value={form.customer_id || ""}
-                  onChange={(e) =>
+                <RemoteSearchSelect<CustomerResponse>
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+                  placeholder="Search customer…"
+                  value={form.customer_id > 0 ? form.customer_id : ""}
+                  onChange={(next, opt) => {
+                    const id = typeof next === "number" && next > 0 ? next : 0;
+                    setSelectedCustomerName(opt?.meta?.name ?? (id ? opt?.label ?? null : null));
                     setForm((prev) => ({
                       ...prev,
-                      customer_id: Number(e.target.value) || 0,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
-                >
-                  <option value="">Select customer...</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                      customer_id: id,
+                    }));
+                  }}
+                  fetchPage={fetchCustomerPage}
+                  hydrateById={hydrateCustomer}
+                  allowClear
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">Linked quotation (optional)</label>
                 <select
                   value={form.quotation_id ?? ""}
-                  onChange={(e) =>
-                    setForm((prev) => {
-                      const nextQuotationId = e.target.value ? Number(e.target.value) : undefined;
-                      const quote = nextQuotationId ? quotationsById.get(nextQuotationId) ?? null : null;
-                      return {
-                        ...prev,
-                        quotation_id: nextQuotationId,
-                        customer_id: quote?.customer_id ?? prev.customer_id,
-                        style_id: quote?.style_id ?? prev.style_id,
-                        style_ref: quote?.style_ref ?? prev.style_ref,
-                        customer_intermediary_id:
-                          quote?.customer_intermediary_id ?? prev.customer_intermediary_id,
-                        shipping_term: quote?.shipping_term ?? prev.shipping_term,
-                        commission_mode: quote?.commission_mode ?? prev.commission_mode,
-                        commission_type: quote?.commission_type ?? prev.commission_type,
-                        commission_value: quote?.commission_value ?? prev.commission_value,
-                      };
-                    })
-                  }
+                  onChange={(e) => {
+                    const nextQuotationId = e.target.value ? Number(e.target.value) : undefined;
+                    const quote = nextQuotationId ? quotationsById.get(nextQuotationId) ?? null : null;
+                    if (quote?.customer_name) {
+                      setSelectedCustomerName(quote.customer_name);
+                    }
+                    setForm((prev) => ({
+                      ...prev,
+                      quotation_id: nextQuotationId,
+                      customer_id: quote?.customer_id ?? prev.customer_id,
+                      style_id: quote?.style_id ?? prev.style_id,
+                      style_ref: quote?.style_ref ?? prev.style_ref,
+                      customer_intermediary_id:
+                        quote?.customer_intermediary_id ?? prev.customer_intermediary_id,
+                      shipping_term: quote?.shipping_term ?? prev.shipping_term,
+                      commission_mode: quote?.commission_mode ?? prev.commission_mode,
+                      commission_type: quote?.commission_type ?? prev.commission_type,
+                      commission_value: quote?.commission_value ?? prev.commission_value,
+                    }));
+                  }}
                   className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
                 >
                   <option value="">No linked quotation</option>
@@ -506,7 +500,7 @@ export function OrderCreatePage() {
           <div className="rounded-xl border border-border bg-surface-raised p-4">
             <h3 className="text-sm font-semibold text-text-primary">Live summary</h3>
             <div className="mt-3 space-y-1 text-sm text-text-secondary">
-              <div><span className="font-medium">Customer:</span> {selectedCustomer?.name ?? "Not selected"}</div>
+              <div><span className="font-medium">Customer:</span> {selectedCustomerName ?? "Not selected"}</div>
               <div><span className="font-medium">Quotation:</span> {selectedQuotation?.quotation_code ?? "Not linked"}</div>
               <div><span className="font-medium">Style:</span> {form.style_ref ?? "—"}</div>
               <div><span className="font-medium">Shipping:</span> {form.shipping_term ?? "—"}</div>

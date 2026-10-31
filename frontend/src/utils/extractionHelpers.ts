@@ -9,6 +9,8 @@ import type {
   FieldApplyState,
   FieldConfidence,
   InquiryExtractionResponse,
+  LcExtractionResponse,
+  ShippingDocExtractionResponse,
   VendorExtractionResponse,
 } from "@/types/extraction";
 
@@ -68,8 +70,40 @@ export const INQUIRY_FIELD_LABELS: Record<string, string> = {
   notes: "Notes",
 };
 
+export const LC_FIELD_LABELS: Record<string, string> = {
+  reference: "Reference",
+  lc_number: "LC number",
+  contract_type: "Contract type",
+  amount: "Amount",
+  currency: "Currency",
+  buyer_name: "Buyer name",
+  bank_name: "Issuing bank",
+  contract_date: "Contract date",
+  issue_date: "Issue date",
+  expiry_date: "Expiry date",
+  applicant: "Applicant",
+  beneficiary: "Beneficiary",
+  incoterms: "Incoterms",
+  notes: "Notes",
+};
+
+export const SHIPPING_FIELD_LABELS: Record<string, string> = {
+  reference: "Reference",
+  carrier: "Carrier",
+  booking_ref: "Booking ref",
+  bl_awb: "BL / AWB",
+  etd: "ETD",
+  eta: "ETA",
+  origin_port: "Origin port",
+  dest_port: "Destination port",
+  container_number: "Container number",
+  notes: "Notes",
+};
+
 const CUSTOMER_KEYS = Object.keys(CUSTOMER_FIELD_LABELS);
 const INQUIRY_KEYS = Object.keys(INQUIRY_FIELD_LABELS);
+const LC_KEYS = Object.keys(LC_FIELD_LABELS);
+const SHIPPING_KEYS = Object.keys(SHIPPING_FIELD_LABELS);
 
 export function buildCustomerFieldApplyStates(
   res: CustomerExtractionResponse,
@@ -319,4 +353,50 @@ export function inquiryFormSnapshot(form: InquiryCreate): Record<string, string>
     commission_value: form.commission_value != null ? String(form.commission_value) : "",
     notes: form.notes ?? "",
   };
+}
+
+function buildFieldApplyStatesFromMap(
+  keys: string[],
+  labels: Record<string, string>,
+  fields: Record<string, { value?: unknown; confidence?: number }>,
+  current: Record<string, string>,
+): FieldApplyState[] {
+  const out: FieldApplyState[] = [];
+  for (const key of keys) {
+    const ef = fields[key];
+    if (!ef || ef.value === null || ef.value === undefined) continue;
+    const extractedDisplay = formatExtractedValue(ef.value);
+    if (!extractedDisplay.trim() && key !== "notes") continue;
+    const cur = current[key] ?? "";
+    const conf = typeof ef.confidence === "number" ? ef.confidence : 0;
+    const level = deriveConfidenceLevel(conf);
+    const hasConflict = cur.trim().length > 0 && cur.trim() !== extractedDisplay.trim();
+    out.push({
+      fieldKey: key,
+      label: labels[key] ?? key,
+      extractedValue: extractedDisplay,
+      extractedDisplay,
+      currentValue: cur,
+      applied: false,
+      skipped: false,
+      hasConflict,
+      confidence: conf,
+      confidenceLevel: level,
+    });
+  }
+  return out;
+}
+
+export function buildLcFieldApplyStates(
+  res: LcExtractionResponse,
+  current: Record<string, string>,
+): FieldApplyState[] {
+  return buildFieldApplyStatesFromMap(LC_KEYS, LC_FIELD_LABELS, res.fields, current);
+}
+
+export function buildShippingFieldApplyStates(
+  res: ShippingDocExtractionResponse,
+  current: Record<string, string>,
+): FieldApplyState[] {
+  return buildFieldApplyStatesFromMap(SHIPPING_KEYS, SHIPPING_FIELD_LABELS, res.fields, current);
 }

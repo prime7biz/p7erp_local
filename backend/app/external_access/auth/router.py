@@ -41,9 +41,18 @@ from app.external_access.constants import (
     FF_FINANCIER_PROJECTION_ENABLED,
     PRINCIPAL_FINANCIER,
 )
-from app.external_access.feature_flags import is_customer_portal_enabled, is_financier_portal_enabled
+from app.external_access.feature_flags import (
+    is_customer_portal_enabled,
+    is_financier_portal_enabled,
+    require_portal_enabled,
+)
 from app.external_access.permissions import get_role_codes
-from app.external_access.tokens import decode_external_refresh_token, get_current_external_principal
+from app.external_access.tokens import (
+    assert_session_version_current,
+    bump_session_version,
+    decode_external_refresh_token,
+    get_current_external_principal,
+)
 from app.external_access.constants import JWT_CLAIM_PRINCIPAL_TYPE, JWT_CLAIM_TENANT, parse_external_subject
 
 router = APIRouter(prefix="/auth", tags=["external-auth"])
@@ -60,8 +69,18 @@ async def external_login(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.login_lockout import enforce_login_rate_limit
+
+    await enforce_login_rate_limit(
+        request,
+        company_key=body.company_code or "",
+        scope="external",
+    )
     tenant = await resolve_tenant_by_company_code(db, body.company_code)
     if not tenant:
+        from app.common.auth import verify_password_constant_time
+
+        await verify_password_constant_time(body.password, None)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     principal = await authenticate_external(
         db,
@@ -97,9 +116,10 @@ async def external_logout(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Client discards tokens; server records logout for audit."""
+    """Revoke every token for this principal (all devices) and record logout for audit."""
     from app.external_access.audit import log_external_action
 
+    bump_session_version(principal)
     await log_external_action(
         db,
         tenant_id=principal.tenant_id,
@@ -137,8 +157,26 @@ async def external_refresh(
     pt = payload.get(JWT_CLAIM_PRINCIPAL_TYPE)
     if pt is not None and pt != principal.principal_type:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    assert_session_version_current(payload, principal)
     if principal.locked_at is not None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account locked")
+        from app.common.login_lockout import lockout_minutes, lockout_still_active
+
+        minutes = lockout_minutes(getattr(get_settings(), "external_login_lockout_minutes", 30))
+        if lockout_still_active(principal.locked_at, minutes=minutes):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account locked")
+        principal.locked_at = None
+        principal.failed_login_count = 0
+    tenant_row = await db.execute(
+        select(Tenant).where(
+            Tenant.id == principal.tenant_id,
+            Tenant.is_active.is_(True),
+            Tenant.deleted_at.is_(None),
+        )
+    )
+    tenant = tenant_row.scalar_one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    require_portal_enabled(tenant=tenant, principal_type=principal.principal_type)
     access, refresh = await issue_tokens_for_principal(principal)
     return ExternalTokenResponse(
         access_token=access,
@@ -154,6 +192,9 @@ async def external_accept_invite(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    from app.common.login_lockout import enforce_login_rate_limit
+
+    await enforce_login_rate_limit(request, company_key="invite", scope="accept_invite")
     principal = await accept_invitation(
         db,
         token=body.token,

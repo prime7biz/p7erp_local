@@ -49,6 +49,13 @@ export function BomLineEditDrawer({
             <p className="text-xs text-text-muted">
               {line.item_code_snapshot || line.item_code || "—"} · {line.description_snapshot || line.description || ""}
             </p>
+            {(line.current_stock != null || line.avg_cost != null) && (
+              <p className="mt-1 text-xs text-text-secondary">
+                On hand: <span className="font-medium tabular-nums">{line.current_stock ?? "—"}</span>
+                {" · "}
+                Avg cost: <span className="font-medium tabular-nums">{line.avg_cost ?? "—"}</span>
+              </p>
+            )}
           </div>
           <button type="button" className="text-sm text-text-muted hover:text-text-primary" onClick={onClose} disabled={saving}>
             ✕

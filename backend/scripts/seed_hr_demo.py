@@ -20,7 +20,7 @@ if str(backend) not in sys.path:
     sys.path.insert(0, str(backend))
 
 from app.database import AsyncSessionLocal
-from app.models import Department, Designation, Employee, Tenant
+from app.models import Department, Designation, Employee, Tenant, User
 
 
 async def _get_tenant(db: AsyncSession) -> Tenant:
@@ -157,6 +157,32 @@ async def _upsert_employee(
     db.add(row)
     await db.flush()
     return row
+
+
+async def _link_employee_user(
+    db: AsyncSession,
+    tenant_id: int,
+    employee_code: str,
+    username: str,
+) -> None:
+    employee = (
+        await db.execute(
+            select(Employee).where(
+                Employee.tenant_id == tenant_id,
+                Employee.employee_code == employee_code,
+            )
+        )
+    ).scalars().first()
+    user = (
+        await db.execute(
+            select(User).where(User.tenant_id == tenant_id, User.username == username)
+        )
+    ).scalars().first()
+    if not employee or not user:
+        return
+    if employee.user_id is not None:
+        return
+    employee.user_id = user.id
 
 
 async def main() -> None:
@@ -349,6 +375,10 @@ async def main() -> None:
             db, tenant.id, "EMP-0017", "Dye", "Operator", "dye.op@p7.local", "+8801700000017",
             date(2024, 5, 20), prod.id, des_operator.id, None, True,
         )
+
+        # Link demo logins to employees so ESS (My Profile, etc.) works out of the box.
+        await _link_employee_user(db, tenant.id, "EMP-0001", "shahriyar")
+        await _link_employee_user(db, tenant.id, "EMP-0002", "itoff")
 
         await db.commit()
 

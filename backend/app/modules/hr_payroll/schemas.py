@@ -69,6 +69,10 @@ class PayrollStructureLineBody(BaseModel):
     amount: str = "0"
     formula: str | None = None
     sort_order: int = 0
+    is_pf_component: bool = False
+    is_esi_component: bool = False
+    is_pt_component: bool = False
+    is_gratuity_component: bool = False
 
 
 class PayrollStructureLineOut(BaseModel):
@@ -79,6 +83,10 @@ class PayrollStructureLineOut(BaseModel):
     amount: str
     formula: str | None
     sort_order: int
+    is_pf_component: bool = False
+    is_esi_component: bool = False
+    is_pt_component: bool = False
+    is_gratuity_component: bool = False
     created_at: str
 
 
@@ -147,6 +155,7 @@ class PayrollRunLineOut(BaseModel):
     net_pay: str
     overtime_amount: str = "0"
     remarks: str | None
+    calculation_source: str = "MANUAL"
     created_at: str
     updated_at: str
 
@@ -170,3 +179,97 @@ class PayrollPostingOut(BaseModel):
     posted_at: str
     posted_by: int | None
     note: str | None
+
+
+# --- Phase 1.4: structure assignments + auto-calculate ---
+
+
+class PayrollAssignmentCreate(BaseModel):
+    employee_id: int
+    structure_id: int
+    effective_from: date
+    effective_to: date | None = None
+    base_salary: str | None = None
+    component_overrides: dict | None = None
+
+
+class PayrollAssignmentOut(BaseModel):
+    id: int
+    tenant_id: int
+    employee_id: int
+    structure_id: int
+    effective_from: date
+    effective_to: date | None
+    base_salary: str | None
+    component_overrides: dict | None
+    created_by: int | None
+    created_at: str
+    updated_at: str
+
+
+class PayrollAssignmentEndBody(BaseModel):
+    effective_to: date | None = None
+
+
+class PayrollAutoCalculateApplyBody(BaseModel):
+    employee_ids: list[int] | None = None  # None = all ready employees
+    force: bool = False  # overwrite MANUAL lines
+    overwrite_confirm: bool = False  # alias for force (backward compatible)
+
+
+class PayrollComponentCalcOut(BaseModel):
+    component_id: int
+    component_code: str
+    component_name: str
+    component_type: str
+    calculation_type: str
+    amount: str
+    source_amount: str
+
+
+class PayrollEmployeeCalcPreviewOut(BaseModel):
+    employee_id: int
+    employee_code: str
+    employee_name: str = ""
+    structure_id: int | None
+    assignment_id: int | None
+    base_salary: str
+    days_present: str
+    absent_days: str = "0.0000"
+    late_days: str = "0.0000"
+    ot_hours: str
+    paid_leave_days: str
+    unpaid_leave_days: str
+    gross_pay: str
+    deductions: str
+    net_pay: str
+    overtime_amount: str
+    components: list[PayrollComponentCalcOut] = []
+    warnings: list[str] = []
+    skipped: bool = False
+    skip_reason: str | None = None
+    status: str = "Ready"
+    has_manual_override: bool = False
+    calculation_source: str = "AUTO"
+
+
+class PayrollAutoCalculatePreviewOut(BaseModel):
+    run_id: int
+    period_id: int
+    as_of: date
+    existing_line_count: int
+    requires_overwrite_confirm: bool
+    employees: list[PayrollEmployeeCalcPreviewOut]
+    missing_assignment_employee_ids: list[int]
+    warnings: list[str] = []
+
+
+class PayrollAutoCalculateApplyOut(BaseModel):
+    run_id: int
+    applied: int
+    skipped: int
+    gross_total: str
+    deduction_total: str
+    net_total: str
+    preview_warnings: list[str] = []
+    missing_assignment_employee_ids: list[int] = []

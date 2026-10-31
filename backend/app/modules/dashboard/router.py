@@ -1,34 +1,44 @@
 import json
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.gemini_client import generate_text_for_tenant
 from app.common.tenant import require_tenant
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.modules.dashboard.ai_services import (
     generate_ai_brief,
     generate_ai_profitability,
 )
+from app.modules.dashboard.kpi_service import (
+    build_attention_summary,
+    build_employee_summary,
+    build_kpi_list,
+    build_production_trends,
+    build_revenue_trend,
+    count_active_orders,
+)
+from app.modules.merch.costing_variance_service import list_pending_price_verifications
 from app.models import (
-    BankReconciliation,
     Customer,
     Followup,
-    LeaveRequest,
     Order,
-    PayrollApproval,
-    PaymentRun,
-    Quotation,
     Tenant,
     User,
-    Voucher,
 )
 
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+def _ensure_tenant_match(user: User, tenant: Tenant) -> None:
+    if user.tenant_id != tenant.id:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
 
 @router.get("/kpi")
@@ -37,72 +47,85 @@ async def get_kpis(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return high-level KPI cards for the main dashboard."""
-    if user.tenant_id != tenant.id:
-        from fastapi import HTTPException, status
+    """Return high-level KPI cards for the main dashboard (honest counts)."""
+    _ensure_tenant_match(user, tenant)
+    return await build_kpi_list(db, tenant.id)
 
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
-    # Active orders (all non-draft orders for now)
-    result_orders = await db.execute(
-        select(func.count()).select_from(Order).where(
-            Order.tenant_id == tenant.id,
-        )
-    )
-    active_orders = int(result_orders.scalar() or 0)
+@router.get("/attention-summary")
+async def attention_summary(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Needs-attention strip: approvals, TNA, alerts, promise/commercial risks."""
+    _ensure_tenant_match(user, tenant)
+    try:
+        return await build_attention_summary(db, tenant.id)
+    except Exception:
+        await safe_async_session_rollback(db)
+        return {
+            "pending_approvals": 0,
+            "tna_open": 0,
+            "tna_overdue": 0,
+            "critical_alerts": 0,
+            "total_alerts": 0,
+            "promise_blocked": 0,
+            "commercial_pending": 0,
+            "links": {
+                "pending_approvals": "/app/approvals",
+                "tna_overdue": "/app/followup",
+                "critical_alerts": "/app/merchandising/alerts",
+                "promise_blocked": "/app/orders",
+                "commercial_pending": "/app/orders",
+            },
+        }
 
-    # Customers
-    result_customers = await db.execute(
-        select(func.count()).select_from(Customer).where(Customer.tenant_id == tenant.id)
-    )
-    total_customers = int(result_customers.scalar() or 0)
 
-    # Monthly revenue placeholder; pending approvals from real queues.
-    monthly_revenue = 0
-    vouchers_pending = await db.execute(
-        select(func.count()).select_from(Voucher).where(
-            Voucher.tenant_id == tenant.id,
-            Voucher.status.in_(["SUBMITTED", "CHECKED", "RECOMMENDED"]),
+@router.get("/pending-price-verifications")
+async def pending_price_verifications(
+    limit: int = Query(20, ge=1, le=100),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Owner cost alerts: orders with >10% tentative-vs-actual variance (dashboard shape)."""
+    _ensure_tenant_match(user, tenant)
+    try:
+        items = await list_pending_price_verifications(db, tenant_id=tenant.id, limit=limit)
+    except Exception:
+        await safe_async_session_rollback(db)
+        items = []
+    alerts = []
+    for item in items:
+        pct = item.get("variance_pct")
+        pct_label = f"{pct:+.1f}%" if isinstance(pct, (int, float)) else "n/a"
+        order_id = item.get("order_id")
+        alerts.append(
+            {
+                "id": f"margin_drop:{order_id}",
+                "type": "margin_drop",
+                "severity": "critical",
+                "message": (
+                    f"Order {item.get('order_code') or order_id} cost variance {pct_label} "
+                    "(actuals vs tentative >10%)"
+                ),
+                "entity_type": "order",
+                "entity_id": order_id,
+                "order_id": order_id,
+                "link": item.get("href") or f"/app/orders/{order_id}",
+                "created_at": None,
+                # Keep flat fields for clients that still expect the orders-list shape.
+                "order_code": item.get("order_code"),
+                "order_status": item.get("order_status"),
+                "status": item.get("status"),
+                "tentative_cost": item.get("tentative_cost"),
+                "actual_cost": item.get("actual_cost"),
+                "variance_pct": pct,
+                "href": item.get("href") or f"/app/orders/{order_id}",
+            }
         )
-    )
-    runs_draft = await db.execute(
-        select(func.count()).select_from(PaymentRun).where(
-            PaymentRun.tenant_id == tenant.id,
-            PaymentRun.status == "DRAFT",
-        )
-    )
-    recons_open = await db.execute(
-        select(func.count()).select_from(BankReconciliation).where(
-            BankReconciliation.tenant_id == tenant.id,
-            BankReconciliation.is_finalized.is_(False),
-        )
-    )
-    leave_pending = await db.execute(
-        select(func.count()).select_from(LeaveRequest).where(
-            LeaveRequest.tenant_id == tenant.id,
-            LeaveRequest.status.in_(["PENDING", "SUBMITTED"]),
-        )
-    )
-    payroll_pending = await db.execute(
-        select(func.count()).select_from(PayrollApproval).where(
-            PayrollApproval.tenant_id == tenant.id,
-            func.lower(PayrollApproval.action) == "pending",
-        )
-    )
-    pending_approvals = (
-        int(vouchers_pending.scalar() or 0)
-        + int(runs_draft.scalar() or 0)
-        + int(recons_open.scalar() or 0)
-        + int(leave_pending.scalar() or 0)
-        + int(payroll_pending.scalar() or 0)
-    )
-
-    return [
-        {"id": "active-orders", "label": "Active Orders", "value": active_orders},
-        {"id": "monthly-revenue", "label": "Monthly Revenue", "value": monthly_revenue},
-        {"id": "pending-approvals", "label": "Pending Approvals", "value": pending_approvals},
-        {"id": "total-customers", "label": "Total Customers", "value": total_customers},
-    ]
+    return {"total_alerts": len(alerts), "alerts": alerts}
 
 
 @router.get("/order-status-breakdown")
@@ -112,10 +135,7 @@ async def order_status_breakdown(
     db: AsyncSession = Depends(get_db),
 ):
     """Counts of orders by status for charts and summary cards."""
-    if user.tenant_id != tenant.id:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    _ensure_tenant_match(user, tenant)
 
     result = await db.execute(
         select(Order.status, func.count())
@@ -126,6 +146,7 @@ async def order_status_breakdown(
     return [{"status": status or "UNKNOWN", "count": int(count)} for status, count in rows]
 
 
+
 @router.get("/customer-map")
 async def customer_map(
     tenant: Tenant = Depends(require_tenant),
@@ -133,10 +154,7 @@ async def customer_map(
     db: AsyncSession = Depends(get_db),
 ):
     """Simple customer count per country for the global map section."""
-    if user.tenant_id != tenant.id:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    _ensure_tenant_match(user, tenant)
 
     result = await db.execute(
         select(Customer.country, func.count())
@@ -160,15 +178,9 @@ async def ai_insights(
     db: AsyncSession = Depends(get_db),
 ):
     """Rule-based 'AI' insights for now; can be backed by a real AI service later."""
-    if user.tenant_id != tenant.id:
-        from fastapi import HTTPException, status
+    _ensure_tenant_match(user, tenant)
 
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
-
-    result_orders = await db.execute(
-        select(func.count()).select_from(Order).where(Order.tenant_id == tenant.id)
-    )
-    active_orders = int(result_orders.scalar() or 0)
+    active_orders = await count_active_orders(db, tenant.id)
 
     result_customers = await db.execute(
         select(func.count()).select_from(Customer).where(Customer.tenant_id == tenant.id)
@@ -263,44 +275,15 @@ async def ai_profitability(
 
 @router.get("/production-trends")
 async def production_trends(
+    from_date: str | None = Query(default=None, description="ISO date YYYY-MM-DD"),
+    to_date: str | None = Query(default=None, description="ISO date YYYY-MM-DD"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Simple monthly trend points (output/target/efficiency) for dashboard charts."""
-    if user.tenant_id != tenant.id:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
-
-    # Keep this DB-agnostic (SQLite + Postgres) by bucketing in Python.
-    # Cap scope: last 12 months and at most 10k rows to avoid full-table scans.
-    cutoff = datetime.utcnow() - timedelta(days=365)
-    result = await db.execute(
-        select(Order.created_at)
-        .where(Order.tenant_id == tenant.id, Order.created_at >= cutoff)
-        .order_by(Order.created_at.asc())
-        .limit(10000)
-    )
-    rows = result.all()
-    month_counts: dict[str, int] = {}
-    for (created_at,) in rows:
-        month_key = created_at.strftime("%b %Y")
-        month_counts[month_key] = month_counts.get(month_key, 0) + 1
-    points = []
-    for month_key, order_count in month_counts.items():
-        output = int(order_count or 0)
-        target = max(output + 2, 5)
-        efficiency = round((output / target) * 100, 1) if target > 0 else 0
-        points.append(
-            {
-                "date": month_key,
-                "output": output,
-                "target": target,
-                "efficiency": efficiency,
-            }
-        )
-    return points
+    """Orders created by month (honest label; legacy output/target keys kept)."""
+    _ensure_tenant_match(user, tenant)
+    return await build_production_trends(db, tenant.id, from_date=from_date, to_date=to_date)
 
 
 @router.get("/recent-orders")
@@ -310,10 +293,7 @@ async def recent_orders(
     db: AsyncSession = Depends(get_db),
 ):
     """Latest orders with customer names."""
-    if user.tenant_id != tenant.id:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    _ensure_tenant_match(user, tenant)
 
     result = await db.execute(
         select(Order, Customer)
@@ -344,10 +324,7 @@ async def dashboard_tasks(
     db: AsyncSession = Depends(get_db),
 ):
     """Task list sourced from open order follow-ups."""
-    if user.tenant_id != tenant.id:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    _ensure_tenant_match(user, tenant)
 
     result = await db.execute(
         select(Followup)
@@ -373,13 +350,15 @@ async def dashboard_tasks(
 async def employee_summary(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Placeholder parity endpoint for dashboard widget (HR module pending)."""
-    if user.tenant_id != tenant.id:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
-    return {"total": 0, "breakdown": [], "departments": []}
+    """HR employee counts for dashboard widget."""
+    _ensure_tenant_match(user, tenant)
+    try:
+        return await build_employee_summary(db, tenant.id)
+    except Exception:
+        await safe_async_session_rollback(db)
+        return {"total": 0, "breakdown": [], "departments": []}
 
 
 @router.get("/payroll-summary")
@@ -388,45 +367,21 @@ async def payroll_summary(
     user: User = Depends(get_current_user),
 ):
     """Placeholder parity endpoint for dashboard widget (Payroll module pending)."""
-    if user.tenant_id != tenant.id:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    _ensure_tenant_match(user, tenant)
     return []
 
 
 @router.get("/revenue-trend")
 async def revenue_trend(
+    from_date: str | None = Query(default=None, description="ISO date YYYY-MM-DD"),
+    to_date: str | None = Query(default=None, description="ISO date YYYY-MM-DD"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Revenue trend from quotations (quoted_price or total_amount)."""
-    if user.tenant_id != tenant.id:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
-
-    # Cap work for large tenants: last ~24 months, max rows (Finding #3).
-    since = datetime.utcnow() - timedelta(days=730)
-    result = await db.execute(
-        select(Quotation.created_at, Quotation.quoted_price, Quotation.total_amount)
-        .where(Quotation.tenant_id == tenant.id, Quotation.created_at >= since)
-        .order_by(Quotation.created_at.asc())
-        .limit(8000)
-    )
-    bucket: dict[str, float] = {}
-    for created_at, quoted_price, total_amount in result.all():
-        key = created_at.strftime("%b %Y")
-        raw = quoted_price or total_amount or "0"
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            value = 0.0
-        bucket[key] = bucket.get(key, 0.0) + value
-    months = [{"month": k, "revenue": round(v, 2)} for k, v in bucket.items()]
-    total = round(sum(v["revenue"] for v in months), 2)
-    return {"months": months, "totalRevenue": total}
+    """Quoted amounts by month (quotations — not posted GL revenue)."""
+    _ensure_tenant_match(user, tenant)
+    return await build_revenue_trend(db, tenant.id, from_date=from_date, to_date=to_date)
 
 
 @router.get("/ai/executive-brief")

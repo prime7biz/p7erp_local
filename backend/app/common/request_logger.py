@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from typing import Callable
 
-from jose import JWTError, jwt
+from app.common.jwt_compat import JWTError, jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response

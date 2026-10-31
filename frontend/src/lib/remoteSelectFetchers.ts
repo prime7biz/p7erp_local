@@ -3,12 +3,49 @@ import {
   type BtbLcRow,
   type ChartOfAccountResponse,
   type CostCenterResponse,
+  type CustomerResponse,
   type InventoryItemResponse,
   type OrderResponse,
   type TradeCaseRow,
   type VendorResponse,
 } from "@/api/client";
 import type { RemoteSelectOption } from "@/hooks/useRemotePaginatedSearch";
+
+function customerLabel(c: CustomerResponse): string {
+  return `${c.customer_code} · ${c.name}`;
+}
+
+/** Paginated customers for RemoteSearchSelect (server search). */
+export async function fetchCustomerPage(
+  query: string,
+  page: number,
+  pageSize: number,
+): Promise<{ options: RemoteSelectOption<CustomerResponse>[]; total: number }> {
+  const res = await api.listCustomersPaginated({
+    q: query || undefined,
+    page,
+    page_size: pageSize,
+  });
+  return {
+    options: res.items.map((c) => ({
+      value: c.id,
+      label: customerLabel(c),
+      meta: c,
+    })),
+    total: res.total,
+  };
+}
+
+export async function hydrateCustomer(
+  id: number,
+): Promise<RemoteSelectOption<CustomerResponse> | null> {
+  try {
+    const c = await api.getCustomer(id);
+    return { value: c.id, label: customerLabel(c), meta: c };
+  } catch {
+    return null;
+  }
+}
 
 /** Paginated inventory items for RemoteSearchSelect (server search). */
 export async function fetchInventoryItemPage(

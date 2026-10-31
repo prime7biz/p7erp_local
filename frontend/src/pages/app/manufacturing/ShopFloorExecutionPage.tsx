@@ -33,6 +33,8 @@ export function ShopFloorExecutionPage() {
     Record<number, { qty_in: string; qty_out: string; scrap_qty: string }>
   >({});
 
+  const [balanceSuggestions, setBalanceSuggestions] = useState<Array<Record<string, unknown>>>([]);
+
   const title = useMemo(() => screenTitle(location.pathname), [location.pathname]);
   const areaKey = useMemo(() => {
     if (location.pathname.includes("/production/cutting")) return "cutting";
@@ -83,6 +85,17 @@ export function ShopFloorExecutionPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    api
+      .getPredictiveLineBalance(7)
+      .then((r) =>
+        setBalanceSuggestions(
+          (r.items || []).filter((i) => i.action && i.action !== "hold" && i.action !== "observe").slice(0, 3),
+        ),
+      )
+      .catch(() => setBalanceSuggestions([]));
+  }, []);
 
   const runAction = async (action: "start" | "hold" | "resume" | "complete", opId: number) => {
     setError("");
@@ -185,6 +198,37 @@ export function ShopFloorExecutionPage() {
       </div>
 
       {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
+
+      {balanceSuggestions.length > 0 ? (
+        <div className="rounded-xl border border-border bg-surface-raised p-4">
+          <h2 className="text-sm font-semibold text-text-primary">AI Suggestions</h2>
+          <p className="mb-2 text-[11px] text-text-muted">Line-balance heuristics — confirm with supervisor before moving operators.</p>
+          <ul className="space-y-2">
+            {balanceSuggestions.map((s, i) => (
+              <li
+                key={i}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-primary/20 bg-brand-subtle/40 px-3 py-2 text-xs text-text-secondary"
+              >
+                <span>
+                  {String(s.suggestion ?? "")} · {String(s.line_name ?? "")} ({String(s.action ?? "")}
+                  {s.efficiency_score != null ? `, eff ${String(s.efficiency_score)}` : ""})
+                </span>
+                <button
+                  type="button"
+                  className="rounded border border-border px-2 py-1 text-[11px] hover:bg-state-hover"
+                  onClick={() =>
+                    window.alert(
+                      "Apply is advisory only in this MVP — update line assignments from crew/setup screens after supervisor confirmation.",
+                    )
+                  }
+                >
+                  Apply
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {dashboard ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

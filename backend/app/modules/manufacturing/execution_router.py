@@ -15,6 +15,10 @@ from app.database import get_db
 from app.models import (
     Bom,
     BomItem,
+    Item,
+    ManufacturingRoutingTemplate,
+    Order,
+    Warehouse,
     ManufacturingDowntimeEvent,
     ManufacturingMaterialIssue,
     ManufacturingMaterialReturn,
@@ -57,6 +61,16 @@ router = APIRouter(prefix="/manufacturing/execution", tags=["manufacturing-execu
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+
+
+async def _assert_tenant_refs(db: AsyncSession, tenant_id: int, refs: list[tuple[type, int | None, str]]) -> None:
+    """Reject ids that point at another tenant's rows (or nothing)."""
+    for model, rid, label in refs:
+        if rid is None:
+            continue
+        obj = await db.get(model, rid)
+        if not obj or getattr(obj, "tenant_id", None) != tenant_id:
+            raise HTTPException(status_code=400, detail=f"{label} not found: {rid}")
 
 
 async def _role_name(db: AsyncSession, user: User, tenant_id: int) -> str:
@@ -173,6 +187,16 @@ async def create_work_order(
     else:
         last_id = (await db.execute(select(func.max(ManufacturingWorkOrder.id)).where(ManufacturingWorkOrder.tenant_id == tenant.id))).scalar()
         mo_number = _next_code("MWO-", last_id)
+    await _assert_tenant_refs(
+        db,
+        tenant.id,
+        [
+            (Item, body.item_id, "Item"),
+            (Order, body.order_id, "Order"),
+            (ManufacturingProductionPlanLine, body.plan_line_id, "Plan line"),
+            (ManufacturingRoutingTemplate, body.routing_id, "Routing"),
+        ],
+    )
     resolved_order_id = body.order_id
     if resolved_order_id is None and body.plan_line_id is not None:
         pl = await db.get(ManufacturingProductionPlanLine, body.plan_line_id)
@@ -346,6 +370,11 @@ async def create_material_issue(
         op_row = await db.get(ManufacturingWorkOrderOperation, body.work_order_operation_id)
         if not op_row or op_row.tenant_id != tenant.id or op_row.work_order_id != body.work_order_id:
             raise HTTPException(status_code=404, detail="Operation not found for work order")
+    await _assert_tenant_refs(
+        db, tenant.id, [(Item, body.item_id, "Item"), (Warehouse, body.warehouse_id, "Warehouse")]
+    )
+    # Serialize concurrent issues of the same item (same advisory key as inventory issues).
+    await db.execute(select(func.pg_advisory_xact_lock(int(tenant.id), int(body.item_id))))
 
     available = await _on_hand_qty(db, tenant.id, body.item_id, body.warehouse_id)
     allow_neg = await tenant_allows_negative_stock(db, tenant.id)

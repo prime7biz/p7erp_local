@@ -109,6 +109,8 @@ export function InventoryItemsPage() {
     default_warehouse_id: null,
     stock_group_id: null,
     default_cost: "0",
+    auto_reorder_enabled: false,
+    reorder_level: null,
   });
 
   const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
@@ -646,7 +648,7 @@ export function InventoryItemsPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
-              to="/app/purchase-orders"
+              to="/app/inventory/purchase-orders"
               className="rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
             >
               Purchase orders
@@ -1310,6 +1312,22 @@ export function InventoryItemsPage() {
                     placeholder="Default cost"
                     value={itemForm.default_cost ?? "0"}
                     onChange={(e) => setItemForm((p) => ({ ...p, default_cost: e.target.value }))}
+                  />
+                  <label className="flex items-center gap-1 text-xs whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={!!itemForm.auto_reorder_enabled}
+                      onChange={(e) =>
+                        setItemForm((p) => ({ ...p, auto_reorder_enabled: e.target.checked }))
+                      }
+                    />
+                    Auto reorder
+                  </label>
+                  <input
+                    className="w-28 rounded-lg border border-border-strong px-2 py-2 text-sm"
+                    placeholder="Reorder lvl"
+                    value={itemForm.reorder_level ?? ""}
+                    onChange={(e) => setItemForm((p) => ({ ...p, reorder_level: e.target.value || null }))}
                   />
                   <Button type="submit" size="sm">
                     <Plus className="h-4 w-4" />

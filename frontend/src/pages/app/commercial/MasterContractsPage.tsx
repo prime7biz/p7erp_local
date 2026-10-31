@@ -10,6 +10,12 @@ import {
 } from "@/api/client";
 import { X } from "lucide-react";
 import { logApiError } from "@/utils/logApiError";
+import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel";
+import { ExtractionAlertsBanner } from "@/components/ai-extract/ExtractionAlertsBanner";
+import { FileImportCard } from "@/components/ai-extract/FileImportCard";
+import { useCommercialDocExtraction } from "@/hooks/useCommercialDocExtraction";
+import type { ConflictResolutionChoice, FieldApplyState } from "@/types/extraction";
+import { buildLcFieldApplyStates } from "@/utils/extractionHelpers";
 
 const CONTRACT_TYPES = [
   { value: "EXPORT_LC", label: "Master Export LC" },
@@ -110,6 +116,8 @@ export function MasterContractsPage() {
   const [updateForm, setUpdateForm] = useState<MasterContractUpdate>({});
   const [updating, setUpdating] = useState(false);
   const [alertMap, setAlertMap] = useState<Record<number, MerchAlertItem[]>>({});
+  const lcExtract = useCommercialDocExtraction("lc");
+  const [lcReviewRows, setLcReviewRows] = useState<FieldApplyState[]>([]);
 
   const severityRank: Record<string, number> = {
     critical: 5,
@@ -159,6 +167,45 @@ export function MasterContractsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!lcExtract.response) {
+      setLcReviewRows([]);
+      return;
+    }
+    const current: Record<string, string> = {
+      reference: form.reference ?? "",
+      contract_type: form.contract_type ?? "",
+      amount: form.amount != null ? String(form.amount) : "",
+      currency: form.currency ?? "",
+      buyer_name: form.buyer_name ?? "",
+      bank_name: form.bank_name ?? "",
+      contract_date: form.contract_date ?? "",
+      expiry_date: form.expiry_date ?? "",
+    };
+    setLcReviewRows(buildLcFieldApplyStates(lcExtract.response, current));
+  }, [lcExtract.response]); // eslint-disable-line react-hooks/exhaustive-deps -- snapshot once per extraction
+
+  const applyLcField = (fieldKey: string) => {
+    const row = lcReviewRows.find((r) => r.fieldKey === fieldKey);
+    if (!row || row.skipped) return;
+    if (row.hasConflict && row.conflictResolution !== "use_extracted" && row.conflictResolution !== "merge") return;
+    setForm((prev) => {
+      const next = { ...prev };
+      if (fieldKey === "amount") {
+        const n = Number(row.extractedValue);
+        next.amount = Number.isFinite(n) ? n : prev.amount;
+      } else if (fieldKey === "reference") next.reference = row.extractedValue;
+      else if (fieldKey === "contract_type") next.contract_type = row.extractedValue;
+      else if (fieldKey === "currency") next.currency = row.extractedValue;
+      else if (fieldKey === "buyer_name") next.buyer_name = row.extractedValue;
+      else if (fieldKey === "bank_name") next.bank_name = row.extractedValue;
+      else if (fieldKey === "contract_date" || fieldKey === "issue_date") next.contract_date = row.extractedValue;
+      else if (fieldKey === "expiry_date") next.expiry_date = row.extractedValue;
+      return next;
+    });
+    setLcReviewRows((prev) => prev.map((r) => (r.fieldKey === fieldKey ? { ...r, applied: true } : r)));
+  };
 
   const totals = useMemo(() => {
     const total = items.length;
@@ -476,6 +523,43 @@ export function MasterContractsPage() {
           <p className="mt-0.5 text-xs text-text-muted">
             One master contract can have multiple BTB LCs under it.
           </p>
+        </div>
+        <div className="space-y-4 border-b border-border p-5">
+          <FileImportCard
+            title="Extract from LC document"
+            subtitle="Upload a PDF or image of the LC / sales contract. Fields are reviewed before save — nothing is auto-saved."
+            status={lcExtract.status}
+            error={lcExtract.error}
+            onExtract={lcExtract.extract}
+            onClear={() => {
+              lcExtract.clear();
+              setLcReviewRows([]);
+            }}
+          />
+          {lcExtract.response ? (
+            <ExtractionAlertsBanner
+              alerts={lcExtract.response.alerts}
+              suggestCreateMasterContract={lcExtract.response.suggest_create_master_contract !== false}
+            />
+          ) : null}
+          {lcReviewRows.length > 0 ? (
+            <AutofillReviewPanel
+              title="Review LC extracted fields"
+              fields={lcReviewRows}
+              onApply={applyLcField}
+              onApplyAllHigh={() => {
+                lcReviewRows
+                  .filter((r) => r.confidenceLevel === "high" && !r.applied && !r.skipped && !r.hasConflict)
+                  .forEach((r) => applyLcField(r.fieldKey));
+              }}
+              onSkip={(k) => setLcReviewRows((prev) => prev.map((r) => (r.fieldKey === k ? { ...r, skipped: true } : r)))}
+              onResolveConflict={(k, choice: ConflictResolutionChoice) =>
+                setLcReviewRows((prev) =>
+                  prev.map((r) => (r.fieldKey === k ? { ...r, conflictResolution: choice } : r)),
+                )
+              }
+            />
+          ) : null}
         </div>
         <form onSubmit={createContract} className="grid grid-cols-1 gap-4 p-5 md:grid-cols-3">
           <div>

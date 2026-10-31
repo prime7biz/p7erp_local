@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { useOutletContext } from "react-router-dom";
 import { customerPortalApi } from "@/hooks/useCustomerPortal";
-import { useExternalAuth } from "@/hooks/useExternalAuth";
+import type { PortalOutletContext } from "@/types/portalOutlet";
+import { logApiError } from "@/utils/logApiError";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { PortalErrorState } from "@/components/external-access/PortalErrorState";
 import { Button } from "@/components/ui/button";
@@ -15,8 +17,10 @@ type Note = {
   from_party: string;
 };
 
+type OrderOption = { id: number; label: string };
+
 export function CustomerNotesPage() {
-  const { me } = useExternalAuth("customer");
+  const { me } = useOutletContext<PortalOutletContext>();
   const canNote = me?.role_codes?.includes("customer_collaborator");
   const flags = me?.feature_flags as Record<string, boolean> | undefined;
   const notesEnabled = flags?.customer_notes_enabled === true;
@@ -24,8 +28,24 @@ export function CustomerNotesPage() {
   const [items, setItems] = useState<Note[]>([]);
   const [err, setErr] = useState("");
   const [orderId, setOrderId] = useState("");
+  const [orders, setOrders] = useState<OrderOption[]>([]);
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!notesEnabled || !canNote) return;
+    void customerPortalApi
+      .orders({ limit: 100 })
+      .then((r) =>
+        setOrders(
+          (r.items as Array<{ id: number; order_code?: string; style_ref?: string }>).map((o) => ({
+            id: o.id,
+            label: [o.order_code ?? `#${o.id}`, o.style_ref].filter(Boolean).join(" · "),
+          })),
+        ),
+      )
+      .catch((e) => logApiError("CustomerNotesPage.orders", e));
+  }, [notesEnabled, canNote]);
 
   async function load() {
     try {
@@ -44,7 +64,7 @@ export function CustomerNotesPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     const oid = Number(orderId);
-    if (!Number.isFinite(oid) || !body.trim()) return;
+    if (!orderId || !Number.isFinite(oid) || !body.trim()) return;
     setBusy(true);
     try {
       await customerPortalApi.createNote({ entity_type: "order", entity_id: oid, body: body.trim() });
@@ -66,12 +86,19 @@ export function CustomerNotesPage() {
         <form onSubmit={onSubmit} className="mb-8 rounded-xl border border-border bg-surface-raised p-4 space-y-3">
           <p className="text-sm font-medium text-text-primary">Add note on an order</p>
           <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              placeholder="Order ID"
+            <select
+              aria-label="Order"
               className={`rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}
               value={orderId}
               onChange={(e) => setOrderId(e.target.value)}
-            />
+            >
+              <option value="">Select order…</option>
+              {orders.map((o) => (
+                <option key={o.id} value={String(o.id)}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
             <input
               placeholder="Your message"
               className={`flex-1 rounded-lg border border-border px-3 py-2 text-sm ${erpControlFocusClass}`}

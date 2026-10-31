@@ -113,6 +113,13 @@ export function CommercialPage() {
       count: proformaCount,
     },
     {
+      title: "Commercial Invoices",
+      description: "Sales invoices from posted delivery challans — Issue creates a draft AR voucher for finance.",
+      to: `${BASE}/commercial/invoices`,
+      icon: FileText,
+      count: null as CountState | null,
+    },
+    {
       title: "Trade Cases",
       description: "Unified export/import case management linked with PI, LC, shipment, and document workflow.",
       to: `${BASE}/trade/cases`,

@@ -136,6 +136,26 @@ class AiGenerateForecastRequest(BaseModel):
     to_date: date | None = None
 
 
+class AiFinanceForecastRequest(BaseModel):
+    horizon_days: int = Field(default=90, ge=7, le=365)
+    from_date: date | None = None
+    to_date: date | None = None
+
+
+class AiFinanceForecastResponse(BaseModel):
+    success: bool = True
+    source: str = "cash_flow_projection"
+    horizon_days: int
+    projection: dict[str, Any] = Field(default_factory=dict)
+    narrative: str = ""
+    narrative_source: str = "heuristic"
+    limitations: list[str] = Field(default_factory=list)
+    forecast: dict[str, Any] = Field(default_factory=dict)
+    break_even: dict[str, Any] = Field(default_factory=dict)
+    risks: list[dict[str, Any]] = Field(default_factory=list)
+    budget_variance_insights: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class AiForecastRunResponse(BaseModel):
     id: int
     tenant_id: int

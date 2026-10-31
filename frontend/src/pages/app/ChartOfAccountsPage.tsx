@@ -7,6 +7,9 @@ import {
   type AccountGroupResponse,
   type CoAConfigResponse,
 } from "@/api/client";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { listPageRootClass } from "@/components/app/listPageLayout";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { logApiError } from "@/utils/logApiError";
 import { downloadCsv } from "@/lib/reportExport";
 
@@ -43,7 +46,7 @@ export function ChartOfAccountsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<number | string | null>(null);
   const [form, setForm] = useState<ChartOfAccountCreate>({ ...defaultForm });
 
   async function load() {
@@ -194,40 +197,40 @@ export function ChartOfAccountsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Chart of Accounts</h1>
-          <p className="mt-1 text-sm text-text-muted">Ledger accounts, opening balances, and group-based classification.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void handleExport()}
-            className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
-          >
-            Export CoA
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowImport((i) => !i)}
-            className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
-          >
-            Import CoA
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowCoaConfig((c) => !c)}
-            className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
-          >
-            CoA settings
-          </button>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-            Show Inactive
-          </label>
-        </div>
-      </div>
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Chart of Accounts"
+        description="Ledger accounts, opening balances, and group-based classification."
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => void handleExport()}
+              className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
+            >
+              Export CoA
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowImport((i) => !i)}
+              className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
+            >
+              Import CoA
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCoaConfig((c) => !c)}
+              className="rounded border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-subtle"
+            >
+              CoA settings
+            </button>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+              Show Inactive
+            </label>
+          </>
+        }
+      />
 
       {showImport && (
         <div className="rounded-xl border border-border bg-surface-raised p-4">
@@ -633,39 +636,15 @@ export function ChartOfAccountsPage() {
                   <td className="px-4 py-3">{Number(r.balance || 0).toLocaleString()}</td>
                   <td className="px-4 py-3">{r.enable_bill_wise ? <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">Yes</span> : "—"}</td>
                   <td className="px-4 py-3">
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setOpenActionsId((prev) => (prev === r.id ? null : r.id))}
-                        className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
-                      >
-                        Actions
-                      </button>
-                      {openActionsId === r.id && (
-                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOpenActionsId(null);
-                              startEdit(r);
-                            }}
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOpenActionsId(null);
-                              void remove(r.id);
-                            }}
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <RowActionsMenu
+                      rowId={r.id}
+                      openId={openActionsId}
+                      onOpenChange={setOpenActionsId}
+                      items={[
+                        { key: "edit", label: "Edit", onClick: () => startEdit(r) },
+                        { key: "delete", label: "Delete", danger: true, onClick: () => void remove(r.id) },
+                      ]}
+                    />
                   </td>
                 </tr>
               ))

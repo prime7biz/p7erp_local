@@ -61,9 +61,31 @@ Do **not** start destructive or high-blast-radius DB work until:
 
 ### Measured top queries (fill on server)
 
+Capture procedure (do this before adding more indexes):
+
+1. Set briefly in `.env` / compose: `PERF_TIMING_ENABLED=true`, `PERF_TIMING_SLOW_MS=500`.
+2. Exercise stock summary, voucher list, approvals, and order detail for ~15–30 minutes.
+3. Run the `pg_stat_statements` query in §1 and map fingerprints to routes via slow-request logs.
+4. Fill the table below; clear / disable PERF flags after capture if log volume is high.
+
 | Rank | Query fingerprint | Endpoint | Calls / day | p95 ms | Notes |
 |------|-------------------|----------|-------------|--------|-------|
-| _ | _ | _ | _ | _ | Add rows from `pg_stat_statements` |
+| 1 | _(pending live capture)_ | Stock summary / valuation | — | — | Enable `stock_snapshot_reads` after rebuild+diff |
+| 2 | _(pending live capture)_ | `GET /finance/vouchers` | — | — | Caps tightened toward MAX_PAGE_SIZE |
+| 3 | _(pending live capture)_ | Approvals / available-actions | — | — | Batch endpoint preferred over N+1 |
+| 4 | _(pending live capture)_ | Order related counts | — | — | Parallel/multi-count SQL |
+| 5 | _(pending live capture)_ | Merch control tower | — | — | Count fan-out |
+
+## 5b. Stock snapshot rollout (ops)
+
+Feature flag: `tenants.feature_flags.stock_snapshot_reads` (default **off**).
+
+```powershell
+# Rebuild snapshot for one tenant, then compare
+docker compose exec backend python scripts/rebuild_stock_balance_snapshot.py --tenant-id <id> --diff-check
+```
+
+Then set `stock_snapshot_reads: true` on that tenant’s `feature_flags` JSON. Rollback: set flag back to `false` (see [PERF_ROLLBACK_RUNBOOK.md](PERF_ROLLBACK_RUNBOOK.md)).
 
 ## 6. References
 

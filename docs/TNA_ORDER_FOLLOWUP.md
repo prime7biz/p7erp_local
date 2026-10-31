@@ -60,14 +60,22 @@ All are tenant-scoped and require auth.
 2. **First use:** Opening the Follow-up page loads templates; if none exist, default TNA steps are seeded (order confirmed, LC, proto/fit/size set/PP samples, lab dip, bulk fabric, accessories, fabric in-house, cutting, sewing, inspection, ex-factory, shipment docs, etc.).
 3. **Generate TNA:** Pick an order with a delivery date, click "Generate TNA", then optionally choose templates or use all. Planned dates are set from delivery_date − default_days_before_delivery.
 
-## Optional enhancements (Phase 8+)
+## Production/commercial integration (event sync)
 
-- **PDF / Print:** Timeline has "Export PDF / Print timeline"; table view has "Print list" next to Export CSV. Both use browser print; CSS restricts printed content to the relevant area.
-- **Buyer-specific templates:** `GET /followup-templates` accepts optional `buyer_id` (shows global + that buyer’s templates). Manage TNA templates has a Buyer dropdown to filter; Generate TNA modal shows templates for global + order’s buyer.
-- **Rejection/resubmission history:** Table `followup_action_rejection_logs` (migration 062). GET/POST `/followup-actions/{id}/rejection-history`. Edit modal shows "Rejection history"; marking rejected appends a log entry.
-- **Auto-reminders:** Alert rules `tna_action_overdue` and `tna_action_due_soon` (see Alerts above). "Due this week" KPI and "Due soon (7d)" filter surface due-soon actions.
-- **Inline comments:** Table `followup_action_comments` (migration 063). GET/POST `/followup-actions/{id}/comments`. Edit modal has a comments section (load, list, add).
-- **Production/commercial integration:** Actions have `milestone_type` (e.g. Ex-factory, Shipment, Cutting) and optional `external_id` (migration 064). Table shows Milestone column; Add/Edit modal has Milestone dropdown and External ID.
+Actions have `milestone_type` (aligned with template `code` when generated) and optional `external_id`.
+
+When tenant flag **`tna_event_sync`** is on (Settings → Configuration), business events auto-complete matching milestones via `followup_sync_service`:
+
+- GRN received → `fabric_in_house` / `accessories_in_house`
+- Merch sample approved → type-specific codes (e.g. `pp` → `pp_approval`)
+- Delivery challan POSTED → `shipment_confirmation` / `ex_factory`
+- Hourly cutting/sewing with `order_id` → `cutting_start` / `sewing_start`
+
+See `docs/ORDER_EXECUTION_SPINE.md` for the full post-confirmation path and related flags.
+
+## Optional enhancements (already in product)
+
+- PDF / Print timeline and list; buyer-specific templates; rejection history; auto-reminders (`tna_action_overdue` / `tna_action_due_soon`); inline comments on actions.
 
 ## Legacy
 

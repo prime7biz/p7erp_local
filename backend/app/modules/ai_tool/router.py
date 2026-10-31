@@ -30,6 +30,8 @@ from app.modules.ai_tool.schemas import (
     AiAnomalyGenerateResponse,
     AiOpsOverviewResponse,
     AiConfirmActionRequest,
+    AiFinanceForecastRequest,
+    AiFinanceForecastResponse,
     AiForecastRunResponse,
     AiForecastSummaryResponse,
     AiForecastTemplateInfo,
@@ -707,3 +709,185 @@ async def rollback_ai_artifact(
     return await service.rollback_approval_artifact_direct(
         db, tenant=tenant, user=user, artifact_id=artifact_id, body=body
     )
+
+
+@router.post("/finance/forecast", response_model=AiFinanceForecastResponse)
+async def finance_forecast(
+    body: AiFinanceForecastRequest | None = None,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+    __: None = Depends(ai_tool_daily_quota),
+):
+    """Cash-flow projection heuristic + optional LLM narrative (Phase 4 MVP)."""
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    from app.common.permissions import PERMISSION_AI_FINANCE_FORECAST, assert_soft_permission_allowed
+    from app.modules.ai_tool.finance_forecast_service import build_finance_forecast
+
+    await assert_soft_permission_allowed(
+        db, user, tenant.id, permission_key=PERMISSION_AI_FINANCE_FORECAST
+    )
+    req = body or AiFinanceForecastRequest()
+    result = await build_finance_forecast(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        horizon_days=req.horizon_days,
+        from_date=req.from_date.isoformat() if req.from_date else None,
+        to_date=req.to_date.isoformat() if req.to_date else None,
+    )
+    return AiFinanceForecastResponse(**result)
+
+
+class _PredictLookbackBody(BaseModel):
+    lookback_days: int | None = None
+    style_id: int | None = None
+    line_id: int | None = None
+    machine_id: str | None = None
+
+
+@router.post("/predictions/defect-risk")
+async def ai_predictions_defect_risk(
+    body: _PredictLookbackBody | None = None,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    from app.common.permissions import PERMISSION_AI_DEFECT_PREDICT, assert_soft_permission_allowed
+    from app.modules.production.predictive_heuristic_service import build_defect_risk_suggestions
+
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_AI_DEFECT_PREDICT)
+    days = (body.lookback_days if body else None) or 14
+    return await build_defect_risk_suggestions(db, tenant_id=tenant.id, lookback_days=days)
+
+
+@router.post("/predictions/maintenance")
+async def ai_predictions_maintenance(
+    body: _PredictLookbackBody | None = None,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    from app.common.permissions import PERMISSION_AI_MAINTENANCE_PREDICT, assert_soft_permission_allowed
+    from app.modules.production.predictive_heuristic_service import build_maintenance_risk_suggestions
+
+    await assert_soft_permission_allowed(
+        db, user, tenant.id, permission_key=PERMISSION_AI_MAINTENANCE_PREDICT
+    )
+    days = (body.lookback_days if body else None) or 30
+    return await build_maintenance_risk_suggestions(db, tenant_id=tenant.id, lookback_days=days)
+
+
+@router.post("/predictions/line-balance")
+async def ai_predictions_line_balance(
+    body: _PredictLookbackBody | None = None,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    from app.common.permissions import PERMISSION_AI_LINE_BALANCE, assert_soft_permission_allowed
+    from app.modules.production.predictive_heuristic_service import build_line_balance_suggestions
+
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_AI_LINE_BALANCE)
+    days = (body.lookback_days if body else None) or 7
+    return await build_line_balance_suggestions(db, tenant_id=tenant.id, lookback_days=days)
+
+
+@router.get("/hr/attendance-analysis")
+async def hr_attendance_analysis(
+    employee_id: int | None = None,
+    period_months: int = 6,
+    department_id: int | None = None,
+    days: int | None = None,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    from app.common.permissions import PERMISSION_HR_AI_INSIGHTS_VIEW, assert_soft_permission_allowed
+    from app.common.tenant_feature_keys import is_ai_attendance_analysis_enabled
+    from app.modules.ai_tool.ai_attendance_analysis_service import analyze_attendance_patterns
+
+    if not is_ai_attendance_analysis_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=403, detail="Attendance analysis is disabled")
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_AI_INSIGHTS_VIEW)
+    return await analyze_attendance_patterns(
+        db,
+        tenant.id,
+        employee_id=employee_id,
+        period_months=period_months,
+        department_id=department_id,
+        days=days,
+    )
+
+
+@router.get("/hr/turnover-risk")
+async def hr_turnover_risk(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    from app.common.permissions import PERMISSION_HR_AI_INSIGHTS_VIEW, assert_soft_permission_allowed
+    from app.common.tenant_feature_keys import is_ai_turnover_prediction_enabled
+    from app.modules.ai_tool.ai_turnover_prediction_service import predict_turnover_risk
+
+    if not is_ai_turnover_prediction_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=403, detail="Turnover prediction is disabled")
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_AI_INSIGHTS_VIEW)
+    return await predict_turnover_risk(db, tenant.id)
+
+
+@router.get("/hr/payroll-anomalies")
+async def hr_payroll_anomalies(
+    run_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    from app.common.permissions import PERMISSION_HR_AI_INSIGHTS_VIEW, assert_soft_permission_allowed
+    from app.common.tenant_feature_keys import is_ai_payroll_anomaly_detection_enabled
+    from app.modules.ai_tool.ai_payroll_anomaly_service import detect_payroll_anomalies
+
+    if not is_ai_payroll_anomaly_detection_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=403, detail="Payroll anomaly detection is disabled")
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_AI_INSIGHTS_VIEW)
+    return await detect_payroll_anomalies(db, tenant.id, run_id)
+
+
+@router.get("/hr/compliance-risk")
+async def hr_compliance_risk(
+    framework_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = heavy_limit,
+):
+    ensure_tenant_access(user, tenant)
+    await require_ai_access(db, user)
+    from app.common.permissions import PERMISSION_HR_AI_INSIGHTS_VIEW, assert_soft_permission_allowed
+    from app.common.tenant_feature_keys import is_ai_compliance_risk_prediction_enabled
+    from app.modules.ai_tool.ai_compliance_risk_service import predict_compliance_risks
+
+    if not is_ai_compliance_risk_prediction_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=403, detail="Compliance risk prediction is disabled")
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_AI_INSIGHTS_VIEW)
+    return await predict_compliance_risks(db, tenant.id, framework_id)

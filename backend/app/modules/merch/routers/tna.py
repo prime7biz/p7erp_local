@@ -674,6 +674,7 @@ async def generate_followup_actions(
             is_active=True,
             planned_date=planned,
             status="pending",
+            milestone_type=t.code,
         )
         db.add(action)
         created.append(action)

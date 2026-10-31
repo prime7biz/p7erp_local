@@ -4,7 +4,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from jose import JWTError, jwt
+from app.common.jwt_compat import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy import func
 
@@ -14,6 +14,14 @@ from app.common.auth import (
     get_current_user_optional,
     hash_password,
     verify_password,
+    verify_password_constant_time,
+)
+from app.common.login_lockout import (
+    assert_staff_not_locked,
+    clear_staff_failed_login,
+    enforce_login_rate_limit,
+    record_staff_failed_login,
+    staff_lock_active,
 )
 from app.common.tenant_feature_keys import is_single_session_enforced
 from app.common.email_service import (
@@ -196,6 +204,12 @@ async def login(
     if not username and not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide email or username")
 
+    await enforce_login_rate_limit(
+        request,
+        company_key=company_code or str(tenant_id or ""),
+        scope="staff",
+    )
+
     tenant = None
     if company_code:
         tenant_result = await db.execute(
@@ -216,6 +230,7 @@ async def login(
         )
         tenant = tenant_result.scalar_one_or_none()
     if not tenant:
+        await verify_password_constant_time(password, None)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     user_query = select(User).where(User.tenant_id == tenant.id, User.is_active.is_(True))
     if username:
@@ -235,8 +250,22 @@ async def login(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide email or username")
     user_result = await db.execute(user_query.limit(1))
     user = user_result.scalar_one_or_none()
-    if not user or not await verify_password(password, user.password_hash):
+    password_ok = await verify_password_constant_time(password, user.password_hash if user else None)
+    if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if staff_lock_active(user):
+        # Only reveal the lock to someone who already proved the password.
+        if password_ok:
+            assert_staff_not_locked(user)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if not password_ok:
+        await record_staff_failed_login(db, user)
+        await db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    await clear_staff_failed_login(db, user)
 
     role_row = await db.execute(select(Role).where(Role.id == user.role_id, Role.tenant_id == tenant.id).limit(1))
     role_obj = role_row.scalar_one_or_none()
@@ -347,6 +376,15 @@ async def register(
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Bootstrap registration key required or invalid",
+                )
+        else:
+            # Production / non-dev: never allow open first-user register without a key.
+            app_env = (settings.app_env or "").lower()
+            is_dev_like = app_env in {"dev", "development", "local", "test", "testing"}
+            if not is_dev_like:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Bootstrap registration key required",
                 )
     if not is_bootstrap and not getattr(settings, "allow_public_registration", False):
         if current_user is None:

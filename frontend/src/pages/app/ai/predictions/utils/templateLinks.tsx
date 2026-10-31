@@ -4,8 +4,8 @@ const hrefByCode: Record<string, string> = {
   cash_flow_projection: "/app/finance/cash-forecast",
   receivable_risk_outlook: "/app/finance/cash-forecast",
   inventory_shortage_forecast: "/app/inventory/stock-summary",
-  production_output_forecast: "/app/manufacturing/production-planning",
-  capacity_shortfall_projection: "/app/manufacturing/production-planning",
+  production_output_forecast: "/app/production/planning",
+  capacity_shortfall_projection: "/app/production/planning",
   shipment_delay_risk_projection: "/app/commercial",
 };
 

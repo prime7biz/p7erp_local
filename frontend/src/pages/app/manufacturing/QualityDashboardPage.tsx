@@ -15,10 +15,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import { api } from "@/api/client";
-import type { QualityDashboardResponse } from "@/api/client";
+import type { PredictiveHeuristicResponse, QualityDashboardResponse } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { logApiError } from "@/utils/logApiError";
 
 const resultColors: Record<string, string> = {
   pass: "bg-status-success-subtle text-status-success-foreground",
@@ -26,12 +27,20 @@ const resultColors: Record<string, string> = {
   reject: "bg-status-danger-subtle text-status-danger-foreground",
 };
 
+function riskTone(score100: number): string {
+  if (score100 <= 30) return "border-status-success/40 bg-status-success-subtle/50 text-status-success-foreground";
+  if (score100 <= 70) return "border-status-warning/40 bg-status-warning-subtle/50 text-status-warning-foreground";
+  return "border-status-danger/40 bg-status-danger-subtle/50 text-status-danger-foreground";
+}
+
 export function QualityDashboardPage() {
   const [dashboard, setDashboard] = useState<QualityDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [defectRisk, setDefectRisk] = useState<PredictiveHeuristicResponse | null>(null);
+  const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError("");
@@ -49,9 +58,39 @@ export function QualityDashboardPage() {
     }
   }, [dateFrom, dateTo]);
 
+  const loadDefectRisk = useCallback(() => {
+    api
+      .getPredictiveDefectRisk(14)
+      .then((r) => setDefectRisk(r))
+      .catch((e) => logApiError("QualityDashboardPage.defectRisk", e));
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    loadDefectRisk();
+  }, [loadDefectRisk]);
+
+  const highRiskLines = useMemo(() => {
+    const items = defectRisk?.items ?? [];
+    return items
+      .map((row) => {
+        const score100 =
+          typeof row.risk_score_100 === "number"
+            ? Number(row.risk_score_100)
+            : Math.round(Number(row.risk_score ?? 0) * (Number(row.risk_score) <= 1 ? 100 : 1));
+        return { ...row, score100 } as Record<string, unknown> & { score100: number };
+      })
+      .filter((row) => row.score100 >= 31)
+      .slice(0, 8);
+  }, [defectRisk]);
+
+  const selectedRisk = useMemo(() => {
+    if (selectedLineId == null) return highRiskLines[0] ?? null;
+    return highRiskLines.find((r) => Number(r.line_id) === selectedLineId) ?? highRiskLines[0] ?? null;
+  }, [highRiskLines, selectedLineId]);
 
   const passRatePct = useMemo(() => {
     if (!dashboard) return 0;
@@ -374,22 +413,59 @@ export function QualityDashboardPage() {
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-status-warning" />
-                  AI Quality Insights
+                  Today&apos;s High-Risk Lines
                 </CardTitle>
                 <p className="text-sm font-normal text-text-muted">
-                  Recommendations and anomaly alerts (coming soon)
+                  Heuristic defect risk (0–100). Green ≤30, yellow 31–70, red ≥71.
                 </p>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3 rounded-lg border border-status-warning/30 bg-status-warning-subtle/50 p-4 text-sm text-status-warning-foreground">
-                  <p>
-                    Use defect distribution and pass rate by stage to prioritize CAPA and process fixes.
-                    AI-powered insights will suggest root causes and preventive actions here.
-                  </p>
-                  <Button variant="outline" size="sm" disabled>
-                    AI Insights (Coming soon)
+              <CardContent className="space-y-3">
+                <div className="flex justify-end">
+                  <Button variant="outline" size="sm" type="button" onClick={loadDefectRisk}>
+                    Refresh risk
                   </Button>
                 </div>
+                {highRiskLines.length === 0 ? (
+                  <p className="text-sm text-text-muted">No elevated line risk in the lookback window.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {highRiskLines.map((row) => {
+                      const lid = row.line_id != null ? Number(row.line_id) : null;
+                      return (
+                        <li key={String(lid ?? row.line_name)}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLineId(lid)}
+                            className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm ${riskTone(row.score100)}`}
+                          >
+                            <span className="font-medium">{String(row.line_name ?? "Line")}</span>
+                            <Badge variant="secondary">{row.score100}</Badge>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {selectedRisk ? (
+                  <div className="rounded-lg border border-border bg-surface-subtle/40 p-3 text-xs text-text-secondary">
+                    <p className="font-medium text-text-primary">{String(selectedRisk.line_name ?? "Selected line")}</p>
+                    <p className="mt-1">{String(selectedRisk.suggestion ?? "")}</p>
+                    {Array.isArray(selectedRisk.top_defects) && selectedRisk.top_defects.length > 0 ? (
+                      <ul className="mt-2 space-y-1">
+                        {(selectedRisk.top_defects as Array<Record<string, unknown>>).slice(0, 3).map((d, i) => (
+                          <li key={i}>
+                            {String(d.type)} ({Math.round(Number(d.probability ?? 0) * 100)}%) — {String(d.action ?? "")}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {Array.isArray(selectedRisk.recommended_actions) ? (
+                      <p className="mt-2 text-text-muted">
+                        {(selectedRisk.recommended_actions as string[]).join(" · ")}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </div>

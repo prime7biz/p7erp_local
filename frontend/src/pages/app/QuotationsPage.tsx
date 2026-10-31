@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type QuotationResponse } from "@/api/client";
 import { useListPagination } from "@/hooks/useListPagination";
+import { useDebouncedValue, useLatestRequest } from "@/hooks/useDebouncedValue";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import { QuotationStatusBadge } from "./quotations/QuotationStatusBadge";
@@ -52,26 +53,31 @@ export function QuotationsPage() {
   const { page, setPage, pageSize, setPageSize } = useListPagination();
   const [listTotal, setListTotal] = useState(0);
   const [quickFilter, setQuickFilter] = useState<"all" | "has_inquiry" | "has_style_image" | "ready_to_convert">("all");
+  const debouncedSearch = useDebouncedValue(search);
+  const latest = useLatestRequest();
 
   const load = async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
       const res = await api.listQuotationsPaginated({
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         status: statusFilter || undefined,
         page,
         page_size: pageSize,
         ai_indicators: 1,
         benchmark_hint: 1,
       });
+      if (!latest.isCurrent(token)) return;
       setItems(res.items);
       setListTotal(res.total);
       if (res.page !== page) setPage(res.page);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load quotations");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -93,7 +99,7 @@ export function QuotationsPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, page, pageSize]);
+  }, [debouncedSearch, statusFilter, page, pageSize]);
 
   const openCreate = () => {
     navigate("/app/quotations/new");

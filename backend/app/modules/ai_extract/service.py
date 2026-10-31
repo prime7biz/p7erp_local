@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import os
 from typing import Any
 
 from sqlalchemy import or_, select
@@ -20,6 +21,17 @@ from app.modules.ai_extract.normalizers import (
     split_phone_for_form,
 )
 from app.config import get_settings
+from app.modules.ai_extract.commercial_doc_analysis import (
+    analyze_lc_fields,
+    analyze_packing_list_fields,
+    infer_shipping_document_type,
+)
+from app.modules.ai_extract.hr_doc_analysis import (
+    analyze_hr_birth_fields,
+    analyze_hr_cv_fields,
+    analyze_hr_id_fields,
+    analyze_hr_medical_fields,
+)
 from app.modules.ai_extract.providers.base import BaseExtractionProvider
 from app.modules.ai_extract.providers.gemini_provider import GeminiExtractionProvider
 from app.modules.ai_extract.providers.stub_provider import StubExtractionProvider
@@ -28,19 +40,22 @@ from app.modules.ai_extract.schemas import (
     CustomerExtractionResponse,
     DuplicateWarning,
     ExtractedField,
+    HrDocExtractionResponse,
     InquiryExtractionResponse,
     InquiryItemExtracted,
+    LcExtractionResponse,
     OrderExtractionResponse,
+    ShippingDocExtractionResponse,
     VendorExtractionResponse,
 )
-
 
 def _get_provider() -> BaseExtractionProvider:
     s = get_settings()
     # Keep deterministic stub output only for automated tests.
     # For normal environments, always use Gemini provider (it already
     # returns a clear "unavailable" warning when Gemini is not configured).
-    if (s.app_env or "").strip().lower() in {"test", "testing"}:
+    env = (s.app_env or "").strip().lower()
+    if env in {"test", "testing"} or os.environ.get("PYTEST_CURRENT_TEST"):
         return StubExtractionProvider()
     return GeminiExtractionProvider()
 
@@ -528,4 +543,349 @@ async def extract_order_form(
         fields=fields,
         unmapped_text=unmapped,
         warnings=warnings,
+    )
+
+
+_LC_DATE_KEYS = frozenset({"issue_date", "expiry_date", "contract_date", "shipment_date", "order_delivery_date_hint"})
+_LC_AMOUNT_KEYS = frozenset({"amount", "order_value_hint"})
+_SHIPPING_DATE_KEYS = frozenset({"etd", "eta"})
+
+
+def _normalize_lc_map(raw: dict[str, Any]) -> dict[str, ExtractedField]:
+    confidences: dict[str, float] = {k: float(v) for k, v in (raw.get("_confidences") or {}).items()}
+    fields_out: dict[str, ExtractedField] = {}
+    for key, val in raw.items():
+        if key.startswith("_"):
+            continue
+        base_conf = confidences.get(key, 0.7)
+        src = str(val) if val is not None else None
+        if key in _LC_DATE_KEYS:
+            nd = normalize_date(str(val) if val else None)
+            fields_out[key] = _to_extracted_field(nd, base_conf * (1.0 if nd else 0.35), src)
+            continue
+        if key in _LC_AMOUNT_KEYS:
+            ns = normalize_numeric_string(val)
+            fields_out[key] = _to_extracted_field(ns, base_conf * (1.0 if ns else 0.3), src)
+            continue
+        if key == "currency":
+            s = sanitize_text(str(val) if val else None, 10)
+            fields_out[key] = _to_extracted_field(s.upper() if s else None, base_conf, src)
+            continue
+        if key == "contract_type":
+            s = sanitize_text(str(val) if val else None, 32)
+            fields_out[key] = _to_extracted_field(s.upper() if s else None, base_conf, src)
+            continue
+        if key in {"notes", "special_instructions", "documents_required"}:
+            s = sanitize_text(str(val) if val else None, 8000)
+            fields_out[key] = _to_extracted_field(s, base_conf, src)
+            continue
+        s = sanitize_text(str(val) if val else None, 512)
+        fields_out[key] = _to_extracted_field(s, base_conf, src)
+
+    # Prefer reference from lc_number when reference empty
+    ref = fields_out.get("reference")
+    lc_num = fields_out.get("lc_number")
+    if (not ref or not ref.value) and lc_num and lc_num.value:
+        fields_out["reference"] = _to_extracted_field(
+            str(lc_num.value),
+            float(lc_num.confidence),
+            lc_num.source_text,
+        )
+    if (not fields_out.get("buyer_name") or not fields_out["buyer_name"].value) and fields_out.get("applicant"):
+        app = fields_out["applicant"]
+        if app.value:
+            fields_out["buyer_name"] = _to_extracted_field(str(app.value), float(app.confidence), app.source_text)
+    if (not fields_out.get("bank_name") or not fields_out["bank_name"].value) and fields_out.get("issuing_bank"):
+        bank = fields_out["issuing_bank"]
+        if bank.value:
+            fields_out["bank_name"] = _to_extracted_field(str(bank.value), float(bank.confidence), bank.source_text)
+    if (not fields_out.get("contract_date") or not fields_out["contract_date"].value) and fields_out.get("issue_date"):
+        iss = fields_out["issue_date"]
+        if iss.value:
+            fields_out["contract_date"] = _to_extracted_field(str(iss.value), float(iss.confidence), iss.source_text)
+    return fields_out
+
+
+def _normalize_shipping_map(raw: dict[str, Any]) -> dict[str, ExtractedField]:
+    confidences: dict[str, float] = {k: float(v) for k, v in (raw.get("_confidences") or {}).items()}
+    fields_out: dict[str, ExtractedField] = {}
+    for key, val in raw.items():
+        if key.startswith("_"):
+            continue
+        base_conf = confidences.get(key, 0.7)
+        src = str(val) if val is not None else None
+        if key in _SHIPPING_DATE_KEYS:
+            nd = normalize_date(str(val) if val else None)
+            fields_out[key] = _to_extracted_field(nd, base_conf * (1.0 if nd else 0.35), src)
+            continue
+        if key == "notes":
+            s = sanitize_text(str(val) if val else None, 8000)
+            fields_out[key] = _to_extracted_field(s, base_conf, src)
+            continue
+        s = sanitize_text(str(val) if val else None, 512)
+        fields_out[key] = _to_extracted_field(s, base_conf, src)
+
+    # Alias BL / AWB / ports for form mapping
+    if (not fields_out.get("bl_awb") or not fields_out["bl_awb"].value):
+        for alt in ("bl_number", "awb_number"):
+            alt_f = fields_out.get(alt)
+            if alt_f and alt_f.value:
+                fields_out["bl_awb"] = _to_extracted_field(str(alt_f.value), float(alt_f.confidence), alt_f.source_text)
+                break
+    if (not fields_out.get("origin_port") or not fields_out["origin_port"].value) and fields_out.get("port_of_loading"):
+        pol = fields_out["port_of_loading"]
+        if pol.value:
+            fields_out["origin_port"] = _to_extracted_field(str(pol.value), float(pol.confidence), pol.source_text)
+    if (not fields_out.get("dest_port") or not fields_out["dest_port"].value):
+        for alt in ("port_of_discharge", "destination"):
+            alt_f = fields_out.get(alt)
+            if alt_f and alt_f.value:
+                fields_out["dest_port"] = _to_extracted_field(str(alt_f.value), float(alt_f.confidence), alt_f.source_text)
+                break
+    if (not fields_out.get("carrier") or not fields_out["carrier"].value):
+        for alt in ("shipping_line", "airline"):
+            alt_f = fields_out.get(alt)
+            if alt_f and alt_f.value:
+                fields_out["carrier"] = _to_extracted_field(str(alt_f.value), float(alt_f.confidence), alt_f.source_text)
+                break
+    return fields_out
+
+
+async def _match_shipment_for_shipping(
+    db: AsyncSession,
+    tenant_id: int,
+    fields: dict[str, ExtractedField],
+) -> tuple[int | None, str | None, str | None]:
+    """Soft-match a tenant shipment by BL/AWB or container number (read-only)."""
+    from app.models import Shipment, ShipmentContainer
+
+    bl = None
+    for key in ("bl_awb", "bl_number", "awb_number"):
+        f = fields.get(key)
+        if f and f.value:
+            bl = str(f.value).strip()
+            break
+    container = None
+    cf = fields.get("container_number")
+    if cf and cf.value:
+        container = str(cf.value).strip()
+
+    try:
+        if bl:
+            row = (
+                await db.execute(
+                    select(Shipment).where(
+                        Shipment.tenant_id == tenant_id,
+                        Shipment.bl_awb == bl,
+                    ).limit(1)
+                )
+            ).scalar_one_or_none()
+            if row:
+                return int(row.id), str(row.reference), f"Matched shipment by BL/AWB {bl}."
+        if container:
+            cont = (
+                await db.execute(
+                    select(ShipmentContainer).where(
+                        ShipmentContainer.tenant_id == tenant_id,
+                        ShipmentContainer.container_number == container,
+                    ).limit(1)
+                )
+            ).scalar_one_or_none()
+            if cont:
+                ship = await db.get(Shipment, cont.shipment_id)
+                if ship and ship.tenant_id == tenant_id:
+                    return (
+                        int(ship.id),
+                        str(ship.reference),
+                        f"Matched shipment by container {container}.",
+                    )
+    except Exception:
+        from app.database import safe_async_session_rollback
+
+        await safe_async_session_rollback(db)
+    return None, None, None
+
+
+async def extract_lc_form(
+    db: AsyncSession,
+    tenant_id: int,
+    file_bytes: bytes,
+    content_type: str,
+) -> LcExtractionResponse:
+    del db
+    del tenant_id
+    provider = _get_provider()
+    raw = await provider.extract_lc_fields(file_bytes, content_type)
+    unmapped = [html.escape(x, quote=False) for x in (raw.get("_unmapped_text") or [])]
+    warnings = list(raw.get("_warnings") or [])
+    fields = _normalize_lc_map(raw)
+    alerts = analyze_lc_fields(fields, notes_blob=str(raw.get("notes") or ""))
+    if alerts:
+        warnings.extend(a["message"] for a in alerts if a.get("message"))
+    success = any(f.value is not None and str(f.value).strip() for f in fields.values())
+    return LcExtractionResponse(
+        success=success or bool(warnings),
+        document_type="lc_info",
+        fields=fields,
+        unmapped_text=unmapped,
+        warnings=warnings,
+        alerts=alerts,
+        suggest_create_master_contract=True,
+    )
+
+
+async def extract_shipping_doc_form(
+    db: AsyncSession,
+    tenant_id: int,
+    file_bytes: bytes,
+    content_type: str,
+    *,
+    doc_type: str | None = None,
+) -> ShippingDocExtractionResponse:
+    provider = _get_provider()
+    preferred = (doc_type or "").strip().lower() or None
+    if preferred in {"packing_list", "packing_list_info", "pl"}:
+        raw = await provider.extract_packing_list_fields(file_bytes, content_type)
+    else:
+        raw = await provider.extract_shipping_doc_fields(file_bytes, content_type)
+    unmapped = [html.escape(x, quote=False) for x in (raw.get("_unmapped_text") or [])]
+    warnings = list(raw.get("_warnings") or [])
+    fields = _normalize_shipping_map(raw)
+    document_type = infer_shipping_document_type(raw, preferred)
+    alerts: list[dict[str, str]] = []
+    if document_type == "packing_list_info":
+        alerts = analyze_packing_list_fields(fields)
+    if alerts:
+        warnings.extend(a["message"] for a in alerts if a.get("message"))
+    matched_id, matched_ref, match_hint = await _match_shipment_for_shipping(db, tenant_id, fields)
+    if match_hint:
+        warnings.append(match_hint)
+    success = any(f.value is not None and str(f.value).strip() for f in fields.values())
+    suggested_status = None if document_type == "packing_list_info" else "IN_TRANSIT"
+    return ShippingDocExtractionResponse(
+        success=success or bool(warnings),
+        document_type=document_type,
+        fields=fields,
+        unmapped_text=unmapped,
+        warnings=warnings,
+        alerts=alerts,
+        suggested_status=suggested_status,
+        matched_shipment_id=matched_id,
+        matched_shipment_reference=matched_ref,
+        match_hint=match_hint,
+    )
+
+
+_HR_DATE_KEYS = frozenset(
+    {"date_of_birth", "examination_date", "expiry_date", "issue_date", "from_date", "to_date"}
+)
+
+
+def _normalize_hr_map(raw: dict[str, Any]) -> dict[str, ExtractedField]:
+    confidences: dict[str, float] = {k: float(v) for k, v in (raw.get("_confidences") or {}).items()}
+    fields_out: dict[str, ExtractedField] = {}
+    for key, val in raw.items():
+        if key.startswith("_"):
+            continue
+        base_conf = confidences.get(key, 0.7)
+        src = str(val) if val is not None else None
+        if key in _HR_DATE_KEYS:
+            nd = normalize_date(str(val) if val else None)
+            fields_out[key] = _to_extracted_field(nd, base_conf * (1.0 if nd else 0.35), src)
+            continue
+        if isinstance(val, (list, dict)):
+            fields_out[key] = _to_extracted_field(val, base_conf, src)
+            continue
+        if key in {"height_cm", "weight_kg"}:
+            fields_out[key] = _to_extracted_field(normalize_numeric_string(val), base_conf, src)
+            continue
+        s = sanitize_text(str(val) if val else None, 2000)
+        fields_out[key] = _to_extracted_field(s, base_conf, src)
+    # Split full_name into first/last when missing
+    full = fields_out.get("full_name") or fields_out.get("name")
+    if full and full.value and not (fields_out.get("first_name") and fields_out["first_name"].value):
+        parts = str(full.value).strip().split(None, 1)
+        fields_out["first_name"] = _to_extracted_field(parts[0], full.confidence, full.source_text)
+        if len(parts) > 1:
+            fields_out["last_name"] = _to_extracted_field(parts[1], full.confidence * 0.9, full.source_text)
+    return fields_out
+
+
+async def extract_hr_cv_form(
+    db: AsyncSession, tenant_id: int, file_bytes: bytes, content_type: str
+) -> HrDocExtractionResponse:
+    del db, tenant_id
+    raw = await _get_provider().extract_hr_cv_fields(file_bytes, content_type)
+    fields = _normalize_hr_map(raw)
+    alerts = analyze_hr_cv_fields(fields)
+    warnings = list(raw.get("_warnings") or [])
+    warnings.extend(a["message"] for a in alerts if a.get("message"))
+    success = any(f.value is not None and str(f.value).strip() for f in fields.values() if not isinstance(f.value, (list, dict)))
+    return HrDocExtractionResponse(
+        success=success or bool(warnings),
+        document_type="hr_cv",
+        fields=fields,
+        unmapped_text=[html.escape(x, quote=False) for x in (raw.get("_unmapped_text") or [])],
+        warnings=warnings,
+        alerts=alerts,
+    )
+
+
+async def extract_hr_national_id_form(
+    db: AsyncSession, tenant_id: int, file_bytes: bytes, content_type: str
+) -> HrDocExtractionResponse:
+    del db, tenant_id
+    raw = await _get_provider().extract_hr_national_id_fields(file_bytes, content_type)
+    fields = _normalize_hr_map(raw)
+    alerts = analyze_hr_id_fields(fields)
+    warnings = list(raw.get("_warnings") or [])
+    warnings.extend(a["message"] for a in alerts if a.get("message"))
+    success = any(f.value is not None and str(f.value).strip() for f in fields.values())
+    return HrDocExtractionResponse(
+        success=success or bool(warnings),
+        document_type="hr_national_id",
+        fields=fields,
+        unmapped_text=[html.escape(x, quote=False) for x in (raw.get("_unmapped_text") or [])],
+        warnings=warnings,
+        alerts=alerts,
+    )
+
+
+async def extract_hr_medical_form(
+    db: AsyncSession, tenant_id: int, file_bytes: bytes, content_type: str
+) -> HrDocExtractionResponse:
+    del db, tenant_id
+    raw = await _get_provider().extract_hr_medical_fields(file_bytes, content_type)
+    fields = _normalize_hr_map(raw)
+    alerts = analyze_hr_medical_fields(fields)
+    warnings = list(raw.get("_warnings") or [])
+    warnings.extend(a["message"] for a in alerts if a.get("message"))
+    success = any(f.value is not None and str(f.value).strip() for f in fields.values() if not isinstance(f.value, (list, dict)))
+    return HrDocExtractionResponse(
+        success=success or bool(warnings),
+        document_type="hr_medical_certificate",
+        fields=fields,
+        unmapped_text=[html.escape(x, quote=False) for x in (raw.get("_unmapped_text") or [])],
+        warnings=warnings,
+        alerts=alerts,
+    )
+
+
+async def extract_hr_birth_certificate_form(
+    db: AsyncSession, tenant_id: int, file_bytes: bytes, content_type: str
+) -> HrDocExtractionResponse:
+    del db, tenant_id
+    raw = await _get_provider().extract_hr_birth_certificate_fields(file_bytes, content_type)
+    fields = _normalize_hr_map(raw)
+    alerts = analyze_hr_birth_fields(fields)
+    warnings = list(raw.get("_warnings") or [])
+    warnings.extend(a["message"] for a in alerts if a.get("message"))
+    success = any(f.value is not None and str(f.value).strip() for f in fields.values())
+    return HrDocExtractionResponse(
+        success=success or bool(warnings),
+        document_type="hr_birth_certificate",
+        fields=fields,
+        unmapped_text=[html.escape(x, quote=False) for x in (raw.get("_unmapped_text") or [])],
+        warnings=warnings,
+        alerts=alerts,
     )

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, type HrEssProfileResponse, type HrEssProfileUpdate } from "@/api/client";
+import { Link } from "react-router-dom";
+import { ApiError, api, type HrEssProfileResponse, type HrEssProfileUpdate } from "@/api/client";
 
 export function HrMyProfilePage() {
   const [profile, setProfile] = useState<HrEssProfileResponse | null>(null);
@@ -7,11 +8,13 @@ export function HrMyProfilePage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
+  const [notLinked, setNotLinked] = useState<boolean>(false);
   const [success, setSuccess] = useState<string>("");
 
   const load = async (): Promise<void> => {
     setLoading(true);
     setError("");
+    setNotLinked(false);
     try {
       const row = await api.getHrEssMyProfile();
       setProfile(row);
@@ -21,7 +24,14 @@ export function HrMyProfilePage() {
         address_line: row.address_line,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load profile");
+      if (err instanceof ApiError && err.status === 404) {
+        setNotLinked(true);
+        setError(
+          "Your login account is not linked to an employee record yet. Ask HR to open Employees and set the User field on your employee profile.",
+        );
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to load profile");
+      }
     } finally {
       setLoading(false);
     }
@@ -56,8 +66,21 @@ export function HrMyProfilePage() {
       {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">{error}</div>}
       {success && <div className="rounded-lg border border-status-success/20 bg-status-success-subtle px-4 py-2 text-sm text-status-success-foreground">{success}</div>}
 
-      {loading || !profile ? (
+      {loading ? (
         <div className="rounded-lg border border-border bg-surface-raised p-10 text-center text-sm text-text-muted">Loading profile...</div>
+      ) : notLinked ? (
+        <div className="rounded-lg border border-border bg-surface-raised p-6 text-sm text-text-secondary space-y-3">
+          <p>ESS pages (My Profile, Attendance, Leave, Payslips) need your user account connected to an employee.</p>
+          <p>
+            HR can link you from{" "}
+            <Link to="/app/hr/employees" className="font-medium text-primary hover:underline">
+              HR → Employees
+            </Link>{" "}
+            by editing an employee and choosing your user in the <strong>User</strong> field.
+          </p>
+        </div>
+      ) : !profile ? (
+        <div className="rounded-lg border border-border bg-surface-raised p-10 text-center text-sm text-text-muted">Profile unavailable.</div>
       ) : (
         <form onSubmit={onSubmit} className="rounded-xl border border-border bg-surface-raised p-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="text-sm text-text-secondary">

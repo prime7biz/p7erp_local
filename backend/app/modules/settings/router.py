@@ -820,3 +820,46 @@ async def list_settings_cheque_templates(
     await ensure_user_is_tenant_admin(db, user, tenant.id)
     return SettingsChequeTemplatesListResponse(items=[], total=0)
 
+
+@router.post("/demo/reset")
+async def reset_phase1_demo(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin-only: re-run Phase 1.5 demo seed for this tenant (DEMO* codes or demo_mode)."""
+    from app.common.tenant_feature_keys import DEMO_MODE_ENABLED, is_demo_mode_enabled
+    from app.seeds.phase1_demo import _is_demo_tenant_code, run_phase1_demo_seed
+
+    _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
+
+    code = (tenant.company_code or "").strip().upper()
+    allowed = _is_demo_tenant_code(code) or is_demo_mode_enabled(tenant.feature_flags)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Reset Demo is only allowed for DEMO* tenants or when "
+                f"feature flag '{DEMO_MODE_ENABLED}' is enabled."
+            ),
+        )
+
+    result = await run_phase1_demo_seed(
+        db,
+        company_code=code,
+        reset=True,
+        force=True,
+        create_tenant=False,
+    )
+    logger.info("Phase 1.5 demo reset by user=%s tenant=%s status=%s", user.id, tenant.id, result.get("status"))
+    return {
+        "ok": True,
+        "status": result.get("status"),
+        "order_code": (result.get("summary") or {}).get("order_code") or result.get("order_code"),
+        "narrative": result.get("narrative"),
+        "credentials": result.get("credentials"),
+        "summary": result.get("summary"),
+        "counts": result.get("counts"),
+    }
+

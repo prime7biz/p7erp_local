@@ -13,6 +13,7 @@ import { OrderAiPanel } from "@/components/orders/OrderAiPanel";
 import { OrderAiAuditHistory } from "@/components/orders/OrderAiAuditHistory";
 import { PlanningGroundingCard } from "@/components/orders/PlanningGroundingCard";
 import { CommercialAlignmentCard } from "@/components/orders/CommercialAlignmentCard";
+import { CostBreakdownPanel } from "@/components/orders/CostBreakdownPanel";
 import { ChangeRequestPanel } from "@/components/orders/ChangeRequestPanel";
 import { CommercialTimelineCard } from "@/components/orders/CommercialTimelineCard";
 import { ORDER_PROTECTED_FIELD_DEFS } from "@/lib/commercialChangeFields";
@@ -28,6 +29,7 @@ import { useOrderAi } from "@/hooks/useOrderAi";
 import { logApiError } from "@/utils/logApiError";
 import { useSecureImage } from "@/hooks/useSecureImage";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { PartyLedgerSummaryCard } from "@/pages/app/finance/party-ledger/PartyLedgerSummaryCard";
 import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
 
 export function OrderDetailPage() {
@@ -53,6 +55,11 @@ export function OrderDetailPage() {
   const [pipelineDraftType, setPipelineDraftType] = useState<string>("export");
   const [pipelineDraftNa, setPipelineDraftNa] = useState<Set<string>>(() => new Set());
   const [forcePipeline, setForcePipeline] = useState("");
+  const [generatePosBusy, setGeneratePosBusy] = useState(false);
+  const [generatePosConfirm, setGeneratePosConfirm] = useState(false);
+  const [packingLists, setPackingLists] = useState<
+    Array<{ id: number; packing_list_number: string; status: string; total_cartons: number }>
+  >([]);
   const styleImageUrl = useSecureImage(item?.style_image_url);
   const orderAi = useOrderAi();
   const isTenantAdmin = (me?.role_name || "").toLowerCase() === "admin";
@@ -116,6 +123,12 @@ export function OrderDetailPage() {
         setAmendments(await api.listOrderAmendments(order.id));
         setNewStatus(order.status);
         try {
+          const packs = await api.listPackingLists({ order_id: order.id, limit: 20 });
+          setPackingLists(packs);
+        } catch {
+          setPackingLists([]);
+        }
+        try {
           const ms = await api.getOrderMilestones(order.id);
           syncPipelineDraftFromApi(ms.order_type, ms.pipeline_na_steps);
         } catch {
@@ -152,6 +165,7 @@ export function OrderDetailPage() {
   const execHint = item.ai_indicators
     ? `Readiness ${item.ai_indicators.execution_readiness_score}% · Material ${item.ai_indicators.material_readiness_score}% · Plan ${item.ai_indicators.planning_confidence_score}%`
     : "Operational metrics from API when available";
+  const rc = item.related_counts;
 
   return (
     <div className="p-6 space-y-6">
@@ -370,11 +384,15 @@ export function OrderDetailPage() {
 
       <section className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-text-primary">Related Records</h2>
+        <div className="mt-3 max-w-sm">
+          <PartyLedgerSummaryCard partyType="CUSTOMER" partyId={item.customer_id} title="Customer party ledger" />
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {item.customer_id ? (
             <Link
               to={`/app/customers/${item.customer_id}`}
-              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+              title="Open customer"
+              className="rounded-lg border border-accent-secondary/40 bg-accent-secondary/10 px-2.5 py-1 text-xs font-medium text-accent-secondary hover:bg-accent-secondary/20"
             >
               Customer
             </Link>
@@ -382,16 +400,76 @@ export function OrderDetailPage() {
           {item.quotation_id ? (
             <Link
               to={`/app/quotations/${item.quotation_id}`}
-              className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+              title="Open quotation"
+              className="rounded-lg border border-accent-secondary/40 bg-accent-secondary/10 px-2.5 py-1 text-xs font-medium text-accent-secondary hover:bg-accent-secondary/20"
             >
               Quotation
             </Link>
           ) : null}
           <Link
-            to="/app/inventory/delivery-challans"
-            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            to={`/app/bom?orderId=${item.id}`}
+            title={rc?.bom_exists ? "Order BOM exists" : "Open BOM builder for this order"}
+            className="rounded-lg border border-accent-secondary/40 bg-accent-secondary/10 px-2.5 py-1 text-xs font-medium text-accent-secondary hover:bg-accent-secondary/20"
           >
-            Create delivery challan
+            View BOM{rc?.bom_exists ? " ✓" : ""}
+          </Link>
+          <Link
+            to={`/app/inventory/purchase-orders?order_id=${item.id}`}
+            title={`${rc?.po_count ?? 0} purchase order(s) for this order`}
+            className="rounded-lg border border-accent-secondary/40 bg-accent-secondary/10 px-2.5 py-1 text-xs font-medium text-accent-secondary hover:bg-accent-secondary/20"
+          >
+            View POs{rc?.po_count != null ? ` (${rc.po_count})` : ""}
+          </Link>
+          <Link
+            to={`/app/production/planning?order_id=${item.id}`}
+            title={rc?.production_plan_exists ? "Production plan linked" : "Open production planning"}
+            className="rounded-lg border border-accent-secondary/40 bg-accent-secondary/10 px-2.5 py-1 text-xs font-medium text-accent-secondary hover:bg-accent-secondary/20"
+          >
+            View Production Plan{rc?.production_plan_exists ? " ✓" : ""}
+          </Link>
+          <Link
+            to={`/app/inventory/delivery-challans?order_id=${item.id}`}
+            title={`${rc?.delivery_challan_count ?? 0} delivery challan(s)`}
+            className="rounded-lg border border-accent-secondary/40 bg-accent-secondary/10 px-2.5 py-1 text-xs font-medium text-accent-secondary hover:bg-accent-secondary/20"
+          >
+            View Delivery Challan{rc?.delivery_challan_count != null ? ` (${rc.delivery_challan_count})` : ""}
+          </Link>
+          <Link
+            to={`/app/commercial/invoices?order_id=${item.id}`}
+            title={`${rc?.invoice_count ?? 0} commercial invoice(s)`}
+            className="rounded-lg border border-accent-secondary/40 bg-accent-secondary/10 px-2.5 py-1 text-xs font-medium text-accent-secondary hover:bg-accent-secondary/20"
+          >
+            View Invoices{rc?.invoice_count != null ? ` (${rc.invoice_count})` : ""}
+          </Link>
+          <Link
+            to={`/app/logistics?tab=packing&order_id=${item.id}`}
+            title={`${rc?.packing_list_count ?? packingLists.length} packing list(s)`}
+            className="rounded-lg border border-accent-secondary/40 bg-accent-secondary/10 px-2.5 py-1 text-xs font-medium text-accent-secondary hover:bg-accent-secondary/20"
+          >
+            View Packing List
+            {(rc?.packing_list_count ?? packingLists.length) > 0
+              ? ` (${rc?.packing_list_count ?? packingLists.length})`
+              : ""}
+          </Link>
+          <a
+            href="#cost-breakdown"
+            title="Scroll to cost breakdown panel"
+            className="rounded-lg border border-accent-secondary/40 bg-accent-secondary/10 px-2.5 py-1 text-xs font-medium text-accent-secondary hover:bg-accent-secondary/20"
+          >
+            View Cost Breakdown
+          </a>
+          <Link
+            to={`/app/followup?order_id=${item.id}`}
+            title={`${rc?.tna_actions_count ?? 0} TNA / follow-up action(s)`}
+            className="rounded-lg border border-accent-secondary/40 bg-accent-secondary/10 px-2.5 py-1 text-xs font-medium text-accent-secondary hover:bg-accent-secondary/20"
+          >
+            View TNA Calendar{rc?.tna_actions_count != null ? ` (${rc.tna_actions_count})` : ""}
+          </Link>
+          <Link
+            to={`/app/logistics?tab=packing&order_id=${item.id}`}
+            className="rounded-lg border border-brand-primary/40 bg-brand-subtle px-2.5 py-1 text-xs font-semibold text-brand-primary hover:bg-brand-subtle/80"
+          >
+            Mark as shipped
           </Link>
           <Link
             to={`/app/commercial/proforma-invoices/new?order_id=${item.id}&customer_id=${item.customer_id}`}
@@ -399,6 +477,40 @@ export function OrderDetailPage() {
           >
             Create Proforma Invoice
           </Link>
+          {rc?.export_case_id ? (
+            <Link
+              to={`/app/commercial/export-cases/${rc.export_case_id}/edit`}
+              title="Open linked export case"
+              className="rounded-lg border border-accent-secondary/40 bg-accent-secondary/10 px-2.5 py-1 text-xs font-medium text-accent-secondary hover:bg-accent-secondary/20"
+            >
+              Export Case{rc.export_case_count != null ? ` (${rc.export_case_count})` : ""}
+            </Link>
+          ) : (
+            <Link
+              to={`/app/commercial/export-cases/new?order_id=${item.id}`}
+              className="rounded-lg border border-status-info/30 bg-status-info-subtle px-2.5 py-1 text-xs font-medium text-status-info-foreground hover:bg-status-info-subtle/80"
+            >
+              Create Export Case
+            </Link>
+          )}
+          {packingLists.length > 0 ? (
+            <span className="rounded-lg border border-border bg-surface-subtle px-2.5 py-1 text-xs text-text-secondary">
+              Packing:{" "}
+              {packingLists
+                .slice(0, 2)
+                .map((p) => `${p.packing_list_number} (${p.status})`)
+                .join(", ")}
+              {packingLists.length > 2 ? ` +${packingLists.length - 2}` : ""}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            disabled={generatePosBusy}
+            onClick={() => setGeneratePosConfirm(true)}
+            className="rounded-lg border border-brand-primary px-2.5 py-1 text-xs font-medium text-brand-primary hover:bg-surface-subtle disabled:opacity-50"
+          >
+            {generatePosBusy ? "Generating POs…" : "Generate POs from BOM"}
+          </button>
         </div>
       </section>
 
@@ -566,6 +678,7 @@ export function OrderDetailPage() {
       </div>
 
       <CommercialAlignmentCard orderId={item.id} quotationId={item.quotation_id} />
+      <CostBreakdownPanel orderId={item.id} />
       <PlanningGroundingCard orderId={item.id} />
 
       <CommercialTimelineCard entityType="order" entityId={item.id} />
@@ -645,6 +758,62 @@ export function OrderDetailPage() {
         Created at {new Date(item.created_at).toLocaleString()} · Updated at{" "}
         {new Date(item.updated_at).toLocaleString()}
       </div>
+
+      {generatePosConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !generatePosBusy && setGeneratePosConfirm(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-border bg-surface-raised p-4 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-text-primary">Generate POs from Order BOM?</h3>
+            <p className="mt-1 text-sm text-text-muted">
+              Creates draft purchase orders from the approved/frozen order BOM (one PO per preferred vendor).
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border px-3 py-1.5 text-sm"
+                disabled={generatePosBusy}
+                onClick={() => setGeneratePosConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-brand-primary px-3 py-1.5 text-sm font-medium text-brand-primary-foreground disabled:opacity-50"
+                disabled={generatePosBusy}
+                onClick={async () => {
+                  setGeneratePosBusy(true);
+                  setError("");
+                  try {
+                    const bomDetail = await api.getOrderDrivenBomByOrder(item.id);
+                    const bomId = bomDetail.bom?.id;
+                    if (!bomId) throw new Error("No order BOM found for this order");
+                    const res = await api.generatePurchaseOrdersFromBom(bomId);
+                    const n = res.created?.length ?? 0;
+                    setGeneratePosConfirm(false);
+                    if (n === 0) {
+                      setError("No purchase orders were created (lines may already be procured or lack vendors).");
+                    } else {
+                      navigate(`/app/inventory/purchase-orders?order_id=${item.id}`);
+                    }
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Failed to generate POs from BOM");
+                    setGeneratePosConfirm(false);
+                  } finally {
+                    setGeneratePosBusy(false);
+                  }
+                }}
+              >
+                {generatePosBusy ? "Generating…" : "Generate"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {materialReqModalOpen && (
         <div

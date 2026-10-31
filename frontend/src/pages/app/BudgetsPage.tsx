@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import {
   api,
   type BudgetCreate,
@@ -8,6 +8,7 @@ import {
   type ChartOfAccountResponse,
   type CostCenterResponse,
 } from "@/api/client";
+import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
 
 function linesToCreate(lines: BudgetResponse["lines"]): BudgetLineCreate[] {
@@ -20,7 +21,18 @@ function linesToCreate(lines: BudgetResponse["lines"]): BudgetLineCreate[] {
   }));
 }
 
+function utilizationBarClass(pct: number): string {
+  if (pct >= 100) return "bg-status-danger";
+  if (pct >= 90) return "bg-status-warning";
+  return "bg-status-success";
+}
+
 export function BudgetsPage() {
+  const { me } = useAuth();
+  const enforcementMode =
+    typeof me?.feature_flags?.budget_enforcement_mode === "string"
+      ? String(me.feature_flags.budget_enforcement_mode)
+      : "off";
   const [fiscalYearFilter, setFiscalYearFilter] = useState("");
   const [budgets, setBudgets] = useState<BudgetResponse[]>([]);
   const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
@@ -34,7 +46,15 @@ export function BudgetsPage() {
     budget_name: "",
     fiscal_year: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
     status: "DRAFT",
-    lines: [{ account_id: null, cost_center_id: null, period_month: new Date().toISOString().slice(0, 7), amount: "0", notes: "" }],
+    lines: [
+      {
+        account_id: null,
+        cost_center_id: null,
+        period_month: new Date().toISOString().slice(0, 7),
+        amount: "0",
+        notes: "",
+      },
+    ],
   });
 
   async function load() {
@@ -84,7 +104,15 @@ export function BudgetsPage() {
         budget_name: "",
         fiscal_year: form.fiscal_year,
         status: "DRAFT",
-        lines: [{ account_id: null, cost_center_id: null, period_month: new Date().toISOString().slice(0, 7), amount: "0", notes: "" }],
+        lines: [
+          {
+            account_id: null,
+            cost_center_id: null,
+            period_month: new Date().toISOString().slice(0, 7),
+            amount: "0",
+            notes: "",
+          },
+        ],
       });
       await load();
     } catch (e) {
@@ -116,32 +144,46 @@ export function BudgetsPage() {
     }
   }
 
-  const chartMax = useMemo(() => {
-    if (!vsActual?.rows?.length) return 1;
-    return Math.max(
-      ...vsActual.rows.map((r) => Math.max(Math.abs(r.budget_amount), Math.abs(r.actual_amount), Math.abs(r.variance))),
-      1
-    );
-  }, [vsActual]);
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Budgets & Budget vs Actual</h1>
           <p className="text-sm text-text-muted">Create finance budgets and compare with posted actuals.</p>
+          <p className="text-xs text-text-muted mt-1">
+            Tip: set budgets to <strong>FINAL</strong> and enable Budget enforcement in Settings → Configuration (
+            <code className="mx-1 text-[11px]">off</code>/<code className="mx-1 text-[11px]">warn</code>/
+            <code className="text-[11px]">block</code>) so voucher posting respects cost-center limits.
+          </p>
         </div>
-        <div>
-          <label className="block text-xs text-text-muted">Fiscal year filter</label>
-          <input
-            className="rounded border px-3 py-2 text-sm"
-            placeholder="e.g. 2025-2026 (empty = all)"
-            value={fiscalYearFilter}
-            onChange={(e) => setFiscalYearFilter(e.target.value.trim())}
-          />
+        <div className="flex flex-wrap items-end gap-3">
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              enforcementMode === "block"
+                ? "bg-status-danger-subtle text-status-danger-foreground"
+                : enforcementMode === "warn"
+                  ? "bg-status-warning-subtle text-status-warning-foreground"
+                  : "bg-surface-subtle text-text-muted"
+            }`}
+          >
+            Enforcement: {enforcementMode === "block" ? "Block" : enforcementMode === "warn" ? "Warn" : "Off"}
+          </span>
+          <div>
+            <label className="block text-xs text-text-muted">Fiscal year filter</label>
+            <input
+              className="rounded border px-3 py-2 text-sm"
+              placeholder="e.g. 2025-2026 (empty = all)"
+              value={fiscalYearFilter}
+              onChange={(e) => setFiscalYearFilter(e.target.value.trim())}
+            />
+          </div>
         </div>
       </div>
-      {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
+      {error ? (
+        <div className="rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">
+          {error}
+        </div>
+      ) : null}
 
       <form onSubmit={submit} className="space-y-3 rounded-xl border border-border bg-surface-raised p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -156,7 +198,15 @@ export function BudgetsPage() {
                   budget_name: "",
                   fiscal_year: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
                   status: "DRAFT",
-                  lines: [{ account_id: null, cost_center_id: null, period_month: new Date().toISOString().slice(0, 7), amount: "0", notes: "" }],
+                  lines: [
+                    {
+                      account_id: null,
+                      cost_center_id: null,
+                      period_month: new Date().toISOString().slice(0, 7),
+                      amount: "0",
+                      notes: "",
+                    },
+                  ],
                 });
               }}
             >
@@ -165,9 +215,23 @@ export function BudgetsPage() {
           ) : null}
         </div>
         <div className="grid gap-3 md:grid-cols-3">
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Budget Name" value={form.budget_name} onChange={(e) => setForm((p) => ({ ...p, budget_name: e.target.value }))} />
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Fiscal Year" value={form.fiscal_year} onChange={(e) => setForm((p) => ({ ...p, fiscal_year: e.target.value }))} />
-          <select className="rounded border px-3 py-2 text-sm" value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as "DRAFT" | "FINAL" }))}>
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="Budget Name"
+            value={form.budget_name}
+            onChange={(e) => setForm((p) => ({ ...p, budget_name: e.target.value }))}
+          />
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="Fiscal Year"
+            value={form.fiscal_year}
+            onChange={(e) => setForm((p) => ({ ...p, fiscal_year: e.target.value }))}
+          />
+          <select
+            className="rounded border px-3 py-2 text-sm"
+            value={form.status}
+            onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as "DRAFT" | "FINAL" }))}
+          >
             <option value="DRAFT">DRAFT</option>
             <option value="FINAL">FINAL</option>
           </select>
@@ -193,7 +257,10 @@ export function BudgetsPage() {
                       placeholder="YYYY-MM"
                       value={line.period_month}
                       onChange={(e) =>
-                        setForm((p) => ({ ...p, lines: p.lines.map((r, i) => (i === idx ? { ...r, period_month: e.target.value } : r)) }))
+                        setForm((p) => ({
+                          ...p,
+                          lines: p.lines.map((r, i) => (i === idx ? { ...r, period_month: e.target.value } : r)),
+                        }))
                       }
                     />
                   </td>
@@ -204,7 +271,9 @@ export function BudgetsPage() {
                       onChange={(e) =>
                         setForm((p) => ({
                           ...p,
-                          lines: p.lines.map((r, i) => (i === idx ? { ...r, account_id: e.target.value ? Number(e.target.value) : null } : r)),
+                          lines: p.lines.map((r, i) =>
+                            i === idx ? { ...r, account_id: e.target.value ? Number(e.target.value) : null } : r,
+                          ),
                         }))
                       }
                     >
@@ -223,7 +292,9 @@ export function BudgetsPage() {
                       onChange={(e) =>
                         setForm((p) => ({
                           ...p,
-                          lines: p.lines.map((r, i) => (i === idx ? { ...r, cost_center_id: e.target.value ? Number(e.target.value) : null } : r)),
+                          lines: p.lines.map((r, i) =>
+                            i === idx ? { ...r, cost_center_id: e.target.value ? Number(e.target.value) : null } : r,
+                          ),
                         }))
                       }
                     >
@@ -240,7 +311,10 @@ export function BudgetsPage() {
                       className="rounded border px-2 py-1 text-sm"
                       value={line.amount}
                       onChange={(e) =>
-                        setForm((p) => ({ ...p, lines: p.lines.map((r, i) => (i === idx ? { ...r, amount: e.target.value } : r)) }))
+                        setForm((p) => ({
+                          ...p,
+                          lines: p.lines.map((r, i) => (i === idx ? { ...r, amount: e.target.value } : r)),
+                        }))
                       }
                     />
                   </td>
@@ -248,7 +322,12 @@ export function BudgetsPage() {
                     <button
                       type="button"
                       className="rounded border px-2 py-1 text-xs"
-                      onClick={() => setForm((p) => ({ ...p, lines: p.lines.filter((_, i) => i !== idx || p.lines.length === 1) }))}
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          lines: p.lines.filter((_, i) => i !== idx || p.lines.length === 1),
+                        }))
+                      }
                     >
                       Remove
                     </button>
@@ -266,20 +345,35 @@ export function BudgetsPage() {
             onClick={() =>
               setForm((p) => ({
                 ...p,
-                lines: [...p.lines, { account_id: null, cost_center_id: null, period_month: new Date().toISOString().slice(0, 7), amount: "0", notes: "" }],
+                lines: [
+                  ...p.lines,
+                  {
+                    account_id: null,
+                    cost_center_id: null,
+                    period_month: new Date().toISOString().slice(0, 7),
+                    amount: "0",
+                    notes: "",
+                  },
+                ],
               }))
             }
           >
             Add Line
           </button>
-          <button className="rounded bg-brand-primary px-3 py-2 text-sm text-brand-primary-foreground">{editingId ? "Save budget" : "Create Budget"}</button>
+          <button className="rounded bg-brand-primary px-3 py-2 text-sm text-brand-primary-foreground">
+            {editingId ? "Save budget" : "Create Budget"}
+          </button>
         </div>
       </form>
 
       <div className="rounded-xl border border-border bg-surface-raised p-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Budget List</h2>
-          <select className="rounded border px-2 py-1 text-sm" value={selectedBudgetId ?? ""} onChange={(e) => setSelectedBudgetId(e.target.value ? Number(e.target.value) : null)}>
+          <select
+            className="rounded border px-2 py-1 text-sm"
+            value={selectedBudgetId ?? ""}
+            onChange={(e) => setSelectedBudgetId(e.target.value ? Number(e.target.value) : null)}
+          >
             <option value="">Select for vs actual</option>
             {budgets.map((b) => (
               <option key={b.id} value={b.id}>
@@ -368,29 +462,33 @@ export function BudgetsPage() {
             </div>
           </div>
           <div className="mb-6 space-y-2">
-            <div className="text-sm font-medium text-text-secondary">Budget vs actual by period (bars)</div>
-            {vsActual.rows.map((r) => (
-              <div key={r.line_id} className="border-b border-border pb-2">
-                <div className="mb-1 flex justify-between text-xs text-text-muted">
-                  <span>{r.period_month}</span>
-                  <span>
-                    Var: {r.variance.toLocaleString()} ({r.variance_pct.toLocaleString()}%)
-                  </span>
+            <div className="text-sm font-medium text-text-secondary">
+              Utilization by period (green ≤90%, yellow 90–100%, red &gt;100%)
+            </div>
+            {vsActual.rows.map((r) => {
+              const utilPct =
+                Math.abs(r.budget_amount) > 0
+                  ? (Math.abs(r.actual_amount) / Math.abs(r.budget_amount)) * 100
+                  : 0;
+              return (
+                <div key={r.line_id} className="border-b border-border pb-2">
+                  <div className="mb-1 flex justify-between text-xs text-text-muted">
+                    <span>{r.period_month}</span>
+                    <span>
+                      {utilPct.toFixed(0)}% used · Var: {r.variance.toLocaleString()} (
+                      {r.variance_pct.toLocaleString()}%)
+                    </span>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded bg-surface-subtle">
+                    <div
+                      className={`h-full ${utilizationBarClass(utilPct)}`}
+                      style={{ width: `${Math.min(100, utilPct)}%` }}
+                      title={`Actual ${r.actual_amount} / Budget ${r.budget_amount}`}
+                    />
+                  </div>
                 </div>
-                <div className="flex h-3 overflow-hidden rounded bg-surface-subtle">
-                  <div
-                    className="bg-brand-primary/60"
-                    style={{ width: `${Math.min(100, (Math.abs(r.budget_amount) / chartMax) * 100)}%` }}
-                    title={`Budget ${r.budget_amount}`}
-                  />
-                  <div
-                    className="bg-status-success/70"
-                    style={{ width: `${Math.min(100, (Math.abs(r.actual_amount) / chartMax) * 100)}%` }}
-                    title={`Actual ${r.actual_amount}`}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">

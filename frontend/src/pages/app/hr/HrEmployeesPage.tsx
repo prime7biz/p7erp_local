@@ -9,6 +9,9 @@ import {
   type HrEmployeeUpdate,
   type UserWithRoleResponse,
 } from "@/api/client";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { listPageRootClass } from "@/components/app/listPageLayout";
+import { useDebouncedValue, useLatestRequest } from "@/hooks/useDebouncedValue";
 import { logApiError } from "@/utils/logApiError";
 
 export function HrEmployeesPage() {
@@ -39,24 +42,31 @@ export function HrEmployeesPage() {
   const departmentMap = useMemo(() => new Map(departments.map((d) => [d.id, d.name])), [departments]);
   const designationMap = useMemo(() => new Map(designations.map((d) => [d.id, d.title])), [designations]);
 
+  const debouncedSearch = useDebouncedValue(search);
+  const { begin, isCurrent } = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = begin();
     setLoading(true);
     setError("");
     try {
       const [depRows, desRows, empRows] = await Promise.all([
         api.listHrDepartments({ active_only: false }),
         api.listHrDesignations({ active_only: false }),
-        api.listHrEmployees({ active_only: showInactive ? false : true, search: search || undefined }),
+        api.listHrEmployees({ active_only: showInactive ? false : true, search: debouncedSearch || undefined }),
       ]);
+      if (!isCurrent(token)) return;
       setDepartments(depRows);
       setDesignations(desRows);
       setEmployees(empRows);
     } catch (e) {
+      if (!isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load employees");
     } finally {
-      setLoading(false);
+      if (isCurrent(token)) setLoading(false);
     }
-  }, [showInactive, search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showInactive, debouncedSearch]);
 
   useEffect(() => {
     void load();
@@ -151,74 +161,74 @@ export function HrEmployeesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">HR Employees</h1>
-          <p className="text-sm text-text-muted">Manage employee records for HR master data.</p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            className="rounded border border-border-strong px-3 py-2 text-sm"
-            placeholder="Search by code/name"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <label className="flex items-center gap-2 text-sm text-text-secondary">
-            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-            Show inactive
-          </label>
-          <button
-            type="button"
-            onClick={async () => {
-              setInfo("");
-              try {
-                const blob = await api.exportHrEmployees();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "employees.xlsx";
-                a.click();
-                URL.revokeObjectURL(url);
-                setInfo("Export started.");
-              } catch (e) {
-                setError(e instanceof Error ? e.message : "Export failed");
-              }
-            }}
-            className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary"
-          >
-            Export Excel
-          </button>
-          <label className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary cursor-pointer">
-            Import Excel
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="HR Employees"
+        description="Manage employee records for HR master data."
+        actions={
+          <>
             <input
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setError("");
-                try {
-                  const r = await api.importHrEmployees(file);
-                  setError(`Imported: ${r.created} created, ${r.updated} updated.`);
-                  await load();
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Import failed");
-                }
-                e.target.value = "";
-              }}
+              className="rounded border border-border-strong px-3 py-2 text-sm"
+              placeholder="Search by code/name"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
-          </label>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-white"
-          >
-            Add employee
-          </button>
-        </div>
-      </div>
+            <label className="flex items-center gap-2 text-sm text-text-secondary">
+              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+              Show inactive
+            </label>
+            <button
+              type="button"
+              onClick={async () => {
+                setInfo("");
+                try {
+                  const blob = await api.exportHrEmployees();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "employees.xlsx";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  setInfo("Export started.");
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Export failed");
+                }
+              }}
+              className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary"
+            >
+              Export Excel
+            </button>
+            <label className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary cursor-pointer">
+              Import Excel
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setError("");
+                  try {
+                    const r = await api.importHrEmployees(file);
+                    setError(`Imported: ${r.created} created, ${r.updated} updated.`);
+                    await load();
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Import failed");
+                  }
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={openCreate}
+              className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-semibold text-white"
+            >
+              Add employee
+            </button>
+          </>
+        }
+      />
 
       {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">{error}</div>}
       {info && <div className="rounded-lg border border-status-success/30 bg-status-success-subtle px-4 py-2 text-sm text-status-success-foreground">{info}</div>}

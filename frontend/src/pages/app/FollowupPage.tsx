@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
   type FollowupResponse,
@@ -50,7 +50,14 @@ const TNA_STATUSES = [
 
 const MILESTONE_TYPES = [
   { value: "", label: "—" },
+  { value: "lab_dip_approval", label: "Lab dip approval" },
+  { value: "pp_approval", label: "PP approval" },
+  { value: "fabric_in_house", label: "Fabric in-house" },
+  { value: "accessories_in_house", label: "Accessories in-house" },
+  { value: "cutting_start", label: "Cutting start" },
+  { value: "sewing_start", label: "Sewing start" },
   { value: "ex_factory", label: "Ex-factory" },
+  { value: "shipment_confirmation", label: "Shipment confirmation" },
   { value: "shipment", label: "Shipment" },
   { value: "cutting", label: "Cutting" },
 ];
@@ -220,6 +227,7 @@ function CalendarGrid({
 }
 
 export function FollowupPage() {
+  const [searchParams] = useSearchParams();
   const [summary, setSummary] = useState<FollowupSummaryResponse | null>(null);
   const [unifiedSummary, setUnifiedSummary] = useState<UnifiedTnaSummaryResponse | null>(null);
   const [unifiedActions, setUnifiedActions] = useState<UnifiedTnaActionResponse[]>([]);
@@ -234,7 +242,10 @@ export function FollowupPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchQ, setSearchQ] = useState("");
-  const [filterOrderId, setFilterOrderId] = useState<number | null>(null);
+  const [filterOrderId, setFilterOrderId] = useState<number | null>(() => {
+    const oid = Number(searchParams.get("order_id") || 0);
+    return oid > 0 ? oid : null;
+  });
   const [filterBuyerId, setFilterBuyerId] = useState<number | null>(null);
   const [filterAssignedToId, setFilterAssignedToId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState("");
@@ -1070,9 +1081,24 @@ export function FollowupPage() {
                     <td className="px-4 py-2 text-text-secondary">{formatDate(r.actual_submission_date)}</td>
                     <td className="px-4 py-2 text-text-secondary">{formatDate(r.approval_received_date)}</td>
                     <td className="px-4 py-2">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${statusBadgeClass(r.status)}`}>
-                        {r.status}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className={`rounded-full px-2 py-0.5 text-xs ${statusBadgeClass(r.status)}`}>
+                          {r.status}
+                        </span>
+                        {r.remarks?.includes("[auto-sync]") && (
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[10px] bg-brand-primary/10 text-brand-primary"
+                            title={r.remarks}
+                          >
+                            System
+                          </span>
+                        )}
+                        {r.external_id != null && r.remarks?.includes("production") && (
+                          <span className="rounded-full px-2 py-0.5 text-[10px] bg-status-neutral-subtle text-status-neutral-foreground">
+                            source: production
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-2 text-text-secondary">{userDisplay(r.assigned_to_id)}</td>
                     <td className="px-4 py-2">

@@ -61,6 +61,10 @@ class PayrollStructureLine(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     formula: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
+    is_pf_component: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_esi_component: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_pt_component: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_gratuity_component: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
@@ -120,6 +124,9 @@ class PayrollRunLine(Base):
     net_pay: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     overtime_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0")
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    calculation_source: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="MANUAL", server_default="MANUAL", index=True
+    )  # AUTO | MANUAL
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -205,6 +212,74 @@ class EmployeeAdvance(Base):
     )
 
 
+class PayrollEmployeeStructureAssignment(Base):
+    """Effective-dated link from employee → payroll structure (Phase 1.4)."""
+
+    __tablename__ = "hr_payroll_employee_structure_assignments"
+    __table_args__ = (
+        Index("ix_hr_pay_emp_struct_asgn_tenant_emp", "tenant_id", "employee_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("hr_employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    structure_id: Mapped[int] = mapped_column(
+        ForeignKey("hr_payroll_structures.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    base_salary: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    component_overrides: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class PayrollCalculationSnapshot(Base):
+    """Audit snapshot of auto-calculated payroll inputs for a run line."""
+
+    __tablename__ = "hr_payroll_calculation_snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    payroll_run_line_id: Mapped[int] = mapped_column(
+        ForeignKey("hr_payroll_run_lines.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    attendance_days: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    absent_days: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    late_days: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    leave_days_paid: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    leave_days_unpaid: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    ot_hours: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    base_salary_applied: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    structure_id: Mapped[int | None] = mapped_column(
+        ForeignKey("hr_payroll_structures.id", ondelete="SET NULL"), nullable=True
+    )
+    calculation_source: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="AUTO", server_default="AUTO"
+    )
+    trace_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class PayrollAccountingConfig(Base):
     __tablename__ = "hr_payroll_accounting_config"
 
@@ -226,6 +301,12 @@ class PayrollAccountingConfig(Base):
         ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True
     )
     pf_payable_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    esi_payable_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    pt_payable_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True
     )
     advance_receivable_account_id: Mapped[int | None] = mapped_column(

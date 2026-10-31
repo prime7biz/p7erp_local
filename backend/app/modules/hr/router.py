@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -12,8 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
+from app.common.permissions import PERMISSION_HR_DOCUMENTS_GENERATE, assert_soft_permission_allowed
 from app.common.tenant import require_tenant
+from app.common.tenant_feature_keys import is_age_verification_required, is_auto_document_generation_enabled
 from app.database import get_db, safe_async_session_rollback
+from app.modules.hr_compliance.service import assert_dob_allowed
+from app.modules.hr import hr_document_generator_service as hr_pdf
+from app.models.hr_compliance_framework import EmployeeAgeVerification
+from app.models.hr_payroll import PayrollRunLine
 from app.models import (
     AttendanceEntry,
     ComplianceCheck,
@@ -509,6 +515,7 @@ async def create_employee(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
+    assert_dob_allowed(body.date_of_birth, required=is_age_verification_required(tenant.feature_flags))
     employee_code = await _next_employee_code(db, tenant.id)
     await _validate_fk_values(
         db,
@@ -569,6 +576,11 @@ async def update_employee(
     _ensure_user_tenant(user, tenant)
     row = await _get_employee_or_404(db, tenant.id, employee_id)
     payload = body.model_dump(exclude_unset=True)
+    if "date_of_birth" in payload:
+        assert_dob_allowed(
+            payload.get("date_of_birth"),
+            required=is_age_verification_required(tenant.feature_flags),
+        )
     await _validate_fk_values(
         db,
         tenant.id,
@@ -993,6 +1005,149 @@ async def export_employees(
         io.BytesIO(data),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="employees.xlsx"'},
+    )
+
+
+def _require_doc_gen(tenant: Tenant) -> None:
+    if not is_auto_document_generation_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Document generation is disabled")
+
+
+@router.post("/employees/{employee_id}/documents/id-card")
+async def generate_id_card(
+    employee_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    _require_doc_gen(tenant)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_DOCUMENTS_GENERATE)
+    await _get_employee_or_404(db, tenant.id, employee_id)
+    company = getattr(tenant, "name", None) or "Company"
+    pdf = await hr_pdf.build_id_card_for_employee(db, tenant.id, employee_id, company)
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=id-card.pdf"})
+
+
+@router.post("/employees/{employee_id}/documents/appointment-letter")
+async def generate_appointment_letter(
+    employee_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    _require_doc_gen(tenant)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_DOCUMENTS_GENERATE)
+    emp = await _get_employee_or_404(db, tenant.id, employee_id)
+    dept = await db.get(Department, emp.department_id) if emp.department_id else None
+    desig = await db.get(Designation, emp.designation_id) if emp.designation_id else None
+    mgr = await db.get(Employee, emp.reporting_manager_id) if emp.reporting_manager_id else None
+    pdf = hr_pdf.generate_appointment_letter_pdf(
+        emp,
+        dept_name=dept.name if dept else None,
+        desig_title=desig.title if desig else None,
+        manager_name=f"{mgr.first_name} {mgr.last_name or ''}".strip() if mgr else None,
+        company_name=getattr(tenant, "name", None) or "Company",
+    )
+    return Response(
+        pdf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=appointment-letter.pdf"}
+    )
+
+
+@router.post("/employees/{employee_id}/documents/age-verification-cert")
+async def generate_age_verification_cert(
+    employee_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    _require_doc_gen(tenant)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_DOCUMENTS_GENERATE)
+    emp = await _get_employee_or_404(db, tenant.id, employee_id)
+    ver = (
+        await db.execute(
+            select(EmployeeAgeVerification)
+            .where(
+                EmployeeAgeVerification.tenant_id == tenant.id,
+                EmployeeAgeVerification.employee_id == employee_id,
+            )
+            .order_by(EmployeeAgeVerification.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    pdf = hr_pdf.generate_age_verification_cert_pdf(
+        emp, ver, company_name=getattr(tenant, "name", None) or "Company", verifier_label=user.username or "HR"
+    )
+    return Response(
+        pdf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=age-verification.pdf"}
+    )
+
+
+@router.post("/employees/{employee_id}/documents/joining-letter")
+async def generate_joining_letter(
+    employee_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    _require_doc_gen(tenant)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_DOCUMENTS_GENERATE)
+    emp = await _get_employee_or_404(db, tenant.id, employee_id)
+    pdf = hr_pdf.generate_joining_letter_pdf(emp, company_name=getattr(tenant, "name", None) or "Company")
+    return Response(
+        pdf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=joining-letter.pdf"}
+    )
+
+
+@router.post("/employees/{employee_id}/documents/payslip")
+async def generate_employee_payslip_pdf(
+    employee_id: int,
+    run_id: int = Query(...),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    _require_doc_gen(tenant)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_DOCUMENTS_GENERATE)
+    emp = await _get_employee_or_404(db, tenant.id, employee_id)
+    run = (
+        await db.execute(select(PayrollRun).where(PayrollRun.id == run_id, PayrollRun.tenant_id == tenant.id))
+    ).scalar_one_or_none()
+    if run is None:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
+    line = (
+        await db.execute(
+            select(PayrollRunLine).where(
+                PayrollRunLine.run_id == run_id,
+                PayrollRunLine.employee_id == employee_id,
+                PayrollRunLine.tenant_id == tenant.id,
+            )
+        )
+    ).scalar_one_or_none()
+    pdf = hr_pdf.generate_payslip_pdf(
+        emp, run=run, line=line, company_name=getattr(tenant, "name", None) or "Company"
+    )
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=payslip.pdf"})
+
+
+@router.post("/employees/bulk-documents/id-cards")
+async def generate_bulk_id_cards(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    _require_doc_gen(tenant)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_DOCUMENTS_GENERATE)
+    data = await hr_pdf.build_bulk_id_cards_zip(db, tenant.id, getattr(tenant, "name", None) or "Company")
+    return Response(
+        data,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=id-cards.zip"},
     )
 
 

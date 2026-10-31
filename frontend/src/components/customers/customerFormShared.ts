@@ -56,7 +56,7 @@ export const INITIAL_CUSTOMER_FORM: CustomerFormState = {
 };
 
 export const CUSTOMER_FORM_BASE_INPUT =
-  "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring";
+  "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0";
 
 function normalizeOptional(value: string): string | undefined {
   const trimmed = value.trim();

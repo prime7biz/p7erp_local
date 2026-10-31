@@ -127,7 +127,7 @@ export function VendorsPage() {
         description="Sourcing / procurement · Supplier master. Link purchase orders and receiving to these vendors for consistent operational data."
         actions={
           <Link
-            to="/app/purchase-orders"
+            to="/app/inventory/purchase-orders"
             className="rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle"
           >
             Purchase orders

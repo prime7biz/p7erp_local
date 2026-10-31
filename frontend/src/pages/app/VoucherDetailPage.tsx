@@ -7,6 +7,7 @@ import {
   type ChartOfAccountResponse,
   type CostCenterResponse,
   type BillReferenceRow,
+  type VoucherPostPreflightResponse,
 } from "@/api/client";
 import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
 import { VoucherPrintSheets } from "@/components/print/VoucherPrintSheets";
@@ -76,6 +77,10 @@ export function VoucherDetailPage() {
   const [printLoading, setPrintLoading] = useState(false);
   const [printCopyCount, setPrintCopyCount] = useState(1);
   const [printTemplate, setPrintTemplate] = useState<"standard" | "compact" | "audit">("standard");
+  const [budgetPreflight, setBudgetPreflight] = useState<VoucherPostPreflightResponse | null>(null);
+  const [budgetOverrideOpen, setBudgetOverrideOpen] = useState(false);
+  const [budgetOverrideReason, setBudgetOverrideReason] = useState("");
+  const [posting, setPosting] = useState(false);
 
   const loadVoucher = useCallback(async () => {
     const id = Number(voucherId);
@@ -181,17 +186,19 @@ export function VoucherDetailPage() {
   }
 
   const runAction = useCallback(
-    async (action: string, reason: string) => {
+    async (action: string, reason: string, opts?: { budget_override?: boolean }) => {
       if (!voucher) return;
       setError(null);
       setSuccess(null);
       try {
         if (action === "post") {
-          const posted = await api.postVoucher(voucher.id);
+          setPosting(true);
+          const posted = await api.postVoucher(voucher.id, {
+            budget_override: opts?.budget_override,
+            budget_override_reason: opts?.budget_override ? reason : undefined,
+          });
           if (posted.control_warnings?.length) {
-            setSuccess(
-              `Posted. Review: ${posted.control_warnings.join(" ")}`,
-            );
+            setSuccess(`Posted. Review: ${posted.control_warnings.join(" ")}`);
             await loadVoucher();
             return;
           }
@@ -209,14 +216,46 @@ export function VoucherDetailPage() {
         await loadVoucher();
       } catch (e) {
         setError((e as Error).message);
+      } finally {
+        setPosting(false);
+        setBudgetOverrideOpen(false);
+        setBudgetOverrideReason("");
       }
     },
     [voucher, loadVoucher],
   );
 
-  function requestAction(action: string) {
+  async function requestAction(action: string) {
     if (ACTIONS_NEEDING_REASON.has(action)) {
       setPendingAction(action);
+      return;
+    }
+    if (action === "post" && voucher) {
+      setError(null);
+      setSuccess(null);
+      try {
+        setPosting(true);
+        const pre = await api.voucherPostPreflight(voucher.id);
+        setBudgetPreflight(pre);
+        if (pre.warnings?.length || pre.status === "near_limit" || pre.status === "exceeded") {
+          // Surface banner immediately; still allow warn-mode post below.
+        }
+        if (pre.can_post === false || (pre.mode === "block" && pre.status === "exceeded")) {
+          setBudgetOverrideOpen(true);
+          return;
+        }
+        if (pre.warnings?.length && (pre.mode === "warn" || pre.status === "near_limit" || pre.status === "exceeded")) {
+          const ok = window.confirm(
+            `${pre.warning_message || pre.warnings.join("\n")}\n\nPost this voucher anyway?`,
+          );
+          if (!ok) return;
+        }
+        await runAction("post", "");
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setPosting(false);
+      }
       return;
     }
     void runAction(action, "");
@@ -322,6 +361,31 @@ export function VoucherDetailPage() {
 
       {error ? <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
       {success ? <div className="rounded-lg border border-status-success/30 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
+      {budgetPreflight &&
+      (budgetPreflight.status === "near_limit" ||
+        budgetPreflight.status === "exceeded" ||
+        (budgetPreflight.warnings?.length ?? 0) > 0) ? (
+        <div
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            budgetPreflight.status === "exceeded"
+              ? "border-status-danger/30 bg-status-danger-subtle text-status-danger-foreground"
+              : "border-status-warning/30 bg-status-warning-subtle text-status-warning-foreground"
+          }`}
+        >
+          <div className="font-semibold">
+            Budget {budgetPreflight.status === "exceeded" ? "exceeded" : "near limit"}
+            {budgetPreflight.enforcement_mode || budgetPreflight.mode
+              ? ` · Enforcement: ${budgetPreflight.enforcement_mode || budgetPreflight.mode}`
+              : ""}
+          </div>
+          <p className="mt-1 text-xs">
+            {budgetPreflight.warning_message || budgetPreflight.warnings?.join(" ") || "Review budget utilization before posting."}
+          </p>
+          {budgetPreflight.remaining != null ? (
+            <p className="mt-1 text-xs tabular-nums">Remaining after this voucher: {budgetPreflight.remaining}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       <LinkedRecordsSection title="Linked records" columns={linkedColumns} />
 
@@ -540,7 +604,35 @@ export function VoucherDetailPage() {
         <div className="rounded-xl border border-border bg-surface-raised p-5">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-text-secondary">Bill-Wise Details</h3>
-            {voucher.status === "POSTED" && hasBillWiseLines ? (
+            <div className="flex flex-wrap gap-2">
+              {(voucher.voucher_type || "").toUpperCase() === "RECEIPT" ||
+              (voucher.voucher_type || "").toUpperCase() === "PAYMENT" ? (
+                <button
+                  type="button"
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-subtle"
+                  onClick={async () => {
+                    try {
+                      // FIFO auto-allocate against party ledger (requires party_ledger_enabled)
+                      const partyLine = (voucher.lines || []).find((l) => l.account_id);
+                      if (!partyLine) throw new Error("No party account line on this voucher");
+                      const ledgers = await api.listPartyLedgers({ page_size: 200 });
+                      const match = ledgers.items.find((p) => p.ledger_account_id === partyLine.account_id);
+                      if (!match) throw new Error("No party ledger linked to this voucher account");
+                      const allocs = await api.autoAllocatePartyLedger({
+                        party_ledger_id: match.id,
+                        voucher_id: voucher.id,
+                        method: "FIFO",
+                      });
+                      setSuccess(`Party ledger FIFO allocated ${allocs.length} bill(s).`);
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                >
+                  Auto-allocate FIFO (party ledger)
+                </button>
+              ) : null}
+              {voucher.status === "POSTED" && hasBillWiseLines ? (
               <button
                 type="button"
                 className="rounded-lg border border-brand-primary/30 bg-brand-primary/10 px-3 py-1.5 text-xs font-medium text-brand-primary hover:bg-brand-primary/20"
@@ -557,6 +649,7 @@ export function VoucherDetailPage() {
                 Auto-Create Bill References
               </button>
             ) : null}
+            </div>
           </div>
 
           {billRefs.length > 0 ? (
@@ -683,10 +776,11 @@ export function VoucherDetailPage() {
           <button
             key={action}
             type="button"
-            className="rounded-lg border border-border-strong px-4 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
-            onClick={() => requestAction(action)}
+            disabled={posting && action === "post"}
+            className="rounded-lg border border-border-strong px-4 py-2 text-sm text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
+            onClick={() => void requestAction(action)}
           >
-            {ACTION_LABEL[action] ?? action}
+            {action === "post" && posting ? "Posting…" : ACTION_LABEL[action] ?? action}
           </button>
         ))}
         {voucher.status !== "POSTED" && voucher.status !== "REVERSED" ? (
@@ -735,6 +829,51 @@ export function VoucherDetailPage() {
           void runAction(a, reason);
         }}
       />
+
+      {budgetOverrideOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl border border-border bg-surface-raised p-4 shadow-xl">
+            <h3 className="text-base font-semibold text-text-primary">Budget override required</h3>
+            <p className="mt-2 text-sm text-text-secondary">
+              Posting is blocked because this voucher exceeds the FINAL budget for the cost center / account.
+              You need <code className="text-xs">finance.budget_override</code> and a mandatory reason.
+            </p>
+            {budgetPreflight?.warning_message ? (
+              <p className="mt-2 rounded border border-status-danger/20 bg-status-danger-subtle px-2 py-1.5 text-xs text-status-danger-foreground">
+                {budgetPreflight.warning_message}
+              </p>
+            ) : null}
+            <label className="mt-3 block text-xs font-medium text-text-muted">Override reason</label>
+            <textarea
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm"
+              rows={3}
+              value={budgetOverrideReason}
+              onChange={(e) => setBudgetOverrideReason(e.target.value)}
+              placeholder="Why is this over-budget spend allowed?"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-state-hover"
+                onClick={() => {
+                  setBudgetOverrideOpen(false);
+                  setBudgetOverrideReason("");
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={posting || !budgetOverrideReason.trim()}
+                className="rounded-lg bg-brand-primary px-3 py-1.5 text-sm text-brand-primary-foreground disabled:opacity-50"
+                onClick={() => void runAction("post", budgetOverrideReason.trim(), { budget_override: true })}
+              >
+                {posting ? "Posting…" : "Override & post"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

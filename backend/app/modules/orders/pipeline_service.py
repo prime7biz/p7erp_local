@@ -220,7 +220,20 @@ async def _has_production(db: AsyncSession, tenant_id: int, order_id: int) -> bo
             ManufacturingWorkOrder.order_id == order_id,
         )
     )
-    return (r2.scalar() or 0) > 0
+    if (r2.scalar() or 0) > 0:
+        return True
+    try:
+        from app.models import HourlyProductionEntry
+
+        r3 = await db.execute(
+            select(func.count()).select_from(HourlyProductionEntry).where(
+                HourlyProductionEntry.tenant_id == tenant_id,
+                HourlyProductionEntry.order_id == order_id,
+            )
+        )
+        return (r3.scalar() or 0) > 0
+    except Exception:
+        return False
 
 
 async def _has_shipped(db: AsyncSession, tenant_id: int, order_id: int) -> bool:
@@ -238,6 +251,23 @@ async def _has_shipped(db: AsyncSession, tenant_id: int, order_id: int) -> bool:
 
 
 async def _has_payment(db: AsyncSession, tenant_id: int, order_id: int) -> bool:
+    """Balance-based payment check.
+
+    Prefer ISSUED commercial invoice outstanding (posted allocations), then EXPORT ISSUED
+    proforma outstanding. When neither is linked, fall back to legacy: any POSTED RECEIPT
+    on the order/trade case.
+    """
+    from app.modules.commercial.commercial_invoice_service import order_has_fully_paid_commercial_invoice
+    from app.modules.commercial.proforma_receipt_service import order_has_fully_paid_proforma
+
+    ci_paid = await order_has_fully_paid_commercial_invoice(db, tenant_id=tenant_id, order_id=order_id)
+    if ci_paid is not None:
+        return ci_paid
+
+    pi_paid = await order_has_fully_paid_proforma(db, tenant_id=tenant_id, order_id=order_id)
+    if pi_paid is not None:
+        return pi_paid
+
     r = await db.execute(
         select(func.count())
         .select_from(Voucher)
@@ -399,6 +429,61 @@ async def auto_advance_order_pipeline(
     return new_stage
 
 
+async def compute_next_required_action(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    order_id: int,
+    current_stage: str | None,
+    tna_warnings: list[str],
+) -> dict[str, Any] | None:
+    """Human-facing next step from pipeline stage + earliest open TNA action."""
+    if tna_warnings:
+        return {
+            "kind": "tna",
+            "label": tna_warnings[0],
+            "href": "/app/followup",
+            "pipeline_stage": current_stage,
+        }
+    q = (
+        select(OrderFollowupAction)
+        .where(
+            OrderFollowupAction.tenant_id == tenant_id,
+            OrderFollowupAction.order_id == order_id,
+            OrderFollowupAction.is_active.is_(True),
+            OrderFollowupAction.status.notin_(("completed", "approved", "cancelled")),
+        )
+        .order_by(OrderFollowupAction.planned_date.asc().nulls_last(), OrderFollowupAction.sequence_no, OrderFollowupAction.id)
+        .limit(1)
+    )
+    action = (await db.execute(q)).scalar_one_or_none()
+    if action:
+        return {
+            "kind": "tna",
+            "label": action.title,
+            "href": "/app/followup",
+            "planned_date": action.planned_date.isoformat() if action.planned_date else None,
+            "pipeline_stage": current_stage,
+            "action_id": action.id,
+        }
+    stage = (current_stage or "").upper()
+    stage_hints: dict[str, tuple[str, str]] = {
+        "ORDER_CONFIRMED": ("Create / approve order BOM", "/app/bom/orders"),
+        "PI_ISSUED": ("Receive LC (or mark N/A for local)", "/app/commercial"),
+        "LC_RECEIVED": ("Approve / freeze order BOM", "/app/bom/orders"),
+        "BOM_CREATED": ("Generate purchase orders from BOM", "/app/inventory/purchase-orders"),
+        "PO_ISSUED": ("Receive GRN for materials", "/app/inventory/goods-receiving"),
+        "RM_RECEIVED": ("Allocate line / start production", "/app/production/planning"),
+        "IN_PRODUCTION": ("Post delivery challan when ready", "/app/inventory/delivery-challans"),
+        "SHIPPED": ("Record payment receipt", "/app/accounts"),
+        "PAYMENT_RECEIVED": ("Confirm order completed", "/app/orders"),
+    }
+    if stage in stage_hints:
+        label, href = stage_hints[stage]
+        return {"kind": "pipeline", "label": label, "href": href, "pipeline_stage": stage}
+    return None
+
+
 async def build_milestone_payload(
     db: AsyncSession,
     *,
@@ -453,6 +538,14 @@ async def build_milestone_payload(
             entry["timestamp"] = ts_map[stage].isoformat()
         steps.append(entry)
 
+    next_action = await compute_next_required_action(
+        db,
+        tenant_id=tenant_id,
+        order_id=order_id,
+        current_stage=current,
+        tna_warnings=tna_warnings,
+    )
+
     return {
         "pipeline_status": order.pipeline_status,
         "rm_inhouse_pct": float(rm_pct),
@@ -460,4 +553,5 @@ async def build_milestone_payload(
         "tna_warnings": tna_warnings,
         "pipeline_na_steps": list(na),
         "order_type": order.order_type,
+        "next_required_action": next_action,
     }

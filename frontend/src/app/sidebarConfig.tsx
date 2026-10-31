@@ -32,7 +32,6 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   Activity,
-  MessageSquare,
   Zap,
   UserCheck,
   Landmark,
@@ -53,6 +52,11 @@ import {
   SlidersHorizontal,
   Droplets,
   PlusCircle,
+  Sparkles,
+  LifeBuoy,
+  Recycle,
+  GitBranch,
+  Percent,
 } from "lucide-react";
 
 export type TenantTypeFilter = "manufacturer" | "buying_house" | "both";
@@ -72,8 +76,12 @@ export interface NavItem {
   hideWhenTradeDisabled?: boolean;
   /** Show only when `me.feature_flags[this key] === true` (e.g. `control_tower_enabled`). */
   requiresFeatureFlag?: string;
+  /** Show when any of these feature flags is true (OR). */
+  requiresAnyFeatureFlag?: string[];
   /** With `productionUnitKey: "knitting"`, also require `me.feature_flags.knitting_enabled === true` (hub page). */
   requiresKnittingTenantFeature?: boolean;
+  /** Hide when `me.feature_flags[this key] === false` (default-on flags such as `mis_reports_enabled`). */
+  hideWhenFeatureFlagFalse?: string;
 }
 
 /** Nested groups under a section (e.g. HR sub-menus). */
@@ -122,9 +130,13 @@ export function isNavItemVisibleForTenant(
   if (item.requiresFeatureFlag) {
     if (!featureFlags || featureFlags[item.requiresFeatureFlag] !== true) return false;
   }
+  if (item.requiresAnyFeatureFlag && item.requiresAnyFeatureFlag.length > 0) {
+    if (!featureFlags || !item.requiresAnyFeatureFlag.some((k) => featureFlags[k] === true)) return false;
+  }
   if (item.requiresKnittingTenantFeature) {
     if (!featureFlags || featureFlags.knitting_enabled !== true) return false;
   }
+  if (item.hideWhenFeatureFlagFalse && featureFlags?.[item.hideWhenFeatureFlagFalse] === false) return false;
   return true;
 }
 
@@ -147,7 +159,7 @@ export const menuSections: MenuSection[] = [
   },
   {
     section: "Support",
-    icon: MessageSquare,
+    icon: LifeBuoy,
     items: [
       { icon: ClipboardList, label: "My tickets", href: `${PREFIX}/support/tickets` },
       { icon: PlusCircle, label: "New ticket", href: `${PREFIX}/support/tickets/new` },
@@ -156,24 +168,54 @@ export const menuSections: MenuSection[] = [
   {
     section: "Merchandising",
     icon: Shirt,
-    items: [
-      { icon: Users, label: "Customers", href: `${PREFIX}/customers` },
-      { icon: ClipboardList, label: "Inquiries", href: `${PREFIX}/inquiries` },
-      { icon: FileText, label: "Quotations", href: `${PREFIX}/quotations` },
-      { icon: ShoppingCart, label: "Orders", href: `${PREFIX}/orders` },
-      { icon: LayoutGrid, label: "Merch control tower", href: `${PREFIX}/merchandising/control-tower` },
-      { icon: Shirt, label: "Garment Styles", href: `${PREFIX}/merchandising/styles` },
-      { icon: FlaskConical, label: "Sample development", href: `${PREFIX}/merchandising/samples` },
-      { icon: Calculator, label: "BOM Builder", href: `${PREFIX}/bom` },
-      { icon: Target, label: "Consumption Plans", href: `${PREFIX}/bom/orders` },
-      { icon: TrendingUp, label: "Order Pipeline", href: `${PREFIX}/merchandising/pipeline` },
-      { icon: BarChart3, label: "Pipeline Analytics", href: `${PREFIX}/merchandising/pipeline-analytics` },
-      { icon: AlertTriangle, label: "Critical Alerts", href: `${PREFIX}/merchandising/alerts` },
-      { icon: BarChart3, label: "Wastage Report", href: `${PREFIX}/merchandising/wastage-report` },
-      { icon: ArrowRightLeft, label: "Consumption Recon", href: `${PREFIX}/merchandising/consumption-reconciliation` },
-      { icon: Activity, label: "Follow-up & Unified TNA", href: `${PREFIX}/followup` },
-      { icon: Users, label: "Parties", href: `${PREFIX}/parties` },
-      { icon: TrendingUp, label: "Document Flow", href: `${PREFIX}/flow` },
+    items: [],
+    subsections: [
+      {
+        label: "Sales",
+        items: [
+          { icon: Users, label: "Customers", href: `${PREFIX}/customers` },
+          { icon: ClipboardList, label: "Inquiries", href: `${PREFIX}/inquiries` },
+          { icon: FileText, label: "Quotations", href: `${PREFIX}/quotations` },
+          { icon: ShoppingCart, label: "Orders", href: `${PREFIX}/orders` },
+        ],
+      },
+      {
+        label: "Planning",
+        items: [
+          { icon: Target, label: "Consumption Plans", href: `${PREFIX}/bom/orders` },
+          { icon: Calculator, label: "BOM Builder", href: `${PREFIX}/bom` },
+          { icon: TrendingUp, label: "Order Pipeline", href: `${PREFIX}/merchandising/pipeline` },
+          {
+            icon: ArrowRightLeft,
+            label: "Consumption Recon",
+            href: `${PREFIX}/merchandising/consumption-reconciliation`,
+          },
+        ],
+      },
+      {
+        label: "Analytics",
+        items: [
+          {
+            icon: BarChart3,
+            label: "Pipeline Analytics",
+            href: `${PREFIX}/merchandising/pipeline-analytics`,
+          },
+          { icon: DollarSign, label: "Order Profitability", href: `${PREFIX}/merch/profitability` },
+          { icon: AlertTriangle, label: "Critical Alerts", href: `${PREFIX}/merchandising/alerts` },
+          { icon: Recycle, label: "Wastage Report", href: `${PREFIX}/merchandising/wastage-report` },
+        ],
+      },
+      {
+        label: "Operations",
+        items: [
+          { icon: Shirt, label: "Garment Styles", href: `${PREFIX}/merchandising/styles` },
+          { icon: FlaskConical, label: "Sample Development", href: `${PREFIX}/merchandising/samples` },
+          { icon: LayoutGrid, label: "Control Tower", href: `${PREFIX}/merchandising/control-tower` },
+          { icon: Activity, label: "Follow-up TNA", href: `${PREFIX}/followup` },
+          { icon: Building2, label: "Parties", href: `${PREFIX}/parties` },
+          { icon: GitBranch, label: "Document Flow", href: `${PREFIX}/flow` },
+        ],
+      },
     ],
   },
   {
@@ -184,6 +226,7 @@ export const menuSections: MenuSection[] = [
       { icon: Globe, label: "Export Cases", href: `${PREFIX}/commercial/export-cases` },
       { icon: BookOpen, label: "Master Contracts", href: `${PREFIX}/commercial/master-contracts` },
       { icon: FileText, label: "Proforma Invoices", href: `${PREFIX}/commercial/proforma-invoices` },
+      { icon: FileText, label: "Commercial Invoices", href: `${PREFIX}/commercial/invoices` },
       { icon: ArrowRightLeft, label: "BTB LCs", href: `${PREFIX}/commercial/btb-lcs` },
       {
         icon: FolderTree,
@@ -230,6 +273,18 @@ export const menuSections: MenuSection[] = [
         items: [
           { icon: Package, label: "Stock Master", href: `${PREFIX}/inventory` },
           { icon: FolderTree, label: "Stock Groups", href: `${PREFIX}/inventory/stock-groups` },
+          {
+            icon: Package,
+            label: "Stock Items (hierarchy)",
+            href: `${PREFIX}/inventory/stock-items`,
+            requiresFeatureFlag: "stock_hierarchy_enabled",
+          },
+          {
+            icon: Layers,
+            label: "Godown Stock",
+            href: `${PREFIX}/inventory/godown-stock`,
+            requiresFeatureFlag: "stock_hierarchy_enabled",
+          },
           { icon: Building2, label: "Vendors", href: `${PREFIX}/inventory/vendors` },
         ],
       },
@@ -242,9 +297,119 @@ export const menuSections: MenuSection[] = [
         ],
       },
       {
+        label: "Planning & manufacturing",
+        items: [
+          {
+            icon: Gauge,
+            label: "MRP Run",
+            href: `${PREFIX}/inventory/mrp`,
+            requiresFeatureFlag: "mrp_engine_enabled",
+          },
+          {
+            icon: AlertTriangle,
+            label: "Reorder Suggestions",
+            href: `${PREFIX}/inventory/reorder-suggestions`,
+            requiresFeatureFlag: "auto_reorder_enabled",
+          },
+          {
+            icon: ArrowRightLeft,
+            label: "Inter-Dept Transfers",
+            href: `${PREFIX}/inventory/idt`,
+            requiresFeatureFlag: "inter_department_transfer_enabled",
+          },
+          {
+            icon: ClipboardCheck,
+            label: "Receive IDT",
+            href: `${PREFIX}/inventory/idt-receive`,
+            requiresFeatureFlag: "inter_department_transfer_enabled",
+          },
+          {
+            icon: BarChart3,
+            label: "Process Loss Report",
+            href: `${PREFIX}/inventory/process-loss-report`,
+            requiresFeatureFlag: "process_loss_tracking_enabled",
+          },
+          {
+            icon: FileBarChart,
+            label: "Post-Costing",
+            href: `${PREFIX}/inventory/post-costing`,
+            requiresFeatureFlag: "process_loss_tracking_enabled",
+          },
+          {
+            icon: Settings,
+            label: "Process Loss Standards",
+            href: `${PREFIX}/inventory/process-loss-settings`,
+            requiresFeatureFlag: "process_loss_tracking_enabled",
+          },
+          {
+            icon: ClipboardCheck,
+            label: "GRN Inspection",
+            href: `${PREFIX}/inventory/grn-inspection`,
+            requiresFeatureFlag: "grn_quality_inspection_enabled",
+          },
+          {
+            icon: BarChart3,
+            label: "Quality Dashboard",
+            href: `${PREFIX}/inventory/quality-dashboard`,
+            requiresFeatureFlag: "grn_quality_inspection_enabled",
+          },
+          {
+            icon: TrendingUp,
+            label: "Vendor Scorecard",
+            href: `${PREFIX}/inventory/vendor-scorecard`,
+            requiresFeatureFlag: "grn_quality_inspection_enabled",
+          },
+          {
+            icon: BarChart3,
+            label: "ABC Analysis",
+            href: `${PREFIX}/inventory/abc-analysis`,
+          },
+          {
+            icon: Calculator,
+            label: "EOQ",
+            href: `${PREFIX}/inventory/eoq`,
+          },
+          {
+            icon: Clock,
+            label: "Stock Aging",
+            href: `${PREFIX}/inventory/stock-aging`,
+          },
+          {
+            icon: ClipboardCheck,
+            label: "Cycle Count",
+            href: `${PREFIX}/inventory/cycle-count`,
+            requiresFeatureFlag: "cycle_counting_enabled",
+          },
+          {
+            icon: Package,
+            label: "Serial Tracking",
+            href: `${PREFIX}/inventory/serials`,
+            requiresFeatureFlag: "serial_tracking_enabled",
+          },
+          {
+            icon: Layers,
+            label: "Kit Builder",
+            href: `${PREFIX}/inventory/kits`,
+            requiresFeatureFlag: "kitting_enabled",
+          },
+          {
+            icon: Truck,
+            label: "Consignment Stock",
+            href: `${PREFIX}/inventory/consignment`,
+            requiresFeatureFlag: "consignment_stock_enabled",
+          },
+        ],
+      },
+      {
         label: "Stock control",
         items: [
           { icon: ArrowRightLeft, label: "Transfers", href: `${PREFIX}/inventory/warehouse-transfers` },
+          {
+            icon: ArrowRightLeft,
+            label: "Batch Stock Transfer",
+            href: `${PREFIX}/inventory/stock-transfers`,
+            requiresFeatureFlag: "stock_hierarchy_enabled",
+          },
           { icon: ClipboardList, label: "Adjustments", href: `${PREFIX}/inventory/stock-adjustments` },
           { icon: Shield, label: "Consumption Control", href: `${PREFIX}/inventory/consumption-control` },
           { icon: FileBarChart, label: "Reconciliation", href: `${PREFIX}/inventory/reconciliation` },
@@ -296,7 +461,7 @@ export const menuSections: MenuSection[] = [
           { icon: BookOpen, label: "Operations library", href: `${PREFIX}/production/ie/operations` },
           { icon: ClipboardList, label: "Operation bulletins", href: `${PREFIX}/production/ie/bulletins` },
           { icon: SlidersHorizontal, label: "Line balancing", href: `${PREFIX}/production/ie/line-balance` },
-          { icon: Gauge, label: "IE & Efficiency (legacy)", href: `${PREFIX}/production/ie` },
+          { icon: Gauge, label: "IE & Efficiency", href: `${PREFIX}/production/ie` },
         ],
       },
       {
@@ -377,7 +542,7 @@ export const menuSections: MenuSection[] = [
       {
         label: "Samples & TNA",
         items: [
-          { icon: Shirt, label: "Samples", href: `${PREFIX}/samples/requests` },
+          { icon: Shirt, label: "Sample Requests", href: `${PREFIX}/samples/requests` },
           { icon: Clock, label: "TNA Dashboard", href: `${PREFIX}/tna/dashboard` },
           { icon: ClipboardList, label: "TNA Templates", href: `${PREFIX}/tna/templates` },
           { icon: Calendar, label: "TNA Plans", href: `${PREFIX}/tna/plans` },
@@ -394,14 +559,14 @@ export const menuSections: MenuSection[] = [
       { icon: FlaskConical, label: "Lab Tests", href: `${PREFIX}/quality/lab-tests` },
       { icon: AlertTriangle, label: "CAPA", href: `${PREFIX}/quality/capa` },
       { icon: RotateCcw, label: "Returns", href: `${PREFIX}/quality/returns` },
-      { icon: CheckSquare, label: "Quality (Legacy)", href: `${PREFIX}/quality/qc` },
+      { icon: CheckSquare, label: "QC (Classic)", href: `${PREFIX}/quality/qc` },
     ],
   },
   {
     section: "AI Tools",
-    icon: MessageSquare,
+    icon: Sparkles,
     items: [
-      { icon: MessageSquare, label: "AI Assistant", href: `${PREFIX}/ai/assistant` },
+      { icon: Sparkles, label: "AI Assistant", href: `${PREFIX}/ai/assistant` },
       { icon: Zap, label: "AI Automation", href: `${PREFIX}/ai/automation` },
       { icon: Activity, label: "AI Predictions", href: `${PREFIX}/ai/predictions` },
       { icon: ClipboardList, label: "Weekly AI reports", href: `${PREFIX}/ai/weekly-reports` },
@@ -423,6 +588,16 @@ export const menuSections: MenuSection[] = [
           { icon: UserCog, label: "Designations", href: `${PREFIX}/hr/designations` },
           { icon: Factory, label: "Sections & Lines", href: `${PREFIX}/hr/sections` },
           { icon: UserCheck, label: "Employees", href: `${PREFIX}/hr/employees` },
+          {
+            icon: Sparkles,
+            label: "AI Onboarding",
+            href: `${PREFIX}/hr/employees/ai-onboard`,
+            requiresAnyFeatureFlag: [
+              "ocr_cv_extraction_enabled",
+              "ocr_id_extraction_enabled",
+              "ocr_medical_extraction_enabled",
+            ],
+          },
         ],
       },
       {
@@ -454,11 +629,18 @@ export const menuSections: MenuSection[] = [
         items: [
           { icon: Layers, label: "Components", href: `${PREFIX}/hr/payroll/components` },
           { icon: Layers, label: "Salary Structures", href: `${PREFIX}/hr/payroll/salary-structures` },
+          { icon: Users, label: "Structure Assignments", href: `${PREFIX}/hr/payroll/assignments` },
           { icon: Calendar, label: "Periods", href: `${PREFIX}/hr/payroll/periods` },
           { icon: DollarSign, label: "Runs", href: `${PREFIX}/hr/payroll/runs` },
           { icon: Banknote, label: "Advances & Loans", href: `${PREFIX}/hr/payroll/advances` },
           { icon: TrendingUp, label: "Bonuses", href: `${PREFIX}/hr/payroll/bonuses` },
           { icon: Landmark, label: "Accounting Config", href: `${PREFIX}/hr/payroll/accounting-config` },
+          {
+            icon: ShieldCheck,
+            label: "Statutory Config",
+            href: `${PREFIX}/hr/payroll/statutory`,
+            requiresFeatureFlag: "statutory_payroll_enabled",
+          },
           { icon: ShieldCheck, label: "Approvals", href: `${PREFIX}/hr/payroll/approvals` },
           { icon: FileSpreadsheet, label: "Payslips", href: `${PREFIX}/hr/payroll/payslips` },
         ],
@@ -489,7 +671,18 @@ export const menuSections: MenuSection[] = [
       {
         label: "Analytics",
         items: [
-          { icon: Shield, label: "Compliance", href: `${PREFIX}/hr/compliance` },
+          { icon: Shield, label: "Compliance", href: `${PREFIX}/hr/compliance`, requiresFeatureFlag: "compliance_tracking_enabled" },
+          {
+            icon: Sparkles,
+            label: "AI Insights",
+            href: `${PREFIX}/hr/ai-insights`,
+            requiresAnyFeatureFlag: [
+              "ai_attendance_analysis_enabled",
+              "ai_turnover_prediction_enabled",
+              "ai_payroll_anomaly_detection_enabled",
+              "ai_compliance_risk_prediction_enabled",
+            ],
+          },
           { icon: BarChart3, label: "HR Reports", href: `${PREFIX}/hr/reports` },
         ],
       },
@@ -518,6 +711,89 @@ export const menuSections: MenuSection[] = [
           { icon: FileSpreadsheet, label: "Voucher Print", href: `${PREFIX}/accounts/vouchers/print` },
           { icon: ClipboardList, label: "Voucher Approvals", href: `${PREFIX}/accounts/vouchers/approval-queue` },
           { icon: FileText, label: "Bills", href: `${PREFIX}/accounts/outstanding-bills` },
+          {
+            icon: BookOpen,
+            label: "Party Ledgers",
+            href: `${PREFIX}/finance/party-ledgers`,
+            requiresFeatureFlag: "party_ledger_enabled",
+          },
+          {
+            icon: FileSpreadsheet,
+            label: "Tax Ledgers",
+            href: `${PREFIX}/finance/tax-ledgers`,
+            requiresFeatureFlag: "gst_system_enabled",
+          },
+          {
+            icon: FileBarChart,
+            label: "GST Returns",
+            href: `${PREFIX}/finance/gst/returns`,
+            requiresFeatureFlag: "gst_system_enabled",
+          },
+          {
+            icon: Settings,
+            label: "Tax Settings",
+            href: `${PREFIX}/finance/gst/settings`,
+            requiresFeatureFlag: "gst_system_enabled",
+          },
+          {
+            icon: SlidersHorizontal,
+            label: "Voucher types (advanced)",
+            href: `${PREFIX}/finance/voucher-types`,
+          },
+          {
+            icon: Layers,
+            label: "Voucher Classes",
+            href: `${PREFIX}/finance/voucher-classes`,
+            requiresFeatureFlag: "voucher_class_enabled",
+          },
+          {
+            icon: RotateCcw,
+            label: "Recurring Vouchers",
+            href: `${PREFIX}/finance/recurring-vouchers`,
+            requiresFeatureFlag: "recurring_voucher_enabled",
+          },
+          {
+            icon: Calendar,
+            label: "Post-dated Register",
+            href: `${PREFIX}/finance/registers/post-dated`,
+            requiresFeatureFlag: "post_dated_voucher_enabled",
+          },
+          {
+            icon: FileText,
+            label: "Memorandum Register",
+            href: `${PREFIX}/finance/registers/memorandum`,
+            requiresFeatureFlag: "memorandum_voucher_enabled",
+          },
+          {
+            icon: PlusCircle,
+            label: "Credit Note",
+            href: `${PREFIX}/finance/credit-notes/new`,
+            requiresFeatureFlag: "credit_debit_note_enabled",
+          },
+          {
+            icon: FileSpreadsheet,
+            label: "Debit Note",
+            href: `${PREFIX}/finance/debit-notes/new`,
+            requiresFeatureFlag: "credit_debit_note_enabled",
+          },
+          {
+            icon: ArrowRightLeft,
+            label: "Stock Transfer Voucher",
+            href: `${PREFIX}/finance/stock-transfer-vouchers/new`,
+            requiresFeatureFlag: "stock_transfer_voucher_enabled",
+          },
+          {
+            icon: Percent,
+            label: "TDS Settings",
+            href: `${PREFIX}/finance/tds`,
+            requiresFeatureFlag: "tds_system_enabled",
+          },
+          {
+            icon: FileBarChart,
+            label: "TDS Reports",
+            href: `${PREFIX}/finance/tds/reports`,
+            requiresFeatureFlag: "tds_system_enabled",
+          },
           { icon: FileText, label: "Vendor bills (GRN)", href: `${PREFIX}/accounts/vendor-bills` },
           { icon: FileText, label: "Purchase & AP", href: `${PREFIX}/accounts/purchase-workflow` },
         ],
@@ -545,6 +821,36 @@ export const menuSections: MenuSection[] = [
           { icon: Activity, label: "Voucher Analytics", href: `${PREFIX}/accounts/reports/voucher-analytics` },
           { icon: PieChart, label: "Group Summary", href: `${PREFIX}/accounts/reports/group-summary` },
           { icon: Activity, label: "Ratio Analysis", href: `${PREFIX}/accounts/reports/ratio-analysis` },
+          {
+            icon: Gauge,
+            label: "Financial MIS Dashboard",
+            href: `${PREFIX}/finance/mis`,
+            hideWhenFeatureFlagFalse: "mis_reports_enabled",
+          },
+          {
+            icon: GitBranch,
+            label: "Fund Flow",
+            href: `${PREFIX}/finance/mis/fund-flow`,
+            hideWhenFeatureFlagFalse: "mis_reports_enabled",
+          },
+          {
+            icon: Activity,
+            label: "MIS Ratios",
+            href: `${PREFIX}/finance/mis/ratios`,
+            hideWhenFeatureFlagFalse: "mis_reports_enabled",
+          },
+          {
+            icon: FileSpreadsheet,
+            label: "Comparative",
+            href: `${PREFIX}/finance/mis/comparative`,
+            hideWhenFeatureFlagFalse: "mis_reports_enabled",
+          },
+          {
+            icon: TrendingUp,
+            label: "Cash Scenarios",
+            href: `${PREFIX}/finance/mis/cash-scenarios`,
+            hideWhenFeatureFlagFalse: "mis_reports_enabled",
+          },
         ],
       },
       {

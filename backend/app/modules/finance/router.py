@@ -4,6 +4,7 @@ import csv
 import calendar
 import hashlib
 import json
+import logging
 import secrets
 from collections import defaultdict
 from io import StringIO
@@ -14,25 +15,30 @@ from typing import Iterable, Literal
 # Rollup bucket for contract / CM reporting (chart_of_accounts.cost_nature, voucher_lines.cost_nature_override).
 COST_NATURE_CODES = frozenset({"MATERIAL", "CM", "OTHER", "NON_OPERATING"})
 CostNatureLiteral = Literal["MATERIAL", "CM", "OTHER", "NON_OPERATING"]
-from urllib.error import URLError
-from urllib.request import urlopen
-
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import Response as BytesResponse
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
 from app.common.money_schema import MoneyLineStr, MoneyStrNonNeg, MoneyStrNonNegOpt, RateStrNonNeg, RateStrNonNegOpt
-from app.common.orm_numeric import decimal_to_money_response, decimal_to_rate_response
+from app.common.orm_numeric import (
+    decimal_money_passthrough,
+    decimal_rate_passthrough,
+    decimal_to_money_response,
+    decimal_to_rate_response,
+)
 from sqlalchemy import case, cast, func, Numeric, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.permissions import (
     PERMISSION_FINANCE_AP_POSTING_APPROVE,
+    PERMISSION_FINANCE_BUDGET_OVERRIDE,
     assert_delegate_manager_or_permission,
     require_internal_permission,
 )
 from app.common.authz import get_user_role_scoped_to_tenant
+from app.modules.finance.advanced_voucher_service import voucher_book_impact_applied, voucher_in_books_clause
+from app.modules.finance.budget_enforcement_service import evaluate_voucher_budget
 from app.common.codegen import next_tenant_code
 from app.modules.finance.voucher_controls import (
     allocate_series_voucher_number,
@@ -91,6 +97,8 @@ from app.models import (
     Vendor,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
     prefix="/finance",
     tags=["finance"],
@@ -105,6 +113,11 @@ DEFAULT_VOUCHER_TYPES: list[tuple[str, str]] = [
     ("MJ", "Material Journal"),
     ("PJ", "Purchase Journal"),
     ("LCJ", "LC Journal"),
+    ("CREDIT_NOTE", "Credit Note"),
+    ("DEBIT_NOTE", "Debit Note"),
+    ("STOCK_TRANSFER", "Stock Transfer"),
+    ("MEMORANDUM", "Memorandum"),
+    ("OPTIONAL", "Optional"),
 ]
 
 VOUCHER_WORKFLOW: dict[str, set[str]] = {
@@ -113,7 +126,9 @@ VOUCHER_WORKFLOW: dict[str, set[str]] = {
     "CHECKED": {"RECOMMENDED", "REJECTED"},
     "RECOMMENDED": {"APPROVED", "REJECTED"},
     "APPROVED": {"POSTED", "REJECTED"},
-    "POSTED": {"REVERSED"},
+    # POSTED leaves only via POST /vouchers/{id}/reverse or /cancel-posting, which
+    # undo the book impact; a bare status flip would leave balances applied.
+    "POSTED": set(),
     "REJECTED": {"DRAFT"},
     "CANCELLED": set(),
     "REVERSED": set(),
@@ -185,17 +200,28 @@ async def _lookup_exchange_rate(
         return max(_to_float(latest.exchange_rate), 0.000001), "manual-rate-table", datetime.utcnow()
 
     try:
-        with urlopen(f"https://open.er-api.com/v6/latest/{from_code}", timeout=5) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        import httpx
+
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"https://open.er-api.com/v6/latest/{from_code}")
+            response.raise_for_status()
+            payload = response.json()
         rates = payload.get("rates") if isinstance(payload, dict) else {}
         raw_rate = rates.get(to_code) if isinstance(rates, dict) else None
         live_rate = float(raw_rate)
         if live_rate > 0:
             return live_rate, "open.er-api.com", datetime.utcnow()
-    except (URLError, TimeoutError, ValueError, TypeError, KeyError, OSError):
-        pass
+    except Exception:
+        logger.warning("live FX lookup failed %s->%s", from_code, to_code, exc_info=True)
 
-    return 1.0, "fallback-1.0", datetime.utcnow()
+    # A silent 1.0 would book e.g. USD 10,000 as BDT 10,000; make the user supply a rate.
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            f"No exchange rate available for {from_code} to {to_code}. "
+            "Enter the rate on the voucher or add it under Finance → Currency rates."
+        ),
+    )
 
 
 def _voucher_signature_payload(voucher: Voucher, lines: list[VoucherLine]) -> dict:
@@ -664,6 +690,11 @@ class FxReceiptOut(BaseModel):
     status: str
     notes: str | None
 
+    _fx_money = field_validator("fc_amount", "base_amount", "settled_amount", mode="before")(
+        decimal_money_passthrough
+    )
+    _fx_rate = field_validator("rate_to_base", mode="before")(decimal_rate_passthrough)
+
     class Config:
         from_attributes = True
 
@@ -693,6 +724,11 @@ class BillOut(BaseModel):
     currency: str
     status: str
     notes: str | None
+
+    @field_validator("amount", "paid_amount", mode="before")
+    @classmethod
+    def _coerce_bill_money(cls, value: object) -> str:
+        return decimal_to_money_response(value)
 
     class Config:
         from_attributes = True
@@ -775,6 +811,8 @@ class BankAccountOut(BankAccountBody):
     id: int
     tenant_id: int
 
+    _bank_money = field_validator("opening_balance", "current_balance", mode="before")(decimal_money_passthrough)
+
     class Config:
         from_attributes = True
 
@@ -801,6 +839,15 @@ class BankReconciliationOut(BaseModel):
     finalized_by: int | None
     finalize_reason: str | None
     created_by: int | None
+
+    @field_validator("statement_balance", "book_balance", "difference_amount", mode="before")
+    @classmethod
+    def _coerce_money_fields(cls, value: object) -> str:
+        if value is None:
+            return "0.0000"
+        if isinstance(value, str):
+            return value
+        return decimal_to_money_response(value)
 
     class Config:
         from_attributes = True
@@ -832,6 +879,24 @@ class PaymentRunItemOut(PaymentRunItemBody):
     payment_run_id: int
     status: str
 
+    @field_validator("amount", "base_amount", mode="before")
+    @classmethod
+    def _coerce_money_fields(cls, value: object) -> str:
+        if value is None:
+            return "0.0000"
+        if isinstance(value, str):
+            return value
+        return decimal_to_money_response(value)
+
+    @field_validator("fx_rate_to_base", mode="before")
+    @classmethod
+    def _coerce_rate_field(cls, value: object) -> str:
+        if value is None:
+            return "1.000000"
+        if isinstance(value, str):
+            return value
+        return decimal_to_rate_response(value)
+
     class Config:
         from_attributes = True
 
@@ -850,6 +915,15 @@ class PaymentRunOut(BaseModel):
     remarks: str | None
     created_by: int | None
     items: list[PaymentRunItemOut]
+
+    @field_validator("total_amount", mode="before")
+    @classmethod
+    def _coerce_total_amount(cls, value: object) -> str:
+        if value is None:
+            return "0.0000"
+        if isinstance(value, str):
+            return value
+        return decimal_to_money_response(value)
 
 
 class SettlementAuditRow(BaseModel):
@@ -945,6 +1019,10 @@ class BankStatementLineOut(BankStatementLineBody):
     reconciliation_id: int
     matched_payment_run_id: int | None
     matched_status: str
+
+    _stmt_money = field_validator("debit_amount", "credit_amount", "running_balance", mode="before")(
+        decimal_money_passthrough
+    )
 
     class Config:
         from_attributes = True
@@ -1050,6 +1128,41 @@ async def _budget_out(db: AsyncSession, budget: Budget) -> BudgetOut:
     return _budget_to_out(budget, line_rows)
 
 
+def _bank_reconciliation_to_out(row: BankReconciliation) -> BankReconciliationOut:
+    return BankReconciliationOut(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        bank_account_id=row.bank_account_id,
+        statement_date=row.statement_date,
+        statement_balance=decimal_to_money_response(row.statement_balance),
+        book_balance=decimal_to_money_response(row.book_balance),
+        difference_amount=decimal_to_money_response(row.difference_amount),
+        status=row.status,
+        notes=row.notes,
+        is_finalized=row.is_finalized,
+        finalized_at=row.finalized_at,
+        finalized_by=row.finalized_by,
+        finalize_reason=row.finalize_reason,
+        created_by=row.created_by,
+    )
+
+
+def _payment_run_item_to_out(item: PaymentRunItem) -> PaymentRunItemOut:
+    return PaymentRunItemOut(
+        id=item.id,
+        tenant_id=item.tenant_id,
+        payment_run_id=item.payment_run_id,
+        bill_id=item.bill_id,
+        party_name=item.party_name,
+        amount=decimal_to_money_response(item.amount),
+        source_currency=item.source_currency,
+        fx_rate_to_base=decimal_to_rate_response(item.fx_rate_to_base),
+        base_amount=decimal_to_money_response(item.base_amount),
+        reference=item.reference,
+        status=item.status,
+    )
+
+
 def _payment_run_to_out(run: PaymentRun, items: list[PaymentRunItem]) -> PaymentRunOut:
     return PaymentRunOut(
         id=run.id,
@@ -1059,12 +1172,12 @@ def _payment_run_to_out(run: PaymentRun, items: list[PaymentRunItem]) -> Payment
         bank_account_id=run.bank_account_id,
         base_currency=run.base_currency,
         status=run.status,
-        total_amount=run.total_amount,
+        total_amount=decimal_to_money_response(run.total_amount),
         executed_voucher_id=run.executed_voucher_id,
         trade_case_id=run.trade_case_id,
         remarks=run.remarks,
         created_by=run.created_by,
-        items=sorted(items, key=lambda x: x.id),
+        items=[_payment_run_item_to_out(item) for item in sorted(items, key=lambda x: x.id)],
     )
 
 
@@ -1223,6 +1336,58 @@ async def _lock_chart_accounts_for_subset(
     return {a.id: a for a in result.scalars().all()}
 
 
+async def _lock_voucher(db: AsyncSession, tenant_id: int, voucher_id: int) -> Voucher:
+    """Load a voucher with SELECT ... FOR UPDATE so concurrent post/reverse/cancel serialize.
+
+    populate_existing refreshes any copy already in the session, so status checks
+    after this call see the committed value, not a stale one.
+    """
+    row = (
+        await db.execute(
+            select(Voucher)
+            .where(Voucher.id == voucher_id, Voucher.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    return row
+
+
+async def _assert_open_period(db: AsyncSession, tenant_id: int, on_date: date, *, what: str = "this voucher date") -> None:
+    open_period = (
+        await db.execute(
+            select(AccountingPeriod.id).where(
+                AccountingPeriod.tenant_id == tenant_id,
+                AccountingPeriod.is_closed.is_(False),
+                AccountingPeriod.start_date <= on_date,
+                AccountingPeriod.end_date >= on_date,
+            )
+        )
+    ).scalars().first()
+    if not open_period:
+        raise HTTPException(status_code=400, detail=f"No open accounting period for {what}")
+
+
+async def _assert_no_facility_link(db: AsyncSession, tenant_id: int, voucher_id: int) -> None:
+    """Facility drawdowns/repayments have no automatic undo; block silent ledger/facility drift."""
+    from app.models.facility import FacilityTransaction
+
+    linked = (
+        await db.execute(
+            select(FacilityTransaction.id)
+            .where(FacilityTransaction.tenant_id == tenant_id, FacilityTransaction.voucher_id == voucher_id)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if linked is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="This voucher created a loan/facility transaction. Reverse it from the Facilities module instead.",
+        )
+
+
 async def _active_voucher_type_codes(db: AsyncSession, tenant_id: int) -> set[str]:
     persisted = list(
         (
@@ -1251,7 +1416,7 @@ def _assert_voucher_transition(current_status: str, next_status: str) -> None:
 
 @router.get("/account-groups", response_model=list[AccountGroupOut])
 async def list_account_groups(
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -1269,7 +1434,7 @@ async def list_account_groups(
 
 @router.get("/account-groups/hierarchy", response_model=list[AccountGroupHierarchyNode])
 async def list_account_groups_hierarchy(
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -2033,7 +2198,7 @@ async def coa_import(
 @router.get("/vouchers/types", response_model=list[VoucherTypeOut])
 async def list_voucher_types(
     active_only: bool = Query(default=False),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -2375,6 +2540,18 @@ async def create_voucher(
             "Possible duplicate risk: same fingerprint as posted voucher(s) "
             + ", ".join(str(v) for v in similar)
         )
+    # Sprint 3: optional auto GST lines (flag-gated; never blocks create)
+    try:
+        from app.modules.finance.gst_tax_hooks import maybe_auto_calculate_tax_on_voucher
+
+        await maybe_auto_calculate_tax_on_voucher(
+            db,
+            tenant.id,
+            row,
+            feature_flags=tenant.feature_flags,
+        )
+    except Exception:
+        pass
     await db.commit()
     await db.refresh(row)
     return await _voucher_out(db, row, control_warnings=control_warnings or None)
@@ -2496,6 +2673,17 @@ async def update_voucher(
         updated_lines.append(voucher_line)
 
     _apply_internal_signature(row, updated_lines)
+    try:
+        from app.modules.finance.gst_tax_hooks import maybe_auto_calculate_tax_on_voucher
+
+        await maybe_auto_calculate_tax_on_voucher(
+            db,
+            tenant.id,
+            row,
+            feature_flags=tenant.feature_flags,
+        )
+    except Exception:
+        pass
     await db.commit()
     await db.refresh(row)
     return await _voucher_out(db, row)
@@ -2523,72 +2711,229 @@ async def delete_voucher(
     return {"ok": True, "message": "Voucher deleted"}
 
 
+class VoucherStatusUpdateBody(BaseModel):
+    status: str
+    budget_override: bool = False
+    budget_override_reason: str | None = None
+
+
+class VoucherPostPreflightOut(BaseModel):
+    ok: bool
+    mode: str
+    remaining: float | None = None
+    warnings: list[str] = []
+    has_budget: bool = False
+    budget_amount: float | None = None
+    used_amount: float | None = None
+    pending_amount: float | None = None
+    projected: float | None = None
+    status: str = "within_budget"
+    enforcement_mode: str = "off"
+    can_post: bool = True
+    warning_message: str | None = None
+
+
+class VoucherPostBody(BaseModel):
+    budget_override: bool = False
+    budget_override_reason: str | None = None
+
+
+@router.post("/vouchers/{voucher_id}/post-preflight", response_model=VoucherPostPreflightOut)
+async def voucher_post_preflight(
+    voucher_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Check budget utilization before posting (does not change voucher status)."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(Voucher, voucher_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    line_rows = list(
+        (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all()
+    )
+    result = await evaluate_voucher_budget(
+        db,
+        tenant_id=tenant.id,
+        feature_flags=tenant.feature_flags,
+        voucher=row,
+        lines=line_rows,
+    )
+    return VoucherPostPreflightOut(
+        ok=result.ok,
+        mode=result.mode,
+        remaining=result.remaining,
+        warnings=result.warnings,
+        has_budget=result.has_budget,
+        budget_amount=result.budget_amount,
+        used_amount=result.used_amount,
+        pending_amount=result.pending_amount,
+        projected=result.projected,
+        status=result.status,
+        enforcement_mode=result.enforcement_mode or result.mode,
+        can_post=result.can_post,
+        warning_message=result.warning_message,
+    )
+
+
 @router.post("/vouchers/{voucher_id}/status", response_model=VoucherOut)
 async def update_voucher_status(
     voucher_id: int,
-    body: dict[str, str],
+    body: VoucherStatusUpdateBody,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = await db.get(Voucher, voucher_id)
-    if not row or row.tenant_id != tenant.id:
-        raise HTTPException(status_code=404, detail="Voucher not found")
-    next_status = (body.get("status") or "").strip().upper()
+    row = await _lock_voucher(db, tenant.id, voucher_id)
+    next_status = (body.status or "").strip().upper()
+    budget_override = bool(body.budget_override)
+    budget_override_reason = body.budget_override_reason
     allowed = set(VOUCHER_WORKFLOW.keys())
     if next_status not in allowed:
         raise HTTPException(status_code=400, detail="Invalid voucher status")
+    if next_status == "POSTED" and row.status == "POSTED":
+        raise HTTPException(status_code=409, detail="Voucher is already posted")
     if next_status != row.status:
         _assert_voucher_transition(row.status, next_status)
-    # Approval + posting transitions are restricted.
-    if next_status in {"CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REVERSED"} and next_status != row.status:
-        await _require_manager_or_admin(db, user, tenant.id)
+    # Approval, posting, rejection and cancellation are restricted; a creator may
+    # still cancel their own draft.
+    if next_status != row.status:
+        own_draft_cancel = (
+            next_status == "CANCELLED" and row.status == "DRAFT" and row.created_by == user.id
+        )
+        if next_status in {"CHECKED", "RECOMMENDED", "APPROVED", "POSTED", "REJECTED", "CANCELLED"} and not own_draft_cancel:
+            await _require_manager_or_admin(db, user, tenant.id)
     post_control_warnings: list[str] = []
+    from app.modules.finance.advanced_voucher_service import voucher_should_affect_books
+
+    affect_books = voucher_should_affect_books(row)
     if next_status == "POSTED" and row.status != "POSTED":
-        open_period = (
-            await db.execute(
-                select(AccountingPeriod).where(
-                    AccountingPeriod.tenant_id == tenant.id,
-                    AccountingPeriod.is_closed.is_(False),
-                    AccountingPeriod.start_date <= row.voucher_date,
-                    AccountingPeriod.end_date >= row.voucher_date,
+        if affect_books:
+            open_period = (
+                await db.execute(
+                    select(AccountingPeriod).where(
+                        AccountingPeriod.tenant_id == tenant.id,
+                        AccountingPeriod.is_closed.is_(False),
+                        AccountingPeriod.start_date <= row.voucher_date,
+                        AccountingPeriod.end_date >= row.voucher_date,
+                    )
+                )
+            ).scalars().first()
+            if not open_period:
+                raise HTTPException(status_code=400, detail="No open accounting period for this voucher date")
+            lines_result = await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))
+            line_rows = list(lines_result.scalars().all())
+            budget_check = await evaluate_voucher_budget(
+                db,
+                tenant_id=tenant.id,
+                feature_flags=tenant.feature_flags,
+                voucher=row,
+                lines=line_rows,
+            )
+            if budget_check.over_budget and budget_check.mode == "block":
+                if not budget_override:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "message": "Budget exceeded — posting blocked",
+                            "code": "budget_exceeded",
+                            "remaining": budget_check.remaining,
+                            "warnings": budget_check.warnings,
+                            "mode": budget_check.mode,
+                            "status": budget_check.status,
+                            "has_budget": budget_check.has_budget,
+                            "budget_amount": budget_check.budget_amount,
+                            "used_amount": budget_check.used_amount,
+                            "pending_amount": budget_check.pending_amount,
+                            "projected": budget_check.projected,
+                        },
+                    )
+                reason = (budget_override_reason or "").strip()
+                if not reason:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="budget_override_reason is required when overriding a budget block",
+                    )
+                await assert_delegate_manager_or_permission(
+                    db, user, tenant.id, permission_key=PERMISSION_FINANCE_BUDGET_OVERRIDE
+                )
+                post_control_warnings.append(f"Budget override: {reason}")
+                post_control_warnings.extend(budget_check.warnings)
+            elif budget_check.warnings:
+                # warn mode, near_limit, or exceeded-under-warn — allow and surface warnings
+                post_control_warnings.extend(budget_check.warnings)
+            if getattr(row, "fiscal_year", None) is None:
+                row.fiscal_year = fiscal_year_calendar(row.voucher_date)
+            post_control_warnings = list(post_control_warnings) + list(
+                await finalize_posted_voucher_metadata(
+                    db, tenant.id, row, line_rows, strict_duplicate_check=True
                 )
             )
-        ).scalars().first()
-        if not open_period:
-            raise HTTPException(status_code=400, detail="No open accounting period for this voucher date")
-        lines_result = await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))
-        line_rows = list(lines_result.scalars().all())
-        if getattr(row, "fiscal_year", None) is None:
-            row.fiscal_year = fiscal_year_calendar(row.voucher_date)
-        post_control_warnings = await finalize_posted_voucher_metadata(
-            db, tenant.id, row, line_rows, strict_duplicate_check=True
-        )
-        locked_accounts = await _lock_chart_accounts_for_subset(
-            db, tenant.id, (line.account_id for line in line_rows)
-        )
-        for line in line_rows:
-            account = locked_accounts.get(line.account_id)
-            if not account:
-                continue
-            current_balance = _to_float(account.balance)
-            amount = _to_float(line.amount)
-            if account.normal_balance == "debit":
-                current_balance += amount if line.entry_type == "DEBIT" else -amount
-            else:
-                current_balance += amount if line.entry_type == "CREDIT" else -amount
-            account.balance = str(round(current_balance, 4))
+            locked_accounts = await _lock_chart_accounts_for_subset(
+                db, tenant.id, (line.account_id for line in line_rows)
+            )
+            for line in line_rows:
+                account = locked_accounts.get(line.account_id)
+                if not account:
+                    continue
+                current_balance = _to_float(account.balance)
+                amount = _to_float(line.amount)
+                if account.normal_balance == "debit":
+                    current_balance += amount if line.entry_type == "DEBIT" else -amount
+                else:
+                    current_balance += amount if line.entry_type == "CREDIT" else -amount
+                account.balance = str(round(current_balance, 4))
+            row.books_applied = True
+        else:
+            row.books_applied = False
+            post_control_warnings.append("Posted without books impact (memorandum/optional/post-dated/stock transfer)")
     row.status = next_status
-    if next_status == "POSTED":
+    if next_status == "POSTED" and affect_books:
         from app.modules.facility.posting_hooks import process_facility_voucher_posted
+        from app.modules.commercial.proforma_receipt_service import sync_allocation_status_for_voucher
+        from app.modules.commercial.commercial_invoice_service import sync_ci_allocation_status_for_voucher
+        from app.modules.finance.party_ledger_hooks import on_voucher_posted
 
         await process_facility_voucher_posted(db, tenant.id, row, user.id)
+        await sync_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
+        await sync_ci_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
+        await on_voucher_posted(
+            db,
+            tenant.id,
+            row,
+            feature_flags=tenant.feature_flags,
+            created_by=user.id,
+        )
+        try:
+            from app.modules.finance.tds_service import maybe_auto_tds_on_payment_voucher
+
+            async with db.begin_nested():
+                await maybe_auto_tds_on_payment_voucher(
+                    db,
+                    tenant.id,
+                    row,
+                    feature_flags=tenant.feature_flags,
+                    created_by=user.id,
+                )
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("auto TDS on payment failed voucher=%s", row.id)
+    elif next_status in {"REVERSED", "CANCELLED"}:
+        from app.modules.commercial.proforma_receipt_service import sync_allocation_status_for_voucher
+        from app.modules.commercial.commercial_invoice_service import sync_ci_allocation_status_for_voucher
+        from app.modules.finance.party_ledger_hooks import on_voucher_cancelled
+
+        await sync_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
+        await sync_ci_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
+        await on_voucher_cancelled(db, tenant.id, row, feature_flags=tenant.feature_flags)
     lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all())
     _apply_internal_signature(row, lines)
     await db.commit()
     await db.refresh(row)
-    if next_status == "POSTED" and (row.voucher_type or "").upper() == "RECEIPT":
+    if next_status == "POSTED" and affect_books and (row.voucher_type or "").upper() == "RECEIPT":
         from app.modules.orders.pipeline_service import auto_advance_order_pipeline
 
         oids: set[int] = set()
@@ -2641,6 +2986,9 @@ async def day_book_report(
         )
     result = await db.execute(stmt)
     rows = list(result.scalars().all())
+    from app.modules.finance.advanced_voucher_service import voucher_visible_in_day_book
+
+    rows = [r for r in rows if voucher_visible_in_day_book(r)]
     account_group_map = {
         account.id: account.group_id
         for account in (
@@ -2683,6 +3031,39 @@ async def day_book_report(
     return {"rows": out, "total_amount": round(total_amount, 2)}
 
 
+async def _posted_movement_by_account(
+    db: AsyncSession,
+    tenant_id: int,
+    as_of_date: date,
+    account_ids: Iterable[int] | None = None,
+) -> dict[int, dict[str, float]]:
+    """Sum posted, in-books voucher lines per (account, DEBIT/CREDIT) in SQL.
+
+    Replaces loading every voucher line into Python, which grew with ledger size.
+    """
+    stmt = (
+        select(VoucherLine.account_id, VoucherLine.entry_type, func.coalesce(func.sum(VoucherLine.amount), 0))
+        .join(Voucher, VoucherLine.voucher_id == Voucher.id)
+        .where(
+            VoucherLine.tenant_id == tenant_id,
+            Voucher.tenant_id == tenant_id,
+            Voucher.status == "POSTED",
+            voucher_in_books_clause(),
+            Voucher.voucher_date <= as_of_date,
+        )
+        .group_by(VoucherLine.account_id, VoucherLine.entry_type)
+    )
+    if account_ids is not None:
+        ids = list(account_ids)
+        if not ids:
+            return defaultdict(lambda: {"DEBIT": 0.0, "CREDIT": 0.0})
+        stmt = stmt.where(VoucherLine.account_id.in_(ids))
+    movement: dict[int, dict[str, float]] = defaultdict(lambda: {"DEBIT": 0.0, "CREDIT": 0.0})
+    for acct_id, entry_type, total in (await db.execute(stmt)).all():
+        movement[acct_id][(entry_type or "DEBIT").upper()] += _to_float(total)
+    return movement
+
+
 @router.get("/reports/trial-balance")
 async def trial_balance_report(
     as_of_date: date | None = Query(default=None),
@@ -2704,27 +3085,18 @@ async def trial_balance_report(
         accounts_stmt = accounts_stmt.where(ChartOfAccount.id == account_id)
     if group_id is not None:
         accounts_stmt = accounts_stmt.where(ChartOfAccount.group_id == group_id)
-    accounts_result = await db.execute(accounts_stmt)
-    posted_lines = (
-        await db.execute(
-            select(VoucherLine, Voucher)
-            .join(Voucher, VoucherLine.voucher_id == Voucher.id)
-            .where(
-                VoucherLine.tenant_id == tenant.id,
-                Voucher.tenant_id == tenant.id,
-                Voucher.status == "POSTED",
-                Voucher.voucher_date <= as_of_date,
-            )
-        )
-    ).all()
-    movement: dict[int, dict[str, float]] = defaultdict(lambda: {"DEBIT": 0.0, "CREDIT": 0.0})
-    for line, _voucher in posted_lines:
-        movement[line.account_id][line.entry_type] += _to_float(line.amount)
+    account_rows = (await db.execute(accounts_stmt)).all()
+    movement = await _posted_movement_by_account(
+        db,
+        tenant.id,
+        as_of_date,
+        [a.id for a, _g in account_rows] if (account_id is not None or group_id is not None) else None,
+    )
 
     rows = []
     debit_total = 0.0
     credit_total = 0.0
-    for account, group in accounts_result.all():
+    for account, group in account_rows:
         opening = _to_float(account.opening_balance)
         debit_mov = movement[account.id]["DEBIT"]
         credit_mov = movement[account.id]["CREDIT"]
@@ -2783,24 +3155,12 @@ async def financial_statements(
     )
     if group_id is not None:
         accounts_stmt = accounts_stmt.where(ChartOfAccount.group_id == group_id)
-    accounts_result = await db.execute(accounts_stmt)
-    posted_lines = (
-        await db.execute(
-            select(VoucherLine, Voucher)
-            .join(Voucher, VoucherLine.voucher_id == Voucher.id)
-            .where(
-                VoucherLine.tenant_id == tenant.id,
-                Voucher.tenant_id == tenant.id,
-                Voucher.status == "POSTED",
-                Voucher.voucher_date <= as_of_date,
-            )
-        )
-    ).all()
-    movement: dict[int, dict[str, float]] = defaultdict(lambda: {"DEBIT": 0.0, "CREDIT": 0.0})
-    for line, _voucher in posted_lines:
-        movement[line.account_id][line.entry_type] += _to_float(line.amount)
+    account_rows = (await db.execute(accounts_stmt)).all()
+    movement = await _posted_movement_by_account(
+        db, tenant.id, as_of_date, [a.id for a, _g in account_rows] if group_id is not None else None
+    )
     summary = {"Asset": 0.0, "Liability": 0.0, "Equity": 0.0, "Income": 0.0, "Expense": 0.0}
-    for account, group in accounts_result.all():
+    for account, group in account_rows:
         opening = _to_float(account.opening_balance)
         debit_mov = movement[account.id]["DEBIT"]
         credit_mov = movement[account.id]["CREDIT"]
@@ -2847,6 +3207,7 @@ async def cash_flow_statement(
                 .where(
                     Voucher.tenant_id == tenant.id,
                     Voucher.status == "POSTED",
+                    voucher_in_books_clause(),
                     Voucher.voucher_date >= from_date,
                     Voucher.voucher_date <= to_date,
                 )
@@ -3004,7 +3365,7 @@ async def cash_flow_statement(
 
 @router.get("/cash-forecast/scenarios", response_model=list[CashScenarioOut])
 async def list_cash_forecast_scenarios(
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -3152,7 +3513,11 @@ async def generate_cash_forecast(
     posted_vouchers = list(
         (
             await db.execute(
-                select(Voucher).where(Voucher.tenant_id == tenant.id, Voucher.status == "POSTED")
+                select(Voucher).where(
+                    Voucher.tenant_id == tenant.id,
+                    Voucher.status == "POSTED",
+                    voucher_in_books_clause(),
+                )
             )
         ).scalars().all()
     )
@@ -3776,7 +4141,7 @@ async def list_cost_centers(
     response: Response,
     active_only: bool = Query(default=True),
     search: str | None = Query(default=None, description="Substring match on center code or name (case-insensitive)"),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -3934,7 +4299,7 @@ async def update_cost_center(
 @router.get("/budgets", response_model=list[BudgetOut])
 async def list_budgets(
     fiscal_year: str | None = Query(default=None),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -4060,7 +4425,7 @@ async def budget_vs_actual(
     posted_lines_query = (
         select(VoucherLine, Voucher)
         .join(Voucher, VoucherLine.voucher_id == Voucher.id)
-        .where(VoucherLine.tenant_id == tenant.id, Voucher.status == "POSTED")
+        .where(VoucherLine.tenant_id == tenant.id, Voucher.status == "POSTED", voucher_in_books_clause())
     )
     posted_rows = list((await db.execute(posted_lines_query)).all())
     rows = []
@@ -4103,7 +4468,7 @@ async def budget_vs_actual(
 @router.get("/banking/accounts", response_model=list[BankAccountOut])
 async def list_bank_accounts(
     active_only: bool = Query(default=True),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -4163,7 +4528,8 @@ async def list_bank_reconciliations(
     stmt = select(BankReconciliation).where(BankReconciliation.tenant_id == tenant.id).order_by(BankReconciliation.id.desc())
     if bank_account_id is not None:
         stmt = stmt.where(BankReconciliation.bank_account_id == bank_account_id)
-    return list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
+    rows = list((await db.execute(stmt.offset(offset).limit(limit))).scalars().all())
+    return [_bank_reconciliation_to_out(row) for row in rows]
 
 
 @router.post("/banking/reconciliation", response_model=BankReconciliationOut)
@@ -4194,7 +4560,7 @@ async def create_bank_reconciliation(
     db.add(row)
     await db.commit()
     await db.refresh(row)
-    return row
+    return _bank_reconciliation_to_out(row)
 
 
 @router.post("/banking/reconciliation/{recon_id}/resolve", response_model=BankReconciliationOut)
@@ -4213,7 +4579,7 @@ async def resolve_bank_reconciliation(
     row.status = "MATCHED"
     await db.commit()
     await db.refresh(row)
-    return row
+    return _bank_reconciliation_to_out(row)
 
 
 @router.post("/banking/reconciliation/{recon_id}/finalize", response_model=BankReconciliationOut)
@@ -4230,14 +4596,14 @@ async def finalize_bank_reconciliation(
     if not recon or recon.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Reconciliation not found")
     if recon.is_finalized:
-        return recon
+        return _bank_reconciliation_to_out(recon)
     recon.is_finalized = True
     recon.finalized_at = datetime.utcnow()
     recon.finalized_by = user.id
     recon.finalize_reason = body.reason
     await db.commit()
     await db.refresh(recon)
-    return recon
+    return _bank_reconciliation_to_out(recon)
 
 
 @router.get("/banking/reconciliation/{recon_id}/match-logs", response_model=list[BankStatementMatchLogOut])
@@ -4869,7 +5235,12 @@ async def execute_payment_run(
         db.add(voucher)
         await db.flush()
 
-        total_amount = round(_to_float(run.total_amount), 2)
+        # Credit must equal the debits actually booked (per-party rounding), not the
+        # separately rounded run total, or the voucher is out of balance by paisa.
+        total_amount = float(
+            sum((Decimal(str(amt)) for _, amt, _ in supplier_party_lines), Decimal("0")).quantize(Decimal("0.01"))
+        )
+        voucher.books_applied = True
         for party_name, rounded_amount, supplier_ap in supplier_party_lines:
             acct = locked_gl.get(supplier_ap.id)
             if not acct:
@@ -5569,7 +5940,7 @@ async def backfill_voucher_signatures(
 
 @router.get("/accounting-periods", response_model=list[AccountingPeriodOut])
 async def list_accounting_periods(
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int = Query(default=500, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
@@ -5721,6 +6092,54 @@ async def voucher_available_actions(
     voucher = await db.get(Voucher, voucher_id)
     if not voucher or voucher.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher not found")
+    actions = _voucher_actions_for_status(voucher.status, is_privileged=is_privileged)
+    return {"voucher_id": voucher_id, "status": voucher.status, "actions": actions}
+
+
+class VoucherAvailableActionsBatchBody(BaseModel):
+    voucher_ids: list[int] = Field(default_factory=list, max_length=200)
+
+
+@router.post("/vouchers/available-actions-batch")
+async def voucher_available_actions_batch(
+    body: VoucherAvailableActionsBatchBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Batch available-actions lookup to avoid N+1 from Approvals UI."""
+    _ensure_tenant(user, tenant)
+    role = await get_user_role_scoped_to_tenant(db, user, tenant.id)
+    role_name = (role.name if role else "").strip().lower()
+    is_privileged = role_name in {"admin", "manager", "super_admin", "superadmin", "owner"}
+    ids = list(dict.fromkeys(int(i) for i in (body.voucher_ids or []) if i is not None))
+    if not ids:
+        return {"items": []}
+    rows = (
+        await db.execute(
+            select(Voucher.id, Voucher.status).where(
+                Voucher.tenant_id == tenant.id,
+                Voucher.id.in_(ids),
+            )
+        )
+    ).all()
+    by_id = {int(r.id): str(r.status) for r in rows}
+    items = []
+    for vid in ids:
+        st = by_id.get(vid)
+        if st is None:
+            continue
+        items.append(
+            {
+                "voucher_id": vid,
+                "status": st,
+                "actions": _voucher_actions_for_status(st, is_privileged=is_privileged),
+            }
+        )
+    return {"items": items}
+
+
+def _voucher_actions_for_status(status_value: str, *, is_privileged: bool) -> list[str]:
     status_to_actions = {
         "DRAFT": ["submit", "cancel"],
         "SUBMITTED": ["check", "reject"],
@@ -5732,23 +6151,29 @@ async def voucher_available_actions(
         "CANCELLED": [],
         "REVERSED": [],
     }
-    actions = status_to_actions.get(voucher.status, [])
+    actions = list(status_to_actions.get(status_value, []))
     privileged_actions = {"check", "recommend", "approve", "post", "reject", "reverse", "cancel_posting"}
     if not is_privileged:
         actions = [a for a in actions if a not in privileged_actions]
-    return {"voucher_id": voucher_id, "status": voucher.status, "actions": actions}
+    return actions
 
 
 @router.post("/vouchers/{voucher_id}/post", response_model=VoucherOut)
 async def post_voucher(
     voucher_id: int,
+    body: VoucherPostBody | None = None,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    post_body = body or VoucherPostBody()
     return await update_voucher_status(
         voucher_id=voucher_id,
-        body={"status": "POSTED"},
+        body=VoucherStatusUpdateBody(
+            status="POSTED",
+            budget_override=bool(post_body.budget_override),
+            budget_override_reason=post_body.budget_override_reason,
+        ),
         tenant=tenant,
         user=user,
         db=db,
@@ -5764,23 +6189,30 @@ async def cancel_posted_voucher(
 ):
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
-    voucher = await db.get(Voucher, voucher_id)
-    if not voucher or voucher.tenant_id != tenant.id:
-        raise HTTPException(status_code=404, detail="Voucher not found")
+    voucher = await _lock_voucher(db, tenant.id, voucher_id)
     if voucher.status != "POSTED":
         raise HTTPException(status_code=400, detail="Only posted vouchers can cancel posting")
+    if voucher.reversed_by_voucher_id:
+        raise HTTPException(status_code=409, detail="Voucher already has a reversal")
+    await _assert_no_facility_link(db, tenant.id, voucher.id)
     lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all())
-    locked_accounts = await _lock_chart_accounts_for_subset(
-        db, tenant.id, (line.account_id for line in lines)
-    )
-    for line in lines:
-        account = locked_accounts.get(line.account_id)
-        if not account:
-            continue
-        # Reverse the previously posted effect.
-        reverse_entry = "CREDIT" if line.entry_type == "DEBIT" else "DEBIT"
-        _apply_voucher_impact(account, reverse_entry, _to_float(line.amount))
+    if voucher_book_impact_applied(voucher):
+        await _assert_open_period(db, tenant.id, voucher.voucher_date)
+        locked_accounts = await _lock_chart_accounts_for_subset(
+            db, tenant.id, (line.account_id for line in lines)
+        )
+        for line in lines:
+            account = locked_accounts.get(line.account_id)
+            if not account:
+                continue
+            # Reverse the previously posted effect.
+            reverse_entry = "CREDIT" if line.entry_type == "DEBIT" else "DEBIT"
+            _apply_voucher_impact(account, reverse_entry, _to_float(line.amount))
+        voucher.books_applied = False
     voucher.status = "APPROVED"
+    from app.modules.finance.party_ledger_hooks import on_voucher_cancelled
+
+    await on_voucher_cancelled(db, tenant.id, voucher, feature_flags=tenant.feature_flags)
     await db.commit()
     await db.refresh(voucher)
     return await _voucher_out(db, voucher)
@@ -5795,12 +6227,19 @@ async def reverse_voucher(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    src = await db.get(Voucher, voucher_id)
-    if not src or src.tenant_id != tenant.id:
-        raise HTTPException(status_code=404, detail="Voucher not found")
+    await _require_manager_or_admin(db, user, tenant.id)
+    src = await _lock_voucher(db, tenant.id, voucher_id)
     if src.status != "POSTED":
         raise HTTPException(status_code=400, detail="Only posted vouchers can be reversed")
-    await _require_manager_or_admin(db, user, tenant.id)
+    if src.reversed_by_voucher_id:
+        raise HTTPException(status_code=409, detail="Voucher already has a reversal")
+    if not voucher_book_impact_applied(src):
+        raise HTTPException(
+            status_code=400,
+            detail="This voucher never affected the books (memorandum/optional/post-dated); use cancel-posting instead",
+        )
+    await _assert_no_facility_link(db, tenant.id, src.id)
+    await _assert_open_period(db, tenant.id, date.today(), what="today's date (reversal date)")
 
     source_lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == src.id))).scalars().all())
     if not source_lines:
@@ -5870,7 +6309,15 @@ async def reverse_voucher(
             _apply_voucher_impact(account, flipped, _to_float(line.amount))
     src.status = "REVERSED"
     src.reversed_by_voucher_id = rev.id
+    rev.books_applied = True
     await db.flush()
+    from app.modules.commercial.commercial_invoice_service import sync_ci_allocation_status_for_voucher
+    from app.modules.commercial.proforma_receipt_service import sync_allocation_status_for_voucher
+    from app.modules.finance.party_ledger_hooks import on_voucher_cancelled
+
+    await sync_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=src)
+    await sync_ci_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=src)
+    await on_voucher_cancelled(db, tenant.id, src, feature_flags=tenant.feature_flags)
     rev_lines = list(
         (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == rev.id))).scalars().all()
     )
@@ -5892,8 +6339,16 @@ async def allocate_bill_against_voucher(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    bill = await db.get(OutstandingBill, bill_id)
-    if not bill or bill.tenant_id != tenant.id:
+    # Lock the bill so two concurrent allocations cannot both pass the outstanding check.
+    bill = (
+        await db.execute(
+            select(OutstandingBill)
+            .where(OutstandingBill.id == bill_id, OutstandingBill.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
     voucher = await db.get(Voucher, body.voucher_id)
     if not voucher or voucher.tenant_id != tenant.id:
@@ -5934,7 +6389,8 @@ async def auto_create_bill_from_voucher(
     lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all())
     if not lines:
         raise HTTPException(status_code=400, detail="Voucher has no lines")
-    total = sum(_to_float(line.amount) for line in lines if line.entry_type in {"DEBIT", "CREDIT"})
+    # A balanced voucher's value is one side; summing DEBIT+CREDIT doubled every bill.
+    total = sum(_to_float(line.amount) for line in lines if line.entry_type == "DEBIT")
     if total <= 0:
         raise HTTPException(status_code=400, detail="Voucher amount is zero")
     prefix = "AP-" if body.bill_type == "PAYABLE" else "AR-"
@@ -6135,6 +6591,7 @@ async def ledger_activity_report(
             Voucher.voucher_date >= from_date,
             Voucher.voucher_date <= to_date,
             Voucher.status == "POSTED",
+            voucher_in_books_clause(),
         )
         .order_by(Voucher.voucher_date.asc(), Voucher.id.asc(), VoucherLine.id.asc())
     )

@@ -3,6 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.common.auth import get_current_user
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
@@ -26,6 +27,7 @@ from app.modules.hr_ess.schemas import (
     LeaveRequestCreate,
     LeaveRequestResponse,
     MyProfileResponse,
+    MyProfileUpdate,
     PayslipResponse,
 )
 
@@ -39,7 +41,9 @@ def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
 
 async def _get_my_employee_or_404(db: AsyncSession, tenant_id: int, user_id: int) -> Employee:
     result = await db.execute(
-        select(Employee).where(Employee.tenant_id == tenant_id, Employee.user_id == user_id)
+        select(Employee)
+        .options(selectinload(Employee.department), selectinload(Employee.designation))
+        .where(Employee.tenant_id == tenant_id, Employee.user_id == user_id)
     )
     employee = result.scalar_one_or_none()
     if not employee:
@@ -85,6 +89,24 @@ def _pref_to_response(pref: EssPreference) -> EssPreferenceResponse:
     )
 
 
+def _employee_to_profile_response(employee: Employee, pref: EssPreference) -> MyProfileResponse:
+    full_name = f"{employee.first_name} {employee.last_name}".strip() if employee.last_name else employee.first_name
+    return MyProfileResponse(
+        employee_id=employee.id,
+        employee_code=employee.employee_code,
+        full_name=full_name,
+        email=employee.email,
+        phone=employee.phone,
+        address_line=employee.address_line,
+        department=employee.department.name if employee.department else None,
+        designation=employee.designation.title if employee.designation else None,
+        department_id=employee.department_id,
+        designation_id=employee.designation_id,
+        joining_date=employee.joining_date,
+        preference=_pref_to_response(pref),
+    )
+
+
 @router.get("/my-profile", response_model=MyProfileResponse)
 async def my_profile(
     tenant: Tenant = Depends(require_tenant),
@@ -94,18 +116,29 @@ async def my_profile(
     _ensure_user_tenant(user, tenant)
     employee = await _get_my_employee_or_404(db, tenant.id, user.id)
     pref = await _get_or_create_pref(db, tenant.id, employee.id)
-    full_name = f"{employee.first_name} {employee.last_name}".strip() if employee.last_name else employee.first_name
-    return MyProfileResponse(
-        employee_id=employee.id,
-        employee_code=employee.employee_code,
-        full_name=full_name,
-        email=employee.email,
-        phone=employee.phone,
-        department_id=employee.department_id,
-        designation_id=employee.designation_id,
-        joining_date=employee.joining_date,
-        preference=_pref_to_response(pref),
-    )
+    return _employee_to_profile_response(employee, pref)
+
+
+@router.patch("/my-profile", response_model=MyProfileResponse)
+async def update_my_profile(
+    body: MyProfileUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    employee = await _get_my_employee_or_404(db, tenant.id, user.id)
+    pref = await _get_or_create_pref(db, tenant.id, employee.id)
+    payload = body.model_dump(exclude_unset=True)
+    if "email" in payload:
+        employee.email = payload["email"].strip() if payload["email"] else None
+    if "phone" in payload:
+        employee.phone = payload["phone"].strip() if payload["phone"] else None
+    if "address_line" in payload:
+        employee.address_line = payload["address_line"].strip() if payload["address_line"] else None
+    await db.commit()
+    await db.refresh(employee)
+    return _employee_to_profile_response(employee, pref)
 
 
 @router.patch("/my-profile/preferences", response_model=EssPreferenceResponse)

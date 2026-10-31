@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type InquiryResponse } from "@/api/client";
 import { useListPagination } from "@/hooks/useListPagination";
+import { useDebouncedValue, useLatestRequest } from "@/hooks/useDebouncedValue";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import {
@@ -68,25 +69,31 @@ export function InquiriesPage() {
   const [listTotal, setListTotal] = useState(0);
   const [submittingInquiryId, setSubmittingInquiryId] = useState<number | null>(null);
 
+  const debouncedSearch = useDebouncedValue(search);
+  const latest = useLatestRequest();
+
   const load = async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
       const res = await api.listInquiriesPaginated({
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         status: statusFilter || undefined,
         department: departmentFilter || undefined,
         page,
         page_size: pageSize,
         ai_indicators: 1,
       });
+      if (!latest.isCurrent(token)) return;
       setItems(res.items);
       setListTotal(res.total);
       if (res.page !== page) setPage(res.page);
     } catch (e) {
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load inquiries");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
   };
 
@@ -98,7 +105,7 @@ export function InquiriesPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, departmentFilter, page, pageSize]);
+  }, [debouncedSearch, statusFilter, departmentFilter, page, pageSize]);
 
   return (
     <div className={listPageRootClass}>

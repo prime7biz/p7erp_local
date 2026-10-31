@@ -11,9 +11,10 @@ import json
 import logging
 from typing import Any
 
-from jose import JWTError, jwt
+from app.common.jwt_compat import JWTError, jwt
 from sqlalchemy import select
 
+from app.common.auth import is_internal_access_payload
 from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.models import User
@@ -52,13 +53,16 @@ async def resolve_mcp_tenant(
     token = auth_value[7:]
     try:
         payload = jwt.decode(
-            token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
+            token,
+            settings.jwt_secret,
+            algorithms=[settings.jwt_algorithm],
+            options={"verify_aud": False},
         )
     except JWTError as exc:
         raise ValueError("Invalid or expired Bearer token.") from exc
 
-    if payload.get("aud") == "platform-admin":
-        raise ValueError("Platform-admin tokens are not valid for MCP tool calls.")
+    if not is_internal_access_payload(payload):
+        raise ValueError("Only staff access tokens are valid for MCP tool calls.")
 
     sub = payload.get("sub")
     if not sub:

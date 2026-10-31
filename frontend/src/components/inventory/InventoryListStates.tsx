@@ -78,7 +78,10 @@ type EmptyProps = {
 
 export function InventoryEmptyState({ title = "No records found", description }: EmptyProps) {
   return (
-    <div className="rounded-xl border border-dashed border-border bg-surface-subtle/40 px-6 py-12 text-center">
+    <div
+      className="rounded-xl border border-dashed border-border bg-surface-subtle/40 px-6 py-12 text-center"
+      role="status"
+    >
       <p className="text-sm font-medium text-text-secondary">{title}</p>
       {description ? <p className="mt-1 text-xs text-text-muted">{description}</p> : null}
     </div>

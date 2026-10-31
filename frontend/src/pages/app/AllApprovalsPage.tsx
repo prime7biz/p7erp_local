@@ -7,8 +7,10 @@ import {
   type PaymentRunResponse,
   type VoucherResponse,
 } from "@/api/client";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
 import { useAuth } from "@/context/AuthContext";
+import { logApiError } from "@/utils/logApiError";
 
 type ApprovalDocType = "ALL" | "VOUCHER" | "PAYMENT_RUN" | "BANK_RECONCILIATION" | "ACCOUNTING_PERIOD";
 
@@ -50,16 +52,10 @@ const ACTION_LABEL: Record<string, string> = {
   reopen: "Reopen",
 };
 
-function actionButtonClass(action: string) {
-  if (action === "reject") return "rounded border border-status-danger/30 bg-status-danger-subtle px-2 py-1 text-xs text-status-danger-foreground";
-  if (action === "approve" || action === "post" || action === "execute" || action === "finalize" || action === "close") {
-    return "rounded border border-status-success/30 bg-status-success-subtle px-2 py-1 text-xs text-status-success-foreground";
-  }
-  if (action === "check" || action === "recommend" || action === "submit" || action === "process" || action === "reopen") {
-    return "rounded border border-status-info/30 bg-status-info-subtle px-2 py-1 text-xs text-status-info-foreground";
-  }
-  return "rounded border px-2 py-1 text-xs";
-}
+const PRIVILEGED_ROLES = new Set(["admin", "manager", "owner", "super_admin", "superadmin"]);
+const VOUCHER_PAGE_LIMIT = 500;
+/** Backend caps POST /vouchers/available-actions-batch at 200 ids. */
+const ACTIONS_BATCH_SIZE = 200;
 
 function mapPaymentRunActions(status: string, canApproveOrProcess: boolean, canExecute: boolean): string[] {
   if (status === "DRAFT" && canApproveOrProcess) return ["approve"];
@@ -94,46 +90,57 @@ export function AllApprovalsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [myRole, setMyRole] = useState("");
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<string | number | null>(null);
 
-  const canApproveOrProcess = myRole === "admin" || myRole === "manager";
+  // Role comes from /auth/me; listing users needs settings access that finance users lack.
+  const myRole = (me?.role_name ?? "").trim().toLowerCase();
+  const canApproveOrProcess = PRIVILEGED_ROLES.has(myRole);
   const canExecute = canApproveOrProcess;
-
-  const loadRole = useCallback(async () => {
-    if (!me?.user_id) return;
-    try {
-      const users = await api.listUsers();
-      const mine = users.find((u) => u.id === me.user_id);
-      setMyRole((mine?.role_name ?? "").trim().toLowerCase());
-    } catch {
-      setMyRole("");
-    }
-  }, [me?.user_id]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     setSuccess("");
     try {
-      const [vouchers, runs, reconciliations, periods] = await Promise.all([
-        api.listVouchers(),
+      const [voucherPages, runs, reconciliations, periods] = await Promise.all([
+        // One request per queue status so older pending vouchers are not cut off by the default page size.
+        Promise.all(
+          VOUCHER_QUEUE_STATUSES.map((s) =>
+            api.listVouchersWithTotal({ status_filter: s, limit: VOUCHER_PAGE_LIMIT }).catch((e) => {
+              logApiError(`AllApprovalsPage.vouchers(${s})`, e);
+              return { rows: [] as VoucherResponse[], total: 0 };
+            }),
+          ),
+        ),
         api.listPaymentRuns(),
         api.listBankReconciliations(),
         api.listAccountingPeriods(),
       ]);
-      const queueVouchers = vouchers.filter((v) => VOUCHER_QUEUE_STATUSES.includes(v.status));
-      const voucherActionPairs = await Promise.all(
-        queueVouchers.map(async (v) => {
-          try {
-            const meta = await api.getVoucherAvailableActions(v.id);
-            return [v.id, meta.actions] as [number, string[]];
-          } catch {
-            return [v.id, []] as [number, string[]];
-          }
-        }),
-      );
+      const queueVouchers = voucherPages.flatMap((p) => p.rows);
       const voucherActionMap: Record<number, string[]> = {};
-      for (const [id, actions] of voucherActionPairs) voucherActionMap[id] = actions;
+      const ids = queueVouchers.map((v) => v.id);
+      for (let i = 0; i < ids.length; i += ACTIONS_BATCH_SIZE) {
+        const chunk = ids.slice(i, i + ACTIONS_BATCH_SIZE);
+        try {
+          const batch = await api.getVoucherAvailableActionsBatch(chunk);
+          for (const item of batch.items) voucherActionMap[item.voucher_id] = item.actions;
+        } catch (e) {
+          logApiError("AllApprovalsPage.actionsBatch", e);
+          const pairs = await Promise.all(
+            chunk.map(async (id) => {
+              try {
+                const meta = await api.getVoucherAvailableActions(id);
+                return [id, meta.actions] as [number, string[]];
+              } catch (err) {
+                logApiError("AllApprovalsPage.actions", err);
+                return [id, []] as [number, string[]];
+              }
+            }),
+          );
+          for (const [id, actions] of pairs) voucherActionMap[id] = actions;
+        }
+      }
 
       const voucherRows: ApprovalRow[] = queueVouchers.map((v: VoucherResponse) => ({
         doc_type: "VOUCHER",
@@ -191,10 +198,6 @@ export function AllApprovalsPage() {
   }, [canApproveOrProcess, canExecute]);
 
   useEffect(() => {
-    void loadRole();
-  }, [loadRole]);
-
-  useEffect(() => {
     void load();
   }, [load]);
 
@@ -212,8 +215,12 @@ export function AllApprovalsPage() {
   const actionableRows = rows.filter((r) => r.actions.length > 0).length;
 
   async function takeAction(row: ApprovalRow, action: string) {
+    const key = `${row.doc_type}-${row.id}`;
+    if (busyKey) return;
+    setBusyKey(key);
     try {
       setSuccess("");
+      setError("");
       if (row.doc_type === "VOUCHER") {
         if (action === "post") {
           await api.postVoucher(row.id);
@@ -240,6 +247,8 @@ export function AllApprovalsPage() {
       await load();
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusyKey(null);
     }
   }
 
@@ -361,14 +370,23 @@ export function AllApprovalsPage() {
                   <td className="px-3 py-2 text-right">{r.amount == null ? "-" : r.amount.toLocaleString()}</td>
                   <td className="px-3 py-2">{r.details}</td>
                   <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      {r.actions.length === 0 ? <span className="text-xs text-text-muted">No action</span> : null}
-                      {r.actions.map((action) => (
-                        <button key={action} className={actionButtonClass(action)} onClick={() => void takeAction(r, action)}>
-                          {ACTION_LABEL[action] ?? action}
-                        </button>
-                      ))}
-                    </div>
+                    {r.actions.length === 0 ? (
+                      <span className="text-xs text-text-muted">No action</span>
+                    ) : (
+                      <RowActionsMenu
+                        rowId={`${r.doc_type}-${r.id}`}
+                        openId={openActionsId}
+                        onOpenChange={setOpenActionsId}
+                        label={busyKey === `${r.doc_type}-${r.id}` ? "Working…" : "Actions"}
+                        items={r.actions.map((action) => ({
+                          key: action,
+                          label: ACTION_LABEL[action] ?? action,
+                          danger: action === "reject" || action === "cancel",
+                          disabled: busyKey != null,
+                          onClick: () => void takeAction(r, action),
+                        }))}
+                      />
+                    )}
                   </td>
                 </tr>
               ))

@@ -44,7 +44,7 @@ class RegisterRequest(BaseModel):
     tenant_id: int
     email: EmailStr
     username: str | None = None
-    password: str
+    password: str = Field(min_length=8)
     first_name: str | None = None
     last_name: str | None = None
     bootstrap_key: str | None = None  # optional; first user: X-Bootstrap-Key / this must match env or tenant bootstrap hash (Finding #4)

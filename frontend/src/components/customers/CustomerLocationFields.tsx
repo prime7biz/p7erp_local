@@ -3,7 +3,7 @@ import { citiesForCountry, FORM_COUNTRIES } from "@/data/formLocations";
 import { cn } from "@/lib/utils";
 
 const FIELD_SELECT_CLASS =
-  "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-focus-ring";
+  "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:border-brand-primary focus:outline-none focus:ring-0";
 
 const CITY_OTHER = "__other__";
 

@@ -135,7 +135,7 @@ export function OutstandingBillsPage() {
               View full AR/AP aging report
             </Link>
             {" · "}
-            <Link className="font-medium text-brand-primary hover:underline" to="/app/vouchers">
+            <Link className="font-medium text-brand-primary hover:underline" to="/app/accounts/vouchers">
               Vouchers
             </Link>
           </p>

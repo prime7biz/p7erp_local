@@ -70,3 +70,41 @@ class OrderExtractionResponse(BaseModel):
     fields: dict[str, ExtractedField] = Field(default_factory=dict)
     unmapped_text: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+
+
+class LcExtractionResponse(BaseModel):
+    """Letter of Credit / master contract document extraction (no DB writes)."""
+
+    success: bool
+    document_type: str = "lc_info"
+    fields: dict[str, ExtractedField] = Field(default_factory=dict)
+    unmapped_text: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    alerts: list[dict[str, str]] = Field(default_factory=list)
+    suggest_create_master_contract: bool = True
+
+
+class ShippingDocExtractionResponse(BaseModel):
+    """BL / AWB / packing list / booking note extraction (no DB writes)."""
+
+    success: bool
+    document_type: str = "shipping_doc_info"
+    fields: dict[str, ExtractedField] = Field(default_factory=dict)
+    unmapped_text: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    alerts: list[dict[str, str]] = Field(default_factory=list)
+    suggested_status: str | None = "IN_TRANSIT"
+    matched_shipment_id: int | None = None
+    matched_shipment_reference: str | None = None
+    match_hint: str | None = None
+
+
+class HrDocExtractionResponse(BaseModel):
+    """HR CV / NID / medical / birth certificate extraction (no DB writes)."""
+
+    success: bool
+    document_type: str = "hr_doc"
+    fields: dict[str, ExtractedField] = Field(default_factory=dict)
+    unmapped_text: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    alerts: list[dict[str, str]] = Field(default_factory=list)

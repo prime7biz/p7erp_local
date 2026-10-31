@@ -2,6 +2,144 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Design tokens — Phase 3.1
+  Primary: orange · Secondary: teal · Tertiary: rose
+  Dark mode: class "dark" on <html>
+*/
+:root {
+  /* Refined primary — deeper orange, less neon */
+  --color-brand-primary: #ea580c;
+  --color-brand-primary-foreground: #ffffff;
+  --color-brand-hover: #c2410c;
+  --color-brand-pressed: #9a3412;
+  --color-brand-subtle: #fff7ed;
+  --color-brand-muted: #fb923c;
+  --color-brand-banner: #ea580c;
+
+  /* Secondary accent — teal */
+  --color-accent-secondary: #0d9488;
+  --color-accent-secondary-foreground: #ffffff;
+  --color-accent-secondary-subtle: #f0fdfa;
+
+  /* Tertiary accent — rose (alerts / warnings emphasis) */
+  --color-accent-tertiary: #f43f5e;
+  --color-accent-tertiary-foreground: #ffffff;
+  --color-accent-tertiary-subtle: #fff1f2;
+
+  /* Warmer surfaces */
+  --color-surface-base: #fafaf9;
+  --color-surface-raised: #ffffff;
+  --color-surface-elevated: #fafcfe;
+  --color-surface-subtle: #f5f5f4;
+  --color-surface-inverse: #0c0a09;
+
+  /* Warmer text */
+  --color-text-primary: #1c1917;
+  --color-text-secondary: #57534e;
+  --color-text-muted: #a8a29e;
+  --color-text-inverse: #fafaf9;
+
+  --color-border: #e7e5e4;
+  --color-border-strong: #a8a29e;
+  --color-border-subtle: #f5f5f4;
+
+  --color-status-success: #15803d;
+  --color-status-success-subtle: #dcfce7;
+  --color-status-success-foreground: #166534;
+  --color-status-warning: #c2410c;
+  --color-status-warning-subtle: #ffedd5;
+  --color-status-warning-foreground: #9a3412;
+  --color-status-danger: #e11d48;
+  --color-status-danger-subtle: #ffe4e6;
+  --color-status-danger-foreground: #9f1239;
+  --color-status-danger-hover: #be123c;
+  --color-status-danger-pressed: #9f1239;
+  --color-status-info: #0e7490;
+  --color-status-info-subtle: #cffafe;
+  --color-status-info-foreground: #155e75;
+  --color-status-neutral: #78716c;
+  --color-status-neutral-subtle: #f5f5f4;
+  --color-status-neutral-foreground: #44403c;
+
+  --color-focus-ring: #ea580c;
+  --color-orange-950: #7c2d12;
+
+  /* Interaction states — replace opacity hacks */
+  --color-state-hover: rgba(28, 25, 23, 0.04);
+  --color-state-pressed: rgba(28, 25, 23, 0.08);
+  --color-state-selected: rgba(234, 88, 12, 0.1);
+  --color-state-disabled: rgba(28, 25, 23, 0.04);
+  --color-state-disabled-text: #a8a29e;
+
+  --shadow-card: 0 1px 3px rgba(28, 25, 23, 0.08), 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-dropdown: 0 4px 6px -1px rgba(28, 25, 23, 0.08), 0 2px 4px -1px rgba(28, 25, 23, 0.04);
+  --shadow-modal: 0 20px 25px -5px rgba(28, 25, 23, 0.12), 0 10px 10px -5px rgba(28, 25, 23, 0.04);
+  --shadow-card-hover: 0 12px 24px -8px rgba(28, 25, 23, 0.18), 0 4px 8px -4px rgba(28, 25, 23, 0.08);
+
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Crimson Pro", "Playfair Display", Georgia, serif;
+}
+
+.dark {
+  --color-surface-base: #0c0a09;
+  --color-surface-raised: #1c1917;
+  --color-surface-elevated: #292524;
+  --color-surface-subtle: #1c1917;
+  --color-surface-inverse: #fafaf9;
+
+  --color-text-primary: #fafaf9;
+  --color-text-secondary: #d6d3d1;
+  --color-text-muted: #a8a29e;
+  --color-text-inverse: #0c0a09;
+
+  --color-border: #44403c;
+  --color-border-strong: #57534e;
+  --color-border-subtle: #292524;
+
+  --color-brand-primary: #fb923c;
+  --color-brand-primary-foreground: #431407;
+  --color-brand-hover: #fdba74;
+  --color-brand-pressed: #ea580c;
+  --color-brand-subtle: rgba(251, 146, 60, 0.12);
+  --color-brand-muted: #fb923c;
+  --color-brand-banner: #ea580c;
+
+  --color-accent-secondary: #2dd4bf;
+  --color-accent-secondary-foreground: #042f2e;
+  --color-accent-secondary-subtle: rgba(45, 212, 191, 0.12);
+
+  --color-accent-tertiary: #fb7185;
+  --color-accent-tertiary-foreground: #4c0519;
+  --color-accent-tertiary-subtle: rgba(251, 113, 133, 0.15);
+
+  --color-state-hover: rgba(255, 255, 255, 0.06);
+  --color-state-pressed: rgba(255, 255, 255, 0.1);
+  --color-state-selected: rgba(251, 146, 60, 0.18);
+  --color-state-disabled: rgba(255, 255, 255, 0.04);
+  --color-state-disabled-text: #78716c;
+
+  --color-status-success-subtle: rgba(22, 163, 74, 0.15);
+  --color-status-success-foreground: #86efac;
+  --color-status-warning-subtle: rgba(194, 65, 12, 0.15);
+  --color-status-warning-foreground: #fdba74;
+  --color-status-danger-subtle: rgba(225, 29, 72, 0.15);
+  --color-status-danger-foreground: #fda4af;
+  --color-status-danger-hover: #fb7185;
+  --color-status-danger-pressed: #e11d48;
+  --color-status-info-subtle: rgba(14, 116, 144, 0.15);
+  --color-status-info-foreground: #67e8f9;
+  --color-status-neutral-subtle: rgba(120, 113, 108, 0.15);
+  --color-status-neutral-foreground: #d6d3d1;
+
+  --color-focus-ring: #fb923c;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-dropdown: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -1px rgba(0, 0, 0, 0.25);
+  --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.25);
+  --shadow-card-hover: 0 12px 24px -8px rgba(0, 0, 0, 0.45), 0 4px 8px -4px rgba(0, 0, 0, 0.3);
+}
+
 /* Optional: data-autofilled hints if components set data-autofilled="high|medium|low" */
 input[data-autofilled="high"],
 select[data-autofilled="high"],
@@ -21,19 +159,41 @@ textarea[data-autofilled="low"] {
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
 }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
 body {
   margin: 0;
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-  background-color: #f8fafc;
-  color: #0f172a;
+  font-family: var(--font-sans);
+  background-color: var(--color-surface-base);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-display {
+  font-family: var(--font-display);
 }
 
 /*
  Global app table responsiveness:
  - If a section/card directly contains a table and has no explicit horizontal scrolling,
    enable horizontal scroll automatically so all columns remain reachable.
- - Existing explicit wrappers (overflow-x-auto) are untouched.
 */
 .erp-main-content :is(section, div):has(> table):not(.overflow-x-auto):not(.overflow-x-scroll) {
   overflow-x: auto;
@@ -41,6 +201,15 @@ body {
 
 .erp-main-content table {
   min-width: max-content;
+}
+
+/* Table row hover accent */
+.erp-main-content tbody tr {
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+.erp-main-content tbody tr:hover {
+  background-color: var(--color-state-hover);
+  box-shadow: inset 3px 0 0 var(--color-brand-primary);
 }
 
 .print-only {
@@ -95,7 +264,6 @@ body {
     border: 1px solid #dbe2ea;
   }
 
-  /* TNA Follow-up: print only timeline or only action list */
   body.print-timeline * {
     visibility: hidden;
   }
@@ -122,5 +290,148 @@ body {
     left: 0;
     top: 0;
     width: 100%;
+  }
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+/* —— Micro-interactions (Phase 3.3) —— */
+.card-lift {
+  transition:
+    transform 200ms ease-out,
+    box-shadow 200ms ease-out,
+    border-color 200ms ease-out;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-border-strong);
+}
+
+.btn-press {
+  transition:
+    transform 160ms ease-out,
+    filter 160ms ease-out,
+    background-color 160ms ease-out;
+}
+.btn-press:hover:not(:disabled) {
+  transform: scale(1.02);
+  filter: brightness(1.05);
+}
+.btn-press:active:not(:disabled) {
+  transform: scale(0.98);
+  filter: brightness(0.97);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-subtle) 0%,
+    var(--color-surface-elevated) 45%,
+    var(--color-surface-subtle) 90%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 0.5rem;
+}
+
+@keyframes sparkle-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.12);
+  }
+}
+
+.sparkle-pulse {
+  animation: sparkle-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-enter {
+  animation: toast-in 220ms ease-out;
+}
+
+@keyframes page-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.page-enter {
+  animation: page-slide-in 240ms ease-out;
+}
+
+.sidebar-expand {
+  transition: height 300ms ease, max-height 300ms ease, opacity 200ms ease;
+  overflow: hidden;
+}
+
+.glass-panel {
+  background: color-mix(in srgb, var(--color-surface-raised) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-lift,
+  .btn-press,
+  .sidebar-expand {
+    transition: none;
+  }
+  .card-lift:hover,
+  .btn-press:hover:not(:disabled) {
+    transform: none;
+  }
+  .skeleton-shimmer,
+  .sparkle-pulse,
+  .toast-enter,
+  .page-enter {
+    animation: none;
   }
 }

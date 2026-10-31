@@ -1252,7 +1252,7 @@ export function VendorDetailDrawer({
                       {paymentVouchers.map((v) => (
                         <li key={v.id}>
                           <a
-                            href={`/app/vouchers/${v.id}`}
+                            href={`/app/accounts/vouchers/${v.id}`}
                             className="text-brand-primary hover:underline"
                             target="_blank"
                             rel="noreferrer"

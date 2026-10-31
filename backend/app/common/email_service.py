@@ -519,6 +519,26 @@ def _build_password_changed_html(*, recipient_name: str) -> str:
     """.strip()
 
 
+async def send_new_lead_notification_email(*, to_email: str, lead: dict[str, str | None]) -> None:
+    """Notify sales that a visitor submitted the Book a demo / Contact form."""
+    from html import escape
+
+    rows = "".join(
+        f"<tr><td style='padding:4px 12px 4px 0;color:#6b7280;'>{escape(k)}</td>"
+        f"<td style='padding:4px 0;'>{escape(v or '—')}</td></tr>"
+        for k, v in lead.items()
+    )
+    message = MessageSchema(
+        subject=f"New Prime7 ERP lead: {lead.get('company') or lead.get('name') or 'website'}",
+        recipients=[to_email],
+        body=f"<html><body style='font-family:Arial,sans-serif;'><h2>New website lead</h2><table>{rows}</table></body></html>",
+        subtype=MessageType.html,
+        headers=POSTMARK_HEADERS,
+    )
+    fm = FastMail(get_mail_connection_config())
+    await fm.send_message(message)
+
+
 async def send_password_changed_notification_email(
     *,
     to_email: str,

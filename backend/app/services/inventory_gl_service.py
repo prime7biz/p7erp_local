@@ -416,6 +416,105 @@ async def post_process_order_receive_gl(
     )
 
 
+async def post_idt_issue_gl(
+    db: AsyncSession,
+    tenant_id: int,
+    user_id: int | None,
+    idt_id: int,
+    source_item_id: int,
+    target_item_id: int,
+    notes: str,
+) -> None:
+    """Dr WIP / Cr RM stock for inter-department issue (fail-soft via _post_balanced_voucher)."""
+    mv = (
+        await db.execute(
+            select(StockMovement).where(
+                StockMovement.tenant_id == tenant_id,
+                StockMovement.reference_type == "IDT",
+                StockMovement.reference_id == idt_id,
+                StockMovement.item_id == source_item_id,
+                StockMovement.movement_type == "OUT",
+            )
+        )
+    ).scalars().first()
+    val = _f(mv.movement_value) if mv else 0.0
+    if val <= 0:
+        # Fall back to qty * avg from notes path
+        return
+    in_acc = await resolve_inventory_accounts(db, tenant_id, source_item_id)
+    out_acc = await resolve_inventory_accounts(db, tenant_id, target_item_id)
+    inv_in = in_acc.get("inventory")
+    wip = out_acc.get("wip") or out_acc.get("inventory")
+    if not inv_in or not wip:
+        return
+    v_date = mv.movement_date or date.today()
+    entries = [
+        (wip, "DEBIT", val, notes),
+        (inv_in, "CREDIT", val, notes),
+    ]
+    await _post_balanced_voucher(
+        db,
+        tenant_id,
+        user_id,
+        v_date,
+        f"IDT issue #{idt_id}",
+        f"IDT-ISSUE-{idt_id}",
+        entries,
+        source_system="IDT",
+        source_id=idt_id,
+        action="ISSUE",
+    )
+
+
+async def post_idt_receive_gl(
+    db: AsyncSession,
+    tenant_id: int,
+    user_id: int | None,
+    idt_id: int,
+    source_item_id: int,
+    target_item_id: int,
+    notes: str,
+) -> None:
+    """Dr FG/WIP-next / Cr WIP-current for IDT receive."""
+    mv = (
+        await db.execute(
+            select(StockMovement).where(
+                StockMovement.tenant_id == tenant_id,
+                StockMovement.reference_type == "IDT",
+                StockMovement.reference_id == idt_id,
+                StockMovement.item_id == target_item_id,
+                StockMovement.movement_type == "IN",
+            )
+        )
+    ).scalars().first()
+    val = _f(mv.movement_value) if mv else 0.0
+    if val <= 0:
+        return
+    src_acc = await resolve_inventory_accounts(db, tenant_id, source_item_id)
+    tgt_acc = await resolve_inventory_accounts(db, tenant_id, target_item_id)
+    wip = src_acc.get("wip") or src_acc.get("inventory")
+    inv_out = tgt_acc.get("inventory")
+    if not inv_out or not wip:
+        return
+    v_date = mv.movement_date or date.today()
+    entries = [
+        (inv_out, "DEBIT", val, notes),
+        (wip, "CREDIT", val, notes),
+    ]
+    await _post_balanced_voucher(
+        db,
+        tenant_id,
+        user_id,
+        v_date,
+        f"IDT receive #{idt_id}",
+        f"IDT-RECV-{idt_id}",
+        entries,
+        source_system="IDT",
+        source_id=idt_id,
+        action="RECEIVE",
+    )
+
+
 async def post_stock_adjustment_gl(
     db: AsyncSession,
     tenant_id: int,

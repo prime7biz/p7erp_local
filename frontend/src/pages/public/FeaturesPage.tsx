@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import {
   Calculator,
   Package,
@@ -180,6 +180,14 @@ function ModuleVisual({ mod, index }: { mod: typeof modules[0]; index: number })
 
 export function FeaturesPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const { hash } = useLocation();
+
+  // Landing module cards deep-link here (/features#merchandising); SPA navigation does not scroll to hashes.
+  useEffect(() => {
+    if (!hash) return;
+    const el = document.getElementById(decodeURIComponent(hash.slice(1)));
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [hash]);
 
   return (
     <>

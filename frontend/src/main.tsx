@@ -4,6 +4,7 @@ import { HelmetProvider } from "react-helmet-async";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
+import "@/lib/theme";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>

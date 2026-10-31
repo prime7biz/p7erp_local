@@ -3,12 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#EA580C" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://prime7erp.com" />
     <!-- Brand: Prime7 ERP (must match src/config/seo.ts to avoid title/description flash before React hydrates) -->
     <meta name="description" content="Prime7 ERP – AI-powered cloud ERP for garment manufacturers and buying houses. Merchandising, production, inventory, LC management, accounting, and HR in one platform." />
     <title>Prime7 ERP – Cloud ERP for Garments & Buying Houses</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Apply theme before React to avoid flash of wrong colors (FOUC). -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("p7_theme");
+          var dark =
+            stored === "dark" ||
+            (stored !== "light" &&
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+          else document.documentElement.classList.remove("dark");
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

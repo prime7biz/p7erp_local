@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { MotionConfig } from "framer-motion";
+import { useMarketingCurrency } from "@/hooks/useMarketingCurrency";
 import { Menu, X, Globe, Mail, Phone, MessageCircle, MapPin, ExternalLink, ChevronDown } from "lucide-react";
 
 const navLinks = [
@@ -24,7 +26,7 @@ const currencies = [
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [currency, setCurrency] = useState("BDT");
+  const [currency, setCurrency] = useMarketingCurrency();
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const currencyRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
@@ -194,7 +196,10 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         )}
       </header>
 
-      <main className="flex-1">{children}</main>
+      {/* Honour the OS "reduce motion" setting for every framer-motion animation on public pages. */}
+      <MotionConfig reducedMotion="user">
+        <main className="flex-1">{children}</main>
+      </MotionConfig>
 
       <footer className="bg-gradient-to-b from-surface-inverse to-surface-inverse/95 text-text-inverse">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">

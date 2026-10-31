@@ -1,18 +1,27 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   api,
   type InventoryDocumentPrintPayload,
   type InventoryGlPostingDetail,
-  type InventoryItemResponse,
   type ProcessOrderCreate,
   type ProcessOrderResponse,
   type VendorResponse,
   type WarehouseResponse,
 } from "@/api/client";
+import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { listPageRootClass } from "@/components/app/listPageLayout";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { GlPostingsPanel } from "@/components/inventory/GlPostingsPanel";
+import { InventoryEmptyState } from "@/components/inventory/InventoryListStates";
+import {
+  InventoryListViewToggle,
+  inventoryScrollTableClass,
+} from "@/components/inventory/InventoryMobileList";
 import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocumentPrintSheets";
 import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
+import { useListViewPreference } from "@/hooks/useInventoryListView";
 import { logApiError } from "@/utils/logApiError";
+import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
 
 const PROCESS_TYPES = ["KNITTING", "DYEING", "FINISHING", "CUTTING", "WASHING", "PRINTING"];
 
@@ -31,14 +40,12 @@ function statusBadgeClass(status: string) {
   }
 }
 
-function defaultForm(items: InventoryItemResponse[], warehouses: WarehouseResponse[]): ProcessOrderCreate {
-  const input = items[0]?.id ?? 0;
-  const output = items[1]?.id ?? items[0]?.id ?? 0;
+function defaultForm(warehouses: WarehouseResponse[]): ProcessOrderCreate {
   return {
     process_type: "KNITTING",
     process_method: "in_house",
-    input_item_id: input,
-    output_item_id: output,
+    input_item_id: 0,
+    output_item_id: 0,
     warehouse_id: warehouses[0]?.id ?? null,
     output_warehouse_id: warehouses[0]?.id ?? null,
     input_quantity: "0",
@@ -59,14 +66,14 @@ function defaultForm(items: InventoryItemResponse[], warehouses: WarehouseRespon
 
 export function ProcessOrdersPage() {
   const [rows, setRows] = useState<ProcessOrderResponse[]>([]);
-  const [items, setItems] = useState<InventoryItemResponse[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
   const [vendors, setVendors] = useState<VendorResponse[]>([]);
+  const [itemLabels, setItemLabels] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kpi, setKpi] = useState({ openPo: 0, openGrn: 0, pendingCr: 0, lowStock: 0 });
   const [prevKpi, setPrevKpi] = useState<{ openPo: number; openGrn: number; pendingCr: number; lowStock: number } | null>(null);
-  const [form, setForm] = useState<ProcessOrderCreate>(defaultForm([], []));
+  const [form, setForm] = useState<ProcessOrderCreate>(defaultForm([]));
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [receiveModal, setReceiveModal] = useState<{
     row: ProcessOrderResponse;
@@ -85,6 +92,7 @@ export function ProcessOrdersPage() {
   const [postingsOpen, setPostingsOpen] = useState(false);
   const [postingsRows, setPostingsRows] = useState<InventoryGlPostingDetail[]>([]);
   const [postingsTitle, setPostingsTitle] = useState("");
+  const { isNarrow, view, setView, showCards } = useListViewPreference();
 
   useEffect(() => {
     const close = () => setOpenActionsId(null);
@@ -92,12 +100,19 @@ export function ProcessOrdersPage() {
     return () => document.removeEventListener("click", close);
   }, []);
 
+  const whName = useCallback(
+    (id: number | null | undefined) => {
+      if (id == null) return "—";
+      return warehouses.find((w) => w.id === id)?.name ?? `#${id}`;
+    },
+    [warehouses],
+  );
+
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [poRows, itms, whs, vnd] = await Promise.all([
+      const [poRows, whs, vnd] = await Promise.all([
         api.listProcessOrders(),
-        api.listInventoryItems(),
         api.listWarehouses(),
         api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }),
       ]);
@@ -107,7 +122,14 @@ export function ProcessOrdersPage() {
         api.getStockSummary(),
       ]);
       setRows(poRows);
-      setItems(itms);
+      setItemLabels((prev) => {
+        const next = { ...prev };
+        for (const r of poRows) {
+          if (r.input_item_name) next[r.input_item_id] = `${r.input_item_code ?? ""} ${r.input_item_name}`.trim();
+          if (r.output_item_name) next[r.output_item_id] = `${r.output_item_code ?? ""} ${r.output_item_name}`.trim();
+        }
+        return next;
+      });
       setWarehouses(whs);
       setVendors(vnd.items);
       const nextKpi = {
@@ -126,9 +148,7 @@ export function ProcessOrdersPage() {
       }
       setKpi(nextKpi);
       localStorage.setItem("p7_inventory_kpi_snapshot", JSON.stringify(nextKpi));
-      if (itms.length > 0) {
-        setForm((prev) => (prev.input_item_id === 0 ? defaultForm(itms, whs) : prev));
-      }
+      setForm((prev) => (prev.input_item_id === 0 && prev.output_item_id === 0 ? defaultForm(whs) : prev));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -138,7 +158,6 @@ export function ProcessOrdersPage() {
     void load();
   }, [load]);
 
-  const itemName = useMemo(() => new Map(items.map((i) => [i.id, i.name])), [items]);
   const trend = (key: keyof typeof kpi) => {
     if (!prevKpi) return "";
     if (kpi[key] > prevKpi[key]) return "↑";
@@ -168,7 +187,7 @@ export function ProcessOrdersPage() {
         output_lot_number: form.output_lot_number?.trim() || null,
       };
       await api.createProcessOrder(payload);
-      setForm(defaultForm(items, warehouses));
+      setForm(defaultForm(warehouses));
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -231,15 +250,131 @@ export function ProcessOrdersPage() {
     }
   };
 
+  const renderRowActions = (row: ProcessOrderResponse) => (
+    <div className="relative inline-block text-left">
+      <button
+        type="button"
+        className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpenActionsId((id) => (id === row.id ? null : row.id));
+        }}
+      >
+        Actions
+      </button>
+      {openActionsId === row.id ? (
+        <div
+          className="absolute right-0 z-10 mt-1 w-44 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {row.status === "DRAFT" ? (
+            <button
+              type="button"
+              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+              onClick={() => {
+                setOpenActionsId(null);
+                void issueOrder(row.id);
+              }}
+            >
+              Issue input
+            </button>
+          ) : null}
+          {row.status === "ISSUED" ? (
+            <>
+              <button
+                type="button"
+                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                onClick={() => {
+                  setOpenActionsId(null);
+                  setCostModal({
+                    processOrderId: row.id,
+                    amount: "0",
+                    cost_type: "ADD_ON",
+                    description: "",
+                  });
+                }}
+              >
+                Add cost line
+              </button>
+              <button
+                type="button"
+                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                onClick={() => {
+                  setOpenActionsId(null);
+                  setReceiveModal({
+                    row,
+                    actual_output_qty: row.expected_output_qty || "1",
+                    processing_charges: row.processing_charges || "0",
+                  });
+                }}
+              >
+                Receive output
+              </button>
+            </>
+          ) : null}
+          {row.status === "RECEIVED" ? (
+            <button
+              type="button"
+              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+              onClick={() => {
+                setOpenActionsId(null);
+                void approveOrder(row.id);
+              }}
+            >
+              Approve
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+            onClick={() => {
+              setOpenActionsId(null);
+              void (async () => {
+                try {
+                  const d = await api.getProcessOrderPrintData(row.id);
+                  setPrintData(d);
+                  setPrintTitle(row.process_number);
+                  setPrintOpen(true);
+                } catch (e) {
+                  logApiError("ProcessOrdersPage.print", e);
+                  setError((e as Error).message);
+                }
+              })();
+            }}
+          >
+            Print preview
+          </button>
+          <button
+            type="button"
+            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+            onClick={() => {
+              setOpenActionsId(null);
+              void (async () => {
+                try {
+                  const p = await api.getProcessOrderGlPostings(row.id);
+                  setPostingsRows(p);
+                  setPostingsTitle(row.process_number);
+                  setPostingsOpen(true);
+                } catch (e) {
+                  logApiError("ProcessOrdersPage.postings", e);
+                  setError((e as Error).message);
+                }
+              })();
+            }}
+          >
+            GL postings
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Process Orders</h1>
-        <p className="text-sm text-text-muted">
-          Multi-stage conversion: input warehouse, output warehouse, subcontractor vendor, prior stage link, and add-on costs before
-          receive.
-        </p>
-      </div>
+    <div className={listPageRootClass}>
+      <AppPageHeader
+        title="Process Orders"
+        description="Multi-stage conversion: input warehouse, output warehouse, subcontractor vendor, prior stage link, and add-on costs before receive."
+      />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <div className="rounded-xl border border-border bg-surface-raised p-3 text-sm">
@@ -269,6 +404,12 @@ export function ProcessOrdersPage() {
       </div>
 
       {error ? <div className="rounded border border-status-danger/20 bg-status-danger-subtle p-3 text-sm text-status-danger-foreground">{error}</div> : null}
+
+      {isNarrow ? (
+        <div className="flex justify-end">
+          <InventoryListViewToggle value={view} onChange={setView} />
+        </div>
+      ) : null}
 
       <div className="rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="mb-3 text-sm font-semibold text-text-secondary">Create Process Order</h2>
@@ -315,28 +456,36 @@ export function ProcessOrdersPage() {
               </option>
             ))}
           </select>
-          <select
+          <RemoteSearchSelect
             className="rounded border px-3 py-2 text-sm"
-            value={String(form.input_item_id)}
-            onChange={(e) => setForm((prev) => ({ ...prev, input_item_id: Number(e.target.value) }))}
-          >
-            {items.map((i) => (
-              <option key={i.id} value={i.id}>
-                Input: {i.name}
-              </option>
-            ))}
-          </select>
-          <select
+            placeholder="Search input item…"
+            value={form.input_item_id > 0 ? form.input_item_id : ""}
+            onChange={(next, opt) => {
+              const id = next === "" ? 0 : Number(next);
+              if (opt?.label && id > 0) {
+                setItemLabels((prev) => ({ ...prev, [id]: opt.meta?.name ?? opt.label }));
+              }
+              setForm((prev) => ({ ...prev, input_item_id: id }));
+            }}
+            fetchPage={fetchInventoryItemPage}
+            hydrateById={hydrateInventoryItem}
+            allowClear
+          />
+          <RemoteSearchSelect
             className="rounded border px-3 py-2 text-sm"
-            value={String(form.output_item_id)}
-            onChange={(e) => setForm((prev) => ({ ...prev, output_item_id: Number(e.target.value) }))}
-          >
-            {items.map((i) => (
-              <option key={i.id} value={i.id}>
-                Output: {i.name}
-              </option>
-            ))}
-          </select>
+            placeholder="Search output item…"
+            value={form.output_item_id > 0 ? form.output_item_id : ""}
+            onChange={(next, opt) => {
+              const id = next === "" ? 0 : Number(next);
+              if (opt?.label && id > 0) {
+                setItemLabels((prev) => ({ ...prev, [id]: opt.meta?.name ?? opt.label }));
+              }
+              setForm((prev) => ({ ...prev, output_item_id: id }));
+            }}
+            fetchPage={fetchInventoryItemPage}
+            hydrateById={hydrateInventoryItem}
+            allowClear
+          />
           <label className="flex items-center gap-2 text-xs text-text-secondary md:col-span-2">
             <input
               type="checkbox"
@@ -445,174 +594,82 @@ export function ProcessOrdersPage() {
         </form>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface-raised">
-        <table className="min-w-full text-sm">
-          <thead className="bg-surface-subtle text-left text-text-secondary">
-            <tr>
-              <th className="px-4 py-3">Process #</th>
-              <th className="px-4 py-3">Type / stage</th>
-              <th className="px-4 py-3">Prior</th>
-              <th className="px-4 py-3">Vendor</th>
-              <th className="px-4 py-3">WH in → out</th>
-              <th className="px-4 py-3">Input</th>
-              <th className="px-4 py-3">Output</th>
-              <th className="px-4 py-3">Loss</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-t">
-                <td className="px-4 py-3 font-medium">{row.process_number}</td>
-                <td className="px-4 py-3">
-                  {row.process_type}
-                  {row.process_stage ? <div className="text-xs text-text-muted">{row.process_stage}</div> : null}
-                </td>
-                <td className="px-4 py-3 text-xs">{row.prior_process_order_id ? `#${row.prior_process_order_id}` : "—"}</td>
-                <td className="px-4 py-3 text-xs">{row.vendor_id ? `#${row.vendor_id}` : "—"}</td>
-                <td className="px-4 py-3 text-xs">
-                  {row.warehouse_id ?? "—"} → {row.output_warehouse_id ?? "—"}
-                </td>
-                <td className="px-4 py-3">{itemName.get(row.input_item_id) ?? row.input_item_id}</td>
-                <td className="px-4 py-3">{itemName.get(row.output_item_id) ?? row.output_item_id}</td>
-                <td className="px-4 py-3 text-xs">
-                  {row.planned_loss_pct ? `plan ${row.planned_loss_pct}%` : "—"}
-                  {row.actual_loss_qty ? <div>act {row.actual_loss_qty}</div> : null}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(row.status)}`}>{row.status}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="relative inline-block text-left">
-                    <button
-                      type="button"
-                      className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenActionsId((id) => (id === row.id ? null : row.id));
-                      }}
-                    >
-                      Actions
-                    </button>
-                    {openActionsId === row.id ? (
-                      <div
-                        className="absolute right-0 z-10 mt-1 w-44 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {row.status === "DRAFT" ? (
-                          <button
-                            type="button"
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            onClick={() => {
-                              setOpenActionsId(null);
-                              void issueOrder(row.id);
-                            }}
-                          >
-                            Issue input
-                          </button>
-                        ) : null}
-                        {row.status === "ISSUED" ? (
-                          <>
-                            <button
-                              type="button"
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                              onClick={() => {
-                                setOpenActionsId(null);
-                                setCostModal({
-                                  processOrderId: row.id,
-                                  amount: "0",
-                                  cost_type: "ADD_ON",
-                                  description: "",
-                                });
-                              }}
-                            >
-                              Add cost line
-                            </button>
-                            <button
-                              type="button"
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                              onClick={() => {
-                                setOpenActionsId(null);
-                                setReceiveModal({
-                                  row,
-                                  actual_output_qty: row.expected_output_qty || "1",
-                                  processing_charges: row.processing_charges || "0",
-                                });
-                              }}
-                            >
-                              Receive output
-                            </button>
-                          </>
-                        ) : null}
-                        {row.status === "RECEIVED" ? (
-                          <button
-                            type="button"
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                            onClick={() => {
-                              setOpenActionsId(null);
-                              void approveOrder(row.id);
-                            }}
-                          >
-                            Approve
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                          onClick={() => {
-                            setOpenActionsId(null);
-                            void (async () => {
-                              try {
-                                const d = await api.getProcessOrderPrintData(row.id);
-                                setPrintData(d);
-                                setPrintTitle(row.process_number);
-                                setPrintOpen(true);
-                              } catch (e) {
-                                logApiError("ProcessOrdersPage.print", e);
-                                setError((e as Error).message);
-                              }
-                            })();
-                          }}
-                        >
-                          Print preview
-                        </button>
-                        <button
-                          type="button"
-                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
-                          onClick={() => {
-                            setOpenActionsId(null);
-                            void (async () => {
-                              try {
-                                const p = await api.getProcessOrderGlPostings(row.id);
-                                setPostingsRows(p);
-                                setPostingsTitle(row.process_number);
-                                setPostingsOpen(true);
-                              } catch (e) {
-                                logApiError("ProcessOrdersPage.postings", e);
-                                setError((e as Error).message);
-                              }
-                            })();
-                          }}
-                        >
-                          GL postings
-                        </button>
-                      </div>
-                    ) : null}
+      {!rows.length ? (
+        <InventoryEmptyState
+          title="No process orders found yet"
+          description="Create a process order above to convert input stock to output."
+        />
+      ) : showCards ? (
+        <div className="space-y-3">
+          {rows.map((row) => (
+            <div key={row.id} className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-semibold text-text-primary">{row.process_number}</div>
+                  <div className="text-sm text-text-secondary">
+                    {row.process_type}
+                    {row.process_stage ? ` · ${row.process_stage}` : ""}
                   </div>
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 ? (
+                  <div className="mt-1 text-xs text-text-muted">
+                    {whName(row.warehouse_id)} → {whName(row.output_warehouse_id)}
+                  </div>
+                  <div className="mt-1">
+                    <span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(row.status)}`}>
+                      {row.status}
+                    </span>
+                  </div>
+                </div>
+                {renderRowActions(row)}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className={`rounded-xl border border-border bg-surface-raised ${inventoryScrollTableClass}`}>
+          <table className="min-w-[960px] w-full text-sm">
+            <thead className="bg-surface-subtle text-left text-text-secondary">
               <tr>
-                <td className="px-4 py-8 text-center text-text-muted" colSpan={10}>
-                  No process orders found yet.
-                </td>
+                <th className="px-4 py-3">Process #</th>
+                <th className="px-4 py-3">Type / stage</th>
+                <th className="px-4 py-3">Prior</th>
+                <th className="px-4 py-3">Vendor</th>
+                <th className="px-4 py-3">WH in → out</th>
+                <th className="px-4 py-3">Input</th>
+                <th className="px-4 py-3">Output</th>
+                <th className="px-4 py-3">Loss</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Actions</th>
               </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className="border-t">
+                  <td className="px-4 py-3 font-medium">{row.process_number}</td>
+                  <td className="px-4 py-3">
+                    {row.process_type}
+                    {row.process_stage ? <div className="text-xs text-text-muted">{row.process_stage}</div> : null}
+                  </td>
+                  <td className="px-4 py-3 text-xs">{row.prior_process_order_id ? `#${row.prior_process_order_id}` : "—"}</td>
+                  <td className="px-4 py-3 text-xs">{row.vendor_id ? `#${row.vendor_id}` : "—"}</td>
+                  <td className="px-4 py-3 text-xs">
+                    {whName(row.warehouse_id)} → {whName(row.output_warehouse_id)}
+                  </td>
+                  <td className="px-4 py-3">{itemLabels[row.input_item_id] ?? row.input_item_id}</td>
+                  <td className="px-4 py-3">{itemLabels[row.output_item_id] ?? row.output_item_id}</td>
+                  <td className="px-4 py-3 text-xs">
+                    {row.planned_loss_pct ? `plan ${row.planned_loss_pct}%` : "—"}
+                    {row.actual_loss_qty ? <div>act {row.actual_loss_qty}</div> : null}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`rounded px-2 py-1 text-xs font-semibold ${statusBadgeClass(row.status)}`}>{row.status}</span>
+                  </td>
+                  <td className="px-4 py-3">{renderRowActions(row)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {receiveModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">

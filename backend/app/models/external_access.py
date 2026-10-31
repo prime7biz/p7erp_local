@@ -58,6 +58,8 @@ class ExternalPrincipal(Base):
     must_reset_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     password_reset_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     password_reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Bumped on logout / password reset / deactivation; tokens carrying an older value are rejected.
+    session_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False

@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from app.common.jwt_compat import JWTError, jwt
 from passlib.context import CryptContext
 from passlib.exc import UnknownHashError
 from sqlalchemy import select
@@ -37,6 +37,24 @@ async def verify_password(plain: str, hashed: str) -> bool:
     return await asyncio.to_thread(_verify_password_sync, plain, hashed)
 
 
+_dummy_hash: str | None = None
+
+
+async def verify_password_constant_time(plain: str, hashed: str | None) -> bool:
+    """Verify against the real hash, or a dummy one when the account is missing.
+
+    Keeps login latency the same for unknown accounts so timing cannot reveal
+    which usernames/emails exist.
+    """
+    global _dummy_hash
+    if hashed:
+        return await verify_password(plain, hashed)
+    if _dummy_hash is None:
+        _dummy_hash = await hash_password("p7-dummy-password-for-timing")
+    await verify_password(plain, _dummy_hash)
+    return False
+
+
 def create_access_token(
     subject: str | int,
     expires_delta: timedelta | None = None,
@@ -54,12 +72,41 @@ def create_access_token(
 def decode_access_token(token: str) -> dict:
     settings = get_settings()
     try:
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        # verify_aud=False so we can inspect aud/typ and reject platform-admin explicitly
+        # (defense-in-depth; python-jose would otherwise fail on aud alone).
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=[settings.jwt_algorithm],
+            options={"verify_aud": False},
+        )
         return payload
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
+        )
+
+
+def is_internal_access_payload(payload: dict) -> bool:
+    """Allow-list: staff access tokens carry only sub/exp (+ optional sv).
+
+    Any typ/aud/use claim marks a different token family (platform admin,
+    external portal, password reset) that must never authenticate staff routes.
+    """
+    for claim in ("typ", "aud", "use"):
+        if payload.get(claim) is not None:
+            return False
+    sub = str(payload.get("sub") or "")
+    return bool(sub) and not sub.startswith("ext:")
+
+
+def _reject_non_internal_token(payload: dict) -> None:
+    """Reject platform-admin, external, and password-reset JWTs on internal /api/v1 routes."""
+    if not is_internal_access_payload(payload):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
         )
 
 
@@ -71,6 +118,7 @@ async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
 ) -> User:
     payload = decode_access_token(credentials.credentials)
+    _reject_non_internal_token(payload)
     sub = payload.get("sub")
     if not sub:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
@@ -119,10 +167,13 @@ async def get_current_user_optional(
         return None
     try:
         payload = decode_access_token(credentials.credentials)
+        _reject_non_internal_token(payload)
         sub = payload.get("sub")
         if not sub:
             return None
         user_id = int(sub)
+    except HTTPException:
+        return None
     except (JWTError, ValueError):
         return None
     result = await db.execute(select(User).where(User.id == user_id, User.is_active.is_(True)))

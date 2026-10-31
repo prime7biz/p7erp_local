@@ -208,7 +208,7 @@ export function GoodsReceivingPage() {
         description="Inventory · PO and non-PO receipts with accepted/rejected quantities, acknowledgement, and finance vendor bills. Larger tap targets for warehouse use."
         actions={
           <Link
-            to="/app/purchase-orders"
+            to="/app/inventory/purchase-orders"
             className="rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle min-h-[44px] inline-flex items-center"
           >
             Purchase orders

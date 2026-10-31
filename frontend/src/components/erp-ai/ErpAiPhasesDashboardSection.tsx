@@ -331,7 +331,7 @@ export function ErpAiPhasesDashboardSection() {
               AR/AP aging
             </Link>
             {" · "}
-            <Link to="/app/manufacturing/planning" className="text-brand-primary hover:underline">
+            <Link to="/app/production/planning" className="text-brand-primary hover:underline">
               Production planning
             </Link>
           </span>

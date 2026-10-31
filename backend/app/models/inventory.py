@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import datetime, date
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -19,6 +20,10 @@ class Warehouse(Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_production_floor: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_store: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_rejected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_quarantine: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -51,6 +56,13 @@ class StockGroup(Base):
     grni_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    sales_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    purchase_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    default_valuation_method: Mapped[str] = mapped_column(String(8), nullable=False, default="FIFO")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -338,6 +350,9 @@ class StockMovement(Base):
     movement_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     lot_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    batch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("stock_batches.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -420,6 +435,76 @@ class InventoryCostLayer(Base):
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     layer_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class StockItemPrice(Base):
+    """Multiple named price lists per stock item (Wholesale / Retail / Distributor)."""
+
+    __tablename__ = "stock_item_prices"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "stock_item_id",
+            "price_list_name",
+            "effective_from",
+            name="uq_stock_item_prices_list_effective",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    stock_item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), nullable=False, index=True)
+    price_list_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="BDT")
+    effective_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class StockBatch(Base):
+    """Physical batch / lot per item and godown (warehouse)."""
+
+    __tablename__ = "stock_batches"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "stock_item_id",
+            "batch_number",
+            "godown_id",
+            name="uq_stock_batches_item_batch_godown",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    stock_item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), nullable=False, index=True)
+    batch_number: Mapped[str] = mapped_column(String(64), nullable=False)
+    manufacturing_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    opening_qty: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    received_qty: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    issued_qty: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    current_qty: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0"))
+    cost_per_unit: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=Decimal("0"))
+    godown_id: Mapped[int | None] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_movement_id: Mapped[int | None] = mapped_column(
+        ForeignKey("stock_movements.id", ondelete="SET NULL"), nullable=True
+    )
+    goods_receiving_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("goods_receiving_items.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="ACTIVE", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class InventoryGlPosting(Base):
@@ -814,3 +899,364 @@ class ConsumptionChangeRequest(Base):
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+# --- Sprint I1: MRP / reorder / IDT / process loss ---
+
+
+class PlannedOrder(Base):
+    __tablename__ = "planned_orders"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "planned_order_number", name="uq_planned_orders_tenant_number"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    planned_order_number: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_bom_id: Mapped[int | None] = mapped_column(
+        ForeignKey("boms.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
+    required_qty: Mapped[Decimal] = mapped_column(Numeric(15, 4), nullable=False)
+    planned_qty: Mapped[Decimal] = mapped_column(Numeric(15, 4), nullable=False)
+    requirement_date: Mapped[date] = mapped_column(Date, nullable=False)
+    release_date: Mapped[date] = mapped_column(Date, nullable=False)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PLANNED", index=True)
+    generated_po_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True
+    )
+    generated_mo_id: Mapped[int | None] = mapped_column(
+        ForeignKey("manufacturing_orders.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class ReorderSuggestion(Base):
+    __tablename__ = "reorder_suggestions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
+    warehouse_id: Mapped[int | None] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    current_stock: Mapped[Decimal] = mapped_column(Numeric(15, 4), nullable=False)
+    reorder_level: Mapped[Decimal] = mapped_column(Numeric(15, 4), nullable=False)
+    suggested_qty: Mapped[Decimal] = mapped_column(Numeric(15, 4), nullable=False)
+    preferred_vendor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vendors.id", ondelete="SET NULL"), nullable=True
+    )
+    estimated_cost: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING", index=True)
+    generated_po_id: Mapped[int | None] = mapped_column(
+        ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class InterDepartmentTransfer(Base):
+    __tablename__ = "inter_department_transfers"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "idt_number", name="uq_idt_tenant_number"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    idt_number: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    idt_date: Mapped[date] = mapped_column(Date, nullable=False)
+    from_warehouse_id: Mapped[int] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    to_warehouse_id: Mapped[int] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    process_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False)
+    source_qty_issued: Mapped[Decimal] = mapped_column(Numeric(15, 4), nullable=False)
+    source_qty_unit: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_batch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("stock_batches.id", ondelete="SET NULL"), nullable=True
+    )
+    target_item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False)
+    target_qty_expected: Mapped[Decimal] = mapped_column(Numeric(15, 4), nullable=False)
+    target_qty_received: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
+    target_qty_unit: Mapped[str] = mapped_column(String(16), nullable=False)
+    process_loss_qty: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
+    process_loss_percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    standard_process_loss_percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    loss_exception: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_job_work: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    job_work_vendor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vendors.id", ondelete="SET NULL"), nullable=True
+    )
+    job_work_cost_per_unit: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
+    job_work_total_cost: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+    transport_cost: Mapped[Decimal] = mapped_column(
+        Numeric(15, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    other_charges: Mapped[Decimal] = mapped_column(
+        Numeric(15, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="ISSUED", index=True)
+    source_item_cost: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
+    target_item_value: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
+    source_voucher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True
+    )
+    target_voucher_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vouchers.id", ondelete="SET NULL"), nullable=True
+    )
+    linked_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    narration: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class InterDepartmentTransferLine(Base):
+    __tablename__ = "inter_department_transfer_lines"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    idt_id: Mapped[int] = mapped_column(
+        ForeignKey("inter_department_transfers.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    source_item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False)
+    source_qty: Mapped[Decimal] = mapped_column(Numeric(15, 4), nullable=False)
+    source_batch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("stock_batches.id", ondelete="SET NULL"), nullable=True
+    )
+    source_unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class ProcessLossStandard(Base):
+    __tablename__ = "process_loss_standards"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "process_name",
+            "item_category_id",
+            name="uq_process_loss_standards_tenant_process_cat",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    process_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    standard_loss_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    warning_threshold_percent: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), nullable=False, default=Decimal("5.00"), server_default="5.00"
+    )
+    item_category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("item_categories.id", ondelete="SET NULL"), nullable=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class GrnQualityInspection(Base):
+    """Inbound QC for a GRN line (Sprint I2)."""
+
+    __tablename__ = "grn_quality_inspections"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "grn_item_id", name="uq_grn_qc_tenant_grn_item"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    grn_id: Mapped[int] = mapped_column(
+        ForeignKey("goods_receiving.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    grn_item_id: Mapped[int] = mapped_column(
+        ForeignKey("goods_receiving_items.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    inspection_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    inspected_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    received_qty: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    accepted_qty: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    rejected_qty: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    hold_qty: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    parameters: Mapped[dict | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), nullable=True
+    )
+    result: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING", index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photos: Mapped[list | dict | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), nullable=True
+    )
+    target_warehouse_id: Mapped[int | None] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True
+    )
+    quarantine_warehouse_id: Mapped[int | None] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True
+    )
+    rejected_warehouse_id: Mapped[int | None] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True
+    )
+    debit_note_suggested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class CycleCountTask(Base):
+    """Scheduled / completed cycle count for an item at a warehouse (Sprint I3)."""
+
+    __tablename__ = "cycle_count_tasks"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), nullable=False, index=True)
+    warehouse_id: Mapped[int] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    scheduled_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="SCHEDULED", index=True)
+    system_qty: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    counted_qty: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    variance_qty: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    variance_value: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    abc_class: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    adjustment_suggested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    counted_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    counted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class StockSerial(Base):
+    """Individual serial-number unit tracking (Sprint I4)."""
+
+    __tablename__ = "stock_serials"
+    __table_args__ = (UniqueConstraint("tenant_id", "serial_number", name="uq_stock_serials_tenant_serial"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), nullable=False, index=True)
+    serial_number: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="IN_STOCK", index=True)
+    warehouse_id: Mapped[int | None] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    grn_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("goods_receiving_items.id", ondelete="SET NULL"), nullable=True
+    )
+    dc_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("delivery_challan_items.id", ondelete="SET NULL"), nullable=True
+    )
+    warranty_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    warranty_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class ItemKit(Base):
+    """Sales kit / bundle header (Sprint I4)."""
+
+    __tablename__ = "item_kits"
+    __table_args__ = (UniqueConstraint("tenant_id", "kit_code", name="uq_item_kits_tenant_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    kit_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    kit_price: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class ItemKitComponent(Base):
+    """Component line of a sales kit (Sprint I4)."""
+
+    __tablename__ = "item_kit_components"
+    __table_args__ = (UniqueConstraint("kit_id", "item_id", name="uq_item_kit_components_kit_item"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    kit_id: Mapped[int] = mapped_column(ForeignKey("item_kits.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
+    quantity: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("1"), server_default="1"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class ConsignmentStock(Base):
+    """Vendor-owned consignment inventory at our warehouse (Sprint I4)."""
+
+    __tablename__ = "consignment_stocks"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    vendor_id: Mapped[int] = mapped_column(ForeignKey("vendors.id", ondelete="RESTRICT"), nullable=False, index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("items.id", ondelete="RESTRICT"), nullable=False, index=True)
+    warehouse_id: Mapped[int] = mapped_column(
+        ForeignKey("warehouses.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    consigned_qty: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    consumed_qty: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    remaining_qty: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    billed_qty: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0"), server_default="0"
+    )
+    is_billed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    agreement_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    settlement_terms_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_settled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

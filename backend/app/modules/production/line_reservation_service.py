@@ -201,6 +201,25 @@ async def confirm_reservation_firm(
         resource="sewing_line_style_config",
         details=f"config_id={config_id}",
     )
+    # Optional spine sync when line_allocation_confirm_enabled (and tna_event_sync) is on.
+    from app.common.tenant_feature_keys import is_line_allocation_confirm_enabled
+
+    if row.order_id and is_line_allocation_confirm_enabled(tenant.feature_flags):
+        try:
+            from app.modules.merch.constants import TNA_EVENT_LINE_ALLOCATED
+            from app.modules.merch.followup_sync_service import maybe_sync_followup
+
+            await maybe_sync_followup(
+                db,
+                tenant=tenant,
+                order_id=row.order_id,
+                event_key=TNA_EVENT_LINE_ALLOCATED,
+                external_id=row.id,
+                user_id=user_id,
+                note=f"[auto-sync] Line allocation confirmed config={row.id}",
+            )
+        except Exception:
+            pass
     return row
 
 

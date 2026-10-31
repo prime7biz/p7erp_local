@@ -20,6 +20,16 @@ class Settings(BaseSettings):
     external_jwt_refresh_expire_days: int = 14
     external_login_max_attempts: int = 8
     external_login_lockout_minutes: int = 30
+    # Staff (internal) login lockout — mirrors external portal behaviour.
+    staff_login_max_attempts: int = 8
+    staff_login_lockout_minutes: int = 30
+    # Soft rate limit for POST /auth/login and external login (per IP + company), requests per minute.
+    login_rate_limit_per_minute: int = 20
+    # true: alert scans / weekly AI reports / platform maintenance run as loops inside each API
+    # process (advisory-locked so one runs). false: the Celery beat service schedules them.
+    inprocess_schedulers_enabled: bool = True
+    # Where website "Book a demo" leads are emailed (leads are always stored in marketing_leads).
+    sales_notification_email: str = ""
     tenant_strategy: str = "header"  # header | subdomain | path
     cors_origins: str = ""
     redis_url: str | None = None

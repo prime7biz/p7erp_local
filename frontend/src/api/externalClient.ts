@@ -1,6 +1,7 @@
 /**
  * HTTP client for `/api/external/*` — separate auth from internal ERP (`p7_token`).
  */
+import { API_BASE } from "@/api/apiBase";
 import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
 import { redirectToUnifiedLogin } from "@/utils/portalAuthRedirect";
 import type {
@@ -9,8 +10,24 @@ import type {
   ExternalTokenResponse,
 } from "@/types/externalAccess";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 const EXTERNAL_PREFIX = "/api/external";
+
+/** One refresh at a time: parallel 401s share it instead of each rotating tokens. */
+let refreshInFlight: Promise<ExternalTokenResponse> | null = null;
+
+function refreshOnce(refreshToken: string): Promise<ExternalTokenResponse> {
+  if (!refreshInFlight) {
+    refreshInFlight = postRefreshTokens(refreshToken)
+      .then((next) => {
+        setExtAuth(next.access_token, next.refresh_token, next.tenant_id, next.principal_type);
+        return next;
+      })
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
 
 export function getExtToken(): string | null {
   return localStorage.getItem("p7_ext_token");
@@ -132,8 +149,7 @@ async function extRequest<T>(path: string, init: RequestInit = {}, authRetryAfte
       const rt = getExtRefreshToken();
       if (rt) {
         try {
-          const next = await postRefreshTokens(rt);
-          setExtAuth(next.access_token, next.refresh_token, next.tenant_id, next.principal_type);
+          await refreshOnce(rt);
           return extRequest<T>(path, init, true);
         } catch {
           extSessionExpiredRedirect(true);

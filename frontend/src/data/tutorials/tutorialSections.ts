@@ -98,18 +98,23 @@ Prime7 ERP is **multi-tenant**: your company’s data is isolated. You sign in w
         title: "Dashboard",
         content: `## Overview
 
-The **Dashboard** is the home route after login (\`/app\`). It summarizes activity and gives shortcuts into daily work.
+The **Dashboard** is the home route after login (\`/app\`). It shows what needs your attention first, then trusted summary numbers and shortcuts into daily work.
 
 ## What to do here
 
-- Review summary cards and lists your tenant has enabled.
-- Use the **sidebar** to open modules (Merchandising, Inventory, Finance, and so on).
+- Check **Needs attention** for approvals, overdue TNA, critical alerts, and order risks. When everything is clear, you see a green **All systems clear** banner.
+- Review **Key metrics** cards (active orders, quoted this month, pending approvals, inventory items, customers). Each card has a teal **View details** link in the footer.
+- Role-specific blocks (merch health, promise risks, control tower) appear above the pipeline based on your role.
+- Use the **Order Pipeline** donut chart and the **AI daily brief** (headings and bullet lists are formatted for readability).
+- Use the **Quick actions** grid to start inquiries, quotations, or other work your role allows.
+- Expand **ERP AI phases (advanced)** only when you need the deeper AI tooling section.
 
 ## Tips
 
-- Exact widgets depend on your tenant setup and permissions.`,
-        tags: ["dashboard", "home", "overview"],
-        lastUpdated: "2026-04-04",
+- **Quoted this month** comes from quotations, not posted finance (GL) revenue.
+- Exact widgets depend on your tenant setup, role, and permissions.`,
+        tags: ["dashboard", "home", "overview", "attention", "kpi"],
+        lastUpdated: "2026-07-18",
         coverImage: "/images/tech-pattern.svg",
         infographics: [
           {
@@ -131,17 +136,28 @@ The **left sidebar** lists modules. This matches the live menu in the app (see *
 ## How it behaves
 
 - **Sections** can be expanded or collapsed. Click the section header to open or close it.
-- Some sections (for example **Inventory**, **Manufacturing**, **HR**, **Finance**) show **subsection labels** such as “Procurement” or “Transactions” to group related pages.
-- When the sidebar is **collapsed** to icons, hover a section to open a **flyout menu** of its links.
+- **Merchandising** is grouped into subsections: **Sales**, **Planning**, **Analytics**, and **Operations**.
+- Other sections (for example **Inventory**, **Manufacturing**, **HR**, **Finance**) also show **subsection labels** such as “Procurement” or “Transactions” to group related pages.
+- Older “legacy” labels on Manufacturing TNA / samples / IE and Quality classic QC have been cleaned up to plain names (for example **TNA Dashboard**, **Sample Requests**, **QC (Classic)**).
+- The **active page** shows a short orange **pill** on the left of the link (not a full-height border).
+- When the sidebar is **collapsed** to icons, hover a section to open a **flyout menu** of its links. Custom dark tooltips show the page name.
+- **Favorites** and **Recents** appear at the top when you have starred pages (from search) or visited routes recently. In collapsed mode they remain as icon shortcuts with tooltips.
+- A **breadcrumb** strip under the top bar always shows Home → module → page for the current route.
 - At the bottom, **Help & Tutorials** opens this guide (\`/app/tutorials\`).
-- In the **top bar**, use **Portals** (link icon) for **Customer portal** and **Financier portal** — they open the unified sign-in page (\`/login\`) with the correct portal role pre-selected (\`/login?role=customer\` or \`/login?role=financier\`). **Manage external access** opens \`/app/settings/external-access\` (feature flags, access lists, invite email automation).
-- Under **Settings** in the sidebar, **External access** goes to the same administration screen.
+
+## Top bar
+
+- **Search** opens the command palette (**Ctrl+K** or **Cmd+K**) to jump to any entitled page.
+- **New** is a role-aware create menu (inquiry, quotation, order, voucher, and more).
+- **AI** (sparkle icon) opens the Prime7 AI assistant panel.
+- **Bell** shows a badge when approvals or alerts need attention; click to open **All approvals**.
+- **Portals** links to customer and financier portal sign-in and external access settings.
 
 ## Tips
 
 - Menu items may be **hidden** if your **tenant type** is manufacturer vs buying house, or if a **feature flag** (such as trade) is off for your tenant.`,
-        tags: ["navigation", "sidebar", "menu"],
-        lastUpdated: "2026-04-06",
+        tags: ["navigation", "sidebar", "menu", "search", "command palette"],
+        lastUpdated: "2026-07-18",
         relatedAppRoutes: ["/app/tutorials"],
         relatedArticleIds: ["gs-tenant-modes", "gs-row-actions"],
       },
@@ -293,19 +309,18 @@ Each step has its own list and detail screens under \`/app/customers\`, \`/app/i
 
 ## Related areas
 
-- **Garment Styles** — \`/app/merchandising/styles\`
-- **BOM Builder** (order-driven BOM from orders; pipeline milestones shown when an order is selected) — \`/app/bom\`
-- **Consumption Plans** — \`/app/bom/orders\`
-- **Merch control tower** — \`/app/merchandising/control-tower\` (one-screen counts: open inquiries, quotation risk, drift, BOM, TNA, planning)
-- **Order Pipeline** / **Pipeline Analytics** — \`/app/merchandising/pipeline\`, \`/app/merchandising/pipeline-analytics\`
-- **Critical Alerts**, **Wastage**, **Consumption Recon** — merchandising operations views
-- **Follow-up & Unified TNA**, **Parties**, **Document Flow** — coordination and documents
+Merchandising sidebar subsections:
+
+- **Sales** — Customers, Inquiries, Quotations, Orders
+- **Planning** — Consumption Plans (\`/app/bom/orders\`), BOM Builder (\`/app/bom\`), Order Pipeline, Consumption Recon
+- **Analytics** — Pipeline Analytics, Order Profitability (\`/app/merch/profitability\`), Critical Alerts, Wastage Report
+- **Operations** — Garment Styles, Sample Development, Control Tower (\`/app/merchandising/control-tower\`), Follow-up TNA (\`/app/followup\`), Parties, Document Flow
 
 ## Tips
 
 - Use **Actions** on each list row for view/edit/print where enabled.`,
         tags: ["inquiry", "quotation", "order", "customer", "merchandising"],
-        lastUpdated: "2026-04-10",
+        lastUpdated: "2026-07-25",
         featured: true,
         infographics: [
           {
@@ -330,6 +345,8 @@ Each step has its own list and detail screens under \`/app/customers\`, \`/app/i
           "/app/merchandising/control-tower",
           "/app/merchandising/pipeline",
           "/app/merchandising/pipeline-analytics",
+          "/app/merch/profitability",
+          "/app/merch/order-profitability",
         ],
         relatedArticleIds: [
           "gs-row-actions",
@@ -499,9 +516,10 @@ Under **Export & Import** you manage export selling room workflows: commercial r
 ## Main routes
 
 - **Commercial** — \`/app/commercial\`
-- **Export Cases** — \`/app/commercial/export-cases\`
+- **Export Cases** — \`/app/commercial/export-cases\` (create at \`/app/commercial/export-cases/new\`; can prefill \`order_id\` from an order)
 - **Master Contracts** — \`/app/commercial/master-contracts\`
 - **Proforma Invoices** — \`/app/commercial/proforma-invoices\`
+- **Commercial Invoices** — \`/app/commercial/invoices\` (from posted delivery challans)
 - **BTB LCs** — \`/app/commercial/btb-lcs\`
 
 ## Trade and logistics (when enabled)
@@ -514,9 +532,11 @@ If **trade** is enabled for your tenant:
 
 ## Tips
 
+- From an **Order** detail page you can open related BOM, POs, production planning, commercial invoices, or create an export case with the order prefilled.
+- Create a commercial invoice from a **posted** delivery challan (Create Invoice), then **Issue** to raise a draft AR voucher.
 - If these links are missing, trade may be disabled for your tenant.`,
-        tags: ["commercial", "LC", "proforma", "export", "trade"],
-        lastUpdated: "2026-04-04",
+        tags: ["commercial", "LC", "proforma", "export", "trade", "invoice"],
+        lastUpdated: "2026-07-25",
         coverImage: "/images/hero-factory.svg",
         infographics: [
           {
@@ -530,8 +550,10 @@ If **trade** is enabled for your tenant:
         relatedAppRoutes: [
           "/app/commercial",
           "/app/commercial/export-cases",
+          "/app/commercial/export-cases/new",
           "/app/commercial/master-contracts",
           "/app/commercial/proforma-invoices",
+          "/app/commercial/invoices",
           "/app/commercial/btb-lcs",
           "/app/trade/cases",
           "/app/trade/dashboard",
@@ -565,6 +587,30 @@ If **trade** is enabled for your tenant:
 - **Goods Receiving** — \`/app/inventory/goods-receiving\`
 - **Process Orders** — \`/app/inventory/process-orders\`
 
+## Planning and manufacturing (feature-flagged)
+
+Enable tenant flags as needed: \`mrp_engine_enabled\`, \`auto_reorder_enabled\`, \`inter_department_transfer_enabled\`, \`process_loss_tracking_enabled\`, \`grn_quality_inspection_enabled\`.
+
+- **MRP Run** — \`/app/inventory/mrp\`
+- **Reorder Suggestions** — \`/app/inventory/reorder-suggestions\`
+- **Inter-Dept Transfers** — \`/app/inventory/idt\`
+- **Receive IDT** — \`/app/inventory/idt-receive\`
+- **Process Loss Report** — \`/app/inventory/process-loss-report\`
+- **Post-Costing** — \`/app/inventory/post-costing\`
+- **Process Loss Standards** — \`/app/inventory/process-loss-settings\`
+- **GRN Inspection** — \`/app/inventory/grn-inspection\` (quarantine accept/reject/hold)
+- **Quality Dashboard** — \`/app/inventory/quality-dashboard\`
+- **Vendor Scorecard** — \`/app/inventory/vendor-scorecard\`
+- **ABC Analysis** — \`/app/inventory/abc-analysis\`
+- **EOQ** — \`/app/inventory/eoq\`
+- **Stock Aging** — \`/app/inventory/stock-aging\`
+- **Cycle Count** — \`/app/inventory/cycle-count\` (flag \`cycle_counting_enabled\`)
+- **Serial Tracking** — \`/app/inventory/serials\` (flag \`serial_tracking_enabled\`)
+- **Kit Builder** — \`/app/inventory/kits\` (flag \`kitting_enabled\`)
+- **Consignment Stock** — \`/app/inventory/consignment\` (flag \`consignment_stock_enabled\`)
+
+Item planning (auto reorder, safety stock, lead time) is on Stock Item detail → **Planning** tab, and on Stock Master create.
+
 ## Stock control
 
 - **Transfers** — \`/app/inventory/warehouse-transfers\`
@@ -578,8 +624,10 @@ Stock summary, FIFO summary, dashboard, ledger, valuation — all under \`/app/i
 
 ## Outbound
 
-- **Delivery Challans** — \`/app/inventory/delivery-challans\`
+- **Delivery Challans** — \`/app/inventory/delivery-challans\` (new challans start as **DRAFT**; **POSTED** is final because stock has already gone out — fix mistakes with a stock adjustment, not by re-posting). From an order, **Delivery challans** opens the list filtered to that order and **New challan** pre-links the order.
 - **Gate Passes** — \`/app/inventory/enhanced-gate-passes\`
+
+Purchase orders and GRNs have a **Print** action that opens a printable document in a new tab.
 
 ## Traceability
 
@@ -588,8 +636,8 @@ Stock summary, FIFO summary, dashboard, ledger, valuation — all under \`/app/i
 ## Tips
 
 - Manufacturing orders for production are under **Manufacturing** (\`/app/production/manufacturing-orders\`), not inside Inventory.`,
-        tags: ["inventory", "PO", "GRN", "stock", "warehouse"],
-        lastUpdated: "2026-04-04",
+        tags: ["inventory", "PO", "GRN", "stock", "warehouse", "QC", "ABC", "EOQ"],
+        lastUpdated: "2026-10-31",
         infographics: [
           {
             type: "flow",
@@ -597,11 +645,26 @@ Stock summary, FIFO summary, dashboard, ledger, valuation — all under \`/app/i
             steps: [
               { label: "Purchase order", href: "/app/inventory/purchase-orders" },
               { label: "Goods receiving", href: "/app/inventory/goods-receiving" },
+              { label: "GRN QC (when enabled)", href: "/app/inventory/grn-inspection" },
               { label: "Stock master / reports", href: "/app/inventory" },
             ],
           },
         ],
-        relatedAppRoutes: ["/app/inventory", "/app/inventory/purchase-orders", "/app/inventory/goods-receiving"],
+        relatedAppRoutes: [
+          "/app/inventory",
+          "/app/inventory/purchase-orders",
+          "/app/inventory/goods-receiving",
+          "/app/inventory/grn-inspection",
+          "/app/inventory/quality-dashboard",
+          "/app/inventory/vendor-scorecard",
+          "/app/inventory/abc-analysis",
+          "/app/inventory/eoq",
+          "/app/inventory/stock-aging",
+          "/app/inventory/cycle-count",
+          "/app/inventory/serials",
+          "/app/inventory/kits",
+          "/app/inventory/consignment",
+        ],
         relatedArticleIds: ["mfg-overview", "inv-po-deep", "inv-grn-deep", "inv-transfer-adjust"],
       },
       {
@@ -713,10 +776,12 @@ Use **Transfers** to move stock between warehouses and **Adjustments** to correc
 
 ## Adjustments
 
-1. Open **Adjustments** — \`/app/inventory/stock-adjustments\` (or **new** route if your app uses it).
-2. Choose **reason** and **warehouse** as prompted.
-3. Enter **positive or negative** quantities per item as the UI allows.
-4. Save and complete any approval step your tenant requires.
+1. Open **Adjustments** — \`/app/inventory/stock-adjustments\`.
+2. Choose **reason** and **warehouse**, then search and pick the **item** (type a code or name).
+3. Enter a **positive** quantity to add stock or a **negative** quantity to remove it.
+4. Save — the adjustment starts as **DRAFT**. Open **Actions → Post to stock** on the row to apply the movement.
+
+List rows show each item's **code and name**, so you can confirm the right item before posting.
 
 ## Common mistakes
 
@@ -731,7 +796,7 @@ Use **Transfers** to move stock between warehouses and **Adjustments** to correc
 
 - For consumption vs production issues, your team may also use **Consumption Control** or manufacturing screens — see the inventory map article.`,
         tags: ["transfer", "adjustment", "warehouse", "stock"],
-        lastUpdated: "2026-04-03",
+        lastUpdated: "2026-10-31",
         relatedAppRoutes: ["/app/inventory/warehouse-transfers", "/app/inventory/stock-adjustments"],
         relatedArticleIds: ["inv-overview", "gs-row-actions"],
       },
@@ -827,8 +892,8 @@ Your administrator turns it on under **Settings → Configuration** using the **
 - From an order, open **Control Tower** in the workflow strip when the feature is enabled.
 - *Projected* labels are estimates; *actual* values come from posted transactions and stock.`,
         tags: ["operations", "control tower", "planning", "master lc"],
-        lastUpdated: "2026-04-10",
-        relatedAppRoutes: ["/app/operations/control-tower", "/app/settings/configuration", "/app/orders"],
+        lastUpdated: "2026-10-31",
+        relatedAppRoutes: ["/app/operations/control-tower", "/app/settings/config", "/app/orders"],
         relatedArticleIds: ["mfg-overview", "mfg-planning-deep", "gs-sidebar"],
       },
       {
@@ -963,14 +1028,14 @@ Your administrator turns it on under **Settings → Configuration** using the **
   {
     id: "quality",
     title: "Quality",
-    description: "QC dashboard, inspections, lab tests, CAPA, returns, and legacy QC.",
+    description: "QC dashboard, inspections, lab tests, CAPA, returns, and QC (Classic).",
     articles: [
       {
         id: "quality-overview",
         title: "Quality module",
         content: `## Overview
 
-**Quality** includes dashboard, inspections, lab tests, CAPA, returns, and a legacy QC entry point.
+**Quality** includes dashboard, inspections, lab tests, CAPA, returns, and a **QC (Classic)** entry point.
 
 ## Routes
 
@@ -1063,23 +1128,47 @@ Your administrator turns it on under **Settings → Configuration** using the **
 
 - **HR Dashboard** — \`/app/hr\`
 - **Employees** — \`/app/hr/employees\`
+- **AI employee onboarding** — \`/app/hr/employees/ai-onboard\` (OCR CV / NID / medical; feature flags)
 - **Attendance** — routes under \`/app/hr/attendance/...\`
 - **Leave** — \`/app/hr/leave/...\`
-- **Payroll** — \`/app/hr/payroll/...\`
+- **Payroll** — \`/app/hr/payroll/...\` (components, structures, **structure assignments**, periods, runs with optional auto-calculate)
+- **Compliance (BSCI/WRAP/SEDEX)** — \`/app/hr/compliance\`
+- **AI Insights** — \`/app/hr/ai-insights\`
 - **ESS** — \`/app/hr/ess/...\`
 
-Use the sidebar subsection labels to find the exact screen.`,
-        tags: ["HR", "payroll", "attendance", "leave"],
-        lastUpdated: "2026-04-04",
+Use the sidebar subsection labels to find the exact screen.
+
+**Payroll auto-calculate** (feature flag \`payroll_auto_calculate_enabled\`, default off): assign a structure under \`/app/hr/payroll/assignments\`, then on a DRAFT run use **Auto-calculate** → preview → apply.
+
+**Payroll rules worth knowing**
+
+- Each period allows **one active payroll run**. To redo a run, **Reject** it first (Payroll Approvals), then create a new one.
+- **Payroll Approvals** — \`/app/hr/payroll/approvals\` lists **FINALIZED** runs waiting for a manager; use **Actions → Approve** or **Reject** (with a reason). Posted runs cannot be approved or rejected again.
+- **Payslips** — managers see everyone's payslips; other staff see only their own (their user must be linked to an employee record). Downloads are PDF files.
+- **Late** attendance counts as a worked day for salary; late penalties are calculated separately.
+
+**Leave balances** — submitting a request reserves the days immediately (pending); approval moves them to used, rejection releases them. When an allocation is set for the leave type, requests beyond the remaining balance are blocked.
+
+**Sprint H1 compliance** (flags default off): enable \`compliance_tracking_enabled\`, \`age_verification_required\`, and \`medical_certificate_tracking_enabled\` on the tenant, then activate BSCI/WRAP/SEDEX templates on the Compliance page. See \`docs/HR_COMPLIANCE_H1.md\`.`,
+        tags: ["HR", "payroll", "attendance", "leave", "compliance"],
+        lastUpdated: "2026-10-31",
         coverImage: "/images/hero-bg.svg",
         infographics: [
           {
             type: "highlight",
             title: "HR areas",
-            body: "Core HR and attendance feed leave and payroll; ESS gives employees self-service access.",
+            body: "Core HR and attendance feed leave and payroll; ESS gives employees self-service access. Compliance and AI Insights support buyer audits.",
           },
         ],
-        relatedAppRoutes: ["/app/hr", "/app/hr/employees"],
+        relatedAppRoutes: [
+          "/app/hr",
+          "/app/hr/employees",
+          "/app/hr/employees/ai-onboard",
+          "/app/hr/compliance",
+          "/app/hr/ai-insights",
+          "/app/hr/payroll/assignments",
+          "/app/hr/payroll/runs",
+        ],
         relatedArticleIds: [],
       },
     ],
@@ -1261,13 +1350,22 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 
 ## After approval
 
-- **Post** moves amounts into the ledger when controls pass; watch for **control warnings** after posting.
+- **Post** moves amounts into the ledger when controls pass; watch for **control warnings** after posting. Posting the same voucher twice is blocked.
+- A **posted** voucher can only leave **POSTED** through **Reverse** (creates a mirror voucher dated today — today must be in an open accounting period) or **Cancel posting** (its own date must be in an open period).
+- **Reverse** is not available for memorandum / optional / post-dated vouchers that never hit the books — use **Cancel posting** instead.
+- Vouchers that created a **loan / facility** drawdown or repayment must be reversed from **Facilities**, not from the voucher list.
 - Return to **Vouchers** for full edit history on draft lines.
+
+## Who can do what
+
+- **Check**, **Recommend**, **Approve**, **Post**, **Reject**, **Reverse** and **Cancel posting** need a **manager** or **admin** role.
+- A user may **Cancel** their **own draft**; cancelling someone else's draft needs a manager.
 
 ## Common mistakes
 
 - **Date range** too narrow (vouchers “disappear” from the queue).
 - **Reject** or **Reverse** without a clear **reason** when the modal asks for one.
+- Trying to reverse while **today's** accounting period is closed — ask finance to open it first.
 
 ## What to do next
 
@@ -1277,7 +1375,7 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 
 - You can export or print from the queue if those toolbar actions are visible for your role.`,
         tags: ["voucher", "approval", "finance", "workflow"],
-        lastUpdated: "2026-04-04",
+        lastUpdated: "2026-10-31",
         featured: true,
         coverImage: "/images/tech-pattern.svg",
         relatedAppRoutes: ["/app/accounts/vouchers/approval-queue", "/app/accounts/vouchers"],

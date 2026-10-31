@@ -3,15 +3,26 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-semibold transition-all disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring/50 focus-visible:ring-offset-2",
+  "btn-press inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-semibold transition-all disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised",
   {
     variants: {
       variant: {
-        default: "bg-brand-primary text-brand-primary-foreground hover:bg-brand-primary/90",
-        outline: "border border-border bg-surface-raised text-text-secondary hover:bg-surface-subtle",
-        ghost: "text-brand-primary hover:bg-brand-primary/10",
-        cta: "bg-brand-primary text-brand-primary-foreground hover:bg-brand-primary/90",
-        danger: "bg-status-danger text-white hover:bg-status-danger/90",
+        // primary and cta are aliases of default (backward compatibility)
+        default:
+          "bg-brand-primary text-brand-primary-foreground hover:bg-brand-hover active:bg-brand-pressed",
+        primary:
+          "bg-brand-primary text-brand-primary-foreground hover:bg-brand-hover active:bg-brand-pressed",
+        cta: "bg-brand-primary text-brand-primary-foreground hover:bg-brand-hover active:bg-brand-pressed",
+        secondary:
+          "bg-surface-subtle text-text-primary border border-border hover:bg-state-hover active:bg-state-pressed",
+        outline:
+          "border border-border bg-surface-raised text-text-secondary hover:bg-state-hover active:bg-state-pressed",
+        ghost: "text-brand-primary hover:bg-brand-subtle active:bg-state-pressed",
+        subtle:
+          "text-text-secondary hover:text-text-primary hover:bg-state-hover active:bg-state-pressed",
+        danger:
+          "bg-status-danger text-status-danger-foreground hover:bg-status-danger-hover active:bg-status-danger-pressed",
+        link: "text-brand-primary underline-offset-4 hover:underline",
       },
       size: {
         default: "h-11 px-5",

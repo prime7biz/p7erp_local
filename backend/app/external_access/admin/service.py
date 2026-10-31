@@ -24,6 +24,7 @@ from app.models import (
 )
 
 from app.external_access.audit import log_external_action
+from app.external_access.tokens import bump_session_version
 from app.external_access.constants import (
     FF_CUSTOMER_NOTES_ENABLED,
     FF_CUSTOMER_PORTAL_ENABLED,
@@ -81,7 +82,8 @@ async def create_invitation(
     db.add(inv)
     await db.flush()
     await db.refresh(inv)
-    return inv, plain
+    # "<id>.<secret>" lets accept-invite look up one row instead of bcrypt-scanning all pending invites.
+    return inv, f"{inv.id}.{plain}"
 
 
 async def build_principal_row(db: AsyncSession, p: ExternalPrincipal) -> dict:
@@ -168,7 +170,12 @@ async def update_principal(
     if body.phone is not None:
         p.phone = (body.phone or "").strip() or None
     if body.is_active is not None:
+        if p.is_active and not body.is_active:
+            bump_session_version(p)
         p.is_active = body.is_active
+    if getattr(body, "clear_lock", None) is True:
+        p.locked_at = None
+        p.failed_login_count = 0
     if body.role_codes is not None:
         await sync_principal_roles(db, p.id, body.role_codes)
 

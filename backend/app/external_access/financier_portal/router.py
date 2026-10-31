@@ -142,10 +142,9 @@ async def financier_order_book(
     await _roles_ok(db, principal)
     tid = principal.tenant_id
     party_id = await fsel.financier_party_id_for_principal(db, principal)
-    max_scope = await financier_max_scope(db, principal)
-    use_financed = financed_only
-    if use_financed is None and max_scope and financier_scope_satisfies(SCOPE_CREDIT_MONITORING, max_scope) and party_id:
-        use_financed = True
+    # A financier linked to a party only ever sees orders that party finances;
+    # financed_only=false must not widen that to the whole tenant order book.
+    use_financed = bool(party_id) or bool(financed_only)
     if use_financed and party_id:
         from app.external_access.financier_portal.visibility_service import build_financed_order_book_rows
 
@@ -288,6 +287,11 @@ async def financier_order_detail(
                 db, tenant_id=tid, party_id=party_id, order_id=order_id
             )
         return FinancierOrderDetail(**enriched)
+    if party_id:
+        btb_rows = await fsel.party_btb_lc_rows(db, tid, party_id)
+        order_btbs = await fsel.order_btb_links_for_party(db, tid, btb_rows)
+        if order_id not in order_btbs:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not in your financed scope")
     row = await sel.get_order_with_buyer(db, tid, order_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
@@ -829,7 +833,7 @@ async def financier_inventory_ledger(
     date_to: date | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    include_gl: bool = Query(default=True),
+    include_gl: bool = Query(default=False),
 ):
     _require_advanced_portal()
     await _roles_ok(db, principal)

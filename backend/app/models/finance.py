@@ -151,6 +151,16 @@ class VoucherType(Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Sprint 4 kind flags
+    is_credit_note: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_debit_note: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_memorandum: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_optional: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_post_dated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_stock_transfer: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    voucher_class_id: Mapped[int | None] = mapped_column(
+        ForeignKey("voucher_classes.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -217,6 +227,18 @@ class Voucher(Base):
     duplicate_risk_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     bank_reconciliation_id: Mapped[int | None] = mapped_column(
         ForeignKey("bank_reconciliations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Sprint 4 advanced voucher flags
+    is_post_dated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    is_memorandum: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    is_optional: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    include_in_books: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    books_applied: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    original_party_bill_id: Mapped[int | None] = mapped_column(
+        ForeignKey("party_ledger_bills.id", ondelete="SET NULL"), nullable=True
+    )
+    voucher_class_id: Mapped[int | None] = mapped_column(
+        ForeignKey("voucher_classes.id", ondelete="SET NULL"), nullable=True
     )
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)

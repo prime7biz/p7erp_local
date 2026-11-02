@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import date
 
 from sqlalchemy import select
 
 from app.common.celery_app import celery_app
+from app.workers.async_runner import run_async
 from app.common.tenant_feature_keys import is_medical_certificate_tracking_enabled
 from app.database import AsyncSessionLocal
 from app.models.hr_compliance_framework import EmployeeMedicalRecord
@@ -86,4 +86,4 @@ async def _run_all_tenants() -> dict:
 
 @celery_app.task(name="hr.medical_certificate_expiry")
 def medical_certificate_expiry() -> dict:
-    return asyncio.run(_run_all_tenants())
+    return run_async(_run_all_tenants())

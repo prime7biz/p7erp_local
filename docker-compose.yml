@@ -174,6 +174,11 @@ services:
     # Stable mode: avoid reload restarts (prevents intermittent 502s behind nginx).
     # Single worker on dev to reduce CPU contention with Ollama on low-spec hosts (4-core / 16GB RAM).
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
 
   worker:
     image: p7erp_local-backend
@@ -195,6 +200,40 @@ services:
     volumes:
       - ./backend:/app
     command: celery -A app.common.celery_app.celery_app worker --loglevel=info
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+
+  # Single beat process — do not scale replicas above 1.
+  beat:
+    image: p7erp_local-backend
+    restart: always
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: postgresql://p7erp:p7erp@postgres:5432/p7erp
+      USE_PGBOUNCER: ${USE_PGBOUNCER:-false}
+      DATABASE_URL_PGBOUNCER: ${DATABASE_URL_PGBOUNCER:-postgresql://p7erp:p7erp@pgbouncer:5432/p7erp}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    command: celery -A app.common.celery_app.celery_app beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   frontend:
     build:

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from sqlalchemy import select
 
 from app.common.celery_app import celery_app
+from app.workers.async_runner import run_async
 from app.common.tenant_feature_keys import is_batch_tracking_enabled, is_stock_hierarchy_enabled
 from app.database import AsyncSessionLocal
 from app.models.tenant import Tenant
@@ -74,4 +74,4 @@ async def _run_all_tenants() -> dict:
 
 @celery_app.task(name="inventory.daily_stock_maintenance")
 def daily_stock_maintenance() -> dict:
-    return asyncio.run(_run_all_tenants())
+    return run_async(_run_all_tenants())

@@ -58,9 +58,11 @@ services:
   backend:
     image: ${BACKEND_IMAGE:-your-dockerhub-user/p7erp-backend:latest}
     restart: always
-    environment:
+    environment: &backend_env
       APP_ENV: ${APP_ENV:-production}
       APP_VERSION: ${APP_VERSION:-dev}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       DATABASE_URL: postgresql://${POSTGRES_USER:-p7erp}:${POSTGRES_PASSWORD:-p7erp}@postgres:5432/${POSTGRES_DB:-p7erp}
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET}
@@ -123,10 +125,57 @@ services:
       retries: 3
       start_period: 20s
     deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
       update_config:
         order: start-first
         failure_action: rollback
         delay: 10s
+      restart_policy:
+        condition: on-failure
+
+  # Celery worker + beat (scheduled GST/stock/MIS jobs). Beat must stay at 1 replica.
+  worker:
+    image: ${BACKEND_IMAGE:-your-dockerhub-user/p7erp-backend:latest}
+    restart: always
+    environment: *backend_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend_media:/app/media
+    command: celery -A app.common.celery_app.celery_app worker --loglevel=info
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+      restart_policy:
+        condition: on-failure
+
+  beat:
+    image: ${BACKEND_IMAGE:-your-dockerhub-user/p7erp-backend:latest}
+    restart: always
+    environment: *backend_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
+    volumes:
+      - backend_media:/app/media
+    command: celery -A app.common.celery_app.celery_app beat --loglevel=info --schedule /app/media/celerybeat-schedule
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
       restart_policy:
         condition: on-failure
 

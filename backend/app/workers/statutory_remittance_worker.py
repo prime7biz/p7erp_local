@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import date
 
 from sqlalchemy import select
 
 from app.common.celery_app import celery_app
+from app.workers.async_runner import run_async
 from app.common.tenant_feature_keys import is_statutory_payroll_enabled
 from app.database import AsyncSessionLocal
 from app.models.tenant import Tenant
@@ -62,4 +62,4 @@ async def _run_all_tenants() -> dict:
 
 @celery_app.task(name="hr.monthly_statutory_remittance")
 def monthly_statutory_remittance() -> dict:
-    return asyncio.run(_run_all_tenants())
+    return run_async(_run_all_tenants())

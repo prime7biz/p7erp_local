@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from sqlalchemy import select
 
 from app.common.celery_app import celery_app
+from app.workers.async_runner import run_async
 from app.common.tenant_feature_keys import is_cycle_counting_enabled, is_stock_aging_enabled
 from app.database import AsyncSessionLocal
 from app.models.tenant import Tenant
@@ -76,9 +76,9 @@ async def _monthly_aging_alert() -> dict:
 
 @celery_app.task(name="inventory.weekly_cycle_count_schedule")
 def weekly_cycle_count_schedule() -> dict:
-    return asyncio.run(_weekly_cycle_count())
+    return run_async(_weekly_cycle_count())
 
 
 @celery_app.task(name="inventory.monthly_stock_aging_alert")
 def monthly_stock_aging_alert() -> dict:
-    return asyncio.run(_monthly_aging_alert())
+    return run_async(_monthly_aging_alert())

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from sqlalchemy import select
 
 from app.common.celery_app import celery_app
+from app.workers.async_runner import run_async
 from app.database import AsyncSessionLocal
 from app.models.tenant import Tenant
 from app.modules.finance.party_ledger_hooks import daily_party_ledger_maintenance
@@ -40,4 +40,4 @@ async def _run_all_tenants() -> dict:
 @celery_app.task(name="party_ledger.daily_maintenance")
 def party_ledger_daily_maintenance() -> dict:
     """Run daily overdue mark + interest for all active tenants."""
-    return asyncio.run(_run_all_tenants())
+    return run_async(_run_all_tenants())

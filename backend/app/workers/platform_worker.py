@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import Any
 
 from app.common.celery_app import celery_app
+from app.workers.async_runner import run_async
 from app.database import AsyncSessionLocal, safe_async_session_rollback
 from app.models import PlatformBackgroundJob, Tenant
 from app.models.tenant import TenantType
@@ -126,7 +126,7 @@ def bulk_create_tenants_task(
     plan_id: int | None,
     admin_id: int,
 ) -> dict[str, Any]:
-    asyncio.run(_run_bulk_create(job_id, members, plan_id, admin_id, self.request.id))
+    run_async(_run_bulk_create(job_id, members, plan_id, admin_id, self.request.id))
     return {"job_id": job_id, "ok": True}
 
 
@@ -138,5 +138,5 @@ def data_migration_import_task(
     entity_type: str,
     csv_text: str,
 ) -> dict[str, Any]:
-    asyncio.run(_run_data_migration_import(job_id, tenant_id, entity_type, csv_text, self.request.id))
+    run_async(_run_data_migration_import(job_id, tenant_id, entity_type, csv_text, self.request.id))
     return {"job_id": job_id, "ok": True}

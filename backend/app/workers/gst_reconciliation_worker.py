@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from calendar import monthrange
 from datetime import date
@@ -10,6 +9,7 @@ from datetime import date
 from sqlalchemy import select
 
 from app.common.celery_app import celery_app
+from app.workers.async_runner import run_async
 from app.common.tenant_feature_keys import is_gst_system_enabled
 from app.database import AsyncSessionLocal
 from app.models import Tenant
@@ -60,4 +60,4 @@ async def _run() -> dict:
 
 @celery_app.task(name="finance.monthly_gst_reconciliation")
 def monthly_gst_reconciliation_task() -> dict:
-    return asyncio.run(_run())
+    return run_async(_run())

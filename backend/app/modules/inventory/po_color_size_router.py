@@ -1,4 +1,4 @@
-"""Colour × size grid per purchase-order line (flag `po_color_size_matrix_enabled`, default off).
+"""Colour × size grid per purchase-order line (flag `po_color_size_matrix_enabled`, default on).
 
 The grid is a breakdown only — it never changes the PO line quantity or PO totals.
 - DRAFT PO: the grid may differ from the line quantity (UI shows a mismatch warning).

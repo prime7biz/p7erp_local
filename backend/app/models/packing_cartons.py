@@ -1,4 +1,4 @@
-"""Carton detail lines of a packing list (flag `packing_list_cartons_enabled`, default off).
+"""Carton detail lines of a packing list (flag `packing_list_cartons_enabled`, default on).
 
 One line = carton number range × colour × size × pieces per carton. Several lines with the
 same range describe an assorted (ratio) carton; weights/dimensions are per carton of the range.

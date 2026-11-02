@@ -79,6 +79,7 @@ async def test_scan_station_flow(db_session_integration):
 
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            tenant.feature_flags = {**(tenant.feature_flags or {}), SHOP_FLOOR_SCAN_ENABLED: False}
             _as(db, user, tenant)
             assert (await ac.get("/api/v1/production/scan/setup")).status_code == 403
             tenant.feature_flags = {**(tenant.feature_flags or {}), SHOP_FLOOR_SCAN_ENABLED: True}

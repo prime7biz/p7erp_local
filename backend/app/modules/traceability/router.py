@@ -1,4 +1,4 @@
-"""Traceability API (flag `traceability_enabled`, default off): certificates, cut-ticket fabric lots, order report."""
+"""Traceability API (flag `traceability_enabled`, default on): certificates, cut-ticket fabric lots, order report."""
 
 from __future__ import annotations
 

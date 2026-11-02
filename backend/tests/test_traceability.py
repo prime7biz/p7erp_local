@@ -86,6 +86,7 @@ async def test_traceability_report_end_to_end(db_session_integration):
 
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            tenant.feature_flags = {**(tenant.feature_flags or {}), TRACEABILITY_ENABLED: False}
             _as(db, user, tenant)
             assert (await ac.get("/api/v1/traceability/certificates")).status_code == 403
             tenant.feature_flags = {**(tenant.feature_flags or {}), TRACEABILITY_ENABLED: True}

@@ -1,4 +1,4 @@
-"""Packing list carton detail (flag `packing_list_cartons_enabled`, default off)."""
+"""Packing list carton detail (flag `packing_list_cartons_enabled`, default on)."""
 
 from __future__ import annotations
 

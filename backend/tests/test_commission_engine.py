@@ -100,6 +100,7 @@ async def test_commission_engine_end_to_end(db_session_integration):
 
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            tenant.feature_flags = {**(tenant.feature_flags or {}), COMMISSION_ENGINE_ENABLED: False}
             _as(db, user, tenant)
             assert (await ac.get("/api/v1/commission/rules")).status_code == 403  # flag off
             assert (await ac.get("/api/v1/commission/settings")).json()["enabled"] is False

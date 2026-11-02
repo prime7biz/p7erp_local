@@ -544,7 +544,7 @@ Statuses follow a chain such as **Draft → Submitted → Approved → Sent → 
 
 Buyers usually order one style in several colours and sizes. The **Colour / size breakdown** grid on the order page records exactly how many pieces of each combination you must make.
 
-This grid appears only when an admin turns on **Settings → Configuration → Colour / size breakdown on orders**.
+This grid is on for every company. An admin can hide it by unticking **Settings → Configuration → Colour / size breakdown on orders**.
 
 ## Steps
 
@@ -563,7 +563,7 @@ Once an order is **Confirmed**, **In progress** or **Completed**, its quantity i
 - Saving replaces the whole grid, so everyone sees the same breakdown.`,
         tags: ["order", "colour", "color", "size", "breakdown", "matrix", "quantity"],
         keywords: ["size ratio", "colourway", "assortment"],
-        lastUpdated: "2026-11-01",
+        lastUpdated: "2026-11-02",
         relatedAppRoutes: ["/app/orders"],
         relatedArticleIds: ["merch-quotation-to-order"],
       },
@@ -640,7 +640,7 @@ If **trade** is enabled for your tenant:
 - **We earn** — commission a factory or buyer pays your buying house.
 - **We pay** — commission you owe an agent linked to the order.
 
-An admin turns it on in **Settings → Configuration → Commission engine**.
+It is on for every company; an admin can switch it off in **Settings → Configuration → Commission engine**.
 
 ## 1. Set rules, tax and accounts (Rules & settings tab)
 
@@ -664,7 +664,7 @@ Pick the order, the factory (if the factory pays you), the shipment or invoice r
 - A shipment on a statement cannot be deleted or recalculated until its statement is cancelled.`,
         tags: ["commission", "buying house", "agent", "TDS", "VDS", "AIT", "statement", "shipment"],
         keywords: ["brokerage", "commission invoice", "agent commission"],
-        lastUpdated: "2026-11-01",
+        lastUpdated: "2026-11-02",
         relatedAppRoutes: ["/app/commercial/commission"],
         relatedArticleIds: ["commercial-overview"],
       },
@@ -674,7 +674,7 @@ Pick the order, the factory (if the factory pays you), the shipment or invoice r
         summary: "Record each UD and its permitted imports, track imports and consumption in bond, and export monthly purchase and sales VAT registers.",
         content: `## Overview
 
-**Export & Import → Bond & VAT registers** (\`/app/commercial/bd-compliance\`) keeps the registers a Bangladesh bonded exporter needs between audits. An admin turns it on in **Settings → Configuration → Bangladesh bond & VAT registers**.
+**Export & Import → Bond & VAT registers** (\`/app/commercial/bd-compliance\`) keeps the registers a Bangladesh bonded exporter needs between audits. It is on for every company; an admin can switch it off in **Settings → Configuration → Bangladesh bond & VAT registers**.
 
 These are **working registers** — exports are spreadsheets (CSV / Excel from each table's **Export** menu), not the official e-UD, CBMS or NBR upload files. Check figures before filing.
 
@@ -719,7 +719,7 @@ The **Bond register** tab lists every movement in date order with a running bala
         summary: "Enter carton ranges with colour, size and pieces per carton; totals, weights, CBM and the order's left-to-pack balance are calculated.",
         content: `## Overview
 
-Open a packing list from **Logistics → Packing lists** (\`/app/logistics\`). When an admin turns on **Settings → Configuration → Carton detail on packing lists**, a **Carton detail** section appears.
+Open a packing list from **Logistics → Packing lists** (\`/app/logistics\`). A **Carton detail** section appears on it (an admin can hide it by unticking **Settings → Configuration → Carton detail on packing lists**).
 
 ## Steps
 
@@ -885,7 +885,7 @@ Purchase orders and GRNs have a **Print** action that opens a printable document
 
 ## Colour / size breakdown (optional)
 
-When an admin turns on **Settings → Configuration → Colour / size breakdown on purchase orders**, open **Actions → Receipt progress & vendor bill** on a PO and use **Colour / size breakdown** to split each line by colour and size (for example trims per garment colour). **Use order colours & sizes** copies the linked order's grid. The breakdown never changes the PO quantity; once a PO is past **DRAFT**, a saved grid must total the line quantity, and closed or cancelled POs are read-only.
+Open **Actions → Receipt progress & vendor bill** on a PO and use **Colour / size breakdown** to split each line by colour and size (for example trims per garment colour). **Use order colours & sizes** copies the linked order's grid. The breakdown never changes the PO quantity; once a PO is past **DRAFT**, a saved grid must total the line quantity, and closed or cancelled POs are read-only.
 
 ## Tips
 
@@ -993,7 +993,7 @@ List rows show each item's **code and name**, so you can confirm the right item 
 
 Buyers increasingly ask: *which fabric went into this order, who supplied it, and was it certified?* **Inventory → Certificates & order trace** (\`/app/inventory/traceability\`) answers that from data you already keep.
 
-An admin turns it on in **Settings → Configuration → Traceability & certificates**.
+It is on for every company; an admin can switch it off in **Settings → Configuration → Traceability & certificates**.
 
 ## 1. Certificates
 
@@ -1012,7 +1012,7 @@ On **Order traceability**, pick an order. You see every cut ticket's fabric lots
 The yellow **gaps** box lists what to fix before sending: cut tickets without lots, lots without certificates, or certificates that had expired when the fabric arrived. Use **Export CSV for buyer** or **Print**.`,
         tags: ["traceability", "certificate", "GOTS", "OEKO-TEX", "GRS", "fabric lot", "roll", "compliance", "buyer"],
         keywords: ["transaction certificate", "scope certificate", "sustainability", "audit"],
-        lastUpdated: "2026-11-01",
+        lastUpdated: "2026-11-02",
         relatedAppRoutes: ["/app/inventory/traceability", "/app/production/cutting/pipeline"],
         relatedArticleIds: ["inv-overview"],
       },
@@ -1285,7 +1285,7 @@ Your administrator turns it on under **Settings → Configuration** using the **
 
 The **Scan station** (\`/app/production/scan-station\`) turns a tablet or PC with a barcode scanner into a line counter. Every bundle barcode printed on the **Cutting pipeline** page can be scanned once per operation.
 
-An admin turns it on in **Settings → Configuration → Shop-floor scan station**. The order's style needs an **operation bulletin** (IE) so operations and SMV are known.
+It is on for every company; an admin can switch it off in **Settings → Configuration → Shop-floor scan station**. The order's style needs an **operation bulletin** (IE) so operations and SMV are known.
 
 ## Set up the station (once per shift)
 
@@ -1454,7 +1454,7 @@ Open the assistant (✦ in the top bar) while an **order, customer, style, vouch
 - **LC expiry** — trade cases whose LC or master contract expires within 14 days.
 - **BOM shortfall** — orders due within 45 days whose BOM materials are not fully covered by purchase orders.
 
-An admin turns it on in **Settings → Configuration → AI exception agents**. You only see agents for modules your role can open.
+It is on for every company; an admin can switch it off in **Settings → Configuration → AI exception agents**. You only see agents for modules your role can open.
 
 ## Human confirmation
 

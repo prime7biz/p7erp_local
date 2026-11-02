@@ -1,4 +1,4 @@
-"""Traceability (flag `traceability_enabled`, default off).
+"""Traceability (flag `traceability_enabled`, default on).
 
 - MaterialCertificate: GOTS / OEKO-TEX / GRS … held by a supplier and/or covering a material.
 - CutTicketFabricLot: which received fabric lot (StockBatch) and rolls a cut ticket used,

@@ -98,6 +98,7 @@ async def test_exception_agents_need_human_confirmation(db_session_integration, 
     await db.commit()
     ids = {"admin": admin.id, "merch": merchandiser.id, "action": action.id, "order": order.id}
 
+    tenant.feature_flags = {**(tenant.feature_flags or {}), AI_EXCEPTION_AGENTS_ENABLED: False, AI_DASHBOARD_CARDS_ENABLED: False}
     _as(db, admin, tenant)
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

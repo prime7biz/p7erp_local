@@ -58,6 +58,7 @@ async def test_po_color_size_grid(db_session_integration):
         ],
     }
 
+    tenant.feature_flags = {PO_COLOR_SIZE_MATRIX_ENABLED: False}
     _as(db, user, tenant)
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

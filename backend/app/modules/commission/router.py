@@ -1,4 +1,4 @@
-"""Commission engine API (flag `commission_engine_enabled`, default off)."""
+"""Commission engine API (flag `commission_engine_enabled`, default on)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Commission engine (flag `commission_engine_enabled`, default off).
+"""Commission engine (flag `commission_engine_enabled`, default on).
 
 Two directions:
 - RECEIVABLE: commission we earn from a factory (vendor) or buyer (customer) on each shipment.

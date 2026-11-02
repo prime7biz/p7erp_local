@@ -12,7 +12,7 @@ from app.common.permissions import permissions_registry_api_payload, require_int
 from app.common.username import generate_unique_username_for_tenant
 from app.common.authz import ensure_user_is_tenant_admin
 from app.common.tenant import require_tenant
-from app.common.tenant_feature_keys import normalize_feature_flags
+from app.common.tenant_feature_keys import normalize_feature_flags, with_effective_default_flags
 from app.database import get_db
 from app.models import AuditLog, CommissionMode, Role, Tenant, User
 from app.modules.audit.service import log_action
@@ -89,7 +89,7 @@ async def get_settings_config(
         tenant_type=tenant.tenant_type,
         default_commission_mode=tenant.default_commission_mode or CommissionMode.EXCLUDE,
         is_active=tenant.is_active,
-        feature_flags=tenant.feature_flags if isinstance(tenant.feature_flags, dict) else None,
+        feature_flags=with_effective_default_flags(tenant.feature_flags),
         country_code=(tenant.country_code or "").strip() or None,
         timezone=(tenant.timezone or "").strip() or None,
     )
@@ -150,7 +150,7 @@ async def update_settings_config(
         tenant_type=tenant.tenant_type,
         default_commission_mode=tenant.default_commission_mode or CommissionMode.EXCLUDE,
         is_active=tenant.is_active,
-        feature_flags=tenant.feature_flags if isinstance(tenant.feature_flags, dict) else None,
+        feature_flags=with_effective_default_flags(tenant.feature_flags),
         country_code=(tenant.country_code or "").strip() or None,
         timezone=(tenant.timezone or "").strip() or None,
     )

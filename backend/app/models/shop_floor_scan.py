@@ -1,4 +1,4 @@
-"""Bundle × operation scans from the shop-floor scan station (flag `shop_floor_scan_enabled`, default off).
+"""Bundle × operation scans from the shop-floor scan station (flag `shop_floor_scan_enabled`, default on).
 
 `client_key` is generated on the device for every scan so an offline queue can be re-sent
 safely: the same key is accepted once. A bundle is counted at most once per operation.

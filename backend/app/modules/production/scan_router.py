@@ -1,4 +1,4 @@
-"""Shop-floor scan station API (flag `shop_floor_scan_enabled`, default off)."""
+"""Shop-floor scan station API (flag `shop_floor_scan_enabled`, default on)."""
 
 from __future__ import annotations
 

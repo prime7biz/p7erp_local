@@ -102,6 +102,7 @@ async def test_bd_registers_http_flow(db_session_integration):
     await db.commit()
     ud_no = f"UD-{uuid.uuid4().hex[:6]}"
 
+    tenant.feature_flags = {BD_BOND_COMPLIANCE_ENABLED: False}
     _as(db, user, tenant)
     try:
         transport = ASGITransport(app=app)

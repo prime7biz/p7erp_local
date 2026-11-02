@@ -23,7 +23,7 @@ from app.common.login_lockout import (
     record_staff_failed_login,
     staff_lock_active,
 )
-from app.common.tenant_feature_keys import is_single_session_enforced
+from app.common.tenant_feature_keys import is_single_session_enforced, with_effective_default_flags
 from app.common.email_service import (
     send_forgot_password_email,
     send_password_changed_notification_email,
@@ -595,7 +595,7 @@ async def me(
         tenant_name=tenant.name,
         tenant_type=tenant.tenant_type,
         company_code=tenant.company_code,
-        feature_flags=tenant.feature_flags if isinstance(tenant.feature_flags, dict) else None,
+        feature_flags=with_effective_default_flags(tenant.feature_flags),
         role_name=role_name,
         role_permissions=role_permissions,
     )

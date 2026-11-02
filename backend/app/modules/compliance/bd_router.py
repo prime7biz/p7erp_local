@@ -1,4 +1,4 @@
-"""Bangladesh bond / UD / Mushak registers (flag `bd_bond_compliance_enabled`, default off).
+"""Bangladesh bond / UD / Mushak registers (flag `bd_bond_compliance_enabled`, default on).
 
 Two routers:
 - ``bd_trade_router``  — UD register, permitted-import lines, bond register (trade.access).

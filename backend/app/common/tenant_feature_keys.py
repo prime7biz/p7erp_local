@@ -115,7 +115,7 @@ EOQ_HOLDING_COST_RATE = "eoq_holding_cost_rate"
 # Sprint I4 serial / kit / consignment (all default off).
 SERIAL_TRACKING_ENABLED = "serial_tracking_enabled"
 
-# R4 RMG depth (all default off).
+# R4 RMG depth (default ON — a tenant can switch each one off with an explicit False).
 ORDER_COLOR_SIZE_MATRIX_ENABLED = "order_color_size_matrix_enabled"
 COMMISSION_ENGINE_ENABLED = "commission_engine_enabled"
 TRACEABILITY_ENABLED = "traceability_enabled"
@@ -124,9 +124,24 @@ SHOP_FLOOR_SCAN_ENABLED = "shop_floor_scan_enabled"
 BD_BOND_COMPLIANCE_ENABLED = "bd_bond_compliance_enabled"
 PO_COLOR_SIZE_MATRIX_ENABLED = "po_color_size_matrix_enabled"
 
-# R5 governed AI (default off).
+# R5 governed AI (default ON — explicit False switches off).
 AI_EXCEPTION_AGENTS_ENABLED = "ai_exception_agents_enabled"
 AI_DASHBOARD_CARDS_ENABLED = "ai_dashboard_cards_enabled"
+
+# Flags that are on for every tenant (existing and new) unless explicitly set to False.
+# API payloads read by the frontend (`/auth/me`, `/settings/config`) fill these in as True when missing.
+DEFAULT_ON_FEATURE_FLAGS: tuple[str, ...] = (
+    ORDER_COLOR_SIZE_MATRIX_ENABLED,
+    COMMISSION_ENGINE_ENABLED,
+    TRACEABILITY_ENABLED,
+    PACKING_LIST_CARTONS_ENABLED,
+    SHOP_FLOOR_SCAN_ENABLED,
+    BD_BOND_COMPLIANCE_ENABLED,
+    PO_COLOR_SIZE_MATRIX_ENABLED,
+    AI_EXCEPTION_AGENTS_ENABLED,
+    AI_DASHBOARD_CARDS_ENABLED,
+)
+
 KITTING_ENABLED = "kitting_enabled"
 CONSIGNMENT_STOCK_ENABLED = "consignment_stock_enabled"
 
@@ -146,40 +161,53 @@ def _flag_default_true(feature_flags: Any, key: str) -> bool:
     return feature_flags.get(key) is not False
 
 
+def with_effective_default_flags(feature_flags: Any) -> dict[str, Any]:
+    """Copy of ``feature_flags`` with each ``DEFAULT_ON_FEATURE_FLAGS`` key set to True when missing.
+
+    The frontend checks these keys with ``=== true``; filling them here keeps that
+    check correct without storing anything. Explicit False values are kept.
+    """
+    flags = dict(feature_flags) if isinstance(feature_flags, dict) else {}
+    for key in DEFAULT_ON_FEATURE_FLAGS:
+        if key not in flags:
+            flags[key] = True
+    return flags
+
+
 def is_order_color_size_matrix_enabled(feature_flags: Any) -> bool:
-    return _flag_true(feature_flags, ORDER_COLOR_SIZE_MATRIX_ENABLED)
+    return _flag_default_true(feature_flags, ORDER_COLOR_SIZE_MATRIX_ENABLED)
 
 
 def is_shop_floor_scan_enabled(feature_flags: Any) -> bool:
-    return _flag_true(feature_flags, SHOP_FLOOR_SCAN_ENABLED)
+    return _flag_default_true(feature_flags, SHOP_FLOOR_SCAN_ENABLED)
 
 
 def is_bd_bond_compliance_enabled(feature_flags: Any) -> bool:
-    return _flag_true(feature_flags, BD_BOND_COMPLIANCE_ENABLED)
+    return _flag_default_true(feature_flags, BD_BOND_COMPLIANCE_ENABLED)
 
 
 def is_po_color_size_matrix_enabled(feature_flags: Any) -> bool:
-    return _flag_true(feature_flags, PO_COLOR_SIZE_MATRIX_ENABLED)
+    return _flag_default_true(feature_flags, PO_COLOR_SIZE_MATRIX_ENABLED)
 
 
 def is_ai_exception_agents_enabled(feature_flags: Any) -> bool:
-    return _flag_true(feature_flags, AI_EXCEPTION_AGENTS_ENABLED)
+    return _flag_default_true(feature_flags, AI_EXCEPTION_AGENTS_ENABLED)
 
 
 def is_ai_dashboard_cards_enabled(feature_flags: Any) -> bool:
-    return _flag_true(feature_flags, AI_DASHBOARD_CARDS_ENABLED)
+    return _flag_default_true(feature_flags, AI_DASHBOARD_CARDS_ENABLED)
 
 
 def is_packing_list_cartons_enabled(feature_flags: Any) -> bool:
-    return _flag_true(feature_flags, PACKING_LIST_CARTONS_ENABLED)
+    return _flag_default_true(feature_flags, PACKING_LIST_CARTONS_ENABLED)
 
 
 def is_traceability_enabled(feature_flags: Any) -> bool:
-    return _flag_true(feature_flags, TRACEABILITY_ENABLED)
+    return _flag_default_true(feature_flags, TRACEABILITY_ENABLED)
 
 
 def is_commission_engine_enabled(feature_flags: Any) -> bool:
-    return _flag_true(feature_flags, COMMISSION_ENGINE_ENABLED)
+    return _flag_default_true(feature_flags, COMMISSION_ENGINE_ENABLED)
 
 
 def is_tna_event_sync_enabled(feature_flags: Any) -> bool:

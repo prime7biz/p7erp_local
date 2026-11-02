@@ -89,6 +89,7 @@ async def test_packing_cartons_flow(db_session_integration):
     }
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            tenant.feature_flags = {**(tenant.feature_flags or {}), PACKING_LIST_CARTONS_ENABLED: False}
             _as(db, user, tenant)
             url1 = f"/api/v1/logistics/packing-lists/{ids['pl1']}/cartons"
             assert (await ac.put(url1, json=first)).status_code == 403  # flag off

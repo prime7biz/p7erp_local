@@ -61,6 +61,7 @@ async def test_color_size_matrix_flow(db_session_integration):
 
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            tenant.feature_flags = {**(tenant.feature_flags or {}), ORDER_COLOR_SIZE_MATRIX_ENABLED: False}
             _as(db, user, tenant)
             r = await ac.get(url)
             assert r.status_code == 200, r.text

@@ -43,6 +43,35 @@ async def require_financier_external(
     return principal
 
 
+async def require_supplier_external(
+    principal: Annotated[ExternalPrincipal, Depends(get_current_external_principal)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ExternalPrincipal:
+    from app.external_access.constants import PRINCIPAL_SUPPLIER, ROLE_SUPPLIER_USER
+    from app.external_access.permissions import get_role_codes
+
+    assert_principal_type(principal, PRINCIPAL_SUPPLIER)
+    tenant = (await db.execute(select(Tenant).where(Tenant.id == principal.tenant_id))).scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    require_portal_enabled(tenant=tenant, principal_type=PRINCIPAL_SUPPLIER)
+    if ROLE_SUPPLIER_USER not in await get_role_codes(db, principal):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No supplier portal role assigned")
+    return principal
+
+
+async def get_allowed_vendor_ids(db: AsyncSession, principal: ExternalPrincipal) -> list[int]:
+    from app.models.supplier_portal import ExternalSupplierAccess
+
+    r = await db.execute(
+        select(ExternalSupplierAccess.vendor_id).where(
+            ExternalSupplierAccess.external_principal_id == principal.id,
+            ExternalSupplierAccess.tenant_id == principal.tenant_id,
+        )
+    )
+    return [row[0] for row in r.all()]
+
+
 async def get_allowed_customer_ids(db: AsyncSession, principal: ExternalPrincipal) -> list[int]:
     r = await db.execute(
         select(ExternalCustomerAccess.customer_id).where(

@@ -38,7 +38,11 @@ from app.modules.auth.me_schema import MeResponse
 from app.modules.auth.legal_acceptance import CURRENT_LEGAL_ACCEPTANCE_VERSION
 from app.modules.audit.service import log_action
 from app.common.username import generate_unique_username_for_tenant
-from app.external_access.feature_flags import is_customer_portal_enabled, is_financier_portal_enabled
+from app.external_access.feature_flags import (
+    is_customer_portal_enabled,
+    is_financier_portal_enabled,
+    is_supplier_portal_enabled,
+)
 from app.modules.auth.schemas import (
     ForgotPasswordRequest,
     MessageResponse,
@@ -157,6 +161,8 @@ async def resolve_tenant_public(
         available.append("customer")
     if is_financier_portal_enabled(tenant):
         available.append("financier")
+    if is_supplier_portal_enabled(tenant):
+        available.append("supplier")
     return ResolveTenantResponse(
         tenant_id=tenant.id,
         tenant_name=tenant.name,

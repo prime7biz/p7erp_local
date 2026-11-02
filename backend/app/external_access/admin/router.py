@@ -32,12 +32,14 @@ from app.external_access.admin.schemas import (
     ExternalInviteCustomerRequest,
     ExternalInviteFinancierRequest,
     ExternalInviteResponse,
+    ExternalInviteSupplierRequest,
     ExternalMessageResponse,
     ExternalPrincipalAdminRow,
     ExternalPrincipalListResponse,
     ExternalPrincipalPatchRequest,
 )
 from app.external_access.admin.service import (
+    assert_vendors_in_tenant,
     build_principal_row,
     create_invitation,
     patch_tenant_external_flags,
@@ -51,8 +53,11 @@ from app.external_access.constants import (
     FF_FINANCIER_FINANCIAL_SUMMARY_ENABLED,
     FF_FINANCIER_PORTAL_ENABLED,
     FF_FINANCIER_PROJECTION_ENABLED,
+    FF_SUPPLIER_PORTAL_ENABLED,
     PRINCIPAL_CUSTOMER,
     PRINCIPAL_FINANCIER,
+    PRINCIPAL_SUPPLIER,
+    ROLE_SUPPLIER_USER,
 )
 from app.external_access.feature_flags import (
     is_customer_notes_enabled,
@@ -61,6 +66,7 @@ from app.external_access.feature_flags import (
     is_financier_financial_summary_enabled,
     is_financier_portal_enabled,
     is_financier_projection_enabled,
+    is_supplier_portal_enabled,
     require_portal_enabled,
 )
 
@@ -71,6 +77,13 @@ logger = logging.getLogger(__name__)
 def _ensure_user_tenant(user: User, tenant: Tenant) -> None:
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+
+
+async def _require_principal_type(db: AsyncSession, tenant: Tenant, principal_id: int, principal_type: str) -> None:
+    """404 unless the principal belongs to this tenant and has the type the endpoint manages (checked before any edit)."""
+    p = await db.get(ExternalPrincipal, principal_id)
+    if not p or p.tenant_id != tenant.id or p.principal_type != principal_type:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Not a {principal_type} principal")
 
 
 async def _send_invite_email_with_fallback(
@@ -121,7 +134,15 @@ async def _overview_response(db: AsyncSession, tenant: Tenant) -> ExternalAccess
             ExternalInvitation.accepted_at.is_(None),
         )
     )
+    c4 = await db.scalar(
+        select(func.count()).select_from(ExternalPrincipal).where(
+            ExternalPrincipal.tenant_id == tenant.id,
+            ExternalPrincipal.principal_type == PRINCIPAL_SUPPLIER,
+        )
+    )
     return ExternalAccessOverviewResponse(
+        supplier_portal_enabled=is_supplier_portal_enabled(tenant),
+        supplier_principal_count=int(c4 or 0),
         customer_portal_enabled=is_customer_portal_enabled(tenant),
         financier_portal_enabled=is_financier_portal_enabled(tenant),
         customer_notes_enabled=is_customer_notes_enabled(tenant),
@@ -162,6 +183,7 @@ async def external_access_feature_flags_patch(
         FF_FINANCIER_FINANCIAL_SUMMARY_ENABLED: body.financier_financial_summary_enabled,
         FF_FINANCIER_PROJECTION_ENABLED: body.financier_projection_enabled,
         FF_EXTERNAL_PORTAL_DOCUMENT_DOWNLOADS_ENABLED: body.external_portal_document_downloads_enabled,
+        FF_SUPPLIER_PORTAL_ENABLED: body.supplier_portal_enabled,
     }
     await patch_tenant_external_flags(db, tenant, patch)
     await log_action(
@@ -372,6 +394,102 @@ async def invite_financier_principal(
     )
 
 
+@router.get("/suppliers", response_model=ExternalPrincipalListResponse)
+async def list_supplier_principals(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
+    rows, total = await _list_principals(db, tenant, PRINCIPAL_SUPPLIER, limit, offset)
+    items = [ExternalPrincipalAdminRow(**await build_principal_row(db, p)) for p in rows]
+    return ExternalPrincipalListResponse(items=items, total=total)
+
+
+@router.post("/suppliers/invite", response_model=ExternalInviteResponse)
+async def invite_supplier_principal(
+    body: ExternalInviteSupplierRequest,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
+    require_portal_enabled(tenant=tenant, principal_type=PRINCIPAL_SUPPLIER)
+    vendor_ids = sorted(set(body.vendor_ids))
+    await assert_vendors_in_tenant(db, tenant.id, vendor_ids)
+
+    inv, plain = await create_invitation(
+        db,
+        tenant=tenant,
+        invited_by=user,
+        principal_type=PRINCIPAL_SUPPLIER,
+        email=str(body.email),
+        full_name=body.full_name,
+        payload={"role_codes": [ROLE_SUPPLIER_USER], "vendor_ids": vendor_ids},
+    )
+    await log_external_action(
+        db,
+        tenant_id=tenant.id,
+        action="EXTERNAL_INVITE_CREATED",
+        resource_type="external_invitation",
+        resource_id=inv.id,
+        internal_user_id=user.id,
+        details={"principal_type": PRINCIPAL_SUPPLIER, "email": body.email, "vendor_ids": vendor_ids},
+    )
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="EXTERNAL_INVITE_SUPPLIER",
+        resource="external_invitation",
+        details=str(inv.id),
+    )
+    invite_email_sent, invite_token, message = await _send_invite_email_with_fallback(
+        tenant=tenant,
+        principal_type=PRINCIPAL_SUPPLIER,
+        email=str(body.email),
+        full_name=body.full_name,
+        token=plain,
+        expires_at=inv.expires_at,
+    )
+    return ExternalInviteResponse(
+        invitation_id=inv.id,
+        expires_at=inv.expires_at,
+        invite_token=invite_token,
+        invite_email_sent=invite_email_sent,
+        message=message,
+    )
+
+
+@router.patch("/suppliers/{principal_id}", response_model=ExternalPrincipalAdminRow)
+async def patch_supplier_principal(
+    principal_id: int,
+    body: ExternalPrincipalPatchRequest,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_user_tenant(user, tenant)
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
+    await _require_principal_type(db, tenant, principal_id, PRINCIPAL_SUPPLIER)
+    # Supplier logins always carry exactly the supplier role; ignore role edits from the client.
+    body.role_codes = None
+    p = await update_principal(db, tenant, principal_id, body)
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="EXTERNAL_PRINCIPAL_UPDATE",
+        resource="external_principal",
+        details=f"supplier:{principal_id}",
+    )
+    return ExternalPrincipalAdminRow(**await build_principal_row(db, p))
+
+
 @router.patch("/customers/{principal_id}", response_model=ExternalPrincipalAdminRow)
 async def patch_customer_principal(
     principal_id: int,
@@ -382,9 +500,8 @@ async def patch_customer_principal(
 ):
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
+    await _require_principal_type(db, tenant, principal_id, PRINCIPAL_CUSTOMER)
     p = await update_principal(db, tenant, principal_id, body)
-    if p.principal_type != PRINCIPAL_CUSTOMER:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not a customer principal")
     await log_action(
         db,
         tenant_id=tenant.id,
@@ -406,9 +523,8 @@ async def patch_financier_principal(
 ):
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
+    await _require_principal_type(db, tenant, principal_id, PRINCIPAL_FINANCIER)
     p = await update_principal(db, tenant, principal_id, body)
-    if p.principal_type != PRINCIPAL_FINANCIER:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not a financier principal")
     await log_action(
         db,
         tenant_id=tenant.id,

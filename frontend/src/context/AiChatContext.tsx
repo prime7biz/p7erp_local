@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api, type AiMessageResponse, type AiToolInvocationResult } from "@/api/client";
+import type { ScreenContext } from "@/lib/screenContext";
 
 const LAST_SESSION_KEY = "p7_ai_last_session_id";
 
@@ -18,7 +19,7 @@ interface AiChatContextValue {
   ensureSession: () => Promise<number | null>;
   createSession: () => Promise<number | null>;
   loadMessages: (sessionId?: number | null) => Promise<void>;
-  sendMessage: (prompt: string, sessionId?: number | null) => Promise<boolean>;
+  sendMessage: (prompt: string, sessionId?: number | null, context?: ScreenContext | null) => Promise<boolean>;
   approveEscalation: (messageId: number, toolRequired: string, sessionId?: number | null) => Promise<boolean>;
   cancelEscalation: (messageId: number) => void;
   setWidgetOpen: (open: boolean) => void;
@@ -131,14 +132,14 @@ export function AiChatProvider({ children }: { children: React.ReactNode }) {
   }, [ensureSession, loadMessages]);
 
   const sendMessage = useCallback(
-    async (prompt: string, sessionId?: number | null) => {
+    async (prompt: string, sessionId?: number | null, context?: ScreenContext | null) => {
       const sid = sessionId ?? activeSessionId ?? (await ensureSession());
       if (!sid) return false;
       if (sid !== activeSessionId) setActiveSessionId(sid);
       setSending(true);
       setError("");
       try {
-        const result = await api.aiSendMessage(sid, prompt);
+        const result = await api.aiSendMessage(sid, prompt, context);
         setMessages((prev) => [...prev, result.user_message, result.assistant_message]);
         setLastToolResults(result.tool_results || []);
         return true;

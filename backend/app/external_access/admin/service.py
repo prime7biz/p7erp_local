@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.common.auth import hash_password
 from app.common.db_datetime import utc_naive_plus
 from app.models import (
+    Customer,
     ExternalAuditLog,
     ExternalCustomerAccess,
     ExternalFinancierAccess,
@@ -21,7 +22,9 @@ from app.models import (
     ExternalRole,
     Tenant,
     User,
+    Vendor,
 )
+from app.models.supplier_portal import ExternalSupplierAccess
 
 from app.external_access.audit import log_external_action
 from app.external_access.tokens import bump_session_version
@@ -34,6 +37,7 @@ from app.external_access.constants import (
     FF_FINANCIER_PROJECTION_ENABLED,
     PRINCIPAL_CUSTOMER,
     PRINCIPAL_FINANCIER,
+    PRINCIPAL_SUPPLIER,
 )
 
 
@@ -86,6 +90,14 @@ async def create_invitation(
     return inv, f"{inv.id}.{plain}"
 
 
+async def assert_vendors_in_tenant(db: AsyncSession, tenant_id: int, vendor_ids: list[int]) -> None:
+    found = (
+        await db.execute(select(Vendor.id).where(Vendor.id.in_(vendor_ids), Vendor.tenant_id == tenant_id))
+    ).scalars().all()
+    if set(found) != set(vendor_ids):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="One or more suppliers are not in your organization")
+
+
 async def build_principal_row(db: AsyncSession, p: ExternalPrincipal) -> dict:
     result = await db.execute(
         select(ExternalPrincipal)
@@ -112,8 +124,16 @@ async def build_principal_row(db: AsyncSession, p: ExternalPrincipal) -> dict:
         "customer_ids": None,
         "access_scope": None,
         "financier_party_id": None,
+        "vendor_ids": None,
     }
-    if p2.principal_type == PRINCIPAL_CUSTOMER:
+    if p2.principal_type == PRINCIPAL_SUPPLIER:
+        r = await db.execute(
+            select(ExternalSupplierAccess.vendor_id)
+            .where(ExternalSupplierAccess.external_principal_id == p2.id)
+            .order_by(ExternalSupplierAccess.vendor_id)
+        )
+        row["vendor_ids"] = [x[0] for x in r.all()]
+    elif p2.principal_type == PRINCIPAL_CUSTOMER:
         r = await db.execute(
             select(ExternalCustomerAccess.customer_id).where(
                 ExternalCustomerAccess.external_principal_id == p2.id
@@ -179,7 +199,22 @@ async def update_principal(
     if body.role_codes is not None:
         await sync_principal_roles(db, p.id, body.role_codes)
 
+    if p.principal_type == PRINCIPAL_SUPPLIER and getattr(body, "vendor_ids", None) is not None:
+        vendor_ids = sorted({int(v) for v in body.vendor_ids})
+        if not vendor_ids:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A supplier login needs at least one vendor")
+        await assert_vendors_in_tenant(db, tenant.id, vendor_ids)
+        await db.execute(delete(ExternalSupplierAccess).where(ExternalSupplierAccess.external_principal_id == p.id))
+        for vid in vendor_ids:
+            db.add(ExternalSupplierAccess(tenant_id=tenant.id, external_principal_id=p.id, vendor_id=vid))
+
     if p.principal_type == PRINCIPAL_CUSTOMER and body.customer_ids is not None:
+        cids = {int(c) for c in body.customer_ids}
+        found = (
+            await db.execute(select(Customer.id).where(Customer.id.in_(cids), Customer.tenant_id == tenant.id))
+        ).scalars().all()
+        if set(found) != cids:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="One or more customers are not in your organization")
         await db.execute(
             delete(ExternalCustomerAccess).where(ExternalCustomerAccess.external_principal_id == p.id)
         )

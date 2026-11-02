@@ -67,8 +67,23 @@ class AiToolInvocationResult(BaseModel):
     error_category: str | None = None
 
 
+class AiScreenContextIn(BaseModel):
+    """What the user is looking at when they ask (sent by the chat drawer; optional)."""
+
+    route: str | None = Field(default=None, max_length=300)
+    record_type: Literal["order", "customer", "style", "voucher", "employee"] | None = None
+    record_id: int | None = Field(default=None, ge=1)
+
+
+class AiCitation(BaseModel):
+    label: str
+    href: str
+    record_type: str | None = None
+
+
 class AiChatRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=4000)
+    context: AiScreenContextIn | None = None
 
 
 class EscalationPayload(BaseModel):
@@ -93,6 +108,7 @@ class AiChatResponse(BaseModel):
     tool_results: list[AiToolInvocationResult] = Field(default_factory=list)
     blocked: bool = False
     escalation: EscalationPayload | None = None
+    citations: list[AiCitation] = Field(default_factory=list)
 
 
 class AiQuickAction(BaseModel):

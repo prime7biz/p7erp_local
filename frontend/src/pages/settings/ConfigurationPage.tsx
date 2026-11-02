@@ -562,6 +562,51 @@ export function ConfigurationPage() {
                 "Open CAPA blocks challan",
                 "Refuse delivery challan POST while the order has open manufacturing CAPA records.",
               ],
+              [
+                "order_color_size_matrix_enabled",
+                "Colour / size breakdown on orders",
+                "Show a colour × size quantity grid on each order page. Confirmed orders can be redistributed but keep their confirmed total.",
+              ],
+              [
+                "shop_floor_scan_enabled",
+                "Shop-floor scan station",
+                "Production → Scan station: scan bundles per operation on a tablet; keeps working when Wi-Fi drops and never double-counts a bundle.",
+              ],
+              [
+                "packing_list_cartons_enabled",
+                "Carton detail on packing lists",
+                "Carton-range × colour × size lines on each packing list, with weights, CBM and the order's left-to-pack balance (uses the order colour/size breakdown when present).",
+              ],
+              [
+                "traceability_enabled",
+                "Traceability & certificates",
+                "Inventory → Certificates & order trace: GOTS/OEKO-TEX/GRS certificates, fabric lots on cut tickets, and a buyer traceability report per order. Fabric lots need batch tracking (above) on at goods receipt.",
+              ],
+              [
+                "commission_engine_enabled",
+                "Commission engine",
+                "Export & Import → Commission: commission earned from factories/buyers and paid to agents per shipment, with statements and draft vouchers.",
+              ],
+              [
+                "po_color_size_matrix_enabled",
+                "Colour / size breakdown on purchase orders",
+                "Purchase order trace view: a colour × size grid per PO line (breakdown only; approved POs must keep the line quantity).",
+              ],
+              [
+                "bd_bond_compliance_enabled",
+                "Bangladesh bond & VAT registers",
+                "Export & Import → Bond & VAT registers: UD entitlements and utilization, bond register, and Mushak 6.1 / 6.2 style registers with spreadsheet export.",
+              ],
+              [
+                "ai_exception_agents_enabled",
+                "AI exception agents",
+                "AI Tools → Exception agents: finds overdue TNA actions, expiring LCs and BOM materials not on PO, plus an owner brief. Nothing is sent until a manager confirms.",
+              ],
+              [
+                "ai_dashboard_cards_enabled",
+                "Ask-a-metric dashboard cards",
+                "Type a question on the dashboard (e.g. “late orders”) and pin the answer as a card. Answers come only from a fixed list of figures.",
+              ],
             ] as const
           ).map(([key, title, help]) => (
             <label key={key} className="flex items-start gap-3 text-sm text-text-secondary">

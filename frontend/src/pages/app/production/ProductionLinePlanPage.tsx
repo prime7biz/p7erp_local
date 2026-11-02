@@ -52,6 +52,25 @@ type PlanRow = {
   reservation_status?: string | null;
   planned_qty?: number;
   completed_qty?: number;
+  factory_unit?: string | null;
+  order_code?: string | null;
+  delivery_date?: string | null;
+};
+
+type BoardResponse = Awaited<ReturnType<typeof api.getPlanBoard>>;
+type PlanConflict = NonNullable<BoardResponse["conflicts"]>[number];
+type FactoryLoad = NonNullable<BoardResponse["factory_load"]>[number];
+
+const MAIN_FACTORY = "Main factory";
+
+function unitOf(l: { factory_unit?: string | null }): string {
+  return (l.factory_unit || "").trim() || MAIN_FACTORY;
+}
+
+const CONFLICT_LABEL: Record<string, string> = {
+  LINE_OVERLAP: "Line overlap",
+  LATE_DELIVERY: "Late vs delivery",
+  INACTIVE_LINE: "Inactive line",
 };
 
 type AiStatus = {
@@ -105,6 +124,9 @@ export function ProductionLinePlanPage() {
   const [from, setFrom] = useState(todayISO());
   const [to, setTo] = useState(addDays(todayISO(), 30));
   const [items, setItems] = useState<PlanRow[]>([]);
+  const [conflicts, setConflicts] = useState<PlanConflict[]>([]);
+  const [factoryLoad, setFactoryLoad] = useState<FactoryLoad[]>([]);
+  const [factoryFilter, setFactoryFilter] = useState("");
   const [lines, setLines] = useState<Awaited<ReturnType<typeof api.listSewingLines>>>([]);
   const [suggest, setSuggest] = useState<unknown[]>([]);
   const [error, setError] = useState("");
@@ -147,6 +169,8 @@ export function ProductionLinePlanPage() {
     try {
       const res = await api.getPlanBoard(from, to);
       setItems((res.items as PlanRow[]) ?? []);
+      setConflicts(res.conflicts ?? []);
+      setFactoryLoad(res.factory_load ?? []);
     } catch (e) {
       logApiError(e, "ProductionLinePlanPage.loadBoard");
       setError("Could not load plan board.");
@@ -320,13 +344,34 @@ export function ProductionLinePlanPage() {
     return m;
   }, [items]);
 
+  const factoryUnits = useMemo(() => {
+    const s = new Set(lines.map(unitOf));
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [lines]);
+
   const displayLines = useMemo(() => {
-    const ids = new Set(lines.map((l) => l.id));
-    for (const it of items) ids.add(it.line_id);
     return [...lines]
-      .filter((l) => ids.has(l.id))
-      .sort((a, b) => a.line_code.localeCompare(b.line_code));
-  }, [lines, items]);
+      .filter((l) => !factoryFilter || unitOf(l) === factoryFilter)
+      .sort((a, b) => unitOf(a).localeCompare(unitOf(b)) || a.line_code.localeCompare(b.line_code));
+  }, [lines, factoryFilter]);
+
+  const conflictByConfig = useMemo(() => {
+    const m = new Map<number, PlanConflict[]>();
+    for (const c of conflicts) {
+      for (const id of c.config_ids) {
+        const list = m.get(id) ?? [];
+        list.push(c);
+        m.set(id, list);
+      }
+    }
+    return m;
+  }, [conflicts]);
+
+  const visibleConflicts = useMemo(() => {
+    if (!factoryFilter) return conflicts;
+    const lineIds = new Set(displayLines.map((l) => l.id));
+    return conflicts.filter((c) => lineIds.has(c.line_id));
+  }, [conflicts, displayLines, factoryFilter]);
 
   const labelForItem = (it: PlanRow) => {
     const oid = it.order_id;
@@ -398,6 +443,23 @@ export function ProductionLinePlanPage() {
               onChange={(e) => setTo(e.target.value)}
             />
           </label>
+          {factoryUnits.length > 1 ? (
+            <label className="text-sm">
+              Factory
+              <select
+                className="ml-2 rounded-md border border-border-subtle px-2 py-1"
+                value={factoryFilter}
+                onChange={(e) => setFactoryFilter(e.target.value)}
+              >
+                <option value="">All factories</option>
+                {factoryUnits.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <button
             type="button"
             className="rounded-lg border border-border-subtle bg-surface-elevated px-3 py-1.5 text-sm"
@@ -425,6 +487,58 @@ export function ProductionLinePlanPage() {
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
+        {factoryLoad.length > 1 ? (
+          <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4" aria-label="Load by factory">
+            {factoryLoad.map((f) => {
+              const pct = f.planned_qty > 0 ? Math.round((f.completed_qty / f.planned_qty) * 100) : 0;
+              const selected = factoryFilter === f.factory_unit;
+              return (
+                <button
+                  key={f.factory_unit}
+                  type="button"
+                  onClick={() => setFactoryFilter(selected ? "" : f.factory_unit)}
+                  className={`rounded-lg border p-3 text-left text-xs ${
+                    selected ? "border-brand-primary bg-brand-primary/5" : "border-border-subtle bg-surface-elevated"
+                  }`}
+                >
+                  <div className="font-medium text-text-primary">{f.factory_unit}</div>
+                  <div className="mt-1 text-text-secondary">
+                    {f.line_count} line(s) · {f.plan_count} plan(s)
+                  </div>
+                  <div className="text-text-muted">
+                    {Math.round(f.completed_qty).toLocaleString()} / {Math.round(f.planned_qty).toLocaleString()} pcs ({pct}%)
+                  </div>
+                </button>
+              );
+            })}
+          </section>
+        ) : null}
+
+        {visibleConflicts.length > 0 ? (
+          <section className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/30">
+            <h2 className="mb-2 text-sm font-medium text-red-800 dark:text-red-200">
+              Planning conflicts ({visibleConflicts.length})
+            </h2>
+            <ul className="space-y-1 text-xs">
+              {visibleConflicts.slice(0, 20).map((c, i) => (
+                <li key={`${c.kind}-${c.config_ids.join("-")}-${i}`} className="flex gap-2">
+                  <span
+                    className={`shrink-0 rounded px-1.5 py-0.5 font-medium ${
+                      c.severity === "error" ? "bg-red-600 text-white" : "bg-amber-500 text-white"
+                    }`}
+                  >
+                    {CONFLICT_LABEL[c.kind] ?? c.kind}
+                  </span>
+                  <span className="text-text-primary">{c.message}</span>
+                </li>
+              ))}
+            </ul>
+            {visibleConflicts.length > 20 ? (
+              <p className="mt-1 text-xs text-text-muted">+{visibleConflicts.length - 20} more — narrow the date range.</p>
+            ) : null}
+          </section>
+        ) : null}
+
         {!rangeTooWide && days.length > 0 ? (
           <section className="rounded-lg border border-border-subtle bg-surface-elevated p-3">
             <h2 className="mb-3 text-sm font-medium">Timeline by line</h2>
@@ -448,10 +562,17 @@ export function ProductionLinePlanPage() {
             </div>
 
             <div className="space-y-2 overflow-x-auto">
-              {displayLines.map((line) => {
+              {displayLines.map((line, lineIdx) => {
                 const rowItems = itemsByLine.get(line.id) ?? [];
+                const unit = unitOf(line);
+                const prev = lineIdx > 0 ? displayLines[lineIdx - 1] : undefined;
+                const showUnitHeader = factoryUnits.length > 1 && (!prev || unitOf(prev) !== unit);
                 return (
-                  <div key={line.id} className="min-w-[480px] overflow-hidden rounded-md border border-border-subtle/80">
+                  <div key={line.id}>
+                    {showUnitHeader ? (
+                      <div className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-text-muted">{unit}</div>
+                    ) : null}
+                  <div className="min-w-[480px] overflow-hidden rounded-md border border-border-subtle/80">
                     <div className="bg-surface-subtle px-2 py-1 text-xs font-medium text-text-secondary">{lineName(line.id)}</div>
                     <div
                       className="relative h-14 w-full"
@@ -492,7 +613,8 @@ export function ProductionLinePlanPage() {
                         const pr = oid != null ? pipelineByOrder.get(oid) : undefined;
                         const overall = pr?.overall_status;
                         const matOk = pr?.chain?.material_readiness?.status !== "blocked";
-                        const conflict = overall === "blocked" || !matOk;
+                        const planConflicts = conflictByConfig.get(it.id) ?? [];
+                        const conflict = overall === "blocked" || !matOk || planConflicts.length > 0;
                         return (
                           <div
                             key={it.id}
@@ -513,7 +635,7 @@ export function ProductionLinePlanPage() {
                               className={`min-w-0 flex-1 truncate rounded-r border px-1 text-left text-[10px] font-medium leading-tight ${color} ${
                                 conflict ? "ring-2 ring-red-500" : ""
                               }`}
-                              title={`${labelForItem(it)} · ${st} · ${rs}`}
+                              title={[`${labelForItem(it)} · ${st} · ${rs}`, ...planConflicts.map((c) => c.message)].join("\n")}
                             >
                               <span className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${overallDotClass(overall)}`} />
                               <span className="mr-0.5 rounded bg-white/25 px-0.5 text-[9px] uppercase">{rs}</span>
@@ -523,6 +645,7 @@ export function ProductionLinePlanPage() {
                         );
                       })}
                     </div>
+                  </div>
                   </div>
                 );
               })}
@@ -560,7 +683,12 @@ export function ProductionLinePlanPage() {
                   return (
                     <tr key={row.id} className="border-b border-border-subtle/60">
                       <td className="py-2 pr-4">{lineName(row.line_id)}</td>
-                      <td className="py-2 pr-4">{row.order_id != null ? String(row.order_id) : "—"}</td>
+                      <td className="py-2 pr-4">
+                        {row.order_code ?? (row.order_id != null ? String(row.order_id) : "—")}
+                        {row.delivery_date ? (
+                          <div className="text-[11px] text-text-muted">Due {row.delivery_date}</div>
+                        ) : null}
+                      </td>
                       <td className="py-2 pr-4">{pr?.style_code ?? "—"}</td>
                       <td className="py-2 pr-4">{row.start_date}</td>
                       <td className="py-2 pr-4">{row.planned_end_date ?? "—"}</td>

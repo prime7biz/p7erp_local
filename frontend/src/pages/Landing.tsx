@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { motion, useInView } from "framer-motion";
+import { trackEvent } from "@/lib/analytics";
 import {
   Palette,
   FileText,
@@ -116,9 +117,9 @@ function DashboardSection() {
               <source srcSet="/images/prime7-dashboard.webp" type="image/webp" />
               <img
                 src="/images/prime7-dashboard.png"
-                alt="Prime7 ERP Dashboard showing live production snapshot and line efficiency"
-                width={1200}
-                height={720}
+                alt="Prime7 ERP home dashboard with pending approvals, overdue TNA tasks, critical alerts and order KPIs"
+                width={1440}
+                height={900}
                 className="w-full h-auto"
                 loading="lazy"
               />
@@ -521,12 +522,16 @@ export function Landing() {
             Replace disconnected spreadsheets with one system for merchandising, production, commercial and finance — set up with local support in Bangladesh.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/signup" className={`${btnPrimary} px-8 py-4 bg-brand-primary shadow-xl shadow-brand-primary/30`}>
+            <Link
+              to="/signup"
+              onClick={() => trackEvent("signup_started", { from: "landing_final_cta" })}
+              className={`${btnPrimary} px-8 py-4 bg-brand-primary shadow-xl shadow-brand-primary/30`}
+            >
               Start Free Trial
               <ArrowRight className="ml-2 h-5 w-5" />
             </Link>
-            <Link to="/contact" className={btnOutline}>
-              Talk to Sales
+            <Link to="/book-demo" onClick={() => trackEvent("cta_click", { cta: "book_demo", from: "landing_final_cta" })} className={btnOutline}>
+              Book a Demo
             </Link>
           </div>
           <div className="mt-10 flex flex-col items-center justify-center gap-3 text-sm text-text-inverse/80 sm:flex-row sm:gap-8">

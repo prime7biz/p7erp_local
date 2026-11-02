@@ -48,6 +48,16 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
     description:
       "Contact Prime7 ERP for demos, support, and sales. Book a demo or get in touch with our team.",
   },
+  "/book-demo": {
+    title: "Book a Demo – Prime7 ERP for Garments & Buying Houses",
+    description:
+      "Book a 45-minute live demo of Prime7 ERP: merchandising, inventory, production, LC, accounts and payroll for Bangladesh garment businesses.",
+  },
+  "/roi-calculator": {
+    title: "ERP ROI Calculator – Prime7 ERP",
+    description:
+      "Estimate how many admin hours and how much salary cost your garment team could save by moving off spreadsheets. Your numbers, transparent formula.",
+  },
   "/garments-erp": {
     title: "Garments ERP – Prime7 ERP",
     description:

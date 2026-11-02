@@ -29,7 +29,7 @@ export function ExternalAccessPage() {
     if (!o) return;
     setBusy(true);
     try {
-      const cur = o[key] as boolean;
+      const cur = Boolean(o[key]);
       const patch = { [key]: !cur };
       const next = await api.patchExternalAccessFeatureFlags(patch);
       setO(next);
@@ -44,7 +44,7 @@ export function ExternalAccessPage() {
     <div>
       <AppPageHeader
         title="External access"
-        description="Customer and financier portals — enable per tenant, then invite users from the sub-pages."
+        description="Customer, financier and supplier portals — enable per tenant, then invite users from the sub-pages."
       />
       {err ? <div className={listPageErrorClass}>{err}</div> : null}
       {o ? (
@@ -97,7 +97,20 @@ export function ExternalAccessPage() {
               Manage financier access →
             </Link>
           </div>
-          <div className="rounded-xl border border-border bg-surface-raised p-4 md:col-span-2">
+          <div className="rounded-xl border border-border bg-surface-raised p-4">
+            <p className="font-medium text-text-primary">Supplier portal</p>
+            <p className="mt-1 text-sm text-text-muted">Principals: {o.supplier_principal_count ?? 0}</p>
+            <p className="mt-1 text-xs text-text-muted">Suppliers see their own approved POs, confirm them and post ship dates.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void toggle("supplier_portal_enabled")}>
+                {o.supplier_portal_enabled ? "Disable" : "Enable"} portal
+              </Button>
+            </div>
+            <Link className="mt-3 inline-block text-sm text-brand-primary" to="/app/settings/external-access/suppliers">
+              Manage supplier access →
+            </Link>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-raised p-4">
             <p className="text-sm text-text-muted">
               Pending invitations: {o.pending_invitation_count}.{" "}
               <Link className="text-brand-primary" to="/app/settings/external-access/audit">

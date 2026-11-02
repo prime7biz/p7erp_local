@@ -19,6 +19,18 @@ const ExportCasesPage = lazy(() => import("@/pages/app/commercial/ExportCasesPag
 const ExportCaseFormPage = lazy(() =>
   import("@/pages/app/commercial/ExportCaseFormPage").then((m) => ({ default: m.ExportCaseFormPage })),
 );
+const ScanStationPage = lazy(() =>
+  import("@/pages/app/production/scan/ScanStationPage").then((m) => ({ default: m.ScanStationPage })),
+);
+const AiAgentsPage = lazy(() =>
+  import("@/pages/app/ai/agents/AiAgentsPage").then((m) => ({ default: m.AiAgentsPage })),
+);
+const BdCompliancePage = lazy(() =>
+  import("@/pages/app/commercial/bd-compliance/BdCompliancePage").then((m) => ({ default: m.BdCompliancePage })),
+);
+const CommissionPage = lazy(() =>
+  import("@/pages/app/commercial/CommissionPage").then((m) => ({ default: m.CommissionPage })),
+);
 const ProformaInvoicesPage = lazy(() =>
   import("@/pages/app/commercial/ProformaInvoicesPage").then((m) => ({ default: m.ProformaInvoicesPage })),
 );
@@ -294,6 +306,9 @@ const ExternalCustomerAccessPage = lazy(() =>
 const ExternalFinancierAccessPage = lazy(() =>
   import("@/pages/settings/external-access/ExternalFinancierAccessPage").then((m) => ({ default: m.ExternalFinancierAccessPage })),
 );
+const ExternalSupplierAccessPage = lazy(() =>
+  import("@/pages/settings/external-access/ExternalSupplierAccessPage").then((m) => ({ default: m.ExternalSupplierAccessPage })),
+);
 const ExternalAccessAuditPage = lazy(() =>
   import("@/pages/settings/external-access/ExternalAccessAuditPage").then((m) => ({ default: m.ExternalAccessAuditPage })),
 );
@@ -437,6 +452,9 @@ const CashflowCalendarPage = lazy(() =>
 );
 const LotTraceabilityPage = lazy(() =>
   import("@/pages/app/LotTraceabilityPage").then((m) => ({ default: m.LotTraceabilityPage })),
+);
+const TraceabilityPage = lazy(() =>
+  import("@/pages/app/inventory/TraceabilityPage").then((m) => ({ default: m.TraceabilityPage })),
 );
 const DayBookPage = lazy(() => import("@/pages/app/DayBookPage").then((m) => ({ default: m.DayBookPage })));
 const TrialBalancePage = lazy(() =>
@@ -864,6 +882,7 @@ export function AppProtectedRouter() {
           <Route path="inventory/stock-adjustments/new" element={<StockAdjustmentsPage />} />
           <Route path="inventory/warehouse-transfers" element={<WarehouseTransfersPage />} />
           <Route path="inventory/lots" element={<LotTraceabilityPage />} />
+          <Route path="inventory/traceability" element={<TraceabilityPage />} />
           <Route path="inventory/purchase-orders" element={<PurchaseOrdersPage />} />
           <Route path="inventory/goods-receiving" element={<GoodsReceivingPage />} />
           <Route path="inventory/delivery-challans/:challanId" element={<DeliveryChallanDetailPage />} />
@@ -909,6 +928,7 @@ export function AppProtectedRouter() {
           <Route path="production/planning" element={<ProductionPlanningPage />} />
           <Route path="production/advanced-planning" element={<Navigate to="/app/production/planning" replace />} />
           <Route path="production/cutting/pipeline" element={<ProductionCuttingPage />} />
+          <Route path="production/scan-station" element={<ScanStationPage />} />
           <Route path="production/cutting" element={<ShopFloorExecutionPage />} />
           <Route path="production/sewing" element={<ShopFloorExecutionPage />} />
           <Route path="production/finishing-packing" element={<ShopFloorExecutionPage />} />
@@ -938,6 +958,7 @@ export function AppProtectedRouter() {
           <Route path="ai/automation" element={<AiAutomationPage />} />
           <Route path="ai/predictions" element={<AiPredictionsPage />} />
           <Route path="ai/weekly-reports" element={<AiWeeklyReportsPage />} />
+          <Route path="ai/agents" element={<AiAgentsPage />} />
         </Route>
         <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.inventory} />}>
           <Route path="inventory/consumption-control" element={<ConsumptionControlPage />} />
@@ -953,6 +974,8 @@ export function AppProtectedRouter() {
           <Route path="commercial/export-cases/:id/edit" element={<ExportCaseFormPage />} />
           <Route path="commercial/master-contracts" element={<MasterContractsPage />} />
           <Route path="commercial/proforma-invoices" element={<ProformaInvoicesPage />} />
+          <Route path="commercial/commission" element={<CommissionPage />} />
+          <Route path="commercial/bd-compliance" element={<BdCompliancePage />} />
           <Route path="commercial/proforma-invoices/new" element={<ProformaInvoiceFormPage />} />
           <Route path="commercial/proforma-invoices/:id/edit" element={<ProformaInvoiceFormPage />} />
           <Route path="commercial/invoices" element={<CommercialInvoicesPage />} />
@@ -1131,6 +1154,7 @@ export function AppProtectedRouter() {
             <Route path="external-access" element={<ExternalAccessPage />} />
             <Route path="external-access/customers" element={<ExternalCustomerAccessPage />} />
             <Route path="external-access/financiers" element={<ExternalFinancierAccessPage />} />
+            <Route path="external-access/suppliers" element={<ExternalSupplierAccessPage />} />
             <Route path="external-access/audit" element={<ExternalAccessAuditPage />} />
           </Route>
         </Route>

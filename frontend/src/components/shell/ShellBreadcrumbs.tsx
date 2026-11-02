@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import type { FlatNavRoute } from "@/components/shell/flattenMenuRoutes";
+import { useRecordBreadcrumbLabel } from "@/components/shell/recordBreadcrumb";
 
 function normalizePath(path: string) {
   if (path.length > 1 && path.endsWith("/")) return path.slice(0, -1);
@@ -26,8 +27,11 @@ export function resolveShellBreadcrumb(pathname: string, routes: FlatNavRoute[])
 
 export function ShellBreadcrumbs({ routes }: { routes: FlatNavRoute[] }) {
   const location = useLocation();
+  const recordLabel = useRecordBreadcrumbLabel();
   const crumb = resolveShellBreadcrumb(location.pathname, routes);
-  if (!crumb) return null;
+  // The home dashboard is the root of the trail; "Home › Dashboard › Home" adds nothing.
+  if (!crumb || normalizePath(location.pathname) === "/app") return null;
+  const onRecord = recordLabel && normalizePath(location.pathname) !== crumb.href;
 
   return (
     <nav
@@ -47,9 +51,18 @@ export function ShellBreadcrumbs({ routes }: { routes: FlatNavRoute[] }) {
         {crumb.page !== crumb.module ? (
           <li className="flex min-w-0 items-center gap-1">
             <ChevronRight className="h-3 w-3 shrink-0" />
-            <Link to={crumb.href} className="truncate font-medium text-text-primary hover:text-brand-primary">
+            <Link
+              to={crumb.href}
+              className={onRecord ? "truncate text-text-secondary hover:text-brand-primary" : "truncate font-medium text-text-primary hover:text-brand-primary"}
+            >
               {crumb.page}
             </Link>
+          </li>
+        ) : null}
+        {onRecord ? (
+          <li className="flex min-w-0 items-center gap-1" aria-current="page">
+            <ChevronRight className="h-3 w-3 shrink-0" />
+            <span className="truncate font-medium text-text-primary">{recordLabel}</span>
           </li>
         ) : null}
       </ol>

@@ -222,12 +222,24 @@ export const menuSections: MenuSection[] = [
     section: "Export & Import",
     icon: Globe,
     items: [
-      { icon: Globe, label: "Commercial", href: `${PREFIX}/commercial` },
+      { icon: Globe, label: "Commercial", href: `${PREFIX}/commercial`, exact: true },
       { icon: Globe, label: "Export Cases", href: `${PREFIX}/commercial/export-cases` },
       { icon: BookOpen, label: "Master Contracts", href: `${PREFIX}/commercial/master-contracts` },
       { icon: FileText, label: "Proforma Invoices", href: `${PREFIX}/commercial/proforma-invoices` },
       { icon: FileText, label: "Commercial Invoices", href: `${PREFIX}/commercial/invoices` },
       { icon: ArrowRightLeft, label: "BTB LCs", href: `${PREFIX}/commercial/btb-lcs` },
+      {
+        icon: FileText,
+        label: "Commission",
+        href: `${PREFIX}/commercial/commission`,
+        requiresFeatureFlag: "commission_engine_enabled",
+      },
+      {
+        icon: BookOpen,
+        label: "Bond & VAT registers",
+        href: `${PREFIX}/commercial/bd-compliance`,
+        requiresFeatureFlag: "bd_bond_compliance_enabled",
+      },
       {
         icon: FolderTree,
         label: "Trade Cases",
@@ -434,7 +446,15 @@ export const menuSections: MenuSection[] = [
       },
       {
         label: "Traceability",
-        items: [{ icon: Package, label: "Lot Traceability", href: `${PREFIX}/inventory/lots` }],
+        items: [
+          { icon: Package, label: "Lot Traceability", href: `${PREFIX}/inventory/lots` },
+          {
+            icon: ShieldCheck,
+            label: "Certificates & order trace",
+            href: `${PREFIX}/inventory/traceability`,
+            requiresFeatureFlag: "traceability_enabled",
+          },
+        ],
       },
     ],
   },
@@ -447,7 +467,7 @@ export const menuSections: MenuSection[] = [
       {
         label: "Overview",
         items: [
-          { icon: Factory, label: "Production Overview", href: `${PREFIX}/production` },
+          { icon: Factory, label: "Production Overview", href: `${PREFIX}/production`, exact: true },
           { icon: Package, label: "Manufacturing Orders", href: `${PREFIX}/production/manufacturing-orders` },
           { icon: Settings, label: "Production setup", href: `${PREFIX}/production/setup` },
           { icon: Calendar, label: "Factory calendar", href: `${PREFIX}/production/calendar` },
@@ -469,6 +489,12 @@ export const menuSections: MenuSection[] = [
         items: [
           { icon: Scissors, label: "Cutting (shop floor)", href: `${PREFIX}/production/cutting` },
           { icon: Scissors, label: "Cutting pipeline", href: `${PREFIX}/production/cutting/pipeline` },
+          {
+            icon: Activity,
+            label: "Scan station",
+            href: `${PREFIX}/production/scan-station`,
+            requiresFeatureFlag: "shop_floor_scan_enabled",
+          },
           { icon: Activity, label: "Hourly — Cutting", href: `${PREFIX}/production/hourly/cutting` },
           { icon: Cog, label: "Sewing (shop floor)", href: `${PREFIX}/production/sewing` },
           { icon: Activity, label: "Hourly — Sewing", href: `${PREFIX}/production/hourly/sewing` },
@@ -570,6 +596,12 @@ export const menuSections: MenuSection[] = [
       { icon: Zap, label: "AI Automation", href: `${PREFIX}/ai/automation` },
       { icon: Activity, label: "AI Predictions", href: `${PREFIX}/ai/predictions` },
       { icon: ClipboardList, label: "Weekly AI reports", href: `${PREFIX}/ai/weekly-reports` },
+      {
+        icon: AlertTriangle,
+        label: "Exception agents",
+        href: `${PREFIX}/ai/agents`,
+        requiresFeatureFlag: "ai_exception_agents_enabled",
+      },
     ],
   },
   {

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { MapPin, Mail, Phone, MessageCircle, Clock, Send, Loader2, Building2, ArrowRight } from "lucide-react";
-import { API_BASE } from "@/api/apiBase";
+import { submitLead } from "@/api/publicLeads";
+import { trackEvent } from "@/lib/analytics";
 
 const companySizes = [
   { value: "1-10", label: "1–10 employees" },
@@ -41,29 +42,16 @@ export function ContactPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/api/v1/public/leads`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          company: form.company || null,
-          phone: form.phone || null,
-          company_size: form.companySize || null,
-          message: form.message,
-          source_page: typeof window !== "undefined" ? window.location.pathname : null,
-          website: form.website || null,
-        }),
+      await submitLead({
+        name: form.name,
+        email: form.email,
+        company: form.company || null,
+        phone: form.phone || null,
+        company_size: form.companySize || null,
+        message: form.message,
+        website: form.website || null,
       });
-      if (!res.ok) {
-        throw new Error(
-          res.status === 429
-            ? "Too many submissions. Please wait a minute and try again."
-            : res.status === 422
-              ? "Please check your email address and required fields."
-              : "We could not send your message. Please try again or contact us on WhatsApp.",
-        );
-      }
+      trackEvent("contact_submitted", { company_size: form.companySize || undefined });
       setSubmitted(true);
       setForm({ name: "", email: "", company: "", phone: "", message: "", companySize: "", website: "" });
     } catch (err) {

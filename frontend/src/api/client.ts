@@ -1488,6 +1488,416 @@ export interface PaginatedRows<T> {
   total_pages: number;
 }
 
+export interface PackingCartonLine {
+  carton_from: number;
+  carton_to: number;
+  color_name: string;
+  size: string;
+  pcs_per_carton: number;
+  net_kg_per_carton?: string | null;
+  gross_kg_per_carton?: string | null;
+  length_cm?: string | null;
+  width_cm?: string | null;
+  height_cm?: string | null;
+}
+
+export interface PackingCartons {
+  enabled: boolean;
+  packing_list_id: number;
+  order_id: number | null;
+  order_code: string | null;
+  status: string;
+  locked: boolean;
+  lines: PackingCartonLine[];
+  summary: { total_cartons: number; total_pcs: number; net_kg: string; gross_kg: string; cbm: string };
+  breakdown: {
+    color_name: string;
+    size: string;
+    packed_this_list: number;
+    packed_all_lists: number;
+    ordered_qty: number | null;
+    balance_to_pack: number | null;
+  }[];
+}
+
+export type CertificateType = "GOTS" | "OCS" | "GRS" | "RCS" | "OEKO_TEX_100" | "BCI" | "FSC" | "OTHER";
+
+export interface MaterialCertificate {
+  id: number;
+  cert_type: CertificateType;
+  certificate_number: string;
+  issuer: string | null;
+  vendor_id: number | null;
+  vendor_name: string | null;
+  item_id: number | null;
+  item_name: string | null;
+  valid_from: string | null;
+  valid_until: string | null;
+  status: "valid" | "expiring" | "expired" | "not_yet_valid";
+  notes: string | null;
+}
+
+export interface CutTicketFabricLot {
+  id: number;
+  cut_ticket_id: number;
+  stock_batch_id: number;
+  batch_number: string;
+  item_code: string | null;
+  item_name: string | null;
+  qty_used: string | null;
+  roll_numbers: string | null;
+  grn_code: string | null;
+  received_date: string | null;
+  supplier_name: string | null;
+}
+
+export interface OrderTraceabilityReport {
+  order_id: number;
+  order_code: string;
+  customer_name: string | null;
+  style_ref: string | null;
+  cut_tickets: { id: number; ticket_code: string; cut_date: string | null; total_pcs_cut: number | null; bundle_count: number; bundle_pcs: number }[];
+  fabric_lots: (CutTicketFabricLot & {
+    cut_ticket_code: string;
+    certificates: { cert_type: string; certificate_number: string; issuer: string | null; valid_until: string | null; status_on_receipt: string }[];
+  })[];
+  packing_lists: { packing_list_number: string; packing_date: string | null; total_cartons: number; status: string }[];
+  gaps: string[];
+}
+
+export type CommissionDirection = "RECEIVABLE" | "PAYABLE";
+
+export interface CommissionSettings {
+  enabled: boolean;
+  tds_rate_pct: string;
+  vds_rate_pct: string;
+  income_account_id: number | null;
+  receivable_account_id: number | null;
+  expense_account_id: number | null;
+  payable_account_id: number | null;
+  tds_receivable_account_id: number | null;
+  tds_payable_account_id: number | null;
+  vds_receivable_account_id: number | null;
+  vds_payable_account_id: number | null;
+}
+
+export interface CommissionRule {
+  id: number;
+  direction: CommissionDirection;
+  scope: "DEFAULT" | "CUSTOMER" | "VENDOR" | "INTERMEDIARY";
+  customer_id: number | null;
+  vendor_id: number | null;
+  intermediary_id: number | null;
+  target_name: string | null;
+  rate_type: "PERCENTAGE" | "FIXED";
+  rate: string;
+  is_active: boolean;
+  notes: string | null;
+}
+
+export interface CommissionEntry {
+  id: number;
+  shipment_id: number;
+  shipment_ref: string | null;
+  order_code: string | null;
+  direction: CommissionDirection;
+  counterparty_type: "CUSTOMER" | "VENDOR" | "INTERMEDIARY";
+  counterparty_id: number;
+  counterparty_name: string | null;
+  rate_type: string;
+  rate: string;
+  rate_source: string;
+  base_amount: string;
+  gross_amount: string;
+  tds_amount: string;
+  vds_amount: string;
+  net_amount: string;
+  currency: string;
+  status: "PENDING" | "STATEMENTED";
+  statement_id: number | null;
+}
+
+export interface CommissionShipment {
+  id: number;
+  order_id: number;
+  order_code: string | null;
+  vendor_id: number | null;
+  vendor_name: string | null;
+  shipment_ref: string;
+  shipment_date: string;
+  shipped_qty: number | null;
+  shipped_value: string;
+  currency: string;
+  exchange_rate_to_base: string;
+  notes: string | null;
+  entries: CommissionEntry[];
+}
+
+export interface CommissionStatement {
+  id: number;
+  statement_code: string;
+  direction: CommissionDirection;
+  counterparty_type: CommissionEntry["counterparty_type"];
+  counterparty_id: number;
+  counterparty_name: string | null;
+  statement_date: string;
+  currency: string;
+  gross_total: string;
+  tds_total: string;
+  vds_total: string;
+  net_total: string;
+  base_gross_total: string;
+  status: "DRAFT" | "ISSUED" | "CANCELLED";
+  voucher_id: number | null;
+  voucher_number: string | null;
+  notes: string | null;
+  issued_at: string | null;
+  entries: CommissionEntry[];
+  warning: string | null;
+}
+
+export interface OrderColorSizeMatrix {
+  enabled: boolean;
+  order_id: number;
+  order_quantity: number | null;
+  /** Order is CONFIRMED / IN_PROGRESS / COMPLETED: total must stay equal to the confirmed quantity. */
+  locked: boolean;
+  colors: { name: string; code?: string | null }[];
+  sizes: string[];
+  cells: { color: string; size: string; quantity: number }[];
+  total: number;
+  matches_order_quantity: boolean | null;
+  suggested_colors: { name: string; code?: string | null }[];
+  suggested_sizes: string[];
+}
+
+/** Quantities are decimal strings (e.g. "20.5"). */
+export interface PoColorSizeLine {
+  po_item_id: number;
+  item_code: string;
+  item_name: string;
+  quantity: string;
+  colors: { name: string; code?: string | null }[];
+  sizes: string[];
+  cells: { color: string; size: string; quantity: string }[];
+  total: string;
+  matches_quantity: boolean | null;
+}
+
+export interface PoColorSizeGrid {
+  enabled: boolean;
+  purchase_order_id: number;
+  po_code: string;
+  po_status: string;
+  read_only: boolean;
+  /** Non-draft POs: a saved grid must total exactly the line quantity. */
+  must_match_quantity: boolean;
+  lines: PoColorSizeLine[];
+  suggested_colors: { name: string; code?: string | null }[];
+  suggested_sizes: string[];
+}
+
+export type UdStatus = "DRAFT" | "APPROVED" | "CLOSED";
+
+export interface UdEntitlementInput {
+  id?: number | null;
+  item_description: string;
+  hs_code?: string | null;
+  uom?: string | null;
+  entitled_qty: string;
+  entitled_value_usd?: string | null;
+}
+
+export interface UdHeader {
+  id: number;
+  ud_no: string;
+  amendment_no: number;
+  ud_date: string | null;
+  issuer: string;
+  trade_case_id: number | null;
+  trade_case_reference?: string | null;
+  export_lc_no: string | null;
+  buyer_name: string | null;
+  export_value_usd: string | null;
+  garment_qty: string | null;
+  expiry_date: string | null;
+  status: UdStatus;
+  notes: string | null;
+}
+
+export interface UdListItem extends UdHeader {
+  entitlement_count: number;
+  days_to_expiry: number | null;
+}
+
+export interface UdUtilizationLine {
+  entitlement_id: number;
+  item_description: string;
+  hs_code: string | null;
+  uom: string | null;
+  entitled_qty: string;
+  imported_qty: string;
+  consumed_qty: string;
+  remaining_entitlement_qty: string;
+  in_bond_qty: string;
+  utilization_pct: number | null;
+  entry_count: number;
+}
+
+export interface UdDetail extends UdHeader {
+  entitlements: (UdEntitlementInput & { id: number })[];
+  utilization: {
+    lines: UdUtilizationLine[];
+    warnings: { kind: string; message: string }[];
+    total_entitled_value_usd: string;
+    total_imported_value_bdt: string;
+  };
+}
+
+export interface UdBodyInput {
+  ud_no: string;
+  amendment_no?: number;
+  ud_date?: string | null;
+  issuer: string;
+  trade_case_id?: number | null;
+  export_lc_no?: string | null;
+  buyer_name?: string | null;
+  export_value_usd?: string | null;
+  garment_qty?: string | null;
+  expiry_date?: string | null;
+  notes?: string | null;
+  entitlements: UdEntitlementInput[];
+}
+
+export interface BondRegisterRow {
+  id: number;
+  entry_date: string | null;
+  reference_no: string | null;
+  entry_type: string;
+  ud_no: string | null;
+  up_no: string | null;
+  item_description: string | null;
+  in_qty: string;
+  out_qty: string;
+  value_bdt: string;
+  balance_qty: string;
+  status: string | null;
+}
+
+export interface BondRegister {
+  rows: BondRegisterRow[];
+  opening_items: number;
+  opening_balance_qty: string;
+  closing_balance_qty: string;
+}
+
+export interface MushakRegister {
+  register: "6.1" | "6.2";
+  title: string;
+  period: string;
+  rows: Record<string, string | number | null>[];
+  totals: Record<string, string>;
+  note: string;
+}
+
+export interface GovernedFinding {
+  agent: "tna_delay" | "lc_expiry" | "bom_shortfall" | string;
+  agent_label: string;
+  key: string;
+  severity: "critical" | "high" | "medium" | "low" | string;
+  title: string;
+  detail: string;
+  recommended_action: string;
+  href: string | null;
+  order_id: number | null;
+  suggested_action: { type: "notify"; label: string };
+}
+
+export interface GovernedExceptions {
+  agents: { id: string; label: string; count: number }[];
+  can_confirm: boolean;
+  hidden_recently: number;
+  items: GovernedFinding[];
+}
+
+export interface OwnerBrief {
+  metrics: Record<string, number>;
+  exception_counts: Record<string, number>;
+  highlights: { title: string; detail: string; href: string | null; severity: string }[];
+  narrative: string;
+  source: "ai" | "rules";
+  generated_at: string;
+}
+
+export interface MetricMeta {
+  id: string;
+  label: string;
+  description: string;
+  unit: string;
+  href: string;
+}
+
+export interface MetricValue extends MetricMeta {
+  value: number;
+  breakdown?: { label: string; value: number }[];
+}
+
+export type MetricAnswer =
+  | { matched: true; method: "keywords" | "ai"; metric: MetricValue; suggestions: MetricMeta[] }
+  | { matched: false; message: string; suggestions: MetricMeta[] };
+
+export interface OnboardingChecklist {
+  steps: { key: string; title: string; description: string; href: string; done: boolean }[];
+  completed: number;
+  total: number;
+}
+
+export interface AppNotification {
+  id: number;
+  kind: string;
+  title: string;
+  body: string | null;
+  href: string | null;
+  read: boolean;
+  created_at: string;
+}
+
+export interface NotificationList {
+  items: AppNotification[];
+  unread_count: number;
+}
+
+export interface GlobalSearchHit {
+  kind: string;
+  id: number;
+  title: string;
+  subtitle?: string | null;
+  href: string;
+}
+
+export interface GlobalSearchResponse {
+  query: string;
+  groups: { kind: string; label: string; hits: GlobalSearchHit[] }[];
+}
+
+/** What a saved list view remembers: URL filters, sort, visible columns, density. */
+export interface SavedViewConfig {
+  query?: string;
+  sort?: { id: string; desc: boolean }[];
+  hidden_columns?: string[];
+  density?: "compact" | "comfortable";
+}
+
+export interface SavedView {
+  id: number;
+  table_key: string;
+  name: string;
+  config: SavedViewConfig;
+  is_shared: boolean;
+  is_mine: boolean;
+  updated_at: string;
+}
+
 export interface ListWithTotal<T> {
   rows: T[];
   total: number | null;
@@ -2365,10 +2775,14 @@ export const api = {
   async aiListMessages(sessionId: number): Promise<AiMessageResponse[]> {
     return request<AiMessageResponse[]>(`/api/v1/ai-tool/sessions/${sessionId}/messages`);
   },
-  async aiSendMessage(sessionId: number, prompt: string): Promise<AiChatResponse> {
+  async aiSendMessage(
+    sessionId: number,
+    prompt: string,
+    context?: { route?: string; record_type?: string; record_id?: number } | null,
+  ): Promise<AiChatResponse> {
     return request<AiChatResponse>(`/api/v1/ai-tool/sessions/${sessionId}/messages`, {
       method: "POST",
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify(context ? { prompt, context } : { prompt }),
     });
   },
   async aiApproveEscalation(
@@ -2730,6 +3144,26 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     });
+  },
+  async listExternalSupplierPrincipals(): Promise<ExternalPrincipalListResponse> {
+    return request<ExternalPrincipalListResponse>("/api/v1/settings/external-access/suppliers?limit=200");
+  },
+  async inviteExternalSupplier(body: { email: string; full_name: string; vendor_ids: number[] }): Promise<ExternalInviteResponse> {
+    return request<ExternalInviteResponse>("/api/v1/settings/external-access/suppliers/invite", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async patchExternalSupplierPrincipal(principalId: number, body: { vendor_ids: number[] }): Promise<ExternalPrincipalAdminRow> {
+    return request<ExternalPrincipalAdminRow>(`/api/v1/settings/external-access/suppliers/${principalId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+  async listPurchaseOrderSupplierUpdates(
+    poId: number,
+  ): Promise<{ id: number; kind: string; expected_ship_date: string | null; message: string | null; created_at: string; supplier_user: string | null }[]> {
+    return request(`/api/v1/inventory/purchase-orders/${poId}/supplier-updates`);
   },
   async listExternalAccessAudit(params?: { limit?: number; offset?: number }): Promise<ExternalAuditListResponse> {
     const q = new URLSearchParams();
@@ -5348,6 +5782,315 @@ export const api = {
   },
   async getGoodsReceivingPrintData(id: number): Promise<InventoryDocumentPrintPayload & Record<string, unknown>> {
     return request<InventoryDocumentPrintPayload & Record<string, unknown>>(`/api/v1/inventory/goods-receiving/${id}/print-data`);
+  },
+  async getScanSetup(): Promise<{
+    lines: { id: number; line_code: string; name: string }[];
+    orders: { id: number; order_code: string; style_ref: string | null }[];
+  }> {
+    return request("/api/v1/production/scan/setup");
+  },
+  async getScanOperations(orderId: number): Promise<{
+    order_id: number;
+    order_code: string;
+    ob_code: string | null;
+    operations: { id: number; sequence_no: number; operation_name: string; smv: string; is_critical: boolean }[];
+  }> {
+    return request(`/api/v1/production/scan/orders/${orderId}/operations`);
+  },
+  async uploadScans(body: { device_id: string; scans: unknown[] }): Promise<{
+    results: { client_key: string; status: "accepted" | "duplicate" | "already_scanned" | "error"; message?: string | null; bundle_no?: string | null; operation_name?: string | null; pieces?: number | null }[];
+    accepted: number;
+  }> {
+    return request("/api/v1/production/scan/batch", { method: "POST", body: JSON.stringify(body) });
+  },
+  async getScanSummary(params: { sewing_line_id?: number; order_id?: number }): Promise<{
+    day: string;
+    total_pieces: number;
+    earned_minutes: string;
+    hours: { hour: number; pieces: number; earned_minutes: string }[];
+    operations: { operation_name: string; pieces: number }[];
+    operators: { operator_code: string; pieces: number; earned_minutes: string }[];
+  }> {
+    const q = new URLSearchParams({ tz_offset_minutes: String(-new Date().getTimezoneOffset()) });
+    if (params.sewing_line_id) q.set("sewing_line_id", String(params.sewing_line_id));
+    if (params.order_id) q.set("order_id", String(params.order_id));
+    return request(`/api/v1/production/scan/summary?${q.toString()}`);
+  },
+  async getPackingCartons(packingListId: number): Promise<PackingCartons> {
+    return request<PackingCartons>(`/api/v1/logistics/packing-lists/${packingListId}/cartons`);
+  },
+  async savePackingCartons(packingListId: number, body: { lines: PackingCartonLine[]; sync_header?: boolean }): Promise<PackingCartons> {
+    return request<PackingCartons>(`/api/v1/logistics/packing-lists/${packingListId}/cartons`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+  async listMaterialCertificates(params?: { status?: "valid" | "expiring" | "expired" }): Promise<MaterialCertificate[]> {
+    const q = params?.status ? `?status=${params.status}` : "";
+    return request<MaterialCertificate[]>(`/api/v1/traceability/certificates${q}`);
+  },
+  async saveMaterialCertificate(
+    body: {
+      cert_type: CertificateType;
+      certificate_number: string;
+      issuer?: string | null;
+      vendor_id?: number | null;
+      item_id?: number | null;
+      valid_from?: string | null;
+      valid_until?: string | null;
+      notes?: string | null;
+    },
+    id?: number,
+  ): Promise<MaterialCertificate> {
+    return request<MaterialCertificate>(`/api/v1/traceability/certificates${id ? `/${id}` : ""}`, {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async deleteMaterialCertificate(id: number): Promise<void> {
+    return request<void>(`/api/v1/traceability/certificates/${id}`, { method: "DELETE" });
+  },
+  async listFabricLotOptions(q?: string): Promise<{ id: number; batch_number: string; item_name: string | null; current_qty: string; grn_code: string | null }[]> {
+    return request(`/api/v1/traceability/fabric-lots${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+  },
+  async listCutTicketFabricLots(cutTicketId: number): Promise<CutTicketFabricLot[]> {
+    return request<CutTicketFabricLot[]>(`/api/v1/traceability/cut-tickets/${cutTicketId}/fabric-lots`);
+  },
+  async addCutTicketFabricLot(
+    cutTicketId: number,
+    body: { stock_batch_id: number; qty_used?: string | null; roll_numbers?: string | null },
+  ): Promise<CutTicketFabricLot> {
+    return request<CutTicketFabricLot>(`/api/v1/traceability/cut-tickets/${cutTicketId}/fabric-lots`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async removeCutTicketFabricLot(cutTicketId: number, linkId: number): Promise<void> {
+    return request<void>(`/api/v1/traceability/cut-tickets/${cutTicketId}/fabric-lots/${linkId}`, { method: "DELETE" });
+  },
+  async getOrderTraceability(orderId: number): Promise<OrderTraceabilityReport> {
+    return request<OrderTraceabilityReport>(`/api/v1/traceability/orders/${orderId}`);
+  },
+  async getCommissionSettings(): Promise<CommissionSettings> {
+    return request<CommissionSettings>("/api/v1/commission/settings");
+  },
+  async saveCommissionSettings(body: Omit<CommissionSettings, "enabled">): Promise<CommissionSettings> {
+    return request<CommissionSettings>("/api/v1/commission/settings", { method: "PUT", body: JSON.stringify(body) });
+  },
+  async listCommissionRules(): Promise<CommissionRule[]> {
+    return request<CommissionRule[]>("/api/v1/commission/rules");
+  },
+  async createCommissionRule(body: {
+    direction: CommissionDirection;
+    scope: CommissionRule["scope"];
+    customer_id?: number | null;
+    vendor_id?: number | null;
+    intermediary_id?: number | null;
+    rate_type: "PERCENTAGE" | "FIXED";
+    rate: string;
+    notes?: string | null;
+  }): Promise<CommissionRule> {
+    return request<CommissionRule>("/api/v1/commission/rules", { method: "POST", body: JSON.stringify(body) });
+  },
+  async updateCommissionRule(id: number, body: { rate?: string; rate_type?: string; is_active?: boolean }): Promise<CommissionRule> {
+    return request<CommissionRule>(`/api/v1/commission/rules/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  async deleteCommissionRule(id: number): Promise<void> {
+    return request<void>(`/api/v1/commission/rules/${id}`, { method: "DELETE" });
+  },
+  async listCommissionShipments(params?: { order_id?: number }): Promise<CommissionShipment[]> {
+    const q = params?.order_id ? `?order_id=${params.order_id}` : "";
+    return request<CommissionShipment[]>(`/api/v1/commission/shipments${q}`);
+  },
+  async createCommissionShipment(body: {
+    order_id: number;
+    vendor_id?: number | null;
+    shipment_ref: string;
+    shipment_date: string;
+    shipped_qty?: number | null;
+    shipped_value: string;
+    currency: string;
+    exchange_rate_to_base: string;
+    notes?: string | null;
+  }): Promise<CommissionShipment> {
+    return request<CommissionShipment>("/api/v1/commission/shipments", { method: "POST", body: JSON.stringify(body) });
+  },
+  async recalculateCommissionShipment(id: number): Promise<CommissionShipment> {
+    return request<CommissionShipment>(`/api/v1/commission/shipments/${id}/recalculate`, { method: "POST" });
+  },
+  async deleteCommissionShipment(id: number): Promise<void> {
+    return request<void>(`/api/v1/commission/shipments/${id}`, { method: "DELETE" });
+  },
+  async listCommissionEntries(params?: { status?: "PENDING" | "STATEMENTED"; direction?: CommissionDirection }): Promise<CommissionEntry[]> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.direction) q.set("direction", params.direction);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<CommissionEntry[]>(`/api/v1/commission/entries${suffix}`);
+  },
+  async listCommissionStatements(): Promise<CommissionStatement[]> {
+    return request<CommissionStatement[]>("/api/v1/commission/statements");
+  },
+  async getCommissionStatement(id: number): Promise<CommissionStatement> {
+    return request<CommissionStatement>(`/api/v1/commission/statements/${id}`);
+  },
+  async createCommissionStatement(body: {
+    direction: CommissionDirection;
+    counterparty_type: CommissionEntry["counterparty_type"];
+    counterparty_id: number;
+    currency: string;
+  }): Promise<CommissionStatement> {
+    return request<CommissionStatement>("/api/v1/commission/statements", { method: "POST", body: JSON.stringify(body) });
+  },
+  async issueCommissionStatement(id: number): Promise<CommissionStatement> {
+    return request<CommissionStatement>(`/api/v1/commission/statements/${id}/issue`, { method: "POST" });
+  },
+  async cancelCommissionStatement(id: number): Promise<CommissionStatement> {
+    return request<CommissionStatement>(`/api/v1/commission/statements/${id}/cancel`, { method: "POST" });
+  },
+  async getOrderColorSizeMatrix(orderId: number): Promise<OrderColorSizeMatrix> {
+    return request<OrderColorSizeMatrix>(`/api/v1/orders/${orderId}/color-size-matrix`);
+  },
+  async getGovernedExceptions(): Promise<GovernedExceptions> {
+    return request<GovernedExceptions>("/api/v1/governed-ai/exceptions");
+  },
+  async confirmGovernedException(body: {
+    key: string;
+    decision: "notify" | "dismiss";
+    note?: string | null;
+  }): Promise<{ ok: boolean; decision: string; recipients: number }> {
+    return request("/api/v1/governed-ai/exceptions/confirm", { method: "POST", body: JSON.stringify(body) });
+  },
+  async getOwnerBrief(useAi = true): Promise<OwnerBrief> {
+    return request<OwnerBrief>(`/api/v1/governed-ai/owner-brief?use_ai=${useAi ? "true" : "false"}`);
+  },
+  async sendOwnerBrief(narrative: string): Promise<{ ok: boolean; recipients: number }> {
+    return request("/api/v1/governed-ai/owner-brief/send", { method: "POST", body: JSON.stringify({ narrative }) });
+  },
+  async listMetrics(): Promise<{ items: MetricMeta[] }> {
+    return request("/api/v1/governed-ai/metrics");
+  },
+  async getMetric(id: string): Promise<MetricValue> {
+    return request<MetricValue>(`/api/v1/governed-ai/metrics/${encodeURIComponent(id)}`);
+  },
+  async askMetric(question: string): Promise<MetricAnswer> {
+    return request<MetricAnswer>("/api/v1/governed-ai/metrics/ask", { method: "POST", body: JSON.stringify({ question }) });
+  },
+  async getPoColorSizeGrid(poId: number): Promise<PoColorSizeGrid> {
+    return request<PoColorSizeGrid>(`/api/v1/inventory/purchase-orders/${poId}/color-size`);
+  },
+  async savePoItemColorSizeGrid(
+    poId: number,
+    poItemId: number,
+    body: {
+      colors: { name: string; code?: string | null }[];
+      sizes: string[];
+      cells: { color: string; size: string; quantity: string }[];
+    },
+  ): Promise<PoColorSizeGrid> {
+    return request<PoColorSizeGrid>(`/api/v1/inventory/purchase-orders/${poId}/items/${poItemId}/color-size`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+  async listUds(params: { status?: string; q?: string } = {}): Promise<{ items: UdListItem[]; total: number }> {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.q) qs.set("q", params.q);
+    return request(`/api/v1/compliance/bd/ud${qs.toString() ? `?${qs}` : ""}`);
+  },
+  async getUd(id: number): Promise<UdDetail> {
+    return request<UdDetail>(`/api/v1/compliance/bd/ud/${id}`);
+  },
+  async createUd(body: UdBodyInput): Promise<UdDetail> {
+    return request<UdDetail>("/api/v1/compliance/bd/ud", { method: "POST", body: JSON.stringify(body) });
+  },
+  async updateUd(id: number, body: UdBodyInput): Promise<UdDetail> {
+    return request<UdDetail>(`/api/v1/compliance/bd/ud/${id}`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  async setUdStatus(id: number, status: UdStatus): Promise<UdDetail> {
+    return request<UdDetail>(`/api/v1/compliance/bd/ud/${id}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    });
+  },
+  async deleteUd(id: number): Promise<void> {
+    return request<void>(`/api/v1/compliance/bd/ud/${id}`, { method: "DELETE" });
+  },
+  async getBondRegister(params: { from_date?: string; to_date?: string; ud_no?: string } = {}): Promise<BondRegister> {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) qs.set(k, v);
+    return request<BondRegister>(`/api/v1/compliance/bd/bond-register${qs.toString() ? `?${qs}` : ""}`);
+  },
+  async createBondEntry(body: {
+    reference_no: string;
+    entry_type: "IMPORT" | "EXPORT";
+    ud_entitlement_id?: number | null;
+    ud_no?: string | null;
+    up_no?: string | null;
+    item_description?: string | null;
+    quantity: string;
+    value_bdt?: string | null;
+    entry_date?: string | null;
+    notes?: string | null;
+  }): Promise<unknown> {
+    return request("/api/v1/compliance/bd/bond-entries", { method: "POST", body: JSON.stringify(body) });
+  },
+  async getMushakRegister(register: "6-1" | "6-2", year: number, month: number): Promise<MushakRegister> {
+    return request<MushakRegister>(`/api/v1/compliance/bd/mushak/${register}?year=${year}&month=${month}`);
+  },
+  async saveOrderColorSizeMatrix(
+    orderId: number,
+    body: {
+      colors: { name: string; code?: string | null }[];
+      sizes: string[];
+      cells: { color: string; size: string; quantity: number }[];
+      sync_order_quantity?: boolean;
+    },
+  ): Promise<OrderColorSizeMatrix> {
+    return request<OrderColorSizeMatrix>(`/api/v1/orders/${orderId}/color-size-matrix`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+  async getOnboardingChecklist(): Promise<OnboardingChecklist> {
+    return request<OnboardingChecklist>("/api/v1/onboarding/checklist");
+  },
+  async listNotifications(params?: { limit?: number; unread_only?: boolean }): Promise<NotificationList> {
+    const q = new URLSearchParams();
+    if (params?.limit) q.set("limit", String(params.limit));
+    if (params?.unread_only) q.set("unread_only", "true");
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<NotificationList>(`/api/v1/notifications${suffix}`);
+  },
+  async markNotificationRead(id: number): Promise<void> {
+    return request<void>(`/api/v1/notifications/${id}/read`, { method: "POST" });
+  },
+  async markAllNotificationsRead(): Promise<void> {
+    return request<void>("/api/v1/notifications/read-all", { method: "POST" });
+  },
+  async globalSearch(q: string, limit = 5): Promise<GlobalSearchResponse> {
+    return request<GlobalSearchResponse>(`/api/v1/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+  },
+  async listSavedViews(tableKey: string): Promise<SavedView[]> {
+    return request<SavedView[]>(`/api/v1/saved-views?table_key=${encodeURIComponent(tableKey)}`);
+  },
+  async createSavedView(body: {
+    table_key: string;
+    name: string;
+    config: SavedViewConfig;
+    is_shared?: boolean;
+  }): Promise<SavedView> {
+    return request<SavedView>("/api/v1/saved-views", { method: "POST", body: JSON.stringify(body) });
+  },
+  async updateSavedView(
+    id: number,
+    body: { name?: string; config?: SavedViewConfig; is_shared?: boolean },
+  ): Promise<SavedView> {
+    return request<SavedView>(`/api/v1/saved-views/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  async deleteSavedView(id: number): Promise<void> {
+    return request<void>(`/api/v1/saved-views/${id}`, { method: "DELETE" });
   },
   async bulkPurchaseOrderStatus(
     ids: number[],
@@ -9578,6 +10321,7 @@ export const api = {
       default_helper_count: number;
       supervisor_user_id: number | null;
       is_active: boolean;
+      factory_unit?: string | null;
     }>
   > {
     return request("/api/v1/production/sewing-lines");
@@ -9591,6 +10335,7 @@ export const api = {
     default_helper_count?: number;
     supervisor_user_id?: number | null;
     is_active?: boolean;
+    factory_unit?: string | null;
   }): Promise<unknown> {
     return request("/api/v1/production/sewing-lines", { method: "POST", body: JSON.stringify(body) });
   },
@@ -9604,6 +10349,7 @@ export const api = {
       default_helper_count?: number;
       supervisor_user_id?: number | null;
       is_active?: boolean;
+      factory_unit?: string | null;
     },
   ): Promise<unknown> {
     return request(`/api/v1/production/sewing-lines/${line_id}`, {
@@ -10051,7 +10797,27 @@ export const api = {
     const q = limit_days != null ? `?limit_days=${limit_days}` : "";
     return request(`/api/v1/production/employees/${employee_id}/production-profile${q}`);
   },
-  async getPlanBoard(from_date: string, to_date: string): Promise<{ items: unknown[] }> {
+  async getPlanBoard(
+    from_date: string,
+    to_date: string,
+  ): Promise<{
+    items: unknown[];
+    conflicts?: Array<{
+      kind: "LINE_OVERLAP" | "LATE_DELIVERY" | "INACTIVE_LINE" | string;
+      severity: "error" | "warning" | string;
+      config_ids: number[];
+      line_id: number;
+      order_id: number | null;
+      message: string;
+    }>;
+    factory_load?: Array<{
+      factory_unit: string;
+      line_count: number;
+      plan_count: number;
+      planned_qty: number;
+      completed_qty: number;
+    }>;
+  }> {
     return request(`/api/v1/production/plan-board?from_date=${encodeURIComponent(from_date)}&to_date=${encodeURIComponent(to_date)}`);
   },
   async getControlTowerSummary(params: {

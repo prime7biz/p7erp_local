@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { MotionConfig } from "framer-motion";
 import { useMarketingCurrency } from "@/hooks/useMarketingCurrency";
+import { trackEvent } from "@/lib/analytics";
 import { Menu, X, Globe, Mail, Phone, MessageCircle, MapPin, ExternalLink, ChevronDown } from "lucide-react";
 
 const navLinks = [
@@ -106,7 +107,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 )}
               </div>
               <Link
-                to="/contact"
+                to="/book-demo"
+                onClick={() => trackEvent("cta_click", { cta: "book_demo", from: "header" })}
                 className="whitespace-nowrap inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium border border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5 transition-colors"
               >
                 Book a Demo
@@ -170,8 +172,11 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   <Globe className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary pointer-events-none" />
                 </div>
                 <Link
-                  to="/contact"
-                  onClick={() => setMobileOpen(false)}
+                  to="/book-demo"
+                  onClick={() => {
+                    setMobileOpen(false);
+                    trackEvent("cta_click", { cta: "book_demo", from: "mobile_menu" });
+                  }}
                   className="flex items-center justify-center w-full py-2.5 rounded-lg text-sm font-medium border border-brand-primary/30 text-brand-primary"
                 >
                   Book a Demo
@@ -311,6 +316,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 <li><Link to="/blog" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">Blog & Articles</Link></li>
                 <li><Link to="/about" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">About Us</Link></li>
                 <li><Link to="/contact" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">Contact Us</Link></li>
+                <li><Link to="/book-demo" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">Book a Demo</Link></li>
+                <li><Link to="/roi-calculator" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">ROI Calculator</Link></li>
                 <li><Link to="/security" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">Security</Link></li>
                 <li><Link to="/support" className="text-sm text-text-inverse hover:text-brand-primary transition-colors">Support</Link></li>
               </ul>

@@ -5,44 +5,53 @@ import {
   Package,
   PlusCircle,
   ShoppingCart,
+  Truck,
   Users,
 } from "lucide-react";
 import type { TenantType } from "@/api/client";
+import { resolveRole } from "@/lib/roles";
 
 export type CreateAction = {
   label: string;
   href: string;
   icon: LucideIcon;
+  /** Extra words the command palette matches on. */
+  keywords?: string;
 };
 
-/** Role-aware "New" menu actions for the top bar. */
+/** Role-aware create actions shared by the top-bar New menu, Ctrl+K palette and mobile + button. */
 export function getCreateActions(opts: {
   tenantType: TenantType;
   roleName: string;
 }): CreateAction[] {
-  const role = (opts.roleName || "").toLowerCase();
-  const isFinance = role.includes("finance") || role === "accountant";
-  const isHr = role.includes("hr") || role === "payroll";
-  const isElevated = ["admin", "owner", "manager"].includes(role);
+  const { isElevated, isFinance, isHr } = resolveRole(opts.roleName);
   const merchTenant =
     opts.tenantType === "manufacturer" ||
     opts.tenantType === "buying_house" ||
     opts.tenantType === "both";
+  const operations = isElevated || (!isFinance && !isHr);
 
   const actions: CreateAction[] = [];
 
-  if (merchTenant && (isElevated || (!isFinance && !isHr))) {
+  if (merchTenant && operations) {
     actions.push(
-      { label: "New inquiry", href: "/app/inquiries/new", icon: PlusCircle },
-      { label: "New quotation", href: "/app/quotations/new", icon: ShoppingCart },
-      { label: "New order", href: "/app/orders/new", icon: ClipboardList },
-      { label: "New customer", href: "/app/customers/new", icon: Users },
-      { label: "Items", href: "/app/inventory/items", icon: Package },
+      { label: "New inquiry", href: "/app/inquiries/new", icon: PlusCircle, keywords: "rfq enquiry" },
+      { label: "New quotation", href: "/app/quotations/new", icon: ShoppingCart, keywords: "quote costing" },
+      { label: "New order", href: "/app/orders/new", icon: ClipboardList, keywords: "sales order" },
+      { label: "New customer", href: "/app/customers/new", icon: Users, keywords: "buyer client" },
+    );
+  }
+
+  if (operations) {
+    actions.push(
+      { label: "New PO", href: "/app/inventory/purchase-orders", icon: Package, keywords: "purchase order supplier" },
+      { label: "New challan", href: "/app/inventory/delivery-challans/new", icon: Truck, keywords: "delivery dispatch" },
+      { label: "Items", href: "/app/inventory/items", icon: Package, keywords: "inventory material" },
     );
   }
 
   if (isElevated || isFinance) {
-    actions.push({ label: "Vouchers", href: "/app/accounts/vouchers", icon: FileText });
+    actions.push({ label: "New voucher", href: "/app/accounts/vouchers", icon: FileText, keywords: "payment receipt journal" });
   }
 
   if (actions.length === 0) {

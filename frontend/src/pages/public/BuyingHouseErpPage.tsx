@@ -330,20 +330,20 @@ export function BuyingHouseErpPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <div className="inline-flex items-center gap-2 bg-white/15 text-white px-4 py-1.5 rounded-full text-sm font-medium mb-6">
             <Zap className="w-4 h-4" />
-            Trusted by Leading Buying Houses
+            Built for buying houses
           </div>
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
             Ready to Transform Your Buying House Operations?
           </h2>
           <p className="text-lg text-text-inverse max-w-2xl mx-auto mb-8">
-            Join buying houses who manage T&A, POs, samples, and shipments in one platform. Start your free trial today.
+            Manage T&A, POs, samples, and shipments in one platform. Start a free trial or see it with your own orders in a live demo.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-white px-8 py-3 font-semibold hover:bg-primary/90 transition-colors">
               Start Free Trial <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link to="/contact" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/50 text-white px-8 py-3 font-semibold hover:bg-white/10 transition-colors">
-              Request Demo
+            <Link to="/book-demo" className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/50 text-white px-8 py-3 font-semibold hover:bg-white/10 transition-colors">
+              Book a Demo
             </Link>
           </div>
         </div>

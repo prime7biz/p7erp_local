@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
   type VendorCreate,
@@ -30,7 +30,8 @@ export function VendorsPage() {
   const [items, setItems] = useState<VendorResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
   const [activeOnly, setActiveOnly] = useState<boolean | undefined>(undefined);
   const [vendorType, setVendorType] = useState("");
   const [currency, setCurrency] = useState("");

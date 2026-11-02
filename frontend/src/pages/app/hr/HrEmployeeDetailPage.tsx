@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRecordBreadcrumb } from "@/components/shell/recordBreadcrumb";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   api,
@@ -32,6 +33,7 @@ export function HrEmployeeDetailPage() {
 
   const [tab, setTab] = useState<Tab>("personal");
   const [employee, setEmployee] = useState<HrEmployeeResponse | null>(null);
+  useRecordBreadcrumb(employee ? [employee.first_name, employee.last_name].filter(Boolean).join(" ") || employee.employee_code : null);
   const [departments, setDepartments] = useState<HrDepartmentResponse[]>([]);
   const [designations, setDesignations] = useState<HrDesignationResponse[]>([]);
   const [sections, setSections] = useState<HrSectionResponse[]>([]);

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import type { AiMessageResponse } from "@/api/client";
 import { AiEscalationCard } from "@/pages/app/ai/components/AiEscalationCard";
 import { AiMessageFeedbackBar } from "@/pages/app/ai/components/AiMessageFeedbackBar";
@@ -70,6 +71,9 @@ export function AiChatThread({
             const isUser = message.role === "user";
             const meta = readMessageMeta(message);
             const toolResults = Array.isArray(meta.tool_results) ? meta.tool_results : [];
+            const citations = (Array.isArray(meta.citations) ? meta.citations : []).filter(
+              (c) => !!c && typeof c.href === "string" && c.href.startsWith("/app/") && typeof c.label === "string",
+            );
             const visibleToolResults = toolResults.filter((r) => !HIDDEN_TOOL_CARDS.has(r.tool_name));
             const animateAssistant = !isUser && streamMessageId !== null && message.id === streamMessageId;
             return (
@@ -84,6 +88,16 @@ export function AiChatThread({
                   ) : (
                     <AssistantMessageBody content={message.content} animate={animateAssistant} />
                   )}
+                  {!isUser && citations.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                      <span className="text-text-muted">Source:</span>
+                      {citations.map((c) => (
+                        <Link key={c.href} to={c.href} className="rounded border border-border px-1.5 py-0.5 text-brand-primary hover:underline">
+                          {c.label}
+                        </Link>
+                      ))}
+                    </div>
+                  ) : null}
                   {!isUser && meta.request_id ? (
                     <p className="mt-1 text-[11px] text-text-muted">Trace: {meta.request_id}</p>
                   ) : null}

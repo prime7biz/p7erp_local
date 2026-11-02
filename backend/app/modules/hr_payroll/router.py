@@ -864,6 +864,19 @@ async def reject_run(
             note=body.note.strip() if body.note else None,
         )
     )
+    from app.modules.notifications.service import notify_user
+
+    note = body.note.strip() if body.note else ""
+    notify_user(
+        db,
+        tenant_id=tenant.id,
+        user_id=run.finalized_by or run.created_by,
+        actor_user_id=user.id,
+        kind="hr.payroll.rejected",
+        title=f"Payroll run {run.run_code} was rejected",
+        body=f"Reason: {note}" if note else "Correct the run and finalize it again.",
+        href="/app/hr/payroll/runs",
+    )
     await db.commit()
     await db.refresh(run)
     return _run_out(run)

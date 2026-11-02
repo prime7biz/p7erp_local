@@ -11,6 +11,8 @@ import { FeaturesPage } from "@/pages/public/FeaturesPage";
 import { PricingPage } from "@/pages/public/PricingPage";
 import { AboutPage } from "@/pages/public/AboutPage";
 import { ContactPage } from "@/pages/public/ContactPage";
+import { BookDemoPage } from "@/pages/public/BookDemoPage";
+import { RoiCalculatorPage } from "@/pages/public/RoiCalculatorPage";
 import { GarmentsErpPage } from "@/pages/public/GarmentsErpPage";
 import { BuyingHouseErpPage } from "@/pages/public/BuyingHouseErpPage";
 import { LegalLayout } from "@/components/legal/LegalLayout";
@@ -38,6 +40,24 @@ const AppProtectedRouter = lazy(() =>
   import("@/app/AppProtectedRouter").then((mod) => ({ default: mod.AppProtectedRouter })),
 );
 
+const PortalAcceptInvitePage = lazy(() =>
+  import("@/components/external-access/PortalAuthPages").then((m) => ({ default: m.PortalAcceptInvitePage })),
+);
+const PortalResetPasswordPage = lazy(() =>
+  import("@/components/external-access/PortalAuthPages").then((m) => ({ default: m.PortalResetPasswordPage })),
+);
+const SupplierPortalLayout = lazy(() =>
+  import("@/pages/portal/supplier/SupplierPortalLayout").then((m) => ({ default: m.SupplierPortalLayout })),
+);
+const SupplierDashboardPage = lazy(() =>
+  import("@/pages/portal/supplier/SupplierPages").then((m) => ({ default: m.SupplierDashboardPage })),
+);
+const SupplierPurchaseOrdersPage = lazy(() =>
+  import("@/pages/portal/supplier/SupplierPages").then((m) => ({ default: m.SupplierPurchaseOrdersPage })),
+);
+const SupplierPurchaseOrderDetailPage = lazy(() =>
+  import("@/pages/portal/supplier/SupplierPages").then((m) => ({ default: m.SupplierPurchaseOrderDetailPage })),
+);
 const CustomerAcceptInvitePage = lazy(() =>
   import("@/pages/portal/customer/CustomerAcceptInvitePage").then((m) => ({ default: m.CustomerAcceptInvitePage })),
 );
@@ -201,6 +221,8 @@ export function AppRouter() {
         <Route path="/pricing" element={<PublicLayout><PricingPage /></PublicLayout>} />
         <Route path="/about" element={<PublicLayout><AboutPage /></PublicLayout>} />
         <Route path="/contact" element={<PublicLayout><ContactPage /></PublicLayout>} />
+        <Route path="/book-demo" element={<PublicLayout><BookDemoPage /></PublicLayout>} />
+        <Route path="/roi-calculator" element={<PublicLayout><RoiCalculatorPage /></PublicLayout>} />
         <Route path="/garments-erp" element={<PublicLayout><GarmentsErpPage /></PublicLayout>} />
         <Route path="/buying-house-erp" element={<PublicLayout><BuyingHouseErpPage /></PublicLayout>} />
         <Route path="/privacy" element={<Navigate to="/legal/privacy" replace />} />
@@ -265,6 +287,38 @@ export function AppRouter() {
           <Route path="approvals" element={<CustomerApprovalsPage />} />
           <Route path="shipments" element={<CustomerShipmentsPage />} />
           <Route path="notes" element={<CustomerNotesPage />} />
+        </Route>
+        <Route path="/portal/supplier/login" element={<PortalLegacyLoginRedirect role="supplier" />} />
+        <Route
+          path="/portal/supplier/accept-invite"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <PortalAcceptInvitePage portal="supplier" />
+            </Suspense>
+          }
+        />
+        <Route path="/portal/supplier/forgot-password" element={<Navigate to="/forgot-password?role=supplier" replace />} />
+        <Route
+          path="/portal/supplier/reset-password"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <PortalResetPasswordPage portal="supplier" />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/portal/supplier"
+          element={
+            <Suspense fallback={portalRouteFallback}>
+              <ExternalAccessGuard portal="supplier">
+                <SupplierPortalLayout />
+              </ExternalAccessGuard>
+            </Suspense>
+          }
+        >
+          <Route index element={<SupplierDashboardPage />} />
+          <Route path="purchase-orders" element={<SupplierPurchaseOrdersPage />} />
+          <Route path="purchase-orders/:poId" element={<SupplierPurchaseOrderDetailPage />} />
         </Route>
         <Route path="/portal/financier/login" element={<PortalLegacyLoginRedirect role="financier" />} />
         <Route

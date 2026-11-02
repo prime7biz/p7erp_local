@@ -39,11 +39,13 @@ from app.external_access.constants import (
     FF_FINANCIER_FINANCIAL_SUMMARY_ENABLED,
     FF_FINANCIER_PORTAL_ENABLED,
     FF_FINANCIER_PROJECTION_ENABLED,
+    FF_SUPPLIER_PORTAL_ENABLED,
     PRINCIPAL_FINANCIER,
 )
 from app.external_access.feature_flags import (
     is_customer_portal_enabled,
     is_financier_portal_enabled,
+    is_supplier_portal_enabled,
     require_portal_enabled,
 )
 from app.external_access.permissions import get_role_codes
@@ -285,6 +287,7 @@ async def external_me(
             FF_FINANCIER_FINANCIAL_SUMMARY_ENABLED,
             FF_FINANCIER_PROJECTION_ENABLED,
             FF_EXTERNAL_PORTAL_DOCUMENT_DOWNLOADS_ENABLED,
+            FF_SUPPLIER_PORTAL_ENABLED,
         )
         if k in raw
     }
@@ -292,6 +295,7 @@ async def external_me(
         feature_subset = {
             FF_CUSTOMER_PORTAL_ENABLED: is_customer_portal_enabled(tenant),
             FF_FINANCIER_PORTAL_ENABLED: is_financier_portal_enabled(tenant),
+            FF_SUPPLIER_PORTAL_ENABLED: is_supplier_portal_enabled(tenant),
         }
 
     financier_scope: str | None = None

@@ -114,6 +114,19 @@ EOQ_HOLDING_COST_RATE = "eoq_holding_cost_rate"
 
 # Sprint I4 serial / kit / consignment (all default off).
 SERIAL_TRACKING_ENABLED = "serial_tracking_enabled"
+
+# R4 RMG depth (all default off).
+ORDER_COLOR_SIZE_MATRIX_ENABLED = "order_color_size_matrix_enabled"
+COMMISSION_ENGINE_ENABLED = "commission_engine_enabled"
+TRACEABILITY_ENABLED = "traceability_enabled"
+PACKING_LIST_CARTONS_ENABLED = "packing_list_cartons_enabled"
+SHOP_FLOOR_SCAN_ENABLED = "shop_floor_scan_enabled"
+BD_BOND_COMPLIANCE_ENABLED = "bd_bond_compliance_enabled"
+PO_COLOR_SIZE_MATRIX_ENABLED = "po_color_size_matrix_enabled"
+
+# R5 governed AI (default off).
+AI_EXCEPTION_AGENTS_ENABLED = "ai_exception_agents_enabled"
+AI_DASHBOARD_CARDS_ENABLED = "ai_dashboard_cards_enabled"
 KITTING_ENABLED = "kitting_enabled"
 CONSIGNMENT_STOCK_ENABLED = "consignment_stock_enabled"
 
@@ -131,6 +144,42 @@ def _flag_default_true(feature_flags: Any, key: str) -> bool:
     if key not in feature_flags:
         return True
     return feature_flags.get(key) is not False
+
+
+def is_order_color_size_matrix_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, ORDER_COLOR_SIZE_MATRIX_ENABLED)
+
+
+def is_shop_floor_scan_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, SHOP_FLOOR_SCAN_ENABLED)
+
+
+def is_bd_bond_compliance_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, BD_BOND_COMPLIANCE_ENABLED)
+
+
+def is_po_color_size_matrix_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, PO_COLOR_SIZE_MATRIX_ENABLED)
+
+
+def is_ai_exception_agents_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, AI_EXCEPTION_AGENTS_ENABLED)
+
+
+def is_ai_dashboard_cards_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, AI_DASHBOARD_CARDS_ENABLED)
+
+
+def is_packing_list_cartons_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, PACKING_LIST_CARTONS_ENABLED)
+
+
+def is_traceability_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, TRACEABILITY_ENABLED)
+
+
+def is_commission_engine_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, COMMISSION_ENGINE_ENABLED)
 
 
 def is_tna_event_sync_enabled(feature_flags: Any) -> bool:
@@ -176,7 +225,11 @@ def get_tenant_rbac_mode(feature_flags: Any) -> Literal["off", "shadow", "enforc
 
 
 def is_single_session_enforced(feature_flags: Any) -> bool:
-    """Return True if tenant enabled single-session login enforcement."""
+    """Return True if single-session login enforcement applies (global setting or tenant flag)."""
+    from app.config import get_settings
+
+    if get_settings().single_session_global:
+        return True
     if not isinstance(feature_flags, dict):
         return False
     return feature_flags.get(SINGLE_SESSION_ENFORCED) is True

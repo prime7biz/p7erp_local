@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { api, type CustomerResponse } from "@/api/client";
 import { useCustomerAi } from "@/hooks/useCustomerAi";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { useConfirm } from "@/components/app/useConfirm";
+import { DataGrid, type GridColumn } from "@/components/app/data-grid/DataGrid";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { useListPagination } from "@/hooks/useListPagination";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
-import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import {
   listPageErrorClass,
   listPageFilterPanelClass,
@@ -14,14 +17,7 @@ import {
   listPageKpiLabelClass,
   listPageRootClass,
   listPageTableCardClass,
-  listTableBaseClass,
-  listTableTdClass,
-  listTableThClass,
-  listTableThRightClass,
-  listTableTheadClass,
-  listTableTrClass,
 } from "@/components/app/listPageLayout";
-import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -70,8 +66,9 @@ function DupRiskCell({ score }: { score?: number | null }) {
 export function CustomersPage() {
   const { pageSize, setPageSize } = useListPagination();
   const queryClient = useQueryClient();
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
-  const [actionError, setActionError] = useState("");
+  const confirm = useConfirm();
+  const [openActionsId, setOpenActionsId] = useState<string | number | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const listAi = useCustomerAi();
   const [aiQueryDraft, setAiQueryDraft] = useState("");
@@ -121,15 +118,13 @@ export function CustomersPage() {
       }),
   });
 
-  const customers: CustomerResponse[] = data?.items ?? [];
+  const customers = useMemo<CustomerResponse[]>(() => data?.items ?? [], [data?.items]);
   const total = data?.total ?? 0;
   const activeCount = data?.active_count ?? 0;
   const inactiveCount = data?.inactive_count ?? 0;
   const recentCount = data?.recent_count ?? 0;
 
-  const fetchError =
-    queryError instanceof Error ? queryError.message : queryError ? String(queryError) : "";
-  const error = actionError || fetchError;
+  const error = queryError instanceof Error ? queryError.message : queryError ? String(queryError) : "";
 
   const countries = useMemo(() => facets?.countries ?? [], [facets?.countries]);
   const customerTypes = useMemo(() => facets?.customer_types ?? [], [facets?.customer_types]);
@@ -216,30 +211,192 @@ export function CustomersPage() {
     setSearchParams(next);
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm("Delete this customer? This action cannot be undone.")) return;
-    setActionError("");
-    try {
-      await api.deleteCustomer(id);
-      await queryClient.invalidateQueries({ queryKey: ["customers", "list"] });
-      await queryClient.invalidateQueries({ queryKey: ["customers", "facets"] });
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Delete failed");
+  const refreshLists = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["customers", "list"] });
+    await queryClient.invalidateQueries({ queryKey: ["customers", "facets"] });
+  }, [queryClient]);
+
+  const handleDelete = useCallback(
+    async (customer: CustomerResponse) => {
+      const ok = await confirm({
+        title: `Delete customer “${customer.name}”?`,
+        description: "This action cannot be undone.",
+        confirmLabel: "Delete",
+        danger: true,
+      });
+      if (!ok) return;
+      try {
+        await api.deleteCustomer(customer.id);
+        await refreshLists();
+        toast.success(`Deleted ${customer.name}`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Delete failed");
+      }
+    },
+    [confirm, refreshLists],
+  );
+
+  const bulkSetStatus = async (selected: CustomerResponse[], status: "active" | "inactive", clear: () => void) => {
+    const targets = selected.filter((c) => (c.status || "active").toLowerCase() !== status);
+    if (targets.length === 0) {
+      toast.info(`All selected customers are already ${status}.`);
+      return;
     }
+    const ok = await confirm({
+      title: `Mark ${targets.length} customer${targets.length === 1 ? "" : "s"} as ${status}?`,
+      confirmLabel: `Mark ${status}`,
+      danger: status === "inactive",
+    });
+    if (!ok) return;
+    setBulkBusy(true);
+    let failed = 0;
+    for (const c of targets) {
+      try {
+        await api.updateCustomer(c.id, { status });
+      } catch {
+        failed += 1;
+      }
+    }
+    setBulkBusy(false);
+    clear();
+    await refreshLists();
+    if (failed) toast.error(`${targets.length - failed} updated, ${failed} failed`);
+    else toast.success(`${targets.length} customer${targets.length === 1 ? "" : "s"} marked ${status}`);
   };
 
-  const colCount = 11;
-
-  const renderSkeletonRows = () =>
-    Array.from({ length: 6 }).map((_, idx) => (
-      <tr key={idx} className="animate-pulse">
-        {Array.from({ length: colCount }).map((__, c) => (
-          <td key={c} className={listTableTdClass}>
-            <div className="h-3.5 w-24 rounded bg-surface-subtle" />
-          </td>
-        ))}
-      </tr>
-    ));
+  const columns = useMemo<GridColumn<CustomerResponse>[]>(
+    () => [
+      {
+        id: "name",
+        header: "Customer",
+        alwaysVisible: true,
+        value: (c) => c.name,
+        cell: (c) => (
+          <>
+            <Link to={`/app/customers/${c.id}`} className="inline-flex items-center gap-1 font-semibold text-text-primary hover:text-brand-primary">
+              {c.name}
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+            <div className="text-xs text-text-muted">{c.trade_name ?? c.legal_entity_name ?? "—"}</div>
+          </>
+        ),
+      },
+      { id: "code", header: "ID", value: (c) => c.customer_code, cell: (c) => c.customer_code },
+      {
+        id: "country",
+        header: "Country",
+        value: (c) => c.billing_country ?? c.country ?? "",
+        cell: (c) => c.billing_country ?? c.country ?? "—",
+      },
+      {
+        id: "contact",
+        header: "Primary Contact",
+        value: (c) => c.primary_contact_name ?? "",
+        cell: (c) => (
+          <>
+            <div>{c.primary_contact_name ?? "—"}</div>
+            <div className="text-xs text-text-muted">{c.contact_email ?? c.email ?? "No email"}</div>
+          </>
+        ),
+      },
+      {
+        id: "email",
+        header: "Email",
+        defaultHidden: true,
+        value: (c) => c.contact_email ?? c.email ?? "",
+        cell: (c) => c.contact_email ?? c.email ?? "—",
+      },
+      { id: "type", header: "Type", value: (c) => c.customer_type ?? "", cell: (c) => c.customer_type ?? "—" },
+      {
+        id: "profile",
+        header: "Profile",
+        value: (c) => c.profile_completeness ?? null,
+        cell: (c) => {
+          const pct = c.profile_completeness;
+          if (pct == null) return "—";
+          return (
+            <span
+              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                pct >= 80
+                  ? "bg-status-success-subtle text-status-success-foreground"
+                  : pct >= 50
+                    ? "bg-status-warning-subtle text-status-warning-foreground"
+                    : "bg-status-danger-subtle text-status-danger-foreground"
+              }`}
+            >
+              {pct}%
+            </span>
+          );
+        },
+      },
+      {
+        id: "activity",
+        header: "Activity",
+        value: (c) => c.days_since_activity ?? null,
+        cell: (c) => {
+          const days = c.days_since_activity;
+          if (days != null && days >= 90) {
+            return (
+              <span className="rounded-full bg-status-warning-subtle px-2 py-0.5 text-[10px] font-semibold text-status-warning-foreground">
+                Stale {days}d
+              </span>
+            );
+          }
+          return (
+            <span className="text-xs text-text-muted">{c.last_activity_at ? formatDate(c.last_activity_at) : "No activity"}</span>
+          );
+        },
+      },
+      {
+        id: "dup_risk",
+        header: "Dup risk",
+        value: (c) => c.duplicate_risk_score ?? null,
+        cell: (c) => <DupRiskCell score={c.duplicate_risk_score} />,
+      },
+      {
+        id: "status",
+        header: "Status",
+        value: (c) => (c.status || "active").toLowerCase(),
+        cell: (c) => {
+          const status = (c.status || "active").toLowerCase();
+          return (
+            <span
+              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${
+                status === "active"
+                  ? "bg-status-success-subtle text-status-success-foreground"
+                  : "bg-status-neutral-subtle text-status-neutral-foreground"
+              }`}
+            >
+              {status}
+            </span>
+          );
+        },
+      },
+      { id: "updated", header: "Updated", value: (c) => c.updated_at, cell: (c) => formatDate(c.updated_at) },
+      {
+        id: "actions",
+        header: "Actions",
+        align: "right",
+        alwaysVisible: true,
+        noExport: true,
+        enableSorting: false,
+        cell: (c) => (
+          <RowActionsMenu
+            rowId={c.id}
+            openId={openActionsId}
+            onOpenChange={setOpenActionsId}
+            items={[
+              { key: "view", label: "View", href: `/app/customers/${c.id}` },
+              { key: "edit", label: "Edit", href: `/app/customers/${c.id}/edit` },
+              { key: "print", label: "Print", href: `/app/customers/${c.id}/print` },
+              { key: "delete", label: "Delete", danger: true, onClick: () => void handleDelete(c) },
+            ]}
+          />
+        ),
+      },
+    ],
+    [handleDelete, openActionsId],
+  );
 
   return (
     <div className={listPageRootClass}>
@@ -263,10 +420,7 @@ export function CustomersPage() {
             <span>{error}</span>
             <button
               type="button"
-              onClick={() => {
-                setActionError("");
-                void refetch();
-              }}
+              onClick={() => void refetch()}
               className="font-semibold underline underline-offset-2"
             >
               Retry
@@ -416,201 +570,88 @@ export function CustomersPage() {
       </div>
 
       <div className={listPageTableCardClass}>
-        {loading ? (
-          <ResponsiveTableContainer>
-            <table className={listTableBaseClass}>
-              <thead className={listTableTheadClass}>
-                <tr>
-                  <th className={listTableThClass}>Customer</th>
-                  <th className={listTableThClass}>ID</th>
-                  <th className={listTableThClass}>Country</th>
-                  <th className={listTableThClass}>Primary Contact</th>
-                  <th className={listTableThClass}>Type</th>
-                  <th className={listTableThClass}>Profile</th>
-                  <th className={listTableThClass}>Activity</th>
-                  <th className={listTableThClass}>Dup risk</th>
-                  <th className={listTableThClass}>Status</th>
-                  <th className={listTableThClass}>Updated</th>
-                  <th className={listTableThRightClass}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>{renderSkeletonRows()}</tbody>
-            </table>
-          </ResponsiveTableContainer>
-        ) : customers.length === 0 ? (
-          <div className="p-12 text-center">
-            <Users className="mx-auto mb-3 h-12 w-12 text-border-strong" />
-            <h3 className="text-base font-semibold text-text-primary">No matching customers</h3>
-            <p className="mt-1 text-sm text-text-muted">Try changing filters or create a new customer profile.</p>
-            <div className="mt-4 flex items-center justify-center gap-2">
+        <DataGrid
+          tableKey="customers.list"
+          exportName="customers"
+          columns={columns}
+          rows={customers}
+          getRowId={(c) => c.id}
+          loading={loading}
+          savedViews={{
+            getQuery: () => {
+              const next = new URLSearchParams(searchParams);
+              next.delete("page");
+              return next.toString();
+            },
+            applyQuery: (query) => setSearchParams(new URLSearchParams(query)),
+          }}
+          bulkActions={(selected, clear) => (
+            <>
               <button
                 type="button"
-                onClick={resetFilters}
-                className="rounded-lg border border-border-strong px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
+                disabled={bulkBusy}
+                onClick={() => void bulkSetStatus(selected, "active", clear)}
+                className="rounded-lg border border-border-strong bg-surface-raised px-2.5 py-1 font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
               >
-                Clear filters
+                Mark active
               </button>
-              <Link
-                to="/app/customers/new"
-                className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground hover:bg-brand-primary/90"
+              <button
+                type="button"
+                disabled={bulkBusy}
+                onClick={() => void bulkSetStatus(selected, "inactive", clear)}
+                className="rounded-lg border border-border-strong bg-surface-raised px-2.5 py-1 font-medium text-text-secondary hover:bg-surface-subtle disabled:opacity-50"
               >
-                <Plus className="h-4 w-4" />
-                New customer
-              </Link>
+                Mark inactive
+              </button>
+              {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin text-text-muted" aria-label="Working" /> : null}
+            </>
+          )}
+          emptyState={
+            <div className="p-12 text-center">
+              <Users className="mx-auto mb-3 h-12 w-12 text-border-strong" />
+              <h3 className="text-base font-semibold text-text-primary">No matching customers</h3>
+              <p className="mt-1 text-sm text-text-muted">Try changing filters or create a new customer profile.</p>
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="rounded-lg border border-border-strong px-3 py-2 text-sm font-medium text-text-secondary hover:bg-surface-subtle"
+                >
+                  Clear filters
+                </button>
+                <Link
+                  to="/app/customers/new"
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground hover:bg-brand-primary/90"
+                >
+                  <Plus className="h-4 w-4" />
+                  New customer
+                </Link>
+              </div>
             </div>
-          </div>
-        ) : (
-          <>
-            <ResponsiveTableContainer>
-              <table className={listTableBaseClass}>
-                <thead className={listTableTheadClass}>
-                  <tr>
-                    <th className={listTableThClass}>Customer</th>
-                    <th className={listTableThClass}>ID</th>
-                    <th className={listTableThClass}>Country</th>
-                    <th className={listTableThClass}>Primary Contact</th>
-                    <th className={listTableThClass}>Type</th>
-                    <th className={listTableThClass}>Profile</th>
-                    <th className={listTableThClass}>Activity</th>
-                    <th className={listTableThClass}>Dup risk</th>
-                    <th className={listTableThClass}>Status</th>
-                    <th className={listTableThClass}>Updated</th>
-                    <th className={listTableThRightClass}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {customers.map((customer) => {
-                    const status = (customer.status || "active").toLowerCase();
-                    const statusClasses =
-                      status === "active"
-                        ? "bg-status-success-subtle text-status-success-foreground"
-                        : "bg-status-neutral-subtle text-status-neutral-foreground";
-                    const pct = customer.profile_completeness;
-                    const days = customer.days_since_activity;
-                    const staleBadge =
-                      days != null && days >= 90 ? (
-                        <span className="rounded-full bg-status-warning-subtle px-2 py-0.5 text-[10px] font-semibold text-status-warning-foreground">
-                          Stale {days}d
-                        </span>
-                      ) : customer.last_activity_at ? (
-                        <span className="text-xs text-text-muted">{formatDate(customer.last_activity_at)}</span>
-                      ) : (
-                        <span className="text-xs text-text-muted">No activity</span>
-                      );
-
-                    return (
-                      <tr key={customer.id} className={listTableTrClass}>
-                        <td className={listTableTdClass}>
-                          <Link to={`/app/customers/${customer.id}`} className="inline-flex items-center gap-1 font-semibold text-text-primary hover:text-brand-primary">
-                            {customer.name}
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </Link>
-                          <div className="text-xs text-text-muted">{customer.trade_name ?? customer.legal_entity_name ?? "—"}</div>
-                        </td>
-                        <td className={listTableTdClass}>{customer.customer_code}</td>
-                        <td className={listTableTdClass}>{customer.billing_country ?? customer.country ?? "—"}</td>
-                        <td className={listTableTdClass}>
-                          <div>{customer.primary_contact_name ?? "—"}</div>
-                          <div className="text-xs text-text-muted">{customer.contact_email ?? customer.email ?? "No email"}</div>
-                        </td>
-                        <td className={listTableTdClass}>{customer.customer_type ?? "—"}</td>
-                        <td className={listTableTdClass}>
-                          {pct != null ? (
-                            <span
-                              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                pct >= 80
-                                  ? "bg-status-success-subtle text-status-success-foreground"
-                                  : pct >= 50
-                                    ? "bg-status-warning-subtle text-status-warning-foreground"
-                                    : "bg-status-danger-subtle text-status-danger-foreground"
-                              }`}
-                            >
-                              {pct}%
-                            </span>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td className={listTableTdClass}>{staleBadge}</td>
-                        <td className={listTableTdClass}>
-                          <DupRiskCell score={customer.duplicate_risk_score} />
-                        </td>
-                        <td className={listTableTdClass}>
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${statusClasses}`}>
-                            {status}
-                          </span>
-                        </td>
-                        <td className={listTableTdClass}>{formatDate(customer.updated_at)}</td>
-                        <td className={cn(listTableTdClass, "text-right")}>
-                          <div className="relative inline-block text-left">
-                            <button
-                              type="button"
-                              onClick={() => setOpenActionsId((prev) => (prev === customer.id ? null : customer.id))}
-                              className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
-                            >
-                              Actions
-                            </button>
-                            {openActionsId === customer.id && (
-                              <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
-                                <Link
-                                  to={`/app/customers/${customer.id}`}
-                                  onClick={() => setOpenActionsId(null)}
-                                  className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
-                                >
-                                  View
-                                </Link>
-                                <Link
-                                  to={`/app/customers/${customer.id}/edit`}
-                                  onClick={() => setOpenActionsId(null)}
-                                  className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
-                                >
-                                  Edit
-                                </Link>
-                                <Link
-                                  to={`/app/customers/${customer.id}/print`}
-                                  onClick={() => setOpenActionsId(null)}
-                                  className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
-                                >
-                                  Print
-                                </Link>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setOpenActionsId(null);
-                                    void handleDelete(customer.id);
-                                  }}
-                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </ResponsiveTableContainer>
-            <div className="flex flex-col gap-2 border-t border-border px-4 py-2 sm:flex-row sm:items-center sm:justify-end">
-              <Link to="/app/customers/new" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-primary hover:underline">
-                Add another
-                <ArrowUpRight className="h-4 w-4" />
-              </Link>
-            </div>
-            <DataTablePagination
-              page={page}
-              pageSize={pageSize}
-              total={total}
-              onPageChange={(p) => setPageParam(p)}
-              onPageSizeChange={(s) => {
-                setPageSize(s);
-                setPageParam(1);
-              }}
-            />
-          </>
-        )}
+          }
+          footer={
+            customers.length > 0 ? (
+              <>
+                <div className="flex flex-col gap-2 border-t border-border px-4 py-2 sm:flex-row sm:items-center sm:justify-end">
+                  <Link to="/app/customers/new" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-primary hover:underline">
+                    Add another
+                    <ArrowUpRight className="h-4 w-4" />
+                  </Link>
+                </div>
+                <DataTablePagination
+                  page={page}
+                  pageSize={pageSize}
+                  total={total}
+                  onPageChange={(p) => setPageParam(p)}
+                  onPageSizeChange={(s) => {
+                    setPageSize(s);
+                    setPageParam(1);
+                  }}
+                />
+              </>
+            ) : null
+          }
+        />
       </div>
     </div>
   );

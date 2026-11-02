@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRecordBreadcrumb } from "@/components/shell/recordBreadcrumb";
+import { OrderColorSizeMatrix } from "@/components/orders/OrderColorSizeMatrix";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
   api,
@@ -37,6 +39,7 @@ export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [item, setItem] = useState<OrderResponse | null>(null);
+  useRecordBreadcrumb(item?.order_code);
   const [customer, setCustomer] = useState<CustomerResponse | null>(null);
   const [quotation, setQuotation] = useState<QuotationResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -275,6 +278,13 @@ export function OrderDetailPage() {
       <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
         <OrderMilestoneTracker key={`mt-${item.id}-${milestoneTick}`} orderId={item.id} variant="full" />
       </div>
+
+      <OrderColorSizeMatrix
+        orderId={item.id}
+        onSaved={() => {
+          void refreshOrder(item.id).catch((e) => logApiError("OrderDetailPage.refreshAfterMatrix", e));
+        }}
+      />
 
       <div className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
         <h2 className="text-sm font-semibold text-text-primary">Pipeline settings</h2>

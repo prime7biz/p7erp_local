@@ -16,6 +16,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import { trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -113,7 +114,11 @@ export function HeroEnhancedSection() {
               Manage merchandising, production, inventory, LC processing, and accounting in one unified platform. Stop relying on disconnected Excel sheets.
             </p>
             <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-              <Link to="/signup" className="w-full sm:w-auto inline-flex justify-center">
+              <Link
+                to="/signup"
+                onClick={() => trackEvent("signup_started", { from: "hero" })}
+                className="w-full sm:w-auto inline-flex justify-center"
+              >
                 <Button variant="cta" size="lg" className="w-full sm:w-auto whitespace-nowrap min-w-0 bg-brand-primary text-brand-primary-foreground hover:bg-brand-primary/90 shadow-xl shadow-brand-primary/30 border-0">
                   Start Free Trial
                   <ArrowRight className="ml-2 h-4 w-4 shrink-0" />
@@ -130,6 +135,21 @@ export function HeroEnhancedSection() {
                 Watch Demo
               </Button>
             </div>
+            <p className="mt-4 text-sm text-text-inverse/80">
+              Prefer a guided tour?{" "}
+              <Link
+                to="/book-demo"
+                onClick={() => trackEvent("cta_click", { cta: "book_demo", from: "hero" })}
+                className="font-semibold text-white underline decoration-brand-primary underline-offset-4 hover:text-brand-primary"
+              >
+                Book a 45-minute live demo
+              </Link>{" "}
+              or{" "}
+              <Link to="/roi-calculator" className="font-semibold text-white underline decoration-white/40 underline-offset-4 hover:text-brand-primary">
+                estimate your time savings
+              </Link>
+              .
+            </p>
             <DemoVideoDialog open={demoOpen} onClose={() => setDemoOpen(false)} />
           </div>
 
@@ -153,7 +173,7 @@ export function HeroEnhancedSection() {
                     <source srcSet="/images/prime7-dashboard.webp" type="image/webp" />
                     <img
                       src="/images/prime7-dashboard.png"
-                      alt="Prime7 ERP Dashboard"
+                      alt="Prime7 ERP home dashboard with approvals, TNA, alerts and order KPIs"
                       className="absolute inset-0 w-full h-full object-cover object-top"
                       loading="eager"
                       fetchPriority="high"
@@ -182,10 +202,7 @@ export function HeroEnhancedSection() {
               <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-brand-primary/20 text-brand-primary flex items-center justify-center shrink-0">
                 <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
-              <div className="min-w-0">
-                <p className="text-xs text-white/80 truncate">Sample dashboard view</p>
-                <p className="text-sm font-semibold text-white">Hourly line efficiency</p>
-              </div>
+              <p className="min-w-0 text-sm font-semibold text-white">Real product screen, demo data</p>
             </motion.div>
           </motion.div>
         </div>
@@ -194,13 +211,13 @@ export function HeroEnhancedSection() {
   );
 }
 
-/** Text social proof — no fake partner logo boxes. */
+/** Positioning line; customer names or logos go here only with their written permission. */
 export function LandingTrustLogoStrip() {
   return (
-    <section className="py-8 bg-surface-raised border-b border-border-subtle" aria-label="Trusted by">
+    <section className="py-8 bg-surface-raised border-b border-border-subtle" aria-label="Who Prime7 ERP is for">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <p className="text-text-muted text-sm">
-          Trusted by garment manufacturers across Bangladesh, Vietnam, and India
+          Built in Bangladesh for garment manufacturers, buying houses and export-oriented apparel businesses
         </p>
       </div>
     </section>
@@ -406,8 +423,12 @@ export function StickyCtaBar() {
               Start Free Trial
             </Button>
           </Link>
-          <Link to="/contact" className="text-sm font-semibold text-brand-primary hover:underline">
-            Talk to Sales
+          <Link
+            to="/book-demo"
+            onClick={() => trackEvent("cta_click", { cta: "book_demo", from: "sticky_bar" })}
+            className="text-sm font-semibold text-brand-primary hover:underline"
+          >
+            Book a Demo
           </Link>
           <button type="button" onClick={() => setDismissed(true)} className="h-8 w-8 rounded-lg hover:bg-surface-subtle text-text-muted" aria-label="Dismiss sticky call to action">
             <X className="h-4 w-4 mx-auto" />

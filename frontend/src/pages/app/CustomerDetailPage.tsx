@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRecordBreadcrumb } from "@/components/shell/recordBreadcrumb";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   api,
@@ -29,6 +30,7 @@ export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [customer, setCustomer] = useState<CustomerResponse | null>(null);
+  useRecordBreadcrumb(customer?.name);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [recvAging, setRecvAging] = useState<BillsAgingResponse | null>(null);

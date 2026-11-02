@@ -17,6 +17,8 @@ from app.modules.production.quality_router import router as quality_router
 from app.modules.production.roster_router import router as roster_router
 from app.modules.production.settings_router import router as settings_router
 from app.modules.production.skills_router import router as skills_router
+from app.modules.production.scan_router import router as scan_router
+from app.modules.production.scan_router import router as scan_router
 
 router = APIRouter()
 
@@ -33,6 +35,8 @@ router.include_router(ie_router, dependencies=_production_access_dependency)
 router.include_router(planning_router, dependencies=_production_access_dependency)
 router.include_router(hourly_router, dependencies=_production_access_dependency)
 router.include_router(cutting_router, dependencies=_production_access_dependency)
+router.include_router(scan_router, dependencies=_production_access_dependency)
+router.include_router(scan_router, dependencies=_production_access_dependency)
 router.include_router(costing_router, dependencies=_production_access_dependency)
 router.include_router(knitting_router, dependencies=_production_access_dependency)
 router.include_router(dyeing_router, dependencies=_production_access_dependency)

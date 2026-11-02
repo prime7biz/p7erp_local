@@ -1,30 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { api } from "@/api/client";
+import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { logApiError } from "@/utils/logApiError";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-const DEPT_LABEL: Record<string, string> = {
-  sewing: "Sewing",
-  cutting: "Cutting",
-  knitting: "Knitting",
-  dyeing: "Dyeing",
-  printing: "Printing",
-  aop: "AOP",
-  embroidery: "Embroidery",
-  elastic: "Elastic",
-  washing: "Washing",
-  iron: "Iron",
-  finishing: "Finishing",
-};
+const DEPTS = new Set(["sewing", "cutting", "knitting", "dyeing", "printing", "aop", "embroidery", "elastic", "washing", "iron", "finishing"]);
 
 export function HourlyProductionPage() {
+  const { t } = useTranslation();
   const { dept } = useParams<{ dept: string }>();
   const department_type = dept ?? "sewing";
-  const label = DEPT_LABEL[department_type] ?? department_type;
+  const label = DEPTS.has(department_type) ? t(`hourly.dept.${department_type}`) : department_type;
 
   const [date, setDate] = useState(todayISO());
   const [lineId, setLineId] = useState("");
@@ -77,9 +68,9 @@ export function HourlyProductionPage() {
       setDraft(d);
     } catch (e) {
       logApiError(e, "HourlyProductionPage.loadSheet");
-      setError("Could not load hourly sheet.");
+      setError(t("hourly.loadFailed"));
     }
-  }, [date, department_type, isSewing, lineId, machineId]);
+  }, [date, department_type, isSewing, lineId, machineId, t]);
 
   useEffect(() => {
     void loadRefs();
@@ -113,20 +104,23 @@ export function HourlyProductionPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4">
-      <div>
-        <h1 className="text-xl font-semibold text-text-primary">Hourly production — {label}</h1>
-        <p className="text-sm text-text-secondary">Enter good/reject per hour slot (mobile-friendly).</p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold text-text-primary">{t("hourly.title", { dept: label })}</h1>
+          <p className="text-sm text-text-secondary">{t("hourly.subtitle")}</p>
+        </div>
+        <LanguageSwitcher />
       </div>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       <div className="flex flex-wrap gap-3 rounded-lg border border-border-subtle bg-surface-elevated p-4">
         <label className="text-sm">
-          Date
+          {t("hourly.date")}
           <input type="date" className="ml-2 rounded-md border border-border-subtle px-2 py-1" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label className="text-sm">
-          Shift
+          {t("hourly.shift")}
           <select
             className="ml-2 rounded-md border border-border-subtle px-2 py-1"
             value={shiftId}
@@ -141,7 +135,7 @@ export function HourlyProductionPage() {
         </label>
         {isSewing ? (
           <label className="text-sm">
-            Sewing line
+            {t("hourly.sewingLine")}
             <select className="ml-2 rounded-md border border-border-subtle px-2 py-1" value={lineId} onChange={(e) => setLineId(e.target.value)}>
               <option value="">—</option>
               {lines.map((l) => (
@@ -153,7 +147,7 @@ export function HourlyProductionPage() {
           </label>
         ) : (
           <label className="text-sm">
-            Machine
+            {t("hourly.machine")}
             <select className="ml-2 rounded-md border border-border-subtle px-2 py-1" value={machineId} onChange={(e) => setMachineId(e.target.value)}>
               <option value="">—</option>
               {machines.map((m) => (
@@ -165,7 +159,7 @@ export function HourlyProductionPage() {
           </label>
         )}
         <button type="button" className="rounded-lg border border-border-subtle px-3 py-1.5 text-sm" onClick={() => void loadSheet()}>
-          Refresh
+          {t("hourly.refresh")}
         </button>
       </div>
 
@@ -175,27 +169,29 @@ export function HourlyProductionPage() {
             <span className="w-16 text-sm font-medium text-text-secondary">H{h}</span>
             <input
               inputMode="decimal"
-              placeholder="Good"
+              placeholder={t("hourly.good")}
+              aria-label={`H${h} ${t("hourly.good")}`}
               className="min-w-[100px] flex-1 rounded-lg border border-border-subtle px-3 py-2 text-base"
               value={draft[h]?.good ?? ""}
               onChange={(e) => setDraft((d) => ({ ...d, [h]: { ...d[h], good: e.target.value, reject: d[h]?.reject ?? "" } }))}
             />
             <input
               inputMode="decimal"
-              placeholder="Reject"
+              placeholder={t("hourly.reject")}
+              aria-label={`H${h} ${t("hourly.reject")}`}
               className="min-w-[100px] flex-1 rounded-lg border border-border-subtle px-3 py-2 text-base"
               value={draft[h]?.reject ?? ""}
               onChange={(e) => setDraft((d) => ({ ...d, [h]: { good: d[h]?.good ?? "", reject: e.target.value } }))}
             />
             <button type="button" className="rounded-lg bg-brand-primary px-3 py-2 text-sm text-white" onClick={() => void saveSlot(h)}>
-              Save
+              {t("hourly.save")}
             </button>
           </div>
         ))}
       </div>
 
       {sheet.length > 0 ? (
-        <p className="text-xs text-text-muted">Saved rows: {sheet.length}</p>
+        <p className="text-xs text-text-muted">{t("hourly.savedRows", { count: sheet.length })}</p>
       ) : null}
     </div>
   );

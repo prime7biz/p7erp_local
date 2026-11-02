@@ -10,67 +10,64 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
+// Keep every statement here verifiable in the product or in /legal docs; no certifications we do not hold.
 const securityFeatures = [
   {
     icon: Lock,
-    title: "Data Encryption",
+    title: "Encrypted connections & hashed passwords",
     description:
-      "All data is encrypted at rest using AES-256 and in transit using TLS 1.3. Your financial records, inventory data, and business information are protected with industry-standard encryption.",
+      "All traffic to Prime7 ERP uses HTTPS. Passwords are stored only as bcrypt hashes, never in plain text, and login checks take the same time whether or not an account exists.",
     color: "bg-brand-primary/10 text-brand-primary",
   },
   {
     icon: ShieldCheck,
-    title: "Access Control",
+    title: "Roles, permissions & approvals",
     description:
-      "Role-Based Access Control (RBAC) with multi-level approval workflows. Define granular permissions per user, department, and module. Multi-factor authentication available for all accounts.",
+      "Each user has a role with module-level permissions. Vouchers, payroll runs and purchase documents move through approval steps that only managers or permitted roles can complete.",
     color: "bg-status-success-subtle text-status-success-foreground",
   },
   {
     icon: FileSearch,
-    title: "Audit Logging",
+    title: "Audit trail",
     description:
-      "Complete audit trail for every action — who changed what, when, and why. Immutable logs ensure compliance and accountability across vouchers, inventory movements, and system configurations.",
+      "Key actions are recorded with who did what and when — including approvals, external portal access and AI tool use — so managers can review changes.",
     color: "bg-status-warning-subtle text-status-warning-foreground",
   },
   {
     icon: Server,
-    title: "Multi-Tenant Isolation",
+    title: "Company data isolation",
     description:
-      "Strict data separation between tenants at the database level. Your data is completely isolated from other organizations. Row-level security enforces tenant boundaries at every query.",
+      "Every record belongs to one company account, and every query is filtered by that company. Automated tests check that one company cannot read another company's orders, vouchers, stock or staff.",
     color: "bg-status-info-subtle text-status-info-foreground",
   },
   {
     icon: Database,
-    title: "Backup & Recovery",
+    title: "Login protection",
     description:
-      "Automated daily backups with point-in-time recovery capability. Backups are stored in geographically separate locations. Recovery time objective (RTO) of under 4 hours for critical data.",
+      "Repeated failed logins lock the account temporarily. Customer and financier portal sessions can be revoked instantly, and password-reset links work only once.",
     color: "bg-status-danger-subtle text-status-danger-foreground",
   },
   {
     icon: Award,
-    title: "Compliance",
+    title: "Honest about compliance",
     description:
-      "Built to meet industry security standards and best practices. Regular security audits, vulnerability assessments, and penetration testing ensure ongoing compliance and protection.",
+      "We do not claim ISO 27001 or SOC 2 certification. Our security program follows widely accepted practices; details are in our Security & Compliance document.",
     color: "bg-brand-primary/10 text-brand-primary",
   },
 ];
 
 const infrastructure = [
-  "Cloud-hosted on enterprise-grade infrastructure with auto-scaling",
-  "99.9% uptime SLA with real-time monitoring and alerting",
-  "Geographic redundancy with automatic failover capabilities",
-  "DDoS protection and web application firewall (WAF)",
-  "Regular security patches and zero-downtime deployments",
-  "24/7 infrastructure monitoring by dedicated DevOps team",
+  "Hosted on a dedicated cloud server, with traffic served through Cloudflare",
+  "Target of 99.5% monthly uptime, as defined in our published SLA",
+  "Application and database run in isolated containers with separate networks",
+  "Updates are released as versioned builds with a documented rollback path",
 ];
 
 const privacy = [
-  "GDPR-aware data handling practices and privacy controls",
-  "You own your data — full data portability and export rights",
-  "Right to export all your data in standard formats at any time",
-  "Data processing agreements available for enterprise customers",
-  "No data sharing with third parties without explicit consent",
-  "Data residency options to meet local regulatory requirements",
+  "GDPR-aware privacy design, described in our Privacy Policy",
+  "You own your data — export lists to Excel or CSV at any time",
+  "A Data Processing Agreement is available",
+  "No sharing of your business data with third parties for advertising",
 ];
 
 export function SecurityPage() {
@@ -82,11 +79,14 @@ export function SecurityPage() {
             Security & <span className="text-brand-primary">Privacy</span>
           </h1>
           <p className="mt-6 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">
-            Enterprise-grade security and multi-tenant isolation so your data stays protected and compliant.
+            What we actually do to protect your company&apos;s data — no badges we have not earned.
           </p>
-          <div className="mt-8">
-            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-primary px-6 py-3 text-base font-semibold text-brand-primary-foreground hover:bg-brand-primary/90 transition-colors">
-              Start Free Trial <ArrowRight className="w-4 h-4" />
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            <Link to="/book-demo" className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-primary px-6 py-3 text-base font-semibold text-brand-primary-foreground hover:bg-brand-primary/90 transition-colors">
+              Book a demo <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link to="/signup" className="inline-flex items-center justify-center gap-2 rounded-lg border border-border px-6 py-3 text-base font-semibold text-text-primary hover:bg-surface-subtle transition-colors">
+              Start free trial
             </Link>
           </div>
         </div>

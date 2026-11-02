@@ -15,8 +15,10 @@ from app.external_access.constants import (
     FF_FINANCIER_FINANCIAL_SUMMARY_ENABLED,
     FF_FINANCIER_PORTAL_ENABLED,
     FF_FINANCIER_PROJECTION_ENABLED,
+    FF_SUPPLIER_PORTAL_ENABLED,
     PRINCIPAL_CUSTOMER,
     PRINCIPAL_FINANCIER,
+    PRINCIPAL_SUPPLIER,
 )
 
 
@@ -49,6 +51,10 @@ def is_external_document_download_enabled(tenant: Tenant) -> bool:
     return bool(_flags(tenant).get(FF_EXTERNAL_PORTAL_DOCUMENT_DOWNLOADS_ENABLED))
 
 
+def is_supplier_portal_enabled(tenant: Tenant) -> bool:
+    return bool(_flags(tenant).get(FF_SUPPLIER_PORTAL_ENABLED))
+
+
 def require_portal_enabled(*, tenant: Tenant, principal_type: str) -> None:
     if principal_type == PRINCIPAL_CUSTOMER and not is_customer_portal_enabled(tenant):
         raise HTTPException(
@@ -60,3 +66,11 @@ def require_portal_enabled(*, tenant: Tenant, principal_type: str) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Financier portal is not enabled for this organization",
         )
+    if principal_type == PRINCIPAL_SUPPLIER and not is_supplier_portal_enabled(tenant):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Supplier portal is not enabled for this organization",
+        )
+    # Fail closed: a principal type this check does not know must never get through.
+    if principal_type not in (PRINCIPAL_CUSTOMER, PRINCIPAL_FINANCIER, PRINCIPAL_SUPPLIER):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unknown portal")

@@ -1,14 +1,21 @@
-import { Sparkles, X, MessageSquare, Plus } from "lucide-react";
+import { useState } from "react";
+import { Sparkles, X, MessageSquare, Plus, Crosshair } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { AiChatThread } from "@/pages/app/ai/components/AiChatThread";
 import { AiPromptInput } from "@/pages/app/ai/components/AiPromptInput";
 import { useAiChatContext } from "@/context/AiChatContext";
 import { useAuth } from "@/context/AuthContext";
+import { useRecordBreadcrumbLabel } from "@/components/shell/recordBreadcrumb";
+import { screenContextFromPath, screenRecordNoun } from "@/lib/screenContext";
 
 export function GlobalAiChatWidget() {
   const location = useLocation();
   const { me } = useAuth();
   const appShellV2 = me?.feature_flags?.app_shell_v2 === true;
+  const recordLabel = useRecordBreadcrumbLabel();
+  const screen = screenContextFromPath(location.pathname);
+  const [ignoredRoute, setIgnoredRoute] = useState<string | null>(null);
+  const useScreen = screen !== null && ignoredRoute !== screen.route;
   const {
     messages,
     loadingMessages,
@@ -112,11 +119,33 @@ export function GlobalAiChatWidget() {
             {error ? <p className="mb-2 text-xs text-status-danger">{error}</p> : null}
             {sending ? <p className="mb-2 text-xs text-text-muted">Local AI is thinking...</p> : null}
             {approvingEscalationId ? <p className="mb-2 text-xs text-text-muted">Cloud AI is processing...</p> : null}
+            {screen ? (
+              <div className="mb-2 flex items-center gap-2 text-xs">
+                {useScreen ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-brand-primary/30 bg-brand-primary/5 px-2 py-0.5 text-brand-primary">
+                    <Crosshair className="h-3 w-3" aria-hidden />
+                    Asking about {recordLabel || `this ${screenRecordNoun(screen.record_type)}`}
+                    <button
+                      type="button"
+                      aria-label="Don't use this screen"
+                      className="ml-0.5 rounded-full p-0.5 hover:bg-brand-primary/10"
+                      onClick={() => setIgnoredRoute(screen.route)}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ) : (
+                  <button type="button" className="text-text-muted underline" onClick={() => setIgnoredRoute(null)}>
+                    Use this {screenRecordNoun(screen.record_type)} as context
+                  </button>
+                )}
+              </div>
+            ) : null}
             <AiPromptInput
               sending={sending}
               disabled={loadingBootstrap}
               onSend={async (prompt) => {
-                await sendMessage(prompt);
+                await sendMessage(prompt, null, useScreen ? screen : null);
               }}
             />
           </div>

@@ -15,6 +15,8 @@ class ExternalAccessOverviewResponse(BaseModel):
     customer_principal_count: int
     financier_principal_count: int
     pending_invitation_count: int
+    supplier_portal_enabled: bool = False
+    supplier_principal_count: int = 0
 
 
 class ExternalFeatureFlagsPatch(BaseModel):
@@ -24,6 +26,7 @@ class ExternalFeatureFlagsPatch(BaseModel):
     financier_financial_summary_enabled: bool | None = None
     financier_projection_enabled: bool | None = None
     external_portal_document_downloads_enabled: bool | None = None
+    supplier_portal_enabled: bool | None = None
 
 
 class ExternalPrincipalAdminRow(BaseModel):
@@ -39,6 +42,7 @@ class ExternalPrincipalAdminRow(BaseModel):
     customer_ids: list[int] | None = None
     access_scope: str | None = None
     financier_party_id: int | None = None
+    vendor_ids: list[int] | None = None
 
 
 class ExternalPrincipalListResponse(BaseModel):
@@ -61,6 +65,12 @@ class ExternalInviteFinancierRequest(BaseModel):
     financier_party_id: int | None = None
 
 
+class ExternalInviteSupplierRequest(BaseModel):
+    email: EmailStr
+    full_name: str = Field(..., min_length=1, max_length=255)
+    vendor_ids: list[int] = Field(..., min_length=1, max_length=50)
+
+
 class ExternalInviteResponse(BaseModel):
     invitation_id: int
     expires_at: datetime
@@ -77,6 +87,7 @@ class ExternalPrincipalPatchRequest(BaseModel):
     customer_ids: list[int] | None = None
     access_scope: str | None = None
     financier_party_id: int | None = None
+    vendor_ids: list[int] | None = Field(None, max_length=50)
     # When true, clear locked_at + failed_login_count (admin unlock).
     clear_lock: bool | None = None
 

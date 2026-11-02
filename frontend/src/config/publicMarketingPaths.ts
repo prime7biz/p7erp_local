@@ -8,6 +8,8 @@ export const PUBLIC_MARKETING_PATHS: readonly string[] = [
   "/pricing",
   "/about",
   "/contact",
+  "/book-demo",
+  "/roi-calculator",
   "/garments-erp",
   "/buying-house-erp",
   "/legal/terms",

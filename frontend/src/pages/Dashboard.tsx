@@ -1,6 +1,8 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
+import { AskMetricCards } from "@/components/dashboard/AskMetricCards";
 import { logApiError } from "@/utils/logApiError";
 import { api } from "@/api/client";
 import {
@@ -434,9 +436,11 @@ export function Dashboard() {
             onRangeChange={handleRangeChange}
           />
 
+          <OnboardingChecklist tenantId={me?.tenant_id} roleName={me?.role_name} />
           {needsAttentionStrip}
           <OwnerCostAlertStrip />
           {kpiCards}
+          <AskMetricCards />
 
           {vis.opsOrder.map((block) => renderOpsBlock(block))}
 

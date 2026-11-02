@@ -26,6 +26,22 @@ from app.models.tenant import CommissionMode, Tenant, TenantType
 from app.models.user import User, Role
 from app.models.staff_invitation import StaffInvitation
 from app.models.marketing import MarketingLead
+from app.models.saved_view import UserSavedView
+from app.models.notification import UserNotification
+from app.models.order_matrix import OrderColorSizeLine
+from app.models.traceability import CutTicketFabricLot, MaterialCertificate
+from app.models.packing_cartons import PackingListCartonLine
+from app.models.supplier_portal import ExternalSupplierAccess, SupplierPoUpdate
+from app.models.shop_floor_scan import BundleOperationScan
+from app.models.po_matrix import PurchaseOrderColorSizeLine
+from app.models.ai_agents import AiAgentDecision
+from app.models.commission import (
+    CommissionEntry,
+    CommissionRule,
+    CommissionSettings,
+    CommissionShipment,
+    CommissionStatement,
+)
 from app.models.external_access import (
     ExternalAuditLog,
     ExternalCustomerAccess,
@@ -335,6 +351,8 @@ from app.models.compliance import (
     TenantStatutoryTaxConfig,
     BondedWarehouseEntry,
     PayrollStatutorySummary,
+    UdEntitlement,
+    UtilizationDeclaration,
 )
 from app.models.production import (
     TenantProductionSettings,

@@ -172,7 +172,7 @@ export function PricingPage() {
             ))}
           </div>
           <p className="text-center text-sm text-text-secondary mt-8">
-            All plans include SSL encryption, daily backups, and 99.9% uptime.
+            All plans include HTTPS encryption, role-based access and our published 99.5% monthly uptime target.
           </p>
         </div>
       </section>

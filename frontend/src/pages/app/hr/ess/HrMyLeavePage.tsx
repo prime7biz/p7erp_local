@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { api, type HrLeaveRequestResponse } from "@/api/client";
 import { HrSimpleCrudPage } from "@/pages/app/hr/components/HrSimpleCrudPage";
 
@@ -10,15 +11,17 @@ interface HrMyLeaveCreate {
 }
 
 export function HrMyLeavePage() {
+  const { t } = useTranslation();
   return (
     <HrSimpleCrudPage<HrLeaveRequestResponse, HrMyLeaveCreate>
-      title="My Leave"
-      description="Create your leave requests and check status."
-      emptyMessage="No leave requests found."
-      breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "My Leave" }]}
+      title={t("ess.myLeave")}
+      description={t("ess.myLeaveDesc")}
+      emptyMessage={t("ess.noLeave")}
+      breadcrumbs={[{ label: t("ess.hr"), href: "/app/hr" }, { label: t("ess.myLeave") }]}
       loadItems={() => api.listHrEssMyLeaveRequests()}
       createItem={(payload) => api.createHrEssMyLeaveRequest(payload)}
-      createLabel="Request leave"
+      createLabel={t("ess.requestLeave")}
+      showLanguageSwitcher
       initialForm={{
         leave_type_id: 0,
         from_date: "",
@@ -27,18 +30,18 @@ export function HrMyLeavePage() {
         reason: "",
       }}
       fields={[
-        { key: "leave_type_id", label: "Leave Type ID", type: "number", required: true },
-        { key: "from_date", label: "From Date", type: "date", required: true },
-        { key: "to_date", label: "To Date", type: "date", required: true },
-        { key: "days_requested", label: "Days requested", type: "text", required: true },
-        { key: "reason", label: "Reason", type: "text" },
+        { key: "leave_type_id", label: t("ess.leaveTypeId"), type: "number", required: true },
+        { key: "from_date", label: t("ess.fromDate"), type: "date", required: true },
+        { key: "to_date", label: t("ess.toDate"), type: "date", required: true },
+        { key: "days_requested", label: t("ess.daysRequested"), type: "text", required: true },
+        { key: "reason", label: t("ess.reason"), type: "text" },
       ]}
       columns={[
-        { header: "Leave Type ID", cell: (row) => row.leave_type_id },
-        { header: "From", cell: (row) => row.from_date },
-        { header: "To", cell: (row) => row.to_date },
-        { header: "Days", cell: (row) => row.days_requested },
-        { header: "Status", cell: (row) => row.status },
+        { header: t("ess.leaveTypeId"), cell: (row) => row.leave_type_id },
+        { header: t("ess.from"), cell: (row) => row.from_date },
+        { header: t("ess.to"), cell: (row) => row.to_date },
+        { header: t("ess.days"), cell: (row) => row.days_requested },
+        { header: t("ess.status"), cell: (row) => row.status },
       ]}
     />
   );

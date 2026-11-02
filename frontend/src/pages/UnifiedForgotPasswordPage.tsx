@@ -3,8 +3,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "@/api/client";
 import { externalRequestPasswordReset } from "@/api/externalClient";
 import { AlertCircle, ArrowLeft, Building2, Mail, CheckCircle } from "lucide-react";
+import { isExternalPrincipalType, type ExternalPrincipalType } from "@/types/externalAccess";
 
-type PortalRole = "staff" | "admin" | "customer" | "financier";
+type PortalRole = "staff" | "admin" | ExternalPrincipalType;
 
 export function UnifiedForgotPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -18,7 +19,7 @@ export function UnifiedForgotPasswordPage() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    if (roleParam === "customer" || roleParam === "financier" || roleParam === "admin") {
+    if (isExternalPrincipalType(roleParam) || roleParam === "admin") {
       setLoginRole(roleParam as PortalRole);
     }
   }, [roleParam]);
@@ -34,7 +35,7 @@ export function UnifiedForgotPasswordPage() {
     }
     setLoading(true);
     try {
-      if (loginRole === "customer" || loginRole === "financier") {
+      if (isExternalPrincipalType(loginRole)) {
         await externalRequestPasswordReset({
           company_code: code,
           email: em,
@@ -124,6 +125,7 @@ export function UnifiedForgotPasswordPage() {
                   <option value="admin">Tenant admin</option>
                   <option value="customer">Customer portal</option>
                   <option value="financier">Financier portal</option>
+                  <option value="supplier">Supplier portal</option>
                 </select>
               </div>
               <div className="space-y-1.5">

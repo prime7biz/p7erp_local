@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
+import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 
 export interface HrColumn<TItem> {
   header: string;
@@ -27,6 +29,8 @@ interface HrSimpleCrudPageProps<TItem, TCreate extends object> {
   breadcrumbs?: { label: string; href?: string }[];
   /** Extra content below the table (e.g. batch actions) */
   footer?: ReactNode;
+  /** Show the English / বাংলা switch (employee self-service pages). */
+  showLanguageSwitcher?: boolean;
 }
 
 export function HrSimpleCrudPage<TItem, TCreate extends object>(
@@ -39,12 +43,17 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
     columns,
     loadItems,
     createItem,
-    createLabel = "Add",
+    createLabel,
     fields = [],
     initialForm,
     breadcrumbs,
     footer,
+    showLanguageSwitcher = false,
   } = props;
+  const { t } = useTranslation();
+  // Pages pass `loadItems` inline; keep the latest in a ref so `refresh` is stable and doesn't refetch every render.
+  const loadItemsRef = useRef(loadItems);
+  loadItemsRef.current = loadItems;
   const [items, setItems] = useState<TItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -56,14 +65,14 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
     setLoading(true);
     setError("");
     try {
-      const rows = await loadItems();
+      const rows = await loadItemsRef.current();
       setItems(rows);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load data");
+      setError(err instanceof Error ? err.message : t("crud.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [loadItems]);
+  }, [t]);
 
   useEffect(() => {
     void refresh();
@@ -92,11 +101,11 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
     setSuccess("");
     try {
       await createItem(form);
-      setSuccess("Saved successfully.");
+      setSuccess(t("crud.savedOk"));
       setForm(initialForm ?? null);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      setError(err instanceof Error ? err.message : t("crud.saveFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -113,13 +122,16 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
             <p className="text-sm text-text-muted">{description}</p>
           </div>
         )}
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          className="rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {showLanguageSwitcher ? <LanguageSwitcher /> : null}
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="rounded border border-border-strong px-3 py-1.5 text-sm text-text-secondary"
+          >
+            {t("crud.refresh")}
+          </button>
+        </div>
       </div>
 
       {error && <div className="rounded-lg border border-status-danger/20 bg-status-danger-subtle px-4 py-2 text-sm text-status-danger-foreground">{error}</div>}
@@ -127,7 +139,7 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
 
       <div className="rounded-xl border border-border bg-surface-raised overflow-hidden">
         {loading ? (
-          <div className="p-10 text-center text-sm text-text-muted">Loading...</div>
+          <div className="p-10 text-center text-sm text-text-muted">{t("crud.loading")}</div>
         ) : items.length === 0 ? (
           <div className="p-10 text-center text-sm text-text-muted">{emptyMessage}</div>
         ) : (
@@ -162,8 +174,8 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
 
       {createItem && form && fields.length > 0 && (
         <form onSubmit={onSubmit} className="rounded-xl border border-border bg-surface-raised p-4 space-y-3">
-          <h2 className="text-lg font-semibold text-text-primary">{createLabel}</h2>
-          <p className="text-xs text-text-muted">Fields marked with ** are mandatory.</p>
+          <h2 className="text-lg font-semibold text-text-primary">{createLabel ?? t("crud.add")}</h2>
+          <p className="text-xs text-text-muted">{t("crud.mandatoryNote")}</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {fields.map((field) => (
               <label key={String(field.key)} className="space-y-1 text-sm text-text-secondary">
@@ -184,7 +196,7 @@ export function HrSimpleCrudPage<TItem, TCreate extends object>(
               disabled={submitting}
               className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-primary-foreground disabled:opacity-60"
             >
-              {submitting ? "Saving..." : "Save"}
+              {submitting ? t("crud.saving") : t("crud.save")}
             </button>
           </div>
         </form>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type PackingListRow } from "@/api/client";
+import { PackingCartonsEditor } from "@/components/logistics/PackingCartonsEditor";
 import { logApiError } from "@/utils/logApiError";
 
 const CONTAINER_TYPES = ["20GP", "40GP", "40HQ", "LCL"];
@@ -142,6 +143,8 @@ export function PackingListDetailPage() {
           <p className="text-sm font-semibold">{item.packing_date ?? "—"}</p>
         </div>
       </div>
+
+      <PackingCartonsEditor packingListId={item.id} onSaved={() => void load()} />
 
       <section className="space-y-4 rounded-xl border border-border bg-surface-raised p-4">
         <h2 className="text-sm font-semibold text-text-primary">Containers</h2>

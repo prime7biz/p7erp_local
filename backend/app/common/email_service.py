@@ -171,6 +171,18 @@ async def send_registration_confirmation_email(
     await fm.send_message(message)
 
 
+_PORTAL_LABELS = {"customer": "Customer Portal", "financier": "Financier Portal", "supplier": "Supplier Portal"}
+
+
+def _portal_segment(principal_type: str) -> str:
+    """URL segment under /portal/ for a principal type (unknown types fall back to customer)."""
+    return principal_type if principal_type in _PORTAL_LABELS else "customer"
+
+
+def _portal_label(principal_type: str) -> str:
+    return _PORTAL_LABELS[_portal_segment(principal_type)]
+
+
 def _build_external_invitation_html(
     *,
     recipient_name: str,
@@ -183,7 +195,7 @@ def _build_external_invitation_html(
     safe_name = recipient_name.strip() or "there"
     safe_tenant = tenant_name.strip() or "your organization"
     safe_company_code = (company_code or "").strip()
-    portal_label = "Customer Portal" if principal_type == "customer" else "Financier Portal"
+    portal_label = _portal_label(principal_type)
     cc_line = (
         f'<p style="margin:0 0 16px;line-height:1.6;"><strong>Company code:</strong> {safe_company_code}</p>'
         if safe_company_code
@@ -238,9 +250,8 @@ async def send_external_invitation_email(
 ) -> None:
     settings = get_settings()
     frontend_url = settings.frontend_url.rstrip("/") or "https://prime7erp.com"
-    accept_path = "/portal/customer/accept-invite" if principal_type == "customer" else "/portal/financier/accept-invite"
-    accept_url = f"{frontend_url}{accept_path}?token={quote(invite_token, safe='')}"
-    portal_label = "Customer Portal" if principal_type == "customer" else "Financier Portal"
+    accept_url = f"{frontend_url}/portal/{_portal_segment(principal_type)}/accept-invite?token={quote(invite_token, safe='')}"
+    portal_label = _portal_label(principal_type)
     message = MessageSchema(
         subject=f"Prime7 ERP invitation: {portal_label}",
         recipients=[to_email],
@@ -270,7 +281,7 @@ def _build_external_password_reset_html(
     safe_name = recipient_name.strip() or "there"
     safe_tenant = tenant_name.strip() or "your organization"
     safe_company_code = (company_code or "").strip()
-    portal_label = "Customer Portal" if principal_type == "customer" else "Financier Portal"
+    portal_label = _portal_label(principal_type)
     cc_line = (
         f'<p style="margin:0 0 16px;line-height:1.6;"><strong>Company code:</strong> {safe_company_code}</p>'
         if safe_company_code
@@ -323,9 +334,8 @@ async def send_external_password_reset_email(
 ) -> None:
     settings = get_settings()
     frontend_url = settings.frontend_url.rstrip("/") or "https://prime7erp.com"
-    reset_path = "/portal/customer/reset-password" if principal_type == "customer" else "/portal/financier/reset-password"
-    reset_url = f"{frontend_url}{reset_path}?token={quote(reset_token, safe='')}"
-    portal_label = "Customer Portal" if principal_type == "customer" else "Financier Portal"
+    reset_url = f"{frontend_url}/portal/{_portal_segment(principal_type)}/reset-password?token={quote(reset_token, safe='')}"
+    portal_label = _portal_label(principal_type)
     message = MessageSchema(
         subject=f"Reset your Prime7 ERP {portal_label} password",
         recipients=[to_email],

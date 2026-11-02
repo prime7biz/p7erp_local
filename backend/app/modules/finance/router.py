@@ -2787,6 +2787,7 @@ async def update_voucher_status(
 ):
     _ensure_tenant(user, tenant)
     row = await _lock_voucher(db, tenant.id, voucher_id)
+    previous_status = row.status
     next_status = (body.status or "").strip().upper()
     budget_override = bool(body.budget_override)
     budget_override_reason = body.budget_override_reason
@@ -2929,6 +2930,19 @@ async def update_voucher_status(
         await sync_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
         await sync_ci_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
         await on_voucher_cancelled(db, tenant.id, row, feature_flags=tenant.feature_flags)
+    if previous_status != next_status and next_status in {"APPROVED", "REJECTED", "POSTED", "CANCELLED"}:
+        from app.modules.notifications.service import notify_user
+
+        notify_user(
+            db,
+            tenant_id=tenant.id,
+            user_id=row.created_by,
+            actor_user_id=user.id,
+            kind=f"finance.voucher.{next_status.lower()}",
+            title=f"Voucher {row.voucher_number} {next_status.lower()}",
+            body=f"{row.voucher_type} voucher dated {row.voucher_date.isoformat()} was {next_status.lower()}.",
+            href=f"/app/accounts/vouchers/{row.id}",
+        )
     lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all())
     _apply_internal_signature(row, lines)
     await db.commit()

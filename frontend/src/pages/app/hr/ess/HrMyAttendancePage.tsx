@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { api, type HrAttendanceEntryResponse } from "@/api/client";
 import { HrSimpleCrudPage } from "@/pages/app/hr/components/HrSimpleCrudPage";
 
@@ -6,19 +7,21 @@ interface HrMyAttendanceFilter {
 }
 
 export function HrMyAttendancePage() {
+  const { t } = useTranslation();
   return (
     <HrSimpleCrudPage<HrAttendanceEntryResponse, HrMyAttendanceFilter>
-      title="My Attendance"
-      description="Review your own attendance records."
-      emptyMessage="No attendance records found."
-      breadcrumbs={[{ label: "HR", href: "/app/hr" }, { label: "My Attendance" }]}
+      title={t("ess.myAttendance")}
+      description={t("ess.myAttendanceDesc")}
+      emptyMessage={t("ess.noAttendance")}
+      breadcrumbs={[{ label: t("ess.hr"), href: "/app/hr" }, { label: t("ess.myAttendance") }]}
       loadItems={() => api.listHrEssMyAttendance()}
+      showLanguageSwitcher
       columns={[
-        { header: "Date", cell: (row) => row.attendance_date },
-        { header: "In", cell: (row) => row.in_time },
-        { header: "Out", cell: (row) => row.out_time },
-        { header: "Status", cell: (row) => row.status },
-        { header: "Remarks", cell: (row) => row.remarks },
+        { header: t("ess.date"), cell: (row) => row.attendance_date },
+        { header: t("ess.in"), cell: (row) => row.in_time },
+        { header: t("ess.out"), cell: (row) => row.out_time },
+        { header: t("ess.status"), cell: (row) => row.status },
+        { header: t("ess.remarks"), cell: (row) => row.remarks },
       ]}
     />
   );

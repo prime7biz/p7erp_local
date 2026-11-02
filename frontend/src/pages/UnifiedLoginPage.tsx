@@ -3,6 +3,8 @@ import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { api, setAuth } from "@/api/client";
 import { externalLogin, setExtAuth } from "@/api/externalClient";
 import { useAuth } from "@/context/AuthContext";
+import { portalHomePath } from "@/lib/externalAccess";
+import { isExternalPrincipalType, type ExternalPrincipalType } from "@/types/externalAccess";
 import { PasswordFieldInput } from "@/components/auth/PasswordFieldInput";
 import {
   AlertCircle,
@@ -23,7 +25,7 @@ function safeInternalPath(raw: string | null): string | null {
   return t;
 }
 
-type PortalRole = "staff" | "admin" | "customer" | "financier";
+type PortalRole = "staff" | "admin" | ExternalPrincipalType;
 
 const features = [
   { icon: ShoppingBag, label: "Merchandising" },
@@ -55,7 +57,7 @@ export function UnifiedLoginPage() {
   const { refetch } = useAuth();
 
   useEffect(() => {
-    if (roleParam === "customer" || roleParam === "financier" || roleParam === "admin") {
+    if (isExternalPrincipalType(roleParam) || roleParam === "admin") {
       setLoginRole(roleParam as PortalRole);
     }
   }, [roleParam]);
@@ -91,7 +93,7 @@ export function UnifiedLoginPage() {
     }
     setLoading(true);
     try {
-      if (loginRole === "customer" || loginRole === "financier") {
+      if (isExternalPrincipalType(loginRole)) {
         const res = await externalLogin({
           company_code: code,
           email: email.trim(),
@@ -100,7 +102,7 @@ export function UnifiedLoginPage() {
         });
         setExtAuth(res.access_token, res.refresh_token, res.tenant_id, res.principal_type);
         localStorage.setItem("lastCompanyCode", code);
-        navigate(loginRole === "customer" ? "/portal/customer" : "/portal/financier", { replace: true });
+        navigate(portalHomePath(loginRole), { replace: true });
         return;
       }
 
@@ -128,6 +130,7 @@ export function UnifiedLoginPage() {
     { value: "admin", label: "Tenant admin" },
     { value: "customer", label: "Customer portal" },
     { value: "financier", label: "Financier portal" },
+    { value: "supplier", label: "Supplier portal" },
   ];
 
   const filteredRoleOptions =

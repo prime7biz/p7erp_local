@@ -164,7 +164,7 @@ export function Layout() {
           <AppFooter showHealthDetails={showHealthDetails} />
         </div>
       </div>
-      <QuickCreateFab />
+      <QuickCreateFab tenantType={me.tenant_type} roleName={me.role_name} />
       <AppBottomNav
         tenantType={me.tenant_type}
         enabledOptionalProductionUnits={enabledOptionalUnits}

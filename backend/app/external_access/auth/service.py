@@ -29,6 +29,7 @@ from app.external_access.constants import (
     JWT_CLAIM_TENANT,
     PRINCIPAL_CUSTOMER,
     PRINCIPAL_FINANCIER,
+    PRINCIPAL_SUPPLIER,
     parse_external_subject,
 )
 from app.external_access.feature_flags import require_portal_enabled
@@ -104,7 +105,7 @@ async def authenticate_external(
     password: str,
     principal_type: str,
 ) -> ExternalPrincipal:
-    if principal_type not in (PRINCIPAL_CUSTOMER, PRINCIPAL_FINANCIER):
+    if principal_type not in (PRINCIPAL_CUSTOMER, PRINCIPAL_FINANCIER, PRINCIPAL_SUPPLIER):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid principal_type")
     require_portal_enabled(tenant=tenant, principal_type=principal_type)
 
@@ -269,9 +270,31 @@ async def accept_invitation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation misconfigured")
 
     customer_ids: list[int] = []
+    vendor_ids: list[int] = []
     financier_scope = "orders_and_pipeline"
     fpid_int: int | None = None
-    if matched.principal_type == PRINCIPAL_CUSTOMER:
+    if matched.principal_type == PRINCIPAL_SUPPLIER:
+        from app.models import Vendor
+
+        for vid in payload.get("vendor_ids") or []:
+            try:
+                vendor_ids.append(int(vid))
+            except (TypeError, ValueError):
+                continue
+        if not vendor_ids:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation misconfigured")
+        found = (
+            await db.execute(select(Vendor.id).where(Vendor.id.in_(vendor_ids), Vendor.tenant_id == matched.tenant_id))
+        ).scalars().all()
+        if set(found) != set(vendor_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Invitation references suppliers that are no longer available. "
+                    "Ask your administrator to send a new invitation."
+                ),
+            )
+    elif matched.principal_type == PRINCIPAL_CUSTOMER:
         for cid in payload.get("customer_ids") or []:
             try:
                 customer_ids.append(int(cid))
@@ -335,7 +358,16 @@ async def accept_invitation(
         for role in resolved_roles:
             db.add(ExternalPrincipalRole(external_principal_id=principal.id, role_id=role.id))
 
-        if matched.principal_type == PRINCIPAL_CUSTOMER:
+        if matched.principal_type == PRINCIPAL_SUPPLIER:
+            from app.models.supplier_portal import ExternalSupplierAccess
+
+            for vid in sorted(set(vendor_ids)):
+                db.add(
+                    ExternalSupplierAccess(
+                        tenant_id=matched.tenant_id, external_principal_id=principal.id, vendor_id=vid
+                    )
+                )
+        elif matched.principal_type == PRINCIPAL_CUSTOMER:
             for cid_int in customer_ids:
                 db.add(
                     ExternalCustomerAccess(

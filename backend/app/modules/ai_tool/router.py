@@ -208,6 +208,7 @@ async def send_message(
         user=user,
         session_id=session_id,
         prompt=body.prompt.strip(),
+        screen_context=body.context,
     )
     if result.escalation is not None:
         response.status_code = status.HTTP_202_ACCEPTED

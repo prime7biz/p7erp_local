@@ -13,8 +13,11 @@ import {
 import { useListPagination } from "@/hooks/useListPagination";
 import { useDebouncedValue, useLatestRequest } from "@/hooks/useDebouncedValue";
 import { logApiError } from "@/utils/logApiError";
+import { toast } from "sonner";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
-import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
+import { DataGrid, type GridColumn } from "@/components/app/data-grid/DataGrid";
+import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { useConfirm } from "@/components/app/useConfirm";
 import {
   COMMISSION_MODE_OPTIONS,
   COMMISSION_TYPE_OPTIONS,
@@ -35,20 +38,11 @@ import {
   listPageKpiCardClass,
   listPageKpiGridClass,
   listPageKpiLabelClass,
-  listPageLoadingClass,
   listPageRootClass,
   listPageTableCardClass,
   listPageToolbarButtonClass,
   listPageToolbarInputClass,
   listPageToolbarSelectClass,
-  listTableBaseClass,
-  listTableTdClass,
-  listTableTdPrimaryClass,
-  listTableThClass,
-  listTableThCenterClass,
-  listTableThRightClass,
-  listTableTheadClass,
-  listTableTrClass,
 } from "@/components/app/listPageLayout";
 import { cn } from "@/lib/utils";
 
@@ -157,7 +151,8 @@ export function OrdersPage() {
   const [items, setItems] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const confirm = useConfirm();
+  const [openActionsId, setOpenActionsId] = useState<string | number | null>(null);
   const [quickFilter, setQuickFilter] = useState<"all" | "linked_quotation" | "draft" | "active">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<OrderResponse | null>(null);
@@ -300,6 +295,210 @@ export function OrdersPage() {
   ).length;
   const completedCount = filteredItems.filter((row) => row.status === "COMPLETED").length;
 
+  const openEdit = (o: OrderResponse) => {
+    setEditing(o);
+    setForm({
+      customer_id: o.customer_id,
+      quotation_id: o.quotation_id ?? undefined,
+      style_id: o.style_id ?? undefined,
+      style_ref: o.style_ref ?? undefined,
+      customer_intermediary_id: o.customer_intermediary_id ?? undefined,
+      shipping_term: o.shipping_term ?? undefined,
+      commission_mode: o.commission_mode ?? undefined,
+      commission_type: o.commission_type ?? undefined,
+      commission_value: o.commission_value ?? undefined,
+      order_date: o.order_date ?? undefined,
+      delivery_date: o.delivery_date ?? undefined,
+      quantity: o.quantity ?? undefined,
+      status: o.status ?? undefined,
+      remarks: o.remarks ?? undefined,
+    });
+    setModalOpen(true);
+  };
+
+  const handleDelete = async (o: OrderResponse) => {
+    const ok = await confirm({
+      title: `Delete order ${o.order_code}?`,
+      description: "This action cannot be undone.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.deleteOrder(o.id);
+      toast.success(`Deleted ${o.order_code}`);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    }
+  };
+
+  const columns: GridColumn<OrderResponse>[] = [
+    {
+      id: "code",
+      header: "Code",
+      alwaysVisible: true,
+      value: (o) => o.order_code,
+      cell: (o) => (
+        <Link to={`/app/orders/${o.id}`} className="whitespace-nowrap font-semibold text-status-info hover:underline">
+          {o.order_code}
+        </Link>
+      ),
+    },
+    {
+      id: "customer",
+      header: "Customer",
+      value: displayCustomerName,
+      cell: (o) => <span className="whitespace-nowrap">{displayCustomerName(o)}</span>,
+    },
+    { id: "quotation", header: "Quotation", value: displayQuotationCode, cell: (o) => <span className="whitespace-nowrap">{displayQuotationCode(o)}</span> },
+    {
+      id: "style",
+      header: "Style",
+      value: (o) => o.style_name ?? o.style_ref ?? "",
+      cell: (o) => {
+        const styleName = o.style_name ?? null;
+        const styleRef = o.style_ref ?? null;
+        return (
+          <div className="flex min-w-[140px] items-center gap-2">
+            {o.style_image_url ? (
+              <SecureImage
+                url={o.style_image_url}
+                alt={styleName ?? styleRef ?? "Style"}
+                className="h-9 w-9 shrink-0 rounded border border-border object-cover"
+              />
+            ) : (
+              <div className="h-9 w-9 shrink-0 rounded border border-border bg-surface-subtle" />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium text-text-primary" title={styleName ?? styleRef ?? undefined}>
+                {styleName ?? styleRef ?? "—"}
+              </div>
+              {styleName && styleRef && styleName !== styleRef && (
+                <div className="truncate whitespace-nowrap text-xs text-text-muted" title={styleRef}>
+                  {styleRef}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: "delivery_date",
+      header: "Delivery date",
+      value: (o) => o.delivery_date ?? "",
+      cell: (o) => <span className="whitespace-nowrap">{o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : "—"}</span>,
+    },
+    {
+      id: "quantity",
+      header: "Qty",
+      align: "right",
+      value: (o) => o.quantity ?? null,
+      cell: (o) => (o.quantity != null ? o.quantity.toLocaleString() : "—"),
+    },
+    {
+      id: "exec_ai",
+      header: "Exec AI",
+      value: (o) => o.ai_indicators?.execution_readiness_score ?? null,
+      cell: (o) => {
+        const ai = o.ai_indicators;
+        if (!ai) return "—";
+        const warn =
+          ai.urgent_planning_flag || ai.duplicate_risk_score >= 40 || ai.capacity_bottleneck_flag || ai.missing_dependency_count > 0;
+        const titleParts = [
+          ai.flags?.length ? `Flags: ${ai.flags.join(", ")}` : "",
+          `Material ${ai.material_readiness_score}% · Promise risk ${ai.promise_date_risk_score}%`,
+          ai.missing_dependency_count > 0 ? `Missing deps: ${ai.missing_dependency_count}` : "",
+          ai.urgent_planning_flag ? "Urgent planning" : "",
+          ai.duplicate_risk_score >= 40 ? "Duplicate risk" : "",
+          ai.capacity_bottleneck_flag ? "Line load hint" : "",
+          ai.promise_sensitivity_score != null ? `Promise sensitivity: ${ai.promise_sensitivity_score}` : "",
+        ].filter(Boolean);
+        return (
+          <span className="whitespace-nowrap text-xs" title={titleParts.length ? titleParts.join(" · ") : "Execution readiness"}>
+            E {ai.execution_readiness_score}% · C {ai.completeness_score}%
+            {warn ? <span className="ml-0.5 text-status-warning-foreground">!</span> : null}
+          </span>
+        );
+      },
+    },
+    {
+      id: "grounding",
+      header: "Grounding",
+      value: (o) => groundingByOrderId[o.id]?.overall_readiness ?? "",
+      cell: (o) => {
+        const g = groundingByOrderId[o.id];
+        return g ? (
+          <span
+            className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${groundingPillClass(g.overall_readiness)}`}
+            title={g.overall_readiness}
+          >
+            {g.overall_readiness.replace(/_/g, " ")}
+          </span>
+        ) : (
+          <span className="text-text-muted">—</span>
+        );
+      },
+    },
+    {
+      id: "change_requests",
+      header: "CR",
+      align: "center",
+      value: (o) => groundingByOrderId[o.id]?.pending_change_requests ?? 0,
+      cell: (o) => {
+        const g = groundingByOrderId[o.id];
+        return g && g.pending_change_requests > 0 ? (
+          <span
+            className="inline-flex min-w-[1.25rem] justify-center rounded-full bg-status-warning-subtle px-1.5 py-0.5 text-[10px] font-bold text-status-warning-foreground"
+            title="Pending commercial change requests"
+          >
+            {g.pending_change_requests}
+          </span>
+        ) : (
+          "—"
+        );
+      },
+    },
+    { id: "financial", header: "Financial", enableSorting: false, noExport: true, cell: (o) => <OrderFinancialStatusCell f={o.financial_status} /> },
+    { id: "sewing_line", header: "Sewing line", enableSorting: false, noExport: true, cell: (o) => <OrderSewingLineCell s={o.sewing_line_summary} /> },
+    {
+      id: "pipeline",
+      header: "Pipeline",
+      value: (o) => o.pipeline_status ?? "",
+      cell: (o) => <OrderPipelineListCell pipelineStatus={o.pipeline_status} rmPct={o.rm_inhouse_pct} />,
+    },
+    {
+      id: "status",
+      header: "Status",
+      value: (o) => o.status,
+      cell: (o) => (
+        <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(o.status)}`}>{o.status}</span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      alwaysVisible: true,
+      noExport: true,
+      enableSorting: false,
+      cell: (o) => (
+        <RowActionsMenu
+          rowId={o.id}
+          openId={openActionsId}
+          onOpenChange={setOpenActionsId}
+          items={[
+            { key: "view", label: "View", href: `/app/orders/${o.id}` },
+            { key: "print", label: "Print", href: `/app/orders/${o.id}/print` },
+            { key: "edit", label: "Edit", onClick: () => openEdit(o) },
+            { key: "delete", label: "Delete", danger: true, onClick: () => void handleDelete(o) },
+          ]}
+        />
+      ),
+    },
+  ];
+
   return (
     <div className={listPageRootClass}>
       <AppPageHeader
@@ -407,264 +606,45 @@ export function OrdersPage() {
       )}
 
       <div className={listPageTableCardClass}>
-        {loading ? (
-          <div className={listPageLoadingClass}>Loading orders…</div>
-        ) : filteredItems.length === 0 ? (
-          <div className={listPageEmptyClass}>No orders yet.</div>
-        ) : (
-          <>
-          <ResponsiveTableContainer>
-          <table className={cn(listTableBaseClass, "min-w-[1480px]")}>
-            <thead className={listTableTheadClass}>
-              <tr>
-                <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Code</th>
-                <th className={cn(listTableThClass, "min-w-[120px]")}>Customer</th>
-                <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Quotation</th>
-                <th className={cn(listTableThClass, "min-w-[140px]")}>Style</th>
-                <th className={cn(listTableThClass, "w-28 whitespace-nowrap")}>Delivery date</th>
-                <th className={cn(listTableThRightClass, "w-20 whitespace-nowrap")}>Qty</th>
-                <th
-                  className={cn(listTableThClass, "w-[100px] whitespace-nowrap")}
-                  title="Execution readiness / completeness (AI)"
-                >
-                  Exec AI
-                </th>
-                <th
-                  className={cn(listTableThClass, "w-[88px] whitespace-nowrap")}
-                  title="Deterministic planning grounding"
-                >
-                  Grounding
-                </th>
-                <th
-                  className={cn(listTableThCenterClass, "w-14 whitespace-nowrap")}
-                  title="Pending commercial change requests"
-                >
-                  CR
-                </th>
-                <th
-                  className={cn(listTableThClass, "w-[200px] whitespace-nowrap")}
-                  title="PI, LC, bank facility, BTB, production, shipment"
-                >
-                  Financial
-                </th>
-                <th
-                  className={cn(listTableThClass, "w-[220px] whitespace-nowrap")}
-                  title="Sewing line booking and delivery vs plan"
-                >
-                  Sewing line
-                </th>
-                <th className={cn(listTableThClass, "w-[220px] whitespace-nowrap")} title="Auto pipeline milestone">
-                  Pipeline
-                </th>
-                <th className={cn(listTableThClass, "w-24 whitespace-nowrap")}>Status</th>
-                <th className={cn(listTableThRightClass, "w-24 whitespace-nowrap")}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((o) => {
-                const styleName = o.style_name ?? null;
-                const styleRef = o.style_ref ?? null;
-                const styleImageForRow = o.style_image_url ?? null;
-                const g = groundingByOrderId[o.id];
-
-                return (
-                <tr key={o.id} className={listTableTrClass}>
-                  <td className={cn(listTableTdPrimaryClass, "whitespace-nowrap")}>
-                    <Link
-                      to={`/app/orders/${o.id}`}
-                      className="text-status-info hover:underline"
-                    >
-                      {o.order_code}
-                    </Link>
-                  </td>
-                  <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={displayCustomerName(o)}>
-                    {displayCustomerName(o)}
-                  </td>
-                  <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={displayQuotationCode(o)}>
-                    {displayQuotationCode(o)}
-                  </td>
-                  <td className={listTableTdClass}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      {styleImageForRow ? (
-                        <SecureImage
-                          url={styleImageForRow}
-                          alt={styleName ?? styleRef ?? "Style"}
-                          className="h-9 w-9 shrink-0 rounded object-cover border border-border"
-                        />
-                      ) : (
-                        <div className="h-9 w-9 shrink-0 rounded bg-surface-subtle border border-border" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-text-primary" title={styleName ?? styleRef ?? undefined}>
-                          {styleName ?? styleRef ?? "—"}
-                        </div>
-                        {styleName && styleRef && styleName !== styleRef && (
-                          <div className="text-xs text-text-muted truncate whitespace-nowrap" title={styleRef}>
-                            {styleRef}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className={cn(listTableTdClass, "whitespace-nowrap overflow-hidden text-ellipsis")} title={o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : undefined}>
-                    {o.delivery_date ? new Date(o.delivery_date).toLocaleDateString() : "—"}
-                  </td>
-                  <td className={cn(listTableTdClass, "text-right whitespace-nowrap")}>
-                    {o.quantity != null ? o.quantity.toLocaleString() : "—"}
-                  </td>
-                  <td className={cn(listTableTdClass, "whitespace-nowrap text-xs")}>
-                    {o.ai_indicators ? (() => {
-                      const ai = o.ai_indicators;
-                      const warn =
-                        ai.urgent_planning_flag ||
-                        ai.duplicate_risk_score >= 40 ||
-                        ai.capacity_bottleneck_flag ||
-                        ai.missing_dependency_count > 0;
-                      const titleParts = [
-                        ai.flags?.length ? `Flags: ${ai.flags.join(", ")}` : "",
-                        `Material ${ai.material_readiness_score}% · Promise risk ${ai.promise_date_risk_score}%`,
-                        ai.missing_dependency_count > 0 ? `Missing deps: ${ai.missing_dependency_count}` : "",
-                        ai.urgent_planning_flag ? "Urgent planning" : "",
-                        ai.duplicate_risk_score >= 40 ? "Duplicate risk" : "",
-                        ai.capacity_bottleneck_flag ? "Line load hint" : "",
-                        ai.promise_sensitivity_score != null ? `Promise sensitivity: ${ai.promise_sensitivity_score}` : "",
-                      ].filter(Boolean);
-                      return (
-                        <span title={titleParts.length ? titleParts.join(" · ") : "Execution readiness"}>
-                          E {ai.execution_readiness_score}% · C {ai.completeness_score}%
-                          {warn ? <span className="ml-0.5 text-status-warning-foreground">!</span> : null}
-                        </span>
-                      );
-                    })() : (
-                      "—"
-                    )}
-                  </td>
-                  <td className={cn(listTableTdClass, "whitespace-nowrap text-xs")}>
-                    {g ? (
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${groundingPillClass(g.overall_readiness)}`}
-                        title={g.overall_readiness}
-                      >
-                        {g.overall_readiness.replace(/_/g, " ")}
-                      </span>
-                    ) : (
-                      <span className="text-text-muted">—</span>
-                    )}
-                  </td>
-                  <td className={cn(listTableTdClass, "text-center text-xs whitespace-nowrap")}>
-                    {g && g.pending_change_requests > 0 ? (
-                      <span
-                        className="inline-flex min-w-[1.25rem] justify-center rounded-full bg-status-warning-subtle px-1.5 py-0.5 text-[10px] font-bold text-status-warning-foreground"
-                        title="Pending commercial change requests"
-                      >
-                        {g.pending_change_requests}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className={cn(listTableTdClass, "whitespace-nowrap align-top")}>
-                    <OrderFinancialStatusCell f={o.financial_status} />
-                  </td>
-                  <td className={cn(listTableTdClass, "align-top")}>
-                    <OrderSewingLineCell s={o.sewing_line_summary} />
-                  </td>
-                  <td className={cn(listTableTdClass, "whitespace-nowrap align-top")}>
-                    <OrderPipelineListCell pipelineStatus={o.pipeline_status} rmPct={o.rm_inhouse_pct} />
-                  </td>
-                  <td className={cn(listTableTdClass, "whitespace-nowrap")}>
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(o.status)}`}>
-                      {o.status}
-                    </span>
-                  </td>
-                  <td className={cn(listTableTdClass, "text-right whitespace-nowrap")}>
-                    <div className="relative inline-block text-left">
-                      <button
-                        type="button"
-                        onClick={() => setOpenActionsId((prev) => (prev === o.id ? null : o.id))}
-                        className="rounded-lg border border-border-strong px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-subtle"
-                      >
-                        Actions
-                      </button>
-                      {openActionsId === o.id && (
-                        <div className="absolute right-0 z-10 mt-1 w-36 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
-                          <Link
-                            to={`/app/orders/${o.id}`}
-                            onClick={() => setOpenActionsId(null)}
-                            className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
-                          >
-                            View
-                          </Link>
-                          <Link
-                            to={`/app/orders/${o.id}/print`}
-                            onClick={() => setOpenActionsId(null)}
-                            className="block rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
-                          >
-                            Print
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOpenActionsId(null);
-                              setEditing(o);
-                              setForm({
-                                customer_id: o.customer_id,
-                                quotation_id: o.quotation_id ?? undefined,
-                                style_id: o.style_id ?? undefined,
-                                style_ref: o.style_ref ?? undefined,
-                                customer_intermediary_id: o.customer_intermediary_id ?? undefined,
-                                shipping_term: o.shipping_term ?? undefined,
-                                commission_mode: o.commission_mode ?? undefined,
-                                commission_type: o.commission_type ?? undefined,
-                                commission_value: o.commission_value ?? undefined,
-                                order_date: o.order_date ?? undefined,
-                                delivery_date: o.delivery_date ?? undefined,
-                                quantity: o.quantity ?? undefined,
-                                status: o.status ?? undefined,
-                                remarks: o.remarks ?? undefined,
-                              });
-                              setModalOpen(true);
-                            }}
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              setOpenActionsId(null);
-                              if (!window.confirm("Delete this order?")) return;
-                              try {
-                                setError("");
-                                await api.deleteOrder(o.id);
-                                await load();
-                              } catch (e) {
-                                setError(e instanceof Error ? e.message : "Delete failed");
-                              }
-                            }}
-                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-status-danger hover:bg-status-danger-subtle"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </ResponsiveTableContainer>
-          <DataTablePagination
-            page={page}
-            pageSize={pageSize}
-            total={listTotal}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-          />
-          </>
-        )}
+        <DataGrid
+          tableKey="orders.list"
+          exportName="orders"
+          columns={columns}
+          rows={filteredItems}
+          getRowId={(o) => o.id}
+          loading={loading}
+          savedViews={{
+            getQuery: () => {
+              const p = new URLSearchParams();
+              if (search) p.set("search", search);
+              if (statusFilter) p.set("status", statusFilter);
+              if (quickFilter !== "all") p.set("quick", quickFilter);
+              return p.toString();
+            },
+            applyQuery: (query) => {
+              const p = new URLSearchParams(query);
+              setSearch(p.get("search") ?? "");
+              setStatusFilter(p.get("status") ?? "");
+              const quick = p.get("quick");
+              setQuickFilter(
+                quick === "linked_quotation" || quick === "draft" || quick === "active" ? quick : "all",
+              );
+              setPage(1);
+            },
+          }}
+          emptyState={<div className={listPageEmptyClass}>No orders yet.</div>}
+          footer={
+            filteredItems.length > 0 ? (
+              <DataTablePagination
+                page={page}
+                pageSize={pageSize}
+                total={listTotal}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
+            ) : null
+          }
+        />
       </div>
 
       {modalOpen && editing && (

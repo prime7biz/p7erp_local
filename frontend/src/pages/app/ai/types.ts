@@ -29,6 +29,8 @@ export interface AiAssistantMessageMeta {
   tool_required?: string;
   reason?: string;
   escalation_approved?: boolean;
+  /** Deep links to the record(s) the answer is about (e.g. the order open on screen). */
+  citations?: { label: string; href: string; record_type?: string | null }[];
   /** Phase-2 response envelope */
   provenance?: AiResponseProvenance;
   trace_spans?: AiTraceSpan[];

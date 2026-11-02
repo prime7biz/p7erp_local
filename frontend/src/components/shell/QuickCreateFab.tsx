@@ -1,20 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ClipboardList, FileText, Package, Plus, Truck, X } from "lucide-react";
-
-const QUICK_CREATE_LINKS = [
-  { label: "New order", href: "/app/orders/new", icon: ClipboardList },
-  { label: "New PO", href: "/app/inventory/purchase-orders", icon: Package },
-  { label: "New challan", href: "/app/inventory/delivery-challans/new", icon: Truck },
-  { label: "New voucher", href: "/app/accounts/vouchers", icon: FileText },
-] as const;
+import { Plus, X } from "lucide-react";
+import type { TenantType } from "@/api/client";
+import { getCreateActions } from "@/components/shell/createActions";
 
 /**
  * Mobile-only quick-create FAB for authenticated /app/* routes.
  * Sits above the bottom nav; desktop uses the top-bar New menu instead.
  */
-export function QuickCreateFab() {
+export function QuickCreateFab({ tenantType, roleName }: { tenantType: TenantType; roleName: string }) {
   const location = useLocation();
+  const QUICK_CREATE_LINKS = useMemo(
+    () => getCreateActions({ tenantType, roleName }).filter((a) => a.label !== "Items"),
+    [tenantType, roleName],
+  );
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 

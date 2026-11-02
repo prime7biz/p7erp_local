@@ -114,6 +114,8 @@ class SewingLine(Base):
     default_helper_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     supervisor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Factory / unit name for multi-factory planning (e.g. "Unit 2 — Gazipur"); empty = main factory.
+    factory_unit: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -27,7 +27,7 @@ const painPoints = [
     pain: "Critical data scattered across hundreds of Excel files with no version control or audit trail.",
     solution: "Centralized cloud database with role-based access, full audit trail, and real-time collaboration.",
     before: "50+ Excel files per order, data entry errors, no single source of truth",
-    after: "One platform, zero duplication, instant access from anywhere",
+    after: "One shared record per order, role-based access from anywhere",
   },
   {
     icon: Clock,
@@ -35,15 +35,15 @@ const painPoints = [
     pain: "Missing LC amendment deadlines, late document submissions, and penalty charges from banks.",
     solution: "Automated LC tracking with deadline alerts, document checklists, and amendment management.",
     before: "Manual deadline tracking, last-minute rushes, bank penalties",
-    after: "Automated alerts 7/15/30 days before deadlines, zero penalties",
+    after: "Expiry and shipment-date alerts with document checklists, so deadlines are visible early",
   },
   {
     icon: Scissors,
     title: "Fabric Wastage",
-    pain: "No consumption tracking leads to 5-8% excess fabric wastage and inflated material costs.",
+    pain: "Without consumption tracking, excess fabric use is found too late and material costs creep up.",
     solution: "BOM-based consumption matrix with real-time tracking against standards per size and color.",
-    before: "5-8% wastage, no variance analysis, profit leakage",
-    after: "Under 2% variance, real-time consumption vs standard tracking",
+    before: "Wastage noticed after shipment, no variance analysis, profit leakage",
+    after: "Consumption vs BOM standard tracked per order, size and colour",
   },
   {
     icon: DollarSign,
@@ -67,7 +67,7 @@ const painPoints = [
     pain: "Merchandising, production, accounts, and commercial teams working in silos.",
     solution: "Fully integrated ERP where every department shares real-time data on a single platform.",
     before: "5+ separate tools, manual data transfer, information delays",
-    after: "One platform, instant cross-department visibility, zero data re-entry",
+    after: "One platform, cross-department visibility, far less data re-entry",
   },
 ];
 

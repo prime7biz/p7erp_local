@@ -1,6 +1,12 @@
 /** Types for external stakeholder portals (customer / financier). */
 
-export type ExternalPrincipalType = "customer" | "financier";
+export type ExternalPrincipalType = "customer" | "financier" | "supplier";
+
+export const EXTERNAL_PRINCIPAL_TYPES: readonly ExternalPrincipalType[] = ["customer", "financier", "supplier"];
+
+export function isExternalPrincipalType(v: string | null | undefined): v is ExternalPrincipalType {
+  return v === "customer" || v === "financier" || v === "supplier";
+}
 
 export interface ExternalTokenResponse {
   access_token: string;
@@ -37,6 +43,8 @@ export interface ExternalAccessOverview {
   customer_principal_count: number;
   financier_principal_count: number;
   pending_invitation_count: number;
+  supplier_portal_enabled?: boolean;
+  supplier_principal_count?: number;
 }
 
 export interface ExternalPrincipalAdminRow {
@@ -52,6 +60,7 @@ export interface ExternalPrincipalAdminRow {
   customer_ids: number[] | null;
   access_scope: string | null;
   financier_party_id: number | null;
+  vendor_ids?: number[] | null;
 }
 
 export interface ExternalInviteResponse {
@@ -74,6 +83,7 @@ export interface ExternalFeatureFlagsPatch {
   financier_financial_summary_enabled?: boolean | null;
   financier_projection_enabled?: boolean | null;
   external_portal_document_downloads_enabled?: boolean | null;
+  supplier_portal_enabled?: boolean | null;
 }
 
 export interface ExternalAuditRow {

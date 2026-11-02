@@ -3,7 +3,7 @@ import { Lightbulb, Shield, Factory, HeartHandshake, Target, Eye, BookOpen, Arro
 
 const values = [
   { icon: Lightbulb, title: "Innovation", description: "We leverage AI, automation, and modern cloud architecture to solve problems that legacy ERP systems cannot.", color: "bg-primary/10 text-primary" },
-  { icon: Shield, title: "Reliability", description: "99.9% uptime SLA, daily backups, and enterprise-grade security ensure your business never stops.", color: "bg-primary/10 text-primary" },
+  { icon: Shield, title: "Reliability", description: "A published 99.5% monthly uptime target, versioned releases with a rollback path, and role-based security for every company account.", color: "bg-primary/10 text-primary" },
   { icon: Factory, title: "Industry Focus", description: "Built exclusively for garment manufacturers and buying houses — every feature is purpose-designed for RMG workflows.", color: "bg-primary/10 text-primary" },
   { icon: HeartHandshake, title: "Customer Success", description: "Dedicated onboarding, training, and support teams who understand the garment industry inside out.", color: "bg-primary/10 text-primary" },
 ];

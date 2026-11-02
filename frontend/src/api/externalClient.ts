@@ -4,10 +4,11 @@
 import { API_BASE } from "@/api/apiBase";
 import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
 import { redirectToUnifiedLogin } from "@/utils/portalAuthRedirect";
-import type {
-  ExternalMeResponse,
-  ExternalPrincipalType,
-  ExternalTokenResponse,
+import {
+  isExternalPrincipalType,
+  type ExternalMeResponse,
+  type ExternalPrincipalType,
+  type ExternalTokenResponse,
 } from "@/types/externalAccess";
 
 const EXTERNAL_PREFIX = "/api/external";
@@ -43,8 +44,7 @@ export function getExtTenantId(): string | null {
 
 export function getExtPrincipalType(): ExternalPrincipalType | null {
   const t = localStorage.getItem("p7_ext_principal_type");
-  if (t === "customer" || t === "financier") return t;
-  return null;
+  return isExternalPrincipalType(t) ? t : null;
 }
 
 export function setExtAuth(accessToken: string, refreshToken: string, tenantId: number, principalType: ExternalPrincipalType) {

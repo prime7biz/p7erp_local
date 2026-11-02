@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Bell,
   ChevronDown,
+  Keyboard,
   ExternalLink,
   Landmark,
   LogOut,
@@ -15,38 +15,15 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { api, type MeResponse } from "@/api/client";
+import type { MeResponse } from "@/api/client";
 import { useAiChatContext } from "@/context/AiChatContext";
+import { BellPanel } from "@/components/shell/BellPanel";
 import { CommandPalette } from "@/components/shell/CommandPalette";
+import { ShortcutSheet } from "@/components/shell/ShortcutSheet";
 import { getCreateActions } from "@/components/shell/createActions";
 import type { FlatNavRoute } from "@/components/shell/flattenMenuRoutes";
 import { pushNavRecent, type NavShortcut } from "@/components/shell/navShortcuts";
 import { resolveTheme, setTheme, type ThemePreference } from "@/lib/theme";
-import { logApiError } from "@/utils/logApiError";
-
-const ATTENTION_BELL_CACHE_KEY = "p7_header_attention_bell";
-const ATTENTION_BELL_CACHE_TTL_MS = 45_000;
-
-function loadCachedBellCount(): number | null {
-  try {
-    const raw = sessionStorage.getItem(ATTENTION_BELL_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { value?: number; ts?: number };
-    if (typeof parsed.ts !== "number" || typeof parsed.value !== "number") return null;
-    if (Date.now() - parsed.ts > ATTENTION_BELL_CACHE_TTL_MS) return null;
-    return parsed.value;
-  } catch {
-    return null;
-  }
-}
-
-function saveCachedBellCount(value: number): void {
-  try {
-    sessionStorage.setItem(ATTENTION_BELL_CACHE_KEY, JSON.stringify({ value, ts: Date.now() }));
-  } catch {
-    // Ignore storage failures (private mode/quota).
-  }
-}
 
 function getNameInitial(name?: string | null) {
   if (!name) return "U";
@@ -128,7 +105,7 @@ export function ShellTopHeader({
   const [theme, setThemeState] = useState<ThemePreference>(() => resolveTheme());
   const [newOpen, setNewOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [bellCount, setBellCount] = useState(0);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const newRef = useRef<HTMLDivElement>(null);
 
@@ -165,48 +142,15 @@ export function ShellTopHeader({
       if (!inField && e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         setPaletteOpen(true);
+        return;
+      }
+      if (!inField && e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setShortcutsOpen(true);
       }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const cached = loadCachedBellCount();
-    if (cached !== null) {
-      setBellCount(cached);
-      return () => {
-        cancelled = true;
-      };
-    }
-    api
-      .getDashboardAttentionSummary()
-      .then((summary) => {
-        if (cancelled) return;
-        const total =
-          (summary.pending_approvals ?? 0) +
-          (summary.critical_alerts ?? 0) +
-          (summary.tna_overdue ?? 0);
-        setBellCount(total);
-        saveCachedBellCount(total);
-      })
-      .catch((e) => {
-        logApiError("ShellTopHeader.bellCount", e);
-        api
-          .getDashboardKpis()
-          .then((rows) => {
-            if (cancelled) return;
-            const pending = rows.find((k) => k.id === "pending-approvals")?.value ?? 0;
-            const fallbackCount = typeof pending === "number" ? pending : Number(pending) || 0;
-            setBellCount(fallbackCount);
-            saveCachedBellCount(fallbackCount);
-          })
-          .catch((e2) => logApiError("ShellTopHeader.bellCountFallback", e2));
-      });
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const onPaletteNavigate = (entry: NavShortcut) => {
@@ -223,7 +167,7 @@ export function ShellTopHeader({
             className="flex h-8 w-full max-w-md items-center gap-2 rounded-md border border-border bg-surface-subtle px-2.5 text-sm text-text-muted transition hover:border-border-strong hover:bg-surface-base"
           >
             <Search className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">Search modules and pages…</span>
+            <span className="truncate">Search pages, orders, customers…</span>
             <kbd className="ml-auto hidden shrink-0 rounded border border-border bg-surface-raised px-1.5 py-0.5 text-[10px] text-text-muted sm:inline">
               Ctrl+K
             </kbd>
@@ -269,18 +213,16 @@ export function ShellTopHeader({
           >
             <Sparkles className="h-4 w-4" />
           </button>
-          <Link
-            to="/app/approvals"
-            className="relative flex h-8 w-8 items-center justify-center rounded-md text-text-secondary hover:bg-surface-subtle transition"
-            title="Approvals and alerts"
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="hidden h-8 w-8 items-center justify-center rounded-md text-text-secondary transition hover:bg-surface-subtle lg:flex"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
           >
-            <Bell className="h-4 w-4" />
-            {bellCount > 0 ? (
-              <span className="absolute top-0.5 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-danger px-1 text-[10px] font-semibold text-white">
-                {bellCount > 99 ? "99+" : bellCount}
-              </span>
-            ) : null}
-          </Link>
+            <Keyboard className="h-4 w-4" />
+          </button>
+          <BellPanel />
           <div className="relative" ref={profileRef}>
             <button
               type="button"
@@ -357,9 +299,11 @@ export function ShellTopHeader({
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         routes={paletteRoutes}
+        createActions={createActions}
         userId={me.user_id}
         onNavigate={onPaletteNavigate}
       />
+      <ShortcutSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </>
   );
 }

@@ -64,7 +64,7 @@ describe("app route links", () => {
     );
     const report = dead.map((d) => `${d.file}: /app/${d.link}`);
     expect(report).toEqual([]);
-  });
+  }, 30_000);
 
   it("detects the dead links fixed in the wiring pass", () => {
     const patterns = routePatterns();

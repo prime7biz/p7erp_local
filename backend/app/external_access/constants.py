@@ -3,12 +3,15 @@
 # Principal types
 PRINCIPAL_CUSTOMER = "customer"
 PRINCIPAL_FINANCIER = "financier"
+PRINCIPAL_SUPPLIER = "supplier"
+PRINCIPAL_TYPES = (PRINCIPAL_CUSTOMER, PRINCIPAL_FINANCIER, PRINCIPAL_SUPPLIER)
 
 # Role codes (seeded in external_roles)
 ROLE_CUSTOMER_VIEWER = "customer_viewer"
 ROLE_CUSTOMER_COLLABORATOR = "customer_collaborator"
 ROLE_FINANCIER_VIEWER = "financier_viewer"
 ROLE_FINANCIER_ANALYST = "financier_analyst"
+ROLE_SUPPLIER_USER = "supplier_user"
 
 # Financier access scopes (ordered least to most)
 SCOPE_TENANT_SUMMARY = "tenant_summary"
@@ -32,6 +35,7 @@ FF_CUSTOMER_NOTES_ENABLED = "customer_notes_enabled"
 FF_FINANCIER_FINANCIAL_SUMMARY_ENABLED = "financier_financial_summary_enabled"
 FF_FINANCIER_PROJECTION_ENABLED = "financier_projection_enabled"
 FF_EXTERNAL_PORTAL_DOCUMENT_DOWNLOADS_ENABLED = "external_portal_document_downloads_enabled"
+FF_SUPPLIER_PORTAL_ENABLED = "supplier_portal_enabled"
 
 # Note visibility
 NOTE_VISIBILITY_EXTERNAL_ONLY = "external_only"
@@ -40,7 +44,7 @@ NOTE_VISIBILITY_INTERNAL_ONLY = "internal_only"
 
 # JWT
 JWT_CLAIM_TYPE = "typ"  # "external"
-JWT_CLAIM_PRINCIPAL_TYPE = "pt"  # customer | financier
+JWT_CLAIM_PRINCIPAL_TYPE = "pt"  # customer | financier | supplier
 JWT_CLAIM_TENANT = "tid"
 JWT_CLAIM_USE = "use"  # access | refresh
 JWT_VALUE_EXTERNAL = "external"

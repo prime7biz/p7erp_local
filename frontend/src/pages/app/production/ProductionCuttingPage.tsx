@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/api/client";
+import { CutTicketFabricLots } from "@/components/production/CutTicketFabricLots";
+import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
 
 export function ProductionCuttingPage() {
+  const { me } = useAuth();
+  const traceabilityOn = me?.feature_flags?.traceability_enabled === true;
   const [markers, setMarkers] = useState<Array<{ id: number; marker_code: string; status: string }>>([]);
   const [markerCode, setMarkerCode] = useState("");
   const [orderId, setOrderId] = useState("");
@@ -158,6 +162,7 @@ export function ProductionCuttingPage() {
             Download barcode PDF
           </button>
         </div>
+        {traceabilityOn && Number(cutTicketId) > 0 ? <CutTicketFabricLots cutTicketId={Number(cutTicketId)} /> : null}
       </section>
 
       <section className="rounded-lg border border-border-subtle bg-surface-elevated p-4 space-y-2">

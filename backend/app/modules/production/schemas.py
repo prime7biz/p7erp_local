@@ -138,6 +138,7 @@ class SewingLineCreate(BaseModel):
     default_helper_count: int = 0
     supervisor_user_id: int | None = None
     is_active: bool = True
+    factory_unit: str | None = Field(default=None, max_length=64)
 
 
 class SewingLineUpdate(BaseModel):
@@ -148,6 +149,7 @@ class SewingLineUpdate(BaseModel):
     default_helper_count: int | None = None
     supervisor_user_id: int | None = None
     is_active: bool | None = None
+    factory_unit: str | None = Field(default=None, max_length=64)
 
 
 class SewingLineResponse(BaseModel):
@@ -161,6 +163,7 @@ class SewingLineResponse(BaseModel):
     default_helper_count: int
     supervisor_user_id: int | None
     is_active: bool
+    factory_unit: str | None = None
 
 
 class DepartmentMachineCreate(BaseModel):

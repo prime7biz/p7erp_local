@@ -4,6 +4,7 @@ import asyncio
 import json
 from datetime import date, datetime
 from time import perf_counter
+from typing import Any
 from uuid import uuid4
 
 from fastapi import HTTPException, status
@@ -79,8 +80,11 @@ from app.modules.ai_tool.schemas import (
     AiForecastSummaryResponse,
     AiForecastSummaryFailure,
     AiForecastTemplateInfo,
+    AiCitation,
+    AiScreenContextIn,
     EscalationPayload,
 )
+from app.modules.ai_tool.screen_context import ScreenContext, resolve_screen_context
 from app.modules.ai_tool.router_engine.composer import merge_route_metadata
 from app.modules.ai_tool.router_engine.hybrid_router import HybridRouter
 from app.modules.ai_tool.tool_registry import select_tools
@@ -317,20 +321,26 @@ async def _assistant_text_with_llm(
     blocked: bool,
     *,
     tenant: Tenant | None = None,
+    screen_ctx: ScreenContext | None = None,
 ) -> str:
     """Rule-based reply, optionally rewritten by OpenRouter or local Ollama for natural language."""
     base = _assistant_text(tool_results, intent, blocked)
+    if screen_ctx is not None and not tool_results and not blocked:
+        base = f"{base}\n\nOn this screen — {screen_ctx.summary_line()}."
     provider = get_response_llm_provider()
     if isinstance(provider, StubLlmProvider):
         return base
-    payload = {
+    payload: dict[str, Any] = {
         "user_prompt": user_prompt,
         "draft_reply": base,
         "tool_results": [x.model_dump() for x in tool_results],
     }
+    if screen_ctx is not None:
+        payload["screen_context"] = {"record": screen_ctx.label, "facts": screen_ctx.facts}
     llm_prompt = (
         "You are a helpful assistant for a garment manufacturing ERP (P7 ERP). "
         "Use the draft_reply and tool_results to produce a clear, professional answer for the user. "
+        "If screen_context is present, the user is viewing that record: treat 'this', 'here' or 'it' as that record. "
         "Stay under 250 words. Do not invent numbers or facts not present in the data.\n\n"
         f"{json.dumps(payload, default=str)[:14000]}"
     )
@@ -776,11 +786,22 @@ async def process_prompt(
     user: User,
     session_id: int,
     prompt: str,
+    screen_context: AiScreenContextIn | None = None,
 ) -> AiChatResponse:
     overall_start = perf_counter()
     ensure_tenant_access(user, tenant)
     await require_ai_access(db, user)
     prompt = _normalize_prompt(prompt)
+    screen_ctx: ScreenContext | None = None
+    if screen_context is not None and screen_context.record_type:
+        screen_ctx = await resolve_screen_context(
+            db,
+            tenant=tenant,
+            user=user,
+            record_type=screen_context.record_type,
+            record_id=screen_context.record_id,
+        )
+    citations = [AiCitation(**screen_ctx.citation())] if screen_ctx else []
     session = await repository.get_session(db, tenant_id=tenant.id, session_id=session_id)
     if not session or session.user_id != user.id:
         await audit.log_ai_event(
@@ -835,6 +856,20 @@ async def process_prompt(
         resource="ai.prompt",
         details=_safe_prompt_excerpt(prompt, limit=500),
     )
+    if screen_ctx is not None:
+        await audit.log_ai_event(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            session_id=session.id,
+            message_id=user_msg.id,
+            action="SCREEN_CONTEXT_ATTACHED",
+            request_id=request_id,
+            trace_id=request_id,
+            resource=f"ai.context.{screen_ctx.record_type}",
+            details=screen_ctx.label[:200],
+            details_json={"record_type": screen_ctx.record_type, "record_id": screen_ctx.record_id},
+        )
 
     t_intent = tracer.now_ms()
     intent_result = detect_intent(prompt)
@@ -951,6 +986,7 @@ async def process_prompt(
             "suggest_premium": route_decision.suggest_premium,
             "provenance": prov,
             "trace_spans": tracer.to_json(),
+            "citations": [c.model_dump() for c in citations],
         }
         if escalation is not None:
             assistant_meta["escalation_pending"] = True
@@ -1009,6 +1045,7 @@ async def process_prompt(
             tool_results=[],
             blocked=False,
             escalation=escalation,
+            citations=citations,
         )
 
     blocked = intent_result.intent in {"unsupported_request"}
@@ -1555,7 +1592,7 @@ async def process_prompt(
 
     t_llm = tracer.now_ms()
     assistant_text = await _assistant_text_with_llm(
-        prompt, tool_results, intent_result.intent, blocked, tenant=tenant
+        prompt, tool_results, intent_result.intent, blocked, tenant=tenant, screen_ctx=screen_ctx
     )
     tracer.span_end("llm_compose", t_llm, metadata={})
     elapsed_ms = int((perf_counter() - overall_start) * 1000)
@@ -1585,6 +1622,7 @@ async def process_prompt(
             "suggest_premium": route_decision.suggest_premium,
             "provenance": prov,
             "trace_spans": tracer.to_json(),
+            "citations": [c.model_dump() for c in citations],
             **merge_route_metadata(
                 tool_results=tool_results,
                 route_labels=[route_decision.primary_route, *route_decision.secondary_routes],
@@ -1635,6 +1673,7 @@ async def process_prompt(
         tool_results=tool_results,
         blocked=blocked,
         escalation=None,
+        citations=citations,
     )
 
 

@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     staff_login_lockout_minutes: int = 30
     # Soft rate limit for POST /auth/login and external login (per IP + company), requests per minute.
     login_rate_limit_per_minute: int = 20
+    # true: every staff user may be logged in on only one device at a time (newest login wins),
+    # for all tenants. false: fall back to per-tenant feature flag `single_session_enforced`.
+    single_session_global: bool = True
     # true: alert scans / weekly AI reports / platform maintenance run as loops inside each API
     # process (advisory-locked so one runs). false: the Celery beat service schedules them.
     inprocess_schedulers_enabled: bool = True

@@ -2,8 +2,8 @@ import type { TrustCenterContent } from "./types";
 
 export const trustCenterContent: TrustCenterContent = {
   id: "trust-center",
-  version: "1.0.0",
-  lastUpdated: "2026-04-04",
+  version: "1.0.1",
+  lastUpdated: "2026-11-01",
   heroTitle: "Trust Center",
   heroSubtitle:
     "How Prime7 ERP protects your data, respects privacy, and operates a reliable cloud ERP platform for manufacturers and buying houses—so your teams can focus on production, finance, and growth.",
@@ -12,7 +12,7 @@ export const trustCenterContent: TrustCenterContent = {
       id: "security",
       title: "Security",
       description:
-        "Defense in depth: encryption, access controls, monitoring, and secure engineering practices designed to protect confidentiality and integrity.",
+        "HTTPS for all access, hashed passwords, role-based permissions, login lockout and audit trails — see the Security page for exactly what is in place.",
     },
     {
       id: "privacy",
@@ -49,7 +49,7 @@ export const trustCenterContent: TrustCenterContent = {
     "Multi-tenant logical isolation between customer organizations",
     "Encryption in transit (TLS) for customer-facing access",
     "Role-based access controls inside each tenant",
-    "Backups and recovery procedures for operational resilience",
+    "Export your lists to Excel or CSV at any time",
     "AI outputs are advisory only—not final business or legal decisions",
     "We do not sell customer business data to brokers",
   ],
@@ -82,7 +82,7 @@ export const trustCenterContent: TrustCenterContent = {
       id: "backup",
       question: "How are backups handled?",
       answer:
-        "We maintain backups and recovery procedures aligned with our infrastructure. Specific recovery objectives may be discussed for enterprise agreements.",
+        "Backup frequency and recovery objectives are confirmed with each customer during onboarding and can be written into enterprise agreements. Ask us for the current schedule.",
     },
     {
       id: "ai",

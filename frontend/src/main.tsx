@@ -1,16 +1,22 @@
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
+import { Toaster } from "sonner";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ConfirmProvider } from "./components/app/ConfirmDialog";
 import "./index.css";
 import "@/lib/theme";
+import "@/i18n";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
     <HelmetProvider>
       <BrowserRouter>
-        <App />
+        <ConfirmProvider>
+          <App />
+        </ConfirmProvider>
+        <Toaster position="top-right" richColors closeButton />
       </BrowserRouter>
     </HelmetProvider>
   </ErrorBoundary>

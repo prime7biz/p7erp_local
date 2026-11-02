@@ -17,30 +17,31 @@ import {
   InventoryTableSkeleton,
 } from "@/components/inventory/InventoryListStates";
 import { InventoryListViewToggle, touchFieldClass } from "@/components/inventory/InventoryMobileList";
+import { PoColorSizeGrid } from "@/components/inventory/PoColorSizeGrid";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
 import { logApiError } from "@/utils/logApiError";
+import { useAuth } from "@/context/AuthContext";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
+import { DataGrid, type GridColumn } from "@/components/app/data-grid/DataGrid";
+import { RowActionsMenu, type RowActionItem } from "@/components/app/RowActionsMenu";
+import { useConfirm } from "@/components/app/useConfirm";
+import { toast } from "sonner";
 import {
   listPageFilterBarClass,
   listPageFilterPanelClass,
   listPageKpiCardClass,
   listPageRootClass,
   listPageTableCardClass,
-  listTableBaseClass,
-  listTableTdClass,
-  listTableTdPrimaryClass,
-  listTableThClass,
-  listTableThRightClass,
-  listTableTheadClass,
-  listTableTrClass,
 } from "@/components/app/listPageLayout";
-import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import { useListPagination } from "@/hooks/useListPagination";
 import { cn } from "@/lib/utils";
 
 export function PurchaseOrdersPage() {
   const navigate = useNavigate();
+  const { me } = useAuth();
+  const supplierPortalOn = me?.feature_flags?.supplier_portal_enabled === true;
+  const poGridOn = me?.feature_flags?.po_color_size_matrix_enabled === true;
   const [searchParams] = useSearchParams();
   const orderIdFilter = Number(searchParams.get("order_id") || 0) || undefined;
   const [orders, setOrders] = useState<PurchaseOrderResponse[]>([]);
@@ -193,6 +194,100 @@ export function PurchaseOrdersPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const confirm = useConfirm();
+  const vendorName = useMemo(() => new Map(vendors.map((v) => [v.id, v.name])), [vendors]);
+
+  const bulkSetPoStatus = useCallback(
+    async (selected: PurchaseOrderResponse[], target: "APPROVED" | "CLOSED" | "CANCELLED", clear: () => void) => {
+      const verb = target === "APPROVED" ? "Approve" : target === "CLOSED" ? "Close" : "Cancel";
+      const ok = await confirm({
+        title: `${verb} ${selected.length} purchase order${selected.length === 1 ? "" : "s"}?`,
+        description: "Orders whose current status does not allow this change are skipped.",
+        confirmLabel: verb,
+        danger: target === "CANCELLED",
+      });
+      if (!ok) return;
+      setBulkBusy(true);
+      try {
+        const res = await api.bulkPurchaseOrderStatus(
+          selected.map((r) => r.id),
+          target,
+        );
+        const skipped = res.skipped?.length ?? 0;
+        if (skipped) toast.warning(`${res.updated} updated, ${skipped} skipped (status does not allow ${verb.toLowerCase()})`);
+        else toast.success(`${res.updated} purchase order${res.updated === 1 ? "" : "s"} updated`);
+        clear();
+        await load();
+      } catch (e) {
+        logApiError("PurchaseOrdersPage.bulkStatus", e);
+        toast.error(e instanceof Error ? e.message : "Bulk update failed");
+      } finally {
+        setBulkBusy(false);
+      }
+    },
+    [confirm, load],
+  );
+
+  const poColumns = useMemo<GridColumn<PurchaseOrderResponse>[]>(
+    () => [
+      {
+        id: "po_code",
+        header: "PO Code",
+        alwaysVisible: true,
+        value: (r) => r.po_code,
+        cell: (r) => <span className="font-semibold text-text-primary">{r.po_code}</span>,
+      },
+      { id: "supplier", header: "Supplier", value: (r) => r.supplier_name, cell: (r) => <span className="text-text-primary">{r.supplier_name}</span> },
+      {
+        id: "vendor",
+        header: "Vendor",
+        value: (r) => (r.vendor_id ? vendorName.get(r.vendor_id) ?? `#${r.vendor_id}` : ""),
+        cell: (r) => (r.vendor_id ? vendorName.get(r.vendor_id) ?? `#${r.vendor_id}` : "—"),
+      },
+      { id: "currency", header: "Currency", value: (r) => r.currency ?? "", cell: (r) => r.currency || "—" },
+      { id: "status", header: "Status", value: (r) => r.status, cell: (r) => r.status },
+      {
+        id: "items",
+        header: "Items",
+        enableSorting: false,
+        value: (r) => r.items.map((ln) => `${itemName.get(ln.item_id) || `#${ln.item_id}`} (${ln.quantity})`).join(", "),
+        cell: (r) => (
+          <span className="text-xs">
+            {r.items.map((ln) => `${itemName.get(ln.item_id) || `#${ln.item_id}`} (${ln.quantity})`).join(", ")}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        align: "right",
+        alwaysVisible: true,
+        noExport: true,
+        enableSorting: false,
+        cell: (r) => {
+          const st = (r.status || "").toUpperCase();
+          const items: RowActionItem[] = [
+            { key: "print", label: "Print", href: `/app/inventory/purchase-orders/${r.id}/print` },
+            { key: "trace", label: "Receipt progress & vendor bill", onClick: () => void openPoTrace(r) },
+            { key: "grn", label: "Goods receiving (this PO)", href: `/app/inventory/goods-receiving?po=${r.id}` },
+          ];
+          if (st === "DRAFT") items.push({ key: "approve", label: "Approve", onClick: () => void patchPoStatus(r.id, "APPROVED") });
+          if (st === "APPROVED" || st === "PARTIALLY_RECEIVED")
+            items.push({ key: "close", label: "Close", onClick: () => void patchPoStatus(r.id, "CLOSED") });
+          if (st === "DRAFT" || st === "APPROVED" || st === "PARTIALLY_RECEIVED")
+            items.push({ key: "cancel", label: "Cancel", danger: true, onClick: () => void patchPoStatus(r.id, "CANCELLED") });
+          return (
+            <div onClick={(e) => e.stopPropagation()}>
+              <RowActionsMenu rowId={r.id} openId={openActionsId} onOpenChange={(id) => setOpenActionsId(id as number | null)} items={items} />
+            </div>
+          );
+        },
+      },
+    ],
+    [itemName, vendorName, openActionsId, openPoTrace, patchPoStatus],
+  );
 
   const selectedVendor = useMemo(
     () => vendors.find((v) => v.id === (form.vendor_id ?? -1)) ?? null,
@@ -555,141 +650,51 @@ export function PurchaseOrdersPage() {
         </div>
       ) : (
         <div className={listPageTableCardClass}>
-          <ResponsiveTableContainer>
-            <table className={cn(listTableBaseClass, "min-w-[880px]")}>
-              <thead className={listTableTheadClass}>
-              <tr>
-                <th className={listTableThClass}>PO Code</th>
-                <th className={listTableThClass}>Supplier</th>
-                <th className={listTableThClass}>Vendor</th>
-                <th className={listTableThClass}>Currency</th>
-                <th className={listTableThClass}>Status</th>
-                <th className={listTableThClass}>Items</th>
-                <th className={listTableThRightClass}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((row) => (
-                <tr key={row.id} className={listTableTrClass}>
-                  <td className={listTableTdPrimaryClass}>{row.po_code}</td>
-                  <td className={cn(listTableTdClass, "text-text-primary")}>{row.supplier_name}</td>
-                  <td className={listTableTdClass}>{row.vendor_id ? `#${row.vendor_id}` : "—"}</td>
-                  <td className={listTableTdClass}>{row.currency || "—"}</td>
-                  <td className={listTableTdClass}>{row.status}</td>
-                  <td className={cn(listTableTdClass, "text-xs")}>
-                    {row.items.map((ln) => `${itemName.get(ln.item_id) || `#${ln.item_id}`} (${ln.quantity})`).join(", ")}
-                  </td>
-                  <td className={cn(listTableTdClass, "text-right")}>
-                    {(() => {
-                      const st = (row.status || "").toUpperCase();
-                      const canApprove = st === "DRAFT";
-                      const canClose = st === "APPROVED" || st === "PARTIALLY_RECEIVED";
-                      const canCancel = st === "DRAFT" || st === "APPROVED" || st === "PARTIALLY_RECEIVED";
-                      return (
-                        <div className="relative inline-block text-left">
-                          <button
-                            type="button"
-                            className="min-h-[44px] min-w-[88px] touch-manipulation rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:min-w-0 sm:px-2.5 sm:py-1"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenActionsId((id) => (id === row.id ? null : row.id));
-                            }}
-                          >
-                            Actions
-                          </button>
-                          {openActionsId === row.id && (
-                            <div className="absolute right-0 z-10 mt-1 w-44 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
-                              <button
-                                type="button"
-                                className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenActionsId(null);
-                                  window.open(`/app/inventory/purchase-orders/${row.id}/print`, "_blank", "noopener,noreferrer");
-                                }}
-                              >
-                                Print
-                              </button>
-                              <button
-                                type="button"
-                                className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenActionsId(null);
-                                  void openPoTrace(row);
-                                }}
-                              >
-                                Receipt progress &amp; vendor bill
-                              </button>
-                              <Link
-                                to={`/app/inventory/goods-receiving?po=${row.id}`}
-                                className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
-                                onClick={() => setOpenActionsId(null)}
-                              >
-                                Goods receiving (this PO)
-                              </Link>
-                              {canApprove && (
-                                <button
-                                  type="button"
-                                  className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    setOpenActionsId(null);
-                                    await patchPoStatus(row.id, "APPROVED");
-                                  }}
-                                >
-                                  Approve
-                                </button>
-                              )}
-                              {canClose && (
-                                <button
-                                  type="button"
-                                  className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    setOpenActionsId(null);
-                                    await patchPoStatus(row.id, "CLOSED");
-                                  }}
-                                >
-                                  Close
-                                </button>
-                              )}
-                              {canCancel && (
-                                <button
-                                  type="button"
-                                  className="block min-h-[44px] w-full rounded-md px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    setOpenActionsId(null);
-                                    await patchPoStatus(row.id, "CANCELLED");
-                                  }}
-                                >
-                                  Cancel
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </ResponsiveTableContainer>
-          {!loading && poTotal > 0 ? (
-            <DataTablePagination
-              page={poPage}
-              pageSize={pageSize}
-              total={poTotal}
-              onPageChange={setPoPage}
-              onPageSizeChange={(s) => {
-                setPageSize(s);
-                setPoPage(1);
-              }}
-            />
-          ) : null}
+          <DataGrid
+            tableKey="inventory.purchase-orders"
+            exportName="purchase-orders"
+            columns={poColumns}
+            rows={orders}
+            getRowId={(r) => r.id}
+            savedViews={{
+              getQuery: () => (statusFilter.trim() ? `status=${encodeURIComponent(statusFilter.trim())}` : ""),
+              applyQuery: (query) => setStatusFilter((new URLSearchParams(query).get("status") || "").toUpperCase()),
+            }}
+            bulkActions={(selected, clear) => (
+              <>
+                {(["APPROVED", "CLOSED", "CANCELLED"] as const).map((target) => (
+                  <button
+                    key={target}
+                    type="button"
+                    disabled={bulkBusy}
+                    onClick={() => void bulkSetPoStatus(selected, target, clear)}
+                    className={cn(
+                      "rounded-lg border bg-surface-raised px-2.5 py-1 font-medium disabled:opacity-50",
+                      target === "CANCELLED"
+                        ? "border-status-danger/40 text-status-danger hover:bg-status-danger-subtle"
+                        : "border-border-strong text-text-secondary hover:bg-surface-subtle",
+                    )}
+                  >
+                    {target === "APPROVED" ? "Approve" : target === "CLOSED" ? "Close" : "Cancel"}
+                  </button>
+                ))}
+              </>
+            )}
+            footer={
+              poTotal > 0 ? (
+                <DataTablePagination
+                  page={poPage}
+                  pageSize={pageSize}
+                  total={poTotal}
+                  onPageChange={setPoPage}
+                  onPageSizeChange={(s) => {
+                    setPageSize(s);
+                    setPoPage(1);
+                  }}
+                />
+              ) : null
+            }
+          />
         </div>
       )}
       {!loading && poTotal > 0 && showCards ? (
@@ -808,9 +813,40 @@ export function PurchaseOrdersPage() {
                 ))}
               </ul>
             )}
+            {supplierPortalOn ? <PoSupplierUpdates poId={poTrace.po.id} /> : null}
+            {poGridOn ? <PoColorSizeGrid poId={poTrace.po.id} /> : null}
           </div>
         </div>
       ) : null}
     </div>
+  );
+}
+
+function PoSupplierUpdates({ poId }: { poId: number }) {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof api.listPurchaseOrderSupplierUpdates>> | null>(null);
+  useEffect(() => {
+    api.listPurchaseOrderSupplierUpdates(poId).then(setRows).catch((e) => logApiError("PurchaseOrdersPage.supplierUpdates", e));
+  }, [poId]);
+  const label: Record<string, string> = { CONFIRMED: "Confirmed", DECLINED: "Declined", SHIP_DATE: "Ship date", NOTE: "Note" };
+  return (
+    <>
+      <h3 className="mt-6 text-sm font-semibold text-text-primary">Supplier replies (supplier portal)</h3>
+      {rows == null ? (
+        <p className="mt-1 text-xs text-text-muted">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="mt-1 text-xs text-text-muted">The supplier has not replied yet.</p>
+      ) : (
+        <ul className="mt-2 space-y-1.5 text-sm">
+          {rows.map((u) => (
+            <li key={u.id} className="rounded border border-border px-2 py-1.5">
+              <span className="font-medium">{label[u.kind] ?? u.kind}</span>
+              {u.expected_ship_date ? ` · ship ${u.expected_ship_date}` : ""}
+              <span className="text-xs text-text-muted"> · {u.supplier_user ?? "supplier"} · {new Date(`${u.created_at}Z`).toLocaleString()}</span>
+              {u.message ? <p className="text-xs text-text-secondary">{u.message}</p> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }

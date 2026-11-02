@@ -22,6 +22,9 @@ from app.modules.reports.router import router as reports_router
 from app.modules.inquiries.router import router as inquiries_router
 from app.modules.quotations.router import router as quotations_router
 from app.modules.orders.router import router as orders_router
+from app.modules.orders.color_size_router import router as order_color_size_router
+from app.modules.commission.router import router as commission_router
+from app.modules.traceability.router import router as traceability_router
 from app.modules.orders.change_request_router import router as commercial_change_requests_router
 from app.modules.costing.router import router as costing_router
 from app.modules.currency.router import router as currency_router
@@ -41,6 +44,10 @@ from app.modules.finance.mis_reports_router import router as mis_reports_router
 from app.modules.facility.router import router as facility_router
 from app.modules.manufacturing.router import router as manufacturing_router
 from app.modules.marketing.router import router as marketing_public_router
+from app.modules.saved_views.router import router as saved_views_router
+from app.modules.global_search.router import router as global_search_router
+from app.modules.notifications.router import router as notifications_router
+from app.modules.onboarding.router import router as onboarding_router
 from app.modules.production.router import router as production_router
 from app.modules.hr.router import router as hr_router
 from app.modules.hr_attendance.router import router as hr_attendance_router
@@ -60,8 +67,10 @@ from app.modules.erp_ai_phases.router import router as erp_ai_phases_router
 from app.modules.tna_unified.router import router as tna_unified_router
 from app.modules.trade_case.router import router as trade_case_router
 from app.modules.logistics.router import router as logistics_router
+from app.modules.logistics.carton_router import router as packing_carton_router
 from app.modules.control_tower.router import router as control_tower_router
 from app.modules.compliance.router import router as compliance_router
+from app.modules.compliance.bd_router import bd_trade_router, bd_vat_router
 from app.modules.data_migration.router import router as data_migration_router
 from app.modules.files.router import router as files_router
 from app.modules.admin.router import router as admin_router
@@ -72,6 +81,10 @@ from app.modules.support.router import router as tenant_support_router
 from app.external_access.auth.router import router as external_auth_router
 from app.external_access.customer_portal.router import router as external_customer_router
 from app.external_access.financier_portal.router import router as external_financier_router
+from app.external_access.supplier_portal.router import router as external_supplier_router
+from app.external_access.supplier_portal.internal_router import router as supplier_updates_internal_router
+from app.modules.inventory.po_color_size_router import router as po_color_size_router
+from app.modules.governed_ai.router import router as governed_ai_router
 from app.modules.mcp_server import mount_mcp
 from app.common.external_audit_middleware import ExternalAuditMiddleware
 from app.common.request_logger import RequestLoggingMiddleware
@@ -185,9 +198,14 @@ app.add_middleware(
 app.include_router(external_auth_router, prefix="/api/external")
 app.include_router(external_customer_router, prefix="/api/external")
 app.include_router(external_financier_router, prefix="/api/external")
+app.include_router(external_supplier_router, prefix="/api/external")
 
 app.include_router(files_router, prefix=settings.api_v1_prefix)
 app.include_router(marketing_public_router, prefix=settings.api_v1_prefix)
+app.include_router(saved_views_router, prefix=settings.api_v1_prefix)
+app.include_router(global_search_router, prefix=settings.api_v1_prefix)
+app.include_router(notifications_router, prefix=settings.api_v1_prefix)
+app.include_router(onboarding_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(tenant_router, prefix=settings.api_v1_prefix)
 app.include_router(
@@ -230,6 +248,21 @@ app.include_router(
     orders_router,
     prefix=settings.api_v1_prefix,
     dependencies=[Depends(require_internal_permission("merch.access"))],
+)
+app.include_router(
+    order_color_size_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
+app.include_router(
+    commission_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
+app.include_router(
+    traceability_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("inventory.access"))],
 )
 app.include_router(
     commercial_change_requests_router,
@@ -352,8 +385,38 @@ app.include_router(
     prefix=settings.api_v1_prefix,
     dependencies=[Depends(require_internal_permission("trade.access"))],
 )
+app.include_router(
+    supplier_updates_internal_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("inventory.access"))],
+)
+app.include_router(
+    governed_ai_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("ai.access"))],
+)
+app.include_router(
+    po_color_size_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("inventory.access"))],
+)
+app.include_router(
+    packing_carton_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("trade.access"))],
+)
 app.include_router(control_tower_router, prefix=settings.api_v1_prefix)
 app.include_router(compliance_router, prefix=settings.api_v1_prefix)
+app.include_router(
+    bd_trade_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("trade.access"))],
+)
+app.include_router(
+    bd_vat_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("finance.access"))],
+)
 app.include_router(data_migration_router, prefix=settings.api_v1_prefix)
 app.include_router(admin_router, prefix=settings.api_v1_prefix + "/admin")
 app.include_router(announcements_router, prefix=settings.api_v1_prefix)

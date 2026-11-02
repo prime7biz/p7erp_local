@@ -147,17 +147,20 @@ The **left sidebar** lists modules. This matches the live menu in the app (see *
 
 ## Top bar
 
-- **Search** opens the command palette (**Ctrl+K** or **Cmd+K**) to jump to any entitled page.
+- **Search** opens the command palette (**Ctrl+K** or **Cmd+K**). Type a page name to jump to it, or type two or more letters of a customer, order code, PO code, voucher number, item, vendor or employee to open that record directly. The top of the list also offers **Create** shortcuts (new customer, order, quotation…).
 - **New** is a role-aware create menu (inquiry, quotation, order, voucher, and more).
 - **AI** (sparkle icon) opens the Prime7 AI assistant panel.
-- **Bell** shows a badge when approvals or alerts need attention; click to open **All approvals**.
+- **Bell** opens a panel with two parts: **Needs attention** (pending approvals, critical alerts, overdue TNA, late orders, post-dated vouchers due — each links to its queue) and **For you** (personal notifications, e.g. when your voucher is approved or rejected, or your payroll run is sent back). Click a notification to open the record; use **Mark all read** to clear the badge.
+- **Keyboard** icon (or press **?**) shows all keyboard shortcuts.
+- **Breadcrumbs** under the top bar show where you are, including the record you have open (e.g. an order code or voucher number).
+- **Get started** card on the dashboard (admins and managers) lists setup steps — team, first buyer, supplier, items, order, voucher, employees — and ticks each off automatically. Hide it with **×** once you no longer need it.
 - **Portals** links to customer and financier portal sign-in and external access settings.
 
 ## Tips
 
 - Menu items may be **hidden** if your **tenant type** is manufacturer vs buying house, or if a **feature flag** (such as trade) is off for your tenant.`,
         tags: ["navigation", "sidebar", "menu", "search", "command palette"],
-        lastUpdated: "2026-07-18",
+        lastUpdated: "2026-11-01",
         relatedAppRoutes: ["/app/tutorials"],
         relatedArticleIds: ["gs-tenant-modes", "gs-row-actions"],
       },
@@ -196,11 +199,45 @@ Many data tables use a single **Actions** control per row (not separate edit/del
 
 ## Tips
 
-- Available actions depend on **permissions** and record state.`,
+- Available actions depend on **permissions** and record state.
+- Deleting asks for confirmation in a dialog; results appear as a short message in the top-right corner.`,
         tags: ["actions", "table", "edit", "delete"],
-        lastUpdated: "2026-04-03",
+        lastUpdated: "2026-10-31",
         relatedAppRoutes: ["/app/customers", "/app/inquiries", "/app/quotations", "/app/orders"],
-        relatedArticleIds: ["merch-pipeline"],
+        relatedArticleIds: ["merch-pipeline", "gs-list-tools"],
+      },
+      {
+        id: "gs-list-tools",
+        title: "List tools: columns, saved views, export and bulk actions",
+        summary: "Hide columns, switch row density, save filter setups as named views, export to Excel/CSV and act on many rows at once.",
+        content: `## Overview
+
+**Customers**, **Orders** and **Purchase orders** share one list toolbar above the table (more lists will follow).
+
+## Toolbar
+
+1. **Views** — save the current filters, sort, visible columns and density under a name. Tick **Share with everyone in my company** to let colleagues use it. Pick a view from the list to apply it again; only the person who saved a view can update or delete it.
+2. **Columns** — show or hide columns. Your choice is remembered on this browser.
+3. **Compact / Comfortable** — switch row height to fit more rows on screen.
+4. **Export** — download the rows you see as **Excel (.xlsx)** or **CSV**. If you ticked some rows, only those are exported.
+
+## Sorting
+
+Click a column header to sort the rows on the current page; click again to reverse, a third time to clear.
+
+## Bulk actions
+
+Tick the boxes at the left of each row (or the header box for the whole page). A bar appears with actions for the selection:
+
+- **Customers:** Mark active / Mark inactive.
+- **Purchase orders:** Approve / Close / Cancel. Orders whose status does not allow the change are skipped and reported.
+
+Selections clear when you change page or filters, so a bulk action never touches rows you cannot see.`,
+        tags: ["table", "list", "export", "excel", "csv", "saved views", "bulk", "columns"],
+        keywords: ["filter", "density", "select", "share view"],
+        lastUpdated: "2026-10-31",
+        relatedAppRoutes: ["/app/customers", "/app/orders", "/app/inventory/purchase-orders"],
+        relatedArticleIds: ["gs-row-actions"],
       },
     ],
   },
@@ -497,7 +534,38 @@ Statuses follow a chain such as **Draft → Submitted → Approved → Sent → 
         tags: ["quotation", "order", "convert", "sales"],
         lastUpdated: "2026-04-10",
         relatedAppRoutes: ["/app/quotations", "/app/quotations/new", "/app/orders", "/app/orders/new"],
-        relatedArticleIds: ["merch-pipeline", "merch-inquiry-detail", "gs-row-actions"],
+        relatedArticleIds: ["merch-pipeline", "merch-inquiry-detail", "gs-row-actions", "merch-order-color-size"],
+      },
+      {
+        id: "merch-order-color-size",
+        title: "Colour / size breakdown on an order",
+        summary: "Record pieces per colour and size on the order page; confirmed orders keep their confirmed total.",
+        content: `## Overview
+
+Buyers usually order one style in several colours and sizes. The **Colour / size breakdown** grid on the order page records exactly how many pieces of each combination you must make.
+
+This grid appears only when an admin turns on **Settings → Configuration → Colour / size breakdown on orders**.
+
+## Steps
+
+1. Open the order (\`/app/orders/:id\`).
+2. In **Colour / size breakdown**, click **Use style colours & sizes** to copy the style's colourways and size scale (or the quotation's size ratio), or add colours and sizes yourself.
+3. Type the pieces in each cell. Row, column and grand totals update as you type.
+4. Keep **Set order quantity to grid total** ticked if the order quantity should follow the grid, then click **Save breakdown**.
+
+## Confirmed orders
+
+Once an order is **Confirmed**, **In progress** or **Completed**, its quantity is a commercial term. You can still move pieces between colours and sizes, but the grid total must equal the confirmed quantity. To change the total, raise a **commercial change request**.
+
+## Tips
+
+- Remove a colour or size with the small **×** next to its name before saving.
+- Saving replaces the whole grid, so everyone sees the same breakdown.`,
+        tags: ["order", "colour", "color", "size", "breakdown", "matrix", "quantity"],
+        keywords: ["size ratio", "colourway", "assortment"],
+        lastUpdated: "2026-11-01",
+        relatedAppRoutes: ["/app/orders"],
+        relatedArticleIds: ["merch-quotation-to-order"],
       },
     ],
   },
@@ -559,7 +627,120 @@ If **trade** is enabled for your tenant:
           "/app/trade/dashboard",
           "/app/logistics",
         ],
-        relatedArticleIds: ["merch-pipeline"],
+        relatedArticleIds: ["merch-pipeline", "commercial-commission"],
+      },
+      {
+        id: "commercial-commission",
+        title: "Commission: earned from factories/buyers and paid to agents",
+        summary: "Record each shipment's FOB value; commission in both directions is calculated, grouped into statements and turned into draft vouchers.",
+        content: `## Overview
+
+**Export & Import → Commission** (\`/app/commercial/commission\`) handles two kinds of commission on every shipment:
+
+- **We earn** — commission a factory or buyer pays your buying house.
+- **We pay** — commission you owe an agent linked to the order.
+
+An admin turns it on in **Settings → Configuration → Commission engine**.
+
+## 1. Set rules, tax and accounts (Rules & settings tab)
+
+1. Add rules: **Direction**, **Applies to** (everyone, one factory, one buyer or one agent), **Rate type** (% of shipped FOB value, or a fixed amount per piece) and **Rate**. The most specific rule wins.
+2. Commission terms typed on an **order** override rules. They count as agent commission when the order has an agent, otherwise as commission you earn. An agent's default rate on the buyer–agent link is used next.
+3. Enter **TDS / AIT %** and **VDS %** (0 until you set them) and choose the accounts used for vouchers.
+
+## 2. Record shipments (Shipments tab)
+
+Pick the order, the factory (if the factory pays you), the shipment or invoice reference, date, **shipped FOB value**, currency and **rate to BDT**. Commission lines are calculated immediately. If you change rules later, use **Actions → Recalculate** on shipments not yet on a statement.
+
+## 3. Statements (Statements tab)
+
+1. **Pending commission** groups lines by party and currency. Click **Create statement**.
+2. **Actions → Issue** creates a **DRAFT journal voucher** in BDT for accounts to review and post (commission receivable/income, or expense/payable, with TDS and VDS lines).
+3. **Actions → Cancel** returns the lines to pending. A draft voucher is cancelled automatically; a posted voucher must be reversed in Accounts first.
+
+## Tips
+
+- One shipment reference can be recorded once per order.
+- A shipment on a statement cannot be deleted or recalculated until its statement is cancelled.`,
+        tags: ["commission", "buying house", "agent", "TDS", "VDS", "AIT", "statement", "shipment"],
+        keywords: ["brokerage", "commission invoice", "agent commission"],
+        lastUpdated: "2026-11-01",
+        relatedAppRoutes: ["/app/commercial/commission"],
+        relatedArticleIds: ["commercial-overview"],
+      },
+      {
+        id: "commercial-bd-registers",
+        title: "Bond & VAT registers: UD utilization, bond register, Mushak 6.1 / 6.2",
+        summary: "Record each UD and its permitted imports, track imports and consumption in bond, and export monthly purchase and sales VAT registers.",
+        content: `## Overview
+
+**Export & Import → Bond & VAT registers** (\`/app/commercial/bd-compliance\`) keeps the registers a Bangladesh bonded exporter needs between audits. An admin turns it on in **Settings → Configuration → Bangladesh bond & VAT registers**.
+
+These are **working registers** — exports are spreadsheets (CSV / Excel from each table's **Export** menu), not the official e-UD, CBMS or NBR upload files. Check figures before filing.
+
+## 1. UD register
+
+1. Click **New UD**. Enter the **UD number**, **amendment no.** (0 for the original), **issuer** (BGMEA, BKMEA, BEPZA), UD date, export LC / contract, buyer, export value and **expiry date**.
+2. Under **Permitted imports**, add each raw material on the UD with its **entitled quantity** (and value if you track it).
+3. Save, then **Actions → Approve**. Approved UDs are locked; use **Back to draft** to correct them, or record an amendment as a new UD with the next amendment number.
+4. **Actions → Close UD** when the export is complete.
+
+## 2. Record bond movements
+
+Open a UD (**Actions → View utilization**). Under **Record bond movement**, choose the import line and:
+
+- **Import into bond** — material received against the UD (bill of entry, invoice).
+- **Consumed / exported** — material used in shipped garments.
+
+The table shows **imported**, **consumed**, **in bond**, **remaining entitlement** and **% used**. Warnings appear when imports exceed the entitlement, consumption exceeds imports, or the UD expires within 30 days.
+
+## 3. Bond register
+
+The **Bond register** tab lists every movement in date order with a running balance per item, and the opening balance before the chosen start date. Filter by UD number.
+
+## 4. Mushak 6.1 and 6.2
+
+- **Mushak 6.1 (purchases)** — recorded vendor bills for the month (drafts and cancelled bills are left out), with supplier BIN from the vendor's tax ID, taxable value and VAT in your base currency.
+- **Mushak 6.2 (sales)** — issued and posted commercial invoices, treated as **zero-rated exports**. Add local sales manually.
+
+## Tips
+
+- Use the same item description on the UD and in bond entries; linking movements to a UD line keeps utilization exact.
+- Mushak tabs need finance access; UD and bond tabs need Export & Import access.`,
+        tags: ["UD", "utilization declaration", "bond", "bonded warehouse", "Mushak", "VAT", "BGMEA", "BKMEA", "customs"],
+        keywords: ["Mushak 6.1", "Mushak 6.2", "purchase register", "sales register", "bond licence", "UP"],
+        lastUpdated: "2026-11-02",
+        relatedAppRoutes: ["/app/commercial/bd-compliance"],
+        relatedArticleIds: ["commercial-overview"],
+      },
+      {
+        id: "logistics-packing-cartons",
+        title: "Packing lists: carton detail by colour and size",
+        summary: "Enter carton ranges with colour, size and pieces per carton; totals, weights, CBM and the order's left-to-pack balance are calculated.",
+        content: `## Overview
+
+Open a packing list from **Logistics → Packing lists** (\`/app/logistics\`). When an admin turns on **Settings → Configuration → Carton detail on packing lists**, a **Carton detail** section appears.
+
+## Steps
+
+1. Click **Add carton range** and enter **carton from / to** (e.g. 1–40), **colour**, **size** and **pcs per carton**.
+2. Enter **net / gross kg per carton** and the carton **L × W × H** in cm to get total weights and **CBM**.
+3. **Assorted cartons** (several sizes in one carton): click the **copy** button on a row to add another size for the **same carton range**. Weights and dimensions are taken from the first row of each range.
+4. Click **Save cartons**. The packing list's **total cartons**, **gross** and **net weight** are updated from the detail.
+
+## Ordered vs packed
+
+If the order has a **colour / size breakdown**, the table under the cartons shows, for each colour and size, what is in this list, what all packing lists for the order contain, the ordered quantity and **left to pack**. Over-packing is shown in red.
+
+## Rules
+
+- Different carton ranges may not overlap (1–10 and 8–12 is refused).
+- A packing list that is **Finalized** is read-only.`,
+        tags: ["packing list", "carton", "CBM", "weight", "assortment", "ratio", "shipment"],
+        keywords: ["packing detail", "solid pack", "assorted pack", "carton marks"],
+        lastUpdated: "2026-11-02",
+        relatedAppRoutes: ["/app/logistics"],
+        relatedArticleIds: ["commercial-overview", "merch-order-color-size"],
       },
     ],
   },
@@ -702,11 +883,15 @@ Purchase orders and GRNs have a **Print** action that opens a printable document
 
 - Use **Goods Receiving** when material arrives; follow up in **Purchase & AP** if finance ties POs to bills.
 
+## Colour / size breakdown (optional)
+
+When an admin turns on **Settings → Configuration → Colour / size breakdown on purchase orders**, open **Actions → Receipt progress & vendor bill** on a PO and use **Colour / size breakdown** to split each line by colour and size (for example trims per garment colour). **Use order colours & sizes** copies the linked order's grid. The breakdown never changes the PO quantity; once a PO is past **DRAFT**, a saved grid must total the line quantity, and closed or cancelled POs are read-only.
+
 ## Tips
 
 - The page description notes that POs link vendors from the supplier master and receive into stock via **Goods Receiving**.`,
-        tags: ["purchase order", "PO", "procurement", "vendor"],
-        lastUpdated: "2026-04-04",
+        tags: ["purchase order", "PO", "procurement", "vendor", "colour size breakdown"],
+        lastUpdated: "2026-11-02",
         featured: true,
         coverImage: "/images/hero-bg.svg",
         images: [
@@ -799,6 +984,75 @@ List rows show each item's **code and name**, so you can confirm the right item 
         lastUpdated: "2026-10-31",
         relatedAppRoutes: ["/app/inventory/warehouse-transfers", "/app/inventory/stock-adjustments"],
         relatedArticleIds: ["inv-overview", "gs-row-actions"],
+      },
+      {
+        id: "inv-traceability-certificates",
+        title: "Certificates and order traceability for buyers",
+        summary: "Record GOTS / OEKO-TEX / GRS certificates, note which fabric lots each cut ticket used, and give buyers a traceability report per order.",
+        content: `## Overview
+
+Buyers increasingly ask: *which fabric went into this order, who supplied it, and was it certified?* **Inventory → Certificates & order trace** (\`/app/inventory/traceability\`) answers that from data you already keep.
+
+An admin turns it on in **Settings → Configuration → Traceability & certificates**.
+
+## 1. Certificates
+
+On the **Certificates** tab add each certificate: **type** (GOTS, OCS, GRS, RCS, OEKO-TEX Standard 100, BCI, FSC, other), **number**, **issuing body**, the **supplier** that holds it and/or the **material** it covers, and the **validity dates**. Status shows **valid**, **expiring** (30 days or less left) or **expired**.
+
+## 2. Fabric lots on cut tickets
+
+On the **Cutting pipeline** page (\`/app/production/cutting/pipeline\`), after you create or enter a cut ticket, the **Fabric lots used** panel lets you pick the received lot (from the goods receipt), the quantity used and the roll numbers.
+
+Lots exist only for fabric received while **Enable batch tracking** is on (**Settings → Configuration**) and the fabric item has batch tracking ticked. Turn both on before receiving fabric you need to trace.
+
+## 3. Order traceability report
+
+On **Order traceability**, pick an order. You see every cut ticket's fabric lots with supplier, goods receipt and the certificates valid **on the receipt date**, plus bundles and packing lists.
+
+The yellow **gaps** box lists what to fix before sending: cut tickets without lots, lots without certificates, or certificates that had expired when the fabric arrived. Use **Export CSV for buyer** or **Print**.`,
+        tags: ["traceability", "certificate", "GOTS", "OEKO-TEX", "GRS", "fabric lot", "roll", "compliance", "buyer"],
+        keywords: ["transaction certificate", "scope certificate", "sustainability", "audit"],
+        lastUpdated: "2026-11-01",
+        relatedAppRoutes: ["/app/inventory/traceability", "/app/production/cutting/pipeline"],
+        relatedArticleIds: ["inv-overview"],
+      },
+      {
+        id: "inv-supplier-portal",
+        title: "Supplier portal: suppliers confirm POs and ship dates themselves",
+        summary: "Invite people at your suppliers; they see only their own approved purchase orders, confirm or decline, and post ship dates and notes.",
+        content: `## Overview
+
+The **supplier portal** lets your fabric, trims and service suppliers answer purchase orders online instead of by phone and email.
+
+## 1. Turn it on and invite (admin)
+
+1. Open **Settings → External access** (\`/app/settings/external-access\`) and click **Enable portal** on the **Supplier portal** card.
+2. Click **Manage supplier access**, enter the person's **email** and **name**, tick the **vendors** they work for, and click **Send invitation**.
+3. They receive an email link to set a password. If email is not configured, the page shows a link you can share.
+
+## 2. What the supplier sees
+
+After signing in (sign-in page, role **Supplier portal**, your company code):
+
+- **Dashboard** — open POs, how many still need their reply, and what is due soon or overdue.
+- **Purchase orders** — only **approved** (and later) POs for their linked vendors. Drafts are never shown.
+- **PO detail** — items, prices, what you have received so far, and a **Reply** box: **Confirm order**, **Update ship date**, **Send a note** or **Cannot accept** (with a reason).
+
+## 3. Seeing replies (staff)
+
+- Admins and managers get a **bell notification** for every supplier reply.
+- On **Purchase orders**, open **Actions → Receipt progress & vendor bill** to see the **Supplier replies** history.
+
+## Safety
+
+- A supplier login only ever sees the vendors you ticked; change them any time with **Actions → Change vendors**.
+- **Deactivate** a login to sign that person out everywhere. Turning the portal off blocks all supplier logins at once.
+- Every reply is recorded in **External access → audit log**.`,
+        tags: ["supplier", "vendor", "portal", "purchase order", "confirmation", "ship date", "external access"],
+        keywords: ["supplier collaboration", "PO acknowledgement", "vendor portal"],
+        lastUpdated: "2026-11-02",
+        relatedAppRoutes: ["/app/settings/external-access", "/app/inventory/purchase-orders"],
+        relatedArticleIds: ["inv-po-deep"],
       },
     ],
   },
@@ -1021,7 +1275,80 @@ Your administrator turns it on under **Settings → Configuration** using the **
           },
         ],
         relatedAppRoutes: ["/app/production/hourly/cutting", "/app/production/hourly/sewing", "/app/production/hourly/finishing"],
-        relatedArticleIds: ["mfg-overview", "mfg-mo-deep"],
+        relatedArticleIds: ["mfg-overview", "mfg-mo-deep", "mfg-scan-station"],
+      },
+      {
+        id: "mfg-scan-station",
+        title: "Scan station: count bundles per operation on a tablet",
+        summary: "Scan each bundle as an operation finishes; output and earned minutes update by hour, and scans are kept on the device when Wi-Fi drops.",
+        content: `## Overview
+
+The **Scan station** (\`/app/production/scan-station\`) turns a tablet or PC with a barcode scanner into a line counter. Every bundle barcode printed on the **Cutting pipeline** page can be scanned once per operation.
+
+An admin turns it on in **Settings → Configuration → Shop-floor scan station**. The order's style needs an **operation bulletin** (IE) so operations and SMV are known.
+
+## Set up the station (once per shift)
+
+1. Choose the **line**, the **order** and the **operation** this station counts (from the order's operation bulletin).
+2. Enter the **operator ID** (change it when the operator changes).
+
+## Scan
+
+- Scan the bundle barcode (or type it and press **Enter**). The message shows the bundle and operation.
+- **Offline?** The top bar says so and the scan is kept on this device. It is sent automatically when the connection returns (or press **Send now**).
+- A bundle is counted **once per operation**. Scanning it again — on this or another station — is reported as already counted, never added twice.
+
+## Rejected scans
+
+Unknown barcodes, operations that are not in the order's bulletin, or a wrong device clock are listed under **rejected scans** for the supervisor.
+
+## Today's figures
+
+**Today by hour** shows pieces and **earned minutes** (pieces × SMV) for the line, plus **top operators**.
+
+## Tips
+
+- Use the **English / বাংলা** switch at the top for operators who prefer Bangla.
+- Keep the page open on the station; the queue survives a page reload on the same device.
+- Correct the tablet's date and time — scans older than 7 days or in the future are refused.`,
+        tags: ["scan", "barcode", "bundle", "operation", "SMV", "earned minutes", "shop floor", "offline", "line output"],
+        keywords: ["bundle tracking", "piece rate", "WIP", "operator efficiency"],
+        lastUpdated: "2026-11-02",
+        relatedAppRoutes: ["/app/production/scan-station", "/app/production/cutting/pipeline"],
+        relatedArticleIds: ["mfg-hourly-deep"],
+      },
+      {
+        id: "mfg-line-plan-board",
+        title: "Line plan board: several factories and planning conflicts",
+        summary: "See every sewing line by factory unit, drag plans to reschedule, and fix overlaps and late-delivery warnings before they reach the floor.",
+        content: `## Overview
+
+The **Line plan board** (\`/app/production/line-plan\`) shows each sewing line as a row and each plan as a block across the dates you choose (up to 62 days). Drag the grip (⋮) on a block to move it to another line or start date.
+
+## Several factories or units
+
+1. In **Production setup → Sewing lines**, fill **Factory / unit** for each line (for example "Unit 2 — Gazipur"). Leave it blank for the main factory.
+2. On the board, lines are grouped under their unit. When there is more than one unit, a **Factory** filter and a card per unit appear, with line count, plans and pieces done vs planned. Click a card to show only that unit.
+
+## Planning conflicts
+
+A red **Planning conflicts** panel lists problems in the chosen range, and affected blocks get a red outline (hover a block to read why):
+
+- **Line overlap** — two active plans on the same line share dates.
+- **Late vs delivery** — a plan finishes sewing after the order's delivery date.
+- **Inactive line** — a plan is still booked on a line marked inactive.
+
+Completed and cancelled plans are ignored. Move or shorten the plan, then **Refresh**.
+
+## Tips
+
+- The **Assignments** table shows each order's code and due date.
+- Readiness dots and AI suggestions work as before; conflicts are plain rules and need no AI.`,
+        tags: ["line plan", "planning board", "multi-factory", "unit", "capacity", "overlap", "delivery date", "sewing line"],
+        keywords: ["production planning", "line loading", "factory unit", "late order"],
+        lastUpdated: "2026-11-02",
+        relatedAppRoutes: ["/app/production/line-plan", "/app/production/setup"],
+        relatedArticleIds: ["mfg-overview", "mfg-scan-station"],
       },
     ],
   },
@@ -1085,13 +1412,18 @@ Your administrator turns it on under **Settings → Configuration** using the **
 - **AI Automation** — \`/app/ai/automation\`
 - **AI Predictions** — \`/app/ai/predictions\`
 - **Weekly AI reports** — \`/app/ai/weekly-reports\`
+- **Exception agents** — \`/app/ai/agents\` (optional; see the guide below)
+
+## Ask about the record on screen
+
+Open the assistant (✦ in the top bar) while an **order, customer, style, voucher or employee** page is open. A chip shows **Asking about …** — questions such as "when is this due?" then use that record, and the answer shows a **Source** link back to it. Click × on the chip to ask without it. The assistant only sees records your role can open.
 
 ## Tips
 
 - **AI Predictions** includes forecast templates, KPI summary, filters, run history with charts, a detail drawer (copy JSON), soft-delete for old runs, profitability narrative, and recent anomaly alerts with links to related modules.
 - Availability and behavior depend on tenant configuration and backend features.`,
-        tags: ["AI", "assistant", "automation"],
-        lastUpdated: "2026-04-04",
+        tags: ["AI", "assistant", "automation", "context", "citation"],
+        lastUpdated: "2026-11-02",
         coverImage: "/images/ai-brain.svg",
         infographics: [
           {
@@ -1108,7 +1440,60 @@ Your administrator turns it on under **Settings → Configuration** using the **
           "/app/ai/predictions",
           "/app/ai/weekly-reports",
         ],
-        relatedArticleIds: [],
+        relatedArticleIds: ["ai-exception-agents", "ai-ask-a-figure"],
+      },
+      {
+        id: "ai-exception-agents",
+        title: "Exception agents: find problems, confirm who to tell",
+        summary: "Agents flag overdue TNA actions, expiring LCs and BOM materials not on PO, and prepare an owner brief. A manager confirms before anything is sent.",
+        content: `## Overview
+
+**AI Tools → Exception agents** (\`/app/ai/agents\`) runs three checks every time you open it or click **Run agents**:
+
+- **TNA delay** — follow-up / TNA actions past their planned date (critical after 7 days).
+- **LC expiry** — trade cases whose LC or master contract expires within 14 days.
+- **BOM shortfall** — orders due within 45 days whose BOM materials are not fully covered by purchase orders.
+
+An admin turns it on in **Settings → Configuration → AI exception agents**. You only see agents for modules your role can open.
+
+## Human confirmation
+
+Agents **never send anything on their own**. For each finding, **Actions** offers:
+
+- **Notify the assignee… / Notify managers…** — add an optional note, then **Confirm & send**. The person gets it in their bell inbox with a link to the record.
+- **Dismiss for 7 days** — hide a finding you have handled another way.
+
+Only admins, managers or roles with the **ai.agents.confirm** permission can confirm. Every decision is stored and written to the AI audit log. Findings you acted on are hidden for a few days and come back if the problem is still open.
+
+## Owner brief
+
+**Generate** builds a short morning brief from today's figures and open findings (written by AI when available, otherwise from rules). **Send to managers** asks for confirmation, then delivers it to admins and managers.`,
+        tags: ["AI", "agents", "exceptions", "TNA", "LC expiry", "BOM", "shortage", "owner brief", "governance"],
+        keywords: ["alerts", "human in the loop", "approval", "morning brief"],
+        lastUpdated: "2026-11-02",
+        relatedAppRoutes: ["/app/ai/agents"],
+        relatedArticleIds: ["ai-tools-overview"],
+      },
+      {
+        id: "ai-ask-a-figure",
+        title: "Ask a figure: pin answers to your dashboard",
+        summary: "Type a question like “late orders” on the dashboard; the answer comes from a fixed list of figures and can be pinned as a card.",
+        content: `## Overview
+
+When **Settings → Configuration → Ask-a-metric dashboard cards** is on, the dashboard shows **Ask a figure**.
+
+1. Type a question, e.g. *How many orders are late?*, *open orders by buyer* or *LCs expiring*.
+2. The answer shows one figure with a link to the matching list. **Pin card** keeps it on your dashboard (up to 8; only you see your cards).
+3. Remove a card with ×.
+
+## What it can answer
+
+Answers come only from a fixed list: open orders, open quantity, orders due in 14 days, late orders, open orders by buyer, overdue TNA actions, open purchase orders, BTB LCs expiring in 30 days, vouchers awaiting approval and active employees. If a question doesn't match, you get suggestions instead of a guess. AI may help pick the figure, but it never writes queries, and you only see figures for modules your role can open.`,
+        tags: ["AI", "dashboard", "metric", "KPI", "question", "pin"],
+        keywords: ["natural language", "ask", "cards"],
+        lastUpdated: "2026-11-02",
+        relatedAppRoutes: ["/app"],
+        relatedArticleIds: ["ai-exception-agents"],
       },
     ],
   },
@@ -1138,6 +1523,8 @@ Your administrator turns it on under **Settings → Configuration** using the **
 
 Use the sidebar subsection labels to find the exact screen.
 
+**বাংলা / Bangla** — **My Leave**, **My Attendance** and **My Payslips**, the **Scan station** and **Hourly production** screens have an **English / বাংলা** switch at the top. The choice is remembered on that device. Other screens stay in English for now.
+
 **Payroll auto-calculate** (feature flag \`payroll_auto_calculate_enabled\`, default off): assign a structure under \`/app/hr/payroll/assignments\`, then on a DRAFT run use **Auto-calculate** → preview → apply.
 
 **Payroll rules worth knowing**
@@ -1150,8 +1537,8 @@ Use the sidebar subsection labels to find the exact screen.
 **Leave balances** — submitting a request reserves the days immediately (pending); approval moves them to used, rejection releases them. When an allocation is set for the leave type, requests beyond the remaining balance are blocked.
 
 **Sprint H1 compliance** (flags default off): enable \`compliance_tracking_enabled\`, \`age_verification_required\`, and \`medical_certificate_tracking_enabled\` on the tenant, then activate BSCI/WRAP/SEDEX templates on the Compliance page. See \`docs/HR_COMPLIANCE_H1.md\`.`,
-        tags: ["HR", "payroll", "attendance", "leave", "compliance"],
-        lastUpdated: "2026-10-31",
+        tags: ["HR", "payroll", "attendance", "leave", "compliance", "Bangla", "বাংলা", "language"],
+        lastUpdated: "2026-11-02",
         coverImage: "/images/hero-bg.svg",
         infographics: [
           {

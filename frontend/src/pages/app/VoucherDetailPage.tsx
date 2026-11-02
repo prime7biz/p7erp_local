@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRecordBreadcrumb } from "@/components/shell/recordBreadcrumb";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   api,
@@ -62,6 +63,7 @@ export function VoucherDetailPage() {
   const { voucherId } = useParams<{ voucherId: string }>();
   const navigate = useNavigate();
   const [voucher, setVoucher] = useState<VoucherResponse | null>(null);
+  useRecordBreadcrumb(voucher?.voucher_number);
   const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
   const [costCenters, setCostCenters] = useState<CostCenterResponse[]>([]);
   const [actions, setActions] = useState<string[]>([]);

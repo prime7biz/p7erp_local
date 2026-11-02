@@ -50,6 +50,7 @@ def _line_resp(x: SewingLine) -> SewingLineResponse:
         default_helper_count=x.default_helper_count,
         supervisor_user_id=x.supervisor_user_id,
         is_active=x.is_active,
+        factory_unit=x.factory_unit,
     )
 
 
@@ -71,6 +72,7 @@ async def create_sewing_line(
         default_helper_count=body.default_helper_count,
         supervisor_user_id=body.supervisor_user_id,
         is_active=body.is_active,
+        factory_unit=(body.factory_unit or "").strip() or None,
     )
     db.add(row)
     await db.commit()
@@ -91,6 +93,8 @@ async def update_sewing_line(
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(404, "Sewing line not found")
     for field, val in body.model_dump(exclude_unset=True).items():
+        if field == "factory_unit":
+            val = (val or "").strip() or None
         setattr(row, field, val)
     await db.commit()
     await db.refresh(row)

@@ -72,6 +72,7 @@ export function ProductionSetupPage() {
     default_operator_count: 0,
     default_helper_count: 0,
     supervisor_employee_id: null as number | null,
+    factory_unit: "",
   });
   const [lineSupervisorOptions, setLineSupervisorOptions] = useState<
     Array<{ id: number; name: string; employee_code: string; user_id: number | null }>
@@ -85,6 +86,7 @@ export function ProductionSetupPage() {
     running_machine_count: 0,
     default_operator_count: 0,
     default_helper_count: 0,
+    factory_unit: "",
   });
 
   /* --- Shift add form --- */
@@ -329,6 +331,7 @@ export function ProductionSetupPage() {
         default_operator_count: Number(lineForm.default_operator_count) || 0,
         default_helper_count: Number(lineForm.default_helper_count) || 0,
         supervisor_user_id: sup?.user_id ?? undefined,
+        factory_unit: lineForm.factory_unit.trim() || null,
       });
       const createdCode = lineForm.line_code.trim();
       setShowLineForm(false);
@@ -340,6 +343,7 @@ export function ProductionSetupPage() {
         default_operator_count: 0,
         default_helper_count: 0,
         supervisor_employee_id: null,
+        factory_unit: "",
       });
       await load();
       const linesAfter = await api.listSewingLines();
@@ -371,13 +375,14 @@ export function ProductionSetupPage() {
       running_machine_count: line.running_machine_count,
       default_operator_count: line.default_operator_count,
       default_helper_count: line.default_helper_count,
+      factory_unit: line.factory_unit ?? "",
     });
   };
 
   const saveEditLine = async () => {
     if (editingLineId === null) return;
     try {
-      await api.updateSewingLine(editingLineId, editFields);
+      await api.updateSewingLine(editingLineId, { ...editFields, factory_unit: editFields.factory_unit.trim() || null });
       setEditingLineId(null);
       await load();
     } catch (e) {
@@ -1123,6 +1128,16 @@ export function ProductionSetupPage() {
                 <input className={inputCls} value={lineForm.name} onChange={(e) => setLineForm((f) => ({ ...f, name: e.target.value }))} required />
               </label>
               <label className="block text-xs text-text-secondary">
+                Factory / unit
+                <input
+                  className={inputCls}
+                  value={lineForm.factory_unit}
+                  onChange={(e) => setLineForm((f) => ({ ...f, factory_unit: e.target.value }))}
+                  maxLength={64}
+                  placeholder="e.g. Unit 2 — Gazipur (blank = main factory)"
+                />
+              </label>
+              <label className="block text-xs text-text-secondary">
                 Total machines
                 <input type="number" min={0} className={inputCls} value={lineForm.default_machine_count} onChange={(e) => setLineForm((f) => ({ ...f, default_machine_count: Number(e.target.value) }))} />
               </label>
@@ -1173,6 +1188,7 @@ export function ProductionSetupPage() {
                 <tr>
                   <th className={thCls}>Code</th>
                   <th className={thCls}>Name</th>
+                  <th className={thCls}>Factory</th>
                   <th className={thCls}>Total machines</th>
                   <th className={thCls}>Running machines</th>
                   <th className={thCls}>Operators</th>
@@ -1190,6 +1206,15 @@ export function ProductionSetupPage() {
 
                       {isEditing ? (
                         <>
+                          <td className={tdCls}>
+                            <input
+                              className="w-32 rounded border border-border-subtle bg-surface-elevated px-1.5 py-1 text-sm"
+                              value={editFields.factory_unit}
+                              maxLength={64}
+                              placeholder="Main factory"
+                              onChange={(e) => setEditFields((f) => ({ ...f, factory_unit: e.target.value }))}
+                            />
+                          </td>
                           <td className={tdCls}>
                             <input
                               type="number"
@@ -1247,6 +1272,7 @@ export function ProductionSetupPage() {
                         </>
                       ) : (
                         <>
+                          <td className={tdCls}>{l.factory_unit || <span className="text-text-muted">Main factory</span>}</td>
                           <td className={tdCls}>{l.default_machine_count}</td>
                           <td className={tdCls}>
                             <span className={l.running_machine_count < l.default_machine_count ? "font-semibold text-amber-600" : ""}>

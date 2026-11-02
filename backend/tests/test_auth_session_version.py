@@ -13,6 +13,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select, text
 
 from app.common.auth import create_access_token, hash_password
+from app.config import get_settings
 from app.database import get_db
 from app.main import app
 from app.models import Role, Tenant, User
@@ -134,10 +135,49 @@ async def test_legacy_token_without_sv_remains_valid_during_grace_window(db_sess
 
 
 @pytest.mark.asyncio
-async def test_single_session_flag_off_keeps_previous_token_valid(db_session_integration):
+async def test_single_session_global_default_on_invalidates_old_token(db_session_integration):
+    """Global setting enforces single session even when the tenant flag is off."""
     db = db_session_integration
     await _ensure_auth_session_version_column(db)
     tenant, user = await _seed_user(db, single_session_enforced=False)
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            login_body = {
+                "company_code": tenant.company_code,
+                "email": user.email,
+                "password": "StrongPass123!",
+            }
+            first_login = await ac.post("/api/v1/auth/login", json=login_body)
+            second_login = await ac.post("/api/v1/auth/login", json=login_body)
+            assert first_login.status_code == 200, first_login.text
+            assert second_login.status_code == 200, second_login.text
+
+            me_first = await ac.get(
+                "/api/v1/auth/me",
+                headers={
+                    "Authorization": f"Bearer {first_login.json()['access_token']}",
+                    "X-Tenant-Id": str(tenant.id),
+                },
+            )
+            assert me_first.status_code == 401, me_first.text
+            assert (me_first.json().get("detail") or {}).get("code") == "session_superseded"
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.asyncio
+async def test_single_session_flag_off_keeps_previous_token_valid(db_session_integration, monkeypatch):
+    db = db_session_integration
+    await _ensure_auth_session_version_column(db)
+    tenant, user = await _seed_user(db, single_session_enforced=False)
+    monkeypatch.setenv("SINGLE_SESSION_GLOBAL", "false")
+    get_settings.cache_clear()
 
     async def override_db():
         yield db
@@ -172,3 +212,5 @@ async def test_single_session_flag_off_keeps_previous_token_valid(db_session_int
             assert int(refreshed_user.auth_session_version or 0) == 0
     finally:
         app.dependency_overrides.pop(get_db, None)
+        monkeypatch.delenv("SINGLE_SESSION_GLOBAL", raising=False)
+        get_settings.cache_clear()

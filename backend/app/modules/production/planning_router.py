@@ -31,7 +31,9 @@ from app.modules.production.gemini_planning_service import (
     predict_move_consequences,
     suggest_allocation,
 )
+from app.models.merch import Order
 from app.modules.production.pipeline_service import build_pipeline
+from app.modules.production.plan_conflicts import compute_plan_conflicts, summarize_factory_load
 from app.modules.production.efficiency_ai_service import build_efficiency_forecast
 from app.modules.production.readiness_service import get_order_chain_readiness, get_order_readiness
 from app.modules.production.schemas import (
@@ -111,11 +113,55 @@ async def get_plan_board(
         )
     )
     rows = list(r.scalars().all())
+    line_rows = (await db.execute(select(SewingLine).where(SewingLine.tenant_id == tenant.id))).scalars().all()
+    lines_map = {
+        ln.id: {
+            "line_code": ln.line_code,
+            "is_active": ln.is_active,
+            "factory_unit": getattr(ln, "factory_unit", None),
+        }
+        for ln in line_rows
+    }
+    order_ids = {c.order_id for c in rows if c.order_id}
+    orders_map: dict[int, dict] = {}
+    if order_ids:
+        o_rows = (
+            await db.execute(
+                select(Order.id, Order.order_code, Order.delivery_date)
+                .where(Order.tenant_id == tenant.id)
+                .where(Order.id.in_(order_ids))
+            )
+        ).all()
+        orders_map = {o.id: {"order_code": o.order_code, "delivery_date": o.delivery_date} for o in o_rows}
+    plain = [
+        {
+            "id": c.id,
+            "line_id": c.line_id,
+            "order_id": c.order_id,
+            "start_date": c.start_date,
+            "planned_end_date": c.planned_end_date,
+            "status": c.status,
+            "planned_qty": float(c.planned_qty or 0),
+            "completed_qty": float(c.completed_qty or 0),
+        }
+        for c in rows
+    ]
+    conflicts = compute_plan_conflicts(plain, lines_map, orders_map)
+    factory_load = summarize_factory_load(plain, lines_map)
     return {
+        "conflicts": conflicts,
+        "factory_load": factory_load,
         "items": [
             {
                 "id": c.id,
                 "line_id": c.line_id,
+                "factory_unit": (lines_map.get(c.line_id) or {}).get("factory_unit"),
+                "order_code": (orders_map.get(c.order_id) or {}).get("order_code") if c.order_id else None,
+                "delivery_date": (
+                    d.isoformat()
+                    if c.order_id and (d := (orders_map.get(c.order_id) or {}).get("delivery_date"))
+                    else None
+                ),
                 "order_id": c.order_id,
                 "style_id": c.style_id,
                 "ob_id": c.ob_id,

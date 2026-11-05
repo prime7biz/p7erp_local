@@ -68,6 +68,7 @@ from app.modules.inventory.document_qr_service import (
     verify_inventory_document,
 )
 from app.modules.inventory import stock_snapshot_service
+from app.modules.inventory.qty_format import ZERO as QTY_ZERO, format_qty, to_qty_decimal
 from app.models import (
     Bom,
     BomItem,
@@ -392,6 +393,17 @@ async def _sum_accepted_for_po_line_excluding_grn(
     purchase_order_line_id: int,
     exclude_grn_id: int | None,
 ) -> float:
+    return float(
+        await _sum_accepted_for_po_line_excluding_grn_dec(db, tenant_id, purchase_order_line_id, exclude_grn_id)
+    )
+
+
+async def _sum_accepted_for_po_line_excluding_grn_dec(
+    db: AsyncSession,
+    tenant_id: int,
+    purchase_order_line_id: int,
+    exclude_grn_id: int | None,
+) -> Decimal:
     stmt = (
         select(GoodsReceivingItem.accepted_qty, GoodsReceivingItem.received_qty, GoodsReceivingItem.quantity)
         .join(GoodsReceiving, GoodsReceiving.id == GoodsReceivingItem.goods_receiving_id)
@@ -404,10 +416,9 @@ async def _sum_accepted_for_po_line_excluding_grn(
     )
     if exclude_grn_id is not None:
         stmt = stmt.where(GoodsReceiving.id != exclude_grn_id)
-    total = 0.0
+    total = QTY_ZERO
     for acc, recv, qty in (await db.execute(stmt)).all():
-        q = acc or recv or qty
-        total += _to_float(str(q) if q is not None else "0")
+        total += to_qty_decimal(acc or recv or qty)
     return total
 
 
@@ -3061,10 +3072,12 @@ async def create_goods_receiving(
             wh_id = p.warehouse_id or body.default_warehouse_id
             if not wh_id:
                 continue
-            prev = await _sum_accepted_for_po_line_excluding_grn(db, tenant.id, p.id, None)
-            ord_q = _to_float(p.quantity)
-            pending = max(0.0, ord_q - prev)
-            base_qty = f"{pending:.4g}" if pending > 0 else decimal_to_money_response(p.quantity)
+            prev = await _sum_accepted_for_po_line_excluding_grn_dec(db, tenant.id, p.id, None)
+            pending = to_qty_decimal(p.quantity) - prev
+            if pending <= QTY_ZERO:
+                # Fully received line: prefilling it again would invite over-receipt.
+                continue
+            base_qty = format_qty(pending)
             unit_price = decimal_to_money_response(p.unit_price) if p.unit_price is not None else None
             lines.append(
                 GoodsReceivingItemBody(
@@ -3092,7 +3105,7 @@ async def create_goods_receiving(
         acc = validate_non_negative_qty_str(acc, "accepted_qty")
         if _to_float(acc) - _to_float(recv) > 1e-6:
             raise HTTPException(status_code=400, detail="accepted_qty cannot exceed received_qty")
-        rej = f"{max(0.0, _to_float(recv) - _to_float(acc)):.4g}"
+        rej = format_qty(max(QTY_ZERO, to_qty_decimal(recv) - to_qty_decimal(acc)))
         up = d.get("unit_price")
         acc_val = None
         if up is not None and str(up).strip():
@@ -3113,8 +3126,9 @@ async def create_goods_receiving(
         prev_snap = None
         pend_snap = None
         if poi:
-            prev_snap = f"{await _sum_accepted_for_po_line_excluding_grn(db, tenant.id, poi.id, None):.4g}"
-            pend_snap = f"{max(0.0, _to_float(poi.quantity) - _to_float(prev_snap)):.4g}"
+            prev_dec = await _sum_accepted_for_po_line_excluding_grn_dec(db, tenant.id, poi.id, None)
+            prev_snap = format_qty(prev_dec)
+            pend_snap = format_qty(max(QTY_ZERO, to_qty_decimal(poi.quantity) - prev_dec))
         db.add(
             GoodsReceivingItem(
                 tenant_id=tenant.id,
@@ -3203,7 +3217,7 @@ async def _apply_grn_receive_goods(
         if _to_float(recv_s) + 1e-9 < _to_float(acc_s):
             raise HTTPException(status_code=400, detail="accepted_qty cannot exceed received_qty")
         if not qc_on:
-            line.rejected_qty = f"{max(0.0, _to_float(recv_s) - _to_float(acc_s)):.4g}"
+            line.rejected_qty = format_qty(max(QTY_ZERO, to_qty_decimal(recv_s) - to_qty_decimal(acc_s)))
             line.received_qty = recv_s
             line.accepted_qty = acc_s
             line.quantity = acc_s

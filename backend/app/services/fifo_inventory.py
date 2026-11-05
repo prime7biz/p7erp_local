@@ -69,6 +69,8 @@ async def fifo_process_inbound(
     db.add(layer)
     movement.unit_cost = _uc(uc)
     movement.movement_value = _money(total)
+    # Sessions use autoflush=False: flush so later outbound movements in the same session can query this layer.
+    await db.flush()
 
 
 async def fifo_process_outbound(db: AsyncSession, tenant_id: int, movement: StockMovement) -> float:

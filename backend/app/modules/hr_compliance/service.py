@@ -8,8 +8,9 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.ownership import ensure_owned
 from app.database import safe_async_session_rollback
-from app.models.hr import Employee
+from app.models.hr import Employee, EmployeeDocument
 from app.models.hr_compliance_framework import (
     ComplianceFramework,
     ComplianceRequirement,
@@ -235,6 +236,7 @@ async def create_record(
                 detail="Activate the system framework first, then record against the tenant requirement copy",
             )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found")
+    await ensure_owned(db, EmployeeDocument, body.evidence_document_id, tenant_id, "Document", status_code=404)
 
     status_val = (body.status or "PENDING").upper()
     row = EmployeeComplianceRecord(
@@ -275,6 +277,7 @@ async def update_record(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
     payload = body.model_dump(exclude_unset=True)
+    await ensure_owned(db, EmployeeDocument, payload.get("evidence_document_id"), tenant_id, "Document", status_code=404)
     if "status" in payload and payload["status"]:
         payload["status"] = str(payload["status"]).upper()
         if payload["status"] in {"COMPLIANT", "NON_COMPLIANT", "WAIVED", "UNDER_REVIEW"}:
@@ -316,6 +319,7 @@ async def create_age_verification(
     ).scalar_one_or_none()
     if emp is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
+    await ensure_owned(db, EmployeeDocument, body.document_id, tenant_id, "Document", status_code=404)
 
     age = calculate_age(body.date_of_birth)
     status_val, is_compliant, reason = classify_worker_age(age)
@@ -380,6 +384,7 @@ async def create_medical_record(
     ).scalar_one_or_none()
     if emp is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
+    await ensure_owned(db, EmployeeDocument, body.document_id, tenant_id, "Document", status_code=404)
     row = EmployeeMedicalRecord(
         tenant_id=tenant_id,
         employee_id=employee_id,
@@ -438,6 +443,7 @@ async def update_medical_record(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medical record not found")
     payload = body.model_dump(exclude_unset=True)
+    await ensure_owned(db, EmployeeDocument, payload.get("document_id"), tenant_id, "Document", status_code=404)
     if "fitness_status" in payload and payload["fitness_status"]:
         payload["fitness_status"] = str(payload["fitness_status"]).upper()
     for k, v in payload.items():

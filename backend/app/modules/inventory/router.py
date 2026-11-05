@@ -72,6 +72,8 @@ from app.models import (
     Bom,
     BomItem,
     BtbLc,
+    ExportCase,
+    MasterContract,
     ChartOfAccount,
     Customer,
     DeliveryChallan,
@@ -2263,6 +2265,8 @@ async def _validate_stock_group_body(db: AsyncSession, tenant: Tenant, body: Sto
         body.cogs_account_id,
         body.adjustment_account_id,
         body.grni_account_id,
+        body.sales_account_id,
+        body.purchase_account_id,
     ):
         await _ensure_chart_account_for_tenant(db, tenant.id, aid)
 
@@ -4913,6 +4917,9 @@ async def _validate_process_order_refs(db: AsyncSession, tenant_id: int, body: P
         (Order, body.source_order_id, "Order"),
         (Bom, body.source_bom_id, "BOM"),
         (ProcessOrder, body.prior_process_order_id, "Prior process order"),
+        (BtbLc, body.btb_lc_id, "BTB LC"),
+        (MasterContract, body.master_contract_id, "Master contract"),
+        (ExportCase, body.export_case_id, "Export case"),
     )
     for model, rid, label in refs:
         if rid is None:
@@ -5379,6 +5386,7 @@ async def create_manufacturing_order(
     _ensure_tenant(user, tenant)
     if _to_float(body.planned_quantity) <= 0:
         raise HTTPException(status_code=400, detail="Planned quantity must be greater than 0")
+    await ensure_owned(db, Item, body.finished_item_id, tenant.id, "Item")
     if body.mo_number:
         mo_number = body.mo_number
     else:

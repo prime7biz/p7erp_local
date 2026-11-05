@@ -46,6 +46,7 @@ from app.models.finance import (
 from app.models.inventory import PurchaseOrder, Vendor
 from app.models.merch import Order
 from app.models.customer import Customer
+from app.models.trade import TradeCase
 from app.modules.commercial.schemas import (
     BtbLcAccountingResponse,
     BtbLcCreate,
@@ -580,6 +581,7 @@ async def create_export_case(
         if not order or order.tenant_id != tenant.id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order not found")
         order_delivery = order.delivery_date
+    await ensure_owned(db, TradeCase, body.trade_case_id, tenant.id, "Trade case")
     _validate_export_case_dates(
         expected=body.expected_shipment_date,
         actual=body.actual_shipment_date,
@@ -647,6 +649,7 @@ async def update_export_case(
     expected = data.get("expected_shipment_date", row.expected_shipment_date)
     actual = data.get("actual_shipment_date", row.actual_shipment_date)
     _validate_export_case_dates(expected=expected, actual=actual, order_delivery=order_delivery)
+    await ensure_owned(db, TradeCase, data.get("trade_case_id"), tenant.id, "Trade case")
     for key, value in data.items():
         setattr(row, key, value)
     await db.commit()

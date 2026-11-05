@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.common.auth import get_current_user
+from app.common.ownership import ensure_owned
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.tenant import require_tenant
 from app.database import get_db
@@ -15,6 +16,7 @@ from app.models import (
     EmployeeTicket,
     EssPreference,
     LeaveRequest,
+    LeaveType,
     PayrollPayslip,
     PayrollRunLine,
     Tenant,
@@ -212,6 +214,9 @@ async def create_my_leave_request(
 ):
     _ensure_user_tenant(user, tenant)
     employee = await _get_my_employee_or_404(db, tenant.id, user.id)
+    await ensure_owned(db, LeaveType, body.leave_type_id, tenant.id, "Leave type")
+    if body.to_date < body.from_date:
+        raise HTTPException(status_code=400, detail="to_date must be on or after from_date")
     row = LeaveRequest(
         tenant_id=tenant.id,
         employee_id=employee.id,

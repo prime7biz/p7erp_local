@@ -11,10 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.db_datetime import utc_now_naive
+from app.common.ownership import ensure_owned
 from app.common.pagination import MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
+    Customer,
     FollowupActionRejectionLog,
     FollowupActionTemplate,
     GarmentStyle,
@@ -391,6 +393,7 @@ async def create_followup_template(
     _: None = Depends(require_merch_permission(MERCH_PERMISSION_TNA_MANAGE)),
 ):
     _ensure_tenant(user, tenant)
+    await ensure_owned(db, Customer, body.buyer_id, tenant.id, "Buyer", status_code=404)
     row = FollowupActionTemplate(tenant_id=tenant.id, **body.model_dump())
     db.add(row)
     await db.commit()
@@ -436,6 +439,7 @@ async def update_followup_template(
     row = await db.get(FollowupActionTemplate, template_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Template not found")
+    await ensure_owned(db, Customer, body.buyer_id, tenant.id, "Buyer", status_code=404)
     for f in ("name", "phase", "action_group", "sequence_no", "default_days_before_delivery", "is_mandatory", "is_active", "buyer_id"):
         v = getattr(body, f)
         if v is not None:
@@ -904,6 +908,8 @@ async def create_followup_action(
                 status_code=400,
                 detail="merch_sample_request_id must belong to the same order (or have no order)",
             )
+    await ensure_owned(db, FollowupActionTemplate, body.template_id, tenant.id, "Template", status_code=404)
+    await ensure_owned(db, User, body.assigned_to_id, tenant.id, "User", status_code=404)
     row = OrderFollowupAction(
         tenant_id=tenant.id,
         order_id=body.order_id,
@@ -963,6 +969,7 @@ async def update_followup_action(
                 status_code=400,
                 detail="merch_sample_request_id must belong to the same order (or have no order)",
             )
+    await ensure_owned(db, User, upd.get("assigned_to_id"), tenant.id, "User", status_code=404)
     for field in (
         "sequence_no", "phase", "action_group", "action_type", "title", "description",
         "planned_date", "actual_submission_date", "approval_received_date", "actual_completion_date", "resubmission_date",

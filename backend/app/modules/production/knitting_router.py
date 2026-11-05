@@ -175,6 +175,9 @@ async def create_plan(
 ):
     _ensure(user, tenant)
     require_knitting_enabled(tenant)
+    await ensure_owned(db, DepartmentMachine, body.machine_id, tenant.id, "Machine")
+    await ensure_owned(db, Item, body.yarn_item_id, tenant.id, "Item")
+    await ensure_owned(db, Order, body.order_id, tenant.id, "Order")
     pd = date.fromisoformat(body.planned_date) if body.planned_date else None
     row = KnittingPlan(
         tenant_id=tenant.id,

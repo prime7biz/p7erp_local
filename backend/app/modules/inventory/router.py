@@ -121,6 +121,7 @@ from app.services.fifo_inventory import finalize_movement_fifo, rebuild_fifo_lay
 from app.services.grn_inventory_gl import post_grn_receipt_gl_journal
 from app.modules.inventory.material_control_variance_service import build_order_material_variance
 from app.modules.inventory.stock_availability_service import compute_item_availability
+from app.modules.inventory.stock_on_hand import on_hand_qty as _sql_on_hand_qty
 from app.services.inventory_gl_service import (
     post_consumption_issue_gl,
     post_delivery_challan_gl,
@@ -436,16 +437,7 @@ async def _on_hand_qty(
     item_id: int,
     warehouse_id: int | None,
 ) -> float:
-    stmt = select(StockMovement).where(StockMovement.tenant_id == tenant_id, StockMovement.item_id == item_id)
-    if warehouse_id is None:
-        stmt = stmt.where(StockMovement.warehouse_id.is_(None))
-    else:
-        stmt = stmt.where(StockMovement.warehouse_id == warehouse_id)
-    result = await db.execute(stmt)
-    rows = list(result.scalars().all())
-    in_qty = sum(_to_float(r.quantity) for r in rows if r.movement_type == "IN")
-    out_qty = sum(_to_float(r.quantity) for r in rows if r.movement_type == "OUT")
-    return round(in_qty - out_qty, 3)
+    return await _sql_on_hand_qty(db, tenant_id, item_id, warehouse_id)
 
 
 async def _stock_summary_rows(

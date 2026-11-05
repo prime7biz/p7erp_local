@@ -219,6 +219,39 @@ async def calculate_tax_preview(
     }
 
 
+SALES_VOUCHER_TYPES = frozenset({"SALES", "SALE", "SALES_INVOICE", "SI", "SV"})
+PURCHASE_VOUCHER_TYPES = frozenset({"PURCHASE", "PURCHASE_INVOICE", "PJ", "PI", "PV"})
+SALES_SOURCE_MODULES = frozenset({"COMMERCIAL", "SALES", "AR"})
+PURCHASE_SOURCE_MODULES = frozenset({"INVENTORY", "VENDOR_BILL", "PURCHASE"})
+
+
+def voucher_trade_direction(voucher: Voucher) -> SupplyDirection | None:
+    """OUTWARD for sales vouchers, INWARD for purchase vouchers, None for everything else."""
+    vtype = (voucher.voucher_type or "").strip().upper()
+    src_mod = (voucher.source_module or "").strip().upper()
+    if vtype in SALES_VOUCHER_TYPES or src_mod in SALES_SOURCE_MODULES:
+        return "OUTWARD"
+    if vtype in PURCHASE_VOUCHER_TYPES or src_mod in PURCHASE_SOURCE_MODULES:
+        return "INWARD"
+    return None
+
+
+async def _cash_or_bank_account_ids(db: AsyncSession, tenant_id: int, account_ids: set[int]) -> set[int]:
+    from app.models.finance import AccountGroup
+    from app.modules.finance.voucher_controls import _is_cash_or_bank
+
+    if not account_ids:
+        return set()
+    rows = (
+        await db.execute(
+            select(ChartOfAccount, AccountGroup)
+            .join(AccountGroup, ChartOfAccount.group_id == AccountGroup.id)
+            .where(ChartOfAccount.tenant_id == tenant_id, ChartOfAccount.id.in_(account_ids))
+        )
+    ).all()
+    return {acct.id for acct, grp in rows if _is_cash_or_bank(acct, grp)}
+
+
 async def _infer_taxable_from_voucher(
     db: AsyncSession,
     tenant_id: int,
@@ -228,18 +261,30 @@ async def _infer_taxable_from_voucher(
     direction: SupplyDirection,
     default_rate: Decimal,
 ) -> list[dict[str, Any]]:
+    """Pick the lines GST applies to.
+
+    Lines tagged ``HSN:`` / ``GST_RATE:`` are always taxable. Untagged lines are only inferred
+    on sales/purchase vouchers (income side for sales, expense side for purchases). Cash and
+    bank lines are never taxable.
+    """
+    infer_untagged = voucher_trade_direction(voucher) is not None
+    cash_bank_ids = await _cash_or_bank_account_ids(db, tenant_id, {ln.account_id for ln in lines})
     taxable: list[dict[str, Any]] = []
     for ln in lines:
         notes = ln.notes or ""
         if notes.startswith(GST_LINE_MARKER):
             continue
+        if ln.account_id in cash_bank_ids:
+            continue
         meta = parse_line_tax_meta(notes)
-        # Prefer income (CREDIT) for outward, expense (DEBIT) for inward
-        if direction == "OUTWARD" and ln.entry_type != "CREDIT":
-            if meta["gst_rate"] is None and not meta["hsn_code"]:
+        tagged = meta["gst_rate"] is not None or bool(meta["hsn_code"])
+        if not tagged:
+            if not infer_untagged:
                 continue
-        if direction == "INWARD" and ln.entry_type != "DEBIT":
-            if meta["gst_rate"] is None and not meta["hsn_code"]:
+            # Income (CREDIT) for outward, expense (DEBIT) for inward
+            if direction == "OUTWARD" and ln.entry_type != "CREDIT":
+                continue
+            if direction == "INWARD" and ln.entry_type != "DEBIT":
                 continue
         rate = meta["gst_rate"] if meta["gst_rate"] is not None else default_rate
         if rate <= 0 and not meta["hsn_code"]:
@@ -281,12 +326,7 @@ async def calculate_tax_on_voucher(
     is_ut = bool(settings.get("is_union_territory"))
     default_rate = _rate(_d(settings.get("default_gst_rate") or "18"))
 
-    src_mod = (voucher.source_module or "").upper()
-    inferred_direction: SupplyDirection = direction or (
-        "INWARD" if src_mod in {"INVENTORY", "VENDOR_BILL", "PURCHASE"} else "OUTWARD"
-    )
-    if src_mod in {"COMMERCIAL", "SALES", "AR"}:
-        inferred_direction = direction or "OUTWARD"
+    inferred_direction: SupplyDirection = direction or voucher_trade_direction(voucher) or "OUTWARD"
 
     lines = list(
         (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher_id))).scalars().all()
@@ -362,6 +402,9 @@ async def apply_tax_lines_to_voucher(
     # Output tax: CREDIT tax ledgers; Input tax: DEBIT tax ledgers
     tax_entry: Literal["CREDIT", "DEBIT"] = "CREDIT" if direction == "OUTWARD" else "DEBIT"
     counter_entry: Literal["CREDIT", "DEBIT"] = "DEBIT" if tax_entry == "CREDIT" else "CREDIT"
+    rate = _d(voucher.exchange_rate)
+    if rate <= ZERO:
+        rate = Decimal("1")
 
     created: list[dict[str, Any]] = []
     for p in proposed_lines:
@@ -381,7 +424,7 @@ async def apply_tax_lines_to_voucher(
             account_id=ledger.chart_account_id,
             entry_type=tax_entry,
             amount=str(amt),
-            base_amount=str(amt),
+            base_amount=str(_money(amt * rate)),
             currency=voucher.currency or "BDT",
             exchange_rate=voucher.exchange_rate or "1",
             notes=f"{GST_LINE_MARKER} {ledger.tax_type} {p.get('tax_rate')}% HSN:{p.get('hsn_code') or '-'}",
@@ -410,10 +453,12 @@ async def apply_tax_lines_to_voucher(
         if not candidates:
             candidates = remaining
         target = max(candidates, key=lambda x: _d(x.amount))
+        from app.modules.finance.posting_core import line_base_amount
+
+        old_base = line_base_amount(target)
         new_amt = _money(_d(target.amount) + tax_total)
         target.amount = str(new_amt)
-        if target.base_amount is not None:
-            target.base_amount = str(new_amt)
+        target.base_amount = str(_money(old_base + tax_total * rate))
 
     await db.flush()
     # Verify balance

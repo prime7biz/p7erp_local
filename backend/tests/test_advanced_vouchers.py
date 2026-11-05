@@ -24,7 +24,7 @@ from app.common.tenant_feature_keys import (
 )
 from app.models import Customer, Tenant
 from app.models.advanced_vouchers import RecurringVoucherTemplate, VoucherClass
-from app.models.finance import AccountGroup, ChartOfAccount, Voucher, VoucherLine
+from app.models.finance import AccountGroup, AccountingPeriod, ChartOfAccount, Voucher, VoucherLine
 from app.models.party_ledger import PartyLedger, PartyLedgerBill
 from app.models.tenant import TenantType
 from app.modules.finance.advanced_voucher_service import (
@@ -59,6 +59,17 @@ async def _seed_tenant(db, *, flags: dict | None = None) -> Tenant:
         },
     )
     db.add(t)
+    await db.flush()
+    # Putting held vouchers into the books needs an open period, same as normal posting.
+    db.add(
+        AccountingPeriod(
+            tenant_id=t.id,
+            period_name=f"P{uuid.uuid4().hex[:4]}",
+            start_date=date.today() - timedelta(days=60),
+            end_date=date.today() + timedelta(days=60),
+            is_closed=False,
+        )
+    )
     await db.flush()
     return t
 

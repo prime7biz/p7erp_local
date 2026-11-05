@@ -85,6 +85,13 @@ async def _validate_recurring_refs(db: AsyncSession, tenant_id: int, body: "Recu
         )
 
 
+async def _require_posting_permission(db: AsyncSession, user: User, tenant_id: int) -> None:
+    """Putting a voucher into the books needs the same role as posting one."""
+    from app.modules.finance.router import _require_manager_or_admin
+
+    await _require_manager_or_admin(db, user, tenant_id)
+
+
 def _require_flag(enabled: bool, flag_name: str) -> None:
     if not enabled:
         raise HTTPException(
@@ -924,7 +931,10 @@ async def convert_memorandum_api(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_memorandum_voucher_enabled(tenant.feature_flags), "memorandum_voucher_enabled")
-    voucher = await convert_memorandum_to_regular(db, tenant.id, voucher_id)
+    await _require_posting_permission(db, user, tenant.id)
+    voucher = await convert_memorandum_to_regular(
+        db, tenant.id, voucher_id, feature_flags=tenant.feature_flags, user_id=user.id
+    )
     await db.commit()
     await db.refresh(voucher)
     return {
@@ -946,7 +956,10 @@ async def include_optional_in_books_api(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_optional_voucher_enabled(tenant.feature_flags), "optional_voucher_enabled")
-    voucher = await convert_optional_to_books(db, tenant.id, voucher_id)
+    await _require_posting_permission(db, user, tenant.id)
+    voucher = await convert_optional_to_books(
+        db, tenant.id, voucher_id, feature_flags=tenant.feature_flags, user_id=user.id
+    )
     await db.commit()
     await db.refresh(voucher)
     return {
@@ -965,6 +978,7 @@ async def activate_post_dated_now(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_post_dated_voucher_enabled(tenant.feature_flags), "post_dated_voucher_enabled")
-    ids = await activate_due_post_dated(db, tenant.id)
+    await _require_posting_permission(db, user, tenant.id)
+    ids = await activate_due_post_dated(db, tenant.id, feature_flags=tenant.feature_flags, user_id=user.id)
     await db.commit()
     return {"activated_ids": ids, "count": len(ids)}

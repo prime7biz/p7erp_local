@@ -29,7 +29,7 @@ async def _run_all_tenants() -> dict:
             generated = 0
             try:
                 if is_post_dated_voucher_enabled(flags):
-                    ids = await activate_due_post_dated(db, tenant_id)
+                    ids = await activate_due_post_dated(db, tenant_id, feature_flags=flags)
                     activated = len(ids)
                     if ids:
                         logger.info(

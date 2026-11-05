@@ -642,29 +642,115 @@ async def create_stock_transfer_voucher(
     }
 
 
-async def convert_optional_to_books(db: AsyncSession, tenant_id: int, voucher_id: int) -> Voucher:
-    voucher = await db.get(Voucher, voucher_id)
-    if not voucher or voucher.tenant_id != tenant_id:
+async def _lock_voucher_row(db: AsyncSession, tenant_id: int, voucher_id: int) -> Voucher:
+    await db.flush()
+    voucher = (
+        await db.execute(
+            select(Voucher)
+            .where(Voucher.id == voucher_id, Voucher.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if voucher is None:
         raise HTTPException(status_code=404, detail="Voucher not found")
+    return voucher
+
+
+async def post_held_voucher_to_books(
+    db: AsyncSession,
+    tenant_id: int,
+    voucher: Voucher,
+    *,
+    feature_flags: Any = None,
+    user_id: int | None = None,
+) -> list[str]:
+    """Put an already-POSTED voucher that was held out of the books (memorandum / optional /
+    post-dated) into the books, with the same checks and hooks as normal posting.
+
+    Caller must hold the voucher row lock. Returns control warnings.
+    """
+    from app.models.finance import AccountingPeriod
+    from app.modules.finance.posting_core import apply_voucher_to_books, load_voucher_lines
+    from app.modules.finance.voucher_controls import finalize_posted_voucher_metadata
+
+    if voucher.books_applied:
+        return []
+    open_period = (
+        await db.execute(
+            select(AccountingPeriod.id).where(
+                AccountingPeriod.tenant_id == tenant_id,
+                AccountingPeriod.is_closed.is_(False),
+                AccountingPeriod.start_date <= voucher.voucher_date,
+                AccountingPeriod.end_date >= voucher.voucher_date,
+            )
+        )
+    ).scalars().first()
+    if not open_period:
+        raise HTTPException(status_code=400, detail="No open accounting period for this voucher date")
+    lines = await load_voucher_lines(db, voucher.id)
+    warnings = await finalize_posted_voucher_metadata(db, tenant_id, voucher, lines, strict_duplicate_check=True)
+    await apply_voucher_to_books(db, tenant_id, voucher, lines)
+
+    from app.modules.commercial.commercial_invoice_service import sync_ci_allocation_status_for_voucher
+    from app.modules.commercial.proforma_receipt_service import sync_allocation_status_for_voucher
+    from app.modules.facility.posting_hooks import process_facility_voucher_posted
+    from app.modules.finance.party_ledger_hooks import on_voucher_posted
+
+    await process_facility_voucher_posted(db, tenant_id, voucher, user_id)
+    await sync_allocation_status_for_voucher(db, tenant_id=tenant_id, voucher=voucher)
+    await sync_ci_allocation_status_for_voucher(db, tenant_id=tenant_id, voucher=voucher)
+    await on_voucher_posted(db, tenant_id, voucher, feature_flags=feature_flags, created_by=user_id)
+    await db.flush()
+    return list(warnings)
+
+
+async def convert_optional_to_books(
+    db: AsyncSession,
+    tenant_id: int,
+    voucher_id: int,
+    *,
+    feature_flags: Any = None,
+    user_id: int | None = None,
+) -> Voucher:
+    voucher = await _lock_voucher_row(db, tenant_id, voucher_id)
     if not voucher.is_optional and (voucher.voucher_type or "").upper() != "OPTIONAL":
         raise HTTPException(status_code=400, detail="Not an optional voucher")
     voucher.include_in_books = True
     voucher.is_optional = True
-    if (voucher.status or "").upper() == "POSTED" and not voucher.books_applied:
-        await apply_voucher_line_balances(db, tenant_id, voucher, reverse=False)
+    if (
+        (voucher.status or "").upper() == "POSTED"
+        and not voucher.books_applied
+        and voucher_should_affect_books(voucher)
+    ):
+        await post_held_voucher_to_books(db, tenant_id, voucher, feature_flags=feature_flags, user_id=user_id)
     return voucher
 
 
-async def convert_memorandum_to_regular(db: AsyncSession, tenant_id: int, voucher_id: int) -> Voucher:
-    voucher = await db.get(Voucher, voucher_id)
-    if not voucher or voucher.tenant_id != tenant_id:
-        raise HTTPException(status_code=404, detail="Voucher not found")
+async def convert_memorandum_to_regular(
+    db: AsyncSession,
+    tenant_id: int,
+    voucher_id: int,
+    *,
+    feature_flags: Any = None,
+    user_id: int | None = None,
+) -> Voucher:
+    voucher = await _lock_voucher_row(db, tenant_id, voucher_id)
+    vtype = (voucher.voucher_type or "").upper()
+    if vtype == "STOCK_TRANSFER" or getattr(voucher, "is_stock_transfer", False):
+        raise HTTPException(status_code=400, detail="Stock transfer vouchers cannot be converted")
+    if not voucher.is_memorandum and vtype != "MEMORANDUM":
+        raise HTTPException(status_code=400, detail="Not a memorandum voucher")
     voucher.is_memorandum = False
     voucher.include_in_books = True
-    if (voucher.voucher_type or "").upper() == "MEMORANDUM":
+    if vtype == "MEMORANDUM":
         voucher.voucher_type = "JOURNAL"
-    if (voucher.status or "").upper() == "POSTED" and not voucher.books_applied:
-        await apply_voucher_line_balances(db, tenant_id, voucher, reverse=False)
+    if (
+        (voucher.status or "").upper() == "POSTED"
+        and not voucher.books_applied
+        and voucher_should_affect_books(voucher)
+    ):
+        await post_held_voucher_to_books(db, tenant_id, voucher, feature_flags=feature_flags, user_id=user_id)
     return voucher
 
 
@@ -673,29 +759,46 @@ async def activate_due_post_dated(
     tenant_id: int,
     *,
     as_of: date | None = None,
+    feature_flags: Any = None,
+    user_id: int | None = None,
 ) -> list[int]:
-    """Clear is_post_dated for vouchers whose date has arrived; apply books if already POSTED."""
+    """Clear is_post_dated for vouchers whose date has arrived; put POSTED ones into the books.
+
+    Each voucher is locked and handled in its own savepoint. A voucher that cannot be booked
+    (closed period, duplicate, unbalanced) stays post-dated and is logged, the rest continue.
+    """
     as_of = as_of or date.today()
-    rows = list(
+    ids = list(
         (
             await db.execute(
-                select(Voucher).where(
+                select(Voucher.id)
+                .where(
                     Voucher.tenant_id == tenant_id,
                     Voucher.is_post_dated.is_(True),
                     Voucher.voucher_date <= as_of,
                     Voucher.status.in_(("DRAFT", "APPROVED", "POSTED", "SUBMITTED", "CHECKED", "RECOMMENDED")),
                 )
+                .order_by(Voucher.id)
             )
-        )
-        .scalars()
-        .all()
+        ).scalars().all()
     )
     activated = []
-    for v in rows:
-        v.is_post_dated = False
-        if (v.status or "").upper() == "POSTED" and not v.books_applied and voucher_should_affect_books(v, as_of=as_of):
-            await apply_voucher_line_balances(db, tenant_id, v, reverse=False)
-        activated.append(v.id)
+    for vid in ids:
+        try:
+            async with db.begin_nested():
+                v = await _lock_voucher_row(db, tenant_id, vid)
+                if not v.is_post_dated:
+                    continue
+                v.is_post_dated = False
+                if (
+                    (v.status or "").upper() == "POSTED"
+                    and not v.books_applied
+                    and voucher_should_affect_books(v, as_of=as_of)
+                ):
+                    await post_held_voucher_to_books(db, tenant_id, v, feature_flags=feature_flags, user_id=user_id)
+            activated.append(vid)
+        except Exception:
+            logger.exception("post-dated activation skipped tenant=%s voucher=%s", tenant_id, vid)
     await db.flush()
     return activated
 

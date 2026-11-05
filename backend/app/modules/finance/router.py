@@ -2883,6 +2883,15 @@ async def update_voucher_status(
             ).scalars().first()
             if not open_period:
                 raise HTTPException(status_code=400, detail="No open accounting period for this voucher date")
+            try:
+                from app.modules.finance.tds_service import split_tds_into_payment_voucher
+
+                async with db.begin_nested():
+                    await split_tds_into_payment_voucher(
+                        db, tenant.id, row, feature_flags=tenant.feature_flags, created_by=user.id
+                    )
+            except Exception:
+                logging.getLogger(__name__).exception("TDS split on payment failed voucher=%s", row.id)
             lines_result = await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))
             line_rows = list(lines_result.scalars().all())
             budget_check = await evaluate_voucher_budget(
@@ -2971,7 +2980,9 @@ async def update_voucher_status(
         from app.modules.commercial.proforma_receipt_service import sync_allocation_status_for_voucher
         from app.modules.commercial.commercial_invoice_service import sync_ci_allocation_status_for_voucher
         from app.modules.finance.party_ledger_hooks import on_voucher_cancelled
+        from app.modules.finance.tds_service import on_payment_voucher_cancelled
 
+        await on_payment_voucher_cancelled(db, tenant.id, row)
         await sync_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
         await sync_ci_allocation_status_for_voucher(db, tenant_id=tenant.id, voucher=row)
         await on_voucher_cancelled(db, tenant.id, row, feature_flags=tenant.feature_flags)
@@ -6385,6 +6396,9 @@ async def cancel_posted_voucher(
     if voucher.reversed_by_voucher_id:
         raise HTTPException(status_code=409, detail="Voucher already has a reversal")
     await _assert_no_facility_link(db, tenant.id, voucher.id)
+    from app.modules.finance.tds_service import on_payment_voucher_cancelled
+
+    await on_payment_voucher_cancelled(db, tenant.id, voucher)
     lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all())
     if voucher_book_impact_applied(voucher):
         await _assert_open_period(db, tenant.id, voucher.voucher_date)
@@ -6430,6 +6444,9 @@ async def reverse_voucher(
         )
     await _assert_no_facility_link(db, tenant.id, src.id)
     await _assert_open_period(db, tenant.id, date.today(), what="today's date (reversal date)")
+    from app.modules.finance.tds_service import on_payment_voucher_cancelled
+
+    await on_payment_voucher_cancelled(db, tenant.id, src)
 
     source_lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == src.id))).scalars().all())
     if not source_lines:

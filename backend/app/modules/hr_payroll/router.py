@@ -1631,7 +1631,7 @@ async def get_statutory_config(
 
     if not is_statutory_payroll_enabled(tenant.feature_flags):
         raise HTTPException(status_code=404, detail="Enable statutory_payroll_enabled feature flag")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_HR_PAYROLL_STATUTORY_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_STATUTORY_VIEW)
     row = (
         await db.execute(
             select(PayrollStatutoryConfig).where(PayrollStatutoryConfig.tenant_id == tenant.id).limit(1)
@@ -1669,7 +1669,7 @@ async def put_statutory_config(
 
     if not is_statutory_payroll_enabled(tenant.feature_flags):
         raise HTTPException(status_code=404, detail="Enable statutory_payroll_enabled feature flag")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_HR_PAYROLL_STATUTORY_EDIT)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_STATUTORY_EDIT)
     await _require_payroll_manage(db, user, tenant.id)
     row = (
         await db.execute(
@@ -1717,7 +1717,7 @@ async def preview_statutory(
 
     if not is_statutory_payroll_enabled(tenant.feature_flags):
         raise HTTPException(status_code=404, detail="Enable statutory_payroll_enabled feature flag")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_HR_PAYROLL_STATUTORY_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_STATUTORY_VIEW)
     row = (
         await db.execute(
             select(PayrollStatutoryConfig).where(PayrollStatutoryConfig.tenant_id == tenant.id).limit(1)

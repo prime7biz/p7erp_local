@@ -183,7 +183,7 @@ async def list_advanced_voucher_types(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_VOUCHER_TYPE_CONFIG)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_VOUCHER_TYPE_CONFIG)
     for code, name, flags in [
         ("CREDIT_NOTE", "Credit Note", {"is_credit_note": True}),
         ("DEBIT_NOTE", "Debit Note", {"is_debit_note": True}),
@@ -239,7 +239,7 @@ async def patch_advanced_voucher_type(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_VOUCHER_TYPE_CONFIG)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_VOUCHER_TYPE_CONFIG)
     row = await db.get(VoucherType, type_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher type not found")
@@ -275,7 +275,7 @@ async def list_voucher_classes(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_voucher_class_enabled(tenant.feature_flags), "voucher_class_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_VOUCHER_CLASS_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_VOUCHER_CLASS_VIEW)
     q = select(VoucherClass).where(VoucherClass.tenant_id == tenant.id).order_by(VoucherClass.name)
     if voucher_type:
         q = q.where(VoucherClass.voucher_type == voucher_type.upper())
@@ -292,7 +292,7 @@ async def create_voucher_class(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_voucher_class_enabled(tenant.feature_flags), "voucher_class_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_VOUCHER_CLASS_CREATE)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_VOUCHER_CLASS_CREATE)
     await _validate_voucher_class_refs(db, tenant.id, body)
     row = VoucherClass(
         tenant_id=tenant.id,
@@ -326,7 +326,7 @@ async def get_voucher_class(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_voucher_class_enabled(tenant.feature_flags), "voucher_class_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_VOUCHER_CLASS_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_VOUCHER_CLASS_VIEW)
     row = await db.get(VoucherClass, class_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher class not found")
@@ -343,7 +343,7 @@ async def update_voucher_class(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_voucher_class_enabled(tenant.feature_flags), "voucher_class_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_VOUCHER_CLASS_EDIT)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_VOUCHER_CLASS_EDIT)
     row = await db.get(VoucherClass, class_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher class not found")
@@ -376,7 +376,7 @@ async def delete_voucher_class(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_voucher_class_enabled(tenant.feature_flags), "voucher_class_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_VOUCHER_CLASS_DELETE)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_VOUCHER_CLASS_DELETE)
     row = await db.get(VoucherClass, class_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher class not found")
@@ -394,7 +394,7 @@ async def voucher_class_prefills(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_voucher_class_enabled(tenant.feature_flags), "voucher_class_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_VOUCHER_CLASS_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_VOUCHER_CLASS_VIEW)
     row = await db.get(VoucherClass, class_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher class not found")
@@ -422,7 +422,7 @@ async def list_recurring(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_recurring_voucher_enabled(tenant.feature_flags), "recurring_voucher_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_RECURRING_VOUCHER_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_RECURRING_VOUCHER_VIEW)
     rows = list(
         (
             await db.execute(
@@ -446,7 +446,7 @@ async def create_recurring(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_recurring_voucher_enabled(tenant.feature_flags), "recurring_voucher_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_RECURRING_VOUCHER_CREATE)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_RECURRING_VOUCHER_CREATE)
     await _validate_recurring_refs(db, tenant.id, body)
     row = RecurringVoucherTemplate(
         tenant_id=tenant.id,
@@ -482,7 +482,7 @@ async def update_recurring(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_recurring_voucher_enabled(tenant.feature_flags), "recurring_voucher_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_RECURRING_VOUCHER_EDIT)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_RECURRING_VOUCHER_EDIT)
     row = await db.get(RecurringVoucherTemplate, template_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -516,7 +516,7 @@ async def delete_recurring(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_recurring_voucher_enabled(tenant.feature_flags), "recurring_voucher_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_RECURRING_VOUCHER_DELETE)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_RECURRING_VOUCHER_DELETE)
     row = await db.get(RecurringVoucherTemplate, template_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -534,7 +534,7 @@ async def generate_recurring_now(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_recurring_voucher_enabled(tenant.feature_flags), "recurring_voucher_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_RECURRING_VOUCHER_EDIT)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_RECURRING_VOUCHER_EDIT)
     row = await db.get(RecurringVoucherTemplate, template_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -561,7 +561,7 @@ async def recurring_history(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_recurring_voucher_enabled(tenant.feature_flags), "recurring_voucher_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_RECURRING_VOUCHER_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_RECURRING_VOUCHER_VIEW)
     row = await db.get(RecurringVoucherTemplate, template_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -607,7 +607,7 @@ async def create_credit_note(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_credit_debit_note_enabled(tenant.feature_flags), "credit_debit_note_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_CREDIT_NOTE_CREATE)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_CREDIT_NOTE_CREATE)
     voucher = await create_note_voucher(
         db,
         tenant.id,
@@ -645,7 +645,7 @@ async def create_debit_note(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_credit_debit_note_enabled(tenant.feature_flags), "credit_debit_note_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_DEBIT_NOTE_CREATE)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_DEBIT_NOTE_CREATE)
     voucher = await create_note_voucher(
         db,
         tenant.id,
@@ -686,7 +686,7 @@ async def create_stock_transfer_voucher_api(
 ):
     _ensure_tenant(user, tenant)
     _require_flag(is_stock_transfer_voucher_enabled(tenant.feature_flags), "stock_transfer_voucher_enabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_STOCK_TRANSFER_VOUCHER_CREATE)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_STOCK_TRANSFER_VOUCHER_CREATE)
     result = await create_stock_transfer_voucher(
         db,
         tenant.id,

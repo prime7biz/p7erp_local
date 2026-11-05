@@ -10,9 +10,11 @@ from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.codegen import next_tenant_code
+from app.common.inventory_policy import tenant_allows_negative_stock
 from app.common.tenant_feature_keys import (
     is_batch_tracking_enabled,
     is_grn_quality_inspection_enabled,
@@ -34,6 +36,7 @@ from app.modules.inventory.job_work_costing_service import (
 )
 from app.modules.inventory.process_loss_service import get_standard_for_process
 from app.modules.inventory.stock_batch_service import issue_batch_fifo
+from app.modules.inventory.stock_locks import lock_stock_items, on_hand_qty_decimal
 from app.modules.inventory.stock_valuation_service import refresh_item_stock_caches
 from app.services.fifo_inventory import finalize_movement_fifo
 from app.services.wip_gl_service import maybe_post_idt_issue_wip, maybe_post_idt_receive_wip
@@ -121,6 +124,18 @@ async def create_idt_issue(
     if qty <= ZERO:
         raise HTTPException(status_code=400, detail="Source qty must be positive")
 
+    await lock_stock_items(db, tenant_id, [source_item_id])
+    if not await tenant_allows_negative_stock(db, tenant_id):
+        available = await on_hand_qty_decimal(db, tenant_id, source_item_id, from_warehouse_id)
+        if available + Decimal("0.0001") < qty:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Insufficient stock for {source.item_code} at source. "
+                    f"Available={_q(available)}, required={qty}"
+                ),
+            )
+
     unit_cost = await _avg_unit_cost(db, tenant_id, source_item_id)
     primary_batch_id = source_batch_id
 
@@ -149,7 +164,8 @@ async def create_idt_issue(
                         primary_batch_id = a["batch_id"]
                 if total_q > ZERO:
                     unit_cost = _q(total_val / total_q)
-        except HTTPException:
+        except (HTTPException, DBAPIError):
+            # A DB error aborts the transaction; let it surface instead of failing later.
             raise
         except Exception as exc:
             logger.warning("IDT FIFO allocate failed: %s", exc)
@@ -261,8 +277,16 @@ async def receive_idt(
     notes: str | None = None,
 ) -> InterDepartmentTransfer:
     tenant_id = tenant.id
-    idt = await db.get(InterDepartmentTransfer, idt_id)
-    if not idt or idt.tenant_id != tenant_id:
+    # Row lock: concurrent receipts for the same IDT run one after another.
+    idt = (
+        await db.execute(
+            select(InterDepartmentTransfer)
+            .where(InterDepartmentTransfer.id == idt_id, InterDepartmentTransfer.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not idt:
         raise HTTPException(status_code=404, detail="IDT not found")
     if idt.status not in ("ISSUED", "RECEIVED_PARTIALLY"):
         raise HTTPException(status_code=400, detail="IDT is not open for receive")

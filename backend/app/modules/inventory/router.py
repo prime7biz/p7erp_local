@@ -69,6 +69,7 @@ from app.modules.inventory.document_qr_service import (
 )
 from app.modules.inventory import stock_snapshot_service
 from app.modules.inventory.qty_format import ZERO as QTY_ZERO, format_qty, to_qty_decimal
+from app.modules.inventory.stock_locks import lock_stock_items
 from app.models import (
     Bom,
     BomItem,
@@ -4210,8 +4211,7 @@ async def _lock_stock_items(db: AsyncSession, tenant_id: int, item_ids: Iterable
     Serializes concurrent issues of the same item so two documents cannot both
     pass the on-hand check and drive stock negative.
     """
-    for iid in sorted({int(i) for i in item_ids if i}):
-        await db.execute(select(func.pg_advisory_xact_lock(int(tenant_id), iid)))
+    await lock_stock_items(db, tenant_id, item_ids)
 
 
 @router.post("/delivery-challans", response_model=DeliveryChallanOut)
@@ -6347,8 +6347,16 @@ async def post_warehouse_transfer(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = await db.get(WarehouseTransfer, transfer_id)
-    if not row or row.tenant_id != tenant.id:
+    # Row lock: a second concurrent "post" waits here, then sees POSTED and is rejected.
+    row = (
+        await db.execute(
+            select(WarehouseTransfer)
+            .where(WarehouseTransfer.id == transfer_id, WarehouseTransfer.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Transfer not found")
     if row.status != "DRAFT":
         raise HTTPException(status_code=400, detail="Only draft transfer can be posted")
@@ -6359,6 +6367,7 @@ async def post_warehouse_transfer(
     if not lines:
         raise HTTPException(status_code=400, detail="Transfer has no lines")
 
+    await _lock_stock_items(db, tenant.id, (ln.item_id for ln in lines))
     allow_neg = await tenant_allows_negative_stock(db, tenant.id)
     for line in lines:
         req = _to_float(line.quantity)
@@ -6484,8 +6493,15 @@ async def post_stock_adjustment(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = await db.get(StockAdjustment, adjustment_id)
-    if not row or row.tenant_id != tenant.id:
+    row = (
+        await db.execute(
+            select(StockAdjustment)
+            .where(StockAdjustment.id == adjustment_id, StockAdjustment.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Adjustment not found")
     if row.status != "DRAFT":
         raise HTTPException(status_code=400, detail="Only draft adjustment can be posted")
@@ -6494,6 +6510,7 @@ async def post_stock_adjustment(
     if qty_f == 0:
         raise HTTPException(status_code=400, detail="Quantity cannot be zero")
     mv_date = row.adjustment_date or date.today()
+    await _lock_stock_items(db, tenant.id, [row.item_id])
     if qty_f < 0:
         allow_neg = await tenant_allows_negative_stock(db, tenant.id)
         available = await _on_hand_qty(db, tenant.id, row.item_id, row.warehouse_id)
@@ -6701,8 +6718,15 @@ async def post_physical_inventory_session(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    row = await db.get(PhysicalInventorySession, session_id)
-    if not row or row.tenant_id != tenant.id:
+    row = (
+        await db.execute(
+            select(PhysicalInventorySession)
+            .where(PhysicalInventorySession.id == session_id, PhysicalInventorySession.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if not row:
         raise HTTPException(status_code=404, detail="Physical count session not found")
     if row.status != "DRAFT":
         raise HTTPException(status_code=400, detail="Only draft session can be posted")
@@ -6712,6 +6736,7 @@ async def post_physical_inventory_session(
     lines = list(lines_result.scalars().all())
     if not lines:
         raise HTTPException(status_code=400, detail="Session has no lines")
+    await _lock_stock_items(db, tenant.id, (ln.item_id for ln in lines))
     mv_date = row.count_date or date.today()
     allow_neg = await tenant_allows_negative_stock(db, tenant.id)
     for line in lines:

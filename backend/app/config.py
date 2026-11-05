@@ -190,6 +190,10 @@ class Settings(BaseSettings):
     api_cache_enabled: bool = False
     api_cache_tax_config_ttl_seconds: int = 300
 
+    # Dashboard "AI summary" card: reuse the LLM answer per tenant for this many seconds
+    # (Redis when available, else in-process). 0 = call the LLM on every dashboard load.
+    dashboard_ai_summary_ttl_seconds: int = 1800
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

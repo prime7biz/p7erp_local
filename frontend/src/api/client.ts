@@ -8499,8 +8499,9 @@ export const api = {
   async getDashboardCustomerMap(): Promise<CustomerMapPoint[]> {
     return request<CustomerMapPoint[]>("/api/v1/dashboard/customer-map");
   },
-  async getDashboardInsights(): Promise<DashboardInsight[]> {
-    return request<DashboardInsight[]>("/api/v1/dashboard/ai-insights");
+  async getDashboardInsights(options?: { refresh?: boolean }): Promise<DashboardInsight[]> {
+    const qs = options?.refresh ? "?refresh=true" : "";
+    return request<DashboardInsight[]>(`/api/v1/dashboard/ai-insights${qs}`);
   },
   async getDashboardAiBrief(): Promise<AiDashboardBriefResponse> {
     return request<AiDashboardBriefResponse>("/api/v1/dashboard/ai-brief");

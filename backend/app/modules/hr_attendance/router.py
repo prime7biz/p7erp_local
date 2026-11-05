@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
+from app.common.ownership import ensure_owned
 from app.common.pagination import (
     HR_LIST_DEFAULT_LIMIT,
     HR_LIST_MAX_LIMIT,
@@ -280,6 +281,7 @@ async def create_roster(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_ATTENDANCE_MANAGE)
     await _employee_or_404(db, tenant.id, body.employee_id)
     await _shift_or_404(db, tenant.id, body.shift_id)
     row = AttendanceRoster(tenant_id=tenant.id, created_by=user.id, **body.model_dump())
@@ -302,6 +304,7 @@ async def update_roster(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_ATTENDANCE_MANAGE)
     row = await db.get(AttendanceRoster, roster_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Roster not found")
@@ -406,6 +409,7 @@ async def create_entry(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_ATTENDANCE_MANAGE)
     await _employee_or_404(db, tenant.id, body.employee_id)
     await _assert_attendance_date_open(db, tenant.id, body.attendance_date)
     payload = body.model_dump()
@@ -761,7 +765,9 @@ async def create_overtime_entry(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_ATTENDANCE_MANAGE)
     await _employee_or_404(db, tenant.id, body.employee_id)
+    await ensure_owned(db, OvertimeRule, body.rule_id, tenant.id, "Overtime rule")
     row = OvertimeEntry(
         tenant_id=tenant.id,
         employee_id=body.employee_id,

@@ -14,11 +14,15 @@ from app.common.auth import get_current_user
 from app.common.cache import cache_delete, cache_get_json, cache_set_json, tax_config_cache_key
 from app.common.money_schema import MoneyStrNonNeg
 from app.common.ownership import ensure_owned
-from app.common.permissions import assert_delegate_manager_or_permission
+from app.common.permissions import (
+    PERMISSION_HR_PAYROLL_MANAGE,
+    assert_delegate_manager_or_permission,
+    assert_hr_manager_or_permission,
+)
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db, safe_async_session_rollback
-from app.models import BtbLc, Tenant, TradeCase, User
+from app.models import BtbLc, PayrollRun, Tenant, TradeCase, User
 from app.models.compliance import BondedWarehouseEntry, PayrollStatutorySummary, TenantStatutoryTaxConfig
 from app.modules.compliance.statutory_tax_service import (
     apply_taxes_to_line,
@@ -299,6 +303,8 @@ async def payroll_statutory_calculate(
         pf_employer_rate_pct=Decimal(body.pf_employer_rate_pct),
     )
     if body.persist and body.period_year and body.period_month:
+        await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
+        await ensure_owned(db, PayrollRun, body.payroll_run_id, tenant.id, "Payroll run")
         try:
             summary = PayrollStatutorySummary(
                 tenant_id=tenant.id,

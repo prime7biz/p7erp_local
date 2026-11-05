@@ -720,6 +720,7 @@ async def list_run_lines(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     await _run_or_404(db, tenant.id, run_id)
     rows = (
         await db.execute(
@@ -1289,6 +1290,7 @@ async def list_advances(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     rows = (await db.execute(select(EmployeeAdvance).where(EmployeeAdvance.tenant_id == tenant.id).limit(500))).scalars().all()
     return [
         {
@@ -1469,6 +1471,7 @@ async def list_assignments(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     rows = await payroll_service.list_structure_assignments(
         db, tenant_id=tenant.id, employee_id=employee_id, limit=limit, offset=offset
     )
@@ -1529,6 +1532,7 @@ async def auto_calculate_preview(
     await assert_soft_permission_allowed(
         db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_AUTO_CALCULATE
     )
+    await _require_payroll_manage(db, user, tenant.id)
     preview = await payroll_service.preview_auto_calculate(db, tenant=tenant, run_id=run_id)
     return PayrollAutoCalculatePreviewOut(
         run_id=preview.run_id,

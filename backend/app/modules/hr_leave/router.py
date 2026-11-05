@@ -11,7 +11,11 @@ from app.common.auth import get_current_user
 from app.common.orm_numeric import decimal_to_money_response
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
-from app.common.permissions import PERMISSION_HR_LEAVE_TYPES_MANAGE, assert_hr_manager_or_permission
+from app.common.permissions import (
+    PERMISSION_HR_ATTENDANCE_MANAGE,
+    PERMISSION_HR_LEAVE_TYPES_MANAGE,
+    assert_hr_manager_or_permission,
+)
 from app.common.tenant import require_tenant
 from app.database import get_db, safe_async_session_rollback
 from app.models import (
@@ -59,6 +63,18 @@ async def _employee_or_404(db: AsyncSession, tenant_id: int, employee_id: int) -
     if not row or row.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Employee not found")
     return row
+
+
+async def _require_self_or_leave_manage(db: AsyncSession, user: User, tenant_id: int, employee: Employee) -> None:
+    """Employees may file and edit their own leave; doing it for someone else needs HR rights."""
+    if employee.user_id is not None and employee.user_id == user.id:
+        return
+    await assert_hr_manager_or_permission(db, user, tenant_id, permission_key=PERMISSION_HR_ATTENDANCE_MANAGE)
+
+
+def _validate_leave_dates(from_date: date, to_date: date) -> None:
+    if to_date < from_date:
+        raise HTTPException(status_code=400, detail="to_date must be on or after from_date")
 
 
 async def _leave_type_or_404(db: AsyncSession, tenant_id: int, leave_type_id: int) -> LeaveType:
@@ -445,7 +461,9 @@ async def create_leave_request(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    await _employee_or_404(db, tenant.id, body.employee_id)
+    employee = await _employee_or_404(db, tenant.id, body.employee_id)
+    await _require_self_or_leave_manage(db, user, tenant.id, employee)
+    _validate_leave_dates(body.from_date, body.to_date)
     leave_type = await _leave_type_or_404(db, tenant.id, body.leave_type_id)
     initial_status = "PENDING" if leave_type.requires_approval else "APPROVED"
     row = LeaveRequest(
@@ -494,9 +512,14 @@ async def update_leave_request(
 ):
     _ensure_tenant(user, tenant)
     row = await _lock_leave_request(db, tenant.id, request_id)
+    await _require_self_or_leave_manage(db, user, tenant.id, await _employee_or_404(db, tenant.id, row.employee_id))
     if row.status not in {"DRAFT", "PENDING"}:
         raise HTTPException(status_code=400, detail="Only draft/pending requests can be edited")
     payload = body.model_dump(exclude_unset=True)
+    for key in ("from_date", "to_date"):
+        if key in payload and payload[key] is None:
+            raise HTTPException(status_code=400, detail=f"{key} cannot be empty")
+    _validate_leave_dates(payload.get("from_date", row.from_date), payload.get("to_date", row.to_date))
     old_days = _to_float(row.days_requested)
     for key, value in payload.items():
         setattr(row, key, value)
@@ -519,6 +542,7 @@ async def submit_leave_request(
 ):
     _ensure_tenant(user, tenant)
     row = await _lock_leave_request(db, tenant.id, request_id)
+    await _require_self_or_leave_manage(db, user, tenant.id, await _employee_or_404(db, tenant.id, row.employee_id))
     if row.status not in {"DRAFT", "PENDING"}:
         raise HTTPException(status_code=400, detail="Only draft/pending requests can be submitted")
     if row.status == "DRAFT":

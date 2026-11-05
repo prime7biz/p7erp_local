@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import logging
 from typing import Any, Literal
 
@@ -24,6 +25,11 @@ TOOL_SAFETY: dict[str, SafetyClass] = {
 
 def get_tool_safety_class(tool_name: str) -> SafetyClass:
     return TOOL_SAFETY.get(tool_name, "READ_ONLY")
+
+
+def is_read_only_tool(tool_name: str) -> bool:
+    """True only for tools explicitly classified READ_ONLY (unknown names are not read-only)."""
+    return TOOL_SAFETY.get(tool_name) == "READ_ONLY"
 
 
 def effective_tool_safety(tool_name: str, arguments: dict[str, Any] | None = None) -> SafetyClass:
@@ -58,7 +64,7 @@ def check_commit_allowed(*, tool_name: str, arguments: dict[str, Any]) -> tuple[
     if bool(arguments.get("human_approval_confirmed")) is True:
         token = str(arguments.get("human_approval_token") or "").strip()
         expected = (getattr(settings, "mcp_human_approval_secret", "") or "").strip()
-        if expected and token and token == expected:
+        if expected and token and hmac.compare_digest(token.encode(), expected.encode()):
             return True, None
         if not expected:
             return (

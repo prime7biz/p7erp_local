@@ -1704,19 +1704,27 @@ async def approve_escalation(
                 AiMessage.session_id == session.id,
                 AiMessage.role == "assistant",
             )
+            .with_for_update()
         )
     ).scalar_one_or_none()
     if escalation_msg_row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Escalation message not found")
 
-    meta = escalation_msg_row.content_json if isinstance(escalation_msg_row.content_json, dict) else {}
+    meta = dict(escalation_msg_row.content_json) if isinstance(escalation_msg_row.content_json, dict) else {}
     if not meta.get("escalation_pending"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message is not pending escalation")
 
-    effective_tool = (tool_required or str(meta.get("tool_required") or "")).strip()
+    # The client-sent tool_required is ignored; only the server-stored value is trusted.
+    effective_tool = str(meta.get("tool_required") or "").strip()
     if not effective_tool:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="tool_required is missing")
     effective_tool = normalize_paid_mcp_tool_name(effective_tool)
+
+    meta["escalation_pending"] = False
+    meta["escalation_approved_by_user_id"] = user.id
+    meta["escalation_approved_at"] = datetime.utcnow().isoformat()
+    escalation_msg_row.content_json = meta
+    await db.flush()
 
     request_id = uuid4().hex
     # Critical: preserve full session context (not only the latest prompt).
@@ -1746,6 +1754,7 @@ async def approve_escalation(
             tenant_id=tenant.id,
             requested_tool=effective_tool,
             tenant_system_prefix=build_tenant_system_prompt_line(tenant),
+            user=user,
         )
     else:
         paid_prompt = (

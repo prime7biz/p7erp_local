@@ -63,10 +63,13 @@ async def call_registered_tool(
     arguments: dict,
     *,
     context_tenant_id: int | None = None,
+    user=None,
 ) -> dict:
     """
     In-process MCP bridge for tool execution.
 
     This mirrors an MCP client/server roundtrip while staying inside backend process.
     """
-    return await execute_tool_call(tool_name, arguments, context_tenant_id=context_tenant_id)
+    return await execute_tool_call(
+        tool_name, arguments, context_tenant_id=context_tenant_id, user=user
+    )

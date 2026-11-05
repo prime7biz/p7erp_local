@@ -5125,6 +5125,8 @@ export const api = {
     created_to?: string;
     ai_indicators?: number;
     benchmark_hint?: number;
+    /** When true, hide superseded (older) revisions. */
+    latest_only?: boolean;
     limit?: number;
     offset?: number;
   }): Promise<QuotationResponse[]> {
@@ -5136,6 +5138,7 @@ export const api = {
     if (params?.created_to) q.set("created_to", params.created_to);
     if (params?.ai_indicators != null) q.set("ai_indicators", String(params.ai_indicators));
     if (params?.benchmark_hint != null) q.set("benchmark_hint", String(params.benchmark_hint));
+    if (params?.latest_only) q.set("latest_only", "true");
     if (params?.limit != null) q.set("limit", String(params.limit));
     if (params?.offset != null) q.set("offset", String(params.offset));
     const suffix = q.toString() ? `?${q.toString()}` : "";
@@ -5149,6 +5152,8 @@ export const api = {
     created_to?: string;
     ai_indicators?: number;
     benchmark_hint?: number;
+    /** When true, hide superseded (older) revisions. */
+    latest_only?: boolean;
     page?: number;
     page_size?: number;
   }): Promise<QuotationListPageResponse> {
@@ -5160,6 +5165,7 @@ export const api = {
     if (params?.created_to) q.set("created_to", params.created_to);
     if (params?.ai_indicators != null) q.set("ai_indicators", String(params.ai_indicators));
     if (params?.benchmark_hint != null) q.set("benchmark_hint", String(params.benchmark_hint));
+    if (params?.latest_only) q.set("latest_only", "true");
     if (params?.page != null) q.set("page", String(params.page));
     if (params?.page_size != null) q.set("page_size", String(params.page_size));
     const suffix = q.toString() ? `?${q.toString()}` : "";
@@ -8480,6 +8486,10 @@ export const api = {
   },
   async reviseQuotation(id: number): Promise<QuotationResponse> {
     return request<QuotationResponse>(`/api/v1/quotations/${id}/revise`, { method: "POST" });
+  },
+  /** All versions of a quotation (v1 first); the current one has is_latest_revision = true. */
+  async listQuotationRevisions(id: number): Promise<QuotationResponse[]> {
+    return request<QuotationResponse[]>(`/api/v1/quotations/${id}/revisions`);
   },
   async updateInquiryStatus(id: number, status: string, notes?: string): Promise<InquiryResponse> {
     return request<InquiryResponse>(`/api/v1/inquiries/${id}/status`, {
@@ -13026,6 +13036,12 @@ export interface QuotationResponse {
   is_converted_to_order?: boolean;
   converted_order_id?: number | null;
   version_no: number;
+  /** Revision lineage: null on the first version (v1). */
+  root_quotation_id?: number | null;
+  revision_of_id?: number | null;
+  /** Set when a newer revision replaced this one (read-only). */
+  superseded_at?: string | null;
+  is_latest_revision?: boolean;
   valid_until: string | null;
   notes: string | null;
   created_at: string;
@@ -15568,6 +15584,10 @@ export interface QuotationDetailResponse {
   is_converted_to_order?: boolean;
   converted_order_id?: number | null;
   version_no: number;
+  root_quotation_id?: number | null;
+  revision_of_id?: number | null;
+  superseded_at?: string | null;
+  is_latest_revision?: boolean;
   valid_until: string | null;
   size_ratio_enabled: boolean;
   pack_ratio: string | null;

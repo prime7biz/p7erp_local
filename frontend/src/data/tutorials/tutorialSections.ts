@@ -517,9 +517,22 @@ Statuses follow a chain such as **Draft → Submitted → Approved → Sent → 
 2. Use the **convert to order** (or equivalent) action the UI shows.
 3. Complete the **order** on \`/app/orders/new\` or the order detail screen, then confirm **order** status with your team.
 
+## Revise a quotation (new version)
+
+Use this when the buyer asks for a new price or terms **before** an order exists.
+
+1. Open the quotation and click **Duplicate as new version** (or **Actions → Duplicate** on the list).
+2. The app creates the next version (**v2**, **v3**, …) as a **Draft** with a new code. It keeps the same customer and **inquiry**, and copies all costing lines (materials, CM, other costs, size ratios).
+3. The older version is marked **Superseded**. It becomes **read-only**: you cannot edit, submit, approve, send, revise or convert it. A banner on it links to **View latest vX**.
+4. The inquiry, the pipeline board and **convert inquiry to quotation** always point to the **latest** version.
+5. On the Quotations list, use the **Latest only** chip to hide superseded versions.
+
+If a quotation is already linked to an **order**, it cannot be revised — change the order with an **order amendment** instead. If you delete the latest version by mistake, the previous version becomes the current one again.
+
 ## Common mistakes
 
 - Trying to convert while quotation is still **Draft** or not yet **Sent** / approved per your rules.
+- Trying to edit or convert an older **Superseded** version — open the latest version instead.
 - Skipping line **quantities** or **prices** then wondering why totals or approval fail.
 
 ## What to do next
@@ -531,8 +544,8 @@ Statuses follow a chain such as **Draft → Submitted → Approved → Sent → 
 - Use **Actions** on list rows for **View**, **Edit**, and **Print** where enabled.
 - On the **quotation workspace**, **Quotation AI** may include **Import from document** (PDF/image) to suggest header fields — always review before applying; locked commercial fields still follow change-request rules.
 - If conversion is blocked, check **quotation status** and role permissions.`,
-        tags: ["quotation", "order", "convert", "sales"],
-        lastUpdated: "2026-04-10",
+        tags: ["quotation", "order", "convert", "sales", "revision", "version"],
+        lastUpdated: "2026-11-06",
         relatedAppRoutes: ["/app/quotations", "/app/quotations/new", "/app/orders", "/app/orders/new"],
         relatedArticleIds: ["merch-pipeline", "merch-inquiry-detail", "gs-row-actions", "merch-order-color-size"],
       },

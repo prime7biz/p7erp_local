@@ -33,6 +33,7 @@ from app.modules.inventory.job_work_costing_service import (
     _d,
     _q,
     calculate_job_work_cost_from_idt,
+    receipt_cost_from_idt,
 )
 from app.modules.inventory.process_loss_service import get_standard_for_process
 from app.modules.inventory.stock_batch_service import issue_batch_fifo
@@ -295,11 +296,15 @@ async def receive_idt(
     if received <= ZERO:
         raise HTTPException(status_code=400, detail="Received qty must be positive")
 
+    # Partial receipts add up; loss and status use the running total.
+    previously_received = _q(_d(idt.target_qty_received))
+    total_received = _q(previously_received + received)
+
     issued = _d(idt.source_qty_issued)
-    loss_qty = _q(issued - received)
+    loss_qty = _q(issued - total_received)
     loss_pct = _q((loss_qty / issued) * 100) if issued > ZERO else ZERO
 
-    idt.target_qty_received = received
+    idt.target_qty_received = total_received
     idt.process_loss_qty = loss_qty
     idt.process_loss_percent = loss_pct
 
@@ -316,13 +321,18 @@ async def receive_idt(
 
     # Job work total
     if idt.is_job_work and idt.job_work_cost_per_unit is not None:
-        idt.job_work_total_cost = _q(_d(idt.job_work_cost_per_unit) * received)
+        idt.job_work_total_cost = _q(_d(idt.job_work_cost_per_unit) * total_received)
 
     br = calculate_job_work_cost_from_idt(idt)
     idt.target_item_value = br.unit_cost
 
+    receipt_value = receipt_cost_from_idt(
+        idt, previously_received=previously_received, received_now=received
+    )
+    receipt_unit_cost = receipt_value / received
+
     expected = _d(idt.target_qty_expected)
-    if received + Decimal("0.0001") >= expected:
+    if total_received + Decimal("0.0001") >= expected:
         idt.status = "RECEIVED_FULLY"
     else:
         idt.status = "RECEIVED_PARTIALLY"
@@ -352,7 +362,7 @@ async def receive_idt(
     )
     db.add(mv_in)
     await db.flush()
-    await finalize_movement_fifo(db, tenant_id, mv_in, in_unit_cost=float(br.unit_cost))
+    await finalize_movement_fifo(db, tenant_id, mv_in, in_unit_cost=float(receipt_unit_cost))
 
     if target and (
         is_batch_tracking_enabled(tenant.feature_flags) or getattr(target, "batch_tracking", False)
@@ -367,7 +377,7 @@ async def receive_idt(
         if existing:
             existing.received_qty = _q(_d(existing.received_qty) + received)
             existing.current_qty = _q(_d(existing.current_qty) + received)
-            existing.cost_per_unit = br.unit_cost
+            existing.cost_per_unit = _q(receipt_unit_cost)
             existing.status = "ACTIVE"
             existing.updated_at = datetime.utcnow()
             mv_in.batch_id = existing.id
@@ -380,7 +390,7 @@ async def receive_idt(
                 received_qty=received,
                 issued_qty=ZERO,
                 current_qty=received,
-                cost_per_unit=br.unit_cost,
+                cost_per_unit=_q(receipt_unit_cost),
                 godown_id=idt.to_warehouse_id,
                 status="ACTIVE",
                 source_movement_id=mv_in.id,

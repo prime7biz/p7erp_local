@@ -71,6 +71,36 @@ def calculate_job_work_cost_from_idt(idt: InterDepartmentTransfer) -> JobWorkCos
     )
 
 
+def receipt_cost_from_idt(
+    idt: InterDepartmentTransfer,
+    *,
+    previously_received: Decimal,
+    received_now: Decimal,
+) -> Decimal:
+    """Stock value carried by one IDT receipt.
+
+    Material, transport and other charges are absorbed once, by the first receipt
+    (so a single receipt is valued exactly as before, including normal process loss).
+    Per-unit job-work cost follows the qty of each receipt. All receipts together
+    therefore equal the IDT total cost instead of repeating it on every receipt.
+    """
+    first_receipt = _d(previously_received) <= ZERO
+    fixed = ZERO
+    if first_receipt:
+        fixed = (
+            _q(_d(idt.source_item_cost) * _d(idt.source_qty_issued))
+            + _q(_d(idt.transport_cost))
+            + _q(_d(idt.other_charges))
+        )
+    jw = ZERO
+    if idt.is_job_work:
+        if idt.job_work_cost_per_unit is not None:
+            jw = _q(_d(idt.job_work_cost_per_unit) * _d(received_now))
+        elif first_receipt and idt.job_work_total_cost is not None:
+            jw = _q(_d(idt.job_work_total_cost))
+    return _q(fixed + jw)
+
+
 async def calculate_job_work_cost(
     db: AsyncSession,
     idt_id: int,

@@ -74,6 +74,42 @@ async def test_forgot_password_returns_200_when_email_send_fails(db_session_inte
 
 
 @pytest.mark.asyncio
+async def test_forgot_password_same_response_and_email_sent_in_background(db_session_integration, monkeypatch):
+    db = db_session_integration
+    tenant, user = await _seed_tenant_user(db)
+    await db.commit()
+
+    sent: list[str] = []
+
+    async def _capture(*, to_email, reset_token, recipient_name=None):
+        assert reset_token
+        sent.append(to_email)
+
+    monkeypatch.setattr("app.modules.auth.router.send_forgot_password_email", _capture)
+
+    async def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            known = await ac.post(
+                "/api/v1/auth/forgot-password",
+                json={"email": user.email, "company_code": tenant.company_code},
+            )
+            unknown = await ac.post(
+                "/api/v1/auth/forgot-password",
+                json={"email": f"nobody-{uuid.uuid4().hex[:6]}@example.com", "company_code": tenant.company_code},
+            )
+        assert known.status_code == unknown.status_code == 200
+        assert known.json() == unknown.json()
+        assert sent == [user.email]
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.asyncio
 async def test_forgot_password_returns_200_when_log_action_fails(db_session_integration, monkeypatch):
     """Audit log_action failures must not surface as 500 to the client."""
     db = db_session_integration

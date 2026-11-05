@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.ownership import ensure_owned
 from app.models.finance import ChartOfAccount, Voucher, VoucherLine
 from app.models.party_ledger import PartyLedger
 from app.models.tds import TdsDeduction, TdsSection
@@ -258,6 +259,9 @@ async def create_tds_deduction_record(
     created_by: int | None = None,
     notes: str | None = None,
 ) -> TdsDeduction:
+    await ensure_owned(db, PartyLedger, party_ledger_id, tenant_id, "Party ledger")
+    await ensure_owned(db, TdsSection, tds_section_id, tenant_id, "TDS section")
+    await ensure_owned(db, Voucher, voucher_id, tenant_id, "Voucher")
     row = TdsDeduction(
         tenant_id=tenant_id,
         party_ledger_id=party_ledger_id,
@@ -421,6 +425,8 @@ async def generate_tds_return(
                 .join(PartyLedger, PartyLedger.id == TdsDeduction.party_ledger_id)
                 .where(
                     TdsDeduction.tenant_id == tenant_id,
+                    TdsSection.tenant_id == tenant_id,
+                    PartyLedger.tenant_id == tenant_id,
                     TdsDeduction.deduction_date >= start,
                     TdsDeduction.deduction_date <= end,
                 )

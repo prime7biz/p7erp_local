@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.orm_numeric import api_money_to_decimal, decimal_to_money_response
+from app.common.ownership import ensure_owned
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.permissions import (
@@ -46,6 +47,7 @@ from app.models import (
     VoucherLine,
 )
 from app.modules.hr_payroll.schemas import (
+    PayrollAccountingConfigUpdate,
     PayrollApproveBody,
     PayrollAssignmentCreate,
     PayrollAssignmentEndBody,
@@ -1257,32 +1259,24 @@ async def get_payroll_accounting_config(
 
 @router.put("/accounting-config")
 async def upsert_payroll_accounting_config(
-    body: dict,
+    body: PayrollAccountingConfigUpdate,
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
+    changes = body.model_dump(exclude_unset=True)
+    for key, account_id in changes.items():
+        await ensure_owned(db, ChartOfAccount, account_id, tenant.id, key)
     row = (
         await db.execute(select(PayrollAccountingConfig).where(PayrollAccountingConfig.tenant_id == tenant.id).limit(1))
     ).scalar_one_or_none()
     if not row:
         row = PayrollAccountingConfig(tenant_id=tenant.id)
         db.add(row)
-    for key in (
-        "salary_expense_account_id",
-        "salary_payable_account_id",
-        "bank_account_id",
-        "cash_account_id",
-        "tax_payable_account_id",
-        "pf_payable_account_id",
-        "esi_payable_account_id",
-        "pt_payable_account_id",
-        "advance_receivable_account_id",
-    ):
-        if key in body:
-            setattr(row, key, body[key])
+    for key, account_id in changes.items():
+        setattr(row, key, account_id)
     await db.commit()
     await db.refresh(row)
     return await get_payroll_accounting_config(tenant, user, db)

@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
@@ -14,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.authz import ensure_user_is_tenant_admin
+from app.common.db_datetime import utc_now_naive
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db, safe_async_session_rollback
@@ -148,7 +148,7 @@ async def lemon_squeezy_webhook(request: Request, db: AsyncSession = Depends(get
         else:
             logger.info("Lemon Squeezy webhook ignored event_name=%s", event_name)
 
-        row.processed_at = datetime.now(timezone.utc)
+        row.processed_at = utc_now_naive()
         row.tenant_id = tenant_id_for_row
         await db.commit()
     except Exception:

@@ -14,16 +14,23 @@ from app.models import PlatformPlan, TenantSubscription
 logger = logging.getLogger(__name__)
 
 
+def _to_naive_utc(dt: datetime) -> datetime:
+    """Subscription columns are TIMESTAMP WITHOUT TIME ZONE; store UTC without tzinfo."""
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _parse_ls_datetime(val: Any) -> datetime | None:
     if val is None:
         return None
     if isinstance(val, datetime):
-        return val
+        return _to_naive_utc(val)
     if not isinstance(val, str):
         return None
     s = val.strip().replace("Z", "+00:00")
     try:
-        return datetime.fromisoformat(s)
+        return _to_naive_utc(datetime.fromisoformat(s))
     except ValueError:
         return None
 

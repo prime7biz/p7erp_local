@@ -29,6 +29,7 @@ from app.models.party_ledger import PartyLedger, PartyLedgerBill
 from app.models.tenant import TenantType
 from app.modules.finance.advanced_voucher_service import (
     activate_due_post_dated,
+    apply_posted_note_to_party_bills,
     convert_memorandum_to_regular,
     convert_optional_to_books,
     create_note_voucher,
@@ -207,21 +208,31 @@ async def test_credit_note_creates_bill_and_allocation(db_session_integration):
     assert debits == credits
     assert debits == Decimal("1180.0000")
 
-    note_bills = list(
-        (
-            await db.execute(
-                select(PartyLedgerBill).where(
-                    PartyLedgerBill.party_ledger_id == ledger.id,
-                    PartyLedgerBill.bill_type == "CREDIT_NOTE",
+    async def _note_bills():
+        return list(
+            (
+                await db.execute(
+                    select(PartyLedgerBill).where(
+                        PartyLedgerBill.party_ledger_id == ledger.id,
+                        PartyLedgerBill.bill_type == "CREDIT_NOTE",
+                    )
                 )
             )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    )
-    assert len(note_bills) == 1
+
+    # A draft note does not touch the party outstanding yet.
+    assert len(await _note_bills()) == 0
     await db.refresh(original)
-    assert Decimal(str(original.pending_amount)) < Decimal("1180")
+    assert Decimal(str(original.pending_amount)) == Decimal("1180")
+
+    voucher.status = "POSTED"
+    await apply_posted_note_to_party_bills(db, t.id, voucher)
+    await apply_posted_note_to_party_bills(db, t.id, voucher)  # idempotent
+    assert len(await _note_bills()) == 1
+    await db.refresh(original)
+    assert Decimal(str(original.pending_amount)) == Decimal("0")
 
 
 @pytest.mark.asyncio

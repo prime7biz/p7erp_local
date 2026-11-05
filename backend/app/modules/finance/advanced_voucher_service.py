@@ -322,42 +322,7 @@ async def create_note_voucher(
             )
         )
     await db.flush()
-
-    # Party bill for the note (CR for CN reduces AR pending; DR for DN reduces AP)
-    note_bill = PartyLedgerBill(
-        tenant_id=tenant_id,
-        party_ledger_id=ledger.id,
-        bill_number=f"{note_kind}-{voucher.voucher_number}",
-        bill_date=voucher_date,
-        bill_type=note_kind,
-        original_amount=gross,
-        amount_type="CR" if note_kind == "CREDIT_NOTE" else "DR",
-        pending_amount=gross,
-        settled_amount=ZERO,
-        status="PENDING",
-        due_date=voucher_date,
-        voucher_id=voucher.id,
-        narration=description,
-    )
-    db.add(note_bill)
-    await db.flush()
-
-    # Allocate note against original bill
-    from app.modules.finance.party_ledger_bill_service import allocate_to_bill
-
-    try:
-        await allocate_to_bill(
-            db,
-            tenant_id,
-            bill_id=original.id,
-            voucher_id=voucher.id,
-            allocated_amount=min(gross, _d(original.pending_amount)),
-            allocated_date=voucher_date,
-            notes=f"Auto from {note_kind}",
-            created_by=created_by,
-        )
-    except Exception as exc:
-        logger.warning("CN/DN allocate skipped: %s", exc)
+    # The party outstanding changes only when the note is posted (apply_posted_note_to_party_bills).
 
     # Optional stock impact (goods returned)
     if stock_returns:
@@ -388,6 +353,134 @@ async def create_note_voucher(
         await db.flush()
 
     return voucher
+
+
+NOTE_VOUCHER_TYPES = frozenset({"CREDIT_NOTE", "DEBIT_NOTE"})
+
+
+def is_party_note_voucher(voucher: Voucher) -> bool:
+    return (voucher.voucher_type or "").upper() in NOTE_VOUCHER_TYPES and bool(
+        getattr(voucher, "original_party_bill_id", None)
+    )
+
+
+async def apply_posted_note_to_party_bills(
+    db: AsyncSession,
+    tenant_id: int,
+    voucher: Voucher,
+    *,
+    created_by: int | None = None,
+) -> PartyLedgerBill | None:
+    """Reduce the party outstanding for a posted CN/DN exactly once.
+
+    Records one note bill for the gross amount and settles it against the original bill as far
+    as that bill is still pending; any excess stays open on the note bill as an unapplied credit.
+    Safe to call twice: a voucher that already has a note bill is skipped.
+    """
+    if not is_party_note_voucher(voucher):
+        return None
+    note_kind = (voucher.voucher_type or "").upper()
+    previous = list(
+        (
+            await db.execute(
+                select(PartyLedgerBill).where(
+                    PartyLedgerBill.tenant_id == tenant_id,
+                    PartyLedgerBill.voucher_id == voucher.id,
+                    PartyLedgerBill.bill_type == note_kind,
+                )
+            )
+        ).scalars().all()
+    )
+    live = next((b for b in previous if b.status != "CANCELLED"), None)
+    if live is not None:
+        return live
+    # A note re-posted after cancel-posting reuses its cancelled bill (bill numbers are unique).
+    reusable = previous[0] if previous else None
+
+    original = (
+        await db.execute(
+            select(PartyLedgerBill)
+            .where(PartyLedgerBill.id == voucher.original_party_bill_id, PartyLedgerBill.tenant_id == tenant_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if original is None:
+        return None
+    ledger = await db.get(PartyLedger, original.party_ledger_id)
+    if ledger is None or ledger.tenant_id != tenant_id:
+        return None
+
+    lines = list(
+        (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all()
+    )
+    party_side = "CREDIT" if note_kind == "CREDIT_NOTE" else "DEBIT"
+    side_lines = [ln for ln in lines if (ln.entry_type or "").upper() == party_side]
+    party_line = next((ln for ln in side_lines if ln.account_id == ledger.ledger_account_id), None)
+    if party_line is None and side_lines:
+        party_line = max(side_lines, key=lambda ln: _d(ln.amount))
+    if party_line is None:
+        return None
+    gross = _money(_d(party_line.amount))
+    if gross <= ZERO:
+        return None
+
+    if reusable is not None:
+        note_bill = reusable
+        note_bill.party_ledger_id = ledger.id
+        note_bill.original_amount = gross
+        note_bill.pending_amount = gross
+        note_bill.settled_amount = ZERO
+        note_bill.status = "PENDING"
+        note_bill.voucher_line_id = party_line.id
+    else:
+        note_bill = PartyLedgerBill(
+            tenant_id=tenant_id,
+            party_ledger_id=ledger.id,
+            bill_number=f"{note_kind}-{voucher.voucher_number}",
+            bill_date=voucher.voucher_date,
+            bill_type=note_kind,
+            original_amount=gross,
+            amount_type="CR" if note_kind == "CREDIT_NOTE" else "DR",
+            pending_amount=gross,
+            settled_amount=ZERO,
+            status="PENDING",
+            due_date=voucher.voucher_date,
+            voucher_id=voucher.id,
+            voucher_line_id=party_line.id,
+            narration=voucher.description,
+        )
+        db.add(note_bill)
+    await db.flush()
+
+    from app.modules.finance.party_ledger_bill_service import _refresh_bill_status, allocate_to_bill
+    from app.modules.finance.party_ledger_service import update_party_ledger_balance
+
+    opposite = "DR" if note_kind == "CREDIT_NOTE" else "CR"
+    applied = ZERO
+    if (
+        original.amount_type == opposite
+        and original.status not in {"CANCELLED", "SETTLED"}
+        and _d(original.pending_amount) > ZERO
+    ):
+        applied = _money(min(gross, _d(original.pending_amount)))
+        await allocate_to_bill(
+            db,
+            tenant_id,
+            bill_id=original.id,
+            voucher_id=voucher.id,
+            voucher_line_id=party_line.id,
+            allocated_amount=applied,
+            allocated_date=voucher.voucher_date,
+            notes=f"Auto from {note_kind}",
+            created_by=created_by,
+        )
+    if applied > ZERO:
+        note_bill.pending_amount = _money(gross - applied)
+        note_bill.settled_amount = applied
+        _refresh_bill_status(note_bill)
+    await db.flush()
+    await update_party_ledger_balance(db, ledger.id)
+    return note_bill
 
 
 async def create_stock_transfer_voucher(

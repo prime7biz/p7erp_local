@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.auth import hash_password, verify_password
+from app.common.auth import hash_password, verify_password, verify_password_constant_time
+from app.common.login_lockout import (
+    clear_platform_admin_failed_login,
+    enforce_login_rate_limit,
+    platform_admin_login_locked,
+    record_platform_admin_failed_login,
+)
 from app.config import get_settings
 from app.database import get_db
 from app.models import AdminSession, PlatformAdmin
@@ -37,14 +43,20 @@ async def admin_login(
     db: AsyncSession = Depends(get_db),
 ):
     settings = get_settings()
-    result = await db.execute(
-        select(PlatformAdmin).where(PlatformAdmin.username == body.username.strip())
-    )
+    username = body.username.strip()
+    await enforce_login_rate_limit(request, company_key="platform_admin", scope="platform_admin")
+    if await platform_admin_login_locked(username):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Try again later.",
+        )
+    result = await db.execute(select(PlatformAdmin).where(PlatformAdmin.username == username))
     admin = result.scalar_one_or_none()
-    if not admin or not admin.is_active:
+    password_ok = await verify_password_constant_time(body.password, admin.password_hash if admin else None)
+    if not admin or not admin.is_active or not password_ok:
+        await record_platform_admin_failed_login(username)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    if not await verify_password(body.password, admin.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    await clear_platform_admin_failed_login(username)
     now = datetime.utcnow()
     expires = now + timedelta(minutes=settings.platform_admin_jwt_expire_minutes)
     sess = AdminSession(

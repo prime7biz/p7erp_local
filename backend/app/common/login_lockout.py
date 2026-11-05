@@ -154,6 +154,89 @@ def staff_lock_active(user) -> bool:
     return False
 
 
+# --- Platform super-admin login (no lockout columns on platform_admins; counters live in Redis or memory) ---
+
+_admin_failures: dict[str, tuple[int, float]] = {}
+_admin_failures_lock = Lock()
+
+
+def _platform_admin_failure_key(username: str) -> str:
+    return f"admin_login_fail:{(username or '').strip().lower() or 'none'}"
+
+
+def _platform_admin_lock_settings() -> tuple[int, int]:
+    settings = get_settings()
+    max_attempts = int(getattr(settings, "platform_admin_login_max_attempts", 5) or 5)
+    minutes = lockout_minutes(getattr(settings, "platform_admin_login_lockout_minutes", 15), default=15)
+    return max(1, max_attempts), max(1, minutes) * 60
+
+
+def _memory_admin_failures(key: str, now: float) -> int:
+    count, expires_at = _admin_failures.get(key, (0, 0.0))
+    if now >= expires_at:
+        _admin_failures.pop(key, None)
+        return 0
+    return count
+
+
+async def platform_admin_login_locked(username: str) -> bool:
+    """True when this username has too many recent failures (same answer for unknown usernames)."""
+    max_attempts, _window = _platform_admin_lock_settings()
+    key = _platform_admin_failure_key(username)
+    try:
+        from app.common.redis_client import get_redis
+
+        r = get_redis()
+        if r is not None:
+            raw = await r.get(key)
+            return int(raw or 0) >= max_attempts
+    except Exception:
+        pass
+    with _admin_failures_lock:
+        return _memory_admin_failures(key, time.time()) >= max_attempts
+
+
+async def record_platform_admin_failed_login(username: str) -> None:
+    _max_attempts, window = _platform_admin_lock_settings()
+    key = _platform_admin_failure_key(username)
+    try:
+        from app.common.redis_client import get_redis
+
+        r = get_redis()
+        if r is not None:
+            async with r.pipeline(transaction=True) as pipe:
+                pipe.incr(key)
+                pipe.expire(key, window, nx=True)
+                await pipe.execute()
+            return
+    except Exception:
+        pass
+    now = time.time()
+    with _admin_failures_lock:
+        if key not in _admin_failures and len(_admin_failures) >= _LOGIN_BUCKETS_MAX_KEYS:
+            for k in [k for k, (_c, exp) in _admin_failures.items() if now >= exp]:
+                _admin_failures.pop(k, None)
+            if len(_admin_failures) >= _LOGIN_BUCKETS_MAX_KEYS:
+                _admin_failures.pop(min(_admin_failures, key=lambda k: _admin_failures[k][1]), None)
+        count = _memory_admin_failures(key, now)
+        expires_at = _admin_failures.get(key, (0, now + window))[1]
+        _admin_failures[key] = (count + 1, expires_at)
+
+
+async def clear_platform_admin_failed_login(username: str) -> None:
+    key = _platform_admin_failure_key(username)
+    try:
+        from app.common.redis_client import get_redis
+
+        r = get_redis()
+        if r is not None:
+            await r.delete(key)
+    except Exception:
+        pass
+    with _admin_failures_lock:
+        _admin_failures.pop(key, None)
+
+
 def assert_staff_not_locked(user) -> None:
     if staff_lock_active(user):
         raise HTTPException(

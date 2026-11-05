@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # Staff (internal) login lockout — mirrors external portal behaviour.
     staff_login_max_attempts: int = 8
     staff_login_lockout_minutes: int = 30
+    # Platform super-admin login: failures per username before a temporary lock (cache-backed, no DB column).
+    platform_admin_login_max_attempts: int = 5
+    platform_admin_login_lockout_minutes: int = 15
     # Soft rate limit for POST /auth/login and external login (per IP + company), requests per minute.
     login_rate_limit_per_minute: int = 20
     # true: every staff user may be logged in on only one device at a time (newest login wins),

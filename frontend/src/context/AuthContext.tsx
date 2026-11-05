@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { api, clearAuth, MeResponse } from "@/api/client";
+import { api, ApiError, clearAuth, MeResponse } from "@/api/client";
 
 interface AuthState {
   me: MeResponse | null;
@@ -29,10 +29,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await api.me();
       setMe(data);
-    } catch {
+    } catch (e) {
       setMe(null);
-      setError("Session expired");
-      clearAuth();
+      if (e instanceof ApiError && e.status === 401) {
+        setError("Session expired");
+        clearAuth();
+      } else {
+        // Network error or server restart (e.g. during a deploy): keep the session so the user can retry.
+        setError(
+          e instanceof ApiError
+            ? `Could not load your account (error ${e.status}). Please try again.`
+            : "Could not reach the server. Please try again.",
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -46,6 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAuth();
     setMe(null);
     setError(null);
+    // Full page load so every in-memory store (AI chat, component state) from this user is dropped.
+    window.location.assign("/login");
   }, []);
 
   const hasPermission = useCallback(

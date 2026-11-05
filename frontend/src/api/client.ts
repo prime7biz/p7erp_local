@@ -15,6 +15,7 @@ import type {
 } from "@/types/externalAccess";
 import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
 import { API_BASE } from "@/api/apiBase";
+import { queryClient } from "@/lib/queryClient";
 
 export const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev";
 
@@ -1454,9 +1455,13 @@ export function setAuth(token: string, tenantId: number): void {
   localStorage.setItem("p7_tenant_id", String(tenantId));
 }
 
+/** Remove stored credentials and drop cached API data so the next user cannot see it. */
 export function clearAuth(): void {
   localStorage.removeItem("p7_token");
   localStorage.removeItem("p7_tenant_id");
+  localStorage.removeItem("p7_platform_admin_token");
+  localStorage.removeItem("p7_ai_last_session_id");
+  queryClient.clear();
 }
 
 /**

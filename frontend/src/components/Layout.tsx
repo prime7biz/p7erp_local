@@ -26,8 +26,9 @@ export function Layout() {
   const [announcements, setAnnouncements] = useState<{ id: number; title: string; content: string; type: string }[]>([]);
 
   useEffect(() => {
-    if (getToken() && getTenantId() && !me && !loading) refetch();
-  }, [me, loading, refetch]);
+    // Skip while an error is shown, otherwise a failing /me would be retried in a tight loop.
+    if (getToken() && getTenantId() && !me && !loading && !error) refetch();
+  }, [me, loading, error, refetch]);
 
   useEffect(() => {
     const saved = localStorage.getItem("p7_sidebar_collapsed");
@@ -92,7 +93,26 @@ export function Layout() {
   }, [me, enabledOptionalUnits, hasPermission]);
 
   if (loading) return <div className="p-6">Loading...</div>;
-  if (error) return <div className="p-6 text-status-danger">{error}</div>;
+  if (error) {
+    return (
+      <div className="p-6">
+        <p className="text-status-danger">{error}</p>
+        {getToken() ? (
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="mt-3 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Retry
+          </button>
+        ) : (
+          <a href="/login" className="mt-3 inline-block text-sm text-primary underline">
+            Go to login
+          </a>
+        )}
+      </div>
+    );
+  }
   if (!me) return <Navigate to="/login" replace />;
 
   const displayName = me.first_name

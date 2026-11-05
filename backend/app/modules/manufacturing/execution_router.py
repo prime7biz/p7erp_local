@@ -539,6 +539,7 @@ async def assign_operation(
     await _require_any_role(
         db,
         user,
+        tenant.id,
         {"supervisor", "manager", "admin", "owner", "super_admin", "superadmin"},
         message="Only supervisor/manager/admin can assign operations",
     )

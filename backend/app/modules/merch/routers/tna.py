@@ -10,6 +10,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.db_datetime import utc_now_naive
 from app.common.pagination import MAX_PAGE_SIZE
 from app.common.tenant import require_tenant
 from app.database import get_db
@@ -776,7 +777,7 @@ async def add_followup_action_rejection_log(
     log_entry = FollowupActionRejectionLog(
         tenant_id=tenant.id,
         action_id=action_id,
-        rejected_at=datetime.now(timezone.utc),
+        rejected_at=utc_now_naive(),
         rejection_reason=body.rejection_reason,
         resubmission_date=body.resubmission_date,
         created_by_id=user.id,
@@ -975,7 +976,7 @@ async def update_followup_action(
         log_entry = FollowupActionRejectionLog(
             tenant_id=tenant.id,
             action_id=row.id,
-            rejected_at=datetime.now(timezone.utc),
+            rejected_at=utc_now_naive(),
             rejection_reason=row.rejection_reason,
             resubmission_date=row.resubmission_date,
             created_by_id=user.id,
@@ -1011,7 +1012,7 @@ async def complete_followup_action(
     row.approval_status = "approved"
     row.is_rejected = False
     row.actual_completion_date = date.today()
-    row.completed_at = datetime.now(timezone.utc)
+    row.completed_at = utc_now_naive()
     row.completed_by_id = user.id
     await db.commit()
     await db.refresh(row)

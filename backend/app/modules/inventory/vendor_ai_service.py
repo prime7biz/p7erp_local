@@ -9,10 +9,10 @@ import time
 from typing import Any
 from urllib.parse import urlparse
 
-import httpx
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.safe_http import UnsafeUrlError, fetch_public_url
 from app.models import User, Vendor
 from app.models.ai_tool import AiAuditLog
 from app.modules.ai_extract import service as extract_service
@@ -217,18 +217,20 @@ async def _fetch_website_text(url: str) -> tuple[str, list[str]]:
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
             return "", ["Invalid URL scheme"]
-        async with httpx.AsyncClient(timeout=18.0, follow_redirects=True) as client:
-            r = await client.get(url, headers={"User-Agent": "Prime7ERP-VendorEnrich/1.0"})
-            r.raise_for_status()
-            ct = (r.headers.get("content-type") or "").lower()
-            if "text/html" not in ct and "text/plain" not in ct:
-                warnings.append("Non-HTML response; text extraction may be poor.")
-            raw = r.text[:200_000]
-            text = re.sub(r"<script[\s\S]*?</script>", " ", raw, flags=re.I)
-            text = re.sub(r"<style[\s\S]*?</style>", " ", text, flags=re.I)
-            text = re.sub(r"<[^>]+>", " ", text)
-            text = re.sub(r"\s+", " ", text).strip()[:12000]
-            return text, warnings
+        r = await fetch_public_url(url, headers={"User-Agent": "Prime7ERP-VendorEnrich/1.0"})
+        if r.status_code >= 400:
+            return "", [f"Website fetch failed: HTTP {r.status_code}"]
+        ct = (r.headers.get("content-type") or "").lower()
+        if "text/html" not in ct and "text/plain" not in ct:
+            warnings.append("Non-HTML response; text extraction may be poor.")
+        raw = r.text[:200_000]
+        text = re.sub(r"<script[\s\S]*?</script>", " ", raw, flags=re.I)
+        text = re.sub(r"<style[\s\S]*?</style>", " ", text, flags=re.I)
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()[:12000]
+        return text, warnings
+    except UnsafeUrlError:
+        return "", ["Website URL is not allowed (use a public http/https address)."]
     except Exception as exc:
         return "", [f"Website fetch failed: {type(exc).__name__}"]
 

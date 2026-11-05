@@ -173,7 +173,7 @@ async def get_pipeline_full(
 
     qt_stmt = select(Quotation, Customer.name).join(
         Customer, Quotation.customer_id == Customer.id
-    ).where(Quotation.tenant_id == tenant.id)
+    ).where(Quotation.tenant_id == tenant.id, Quotation.superseded_at.is_(None))
     if document_type == "inquiry" or document_type == "order":
         qt_stmt = qt_stmt.where(1 == 0)
     if customer_id is not None:
@@ -311,7 +311,8 @@ async def get_pipeline_analytics(
 
     qt_result = await db.execute(
         select(Quotation.id, Quotation.inquiry_id, Quotation.status, Quotation.created_at).where(
-            Quotation.tenant_id == tenant.id
+            Quotation.tenant_id == tenant.id,
+            Quotation.superseded_at.is_(None),
         )
     )
     quotations = qt_result.all()

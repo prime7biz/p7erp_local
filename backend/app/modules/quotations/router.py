@@ -62,6 +62,7 @@ from app.modules.quotations.schemas import (
     QuotationSizeRatioLine,
     QuotationUpdate,
 )
+from app.modules.quotations import revision_service
 from app.modules.quotations.quotation_ai_router import router as quotation_ai_subrouter
 from app.modules.quotations import quotation_cost_benchmark_service as qcb_svc
 from app.modules.quotations.quotation_ai_service import compute_quotation_ai_indicators
@@ -125,6 +126,15 @@ async def _next_quotation_code(db: AsyncSession, tenant_id: int) -> str:
   )
 
 
+def _revision_fields(q: Quotation) -> dict:
+  return {
+    "root_quotation_id": q.root_quotation_id,
+    "revision_of_id": q.revision_of_id,
+    "superseded_at": q.superseded_at.isoformat() if q.superseded_at else None,
+    "is_latest_revision": revision_service.is_latest_revision(q),
+  }
+
+
 def _to_quotation_response(
   quotation: Quotation,
   converted_order_id: int | None = None,
@@ -177,6 +187,7 @@ def _to_quotation_response(
     is_converted_to_order=converted_order_id is not None,
     converted_order_id=converted_order_id,
     version_no=quotation.version_no,
+    **_revision_fields(quotation),
     valid_until=quotation.valid_until,
     notes=quotation.notes,
     created_at=quotation.created_at.isoformat(),
@@ -243,6 +254,7 @@ async def list_quotations(
       le=1,
       description="When 1 with ai_indicators=1, attach last cost benchmark badge label per row (if feature enabled).",
   ),
+  latest_only: bool = Query(default=False, description="When true, hide superseded (older) revisions"),
   limit: int = Query(default=50, ge=1, le=500),
   offset: int = Query(default=0, ge=0),
   tenant: Tenant = Depends(require_tenant),
@@ -253,6 +265,8 @@ async def list_quotations(
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
   stmt = select(Quotation).where(Quotation.tenant_id == tenant.id)
+  if latest_only:
+    stmt = stmt.where(Quotation.superseded_at.is_(None))
 
   if search:
     pattern = f"%{search.lower()}%"
@@ -326,6 +340,7 @@ async def list_quotations_paginated(
     le=1,
     description="When 1 with ai_indicators=1, attach last cost benchmark badge label per row (if feature enabled).",
   ),
+  latest_only: bool = Query(default=False, description="When true, hide superseded (older) revisions"),
   page: int = Query(default=1, ge=1),
   page_size: int = Query(default=10, ge=1, le=500),
   tenant: Tenant = Depends(require_tenant),
@@ -339,6 +354,8 @@ async def list_quotations_paginated(
 
   def _apply_filters(stmt):
     s = stmt.where(Quotation.tenant_id == tenant.id)
+    if latest_only:
+      s = s.where(Quotation.superseded_at.is_(None))
     if search:
       pattern = f"%{search.lower()}%"
       s = s.where(
@@ -427,6 +444,7 @@ async def submit_quotation(
   quotation = await db.get(Quotation, quotation_id)
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+  revision_service.ensure_quotation_not_superseded(quotation, action="submit it")
   quotation.status = validate_transition(
     QUOTATION_TRANSITIONS,
     quotation.status,
@@ -451,6 +469,7 @@ async def approve_quotation(
   quotation = await db.get(Quotation, quotation_id)
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+  revision_service.ensure_quotation_not_superseded(quotation, action="approve it")
   quotation.status = validate_transition(
     QUOTATION_TRANSITIONS,
     quotation.status,
@@ -475,6 +494,7 @@ async def send_quotation(
   quotation = await db.get(Quotation, quotation_id)
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+  revision_service.ensure_quotation_not_superseded(quotation, action="send it")
   quotation.status = validate_transition(
     QUOTATION_TRANSITIONS,
     quotation.status,
@@ -494,52 +514,31 @@ async def revise_quotation(
   user: User = Depends(get_current_user),
   db: AsyncSession = Depends(get_db),
 ):
+  """Create the next version (v2, v3, ...) of a quotation; the source becomes read-only."""
+  if user.tenant_id != tenant.id:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+  revised = await revision_service.revise_quotation(db, tenant_id=tenant.id, quotation_id=quotation_id)
+  return _to_quotation_response(revised, tenant=tenant)
+
+
+@router.get("/{quotation_id}/revisions", response_model=list[QuotationResponse])
+async def list_quotation_revisions(
+  quotation_id: int,
+  tenant: Tenant = Depends(require_tenant),
+  user: User = Depends(get_current_user),
+  db: AsyncSession = Depends(get_db),
+):
+  """All versions of this quotation's lineage (v1 first). The current one has is_latest_revision=true."""
   if user.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
   quotation = await db.get(Quotation, quotation_id)
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
-  code = await _next_quotation_code(db, tenant.id)
-  revised = Quotation(
-    tenant_id=tenant.id,
-    customer_id=quotation.customer_id,
-    inquiry_id=quotation.inquiry_id,
-    quotation_code=code,
-    style_ref=quotation.style_ref,
-    style_id=quotation.style_id,
-    customer_intermediary_id=quotation.customer_intermediary_id,
-    shipping_term=quotation.shipping_term,
-    commission_mode=quotation.commission_mode,
-    commission_type=quotation.commission_type,
-    commission_value=quotation.commission_value,
-    department=quotation.department,
-    projected_quantity=quotation.projected_quantity,
-    projected_delivery_date=quotation.projected_delivery_date,
-    quotation_date=quotation.quotation_date,
-    target_price=quotation.target_price,
-    target_price_currency=quotation.target_price_currency,
-    exchange_rate=quotation.exchange_rate,
-    material_cost=quotation.material_cost,
-    manufacturing_cost=quotation.manufacturing_cost,
-    other_cost=quotation.other_cost,
-    total_cost=quotation.total_cost,
-    cost_per_piece=quotation.cost_per_piece,
-    profit_percentage=quotation.profit_percentage,
-    quoted_price=quotation.quoted_price,
-    currency=quotation.currency,
-    total_amount=quotation.total_amount,
-    status="DRAFT",
-    version_no=(quotation.version_no or 1) + 1,
-    valid_until=quotation.valid_until,
-    size_ratio_enabled=quotation.size_ratio_enabled,
-    pack_ratio=quotation.pack_ratio,
-    pcs_per_carton=quotation.pcs_per_carton,
-    notes=quotation.notes,
+  rows = await revision_service.list_lineage(
+    db, tenant_id=tenant.id, root_id=revision_service.lineage_root_id(quotation)
   )
-  db.add(revised)
-  await flush_handling_duplicate_document_code(db)
-  await db.refresh(revised)
-  return _to_quotation_response(revised, tenant=tenant)
+  converted_map = await _get_converted_order_map(db, tenant_id=tenant.id, quotation_ids=[r.id for r in rows])
+  return [_to_quotation_response(r, converted_map.get(r.id), tenant=tenant) for r in rows]
 
 
 @router.post(
@@ -568,6 +567,7 @@ async def create_quotation_from_inquiry(
     .where(
       Quotation.tenant_id == tenant.id,
       Quotation.inquiry_id == inquiry.id,
+      Quotation.superseded_at.is_(None),
     )
     .order_by(Quotation.created_at.desc(), Quotation.id.desc())
     .limit(1)
@@ -914,6 +914,7 @@ async def get_quotation(
     is_converted_to_order=converted_order_id is not None,
     converted_order_id=converted_order_id,
     version_no=quotation.version_no,
+    **_revision_fields(quotation),
     valid_until=quotation.valid_until,
     size_ratio_enabled=quotation.size_ratio_enabled,
     pack_ratio=quotation.pack_ratio,
@@ -944,6 +945,7 @@ async def update_quotation(
   quotation = await db.get(Quotation, quotation_id)
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+  revision_service.ensure_quotation_not_superseded(quotation, action="edit it")
 
   patch_fields = body.model_dump(exclude_unset=True)
   blocked = list_quotation_commercial_patch_violations(quotation.status, patch_fields)
@@ -1015,6 +1017,7 @@ async def full_update_quotation(
   quotation = await db.get(Quotation, quotation_id)
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+  revision_service.ensure_quotation_not_superseded(quotation, action="edit its costing")
 
   if is_quotation_commercial_locked(quotation.status):
     raise HTTPException(
@@ -1370,6 +1373,11 @@ async def delete_quotation(
   if not quotation or quotation.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
   await ensure_quotation_deletable(db, tenant.id, quotation_id)
+  # Deleting the current revision hands "current" back to the revision it replaced.
+  restore_revision_id = quotation.revision_of_id if quotation.superseded_at is None else None
   await db.delete(quotation)
   await db.flush()
+  await revision_service.restore_previous_revision(
+    db, tenant_id=tenant.id, revision_of_id=restore_revision_id
+  )
 

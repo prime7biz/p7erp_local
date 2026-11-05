@@ -137,6 +137,7 @@ async def _get_converted_quotation_map(
     .where(
       Quotation.tenant_id == tenant_id,
       Quotation.inquiry_id.in_(inquiry_ids),
+      Quotation.superseded_at.is_(None),
     )
     .order_by(Quotation.created_at.desc(), Quotation.id.desc())
   )

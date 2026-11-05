@@ -307,6 +307,10 @@ async def update_trade_case(
         updates["status"] = str(updates["status"]).strip().upper()
     if "current_stage" in updates and updates["current_stage"] is not None:
         updates["current_stage"] = str(updates["current_stage"]).strip().upper()
+    for key in ("status", "current_stage"):
+        if key in updates and updates[key] != getattr(row, key):
+            raise HTTPException(status_code=400, detail=f"Use the transition endpoint to change {key}")
+        updates.pop(key, None)
     await _validate_trade_case_links(db, tenant.id, updates)
     for key, value in updates.items():
         setattr(row, key, value)

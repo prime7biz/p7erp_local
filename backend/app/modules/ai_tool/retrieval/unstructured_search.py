@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,9 +49,12 @@ async def search_unstructured_context(
     vec = PgVectorRetrievalAdapter(db=db, tenant_id=tenant_id, domain=domain, filters=filters)
     bm25 = BM25EmbeddingChunksAdapter(db=db, tenant_id=tenant_id, domain=domain, filters=filters)
 
+    # Each search runs in a SAVEPOINT so a failed query (e.g. pgvector missing) is rolled back
+    # without aborting the caller's transaction or the fallback searches below.
     async def _safe_vector() -> list:
         try:
-            return await vec.search(query, top_k=top_k)
+            async with db.begin_nested():
+                return await vec.search(query, top_k=top_k)
         except Exception:
             return []
 
@@ -60,11 +62,14 @@ async def search_unstructured_context(
         try:
             if not (query or "").strip():
                 return []
-            return await bm25.search(query, top_k=top_k)
+            async with db.begin_nested():
+                return await bm25.search(query, top_k=top_k)
         except Exception:
             return []
 
-    vhits, bhits = await asyncio.gather(_safe_vector(), _safe_bm25())
+    # One AsyncSession cannot run two queries at the same time, so these run one after the other.
+    vhits = await _safe_vector()
+    bhits = await _safe_bm25()
     fused, method = merge_hybrid_hits(vector_hits=vhits, bm25_hits=bhits, top_k=top_k)
     if fused:
         return _hits_to_payload(fused, retrieval_method=method, query=query, domain=domain)

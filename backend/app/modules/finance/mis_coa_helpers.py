@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import AccountGroup, ChartOfAccount, Voucher, VoucherLine
 from app.modules.finance.advanced_voucher_service import voucher_in_books_clause
+from app.modules.finance.posting_core import line_base_amount_sql
 
 ZERO = Decimal("0")
 
@@ -43,7 +44,7 @@ async def account_balances_as_of(
     # Aggregate in SQL: one row per (account, side) instead of every voucher line.
     posted = (
         await db.execute(
-            select(VoucherLine.account_id, VoucherLine.entry_type, func.coalesce(func.sum(VoucherLine.amount), 0))
+            select(VoucherLine.account_id, VoucherLine.entry_type, func.coalesce(func.sum(line_base_amount_sql()), 0))
             .join(Voucher, VoucherLine.voucher_id == Voucher.id)
             .where(
                 VoucherLine.tenant_id == tenant_id,

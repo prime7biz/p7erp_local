@@ -106,46 +106,17 @@ async def apply_voucher_line_balances(
     *,
     reverse: bool = False,
 ) -> None:
-    """Apply (or reverse) CoA balance impact for voucher lines. Sets books_applied."""
-    lines = list(
-        (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all()
-    )
+    """Apply (or reverse) CoA balance impact for voucher lines. Sets books_applied.
+
+    Locks the touched accounts, posts base-currency amounts and refuses unbalanced vouchers.
+    """
+    from app.modules.finance.posting_core import apply_voucher_to_books, load_voucher_lines
+
+    lines = await load_voucher_lines(db, voucher.id)
     if not lines:
         voucher.books_applied = not reverse and voucher_should_affect_books(voucher)
         return
-    account_ids = {ln.account_id for ln in lines}
-    accounts = {
-        a.id: a
-        for a in (
-            await db.execute(
-                select(ChartOfAccount).where(
-                    ChartOfAccount.tenant_id == tenant_id,
-                    ChartOfAccount.id.in_(account_ids),
-                )
-            )
-        )
-        .scalars()
-        .all()
-    }
-    for line in lines:
-        account = accounts.get(line.account_id)
-        if not account:
-            continue
-        try:
-            current = Decimal(str(account.balance or 0))
-            amount = Decimal(str(line.amount or 0))
-        except Exception:
-            current = ZERO
-            amount = ZERO
-        entry = line.entry_type
-        if reverse:
-            entry = "CREDIT" if entry == "DEBIT" else "DEBIT"
-        if (account.normal_balance or "debit").lower() == "debit":
-            current = current + amount if entry == "DEBIT" else current - amount
-        else:
-            current = current + amount if entry == "CREDIT" else current - amount
-        account.balance = current.quantize(Decimal("0.0001"))
-    voucher.books_applied = not reverse
+    await apply_voucher_to_books(db, tenant_id, voucher, lines, reverse=reverse)
     await db.flush()
 
 
@@ -658,6 +629,13 @@ async def generate_from_recurring_template(
     if not lines_in:
         raise HTTPException(status_code=400, detail=f"Template {template.id} has no lines")
     await assert_voucher_line_refs(db, tenant_id, lines_in)
+    from app.modules.finance.posting_core import assert_dict_lines_balanced
+
+    # Every generated line shares one currency and rate, so balanced amounts mean balanced base amounts.
+    assert_dict_lines_balanced(
+        [{"entry_type": ln.get("entry_type") or "DEBIT", "amount": ln.get("amount")} for ln in lines_in],
+        label=f"Recurring template {template.id}",
+    )
 
     voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
         db,
@@ -690,6 +668,9 @@ async def generate_from_recurring_template(
     )
     db.add(voucher)
     await db.flush()
+    rate = _d(voucher.exchange_rate)
+    if rate <= ZERO:
+        rate = Decimal("1")
     for ln in lines_in:
         db.add(
             VoucherLine(
@@ -699,7 +680,7 @@ async def generate_from_recurring_template(
                 cost_center_id=ln.get("cost_center_id"),
                 entry_type=str(ln.get("entry_type") or "DEBIT").upper(),
                 amount=str(_money(_d(ln.get("amount")))),
-                base_amount=str(_money(_d(ln.get("amount")))),
+                base_amount=str(_money(_d(ln.get("amount")) * rate)),
                 currency=voucher.currency,
                 exchange_rate=str(voucher.exchange_rate),
                 notes=ln.get("notes"),

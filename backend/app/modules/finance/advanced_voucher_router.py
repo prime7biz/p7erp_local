@@ -55,6 +55,7 @@ from app.modules.finance.advanced_voucher_service import (
     recurring_out,
     voucher_class_out,
 )
+from app.modules.finance.posting_core import assert_dict_lines_balanced
 from app.modules.finance.voucher_controls import allocate_series_voucher_number
 
 router = APIRouter(tags=["finance-advanced-vouchers"])
@@ -78,6 +79,10 @@ async def _validate_recurring_refs(db: AsyncSession, tenant_id: int, body: "Recu
     lines = (body.voucher_template or {}).get("lines") or []
     if lines:
         await assert_voucher_line_refs(db, tenant_id, lines)
+        assert_dict_lines_balanced(
+            [{"entry_type": ln.get("entry_type") or "DEBIT", "amount": ln.get("amount")} for ln in lines],
+            label="Recurring template",
+        )
 
 
 def _require_flag(enabled: bool, flag_name: str) -> None:
@@ -716,6 +721,10 @@ async def create_special_voucher(
     if body.is_post_dated:
         _require_flag(is_post_dated_voucher_enabled(tenant.feature_flags), "post_dated_voucher_enabled")
     await assert_voucher_line_refs(db, tenant.id, body.lines)
+    assert_dict_lines_balanced(
+        [{"entry_type": ln.get("entry_type") or "DEBIT", "amount": ln.get("amount")} for ln in body.lines],
+        label="Special voucher",
+    )
 
     await ensure_voucher_type_row(
         db,

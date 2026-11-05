@@ -60,25 +60,23 @@ async def _insert_audit_row(
     request_path: str,
     response_status: int,
     duration_ms: int,
+    user_tenant_id: int | None = None,
 ) -> None:
+    """``user_tenant_id`` is the user's tenant when the request already resolved it (skips a query)."""
     try:
         async with AsyncSessionLocal() as db:
             tenant_id: int | None = tenant_id_hdr
-            # When X-Tenant-Id is present, use it (API routes already enforce user↔tenant match).
-            # Only hit the DB when the header is missing but we have a user id.
-            if user_id is not None and tenant_id is None:
+            if user_id is not None and user_tenant_id is None:
                 result = await db.execute(select(User.tenant_id).where(User.id == user_id))
-                tid = result.scalar_one_or_none()
-                if tid is not None:
-                    tenant_id = tid
-            elif user_id is not None and tenant_id is not None:
-                result = await db.execute(select(User.tenant_id).where(User.id == user_id))
-                tid = result.scalar_one_or_none()
-                if tid is not None and tid != tenant_id:
+                user_tenant_id = result.scalar_one_or_none()
+            if user_id is not None and user_tenant_id is not None:
+                if tenant_id is None:
+                    tenant_id = user_tenant_id
+                elif user_tenant_id != tenant_id:
                     logger.warning(
                         "Audit skip: X-Tenant-Id=%s does not match user tenant=%s for user_id=%s",
                         tenant_id,
-                        tid,
+                        user_tenant_id,
                         user_id,
                     )
                     return
@@ -102,6 +100,54 @@ async def _insert_audit_row(
             await db.commit()
     except Exception:
         logger.exception("request_logger audit insert failed")
+
+
+class _AuditWriteQueue:
+    """Background audit writes for one event loop, with limits.
+
+    At most ``max_concurrency`` rows are written at once (each write holds a DB connection) and at
+    most ``max_pending`` wait in total; beyond that rows are dropped with a warning so a traffic
+    spike cannot pile up unbounded tasks or starve request handlers of DB connections.
+    """
+
+    def __init__(self, loop: asyncio.AbstractEventLoop, max_concurrency: int) -> None:
+        self.loop = loop
+        self.slots = asyncio.Semaphore(max(1, max_concurrency))
+        self.tasks: set[asyncio.Task] = set()
+        self.dropped = 0
+
+    async def _run(self, row: dict) -> None:
+        async with self.slots:
+            await _insert_audit_row(**row)
+
+    def submit(self, row: dict, max_pending: int) -> None:
+        if len(self.tasks) >= max(1, max_pending):
+            self.dropped += 1
+            if self.dropped == 1 or self.dropped % 100 == 0:
+                logger.warning(
+                    "request audit backlog full (%s pending); dropped %s audit rows so far",
+                    len(self.tasks),
+                    self.dropped,
+                )
+            return
+        task = self.loop.create_task(self._run(row))
+        self.tasks.add(task)
+        task.add_done_callback(self.tasks.discard)
+
+
+_audit_queue: _AuditWriteQueue | None = None
+
+
+def _submit_audit_row(row: dict) -> None:
+    global _audit_queue
+    settings = get_settings()
+    loop = asyncio.get_running_loop()
+    if _audit_queue is None or _audit_queue.loop is not loop:
+        _audit_queue = _AuditWriteQueue(loop, int(settings.audit_log_max_concurrency or 1))
+    _audit_queue.submit(row, int(settings.audit_log_max_pending or 1))
+
+
+_READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -160,23 +206,34 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         status_code = response.status_code
         if tenant_id is None and user_id is None:
             return response
+        if (
+            not settings.audit_log_read_requests
+            and request.method.upper() in _READ_METHODS
+            and status_code < 500
+        ):
+            return response
         action = "API_REQUEST"
         if status_code >= 500:
             action = "API_ERROR"
         ua = request.headers.get("user-agent")
         client = request.client.host if request.client else None
-        asyncio.create_task(
-            _insert_audit_row(
-                tenant_id_hdr=tenant_id,
-                user_id=user_id,
-                action=action,
-                resource="http",
-                ip_address=client,
-                user_agent=ua,
-                request_method=request.method,
-                request_path=path[:500],
-                response_status=status_code,
-                duration_ms=duration_ms,
-            )
+        # get_current_user stores the user's tenant on request.state; reuse it to skip a DB lookup.
+        user_tenant_id = None
+        if user_id is not None and getattr(request.state, "auth_user_id", None) == user_id:
+            user_tenant_id = getattr(request.state, "auth_user_tenant_id", None)
+        _submit_audit_row(
+            {
+                "tenant_id_hdr": tenant_id,
+                "user_id": user_id,
+                "user_tenant_id": user_tenant_id,
+                "action": action,
+                "resource": "http",
+                "ip_address": client,
+                "user_agent": ua,
+                "request_method": request.method,
+                "request_path": path[:500],
+                "response_status": status_code,
+                "duration_ms": duration_ms,
+            }
         )
         return response

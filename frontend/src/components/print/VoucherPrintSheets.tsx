@@ -179,6 +179,7 @@ export function VoucherPrintSheets({ data, copyCount, template, verificationUrl 
             </p>
             <p className="vp-disclaimer">
               This is a system-generated document. The QR code above can be scanned to verify authenticity.
+              This document is confidential and intended solely for the authorized recipient(s).
             </p>
             <p className="vp-print-time">Printed: {data.print_meta?.generated_at ?? new Date().toISOString()}</p>
           </div>

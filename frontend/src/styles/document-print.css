@@ -1,5 +1,23 @@
+/* Print-only document copy rendered under <body> (see PrintOnlyPortal) */
+.p7-print-portal {
+  display: none;
+}
+
 /* Modal shell for in-app document print preview */
 @media print {
+  /* Print only the document: hide #root (sidebar, header, clipped app shell) and other body children */
+  body.p7-print-isolate > :not([data-p7-print-root]) {
+    display: none !important;
+  }
+
+  body.p7-print-isolate {
+    overflow: visible !important;
+  }
+
+  .p7-print-portal {
+    display: block;
+  }
+
   #p7-doc-print-modal {
     position: static !important;
     inset: auto !important;
@@ -7,6 +25,7 @@
     height: auto !important;
     max-height: none !important;
     background: white !important;
+    backdrop-filter: none !important;
     z-index: auto !important;
   }
 
@@ -18,6 +37,11 @@
     overflow: visible !important;
     max-height: none !important;
     background: white !important;
+    padding: 0 !important;
+  }
+
+  #p7-doc-print-modal .vp-root {
+    max-width: none !important;
     padding: 0 !important;
   }
 }

@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
+import { usePrintIsolation } from "@/hooks/usePrintIsolation";
 import "@/styles/document-print.css";
 
 type Props = {
@@ -22,6 +24,8 @@ export function PrintPreviewModal({
   onTemplateChange,
   children,
 }: Props) {
+  usePrintIsolation(open);
+
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -33,9 +37,10 @@ export function PrintPreviewModal({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
       id="p7-doc-print-modal"
+      data-p7-print-root
       className="fixed inset-0 z-[100] flex flex-col bg-black/55 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
@@ -82,6 +87,7 @@ export function PrintPreviewModal({
       <div className="p7-doc-print-scroll flex-1 overflow-auto bg-slate-100/90 p-4 dark:bg-slate-950/80">
         <div className="vp-root mx-auto max-w-[210mm] space-y-6 pb-8">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

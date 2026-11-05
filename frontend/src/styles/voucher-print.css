@@ -1,16 +1,23 @@
+/*
+ Screen and paper use the same geometry: an A4 sheet (210mm) whose padding equals
+ the global print @page margin (14mm, index.css). When printing, the sheet padding
+ drops to 0 and the page margin takes its place, so content is 182mm wide in both.
+*/
 .vp-root {
   --vp-paper-width: 210mm;
+  --vp-page-margin: 14mm;
 }
 
 /* ─── Sheet ─── */
 .vp-sheet {
+  box-sizing: border-box;
   width: 100%;
   max-width: var(--vp-paper-width);
   margin: 0 auto;
   border: 1px solid rgba(148, 163, 184, 0.45);
   border-radius: 12px;
   background: #fff;
-  padding: 28px 32px;
+  padding: var(--vp-page-margin);
   position: relative;
   color: #1e293b;
   font-size: 13px;
@@ -19,9 +26,8 @@
 
 /* ─── Copy badge ─── */
 .vp-copy-badge {
-  position: absolute;
-  top: 14px;
-  left: 14px;
+  display: inline-block;
+  margin-bottom: 6px;
   padding: 2px 10px;
   border: 1px solid #94a3b8;
   border-radius: 999px;
@@ -140,6 +146,16 @@
   border-collapse: collapse;
   margin-bottom: 10px;
   font-size: 12px;
+}
+
+/* Undo app-wide table rules from .erp-main-content (index.css) that do not apply on paper */
+.vp-sheet .vp-table {
+  min-width: 0;
+}
+
+.vp-sheet .vp-table tbody tr:hover {
+  background-color: transparent;
+  box-shadow: none;
 }
 
 .vp-th {
@@ -304,14 +320,22 @@
     border-radius: 0;
     box-shadow: none;
     page-break-after: always;
+    break-after: page;
     max-width: none;
     width: auto;
-    margin: 0;
-    padding: 16mm 12mm;
+    margin: 0 !important;
+    padding: 0;
   }
 
   .vp-sheet:last-child {
     page-break-after: auto;
+    break-after: auto;
+  }
+
+  .vp-balance-badge,
+  .vp-amount-words {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .vp-company-header {
@@ -346,8 +370,6 @@
   /* QR (SVG) must stay visible in print/PDF in Chromium-based browsers */
   .vp-qr-box svg {
     display: block !important;
-    width: 80px !important;
-    height: 80px !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

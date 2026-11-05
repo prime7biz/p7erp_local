@@ -74,7 +74,7 @@ flowchart LR
 | **Pre-close a PO / order balance with a reason** | Yes | – | **MISSING** (verify per module) | – |
 | Purchase requisition → approval | – | Yes | **MISSING** for procurement (only HR job requisition exists) | `backend/app/models/hr_recruitment.py` |
 | **RFQ + supplier quotations + Comparative Statement** | – | Yes | **MISSING** (the existing "comparative statement" is a finance period comparison, not a supplier CS) | `backend/app/modules/finance/comparative_statement_service.py` |
-| Transfers, adjustments, physical count | Yes | Yes | **EXISTS** | `/warehouse-transfers`, `/stock-adjustments`, `/physical-inventory-sessions` |
+| Transfers, adjustments, physical count | Yes | Yes | **EXISTS** | `/warehouse-transfers`, `/stock-adjustments`; counting UI is Cycle Count (`/app/inventory/cycle-count`, flag `cycle_counting_enabled`). `/physical-inventory-sessions` is backend-only (no screen). |
 | Valuation FIFO / Avg / Standard | Yes (per item) | – | **EXISTS** (tenant-level) | `stock_valuation_service.py`, `backend/app/services/fifo_inventory.py` |
 | Negative stock policy | Warn only | – | **EXISTS** – configurable | `backend/app/common/inventory_policy.py` |
 | Inventory → GL auto-posting | Yes | Yes | **EXISTS** | `backend/app/services/inventory_gl_service.py` |

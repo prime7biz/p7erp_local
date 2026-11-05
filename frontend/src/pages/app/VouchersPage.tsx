@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { Sparkles } from "lucide-react";
 import {
   api,
   FINANCE_COST_NATURE_CODES,
@@ -7,13 +8,27 @@ import {
   type ChartOfAccountResponse,
   type TradeCaseRow,
   type VoucherCreate,
+  type VoucherEntryAssistRequest,
   type VoucherLineCreate,
+  type VoucherNarrationSuggestion,
   type VoucherResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
+import { VoucherEntryAssistPanel } from "@/components/vouchers/VoucherEntryAssistPanel";
+import { formatDrCr, formatShortDate } from "@/components/vouchers/voucherAssistFormat";
+import { useVoucherEntryAssist } from "@/hooks/useVoucherEntryAssist";
+import {
+  defaultDateForFiscalYear,
+  fiscalYearBounds,
+  fiscalYearLabel,
+  fiscalYearOf,
+  fiscalYearOptions,
+  localTodayISO,
+  normalizeStartMonth,
+} from "@/lib/fiscalYear";
 import { LedgerQuickCreateModal } from "@/components/quick-create/LedgerQuickCreateModal";
 import { ACTION_LABEL, ACTION_TO_STATUS, ACTIONS_NEEDING_REASON, VOUCHER_STATUSES } from "@/components/vouchers/workflowMeta";
 import { useListPagination } from "@/hooks/useListPagination";
@@ -35,6 +50,11 @@ import type { TaxPreviewResponse } from "@/api/client";
 
 const CTL =
   "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-text-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
+/** Compact control for voucher lines; same height as the ledger search box. */
+const LINE_CTL =
+  "w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm text-text-primary outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
+const LINE_GRID = "md:grid-cols-[2rem_minmax(0,1fr)_8.5rem_8.5rem_5.5rem]";
+const LABEL = "mb-1 block text-xs font-medium text-text-secondary";
 
 function rowAmount(lines: VoucherLineCreate[], t: "DEBIT" | "CREDIT") {
   return lines.filter((l) => l.entry_type === t).reduce((sum, l) => sum + Number(l.amount || 0), 0);
@@ -57,6 +77,8 @@ export function VouchersPage() {
   const { me } = useAuth();
   const gstEnabled = me?.feature_flags?.gst_system_enabled === true;
   const directPostOn = me?.feature_flags?.direct_post_vouchers === true && resolveRole(me?.role_name).isElevated;
+  const assistEnabled = me?.feature_flags?.voucher_entry_assist_enabled !== false;
+  const fyStartMonth = normalizeStartMonth(me?.feature_flags?.fiscal_year_start_month);
   const { page, setPage, pageSize, setPageSize, offset, limit, allowedSizes } = useListPagination();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -89,6 +111,9 @@ export function VouchersPage() {
   const [taxPreviewError, setTaxPreviewError] = useState("");
   const [taxDirection, setTaxDirection] = useState<"OUTWARD" | "INWARD">("OUTWARD");
   const [taxPos, setTaxPos] = useState("");
+  const [openLineActionsIdx, setOpenLineActionsIdx] = useState<number | null>(null);
+  const [narrationSuggestion, setNarrationSuggestion] = useState<VoucherNarrationSuggestion | null>(null);
+  const [narrationLoading, setNarrationLoading] = useState(false);
 
   // Multi-currency
   const [multiCurrency, setMultiCurrency] = useState(false);
@@ -96,7 +121,7 @@ export function VouchersPage() {
 
   const [form, setForm] = useState<VoucherCreate>({
     voucher_type: "JOURNAL",
-    voucher_date: new Date().toISOString().slice(0, 10),
+    voucher_date: localTodayISO(),
     description: "",
     reference: "",
     currency: "BDT",
@@ -207,6 +232,98 @@ export function VouchersPage() {
   const creditTotal = useMemo(() => rowAmount(form.lines, "CREDIT"), [form.lines]);
   const isBalanced = Math.abs(debitTotal - creditTotal) < 0.001;
 
+  const todayISO = localTodayISO();
+  const selectedFiscalYear = fiscalYearOf(form.voucher_date || todayISO, fyStartMonth);
+  const selectedFyBounds = fiscalYearBounds(selectedFiscalYear, fyStartMonth);
+  const fyOptions = useMemo(() => {
+    const opts = fiscalYearOptions(fyStartMonth, todayISO);
+    if (!opts.some((o) => o.fiscalYear === selectedFiscalYear)) {
+      opts.push({
+        fiscalYear: selectedFiscalYear,
+        label: fiscalYearLabel(selectedFiscalYear, fyStartMonth),
+        ...fiscalYearBounds(selectedFiscalYear, fyStartMonth),
+        isCurrent: false,
+      });
+    }
+    return opts;
+  }, [fyStartMonth, todayISO, selectedFiscalYear]);
+
+  function changeFiscalYear(fy: number) {
+    setForm((p) => ({ ...p, voucher_date: defaultDateForFiscalYear(fy, fyStartMonth, todayISO) }));
+  }
+
+  const assistRequest = useMemo<VoucherEntryAssistRequest | null>(() => {
+    if (!showCreate || !assistEnabled || !form.voucher_date) return null;
+    return {
+      voucher_type: form.voucher_type,
+      voucher_date: form.voucher_date,
+      reference: form.reference || null,
+      exclude_voucher_id: editingVoucherId,
+      lines: form.lines.map((l) => ({ account_id: l.account_id, entry_type: l.entry_type, amount: String(l.amount || "0") })),
+    };
+  }, [showCreate, assistEnabled, form.voucher_type, form.voucher_date, form.reference, form.lines, editingVoucherId]);
+  const assist = useVoucherEntryAssist(assistRequest);
+  const assistAccounts = useMemo(
+    () => new Map((assist.data?.accounts ?? []).map((a) => [a.account_id, a])),
+    [assist.data],
+  );
+
+  function addSuggestedAccount(accountId: number, side: "DEBIT" | "CREDIT") {
+    setForm((prev) => {
+      const diff = rowAmount(prev.lines, "DEBIT") - rowAmount(prev.lines, "CREDIT");
+      const fill = side === "CREDIT" && diff > 0.001 ? diff.toFixed(2) : side === "DEBIT" && diff < -0.001 ? (-diff).toFixed(2) : null;
+      const emptyIdx = prev.lines.findIndex((l) => !l.account_id);
+      const target = prev.lines[emptyIdx];
+      if (target) {
+        const amount = Number(target.amount) > 0 ? target.amount : fill ?? target.amount;
+        return {
+          ...prev,
+          lines: prev.lines.map((l, i) => (i === emptyIdx ? { ...l, account_id: accountId, entry_type: side, amount } : l)),
+        };
+      }
+      const line = { ...makeLine(accountId, prev.currency ?? "BDT", prev.exchange_rate ?? "1", side), amount: fill ?? "0" };
+      return { ...prev, lines: [...prev.lines, line] };
+    });
+  }
+
+  function switchLineSide(idx: number) {
+    setForm((prev) => ({
+      ...prev,
+      lines: prev.lines.map((l, i) => (i === idx ? { ...l, entry_type: l.entry_type === "DEBIT" ? "CREDIT" : "DEBIT" } : l)),
+    }));
+  }
+
+  async function requestNarration() {
+    if (!assistRequest) return;
+    setNarrationLoading(true);
+    try {
+      const res = await api.suggestVoucherNarration({
+        ...assistRequest,
+        lines: form.lines.map((l) => ({
+          account_id: l.account_id,
+          entry_type: l.entry_type,
+          amount: String(l.amount || "0"),
+          notes: l.notes || null,
+        })),
+      });
+      setNarrationSuggestion(res);
+    } catch (e) {
+      logApiError("VouchersPage.suggestVoucherNarration", e);
+      setError((e as Error).message);
+    } finally {
+      setNarrationLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (openLineActionsIdx == null) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest("[data-line-actions]")) setOpenLineActionsIdx(null);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [openLineActionsIdx]);
+
   function setLine(idx: number, patch: Partial<VoucherLineCreate>) {
     setForm((prev) => ({
       ...prev,
@@ -270,9 +387,11 @@ export function VouchersPage() {
     setLiveRateStatus("idle");
     billWiseFetchedRef.current.clear();
     setAccountBillWiseMap({});
+    setOpenLineActionsIdx(null);
+    setNarrationSuggestion(null);
     setForm({
       voucher_type: voucherTypes[0] ?? "JOURNAL",
-      voucher_date: new Date().toISOString().slice(0, 10),
+      voucher_date: localTodayISO(),
       description: "",
       reference: "",
       currency: "BDT",
@@ -447,6 +566,8 @@ export function VouchersPage() {
     setEditingVoucherId(voucher.id);
     const isMc = voucher.currency !== voucher.base_currency;
     setMultiCurrency(isMc);
+    setOpenLineActionsIdx(null);
+    setNarrationSuggestion(null);
     setShowCreate(true);
     setForm({
       voucher_type: voucher.voucher_type,
@@ -556,9 +677,11 @@ export function VouchersPage() {
       {/* ─────────────── CREATE / EDIT FORM ─────────────── */}
       {showCreate ? (
         <form onSubmit={submit} className="space-y-5">
-          {/* Card: Voucher Information */}
+          <div className={`grid gap-5 ${assistEnabled ? "xl:grid-cols-[minmax(0,1fr)_21rem]" : ""}`}>
+          <div className="min-w-0 space-y-5">
+          {/* Card: Voucher details */}
           <div className="rounded-xl border border-border bg-surface-raised p-5">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-text-primary">{editingVoucherId ? `Edit Voucher #${editingVoucherId}` : "New Voucher"}</h2>
                 <p className="mt-0.5 text-xs text-text-muted">
@@ -568,6 +691,23 @@ export function VouchersPage() {
               <button type="button" className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => { resetForm(); setShowCreate(false); }}>
                 Cancel
               </button>
+            </div>
+
+            <div className="mb-4 flex flex-wrap gap-1.5" role="group" aria-label="Voucher type">
+              {VOUCHER_HOTKEYS.filter((h) => voucherTypes.length === 0 || voucherTypes.includes(h.type)).map((h) => (
+                <button
+                  key={h.type}
+                  type="button"
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                    form.voucher_type === h.type
+                      ? "border-brand-primary bg-brand-primary text-brand-primary-foreground"
+                      : "border-border-strong text-text-secondary hover:bg-surface-subtle"
+                  }`}
+                  onClick={() => setForm((p) => ({ ...p, voucher_type: h.type }))}
+                >
+                  {h.label} <span className="opacity-70">{h.fKey}</span>
+                </button>
+              ))}
             </div>
 
             {periodLock?.locked ? (
@@ -580,31 +720,112 @@ export function VouchersPage() {
               </div>
             ) : null}
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <label className="mb-1 block text-xs font-medium text-text-secondary">Voucher Type</label>
+                <label className={LABEL}>Voucher type</label>
                 <select className={CTL} value={form.voucher_type} onChange={(e) => setForm((p) => ({ ...p, voucher_type: e.target.value }))}>
                   {voucherTypes.length === 0 ? <option value="JOURNAL">JOURNAL</option> : null}
                   {voucherTypes.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-text-secondary">Voucher Date</label>
-                <input type="date" className={CTL} value={form.voucher_date} onChange={(e) => setForm((p) => ({ ...p, voucher_date: e.target.value }))} />
+                <label className={LABEL}>Financial year</label>
+                <select className={CTL} value={selectedFiscalYear} onChange={(e) => changeFiscalYear(Number(e.target.value))}>
+                  {fyOptions.map((o) => (
+                    <option key={o.fiscalYear} value={o.fiscalYear}>
+                      {o.label}
+                      {o.isCurrent ? " (current)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-text-muted">
+                  {formatShortDate(selectedFyBounds.startDate)} – {formatShortDate(selectedFyBounds.endDate)}
+                </p>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-text-secondary">Reference</label>
+                <label className={LABEL}>Voucher date</label>
+                <input
+                  type="date"
+                  className={CTL}
+                  value={form.voucher_date}
+                  min={selectedFyBounds.startDate}
+                  max={selectedFyBounds.endDate}
+                  onChange={(e) => setForm((p) => ({ ...p, voucher_date: e.target.value }))}
+                />
+                {form.voucher_date !== todayISO ? (
+                  <button
+                    type="button"
+                    className="mt-1 text-[11px] font-medium text-brand-primary hover:underline"
+                    onClick={() => setForm((p) => ({ ...p, voucher_date: todayISO }))}
+                  >
+                    Use today
+                  </button>
+                ) : null}
+              </div>
+              <div>
+                <label className={LABEL}>Reference</label>
                 <input className={CTL} placeholder="e.g. INV-001" value={form.reference ?? ""} onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))} />
               </div>
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-text-secondary">Narration <span className="text-status-danger-foreground">*</span></label>
-                <input className={CTL} placeholder="Enter narration (required for audit)" value={form.description ?? ""} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} required />
+              <div className="sm:col-span-2 lg:col-span-4">
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                  <label className="text-xs font-medium text-text-secondary">
+                    Narration <span className="text-status-danger-foreground">*</span>
+                  </label>
+                  {assistEnabled ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-lg border border-brand-primary/30 bg-brand-primary/10 px-2.5 py-1 text-xs font-medium text-brand-primary hover:bg-brand-primary/20 disabled:opacity-50"
+                      onClick={() => void requestNarration()}
+                      disabled={narrationLoading}
+                      title="Write a narration from the lines you entered"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                      {narrationLoading ? "Thinking…" : "Suggest with AI"}
+                    </button>
+                  ) : null}
+                </div>
+                <textarea
+                  className={`${CTL} min-h-[2.75rem] resize-y`}
+                  rows={2}
+                  placeholder="Enter narration (required for audit)"
+                  value={form.description ?? ""}
+                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                  required
+                />
+                {narrationSuggestion ? (
+                  <div className="mt-2 flex flex-wrap items-start gap-2 rounded-lg border border-brand-primary/20 bg-brand-primary/5 px-3 py-2 text-xs">
+                    <span className="min-w-0 flex-1 text-text-primary">
+                      <span className="mr-1 font-semibold text-brand-primary">
+                        {narrationSuggestion.source === "ai" ? "AI suggestion:" : "Suggestion:"}
+                      </span>
+                      {narrationSuggestion.narration}
+                    </span>
+                    <button
+                      type="button"
+                      className="rounded-md bg-brand-primary px-2.5 py-1 font-medium text-brand-primary-foreground hover:bg-brand-primary/90"
+                      onClick={() => {
+                        setForm((p) => ({ ...p, description: narrationSuggestion.narration }));
+                        setNarrationSuggestion(null);
+                      }}
+                    >
+                      Use
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md border border-border-strong px-2.5 py-1 text-text-secondary hover:bg-surface-subtle"
+                      onClick={() => setNarrationSuggestion(null)}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                ) : null}
               </div>
-              <div className="md:col-span-3 grid gap-4 md:grid-cols-2">
+              <div className="sm:col-span-2 lg:col-span-4 grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-text-secondary">Trade case (optional)</label>
+                  <label className={LABEL}>Trade case (optional)</label>
                   <RemoteSearchSelect<TradeCaseRow>
-                    className={CTL}
+                    className="w-full"
+                    menuPortal
                     placeholder="Search reference, stage…"
                     value={form.trade_case_id && form.trade_case_id > 0 ? form.trade_case_id : ""}
                     onChange={(next) =>
@@ -616,9 +837,10 @@ export function VouchersPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-text-secondary">BTB LC (optional)</label>
+                  <label className={LABEL}>BTB LC (optional)</label>
                   <RemoteSearchSelect<BtbLcRow>
-                    className={CTL}
+                    className="w-full"
+                    menuPortal
                     placeholder="Search LC ref / number…"
                     value={form.btb_lc_id && form.btb_lc_id > 0 ? form.btb_lc_id : ""}
                     onChange={(next) =>
@@ -629,6 +851,197 @@ export function VouchersPage() {
                     allowClear
                   />
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card: Entries (ledger lines) */}
+          <div className="rounded-xl border border-border bg-surface-raised p-5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-text-primary">Entries</h3>
+                <p className="text-[11px] text-text-muted">Type to search a ledger. Arrow keys + Enter pick it; Alt+C creates a new ledger.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => addLine("DEBIT")}>+ Debit line</button>
+                <button type="button" className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => addLine("CREDIT")}>+ Credit line</button>
+                <button type="button" className="rounded-lg border border-brand-primary/30 bg-brand-primary/10 px-3 py-1.5 text-xs font-medium text-brand-primary hover:bg-brand-primary/20" onClick={autoBalanceVoucher}>Auto balance</button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border">
+              <div className={`hidden gap-2 border-b border-border bg-surface-subtle px-3 py-2 text-xs font-medium text-text-muted md:grid ${LINE_GRID}`}>
+                <span className="text-center">#</span>
+                <span>Ledger account</span>
+                <span className="text-right">Debit</span>
+                <span className="text-right">Credit</span>
+                <span className="text-right">Actions</span>
+              </div>
+              {form.lines.map((line, idx) => {
+                const insight = line.account_id > 0 ? assistAccounts.get(line.account_id) : undefined;
+                const goesNegative = insight ? insight.is_cash_or_bank && Number(insight.projected_balance) < 0 : false;
+                return (
+                  <div
+                    key={idx}
+                    className={`border-b border-border px-3 py-3 last:border-b-0 ${line.entry_type === "CREDIT" ? "bg-surface-subtle/40" : ""}`}
+                  >
+                    <div className={`grid gap-2 md:items-start ${LINE_GRID}`}>
+                      <span className="hidden pt-1.5 text-center text-xs text-text-muted md:block">{idx + 1}</span>
+                      <div className="min-w-0">
+                        <label className="mb-1 block text-xs text-text-muted md:hidden">Line {idx + 1} · Ledger account</label>
+                        <RemoteSearchSelect<ChartOfAccountResponse>
+                          className="w-full"
+                          menuPortal
+                          aria-label={`Ledger account for line ${idx + 1}`}
+                          placeholder="Search account number or name…"
+                          value={line.account_id > 0 ? line.account_id : ""}
+                          onChange={(next, opt) => {
+                            const id = typeof next === "number" && next > 0 ? next : 0;
+                            setLine(idx, { account_id: id });
+                            const meta = opt?.meta;
+                            if (meta && id > 0) {
+                              setAccountBillWiseMap((m) => ({ ...m, [id]: Boolean(meta.enable_bill_wise) }));
+                            }
+                          }}
+                          fetchPage={fetchChartAccountPage}
+                          hydrateById={hydrateChartAccount}
+                          createLabel="ledger"
+                          onCreateNew={(typed) => setLedgerCreate({ lineIdx: idx, name: typed })}
+                        />
+                        {insight || (line.account_id > 0 && accountBillWiseMap[line.account_id]) ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-text-muted">
+                            {insight ? (
+                              <span>
+                                Balance {formatDrCr(insight.balance, insight.normal_balance)} → after{" "}
+                                <span className={goesNegative ? "font-semibold text-status-danger-foreground" : "font-medium text-text-secondary"}>
+                                  {formatDrCr(insight.projected_balance, insight.normal_balance)}
+                                </span>
+                              </span>
+                            ) : null}
+                            {insight?.unusual_amount ? (
+                              <span className="font-medium text-status-warning-foreground">Unusual amount</span>
+                            ) : null}
+                            {line.account_id > 0 && accountBillWiseMap[line.account_id] ? (
+                              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">Bill-Wise Enabled</span>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-text-muted md:hidden">Debit</label>
+                        <input
+                          className={`${LINE_CTL} text-right tabular-nums`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          aria-label={`Debit amount for line ${idx + 1}`}
+                          value={line.entry_type === "DEBIT" ? line.amount : ""}
+                          onChange={(e) => setLineSideAmount(idx, "DEBIT", e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-text-muted md:hidden">Credit</label>
+                        <input
+                          className={`${LINE_CTL} text-right tabular-nums`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          aria-label={`Credit amount for line ${idx + 1}`}
+                          value={line.entry_type === "CREDIT" ? line.amount : ""}
+                          onChange={(e) => setLineSideAmount(idx, "CREDIT", e.target.value)}
+                        />
+                      </div>
+                      <div className="relative flex justify-end" data-line-actions>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                          onClick={() => setOpenLineActionsIdx((prev) => (prev === idx ? null : idx))}
+                        >
+                          Actions
+                        </button>
+                        {openLineActionsIdx === idx ? (
+                          <div className="absolute right-0 top-full z-20 mt-1 w-36 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                            <button
+                              type="button"
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              onClick={() => { copyLine(idx); setOpenLineActionsIdx(null); }}
+                            >
+                              Copy line
+                            </button>
+                            <button
+                              type="button"
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              onClick={() => { switchLineSide(idx); setOpenLineActionsIdx(null); }}
+                            >
+                              Switch to {line.entry_type === "DEBIT" ? "Credit" : "Debit"}
+                            </button>
+                            <button
+                              type="button"
+                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 disabled:opacity-40"
+                              disabled={form.lines.length <= 1}
+                              onClick={() => { removeLine(idx); setOpenLineActionsIdx(null); }}
+                            >
+                              Delete line
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="mt-2 grid gap-2 md:ml-[2.5rem] md:grid-cols-3">
+                      <RemoteSearchSelect
+                        className="w-full"
+                        menuPortal
+                        aria-label={`Cost center for line ${idx + 1}`}
+                        placeholder="Cost center (optional)…"
+                        value={line.cost_center_id ?? ""}
+                        onChange={(next) => setLine(idx, { cost_center_id: next === "" ? null : Number(next) })}
+                        fetchPage={fetchCostCenterPage}
+                        hydrateById={hydrateCostCenter}
+                        allowClear
+                      />
+                      <select
+                        className={LINE_CTL}
+                        aria-label={`Cost nature for line ${idx + 1}`}
+                        value={line.cost_nature_override ?? ""}
+                        onChange={(e) =>
+                          setLine(idx, {
+                            cost_nature_override: e.target.value
+                              ? (e.target.value as (typeof FINANCE_COST_NATURE_CODES)[number])
+                              : null,
+                          })
+                        }
+                        title="Overrides the ledger account default for CM / material reporting on this line"
+                      >
+                        <option value="">Cost nature: account default</option>
+                        {FINANCE_COST_NATURE_CODES.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className={LINE_CTL}
+                        aria-label={`Note for line ${idx + 1}`}
+                        placeholder="Line note (optional)"
+                        value={line.notes ?? ""}
+                        onChange={(e) => setLine(idx, { notes: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              <div className={`hidden gap-2 border-t border-border bg-surface-subtle px-3 py-2 text-sm md:grid ${LINE_GRID}`}>
+                <span />
+                <span className="pt-0.5 text-xs font-medium text-text-muted">Total</span>
+                <span className="text-right font-semibold tabular-nums text-text-primary">
+                  {debitTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+                <span className="text-right font-semibold tabular-nums text-text-primary">
+                  {creditTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+                <span />
               </div>
             </div>
           </div>
@@ -722,111 +1135,6 @@ export function VouchersPage() {
             ) : (
               <p className="text-xs text-text-muted">Toggle on to record vouchers in foreign currencies with automatic or manual exchange rates.</p>
             )}
-          </div>
-
-          {/* Card: Voucher Items */}
-          <div className="rounded-xl border border-border bg-surface-raised p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-text-primary">Voucher Items</h3>
-              <div className="flex gap-2">
-                <button type="button" className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => addLine("DEBIT")}>+ Debit Line</button>
-                <button type="button" className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => addLine("CREDIT")}>+ Credit Line</button>
-                <button type="button" className="rounded-lg border border-brand-primary/30 bg-brand-primary/10 px-3 py-1.5 text-xs font-medium text-brand-primary hover:bg-brand-primary/20" onClick={autoBalanceVoucher}>Auto Balance</button>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="min-w-full text-sm">
-                <thead className="bg-surface-subtle text-left">
-                  <tr>
-                    <th className="w-10 px-3 py-2 text-center">#</th>
-                    <th className="px-3 py-2">Account</th>
-                    <th className="px-3 py-2">Cost Center</th>
-                    <th className="px-3 py-2 min-w-[8rem]">Cost nature</th>
-                    <th className="px-3 py-2 text-right">Debit</th>
-                    <th className="px-3 py-2 text-right">Credit</th>
-                    <th className="px-3 py-2">Notes / Narration</th>
-                    <th className="w-24 px-3 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.lines.map((line, idx) => (
-                    <tr key={idx} className="border-t border-border">
-                      <td className="px-3 py-2 text-center text-text-muted">{idx + 1}</td>
-                      <td className="px-3 py-2 min-w-[14rem]">
-                        <RemoteSearchSelect<ChartOfAccountResponse>
-                          className={CTL}
-                          placeholder="Search account number or name…"
-                          value={line.account_id > 0 ? line.account_id : ""}
-                          onChange={(next, opt) => {
-                            const id = typeof next === "number" && next > 0 ? next : 0;
-                            setLine(idx, { account_id: id });
-                            const meta = opt?.meta;
-                            if (meta && id > 0) {
-                              setAccountBillWiseMap((m) => ({ ...m, [id]: Boolean(meta.enable_bill_wise) }));
-                            }
-                          }}
-                          fetchPage={fetchChartAccountPage}
-                          hydrateById={hydrateChartAccount}
-                          createLabel="ledger"
-                          onCreateNew={(typed) => setLedgerCreate({ lineIdx: idx, name: typed })}
-                        />
-                        {line.account_id > 0 && accountBillWiseMap[line.account_id] ? (
-                          <span className="mt-0.5 inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">Bill-Wise Enabled</span>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2 min-w-[12rem]">
-                        <RemoteSearchSelect
-                          className={CTL}
-                          placeholder="Search cost center (optional)…"
-                          value={line.cost_center_id ?? ""}
-                          onChange={(next) => setLine(idx, { cost_center_id: next === "" ? null : Number(next) })}
-                          fetchPage={fetchCostCenterPage}
-                          hydrateById={hydrateCostCenter}
-                          allowClear
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <select
-                          className={CTL}
-                          value={line.cost_nature_override ?? ""}
-                          onChange={(e) =>
-                            setLine(idx, {
-                              cost_nature_override: e.target.value
-                                ? (e.target.value as (typeof FINANCE_COST_NATURE_CODES)[number])
-                                : null,
-                            })
-                          }
-                          title="Overrides the ledger account default for CM / material reporting on this line"
-                        >
-                          <option value="">Use account default</option>
-                          {FINANCE_COST_NATURE_CODES.map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-3 py-2">
-                        <input className={`${CTL} text-right`} type="number" min="0" step="0.01" placeholder="0.00" value={line.entry_type === "DEBIT" ? line.amount : ""} onChange={(e) => setLineSideAmount(idx, "DEBIT", e.target.value)} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input className={`${CTL} text-right`} type="number" min="0" step="0.01" placeholder="0.00" value={line.entry_type === "CREDIT" ? line.amount : ""} onChange={(e) => setLineSideAmount(idx, "CREDIT", e.target.value)} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input className={CTL} placeholder="Line description" value={line.notes ?? ""} onChange={(e) => setLine(idx, { notes: e.target.value })} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex gap-1">
-                          <button type="button" className="rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => copyLine(idx)}>Copy</button>
-                          <button type="button" className="rounded-md border border-status-danger/30 px-2 py-1 text-xs text-status-danger-foreground hover:bg-status-danger-subtle" onClick={() => removeLine(idx)}>Del</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
 
           {gstEnabled ? (
@@ -942,6 +1250,18 @@ export function VouchersPage() {
               )}
             </div>
           ) : null}
+
+          </div>
+          {assistEnabled ? (
+            <VoucherEntryAssistPanel
+              data={assist.data}
+              loading={assist.loading}
+              error={assist.error}
+              onAddAccount={addSuggestedAccount}
+              onUseNarration={(text) => setForm((p) => ({ ...p, description: text }))}
+            />
+          ) : null}
+          </div>
 
           {/* Card: Totals & Actions */}
           <div className="sticky bottom-0 z-20 rounded-xl border border-border bg-surface-raised p-5 shadow-lg md:static md:shadow-none">

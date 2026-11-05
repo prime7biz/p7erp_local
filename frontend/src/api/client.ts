@@ -9737,6 +9737,18 @@ export const api = {
     q.set("voucher_date", voucher_date);
     return request<{ locked: boolean; reason?: string; period_id?: number; period_name?: string }>(`/api/v1/finance/accounting-periods/check-lock?${q.toString()}`);
   },
+  async voucherEntryAssist(body: VoucherEntryAssistRequest): Promise<VoucherEntryAssistResponse> {
+    return request<VoucherEntryAssistResponse>("/api/v1/finance/voucher-entry-assist", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async suggestVoucherNarration(body: VoucherEntryAssistRequest): Promise<VoucherNarrationSuggestion> {
+    return request<VoucherNarrationSuggestion>("/api/v1/finance/voucher-entry-assist/narration", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
   async listBankAccounts(params?: { active_only?: boolean }): Promise<BankAccountResponse[]> {
     const q = new URLSearchParams();
     if (params?.active_only === false) q.set("active_only", "false");
@@ -17746,6 +17758,55 @@ export interface FiscalYearInfo {
   start_date: string;
   end_date: string;
   start_month: number;
+}
+
+/** Draft voucher sent to the entry assistant (read-only hints beside the voucher form). */
+export interface VoucherEntryAssistRequest {
+  voucher_type: string;
+  voucher_date: string;
+  reference?: string | null;
+  exclude_voucher_id?: number | null;
+  lines: Array<{ account_id: number; entry_type: "DEBIT" | "CREDIT"; amount: string; notes?: string | null }>;
+}
+
+export interface VoucherEntryAssistAccount {
+  account_id: number;
+  account_number: string;
+  name: string;
+  group_name: string;
+  nature: string;
+  normal_balance: string;
+  is_cash_or_bank: boolean;
+  enable_bill_wise: boolean;
+  /** Signed in the account's normal direction: negative means the opposite side. */
+  balance: string;
+  projected_balance: string;
+  times_used_last_year: number;
+  average_amount: string | null;
+  last_used_date: string | null;
+  unusual_amount: boolean;
+}
+
+export interface VoucherEntryAssistResponse {
+  fiscal_year: FiscalYearInfo;
+  current_fiscal_year: FiscalYearInfo;
+  accounts: VoucherEntryAssistAccount[];
+  suggested_accounts: Array<{
+    account_id: number;
+    account_number: string;
+    name: string;
+    side: "DEBIT" | "CREDIT";
+    times_used: number;
+  }>;
+  recent_narrations: string[];
+  similar_posted_vouchers: Array<{ id: number; voucher_number: string }>;
+  warnings: Array<{ level: "info" | "warning" | "danger"; message: string }>;
+  history_voucher_count: number;
+}
+
+export interface VoucherNarrationSuggestion {
+  narration: string;
+  source: "ai" | "template";
 }
 
 /** cumulative = since inception (original); fy = Income/Expense for this financial year only. */

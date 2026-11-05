@@ -42,6 +42,7 @@ from app.modules.finance.advanced_voucher_router import router as advanced_vouch
 from app.modules.finance.tds_router import router as tds_router
 from app.modules.finance.mis_reports_router import router as mis_reports_router
 from app.modules.finance.exception_reports_router import router as exception_reports_router
+from app.modules.finance.voucher_entry_assist_router import router as voucher_entry_assist_router
 from app.modules.procurement.router import router as procurement_router
 from app.modules.facility.router import router as facility_router
 from app.modules.manufacturing.router import router as manufacturing_router
@@ -300,6 +301,7 @@ app.include_router(advanced_voucher_router, prefix=settings.api_v1_prefix)
 app.include_router(tds_router, prefix=settings.api_v1_prefix)
 app.include_router(mis_reports_router, prefix=settings.api_v1_prefix)
 app.include_router(exception_reports_router, prefix=settings.api_v1_prefix)
+app.include_router(voucher_entry_assist_router, prefix=settings.api_v1_prefix)
 app.include_router(procurement_router, prefix=settings.api_v1_prefix)
 app.include_router(facility_router, prefix=settings.api_v1_prefix)
 app.include_router(manufacturing_router, prefix=settings.api_v1_prefix)

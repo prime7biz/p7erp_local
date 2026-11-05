@@ -1746,13 +1746,26 @@ On the Vouchers page you can open a new voucher of a given type with one key:
 
 While the form is open, **Ctrl+Enter** saves a draft and **Ctrl+Shift+Enter** saves and submits. On this page F5 opens a Payment voucher instead of refreshing the browser. You can also press **Ctrl+K** and type "payment voucher" from anywhere. Press **?** to see all shortcuts.
 
-## Header — voucher information
+## Header — voucher details
 
-1. Choose **Voucher Type** (e.g. **JOURNAL** or types loaded for your tenant).
-2. Set **Voucher Date**. Watch the **accounting period** banner: a **locked** period blocks posting until the date or period is fixed.
-3. Optional: **Reference** (e.g. invoice number).
-4. **Narration** is **required** — the form validates it for audit.
-5. Optional: link **Trade case** or **BTB LC** when your finance process ties vouchers to those records.
+1. Pick the type with the quick buttons (**Contra F4**, **Payment F5**, **Receipt F6**, **Journal F7**) or the **Voucher type** list for other types.
+2. **Financial year** is preselected to the year that contains today (it follows **Settings → Configuration → Financial year starts in**, e.g. July–June). Choose an earlier year only for back-dated entries; the date picker then stays inside that year.
+3. Set **Voucher date** (defaults to today; **Use today** puts it back). Watch the **accounting period** banner: a **locked** period blocks posting until the date or period is fixed.
+4. Optional: **Reference** (e.g. invoice number).
+5. **Narration** is **required** — the form validates it for audit. Click **Suggest with AI** to get a one-line narration written from your lines and your company's earlier narrations; it is only a suggestion until you click **Use**.
+6. Optional: link **Trade case** or **BTB LC** when your finance process ties vouchers to those records.
+
+## Entry assistant (right-hand panel)
+
+While you type, the **Entry assistant** shows hints from your own posted vouchers of the last 12 months. It never saves anything.
+
+- **Financial year** of the voucher date, and whether it is the current year.
+- **Check before saving** — possible **duplicate** of a posted voucher, an amount more than 3× the ledger's usual amount, cash / bank going negative, header or inactive ledgers, future dates.
+- **Ledgers in this voucher** — balance now and after this voucher (Dr / Cr), usual amount, how often and when it was last used.
+- **Usually used together** — ledgers that normally go with the ones you picked; click one to add it (it fills the difference when the voucher is not balanced yet).
+- **Narrations used before** — click to reuse.
+
+Admins can switch the assistant off per company with feature flag \`voucher_entry_assist_enabled: false\`.
 
 ## Multi-currency (optional)
 
@@ -1761,13 +1774,14 @@ While the form is open, **Ctrl+Enter** saves a draft and **Ctrl+Shift+Enter** sa
 3. Enter **Exchange rate** manually or click **Live Rate** (fetches from open.er-api.com when available).
 4. Line amounts are interpreted in the transaction currency when multi-currency is on.
 
-## Lines
+## Entries (lines)
 
-1. For each row, pick a **Chart of Accounts** account (search control). If the ledger does not exist yet, press **Alt+C** in the account box (or click **+ New ledger** at the bottom of the list), choose its **account group**, and it is created and selected without leaving the voucher.
-2. Set **Debit** or **Credit** and the **amount** (must be greater than zero).
-3. Optional: **cost center**, **notes / narration** per line, bill-wise fields when the account requires them.
-4. Use **Add line**, **copy line**, or **remove line** as needed.
-5. Totals must **balance** (debits = credits). Use **Auto balance** if the page offers it to insert a balancing line.
+1. For each line, search a **ledger account** by number or name. Use **Arrow keys + Enter** to pick from the list. If the ledger does not exist yet, press **Alt+C** in the account box (or click **+ New ledger** at the bottom of the list), choose its **account group**, and it is created and selected without leaving the voucher.
+2. Under the ledger you see its **balance now → after** this voucher.
+3. Type the amount in **Debit** or **Credit** (must be greater than zero).
+4. Optional (second row of each line): **cost center**, **cost nature**, **line note**; bill-wise fields when the account requires them.
+5. Use **+ Debit line** / **+ Credit line**, and the line **Actions** menu for **Copy line**, **Switch to Debit / Credit**, or **Delete line**.
+6. Totals must **balance** (debits = credits). Use **Auto balance** to insert a balancing line.
 
 ## Save
 
@@ -1802,15 +1816,15 @@ Open a voucher (\`/app/accounts/vouchers/:id\`) and scroll to **History**. It li
 
 - Use **Approval queue** in the page header to jump to \`/app/accounts/vouchers/approval-queue\`.
 - **Analytics** link goes to voucher analytics report.`,
-        tags: ["voucher", "journal", "debit", "credit", "posting", "shortcuts"],
-        lastUpdated: "2026-11-04",
+        tags: ["voucher", "journal", "debit", "credit", "posting", "shortcuts", "financial year", "ai"],
+        lastUpdated: "2026-11-05",
         featured: true,
         coverImage: "/images/logo.svg",
         infographics: [
           {
             type: "highlight",
             title: "Before you save",
-            body: "Check narration, balanced debits/credits, accounting period banner, then **Save Draft** or **Save & Submit**.",
+            body: "Check financial year, narration, balanced debits/credits, the accounting period banner and the Entry assistant warnings, then **Save Draft** or **Save & Submit**.",
           },
         ],
         images: [

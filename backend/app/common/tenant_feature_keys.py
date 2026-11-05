@@ -127,6 +127,8 @@ PO_COLOR_SIZE_MATRIX_ENABLED = "po_color_size_matrix_enabled"
 # R5 governed AI (default ON — explicit False switches off).
 AI_EXCEPTION_AGENTS_ENABLED = "ai_exception_agents_enabled"
 AI_DASHBOARD_CARDS_ENABLED = "ai_dashboard_cards_enabled"
+# Read-only hints beside the voucher form (ledger balances, usual accounts, AI narration).
+VOUCHER_ENTRY_ASSIST_ENABLED = "voucher_entry_assist_enabled"
 
 # Flags that are on for every tenant (existing and new) unless explicitly set to False.
 # API payloads read by the frontend (`/auth/me`, `/settings/config`) fill these in as True when missing.
@@ -140,6 +142,7 @@ DEFAULT_ON_FEATURE_FLAGS: tuple[str, ...] = (
     PO_COLOR_SIZE_MATRIX_ENABLED,
     AI_EXCEPTION_AGENTS_ENABLED,
     AI_DASHBOARD_CARDS_ENABLED,
+    VOUCHER_ENTRY_ASSIST_ENABLED,
 )
 
 KITTING_ENABLED = "kitting_enabled"
@@ -213,6 +216,10 @@ def is_ai_exception_agents_enabled(feature_flags: Any) -> bool:
 
 def is_ai_dashboard_cards_enabled(feature_flags: Any) -> bool:
     return _flag_default_true(feature_flags, AI_DASHBOARD_CARDS_ENABLED)
+
+
+def is_voucher_entry_assist_enabled(feature_flags: Any) -> bool:
+    return _flag_default_true(feature_flags, VOUCHER_ENTRY_ASSIST_ENABLED)
 
 
 def is_packing_list_cartons_enabled(feature_flags: Any) -> bool:

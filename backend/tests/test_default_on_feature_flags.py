@@ -14,6 +14,7 @@ CHECKS = {
     fk.PO_COLOR_SIZE_MATRIX_ENABLED: fk.is_po_color_size_matrix_enabled,
     fk.AI_EXCEPTION_AGENTS_ENABLED: fk.is_ai_exception_agents_enabled,
     fk.AI_DASHBOARD_CARDS_ENABLED: fk.is_ai_dashboard_cards_enabled,
+    fk.VOUCHER_ENTRY_ASSIST_ENABLED: fk.is_voucher_entry_assist_enabled,
 }
 
 

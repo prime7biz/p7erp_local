@@ -10,9 +10,21 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db
-from app.models import CuttingBundle, CutTicket, LayPlan, MarkerPlan, Tenant, User
+from app.models import (
+    CuttingBundle,
+    CutTicket,
+    GarmentStyle,
+    Item,
+    LayPlan,
+    MarkerPlan,
+    Order,
+    SewingLine,
+    Tenant,
+    User,
+)
 from app.modules.production.schemas import (
     BundleIssueRequest,
     CutTicketCreate,
@@ -37,6 +49,8 @@ async def create_marker(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure(user, tenant)
+    await ensure_owned(db, Order, body.order_id, tenant.id, "Order")
+    await ensure_owned(db, GarmentStyle, body.style_id, tenant.id, "Style")
     row = MarkerPlan(
         tenant_id=tenant.id,
         order_id=body.order_id,
@@ -85,9 +99,11 @@ async def generate_bundles(
     if not t or t.tenant_id != tenant.id:
         raise HTTPException(404, "Cut ticket not found")
     lay = await db.get(LayPlan, t.lay_plan_id)
-    if not lay:
+    if not lay or lay.tenant_id != tenant.id:
         raise HTTPException(400, "Lay plan missing")
     marker = await db.get(MarkerPlan, lay.marker_plan_id)
+    if marker is not None and marker.tenant_id != tenant.id:
+        raise HTTPException(400, "Marker plan missing")
     order_id = marker.order_id if marker else None
     style_id = marker.style_id if marker else None
 
@@ -152,6 +168,7 @@ async def issue_bundles(
     _ensure(user, tenant)
     from datetime import datetime
 
+    await ensure_owned(db, SewingLine, body.issued_to_line_id, tenant.id, "Sewing line")
     for bid in body.bundle_ids:
         b = await db.get(CuttingBundle, bid)
         if not b or b.tenant_id != tenant.id:
@@ -221,6 +238,8 @@ async def create_lay(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure(user, tenant)
+    await ensure_owned(db, MarkerPlan, body.marker_plan_id, tenant.id, "Marker plan")
+    await ensure_owned(db, Item, body.fabric_item_id, tenant.id, "Fabric item")
     row = LayPlan(
         tenant_id=tenant.id,
         marker_plan_id=body.marker_plan_id,
@@ -242,6 +261,7 @@ async def create_cut_ticket(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure(user, tenant)
+    await ensure_owned(db, LayPlan, body.lay_plan_id, tenant.id, "Lay plan")
     row = CutTicket(
         tenant_id=tenant.id,
         lay_plan_id=body.lay_plan_id,

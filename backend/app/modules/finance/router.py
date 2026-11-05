@@ -39,6 +39,13 @@ from app.common.permissions import (
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.modules.finance.advanced_voucher_service import voucher_book_impact_applied, voucher_in_books_clause
 from app.modules.finance.budget_enforcement_service import evaluate_voucher_budget
+from app.modules.finance.voucher_history import (
+    diff_voucher,
+    header_snapshot,
+    lines_snapshot,
+    list_voucher_events,
+    record_voucher_event,
+)
 from app.common.codegen import next_tenant_code
 from app.modules.finance.voucher_controls import (
     allocate_series_voucher_number,
@@ -1998,18 +2005,15 @@ async def coa_import(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Import Chart of Accounts from CSV. conflict: skip existing, update existing, or abort on first conflict."""
+    """Import Chart of Accounts from CSV or Excel (.xlsx, first sheet). conflict: skip / update / abort."""
+    from app.common.spreadsheet_upload import upload_to_csv_text
+
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
     if conflict not in ("skip", "update", "abort"):
         raise HTTPException(status_code=400, detail="conflict must be skip, update, or abort")
     content = await file.read()
-    if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="CSV file is too large (max 5 MB)")
-    try:
-        text = content.decode("utf-8")
-    except UnicodeDecodeError:
-        text = content.decode("latin-1")
+    text = upload_to_csv_text(file.filename, content)
     sio = StringIO(text)
     reader = csv.DictReader(sio)
     rows = list(reader)
@@ -2552,6 +2556,15 @@ async def create_voucher(
         )
     except Exception:
         pass
+    await record_voucher_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher_id=row.id,
+        event="created",
+        summary=f"Created {voucher_type_code} {voucher_number} for {round(debit_total, 2):,.2f} ({len(body.lines)} lines)",
+        to_status="DRAFT",
+    )
     await db.commit()
     await db.refresh(row)
     return await _voucher_out(db, row, control_warnings=control_warnings or None)
@@ -2584,6 +2597,10 @@ async def update_voucher(
     if round(debit_total, 4) != round(credit_total, 4):
         raise HTTPException(status_code=400, detail="Voucher is not balanced")
 
+    before_header = header_snapshot(row)
+    before_lines = lines_snapshot(
+        (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all()
+    )
     txn_currency = _normalize_currency(body.currency, default=row.currency)
     base_currency = _normalize_currency(body.base_currency, default=row.base_currency)
     if body.exchange_rate is not None:
@@ -2684,6 +2701,17 @@ async def update_voucher(
         )
     except Exception:
         pass
+    changes = diff_voucher(before_header, before_lines, header_snapshot(row), lines_snapshot(updated_lines))
+    changed_names = [k for k in changes if k != "lines"] + (["lines"] if "lines" in changes else [])
+    await record_voucher_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher_id=row.id,
+        event="updated",
+        summary=f"Edited: {', '.join(changed_names)}" if changed_names else "Saved with no changes",
+        changes=changes,
+    )
     await db.commit()
     await db.refresh(row)
     return await _voucher_out(db, row)
@@ -2704,6 +2732,16 @@ async def delete_voucher(
     if row.status in {"POSTED", "REVERSED"}:
         raise HTTPException(status_code=400, detail="Posted/reversed vouchers cannot be deleted")
     lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all())
+    await record_voucher_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher_id=row.id,
+        event="deleted",
+        summary=f"Deleted {row.voucher_type} {row.voucher_number} (was {row.status})",
+        from_status=row.status,
+        changes={"header": header_snapshot(row), "lines": lines_snapshot(lines)},
+    )
     for line in lines:
         await db.delete(line)
     await db.delete(row)
@@ -2715,6 +2753,8 @@ class VoucherStatusUpdateBody(BaseModel):
     status: str
     budget_override: bool = False
     budget_override_reason: str | None = None
+    # Optional note shown in the voucher History (e.g. why it was rejected).
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class VoucherPostPreflightOut(BaseModel):
@@ -2945,6 +2985,19 @@ async def update_voucher_status(
         )
     lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all())
     _apply_internal_signature(row, lines)
+    if previous_status != next_status:
+        reason_parts = [p for p in ((body.reason or "").strip(), (budget_override_reason or "").strip() if budget_override else "") if p]
+        await record_voucher_event(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            voucher_id=row.id,
+            event="status",
+            summary=f"{previous_status} → {next_status}",
+            from_status=previous_status,
+            to_status=next_status,
+            reason=" | ".join(reason_parts) or None,
+        )
     await db.commit()
     await db.refresh(row)
     if next_status == "POSTED" and affect_books and (row.voucher_type or "").upper() == "RECEIPT":
@@ -3078,11 +3131,59 @@ async def _posted_movement_by_account(
     return movement
 
 
+_PL_NATURES = frozenset({"Income", "Expense"})
+
+
+async def _report_balances(
+    db: AsyncSession,
+    tenant: Tenant,
+    account_rows: list,
+    as_of_date: date,
+    *,
+    basis: str,
+    account_ids: list[int] | None,
+) -> tuple[dict[int, float], dict, float]:
+    """Balance per account in its normal direction (positive = normal side).
+
+    basis="cumulative": opening + all posted movement up to as_of (original behaviour).
+    basis="fy": Income/Expense accounts show only this financial year's movement; everything
+    earlier is returned as `profit_brought_forward` (Tally: no year-end closing entry needed).
+    """
+    from app.modules.finance.fiscal_year import fiscal_year_bounds, fiscal_year_info, fy_start_month
+
+    start_month = fy_start_month(tenant.feature_flags)
+    fy_info = fiscal_year_info(as_of_date, start_month)
+    movement = await _posted_movement_by_account(db, tenant.id, as_of_date, account_ids)
+
+    def signed(account: ChartOfAccount, opening: float, dr: float, cr: float) -> float:
+        return opening + dr - cr if account.normal_balance == "debit" else opening + cr - dr
+
+    balances: dict[int, float] = {}
+    profit_bf = 0.0
+    prior: dict[int, dict[str, float]] = {}
+    if basis == "fy":
+        fy_start, _ = fiscal_year_bounds(as_of_date, start_month)
+        pl_ids = [a.id for a, g in account_rows if g.nature in _PL_NATURES]
+        prior = await _posted_movement_by_account(db, tenant.id, fy_start - timedelta(days=1), pl_ids)
+    for account, group in account_rows:
+        opening = _to_float(account.opening_balance)
+        total = signed(account, opening, movement[account.id]["DEBIT"], movement[account.id]["CREDIT"])
+        if basis == "fy" and group.nature in _PL_NATURES:
+            before = signed(account, opening, prior[account.id]["DEBIT"], prior[account.id]["CREDIT"])
+            balances[account.id] = total - before
+            natural = before if (account.normal_balance == "credit") == (group.nature == "Income") else -before
+            profit_bf += natural if group.nature == "Income" else -natural
+        else:
+            balances[account.id] = total
+    return balances, fy_info, profit_bf
+
+
 @router.get("/reports/trial-balance")
 async def trial_balance_report(
     as_of_date: date | None = Query(default=None),
     account_id: int | None = Query(default=None),
     group_id: int | None = Query(default=None),
+    basis: str = Query(default="cumulative", pattern="^(cumulative|fy)$"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -3100,36 +3201,25 @@ async def trial_balance_report(
     if group_id is not None:
         accounts_stmt = accounts_stmt.where(ChartOfAccount.group_id == group_id)
     account_rows = (await db.execute(accounts_stmt)).all()
-    movement = await _posted_movement_by_account(
+    balances, fy_info, profit_bf = await _report_balances(
         db,
-        tenant.id,
+        tenant,
+        account_rows,
         as_of_date,
-        [a.id for a, _g in account_rows] if (account_id is not None or group_id is not None) else None,
+        basis=basis,
+        account_ids=[a.id for a, _g in account_rows] if (account_id is not None or group_id is not None) else None,
     )
 
     rows = []
     debit_total = 0.0
     credit_total = 0.0
     for account, group in account_rows:
-        opening = _to_float(account.opening_balance)
-        debit_mov = movement[account.id]["DEBIT"]
-        credit_mov = movement[account.id]["CREDIT"]
+        bal = balances[account.id]
+        on_normal_side = bal >= 0
         if account.normal_balance == "debit":
-            bal = opening + debit_mov - credit_mov
-            if bal >= 0:
-                debit = bal
-                credit = 0.0
-            else:
-                debit = 0.0
-                credit = abs(bal)
+            debit, credit = (bal, 0.0) if on_normal_side else (0.0, abs(bal))
         else:
-            bal = opening + credit_mov - debit_mov
-            if bal >= 0:
-                credit = bal
-                debit = 0.0
-            else:
-                credit = 0.0
-                debit = abs(bal)
+            debit, credit = (0.0, bal) if on_normal_side else (abs(bal), 0.0)
         debit_total += debit
         credit_total += credit
         rows.append(
@@ -3143,11 +3233,30 @@ async def trial_balance_report(
                 "credit": round(credit, 2),
             }
         )
+    if basis == "fy" and account_id is None and group_id is None and abs(profit_bf) >= 0.005:
+        pbf_debit, pbf_credit = (0.0, profit_bf) if profit_bf > 0 else (abs(profit_bf), 0.0)
+        debit_total += pbf_debit
+        credit_total += pbf_credit
+        rows.append(
+            {
+                "account_id": 0,
+                "account_number": "P&L-BF",
+                "account_name": "Profit & Loss brought forward (earlier years)",
+                "group_name": "Equity (computed)",
+                "nature": "Equity",
+                "debit": round(pbf_debit, 2),
+                "credit": round(pbf_credit, 2),
+                "is_computed": True,
+            }
+        )
     return {
         "as_of_date": as_of_date,
         "rows": rows,
         "total_debit": round(debit_total, 2),
         "total_credit": round(credit_total, 2),
+        "basis": basis,
+        "fiscal_year": fy_info,
+        "profit_brought_forward": round(profit_bf, 2) if basis == "fy" else None,
     }
 
 
@@ -3155,6 +3264,7 @@ async def trial_balance_report(
 async def financial_statements(
     as_of_date: date | None = Query(default=None),
     group_id: int | None = Query(default=None),
+    basis: str = Query(default="cumulative", pattern="^(cumulative|fy)$"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -3170,19 +3280,17 @@ async def financial_statements(
     if group_id is not None:
         accounts_stmt = accounts_stmt.where(ChartOfAccount.group_id == group_id)
     account_rows = (await db.execute(accounts_stmt)).all()
-    movement = await _posted_movement_by_account(
-        db, tenant.id, as_of_date, [a.id for a, _g in account_rows] if group_id is not None else None
+    balances, fy_info, profit_bf = await _report_balances(
+        db,
+        tenant,
+        account_rows,
+        as_of_date,
+        basis=basis,
+        account_ids=[a.id for a, _g in account_rows] if group_id is not None else None,
     )
     summary = {"Asset": 0.0, "Liability": 0.0, "Equity": 0.0, "Income": 0.0, "Expense": 0.0}
     for account, group in account_rows:
-        opening = _to_float(account.opening_balance)
-        debit_mov = movement[account.id]["DEBIT"]
-        credit_mov = movement[account.id]["CREDIT"]
-        if account.normal_balance == "debit":
-            bal = opening + debit_mov - credit_mov
-        else:
-            bal = opening + credit_mov - debit_mov
-        summary[group.nature] = summary.get(group.nature, 0.0) + bal
+        summary[group.nature] = summary.get(group.nature, 0.0) + balances[account.id]
     profit = summary.get("Income", 0.0) - summary.get("Expense", 0.0)
     return {
         "as_of_date": as_of_date,
@@ -3197,6 +3305,9 @@ async def financial_statements(
             "liabilities": round(summary.get("Liability", 0.0), 2),
             "equity": round(summary.get("Equity", 0.0), 2),
         },
+        "basis": basis,
+        "fiscal_year": fy_info,
+        "profit_brought_forward": round(profit_bf, 2) if basis == "fy" else None,
     }
 
 
@@ -6194,6 +6305,66 @@ async def post_voucher(
     )
 
 
+DIRECT_POST_PATH = ("SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED", "POSTED")
+
+
+@router.post("/vouchers/{voucher_id}/direct-post", response_model=VoucherOut)
+async def direct_post_voucher(
+    voucher_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Tally-style save = post (flag `direct_post_vouchers`, default off).
+
+    Walks the normal workflow (submit → check → recommend → approve → post) in one call, so every
+    step is still validated and recorded in the voucher History. Admin / manager only. If a later
+    step fails (e.g. closed period, budget block) the voucher stays at the last successful step.
+    """
+    from app.common.tenant_feature_keys import is_direct_post_vouchers_enabled
+
+    _ensure_tenant(user, tenant)
+    if not is_direct_post_vouchers_enabled(tenant.feature_flags):
+        raise HTTPException(status_code=404, detail="Direct posting is disabled. Set tenant feature flag direct_post_vouchers to true.")
+    await _require_manager_or_admin(db, user, tenant.id)
+    row = await db.get(Voucher, voucher_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    if row.status == "POSTED":
+        raise HTTPException(status_code=409, detail="Voucher is already posted")
+    if row.status not in ("DRAFT", *DIRECT_POST_PATH[:-1]):
+        raise HTTPException(status_code=400, detail=f"Cannot direct-post a {row.status} voucher")
+    start = DIRECT_POST_PATH.index(row.status) + 1 if row.status in DIRECT_POST_PATH else 0
+    out = None
+    for step in DIRECT_POST_PATH[start:]:
+        out = await update_voucher_status(
+            voucher_id=voucher_id,
+            body=VoucherStatusUpdateBody(status=step, reason="Direct post (single-step mode)"),
+            tenant=tenant,
+            user=user,
+            db=db,
+        )
+    return out
+
+
+@router.get("/vouchers/{voucher_id}/history")
+async def voucher_history(
+    voucher_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Edit log for one voucher, newest first (also works after the voucher is deleted)."""
+    _ensure_tenant(user, tenant)
+    row = await db.get(Voucher, voucher_id)
+    if row is not None and row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    events = await list_voucher_events(db, tenant_id=tenant.id, voucher_id=voucher_id)
+    if row is None and not events:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    return {"voucher_id": voucher_id, "events": events}
+
+
 @router.post("/vouchers/{voucher_id}/cancel-posting", response_model=VoucherOut)
 async def cancel_posted_voucher(
     voucher_id: int,
@@ -6227,6 +6398,16 @@ async def cancel_posted_voucher(
     from app.modules.finance.party_ledger_hooks import on_voucher_cancelled
 
     await on_voucher_cancelled(db, tenant.id, voucher, feature_flags=tenant.feature_flags)
+    await record_voucher_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher_id=voucher.id,
+        event="cancel_posting",
+        summary="Posting cancelled (book impact removed)",
+        from_status="POSTED",
+        to_status="APPROVED",
+    )
     await db.commit()
     await db.refresh(voucher)
     return await _voucher_out(db, voucher)
@@ -6339,6 +6520,27 @@ async def reverse_voucher(
         db, tenant.id, rev, rev_lines, strict_duplicate_check=False
     )
     _apply_internal_signature(rev, rev_lines)
+    await record_voucher_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher_id=src.id,
+        event="reversed",
+        summary=f"Reversed by {rev.voucher_number}",
+        from_status="POSTED",
+        to_status="REVERSED",
+        reason=reason,
+    )
+    await record_voucher_event(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        voucher_id=rev.id,
+        event="created",
+        summary=f"Reversal of {src.voucher_number} (posted)",
+        to_status="POSTED",
+        reason=reason,
+    )
     await db.commit()
     await db.refresh(rev)
     return await _voucher_out(db, rev, control_warnings=post_warnings or None)

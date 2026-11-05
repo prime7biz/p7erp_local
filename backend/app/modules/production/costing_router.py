@@ -8,9 +8,23 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db
-from app.models import CmCostActual, CmOverheadConfig, ProductionCostInput, Tenant, User, WipJournal
+from app.models import (
+    ChartOfAccount,
+    CmCostActual,
+    CmOverheadConfig,
+    CostCenter,
+    GarmentStyle,
+    Order,
+    ProductionCostInput,
+    ProductionShift,
+    SewingLine,
+    Tenant,
+    User,
+    WipJournal,
+)
 from app.modules.production.cm_recalc_service import recalc_cm_cost_actuals
 from app.modules.production.schemas import (
     CmOverheadConfigResponse,
@@ -36,6 +50,8 @@ async def post_daily_cost(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure(user, tenant)
+    await ensure_owned(db, SewingLine, body.line_id, tenant.id, "Sewing line")
+    await ensure_owned(db, ProductionShift, body.shift_id, tenant.id, "Shift")
     d = date.fromisoformat(body.cost_date)
     total = (
         body.labor_cost
@@ -205,6 +221,11 @@ async def create_wip_journal(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Provide both gl_debit_account_id and gl_credit_account_id, or neither",
         )
+    await ensure_owned(db, Order, body.order_id, tenant.id, "Order")
+    await ensure_owned(db, GarmentStyle, body.style_id, tenant.id, "Style")
+    await ensure_owned(db, CostCenter, body.cost_center_id, tenant.id, "Cost center")
+    await ensure_owned(db, ChartOfAccount, body.gl_debit_account_id, tenant.id, "Account")
+    await ensure_owned(db, ChartOfAccount, body.gl_credit_account_id, tenant.id, "Account")
     d = date.fromisoformat(body.journal_date)
     total = body.material_value + body.conversion_cost
     row = WipJournal(

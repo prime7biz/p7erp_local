@@ -8,9 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db
-from app.models import DyeBatch, DyeRecipe, Tenant, User
+from app.models import DepartmentMachine, DyeBatch, DyeRecipe, Item, Order, Tenant, User
 from app.modules.production.schemas import DyeBatchCreate, DyeRecipeCreate
 
 router = APIRouter(prefix="/production/dyeing", tags=["production-dyeing"])
@@ -77,6 +78,10 @@ async def create_batch(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure(user, tenant)
+    await ensure_owned(db, DepartmentMachine, body.machine_id, tenant.id, "Machine")
+    await ensure_owned(db, DyeRecipe, body.recipe_id, tenant.id, "Recipe")
+    await ensure_owned(db, Item, body.fabric_item_id, tenant.id, "Fabric item")
+    await ensure_owned(db, Order, body.order_id, tenant.id, "Order")
     ps = datetime.fromisoformat(body.planned_start) if body.planned_start else None
     pe = datetime.fromisoformat(body.planned_end) if body.planned_end else None
     row = DyeBatch(

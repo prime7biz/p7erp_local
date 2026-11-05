@@ -14,8 +14,10 @@ import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
+import { LedgerQuickCreateModal } from "@/components/quick-create/LedgerQuickCreateModal";
 import { ACTION_LABEL, ACTION_TO_STATUS, ACTIONS_NEEDING_REASON, VOUCHER_STATUSES } from "@/components/vouchers/workflowMeta";
 import { useListPagination } from "@/hooks/useListPagination";
+import { VOUCHER_HOTKEYS, useVoucherHotkeys } from "@/hooks/useVoucherHotkeys";
 import {
   fetchBtbLcPage,
   fetchChartAccountPage,
@@ -28,6 +30,7 @@ import {
 } from "@/lib/remoteSelectFetchers";
 import { logApiError } from "@/utils/logApiError";
 import { useAuth } from "@/context/AuthContext";
+import { resolveRole } from "@/lib/roles";
 import type { TaxPreviewResponse } from "@/api/client";
 
 const CTL =
@@ -53,6 +56,7 @@ function makeLine(accountId: number, currency: string, exchangeRate: string, ent
 export function VouchersPage() {
   const { me } = useAuth();
   const gstEnabled = me?.feature_flags?.gst_system_enabled === true;
+  const directPostOn = me?.feature_flags?.direct_post_vouchers === true && resolveRole(me?.role_name).isElevated;
   const { page, setPage, pageSize, setPageSize, offset, limit, allowedSizes } = useListPagination();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -79,6 +83,7 @@ export function VouchersPage() {
   const [editingVoucherId, setEditingVoucherId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [pendingWorkflowAction, setPendingWorkflowAction] = useState<{ voucherId: number; action: string } | null>(null);
+  const [ledgerCreate, setLedgerCreate] = useState<{ lineIdx: number; name: string } | null>(null);
   const [periodLock, setPeriodLock] = useState<{ locked: boolean; reason?: string; period_name?: string } | null>(null);
   const [taxPreview, setTaxPreview] = useState<TaxPreviewResponse | null>(null);
   const [taxPreviewError, setTaxPreviewError] = useState("");
@@ -303,7 +308,7 @@ export function VouchersPage() {
     }
   }
 
-  async function submitVoucher(quickSubmit: boolean) {
+  async function submitVoucher(quickSubmit: boolean, directPost = false) {
     setError(null);
     setSuccess(null);
     try {
@@ -327,8 +332,26 @@ export function VouchersPage() {
         };
         voucher = await api.createVoucher(createPayload);
       }
-      if (quickSubmit) await api.updateVoucherStatus(voucher.id, "SUBMITTED");
-      setSuccess(quickSubmit ? "Voucher saved and submitted." : editingVoucherId ? "Voucher updated." : "Voucher created.");
+      if (directPost) {
+        try {
+          voucher = await api.directPostVoucher(voucher.id);
+        } catch (e) {
+          setError(`Saved as ${voucher.voucher_number}, but posting stopped: ${(e as Error).message}`);
+          resetForm();
+          setShowCreate(false);
+          await loadList();
+          return;
+        }
+      } else if (quickSubmit) await api.updateVoucherStatus(voucher.id, "SUBMITTED");
+      setSuccess(
+        directPost
+          ? `Voucher ${voucher.voucher_number} saved and posted.`
+          : quickSubmit
+            ? "Voucher saved and submitted."
+            : editingVoucherId
+              ? "Voucher updated."
+              : "Voucher created.",
+      );
       resetForm();
       setShowCreate(false);
       await loadList();
@@ -341,6 +364,41 @@ export function VouchersPage() {
     e.preventDefault();
     await submitVoucher(false);
   }
+
+  function openNewVoucher(voucherType: string) {
+    const hasUnsavedLines = showCreate && form.lines.some((l) => Number(l.amount) > 0);
+    if (hasUnsavedLines && !window.confirm("Discard the voucher you are entering and start a new one?")) return;
+    resetForm();
+    setForm((p) => ({ ...p, voucher_type: voucherType }));
+    setShowCreate(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  useVoucherHotkeys({
+    onNewVoucher: openNewVoucher,
+    onSave: (andSubmit) => void submitVoucher(andSubmit),
+    formOpen: showCreate,
+    enabled: pendingWorkflowAction == null && ledgerCreate == null,
+  });
+
+  const newTypeFromUrl = searchParams.get("new");
+  useEffect(() => {
+    if (!newTypeFromUrl) return;
+    const type = newTypeFromUrl.trim().toUpperCase();
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("new");
+        return next;
+      },
+      { replace: true },
+    );
+    if (!/^[A-Z_]{2,32}$/.test(type)) return;
+    resetForm();
+    setForm((p) => ({ ...p, voucher_type: type }));
+    setShowCreate(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newTypeFromUrl, setSearchParams]);
 
   const runListWorkflowAction = useCallback(
     async (voucherId: number, action: string, reason: string) => {
@@ -362,7 +420,7 @@ export function VouchersPage() {
         else {
           const nextStatus = ACTION_TO_STATUS[action];
           if (!nextStatus) throw new Error(`Unsupported action: ${action}`);
-          await api.updateVoucherStatus(voucherId, nextStatus);
+          await api.updateVoucherStatus(voucherId, nextStatus, { reason });
         }
         const label = ACTION_LABEL[action] ?? action;
         setSuccess(reason.trim() ? `Action complete: ${label} — ${reason.trim()}` : `Action complete: ${label}`);
@@ -501,7 +559,12 @@ export function VouchersPage() {
           {/* Card: Voucher Information */}
           <div className="rounded-xl border border-border bg-surface-raised p-5">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-text-primary">{editingVoucherId ? `Edit Voucher #${editingVoucherId}` : "New Voucher"}</h2>
+              <div>
+                <h2 className="text-lg font-semibold text-text-primary">{editingVoucherId ? `Edit Voucher #${editingVoucherId}` : "New Voucher"}</h2>
+                <p className="mt-0.5 text-xs text-text-muted">
+                  {VOUCHER_HOTKEYS.map((h) => `${h.fKey} ${h.label}`).join(" · ")} · Ctrl+Enter save draft · Ctrl+Shift+Enter save &amp; submit
+                </p>
+              </div>
               <button type="button" className="rounded-lg border border-border-strong px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => { resetForm(); setShowCreate(false); }}>
                 Cancel
               </button>
@@ -705,6 +768,8 @@ export function VouchersPage() {
                           }}
                           fetchPage={fetchChartAccountPage}
                           hydrateById={hydrateChartAccount}
+                          createLabel="ledger"
+                          onCreateNew={(typed) => setLedgerCreate({ lineIdx: idx, name: typed })}
                         />
                         {line.account_id > 0 && accountBillWiseMap[line.account_id] ? (
                           <span className="mt-0.5 inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">Bill-Wise Enabled</span>
@@ -894,6 +959,16 @@ export function VouchersPage() {
                 >
                   {editingVoucherId ? "Update & Submit" : "Save & Submit"}
                 </button>
+                {directPostOn ? (
+                  <button
+                    type="button"
+                    className="rounded-lg border border-status-success/30 bg-status-success-subtle px-4 py-2 text-sm font-medium text-status-success-foreground hover:bg-status-success-subtle/80"
+                    title="Save and post in one step (direct posting is on for this company)"
+                    onClick={() => void submitVoucher(false, true)}
+                  >
+                    {editingVoucherId ? "Update & Post" : "Save & Post"}
+                  </button>
+                ) : null}
                 <button
                   type="submit"
                   className="rounded-lg bg-brand-primary px-5 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
@@ -1008,7 +1083,7 @@ export function VouchersPage() {
             ? `Confirm ${ACTION_LABEL[pendingWorkflowAction.action] ?? pendingWorkflowAction.action}`
             : "Confirm"
         }
-        description="A short reason helps your team during review. Full audit storage in the database is planned (see docs/voucher_backend_gaps.md)."
+        description="A short reason helps your team during review. It is saved in the voucher's History."
         confirmLabel={pendingWorkflowAction ? ACTION_LABEL[pendingWorkflowAction.action] ?? "Confirm" : "Confirm"}
         onClose={() => setPendingWorkflowAction(null)}
         onConfirm={(reason) => {
@@ -1016,6 +1091,17 @@ export function VouchersPage() {
           const { voucherId, action } = pendingWorkflowAction;
           setPendingWorkflowAction(null);
           void runListWorkflowAction(voucherId, action, reason);
+        }}
+      />
+
+      <LedgerQuickCreateModal
+        open={ledgerCreate != null}
+        initialName={ledgerCreate?.name}
+        onClose={() => setLedgerCreate(null)}
+        onCreated={(account) => {
+          if (ledgerCreate) setLine(ledgerCreate.lineIdx, { account_id: account.id });
+          setAccountBillWiseMap((m) => ({ ...m, [account.id]: Boolean(account.enable_bill_wise) }));
+          setSuccess(`Ledger "${account.name}" created and selected.`);
         }}
       />
     </div>

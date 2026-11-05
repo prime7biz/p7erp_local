@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { api, type SettingsConfigUpdate, type TenantType } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import {
+  FEATURE_TIER_LABEL,
+  hiddenEnabledCount,
+  readStoredTier,
+  storeTier,
+  tierVisible,
+  type FeatureTier,
+} from "./featureTiers";
 
 const TENANT_TYPE_OPTIONS: Array<{ value: TenantType; label: string }> = [
   { value: "manufacturer", label: "Manufacturer" },
@@ -16,6 +24,9 @@ export function ConfigurationPage() {
   const [success, setSuccess] = useState("");
   const [companyCode, setCompanyCode] = useState("");
   const [featureFlags, setFeatureFlags] = useState<Record<string, boolean | string | number | null>>({});
+  const [featureTier, setFeatureTier] = useState<FeatureTier>(readStoredTier);
+  const showTier = (section: FeatureTier) => tierVisible(section, featureTier);
+  const hiddenOn = hiddenEnabledCount(featureFlags, featureTier);
   const [form, setForm] = useState<SettingsConfigUpdate>({
     company_name: "",
     domain: "",
@@ -179,7 +190,39 @@ export function ConfigurationPage() {
           />
         </div>
 
-        <div className="rounded-lg border border-border bg-surface-subtle p-3">
+        <div className="space-y-2 rounded-lg border border-brand-primary/30 bg-brand-primary/5 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-medium text-text-primary">Show company features</span>
+            <div role="radiogroup" aria-label="Feature level" className="inline-flex rounded-lg border border-border-strong bg-surface-raised p-0.5">
+              {(Object.keys(FEATURE_TIER_LABEL) as FeatureTier[]).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="radio"
+                  aria-checked={featureTier === t}
+                  className={`rounded-md px-3 py-1 text-xs font-medium ${featureTier === t ? "bg-brand-primary text-brand-primary-foreground" : "text-text-secondary hover:bg-surface-subtle"}`}
+                  onClick={() => {
+                    setFeatureTier(t);
+                    storeTier(t);
+                  }}
+                >
+                  {FEATURE_TIER_LABEL[t]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-text-muted">
+            Like Tally's F11: start with the essentials and reveal advanced modules when you need them. Hidden switches keep their
+            settings.
+            {hiddenOn > 0 ? (
+              <span className="ml-1 font-medium text-status-warning-foreground">
+                {hiddenOn} switch{hiddenOn === 1 ? " is" : "es are"} on in hidden sections.
+              </span>
+            ) : null}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3" hidden={!showTier("more")}>
           <label className="flex items-start gap-3 text-sm text-text-secondary">
             <input
               type="checkbox"
@@ -228,7 +271,7 @@ export function ConfigurationPage() {
           </label>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface-subtle p-3">
+        <div className="rounded-lg border border-border bg-surface-subtle p-3" hidden={!showTier("more")}>
           <label className="flex items-start gap-3 text-sm text-text-secondary">
             <input
               type="checkbox"
@@ -252,7 +295,7 @@ export function ConfigurationPage() {
           </label>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3">
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
           <label className="flex items-start gap-3 text-sm text-text-secondary">
             <input
               type="checkbox"
@@ -297,6 +340,48 @@ export function ConfigurationPage() {
 
         <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Finance &amp; costing</p>
+          <label className="flex flex-col gap-1.5 text-sm text-text-secondary">
+            <span className="font-medium text-text-primary">Financial year starts in</span>
+            <select
+              className="max-w-xs rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-text-primary"
+              value={Number(featureFlags.fiscal_year_start_month) || 1}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  fiscal_year_start_month: Number(e.target.value),
+                }))
+              }
+            >
+              {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(
+                (m, i) => (
+                  <option key={m} value={i + 1}>
+                    {m}
+                    {i === 6 ? " (Bangladesh July–June)" : i === 0 ? " (calendar year)" : ""}
+                  </option>
+                ),
+              )}
+            </select>
+            <span className="text-xs text-text-muted">
+              Trial Balance and Financial Statements show income &amp; expense for this financial year, with earlier years carried
+              forward automatically — no year-end closing entry needed. New voucher numbers use this year (e.g. VCH-2026-… from 1 July
+              2026). Change it at a year boundary, not in the middle of a year.
+            </span>
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm text-text-secondary">
+            <span className="font-medium text-text-primary">VAT BIN (Business Identification Number)</span>
+            <input
+              className="max-w-xs rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-text-primary"
+              placeholder="13 digits, e.g. 000123456-0101"
+              value={typeof featureFlags.vat_bin === "string" ? featureFlags.vat_bin : ""}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  vat_bin: e.target.value || null,
+                }))
+              }
+            />
+            <span className="text-xs text-text-muted">Printed on Mushak 6.3 tax invoices and the 9.1 return summary (Bond &amp; VAT registers).</span>
+          </label>
           <label className="flex flex-col gap-1.5 text-sm text-text-secondary">
             <span className="font-medium text-text-primary">Budget enforcement mode</span>
             <select
@@ -464,7 +549,7 @@ export function ConfigurationPage() {
           </label>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3">
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
           <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Advanced vouchers (Sprint 4)</p>
           {(
             [
@@ -475,6 +560,11 @@ export function ConfigurationPage() {
               ["post_dated_voucher_enabled", "Post-dated vouchers", "Post-dated register and activate-due workflow."],
               ["recurring_voucher_enabled", "Recurring vouchers", "Recurring templates with manual generate and history."],
               ["voucher_class_enabled", "Voucher classes", "Reusable voucher class templates with line prefills."],
+              [
+                "direct_post_vouchers",
+                "Direct posting (save = post)",
+                "Tally-style: admins/managers get Save & Post and Post now, which run every approval step in one click (each step still shows in the voucher History). For small teams without a separate checker.",
+              ],
             ] as const
           ).map(([key, title, desc]) => (
             <label key={key} className="flex items-start gap-3 text-sm text-text-secondary">
@@ -497,7 +587,7 @@ export function ConfigurationPage() {
           ))}
         </div>
 
-        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3">
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("all")}>
           <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Sprint 5 — TDS & statutory payroll</p>
           {(
             [
@@ -533,7 +623,7 @@ export function ConfigurationPage() {
           ))}
         </div>
 
-        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3">
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
           <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Order execution spine</p>
           {(
             [
@@ -629,7 +719,31 @@ export function ConfigurationPage() {
           ))}
         </div>
 
-        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3">
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">Procurement</p>
+          <label className="flex items-start gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="mt-1 rounded border-border-strong"
+              checked={featureFlags.procurement_cs_enabled === true}
+              onChange={(e) =>
+                setFeatureFlags((prev) => ({
+                  ...prev,
+                  procurement_cs_enabled: e.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-text-primary">Requisitions &amp; comparative statement (CS)</span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Inventory → Procurement → Requisitions &amp; CS: purchase requisition → approval → supplier quotations →
+                side-by-side comparative statement → select supplier with a recorded reason → create PO. Off by default.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("more")}>
           <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">HR payroll</p>
           <label className="flex items-start gap-3 text-sm text-text-secondary">
             <input
@@ -653,7 +767,7 @@ export function ConfigurationPage() {
           </label>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3">
+        <div className="rounded-lg border border-border bg-surface-subtle p-3 space-y-3" hidden={!showTier("all")}>
           <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
             HR compliance / OCR / AI (Sprint H1)
           </p>

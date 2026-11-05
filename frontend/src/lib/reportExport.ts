@@ -23,6 +23,25 @@ export function downloadCsv(csvContent: string, baseName: string): void {
   URL.revokeObjectURL(url);
 }
 
+type XlsxCell = string | number | null | undefined;
+
+/**
+ * Native Excel export for report pages (numbers stay numeric). The writer library is
+ * loaded only when someone exports, so it does not grow the main bundle.
+ */
+export async function downloadXlsx(headers: string[], rows: XlsxCell[][], baseName: string): Promise<void> {
+  const { default: writeXlsxFile } = await import("write-excel-file");
+  const data = [
+    headers.map((h) => ({ value: h, fontWeight: "bold" as const })),
+    ...rows.map((line) =>
+      line.map((v) =>
+        v == null || v === "" ? null : typeof v === "number" ? { value: v, type: Number } : { value: String(v), type: String },
+      ),
+    ),
+  ];
+  await writeXlsxFile(data, { fileName: `${baseName}_${timestampForFilename(new Date())}.xlsx` });
+}
+
 export function printCurrentPage(): void {
   window.print();
 }

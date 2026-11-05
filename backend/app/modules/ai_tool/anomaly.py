@@ -269,6 +269,8 @@ async def _high_wastage_anomaly(db: AsyncSession, tenant_id: int) -> AnomalyFind
                 high_count += 1
                 if len(examples) < 5:
                     item = await db.get(Item, line.item_id)
+                    if item is not None and item.tenant_id != tenant_id:
+                        item = None
                     style = await db.get(GarmentStyle, quotation.style_id)
                     examples.append({
                         "order_code": order.order_code,

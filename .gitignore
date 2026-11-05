@@ -42,3 +42,6 @@ backups/
 
 # Replit / reference (included in repo)
 # replit-legacy/
+
+# Private audit material (exploit-level security detail; never commit — repo is public)
+docs/erp-modernization/private/

@@ -14,6 +14,7 @@ from app.common.master_contract_workflow import (
     MASTER_CONTRACT_STATUS_VALUES,
 )
 from app.common.codegen import next_tenant_code
+from app.common.ownership import ensure_owned
 from app.modules.finance.auto_posting_service import (
     SYSTEM_BTB_DOCS_CREDIT,
     SYSTEM_BTB_DOCS_DEBIT,
@@ -748,6 +749,7 @@ async def create_master_contract(
 ):
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+    await ensure_owned(db, CostCenter, body.cost_center_id, tenant.id, "Cost center")
     row = MasterContract(
         tenant_id=tenant.id,
         cost_center_id=body.cost_center_id,
@@ -798,6 +800,7 @@ async def update_master_contract(
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Master contract not found")
     updates = body.model_dump(exclude_unset=True)
+    await ensure_owned(db, CostCenter, updates.get("cost_center_id"), tenant.id, "Cost center")
     link_requested = "order_id" in updates
     link_order_id = updates.pop("order_id", None) if link_requested else None
     if "contract_type" in updates and updates["contract_type"] is not None:
@@ -966,6 +969,7 @@ async def create_proforma_invoice(
         contract = await db.get(MasterContract, body.master_contract_id)
         if not contract or contract.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail="Master contract not found")
+    await ensure_owned(db, BankAccount, body.shipper_bank_account_id, tenant.id, "Bank account")
     verification_token = secrets.token_urlsafe(32)
     row = ProformaInvoice(
         tenant_id=tenant.id,
@@ -1075,6 +1079,7 @@ async def update_proforma_invoice(
         po = await db.get(PurchaseOrder, int(update_data["purchase_order_id"]))
         if not po or po.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail="Purchase order not found")
+    await ensure_owned(db, BankAccount, update_data.get("shipper_bank_account_id"), tenant.id, "Bank account")
     for key, value in update_data.items():
         setattr(row, key, value)
     if order_ids is not None:
@@ -2036,6 +2041,7 @@ async def create_btb_lc(
         po = await db.get(PurchaseOrder, body.purchase_order_id)
         if not po or po.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail="Purchase order not found")
+    await ensure_owned(db, BankAccount, body.bank_account_id, tenant.id, "Bank account")
     if contract and body.amount is not None:
         await _enforce_btb_lc_utilization_cap(
             db=db,
@@ -2147,6 +2153,7 @@ async def update_btb_lc(
         po = await db.get(PurchaseOrder, int(updates["purchase_order_id"]))
         if not po or po.tenant_id != tenant.id:
             raise HTTPException(status_code=400, detail="Purchase order not found")
+    await ensure_owned(db, BankAccount, updates.get("bank_account_id"), tenant.id, "Bank account")
     previous_master_id = row.master_contract_id
     for key, value in updates.items():
         setattr(row, key, value)

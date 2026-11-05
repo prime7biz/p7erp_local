@@ -23,6 +23,27 @@ logger = logging.getLogger(__name__)
 ZERO = Decimal("0")
 
 
+async def assert_voucher_line_refs(db: AsyncSession, tenant_id: int, lines: list[dict[str, Any]]) -> None:
+    """Every account / cost centre referenced by voucher line dicts must belong to the tenant."""
+    from app.common.ownership import ensure_all_owned
+    from app.models.finance import CostCenter
+
+    account_ids: list[int | None] = []
+    for ln in lines:
+        raw = ln.get("account_id")
+        if raw in (None, ""):
+            raise HTTPException(status_code=400, detail="Each voucher line needs account_id")
+        account_ids.append(int(raw))
+    await ensure_all_owned(db, ChartOfAccount, account_ids, tenant_id, "Account")
+    await ensure_all_owned(
+        db,
+        CostCenter,
+        [int(ln["cost_center_id"]) if ln.get("cost_center_id") not in (None, "") else None for ln in lines],
+        tenant_id,
+        "Cost center",
+    )
+
+
 def voucher_should_affect_books(voucher: Voucher, *, as_of: date | None = None) -> bool:
     """Memorandum / optional(not included) / future post-dated / stock transfer do not hit CoA."""
     as_of = as_of or date.today()
@@ -246,6 +267,21 @@ async def create_note_voucher(
         tacct = await db.get(ChartOfAccount, tax_account_id)
         if not tacct or tacct.tenant_id != tenant_id:
             raise HTTPException(status_code=400, detail="Invalid tax account")
+    if stock_returns:
+        from app.common.ownership import ensure_all_owned
+        from app.models.costing import Item
+        from app.models.inventory import Warehouse
+
+        await ensure_all_owned(
+            db, Item, [int(sr.get("stock_item_id") or 0) or None for sr in stock_returns], tenant_id, "Item"
+        )
+        await ensure_all_owned(
+            db,
+            Warehouse,
+            [int(sr["godown_id"]) if sr.get("godown_id") else None for sr in stock_returns],
+            tenant_id,
+            "Warehouse",
+        )
 
     await ensure_voucher_type_row(
         db,
@@ -407,6 +443,10 @@ async def create_stock_transfer_voucher(
         raise HTTPException(status_code=404, detail="Source godown not found")
     if not to_wh or to_wh.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Destination godown not found")
+    from app.common.ownership import ensure_all_owned
+    from app.models.costing import Item
+
+    await ensure_all_owned(db, Item, [int(ln["stock_item_id"]) for ln in items], tenant_id, "Item")
 
     await ensure_voucher_type_row(
         db,
@@ -617,6 +657,7 @@ async def generate_from_recurring_template(
     lines_in = tpl.get("lines") or []
     if not lines_in:
         raise HTTPException(status_code=400, detail=f"Template {template.id} has no lines")
+    await assert_voucher_line_refs(db, tenant_id, lines_in)
 
     voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
         db,

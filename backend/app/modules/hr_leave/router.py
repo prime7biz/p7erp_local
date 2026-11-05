@@ -11,6 +11,7 @@ from app.common.auth import get_current_user
 from app.common.orm_numeric import decimal_to_money_response
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
+from app.common.permissions import PERMISSION_HR_LEAVE_TYPES_MANAGE, assert_hr_manager_or_permission
 from app.common.tenant import require_tenant
 from app.database import get_db, safe_async_session_rollback
 from app.models import (
@@ -264,6 +265,7 @@ async def create_leave_type(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_LEAVE_TYPES_MANAGE)
     row = LeaveType(tenant_id=tenant.id, code=body.code.strip().upper(), name=body.name.strip(), is_paid=body.is_paid, requires_approval=body.requires_approval, is_active=body.is_active)
     db.add(row)
     try:
@@ -284,6 +286,7 @@ async def update_leave_type(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_LEAVE_TYPES_MANAGE)
     row = await _leave_type_or_404(db, tenant.id, leave_type_id)
     payload = body.model_dump(exclude_unset=True)
     if payload.get("code") is not None:

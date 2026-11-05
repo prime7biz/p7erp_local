@@ -245,6 +245,8 @@ export interface SettingsChequeTemplatesListResponse {
   total: number;
 }
 
+export type BackupState = "requested" | "running" | "completed" | "failed" | "unavailable";
+
 export interface BackupStatusResponse {
   enabled: boolean;
   provider: string;
@@ -252,6 +254,11 @@ export interface BackupStatusResponse {
   last_backup_at: string | null;
   last_backup_status: string;
   last_backup_note: string | null;
+  state?: BackupState;
+  requested_at?: string | null;
+  size_bytes?: number | null;
+  checksum_recorded?: boolean;
+  restore_available?: boolean;
 }
 
 export interface BackupHistoryRow {
@@ -260,6 +267,8 @@ export interface BackupHistoryRow {
   status: string;
   note: string | null;
   initiated_by_user_id: number | null;
+  kind?: "server_backup" | "tenant_request";
+  size_bytes?: number | null;
 }
 
 export interface StatutoryTaxConfigRow {
@@ -1192,6 +1201,12 @@ export interface HrPayrollAutoCalcEmployee {
   status?: string;
   has_manual_override?: boolean;
   calculation_source?: string;
+  /** SALARY | DAILY | PIECE — derived from the structure's component types. */
+  pay_basis?: string;
+  /** Pieces scanned at the shop-floor station (operator code = employee code) in the period. */
+  pieces?: string;
+  /** Standard minutes earned (pieces × SMV) in the period. */
+  earned_minutes?: string;
 }
 
 export interface HrPayrollAutoCalcPreview {
@@ -1797,6 +1812,94 @@ export interface MushakRegister {
   period: string;
   rows: Record<string, string | number | null>[];
   totals: Record<string, string>;
+  note: string;
+}
+
+export type LcPerformanceFlag = "EXPIRED_UNSHIPPED" | "EXPIRING_UNSHIPPED" | "OVER_SHIPPED" | "BTB_ABOVE_75PCT";
+
+export interface LcPerformanceRow {
+  master_contract_id: number;
+  reference: string;
+  lc_number: string | null;
+  contract_type: string;
+  status: string;
+  buyer_name: string | null;
+  currency: string;
+  lc_value: string;
+  shipped: string;
+  shipped_pct: number | null;
+  realised: string;
+  realised_pct_of_shipped: number | null;
+  realisation_pending: string;
+  outstanding: string;
+  unshipped: string;
+  btb_opened: string;
+  btb_count: number;
+  btb_pct_of_lc: number | null;
+  expiry_date: string | null;
+  days_to_expiry: number | null;
+  last_shipment_date: string | null;
+  invoice_count: number;
+  flags: LcPerformanceFlag[];
+}
+
+export interface LcPerformanceResponse {
+  as_of: string;
+  rows: LcPerformanceRow[];
+  totals_by_currency: { currency: string; lc_value: string; shipped: string; realised: string; outstanding: string; unshipped: string; btb_opened: string }[];
+}
+
+/** Purchases / sales above BDT 2 lakh in a month. */
+export interface Mushak610 {
+  form: "6.10";
+  period: string;
+  threshold_bdt: string;
+  purchases: Record<string, string | number | null>[];
+  sales: Record<string, string | number | null>[];
+  note: string;
+}
+
+/** Draft monthly VAT return summary built from 6.1 / 6.2. */
+export interface Mushak91Summary {
+  return: "9.1";
+  period: string;
+  title: string;
+  seller_name: string;
+  seller_bin: string | null;
+  lines: { section: string; label: string; value: string; vat: string }[];
+  counts: { sales_invoices: number; purchase_bills: number };
+  net_vat_payable: string;
+  carry_forward_credit: string;
+  due_by: string;
+  note: string;
+}
+
+/** Tax invoice data for one commercial invoice. */
+export interface Mushak63 {
+  form: "6.3";
+  title: string;
+  seller: { name: string; bin: string | null; address: string | null };
+  buyer: { name: string; bin: string | null; address: string | null };
+  invoice_code: string;
+  invoice_date: string | null;
+  issued_at: string | null;
+  currency: string | null;
+  exchange_rate_to_base: string | null;
+  supply_type: string;
+  lines: {
+    sl: number;
+    description: string;
+    quantity: string;
+    unit_price: string;
+    value_fc: string;
+    value_bdt: string;
+    sd_amount: string;
+    vat_rate_pct: string;
+    vat_amount: string;
+    total_bdt: string;
+  }[];
+  totals: { value_bdt: string; sd: string; vat: string; total_bdt: string };
+  status: string;
   note: string;
 }
 
@@ -5719,10 +5822,57 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  async updatePurchaseOrderStatus(id: number, status: string): Promise<PurchaseOrderResponse> {
+  async updatePurchaseOrderStatus(id: number, status: string, reason?: string): Promise<PurchaseOrderResponse> {
     return request<PurchaseOrderResponse>(`/api/v1/inventory/purchase-orders/${id}/status`, {
       method: "PATCH",
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(reason?.trim() ? { status, reason: reason.trim() } : { status }),
+    });
+  },
+  async getPurchaseOrderHistory(id: number): Promise<{ purchase_order_id: number; events: DocumentHistoryEvent[] }> {
+    return request(`/api/v1/inventory/purchase-orders/${id}/history`);
+  },
+  async listRequisitions(params?: { status?: string; limit?: number; offset?: number }): Promise<{ rows: RequisitionSummary[]; total: number }> {
+    const q = new URLSearchParams({ limit: String(params?.limit ?? 50), offset: String(params?.offset ?? 0) });
+    if (params?.status) q.set("status", params.status);
+    return request(`/api/v1/procurement/requisitions?${q.toString()}`);
+  },
+  async createRequisition(data: RequisitionInput): Promise<RequisitionDetail> {
+    return request("/api/v1/procurement/requisitions", { method: "POST", body: JSON.stringify(data) });
+  },
+  async getRequisition(id: number): Promise<RequisitionDetail> {
+    return request(`/api/v1/procurement/requisitions/${id}`);
+  },
+  async updateRequisition(id: number, data: RequisitionInput): Promise<RequisitionDetail> {
+    return request(`/api/v1/procurement/requisitions/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  },
+  async setRequisitionStatus(id: number, status: string, reason?: string): Promise<RequisitionDetail> {
+    return request(`/api/v1/procurement/requisitions/${id}/status`, {
+      method: "POST",
+      body: JSON.stringify(reason?.trim() ? { status, reason: reason.trim() } : { status }),
+    });
+  },
+  async addSupplierQuotation(requisitionId: number, data: SupplierQuotationInput): Promise<RequisitionDetail> {
+    return request(`/api/v1/procurement/requisitions/${requisitionId}/quotations`, { method: "POST", body: JSON.stringify(data) });
+  },
+  async deleteSupplierQuotation(quotationId: number): Promise<{ ok: boolean }> {
+    return request(`/api/v1/procurement/quotations/${quotationId}`, { method: "DELETE" });
+  },
+  async getComparativeStatement(requisitionId: number): Promise<ComparativeStatement> {
+    return request(`/api/v1/procurement/requisitions/${requisitionId}/comparative-statement`);
+  },
+  async selectQuotation(requisitionId: number, quotationId: number, reason: string): Promise<ComparativeStatement> {
+    return request(`/api/v1/procurement/requisitions/${requisitionId}/select`, {
+      method: "POST",
+      body: JSON.stringify({ quotation_id: quotationId, reason }),
+    });
+  },
+  async createPoFromRequisition(
+    requisitionId: number,
+    data?: { expected_date?: string | null },
+  ): Promise<{ requisition_id: number; purchase_order_id: number; po_code: string }> {
+    return request(`/api/v1/procurement/requisitions/${requisitionId}/create-po`, {
+      method: "POST",
+      body: JSON.stringify(data ?? {}),
     });
   },
   async getPurchaseOrderReceiptProgress(poId: number): Promise<PurchaseOrderReceiptProgress> {
@@ -6039,6 +6189,18 @@ export const api = {
   async getMushakRegister(register: "6-1" | "6-2", year: number, month: number): Promise<MushakRegister> {
     return request<MushakRegister>(`/api/v1/compliance/bd/mushak/${register}?year=${year}&month=${month}`);
   },
+  async getLcPerformance(): Promise<LcPerformanceResponse> {
+    return request<LcPerformanceResponse>("/api/v1/commercial/lc-performance");
+  },
+  async getMushak610(year: number, month: number): Promise<Mushak610> {
+    return request<Mushak610>(`/api/v1/compliance/bd/mushak/6-10?year=${year}&month=${month}`);
+  },
+  async getMushak91(year: number, month: number): Promise<Mushak91Summary> {
+    return request<Mushak91Summary>(`/api/v1/compliance/bd/mushak/9-1?year=${year}&month=${month}`);
+  },
+  async getMushak63(invoiceId: number): Promise<Mushak63> {
+    return request<Mushak63>(`/api/v1/compliance/bd/mushak/6-3/${invoiceId}`);
+  },
   async saveOrderColorSizeMatrix(
     orderId: number,
     body: {
@@ -6095,10 +6257,11 @@ export const api = {
   async bulkPurchaseOrderStatus(
     ids: number[],
     status: string,
+    reason?: string,
   ): Promise<{ updated: number; skipped?: { id: number; detail: string }[] }> {
     return request<{ updated: number; skipped?: { id: number; detail: string }[] }>("/api/v1/inventory/purchase-orders/bulk-status", {
       method: "POST",
-      body: JSON.stringify({ ids, status }),
+      body: JSON.stringify(reason?.trim() ? { ids, status, reason: reason.trim() } : { ids, status }),
     });
   },
   async bulkReceiveGoods(ids: number[]): Promise<Array<{ id: number; ok: boolean; grn_code?: string; detail?: unknown }>> {
@@ -8626,7 +8789,7 @@ export const api = {
   async updateVoucherStatus(
     id: number,
     status: string,
-    opts?: { budget_override?: boolean; budget_override_reason?: string | null },
+    opts?: { budget_override?: boolean; budget_override_reason?: string | null; reason?: string | null },
   ): Promise<VoucherResponse> {
     return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/status`, {
       method: "POST",
@@ -8636,8 +8799,16 @@ export const api = {
         ...(opts?.budget_override_reason
           ? { budget_override_reason: opts.budget_override_reason }
           : {}),
+        ...(opts?.reason?.trim() ? { reason: opts.reason.trim() } : {}),
       }),
     });
+  },
+  /** Save = post (flag direct_post_vouchers): runs submit → check → recommend → approve → post in one call. */
+  async directPostVoucher(id: number): Promise<VoucherResponse> {
+    return request<VoucherResponse>(`/api/v1/finance/vouchers/${id}/direct-post`, { method: "POST" });
+  },
+  async getVoucherHistory(id: number): Promise<VoucherHistoryResponse> {
+    return request<VoucherHistoryResponse>(`/api/v1/finance/vouchers/${id}/history`);
   },
   async voucherPostPreflight(id: number): Promise<VoucherPostPreflightResponse> {
     return request<VoucherPostPreflightResponse>(`/api/v1/finance/vouchers/${id}/post-preflight`, {
@@ -8731,20 +8902,42 @@ export const api = {
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<DayBookResponse>(`/api/v1/finance/reports/day-book${suffix}`);
   },
-  async getTrialBalance(params?: { as_of_date?: string; account_id?: number; group_id?: number }): Promise<TrialBalanceResponse> {
+  async getTrialBalance(params?: { as_of_date?: string; account_id?: number; group_id?: number; basis?: ReportBasis }): Promise<TrialBalanceResponse> {
     const q = new URLSearchParams();
     if (params?.as_of_date) q.set("as_of_date", params.as_of_date);
     if (params?.account_id) q.set("account_id", String(params.account_id));
     if (params?.group_id) q.set("group_id", String(params.group_id));
+    if (params?.basis) q.set("basis", params.basis);
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<TrialBalanceResponse>(`/api/v1/finance/reports/trial-balance${suffix}`);
   },
-  async getFinancialStatements(params?: { as_of_date?: string; group_id?: number }): Promise<FinancialStatementsResponse> {
+  async getFinancialStatements(params?: { as_of_date?: string; group_id?: number; basis?: ReportBasis }): Promise<FinancialStatementsResponse> {
     const q = new URLSearchParams();
     if (params?.as_of_date) q.set("as_of_date", params.as_of_date);
     if (params?.group_id) q.set("group_id", String(params.group_id));
+    if (params?.basis) q.set("basis", params.basis);
     const suffix = q.toString() ? `?${q.toString()}` : "";
     return request<FinancialStatementsResponse>(`/api/v1/finance/reports/financial-statements${suffix}`);
+  },
+  async getExceptionSummary(): Promise<ExceptionSummaryResponse> {
+    return request<ExceptionSummaryResponse>("/api/v1/finance/exceptions/summary");
+  },
+  async getExceptionGrnNotBilled(params?: { limit?: number; offset?: number }): Promise<ExceptionList<ExceptionGrnRow>> {
+    const q = new URLSearchParams({ limit: String(params?.limit ?? 100), offset: String(params?.offset ?? 0) });
+    return request<ExceptionList<ExceptionGrnRow>>(`/api/v1/finance/exceptions/grn-not-billed?${q.toString()}`);
+  },
+  async getExceptionChallanNotInvoiced(params?: { limit?: number; offset?: number }): Promise<ExceptionList<ExceptionChallanRow>> {
+    const q = new URLSearchParams({ limit: String(params?.limit ?? 100), offset: String(params?.offset ?? 0) });
+    return request<ExceptionList<ExceptionChallanRow>>(`/api/v1/finance/exceptions/challan-not-invoiced?${q.toString()}`);
+  },
+  async getExceptionNegativeCashBank(): Promise<ExceptionList<ExceptionNegativeLedgerRow>> {
+    return request<ExceptionList<ExceptionNegativeLedgerRow>>("/api/v1/finance/exceptions/negative-cash-bank");
+  },
+  async getExceptionNegativeStock(): Promise<ExceptionList<ExceptionNegativeStockRow>> {
+    return request<ExceptionList<ExceptionNegativeStockRow>>("/api/v1/finance/exceptions/negative-stock");
+  },
+  async getExceptionOverdueBills(): Promise<ExceptionList<ExceptionOverdueBillRow>> {
+    return request<ExceptionList<ExceptionOverdueBillRow>>("/api/v1/finance/exceptions/overdue-bills");
   },
   async getCashFlowStatement(params?: { from_date?: string; to_date?: string }): Promise<CashFlowStatementResponse> {
     const q = new URLSearchParams();
@@ -13752,7 +13945,8 @@ export interface VendorResponse {
 }
 
 export interface VendorCreate {
-  vendor_code: string;
+  /** Leave empty to let the API generate one (VEN-0001...). */
+  vendor_code?: string;
   name: string;
   contact_person?: string | null;
   email?: string | null;
@@ -17545,9 +17739,22 @@ export interface DayBookResponse {
   total_amount: number;
 }
 
+/** Tenant financial year (feature flag fiscal_year_start_month; calendar year when not set). */
+export interface FiscalYearInfo {
+  fiscal_year: number;
+  label: string;
+  start_date: string;
+  end_date: string;
+  start_month: number;
+}
+
+/** cumulative = since inception (original); fy = Income/Expense for this financial year only. */
+export type ReportBasis = "cumulative" | "fy";
+
 export interface TrialBalanceResponse {
   as_of_date?: string;
   rows: Array<{
+    /** 0 for the computed "Profit & Loss brought forward" row (basis=fy). */
     account_id: number;
     account_number: string;
     account_name: string;
@@ -17555,9 +17762,13 @@ export interface TrialBalanceResponse {
     nature: string;
     debit: number;
     credit: number;
+    is_computed?: boolean;
   }>;
   total_debit: number;
   total_credit: number;
+  basis?: ReportBasis;
+  fiscal_year?: FiscalYearInfo;
+  profit_brought_forward?: number | null;
 }
 
 export interface FinancialStatementsResponse {
@@ -17573,6 +17784,197 @@ export interface FinancialStatementsResponse {
     liabilities: number;
     equity: number;
   };
+  basis?: ReportBasis;
+  fiscal_year?: FiscalYearInfo;
+  profit_brought_forward?: number | null;
+}
+
+/** Purchase requisition (procurement module, flag procurement_cs_enabled). */
+export type RequisitionStatus = "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "CS_SELECTED" | "PO_CREATED" | "CANCELLED";
+
+export interface RequisitionSummary {
+  id: number;
+  pr_code: string;
+  department: string | null;
+  purpose: string | null;
+  required_date: string | null;
+  status: RequisitionStatus;
+  requested_by: number | null;
+  approved_by: number | null;
+  approved_at: string | null;
+  selected_quotation_id: number | null;
+  selection_reason: string | null;
+  selected_at: string | null;
+  purchase_order_id: number | null;
+  created_at: string | null;
+}
+
+export interface RequisitionDetail extends RequisitionSummary {
+  lines: { id: number; item_id: number; warehouse_id: number | null; quantity: number; estimated_unit_price: number | null; notes: string | null }[];
+  quotations: {
+    id: number;
+    vendor_id: number;
+    vendor_name: string | null;
+    quote_ref: string | null;
+    quote_date: string | null;
+    valid_until: string | null;
+    currency: string | null;
+    delivery_days: number | null;
+    payment_terms: string | null;
+    notes: string | null;
+    prices: { requisition_line_id: number; unit_price: number }[];
+  }[];
+  history: DocumentHistoryEvent[];
+}
+
+export interface RequisitionInput {
+  department?: string | null;
+  purpose?: string | null;
+  required_date?: string | null;
+  lines: { item_id: number; warehouse_id?: number | null; quantity: string; estimated_unit_price?: string | null; notes?: string | null }[];
+}
+
+export interface SupplierQuotationInput {
+  vendor_id: number;
+  quote_ref?: string | null;
+  quote_date?: string | null;
+  valid_until?: string | null;
+  currency?: string | null;
+  delivery_days?: number | null;
+  payment_terms?: string | null;
+  notes?: string | null;
+  lines: { requisition_line_id: number; unit_price: string }[];
+}
+
+export interface ComparativeStatement {
+  requisition_id: number;
+  pr_code: string;
+  status: RequisitionStatus;
+  rows: {
+    line_id: number;
+    item_id: number;
+    item_code: string | null;
+    item_name: string;
+    quantity: number;
+    estimated_unit_price: number | null;
+    prices: { quotation_id: number; unit_price: number; amount: number; is_lowest: boolean }[];
+  }[];
+  quotations: {
+    quotation_id: number;
+    vendor_id: number;
+    vendor_name: string;
+    vendor_code: string | null;
+    quote_ref: string | null;
+    quote_date: string | null;
+    valid_until: string | null;
+    currency: string | null;
+    delivery_days: number | null;
+    payment_terms: string | null;
+    notes: string | null;
+    total: number;
+    lines_quoted: number;
+    is_complete: boolean;
+    rank: number | null;
+  }[];
+  lowest_quotation_id: number | null;
+  selected_quotation_id: number | null;
+  selection_reason: string | null;
+  mixed_currency: boolean;
+}
+
+/** Generic document history row (PO, requisition, ...) from app/common/document_history.py. */
+export interface DocumentHistoryEvent {
+  id: number;
+  event: string;
+  at: string | null;
+  user_id: number | null;
+  username: string | null;
+  summary: string | null;
+  from_status: string | null;
+  to_status: string | null;
+  reason: string | null;
+  extra: Record<string, unknown> | null;
+}
+
+export interface VoucherHistoryEvent {
+  id: number;
+  /** created | updated | status | cancel_posting | reversed | deleted */
+  event: string;
+  at: string | null;
+  user_id: number | null;
+  username: string | null;
+  summary: string | null;
+  from_status: string | null;
+  to_status: string | null;
+  reason: string | null;
+  changes: Record<string, { from?: unknown; to?: unknown; before?: unknown; after?: unknown }> | null;
+}
+
+export interface VoucherHistoryResponse {
+  voucher_id: number;
+  events: VoucherHistoryEvent[];
+}
+
+export type ExceptionCheckKey = "grn_not_billed" | "challan_not_invoiced" | "negative_cash_bank" | "negative_stock" | "overdue_bills";
+
+export interface ExceptionSummaryResponse {
+  as_of_date: string;
+  /** null = that check failed on the server (logged); other checks still return. */
+  counts: Record<ExceptionCheckKey, number | null>;
+}
+
+export interface ExceptionList<T> {
+  rows: T[];
+  total: number;
+  as_of_date?: string;
+}
+
+export interface ExceptionGrnRow {
+  grn_id: number;
+  grn_code: string;
+  received_date: string | null;
+  days_waiting: number | null;
+  vendor_name: string | null;
+  purchase_order_id: number | null;
+  po_code: string | null;
+  supplier_invoice_no: string | null;
+}
+
+export interface ExceptionChallanRow {
+  challan_id: number;
+  challan_code: string;
+  customer_name: string;
+  delivery_date: string | null;
+  days_waiting: number | null;
+}
+
+export interface ExceptionNegativeLedgerRow {
+  account_id: number;
+  account_number: string;
+  account_name: string;
+  group_name: string;
+  balance: number;
+}
+
+export interface ExceptionNegativeStockRow {
+  item_id: number;
+  item_code: string;
+  item_name: string;
+  warehouse_id: number | null;
+  warehouse_name: string | null;
+  on_hand: number;
+}
+
+export interface ExceptionOverdueBillRow {
+  source: "OUTSTANDING_BILL" | "BILL_REFERENCE";
+  id: number;
+  bill_number: string;
+  party_name: string;
+  bill_type: string;
+  due_date: string | null;
+  days_overdue: number | null;
+  amount_due: number;
+  source_voucher_id: number | null;
 }
 
 export interface LedgerActivityResponse {

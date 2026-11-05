@@ -509,6 +509,8 @@ export function InventoryItemsPage() {
       stock_group_id: row.stock_group_id ?? null,
       default_cost: row.default_cost ?? "0",
       is_active: row.is_active,
+      alternate_unit: row.alternate_unit ?? null,
+      conversion_factor: row.conversion_factor ?? null,
     });
   };
 
@@ -531,6 +533,8 @@ export function InventoryItemsPage() {
       stock_group_id: row.stock_group_id ?? null,
       default_cost: row.default_cost ?? "0",
       is_active: row.is_active,
+      alternate_unit: row.alternate_unit ?? null,
+      conversion_factor: row.conversion_factor ?? null,
     });
   };
 
@@ -538,6 +542,12 @@ export function InventoryItemsPage() {
     e.preventDefault();
     if (itemModalMode !== "edit") return;
     if (!editingItem || !editForm) return;
+    const alt = (editForm.alternate_unit ?? "").trim();
+    const factor = Number(editForm.conversion_factor ?? "");
+    if (alt && !(factor > 0)) {
+      setError("Enter how many base units make one alternate unit (must be greater than 0).");
+      return;
+    }
     try {
       await api.updateInventoryItem(editingItem.id, editForm);
       closeEdit();
@@ -1604,6 +1614,39 @@ export function InventoryItemsPage() {
                       value={editForm.default_cost ?? "0"}
                       readOnly={itemModalMode === "view"}
                       onChange={(e) => setEditForm((p) => p && { ...p, default_cost: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-text-muted">Alternate unit (optional)</label>
+                    <input
+                      className={cn(
+                        "w-full rounded-lg border border-border-strong px-3 py-2 text-sm read-only:bg-surface-subtle",
+                        erpControlFocusClass,
+                      )}
+                      placeholder="e.g. Roll, Box, Carton"
+                      value={editForm.alternate_unit ?? ""}
+                      readOnly={itemModalMode === "view"}
+                      onChange={(e) => setEditForm((p) => p && { ...p, alternate_unit: e.target.value || null })}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-text-muted">
+                      1 {editForm.alternate_unit || "alternate unit"} = how many {units.find((u) => u.id === editForm.unit_id)?.name ?? "base units"}?
+                    </label>
+                    <input
+                      className={cn(
+                        "w-full rounded-lg border border-border-strong px-3 py-2 text-sm read-only:bg-surface-subtle",
+                        erpControlFocusClass,
+                      )}
+                      type="number"
+                      min="0"
+                      step="0.000001"
+                      placeholder="e.g. 50"
+                      value={editForm.conversion_factor ?? ""}
+                      readOnly={itemModalMode === "view"}
+                      onChange={(e) => setEditForm((p) => p && { ...p, conversion_factor: e.target.value || null })}
                     />
                   </div>
                 </div>

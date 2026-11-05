@@ -249,7 +249,7 @@ export function vendorSnapshotToAiFieldCurrent(s: VendorFormSnapshot): Record<st
 
 export function vendorCreateToAiFieldCurrent(c: VendorCreate): Record<string, string> {
   return vendorSnapshotToAiFieldCurrent({
-    vendorCode: c.vendor_code,
+    vendorCode: c.vendor_code ?? "",
     name: c.name,
     legalName: s(c.legal_name),
     tradeName: s(c.trade_name),

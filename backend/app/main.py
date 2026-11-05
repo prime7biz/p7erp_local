@@ -41,6 +41,8 @@ from app.modules.finance.gst_tax_router import router as gst_tax_router
 from app.modules.finance.advanced_voucher_router import router as advanced_voucher_router
 from app.modules.finance.tds_router import router as tds_router
 from app.modules.finance.mis_reports_router import router as mis_reports_router
+from app.modules.finance.exception_reports_router import router as exception_reports_router
+from app.modules.procurement.router import router as procurement_router
 from app.modules.facility.router import router as facility_router
 from app.modules.manufacturing.router import router as manufacturing_router
 from app.modules.marketing.router import router as marketing_public_router
@@ -60,6 +62,7 @@ from app.modules.hr_reports.router import router as hr_reports_router
 from app.modules.hr_compliance.router import router as hr_compliance_router
 from app.modules.settings.router import router as settings_router
 from app.modules.commercial.router import router as commercial_router
+from app.modules.commercial.lc_performance_router import router as lc_performance_router
 from app.modules.parties.router import router as parties_router
 from app.modules.ai_tool.router import router as ai_tool_router
 from app.modules.ai_extract.router import router as ai_extract_router
@@ -296,6 +299,8 @@ app.include_router(gst_tax_router, prefix=settings.api_v1_prefix)
 app.include_router(advanced_voucher_router, prefix=settings.api_v1_prefix)
 app.include_router(tds_router, prefix=settings.api_v1_prefix)
 app.include_router(mis_reports_router, prefix=settings.api_v1_prefix)
+app.include_router(exception_reports_router, prefix=settings.api_v1_prefix)
+app.include_router(procurement_router, prefix=settings.api_v1_prefix)
 app.include_router(facility_router, prefix=settings.api_v1_prefix)
 app.include_router(manufacturing_router, prefix=settings.api_v1_prefix)
 app.include_router(production_router, prefix=settings.api_v1_prefix)
@@ -347,6 +352,11 @@ app.include_router(
 app.include_router(settings_router, prefix=settings.api_v1_prefix)
 app.include_router(
     commercial_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("merch.access"))],
+)
+app.include_router(
+    lc_performance_router,
     prefix=settings.api_v1_prefix,
     dependencies=[Depends(require_internal_permission("merch.access"))],
 )

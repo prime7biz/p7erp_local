@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { api, type MushakRegister } from "@/api/client";
 import { DataGrid, type GridColumn } from "@/components/app/data-grid/DataGrid";
@@ -56,18 +57,29 @@ export function MushakTab({ register }: { register: "6-1" | "6-2" }) {
     void load();
   }, [load]);
 
-  const columns = useMemo<GridColumn<Row>[]>(
-    () =>
-      COLUMNS[register].map((c, i) => ({
-        id: c.id,
-        header: c.header,
-        align: c.money ? ("right" as const) : undefined,
-        alwaysVisible: i === 1,
-        value: (r: Row) => (c.money ? Number(r[c.id] ?? 0) : String(r[c.id] ?? "")),
-        cell: (r: Row) => (c.money ? num(r[c.id] as string) : (r[c.id] ?? "—")),
-      })),
-    [register],
-  );
+  const columns = useMemo<GridColumn<Row>[]>(() => {
+    const cols: GridColumn<Row>[] = COLUMNS[register].map((c, i) => ({
+      id: c.id,
+      header: c.header,
+      align: c.money ? ("right" as const) : undefined,
+      alwaysVisible: i === 1,
+      value: (r: Row) => (c.money ? Number(r[c.id] ?? 0) : String(r[c.id] ?? "")),
+      cell: (r: Row) => (c.money ? num(r[c.id] as string) : (r[c.id] ?? "—")),
+    }));
+    if (register === "6-2") {
+      cols.push({
+        id: "mushak_6_3",
+        header: "Tax invoice",
+        noExport: true,
+        cell: (r: Row) => (
+          <Link className="text-brand-primary hover:underline" to={`/app/commercial/bd-compliance/mushak-6-3/${r.invoice_id}`}>
+            Mushak 6.3
+          </Link>
+        ),
+      });
+    }
+    return cols;
+  }, [register]);
 
   return (
     <>

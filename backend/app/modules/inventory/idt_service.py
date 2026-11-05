@@ -91,6 +91,15 @@ async def create_idt_issue(
         raise HTTPException(status_code=404, detail="Source item not found")
     if not target or target.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Target item not found")
+    from app.common.ownership import ensure_all_owned, ensure_owned
+    from app.models import Order, StockBatch, Vendor
+
+    await ensure_owned(db, Vendor, job_work_vendor_id if is_job_work else None, tenant_id, "Vendor")
+    await ensure_owned(db, Order, linked_order_id, tenant_id, "Order")
+    await ensure_all_owned(
+        db, StockBatch, [source_batch_id, *[s.get("source_batch_id") for s in (lines or [])]], tenant_id, "Batch"
+    )
+    await ensure_all_owned(db, Item, [int(s["source_item_id"]) for s in (lines or [])], tenant_id, "Item")
 
     # Sprint I2: block issue while GRN QC is still pending for this item
     if is_grn_quality_inspection_enabled(tenant.feature_flags):

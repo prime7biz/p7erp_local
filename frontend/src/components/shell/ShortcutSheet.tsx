@@ -8,6 +8,12 @@ const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: ["↑", "↓"], label: "Move through search results" },
   { keys: ["Enter"], label: "Open the highlighted result" },
   { keys: ["Esc"], label: "Close search, menus and dialogs" },
+  { keys: ["F4"], label: "Vouchers page: new Contra (or Alt+4)" },
+  { keys: ["F5"], label: "Vouchers page: new Payment (or Alt+5)" },
+  { keys: ["F6"], label: "Vouchers page: new Receipt (or Alt+6)" },
+  { keys: ["F7"], label: "Vouchers page: new Journal (or Alt+7)" },
+  { keys: ["Ctrl", "Enter"], label: "Voucher form: save draft" },
+  { keys: ["Ctrl", "Shift", "Enter"], label: "Voucher form: save and submit" },
 ];
 
 export function ShortcutSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -27,7 +33,7 @@ export function ShortcutSheet({ open, onClose }: { open: boolean; onClose: () =>
         role="dialog"
         aria-modal="true"
         aria-labelledby="shortcut-sheet-title"
-        className="w-full max-w-sm rounded-xl border border-border bg-surface-raised p-5 shadow-xl"
+        className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-xl border border-border bg-surface-raised p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">

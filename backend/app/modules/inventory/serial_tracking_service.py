@@ -112,6 +112,14 @@ async def create_serials_on_grn(
     return created
 
 
+async def _owned_or_none(db: AsyncSession, model: Any, obj_id: int | None, tenant_id: int) -> Any:
+    """Linked row for display, or None when it is missing or belongs to another tenant."""
+    if not obj_id:
+        return None
+    obj = await db.get(model, obj_id)
+    return obj if obj is not None and obj.tenant_id == tenant_id else None
+
+
 async def import_serials_csv(
     db: AsyncSession,
     tenant: Tenant,
@@ -146,6 +154,11 @@ async def import_serials_csv(
                 errors.append(f"row {idx}: duplicate {sn}")
                 continue
             wh = row.get("warehouse_id")
+            if wh:
+                wh_row = await db.get(Warehouse, int(wh))
+                if not wh_row or wh_row.tenant_id != tenant.id:
+                    errors.append(f"row {idx}: warehouse not found")
+                    continue
             db.add(
                 StockSerial(
                     tenant_id=tenant.id,
@@ -176,6 +189,10 @@ async def issue_serials(
     status = status.upper()
     if status not in ("ISSUED", "SOLD", "SCRAPPED"):
         raise HTTPException(status_code=400, detail="Invalid serial status")
+    if dc_item_id is not None:
+        dci = await db.get(DeliveryChallanItem, dc_item_id)
+        if not dci or dci.tenant_id != tenant.id:
+            raise HTTPException(status_code=400, detail=f"Delivery challan line {dc_item_id} not found")
     out: list[StockSerial] = []
     for sid in serial_ids:
         row = await db.get(StockSerial, sid)
@@ -227,26 +244,24 @@ async def trace_serial(
     if not row:
         raise HTTPException(status_code=404, detail="Serial not found")
 
-    item = await db.get(Item, row.item_id)
-    wh = await db.get(Warehouse, row.warehouse_id) if row.warehouse_id else None
+    item = await _owned_or_none(db, Item, row.item_id, tenant_id)
+    wh = await _owned_or_none(db, Warehouse, row.warehouse_id, tenant_id)
     grn_code = None
     grn_id = None
-    if row.grn_item_id:
-        gri = await db.get(GoodsReceivingItem, row.grn_item_id)
-        if gri:
-            grn = await db.get(GoodsReceiving, gri.goods_receiving_id)
-            if grn:
-                grn_code = grn.grn_code
-                grn_id = grn.id
+    gri = await _owned_or_none(db, GoodsReceivingItem, row.grn_item_id, tenant_id)
+    if gri:
+        grn = await _owned_or_none(db, GoodsReceiving, gri.goods_receiving_id, tenant_id)
+        if grn:
+            grn_code = grn.grn_code
+            grn_id = grn.id
     dc_code = None
     dc_id = None
-    if row.dc_item_id:
-        dci = await db.get(DeliveryChallanItem, row.dc_item_id)
-        if dci:
-            dc = await db.get(DeliveryChallan, dci.delivery_challan_id)
-            if dc:
-                dc_code = dc.challan_code
-                dc_id = dc.id
+    dci = await _owned_or_none(db, DeliveryChallanItem, row.dc_item_id, tenant_id)
+    if dci:
+        dc = await _owned_or_none(db, DeliveryChallan, dci.challan_id, tenant_id)
+        if dc:
+            dc_code = dc.challan_code
+            dc_id = dc.id
 
     movements: list[dict[str, Any]] = []
     if row.grn_item_id:
@@ -300,20 +315,19 @@ async def trace_serial(
 
 
 async def serial_to_dict(db: AsyncSession, row: StockSerial) -> dict[str, Any]:
-    item = await db.get(Item, row.item_id)
-    wh = await db.get(Warehouse, row.warehouse_id) if row.warehouse_id else None
+    tid = row.tenant_id
+    item = await _owned_or_none(db, Item, row.item_id, tid)
+    wh = await _owned_or_none(db, Warehouse, row.warehouse_id, tid)
     grn_code = None
-    if row.grn_item_id:
-        gri = await db.get(GoodsReceivingItem, row.grn_item_id)
-        if gri:
-            grn = await db.get(GoodsReceiving, gri.goods_receiving_id)
-            grn_code = grn.grn_code if grn else None
+    gri = await _owned_or_none(db, GoodsReceivingItem, row.grn_item_id, tid)
+    if gri:
+        grn = await _owned_or_none(db, GoodsReceiving, gri.goods_receiving_id, tid)
+        grn_code = grn.grn_code if grn else None
     dc_code = None
-    if row.dc_item_id:
-        dci = await db.get(DeliveryChallanItem, row.dc_item_id)
-        if dci:
-            dc = await db.get(DeliveryChallan, dci.delivery_challan_id)
-            dc_code = dc.challan_code if dc else None
+    dci = await _owned_or_none(db, DeliveryChallanItem, row.dc_item_id, tid)
+    if dci:
+        dc = await _owned_or_none(db, DeliveryChallan, dci.challan_id, tid)
+        dc_code = dc.challan_code if dc else None
     return {
         "id": row.id,
         "serial_number": row.serial_number,

@@ -4,6 +4,16 @@ import { HrPageHeader } from "@/components/hr/HrPageHeader";
 
 const PREFIX = "/app/hr";
 
+/** Must match ALLOWED_CALCULATION_TYPES in backend/app/modules/hr_payroll/formula_engine.py. */
+const CALCULATION_TYPES: [string, string][] = [
+  ["FIXED", "Fixed amount (monthly salary)"],
+  ["PERCENT_OF_BASE", "% of base salary"],
+  ["PER_DAY", "Per day present (daily wage)"],
+  ["PER_HOUR_OT", "Per overtime hour"],
+  ["PER_PIECE", "Per piece scanned (piece rate)"],
+  ["PER_SAM_MINUTE", "Per standard minute earned (SAM)"],
+];
+
 export function HrPayrollComponentsPage() {
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,7 +183,18 @@ export function HrPayrollComponentsPage() {
               <input className="rounded border px-2 py-1 text-sm" placeholder="Code" value={form.code} onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))} required />
               <input className="rounded border px-2 py-1 text-sm" placeholder="Name" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} required />
               <input className="rounded border px-2 py-1 text-sm" placeholder="Component type" value={form.component_type} onChange={(e) => setForm((p) => ({ ...p, component_type: e.target.value }))} />
-              <input className="rounded border px-2 py-1 text-sm" placeholder="Calculation type" value={form.calculation_type} onChange={(e) => setForm((p) => ({ ...p, calculation_type: e.target.value }))} />
+              <select
+                className="rounded border px-2 py-1 text-sm"
+                value={form.calculation_type}
+                onChange={(e) => setForm((p) => ({ ...p, calculation_type: e.target.value }))}
+                title="How the amount is calculated"
+              >
+                {CALCULATION_TYPES.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
               <input className="rounded border px-2 py-1 text-sm" placeholder="Default amount" value={form.default_amount} onChange={(e) => setForm((p) => ({ ...p, default_amount: e.target.value }))} />
               <input className="rounded border px-2 py-1 text-sm" placeholder="Applies to (ALL, WORKER, STAFF)" value={form.applies_to} onChange={(e) => setForm((p) => ({ ...p, applies_to: e.target.value }))} />
               <input className="sm:col-span-2 rounded border px-2 py-1 text-sm" placeholder="Formula (optional)" value={form.formula} onChange={(e) => setForm((p) => ({ ...p, formula: e.target.value }))} />

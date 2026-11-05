@@ -30,7 +30,8 @@ async def trigger_full_backup(
     await db.commit()
     await run_full_backup_job(db, job.id)
     await db.commit()
-    return {"job_id": job.id, "status": "completed"}
+    await db.refresh(job)
+    return {"job_id": job.id, "status": job.status, "error_message": job.error_message}
 
 
 @router.post("/tenant/{tenant_id}")
@@ -53,7 +54,8 @@ async def trigger_tenant_backup(
     await db.commit()
     await run_tenant_export_job(db, job.id, tenant_id)
     await db.commit()
-    return {"job_id": job.id, "status": "completed"}
+    await db.refresh(job)
+    return {"job_id": job.id, "status": job.status, "error_message": job.error_message}
 
 
 @router.get("/jobs")

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, type AccountGroupResponse, type ChartOfAccountResponse, type DayBookResponse } from "@/api/client";
-import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
+import { voucherHref } from "@/lib/financeDrilldown";
+import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
 
 export function DayBookPage() {
   const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
@@ -78,6 +80,15 @@ export function DayBookPage() {
     setSuccess("Day Book exported successfully.");
   }
 
+  async function exportExcel() {
+    await downloadXlsx(
+      ["Voucher", "Date", "Type", "Status", "Description", "Amount"],
+      (data?.rows ?? []).map((r) => [r.voucher_number, r.voucher_date, r.voucher_type, r.status, r.description ?? "", Number(r.amount)]),
+      "day_book_report",
+    );
+    setSuccess("Day Book exported to Excel.");
+  }
+
   function handlePrint() {
     printCurrentPage();
     setSuccess("Day Book print dialog opened.");
@@ -94,7 +105,7 @@ export function DayBookPage() {
       <div className="no-print flex flex-wrap items-end gap-2">
         <div className="mr-auto">
           <h1 className="text-2xl font-semibold text-text-primary">Day Book</h1>
-          <p className="text-sm text-text-muted">Voucher transaction register with date range filtering.</p>
+          <p className="text-sm text-text-muted">Voucher transaction register with date range filtering. Click a voucher number to open it.</p>
         </div>
         <input type="date" className="rounded border px-3 py-2 text-sm" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
         <input type="date" className="rounded border px-3 py-2 text-sm" value={toDate} onChange={(e) => setToDate(e.target.value)} />
@@ -133,6 +144,7 @@ export function DayBookPage() {
         </button>
         <button className="rounded border px-3 py-2 text-sm" onClick={() => handlePrint()}>Print</button>
         <button className="rounded border px-3 py-2 text-sm" onClick={() => exportCsv()}>Export CSV</button>
+        <button className="rounded border px-3 py-2 text-sm" onClick={() => void exportExcel().catch((e) => setError((e as Error).message))}>Export Excel</button>
       </div>
       {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
       {success ? <div className="no-print rounded border border-status-success/20 bg-status-success-subtle px-3 py-2 text-sm text-status-success-foreground">{success}</div> : null}
@@ -151,7 +163,11 @@ export function DayBookPage() {
           <tbody>
             {(data?.rows ?? []).map((r) => (
               <tr key={r.id} className="border-t">
-                <td className={compactView ? "px-2 py-1" : "px-3 py-2"}>{r.voucher_number}</td>
+                <td className={compactView ? "px-2 py-1" : "px-3 py-2"}>
+                  <Link className="text-brand-primary hover:underline print:text-inherit print:no-underline" to={voucherHref(r.id)}>
+                    {r.voucher_number}
+                  </Link>
+                </td>
                 <td className={compactView ? "px-2 py-1" : "px-3 py-2"}>{r.voucher_date}</td>
                 <td className={compactView ? "px-2 py-1" : "px-3 py-2"}>{r.voucher_type}</td>
                 <td className={compactView ? "px-2 py-1" : "px-3 py-2"}>{r.status}</td>

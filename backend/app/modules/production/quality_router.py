@@ -9,9 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.delete_guards import ensure_defect_code_deletable
+from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db
-from app.models import ProductionDefectCode, ProductionQcCheck, SewingLine, Tenant, User
+from app.models import ProductionDefectCode, ProductionQcCheck, ProductionShift, SewingLine, Tenant, User
 from app.modules.production.schemas import (
     ProductionDefectCodeCreate,
     ProductionDefectCodeResponse,
@@ -150,6 +151,7 @@ async def upsert_qc_check(
     line = await db.get(SewingLine, body.sewing_line_id)
     if not line or line.tenant_id != tenant.id:
         raise HTTPException(404, "Line not found")
+    await ensure_owned(db, ProductionShift, body.shift_id, tenant.id, "Shift")
     d = date.fromisoformat(body.production_date)
     r = (
         await db.execute(

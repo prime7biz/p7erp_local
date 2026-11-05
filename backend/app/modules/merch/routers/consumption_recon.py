@@ -967,7 +967,7 @@ async def get_consumption_reconciliation_movements(
         wh_name = None
         if m.warehouse_id:
             wh = await db.get(Warehouse, m.warehouse_id)
-            wh_name = wh.name if wh else None
+            wh_name = wh.name if wh and wh.tenant_id == m.tenant_id else None
         issuer = None
         if m.created_by_user_id:
             u = await db.get(User, m.created_by_user_id)

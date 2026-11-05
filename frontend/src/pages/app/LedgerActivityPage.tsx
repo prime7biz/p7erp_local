@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, type ChartOfAccountResponse, type LedgerActivityResponse } from "@/api/client";
-import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
+import { dateParam, idParam, voucherHref } from "@/lib/financeDrilldown";
+import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
 
 export function LedgerActivityPage() {
+  const [searchParams] = useSearchParams();
   const [compactView, setCompactView] = useState(false);
   const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
-  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
-  const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
-  const [toDate, setToDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(() => idParam(searchParams.get("account_id")));
+  const [fromDate, setFromDate] = useState(() =>
+    dateParam(searchParams.get("from"), new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)),
+  );
+  const [toDate, setToDate] = useState(() => dateParam(searchParams.get("to"), new Date().toISOString().slice(0, 10)));
   const [data, setData] = useState<LedgerActivityResponse | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -61,6 +66,23 @@ export function LedgerActivityPage() {
     setSuccess("Ledger Activity exported successfully.");
   }
 
+  async function exportExcel() {
+    await downloadXlsx(
+      ["Date", "Voucher", "Entry", "Amount", "Reference", "Description", "Running balance"],
+      (data?.rows ?? []).map((r) => [
+        r.voucher_date,
+        r.voucher_number,
+        r.entry_type,
+        Number(r.amount),
+        r.reference ?? "",
+        r.description ?? "",
+        Number(r.running_balance),
+      ]),
+      "ledger_activity_report",
+    );
+    setSuccess("Ledger Activity exported to Excel.");
+  }
+
   function handlePrint() {
     printCurrentPage();
     setSuccess("Ledger Activity print dialog opened.");
@@ -109,6 +131,12 @@ export function LedgerActivityPage() {
           </button>
           <button className="no-print rounded border border-border-strong bg-surface-raised px-3 py-2 text-sm" onClick={() => handlePrint()}>Print</button>
           <button className="no-print rounded border border-border-strong bg-surface-raised px-3 py-2 text-sm" onClick={() => exportCsv()}>Export CSV</button>
+          <button
+            className="no-print rounded border border-border-strong bg-surface-raised px-3 py-2 text-sm"
+            onClick={() => void exportExcel().catch((e) => setError((e as Error).message))}
+          >
+            Export Excel
+          </button>
         </div>
       ) : null}
 
@@ -129,7 +157,15 @@ export function LedgerActivityPage() {
             {(data?.rows ?? []).map((r) => (
               <tr key={`${r.voucher_id}-${r.voucher_number}-${r.running_balance}`} className="border-t">
                 <td className={compactView ? "px-1 py-1" : "px-2 py-1"}>{r.voucher_date}</td>
-                <td className={compactView ? "px-1 py-1" : "px-2 py-1"}>{r.voucher_number}</td>
+                <td className={compactView ? "px-1 py-1" : "px-2 py-1"}>
+                  {r.voucher_id ? (
+                    <Link className="text-brand-primary hover:underline print:text-inherit print:no-underline" to={voucherHref(r.voucher_id)}>
+                      {r.voucher_number}
+                    </Link>
+                  ) : (
+                    r.voucher_number
+                  )}
+                </td>
                 <td className={compactView ? "px-1 py-1" : "px-2 py-1"}>{r.entry_type}</td>
                 <td className={`${compactView ? "px-1 py-1" : "px-2 py-1"} text-right`}>{r.amount.toLocaleString()}</td>
                 <td className={compactView ? "px-1 py-1" : "px-2 py-1"}>{r.reference ?? "-"}</td>

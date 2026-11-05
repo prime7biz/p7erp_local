@@ -18,6 +18,7 @@ from app.common.money import format_money, line_money_from_input, parse_money
 from app.common.orm_numeric import api_money_to_decimal, decimal_money_passthrough, decimal_to_money_response
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.codegen import next_tenant_code
+from app.common.document_history import list_doc_events, record_doc_event
 from app.common.delete_guards import count_where as _count_where, ensure_vendor_deletable
 from app.common.inventory_enums import MovementType, ProcessCostType, ProcessType
 from app.common.db_errors import commit_handling_duplicate_document_code, flush_handling_duplicate_document_code
@@ -50,6 +51,7 @@ from app.common.master_contract_rm_guard import (
     assert_orders_have_master_contract,
     require_master_contract_for_rm_enabled,
 )
+from app.common.ownership import ensure_all_owned, ensure_owned
 from app.common.tenant import require_tenant
 from app.common.tenant_feature_keys import is_stock_snapshot_reads_enabled
 from app.config import get_settings
@@ -69,6 +71,7 @@ from app.modules.inventory import stock_snapshot_service
 from app.models import (
     Bom,
     BomItem,
+    BtbLc,
     ChartOfAccount,
     Customer,
     DeliveryChallan,
@@ -1103,7 +1106,8 @@ class StockGroupOut(BaseModel):
 
 
 class VendorCreate(BaseModel):
-    vendor_code: str
+    # Blank = auto-generate (VEN-0001...), used by quick-create from PO forms.
+    vendor_code: str = ""
     name: str
     contact_person: str | None = None
     email: str | None = None
@@ -2043,6 +2047,7 @@ async def create_item(
     await _ensure_item_unit_for_tenant(db, tenant.id, body.unit_id)
     await _ensure_item_default_warehouse(db, tenant.id, body.default_warehouse_id)
     await _ensure_stock_group_for_item(db, tenant.id, body.stock_group_id)
+    await ensure_owned(db, Vendor, body.preferred_vendor_id, tenant.id, "Vendor")
     if getattr(body, "gst_applicable", False):
         if not (body.hsn_code or "").strip():
             raise HTTPException(status_code=400, detail="HSN code is required when GST is applicable")
@@ -2103,6 +2108,8 @@ async def update_item(
     sg = updates.get("stock_group_id", row.stock_group_id)
     if "stock_group_id" in updates:
         await _ensure_stock_group_for_item(db, tenant.id, sg)
+    if "preferred_vendor_id" in updates:
+        await ensure_owned(db, Vendor, updates["preferred_vendor_id"], tenant.id, "Vendor")
     if "default_cost" in updates:
         updates["default_cost"] = line_money_from_input(updates["default_cost"])
     for money_key in (
@@ -2116,6 +2123,10 @@ async def update_item(
     ):
         if money_key in updates and updates[money_key] is not None:
             updates[money_key] = line_money_from_input(updates[money_key])
+    if updates.get("conversion_factor") is not None and _to_float(updates["conversion_factor"]) <= 0:
+        raise HTTPException(status_code=400, detail="conversion_factor must be greater than 0")
+    if "alternate_unit" in updates and updates["alternate_unit"] is not None:
+        updates["alternate_unit"] = updates["alternate_unit"].strip()[:32] or None
     auto_on = updates.get("auto_reorder_enabled", getattr(row, "auto_reorder_enabled", False))
     reorder_lvl = updates.get("reorder_level", row.reorder_level)
     if auto_on and reorder_lvl is None:
@@ -2392,14 +2403,29 @@ async def create_vendor(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    existing = await db.execute(
-        select(Vendor).where(
-            Vendor.tenant_id == tenant.id,
-            func.lower(Vendor.vendor_code) == body.vendor_code.strip().lower(),
+    if not body.name.strip():
+        raise HTTPException(status_code=400, detail="Vendor name is required")
+
+    async def _code_taken(code: str) -> bool:
+        found = await db.execute(
+            select(Vendor.id).where(
+                Vendor.tenant_id == tenant.id,
+                func.lower(Vendor.vendor_code) == code.strip().lower(),
+            )
         )
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Vendor code already exists")
+        return found.first() is not None
+
+    if body.vendor_code.strip():
+        if await _code_taken(body.vendor_code):
+            raise HTTPException(status_code=400, detail="Vendor code already exists")
+    else:
+        for _ in range(20):
+            candidate = await next_tenant_code(db, model=Vendor, tenant_id=tenant.id, prefix="VEN-", width=4)
+            if not await _code_taken(candidate):
+                body.vendor_code = candidate
+                break
+        else:
+            raise HTTPException(status_code=409, detail="Could not generate a vendor code; enter one manually")
     if body.ledger_id is not None:
         ledger = await db.get(ChartOfAccount, body.ledger_id)
         if not ledger or ledger.tenant_id != tenant.id:
@@ -2579,6 +2605,11 @@ async def create_purchase_order(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await ensure_owned(db, BtbLc, body.btb_lc_id, tenant.id, "BTB LC")
+    await ensure_owned(db, Bom, body.source_bom_id, tenant.id, "BOM")
+    await ensure_all_owned(
+        db, Order, [body.source_order_id, *[ln.source_order_id for ln in body.items]], tenant.id, "Order"
+    )
     supplier_name = body.supplier_name
     vendor_id = body.vendor_id
     if vendor_id is not None:
@@ -2719,11 +2750,61 @@ async def update_purchase_order_status(
     if next_status not in {"DRAFT", "APPROVED", "CLOSED", "CANCELLED"}:
         raise HTTPException(status_code=400, detail="Invalid status")
     _assert_status_transition(PO_TRANSITIONS, row.status, next_status, label="Purchase order")
+    previous_status = row.status
     row.status = next_status
+    if previous_status != next_status:
+        await _record_po_status_event(db, tenant.id, user.id, row, previous_status, status_body.get("reason"))
     await db.commit()
     await db.refresh(row)
     items_result = await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.id))
     return _purchase_order_to_out(row, list(items_result.scalars().all()))
+
+
+async def _record_po_status_event(
+    db: AsyncSession, tenant_id: int, user_id: int | None, row: PurchaseOrder, previous_status: str, reason: str | None
+) -> None:
+    """Pre-close / cancel with a reason (Tally 'pre-close order'): pending qty at close time is kept for audit."""
+    extra: dict | None = None
+    if row.status in {"CLOSED", "CANCELLED"}:
+        lines = (
+            await db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == row.id))
+        ).scalars().all()
+        pending = []
+        for ln in lines:
+            got = await _sum_accepted_for_po_line_excluding_grn(db, tenant_id, ln.id, None)
+            pending.append({"line_id": ln.id, "item_id": ln.item_id, "pending_qty": round(_to_float(ln.quantity) - got, 4)})
+        extra = {"pending_lines": [p for p in pending if p["pending_qty"] > 0]}
+    verb = {"CLOSED": "Closed", "CANCELLED": "Cancelled", "APPROVED": "Approved", "DRAFT": "Moved back to draft"}.get(
+        row.status, row.status
+    )
+    await record_doc_event(
+        db,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        doc_type="purchase_order",
+        doc_id=row.id,
+        event="status",
+        summary=f"{verb} ({previous_status} → {row.status})",
+        from_status=previous_status,
+        to_status=row.status,
+        reason=reason,
+        extra=extra,
+    )
+
+
+@router.get("/purchase-orders/{po_id}/history")
+async def purchase_order_history(
+    po_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    row = await db.get(PurchaseOrder, po_id)
+    if not row or row.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    events = await list_doc_events(db, tenant_id=tenant.id, doc_type="purchase_order", doc_id=po_id)
+    return {"purchase_order_id": po_id, "events": events}
 
 
 class LotTraceGrnLineOut(BaseModel):
@@ -2936,6 +3017,10 @@ async def create_goods_receiving(
             raise HTTPException(status_code=404, detail="Vendor not found")
     if body.default_warehouse_id is not None:
         await _warehouse_for_tenant(db, tenant.id, body.default_warehouse_id)
+    grn_vendor_id = body.vendor_id
+    if grn_vendor_id is None and po is not None and po.vendor_id is not None:
+        po_vendor = await db.get(Vendor, po.vendor_id)
+        grn_vendor_id = po.vendor_id if po_vendor is not None and po_vendor.tenant_id == tenant.id else None
     grn_status = (body.status or "DRAFT").strip().upper()
     if grn_status == "RECEIVED":
         # RECEIVED at create would skip the stock IN done by /receive.
@@ -2949,7 +3034,7 @@ async def create_goods_receiving(
         status=grn_status,
         notes=body.notes,
         created_by_user_id=user.id,
-        vendor_id=body.vendor_id or (po.vendor_id if po else None),
+        vendor_id=grn_vendor_id,
         default_warehouse_id=body.default_warehouse_id,
         source_type=src_type,
         approval_status="PENDING",
@@ -3471,6 +3556,8 @@ async def goods_receiving_print_data(
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="GRN not found")
     v = await db.get(Vendor, row.vendor_id) if getattr(row, "vendor_id", None) else None
+    if v is not None and v.tenant_id != tenant.id:
+        v = None
     po = await db.get(PurchaseOrder, row.purchase_order_id) if row.purchase_order_id else None
     items_result = await db.execute(select(GoodsReceivingItem).where(GoodsReceivingItem.goods_receiving_id == row.id))
     items = list(items_result.scalars().all())
@@ -4368,6 +4455,7 @@ async def create_enhanced_gate_pass(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await ensure_owned(db, DeliveryChallan, body.challan_id, tenant.id, "Delivery challan")
     if body.gate_pass_code:
         code = body.gate_pass_code
     else:
@@ -5113,6 +5201,7 @@ async def add_process_order_cost_line(
     amt = _to_float(body.amount)
     if amt < 0:
         raise HTTPException(status_code=400, detail="amount must be non-negative")
+    await ensure_owned(db, Vendor, body.vendor_id, tenant.id, "Vendor")
     ln = ProcessOrderCostLine(
         tenant_id=tenant.id,
         process_order_id=row.id,
@@ -5689,6 +5778,7 @@ async def issue_consumption_material(
         )
     if body.warehouse_id is None:
         raise HTTPException(status_code=400, detail="Warehouse is required for issue")
+    await _warehouse_for_tenant(db, tenant.id, body.warehouse_id)
     available = await _on_hand_qty(db, tenant.id, body.item_id, body.warehouse_id)
     if body.issue_qty > available:
         raise HTTPException(status_code=400, detail=f"Insufficient stock in warehouse. Available={available}")
@@ -6674,6 +6764,7 @@ async def post_physical_inventory_session(
 class BulkPoStatusBody(BaseModel):
     ids: list[int]
     status: str
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class BulkIdsBody(BaseModel):
@@ -6709,7 +6800,10 @@ async def bulk_purchase_order_status(
         except HTTPException as e:
             skipped.append({"id": pid, "detail": e.detail})
             continue
+        previous_status = row.status
         row.status = st
+        if previous_status != st:
+            await _record_po_status_event(db, tenant.id, user.id, row, previous_status, body.reason)
         updated += 1
     await db.commit()
     return {"updated": updated, "skipped": skipped}

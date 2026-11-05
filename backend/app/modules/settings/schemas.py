@@ -37,8 +37,15 @@ class BackupStatusResponse(BaseModel):
     provider: str
     retention_days: int
     last_backup_at: datetime | None
+    # Same value as `state` (kept for older clients).
     last_backup_status: str
     last_backup_note: str | None
+    # requested | running | completed | failed | unavailable
+    state: str = "unavailable"
+    requested_at: datetime | None = None
+    size_bytes: int | None = None
+    checksum_recorded: bool = False
+    restore_available: bool = False
 
 
 class BackupHistoryRow(BaseModel):
@@ -47,6 +54,9 @@ class BackupHistoryRow(BaseModel):
     status: str
     note: str | None
     initiated_by_user_id: int | None
+    # server_backup | tenant_request
+    kind: str = "server_backup"
+    size_bytes: int | None = None
 
 
 class SettingsRoleResponse(BaseModel):

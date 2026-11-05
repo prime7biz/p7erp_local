@@ -6,14 +6,17 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.ownership import ensure_all_owned, ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
+    GarmentStyle,
     IeOperationsLibrary,
     LineBalanceRun,
     LineBalanceWorkstation,
     OperationBulletin,
     OperationBulletinOp,
+    SewingLine,
     Tenant,
     User,
 )
@@ -100,6 +103,8 @@ async def create_ob(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure(user, tenant)
+    await ensure_owned(db, GarmentStyle, body.style_id, tenant.id, "Style")
+    await ensure_all_owned(db, IeOperationsLibrary, [o.operation_id for o in body.operations], tenant.id, "Operation")
     total = sum(o.smv for o in body.operations)
     ob = OperationBulletin(
         tenant_id=tenant.id,
@@ -172,6 +177,8 @@ async def line_balance(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure(user, tenant)
+    await ensure_owned(db, OperationBulletin, body.ob_id, tenant.id, "Operation bulletin")
+    await ensure_owned(db, SewingLine, body.line_id, tenant.id, "Sewing line")
     result = await run_line_balance(db, tenant.id, body.ob_id, body.num_workstations)
     run = LineBalanceRun(
         tenant_id=tenant.id,

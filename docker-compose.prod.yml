@@ -137,6 +137,8 @@ services:
         condition: on-failure
 
   # Celery worker + beat (scheduled GST/stock/MIS jobs). Beat must stay at 1 replica.
+  # Both wait for backend healthy: backend runs `alembic upgrade head` before uvicorn, so tasks
+  # never run against a half-migrated schema.
   worker:
     image: ${BACKEND_IMAGE:-your-dockerhub-user/p7erp-backend:latest}
     restart: always
@@ -145,6 +147,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     volumes:
       - backend_media:/app/media
@@ -165,6 +169,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      backend:
         condition: service_healthy
       worker:
         condition: service_started

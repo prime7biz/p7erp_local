@@ -234,11 +234,11 @@ export function ChartOfAccountsPage() {
 
       {showImport && (
         <div className="rounded-xl border border-border bg-surface-raised p-4">
-          <h3 className="mb-2 text-sm font-medium text-text-primary">Import Chart of Accounts (CSV)</h3>
+          <h3 className="mb-2 text-sm font-medium text-text-primary">Import Chart of Accounts (CSV or Excel .xlsx — first sheet)</h3>
           <div className="flex flex-wrap items-end gap-3">
             <input
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx"
               className="text-sm"
               onChange={(e) => {
                 setImportFile(e.target.files?.[0] ?? null);

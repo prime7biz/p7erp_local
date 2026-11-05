@@ -40,6 +40,14 @@ async def run_full_backup_job(db: AsyncSession, job_id: int) -> None:
     db_url = s.database_url
     if db_url.startswith("postgresql+asyncpg://"):
         db_url = db_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    if shutil.which("pg_dump") is None:
+        job.status = "failed"
+        job.error_message = (
+            "pg_dump is not installed in the API container. Run scripts/db_backup.sh on the server instead."
+        )
+        job.completed_at = datetime.utcnow()
+        await db.flush()
+        return
     proc = await asyncio.create_subprocess_exec(
         "pg_dump",
         "--format=custom",
@@ -52,8 +60,10 @@ async def run_full_backup_job(db: AsyncSession, job_id: int) -> None:
     _stdout, stderr = await proc.communicate()
     if proc.returncode != 0:
         job.status = "failed"
-        job.error_message = (stderr or b"").decode("utf-8", errors="replace")[:8000]
+        # stderr can echo the connection string; keep only a generic, credential-free message.
+        job.error_message = f"pg_dump exited with code {proc.returncode}. See server logs."
         job.completed_at = datetime.utcnow()
+        out.unlink(missing_ok=True)
         await db.flush()
         return
     job.status = "completed"

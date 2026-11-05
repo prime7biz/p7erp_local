@@ -24,6 +24,13 @@ type Props<T = unknown> = {
   debounceMs?: number;
   emptyMessage?: string;
   allowClear?: boolean;
+  /**
+   * Tally-style "create on the fly": shows a "+ Create" row and binds Alt+C while focused.
+   * Receives the text the user typed so the create form can prefill the name.
+   */
+  onCreateNew?: (typedText: string) => void;
+  /** Noun used in the create row, e.g. "ledger" -> "+ New ledger". */
+  createLabel?: string;
 };
 
 /**
@@ -44,6 +51,8 @@ export function RemoteSearchSelect<T = unknown>({
   debounceMs = 300,
   emptyMessage = "No matches",
   allowClear = true,
+  onCreateNew,
+  createLabel = "record",
 }: Props<T>) {
   const rootRef = useRef<HTMLDivElement>(null);
   const {
@@ -81,6 +90,13 @@ export function RemoteSearchSelect<T = unknown>({
     ? searchInput
     : selectedLabel || (numericValue != null ? `#${numericValue}` : "");
 
+  const triggerCreate = () => {
+    if (!onCreateNew) return;
+    const typed = open ? searchInput.trim() : "";
+    setOpen(false);
+    onCreateNew(typed);
+  };
+
   return (
     <div ref={rootRef} className={`relative min-w-0 ${className}`}>
       <input
@@ -90,8 +106,15 @@ export function RemoteSearchSelect<T = unknown>({
         autoComplete="off"
         aria-label={ariaLabel}
         placeholder={placeholder}
+        title={onCreateNew ? `Alt+C: create a new ${createLabel}` : undefined}
         className="w-full rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm"
         value={inputDisplay}
+        onKeyDown={(e) => {
+          if (onCreateNew && e.altKey && !e.ctrlKey && !e.metaKey && (e.key.toLowerCase() === "c" || e.code === "KeyC")) {
+            e.preventDefault();
+            triggerCreate();
+          }
+        }}
         onChange={(e) => {
           setSearchInput(e.target.value);
           setOpen(true);
@@ -149,6 +172,17 @@ export function RemoteSearchSelect<T = unknown>({
               onClick={() => void loadMore()}
             >
               {loadingMore ? "Loading…" : "Load more"}
+            </button>
+          ) : null}
+          {onCreateNew ? (
+            <button
+              type="button"
+              className="block w-full border-t border-border px-2 py-1.5 text-left text-xs font-medium text-brand-primary hover:bg-surface-subtle"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={triggerCreate}
+            >
+              {searchInput.trim() ? `+ Create ${createLabel} “${searchInput.trim()}”` : `+ New ${createLabel}`}
+              <span className="ml-1 text-text-muted">(Alt+C)</span>
             </button>
           ) : null}
         </div>

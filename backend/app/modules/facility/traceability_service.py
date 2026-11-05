@@ -22,9 +22,13 @@ async def build_traceability_for_utilization(
     fac = await db.get(Facility, util.facility_id)
     btb_id = util.linked_btb_lc_id or (fac.linked_btb_lc_id if fac else None)
     btb = await db.get(BtbLc, btb_id) if btb_id else None
+    if btb is not None and btb.tenant_id != tenant_id:
+        btb, btb_id = None, None
     master = None
     if btb and btb.master_contract_id:
         master = await db.get(MasterContract, btb.master_contract_id)
+        if master is not None and master.tenant_id != tenant_id:
+            master = None
     if btb_id:
         pos = list(
             (

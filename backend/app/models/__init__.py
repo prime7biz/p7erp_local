@@ -35,6 +35,12 @@ from app.models.supplier_portal import ExternalSupplierAccess, SupplierPoUpdate
 from app.models.shop_floor_scan import BundleOperationScan
 from app.models.po_matrix import PurchaseOrderColorSizeLine
 from app.models.ai_agents import AiAgentDecision
+from app.models.procurement import (
+    PurchaseRequisition,
+    PurchaseRequisitionLine,
+    SupplierQuotation,
+    SupplierQuotationLine,
+)
 from app.models.commission import (
     CommissionEntry,
     CommissionRule,

@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
-import { api, type AccountGroupResponse, type FinancialStatementsResponse } from "@/api/client";
-import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
+import { Link } from "react-router-dom";
+import { api, type AccountGroupResponse, type FinancialStatementsResponse, type ReportBasis } from "@/api/client";
+import { trialBalanceHref, type AccountNature } from "@/lib/financeDrilldown";
+import { downloadCsv, downloadXlsx, printCurrentPage } from "@/lib/reportExport";
 
 export function FinancialStatementsPage() {
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
   const [groupId, setGroupId] = useState<number | "">("");
   const [groups, setGroups] = useState<AccountGroupResponse[]>([]);
   const [compactView, setCompactView] = useState(false);
+  const [basis, setBasis] = useState<ReportBasis>("fy");
   const [data, setData] = useState<FinancialStatementsResponse | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -14,7 +17,7 @@ export function FinancialStatementsPage() {
   async function load() {
     try {
       setError("");
-      setData(await api.getFinancialStatements({ as_of_date: asOfDate, group_id: groupId || undefined }));
+      setData(await api.getFinancialStatements({ as_of_date: asOfDate, group_id: groupId || undefined, basis }));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -35,7 +38,7 @@ export function FinancialStatementsPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asOfDate, groupId]);
+  }, [asOfDate, groupId, basis]);
 
   useEffect(() => {
     if (!success) return;
@@ -58,9 +61,37 @@ export function FinancialStatementsPage() {
     setSuccess("Financial Statements exported successfully.");
   }
 
+  async function exportExcel() {
+    await downloadXlsx(
+      ["Section", "Metric", "Value"],
+      [
+        ["Profit & Loss", "Income", Number(data?.profit_and_loss.income ?? 0)],
+        ["Profit & Loss", "Expense", Number(data?.profit_and_loss.expense ?? 0)],
+        ["Profit & Loss", "Net profit", Number(data?.profit_and_loss.net_profit ?? 0)],
+        ["Balance Sheet", "Assets", Number(data?.balance_sheet.assets ?? 0)],
+        ["Balance Sheet", "Liabilities", Number(data?.balance_sheet.liabilities ?? 0)],
+        ["Balance Sheet", "Equity", Number(data?.balance_sheet.equity ?? 0)],
+      ],
+      "financial_statements_report",
+    );
+    setSuccess("Financial Statements exported to Excel.");
+  }
+
   function handlePrint() {
     printCurrentPage();
     setSuccess("Financial Statements print dialog opened.");
+  }
+
+  function natureLink(label: string, nature: AccountNature) {
+    return (
+      <Link
+        className="text-brand-primary hover:underline print:text-inherit print:no-underline"
+        to={trialBalanceHref({ asOf: asOfDate, nature, groupId, basis })}
+        title={`Open ${label} accounts in Trial Balance`}
+      >
+        {label}
+      </Link>
+    );
   }
 
   return (
@@ -72,9 +103,13 @@ export function FinancialStatementsPage() {
       <div className="no-print flex flex-wrap items-end gap-2">
         <div className="mr-auto">
         <h1 className="text-2xl font-semibold text-text-primary">Financial Statements</h1>
-        <p className="text-sm text-text-muted">Profit & loss and balance sheet summary.</p>
+        <p className="text-sm text-text-muted">Profit & loss and balance sheet summary. Click a heading to see its accounts.</p>
         </div>
         <input type="date" className="rounded border px-3 py-2 text-sm" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} />
+        <select className="rounded border px-3 py-2 text-sm" value={basis} onChange={(e) => setBasis(e.target.value as ReportBasis)} title="Income & expense period">
+          <option value="fy">This financial year</option>
+          <option value="cumulative">Since start (all years)</option>
+        </select>
         <select className="rounded border px-3 py-2 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value ? Number(e.target.value) : "")}>
           <option value="">All Groups</option>
           {groups.map((g) => (
@@ -88,6 +123,7 @@ export function FinancialStatementsPage() {
         </button>
         <button className="rounded border px-3 py-2 text-sm" onClick={() => handlePrint()}>Print</button>
         <button className="rounded border px-3 py-2 text-sm" onClick={() => exportCsv()}>Export CSV</button>
+        <button className="rounded border px-3 py-2 text-sm" onClick={() => void exportExcel().catch((e) => setError((e as Error).message))}>Export Excel</button>
       </div>
 
       {error ? <div className="no-print rounded border border-status-danger/20 bg-status-danger-subtle px-3 py-2 text-sm text-status-danger-foreground">{error}</div> : null}
@@ -95,14 +131,19 @@ export function FinancialStatementsPage() {
 
       <div className={`grid ${compactView ? "gap-2" : "gap-4"} md:grid-cols-2`}>
         <div className={`print-card rounded-xl border border-border bg-surface-raised ${compactView ? "p-2" : "p-4"} print:p-2`}>
-          <h2 className={`mb-3 ${compactView ? "text-base" : "text-lg"} font-semibold`}>Profit & Loss</h2>
+          <h2 className={`mb-3 ${compactView ? "text-base" : "text-lg"} font-semibold`}>
+            Profit & Loss
+            {data?.fiscal_year && basis === "fy" ? (
+              <span className="ml-2 text-xs font-normal text-text-muted">FY {data.fiscal_year.label}, from {data.fiscal_year.start_date}</span>
+            ) : null}
+          </h2>
           <div className={`space-y-2 ${compactView ? "text-xs" : "text-sm"} print:text-xs`}>
             <div className="flex justify-between">
-              <span>Income</span>
+              {natureLink("Income", "Income")}
               <span className="font-medium">{Number(data?.profit_and_loss.income ?? 0).toLocaleString()}</span>
             </div>
             <div className="flex justify-between">
-              <span>Expense</span>
+              {natureLink("Expense", "Expense")}
               <span className="font-medium">{Number(data?.profit_and_loss.expense ?? 0).toLocaleString()}</span>
             </div>
             <div className="flex justify-between border-t pt-2">
@@ -115,17 +156,29 @@ export function FinancialStatementsPage() {
           <h2 className={`mb-3 ${compactView ? "text-base" : "text-lg"} font-semibold`}>Balance Sheet</h2>
           <div className={`space-y-2 ${compactView ? "text-xs" : "text-sm"} print:text-xs`}>
             <div className="flex justify-between">
-              <span>Assets</span>
+              {natureLink("Assets", "Asset")}
               <span className="font-medium">{Number(data?.balance_sheet.assets ?? 0).toLocaleString()}</span>
             </div>
             <div className="flex justify-between">
-              <span>Liabilities</span>
+              {natureLink("Liabilities", "Liability")}
               <span className="font-medium">{Number(data?.balance_sheet.liabilities ?? 0).toLocaleString()}</span>
             </div>
             <div className="flex justify-between border-t pt-2">
-              <span>Equity</span>
+              {natureLink("Equity", "Equity")}
               <span className="font-semibold">{Number(data?.balance_sheet.equity ?? 0).toLocaleString()}</span>
             </div>
+            {data?.profit_brought_forward != null ? (
+              <>
+                <div className="flex justify-between text-text-secondary">
+                  <span>Profit brought forward (earlier years)</span>
+                  <span className="font-medium">{Number(data.profit_brought_forward).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-text-secondary">
+                  <span>Profit this year</span>
+                  <span className="font-medium">{Number(data.profit_and_loss.net_profit).toLocaleString()}</span>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       </div>

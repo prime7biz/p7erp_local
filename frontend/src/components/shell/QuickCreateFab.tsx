@@ -11,7 +11,7 @@ import { getCreateActions } from "@/components/shell/createActions";
 export function QuickCreateFab({ tenantType, roleName }: { tenantType: TenantType; roleName: string }) {
   const location = useLocation();
   const QUICK_CREATE_LINKS = useMemo(
-    () => getCreateActions({ tenantType, roleName }).filter((a) => a.label !== "Items"),
+    () => getCreateActions({ tenantType, roleName }).filter((a) => a.label !== "Items" && !a.paletteOnly),
     [tenantType, roleName],
   );
   const [open, setOpen] = useState(false);

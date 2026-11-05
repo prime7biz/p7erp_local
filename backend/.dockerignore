@@ -13,3 +13,7 @@ venv
 .env.*
 *.md
 tests
+# Runtime data must never be baked into images (tenant uploads, database dumps, debug logs)
+media
+backups
+*.log

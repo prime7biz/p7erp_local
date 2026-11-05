@@ -176,6 +176,8 @@ async def generate_po_from_suggestion(
         vendor = await db.get(Vendor, vendor_id)
         if vendor and vendor.tenant_id == tenant_id:
             supplier_name = vendor.name
+        else:
+            vendor_id = None
 
     unit_price = _d(item.avg_cost) or _d(item.default_cost) or _d(item.standard_price)
     po_code = await next_tenant_code(db, model=PurchaseOrder, tenant_id=tenant_id, prefix="PO-", width=4)

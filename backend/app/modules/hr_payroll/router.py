@@ -14,9 +14,11 @@ from app.common.authz import get_user_role_scoped_to_tenant
 from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
 from app.common.permissions import (
     PERMISSION_HR_PAYROLL_AUTO_CALCULATE,
+    PERMISSION_HR_PAYROLL_MANAGE,
     PERMISSION_HR_PAYROLL_STATUTORY_EDIT,
     PERMISSION_HR_PAYROLL_STATUTORY_VIEW,
     assert_delegate_manager_or_permission,
+    assert_hr_manager_or_permission,
     assert_soft_permission_allowed,
 )
 from app.common.tenant import require_tenant
@@ -77,6 +79,10 @@ router = APIRouter(prefix="/hr/payroll", tags=["hr-payroll"])
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+
+
+async def _require_payroll_manage(db: AsyncSession, user: User, tenant_id: int) -> None:
+    await assert_hr_manager_or_permission(db, user, tenant_id, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
 
 
 async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int) -> None:
@@ -409,6 +415,7 @@ async def create_component(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     if body.gl_account_id is not None:
         gl = await db.get(ChartOfAccount, body.gl_account_id)
         if not gl or gl.tenant_id != tenant.id:
@@ -444,6 +451,7 @@ async def update_component(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     row = await _component_or_404(db, tenant.id, component_id)
     payload = body.model_dump(exclude_unset=True)
     if payload.get("gl_account_id") is not None:
@@ -498,6 +506,7 @@ async def create_structure(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     row = PayrollStructure(
         tenant_id=tenant.id,
         code=body.code.strip().upper(),
@@ -550,6 +559,7 @@ async def create_structure_line(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     await _structure_or_404(db, tenant.id, structure_id)
     await _component_or_404(db, tenant.id, body.component_id)
     row = PayrollStructureLine(tenant_id=tenant.id, structure_id=structure_id, **body.model_dump())
@@ -588,6 +598,7 @@ async def create_period(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     if body.end_date < body.start_date:
         raise HTTPException(status_code=400, detail="end_date must be on/after start_date")
     if body.payment_date < body.start_date:
@@ -650,6 +661,7 @@ async def create_run(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     period = await _period_or_404(db, tenant.id, body.period_id)
     if period.is_locked:
         raise HTTPException(status_code=400, detail="Payroll period is locked")
@@ -728,9 +740,13 @@ async def upsert_run_line(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     run = await _run_or_404(db, tenant.id, run_id)
     if run.status not in {"DRAFT", "CHECKED", "REJECTED"}:
         raise HTTPException(status_code=400, detail="Run lines can only be edited before approval/posting")
+    period = await _period_or_404(db, tenant.id, run.period_id)
+    if period.is_locked:
+        raise HTTPException(status_code=400, detail="Payroll period is locked")
     await _employee_or_404(db, tenant.id, body.employee_id)
     if body.structure_id is not None:
         await _structure_or_404(db, tenant.id, body.structure_id)
@@ -1473,6 +1489,7 @@ async def create_assignment(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     row = await payroll_service.create_structure_assignment(
         db,
         tenant_id=tenant.id,
@@ -1496,6 +1513,7 @@ async def end_assignment(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     row = await payroll_service.end_structure_assignment(
         db,
         tenant_id=tenant.id,
@@ -1578,6 +1596,7 @@ async def auto_calculate_apply(
 ):
     """Persist previewed lines. Requires feature flag + soft RBAC permission."""
     _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
     await assert_soft_permission_allowed(
         db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_AUTO_CALCULATE
     )
@@ -1648,6 +1667,7 @@ async def put_statutory_config(
     if not is_statutory_payroll_enabled(tenant.feature_flags):
         raise HTTPException(status_code=404, detail="Enable statutory_payroll_enabled feature flag")
     await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_HR_PAYROLL_STATUTORY_EDIT)
+    await _require_payroll_manage(db, user, tenant.id)
     row = (
         await db.execute(
             select(PayrollStatutoryConfig).where(PayrollStatutoryConfig.tenant_id == tenant.id).limit(1)

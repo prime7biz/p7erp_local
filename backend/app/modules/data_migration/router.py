@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.authz import ensure_user_is_tenant_admin
 from app.common.celery_app import celery_app
+from app.common.spreadsheet_upload import upload_to_csv_text
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db, safe_async_session_rollback
@@ -45,9 +46,9 @@ async def import_csv(
     db: AsyncSession = Depends(get_db),
 ):
     await ensure_user_is_tenant_admin(db, user, tenant.id)
+    raw = await file.read()
+    text = upload_to_csv_text(file.filename, raw)
     try:
-        raw = await file.read()
-        text = raw.decode("utf-8-sig", errors="replace")
         entity = entity_type.strip().lower()
 
         settings = get_settings()

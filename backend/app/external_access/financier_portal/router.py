@@ -555,9 +555,13 @@ async def financier_stock_collateral(
     out: list[dict] = []
     for poi, po in poi_rows[:500]:
         po_code = po.po_code
+        tid = principal.tenant_id
         item = await db.get(Item, poi.item_id)
+        item = item if item is not None and item.tenant_id == tid else None
         btb = await db.get(BtbLc, po.btb_lc_id) if po.btb_lc_id else None
+        btb = btb if btb is not None and btb.tenant_id == tid else None
         wh = await db.get(Warehouse, poi.warehouse_id) if poi.warehouse_id else None
+        wh = wh if wh is not None and wh.tenant_id == tid else None
         received = 0.0
         grns = list(
             (

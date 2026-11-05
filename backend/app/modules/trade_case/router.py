@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.ownership import ensure_owned
 from app.common.storage import FileStorageService
 from app.common.tenant import require_tenant
 from app.config import get_settings
@@ -53,6 +54,18 @@ from app.modules.trade_case.schemas import (
 )
 
 router = APIRouter(prefix="/trade-cases", tags=["trade-cases"])
+
+_LINKED_ENTITY_MODELS = {
+    "trade_case": TradeCase,
+    "order": Order,
+    "shipment": Shipment,
+    "btb_lc": BtbLc,
+    "master_contract": MasterContract,
+    "proforma_invoice": ProformaInvoice,
+    "purchase_order": PurchaseOrder,
+    "customer": Customer,
+    "vendor": Vendor,
+}
 
 
 DEFAULT_STAGE_FLOW = [
@@ -502,6 +515,10 @@ async def upload_trade_document(
     trade_case = await db.get(TradeCase, trade_case_id)
     if not trade_case or trade_case.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Trade case not found")
+    await ensure_owned(db, Shipment, shipment_id, tenant.id, "Shipment")
+    linked_model = _LINKED_ENTITY_MODELS.get((linked_entity_type or "").strip().lower())
+    if linked_model is not None:
+        await ensure_owned(db, linked_model, linked_entity_id, tenant.id, "Linked record")
 
     safe_name, _api_url, full_path_str = await FileStorageService.save_file(file, tenant.id, "trade_docs")
 

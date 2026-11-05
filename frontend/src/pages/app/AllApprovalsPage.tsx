@@ -8,11 +8,22 @@ import {
   type VoucherResponse,
 } from "@/api/client";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
 import { downloadCsv, printCurrentPage } from "@/lib/reportExport";
+import { resolveRole } from "@/lib/roles";
 import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
+import {
+  OPS_DOC_LABEL,
+  OPS_REASON_ACTIONS,
+  loadOpsApprovals,
+  runOpsAction,
+  type OpsApprovalRow,
+  type OpsDocType,
+} from "./approvals/approvalSources";
 
-type ApprovalDocType = "ALL" | "VOUCHER" | "PAYMENT_RUN" | "BANK_RECONCILIATION" | "ACCOUNTING_PERIOD";
+type FinanceDocType = "VOUCHER" | "PAYMENT_RUN" | "BANK_RECONCILIATION" | "ACCOUNTING_PERIOD";
+type ApprovalDocType = "ALL" | FinanceDocType | OpsDocType;
 
 type ApprovalRow = {
   doc_type: Exclude<ApprovalDocType, "ALL">;
@@ -23,7 +34,12 @@ type ApprovalRow = {
   amount: number | null;
   details: string;
   actions: string[];
+  href?: string;
 };
+
+function isOpsRow(row: ApprovalRow): row is OpsApprovalRow {
+  return row.doc_type in OPS_DOC_LABEL;
+}
 
 const VOUCHER_QUEUE_STATUSES = ["SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED"];
 const ACTION_TO_STATUS: Record<string, string> = {
@@ -75,6 +91,7 @@ function mapPeriodActions(period: AccountingPeriodResponse, canApproveOrProcess:
 }
 
 function docTypeLabel(type: ApprovalRow["doc_type"]) {
+  if (type in OPS_DOC_LABEL) return OPS_DOC_LABEL[type as OpsDocType];
   if (type === "VOUCHER") return "Voucher";
   if (type === "PAYMENT_RUN") return "Payment Run";
   if (type === "BANK_RECONCILIATION") return "Bank Reconciliation";
@@ -92,18 +109,21 @@ export function AllApprovalsPage() {
   const [success, setSuccess] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [openActionsId, setOpenActionsId] = useState<string | number | null>(null);
+  const [reasonFor, setReasonFor] = useState<{ row: ApprovalRow; action: string } | null>(null);
 
   // Role comes from /auth/me; listing users needs settings access that finance users lack.
   const myRole = (me?.role_name ?? "").trim().toLowerCase();
   const canApproveOrProcess = PRIVILEGED_ROLES.has(myRole);
   const canExecute = canApproveOrProcess;
+  const canApproveHr = canApproveOrProcess || resolveRole(me?.role_name).isHr;
+  const requisitionsEnabled = me?.feature_flags?.procurement_cs_enabled === true;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     setSuccess("");
     try {
-      const [voucherPages, runs, reconciliations, periods] = await Promise.all([
+      const [voucherPages, runs, reconciliations, periods, opsRows] = await Promise.all([
         // One request per queue status so older pending vouchers are not cut off by the default page size.
         Promise.all(
           VOUCHER_QUEUE_STATUSES.map((s) =>
@@ -116,6 +136,7 @@ export function AllApprovalsPage() {
         api.listPaymentRuns(),
         api.listBankReconciliations(),
         api.listAccountingPeriods(),
+        loadOpsApprovals({ canApprove: canApproveOrProcess, canApproveHr, requisitionsEnabled }),
       ]);
       const queueVouchers = voucherPages.flatMap((p) => p.rows);
       const voucherActionMap: Record<number, string[]> = {};
@@ -189,13 +210,19 @@ export function AllApprovalsPage() {
         actions: mapPeriodActions(p, canApproveOrProcess),
       }));
 
-      setRows([...voucherRows, ...runRows, ...reconRows, ...periodRows]);
+      setRows([
+        ...voucherRows.map((r) => ({ ...r, href: `/app/accounts/vouchers/${r.id}` })),
+        ...runRows,
+        ...reconRows,
+        ...periodRows,
+        ...opsRows,
+      ]);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [canApproveOrProcess, canExecute]);
+  }, [canApproveOrProcess, canExecute, canApproveHr, requisitionsEnabled]);
 
   useEffect(() => {
     void load();
@@ -214,20 +241,30 @@ export function AllApprovalsPage() {
   const totalRows = rows.length;
   const actionableRows = rows.filter((r) => r.actions.length > 0).length;
 
-  async function takeAction(row: ApprovalRow, action: string) {
+  function requestAction(row: ApprovalRow, action: string) {
+    if (OPS_REASON_ACTIONS.has(action)) {
+      setReasonFor({ row, action });
+      return;
+    }
+    void takeAction(row, action, "");
+  }
+
+  async function takeAction(row: ApprovalRow, action: string, reason: string) {
     const key = `${row.doc_type}-${row.id}`;
     if (busyKey) return;
     setBusyKey(key);
     try {
       setSuccess("");
       setError("");
-      if (row.doc_type === "VOUCHER") {
+      if (isOpsRow(row)) {
+        await runOpsAction(row, action, reason);
+      } else if (row.doc_type === "VOUCHER") {
         if (action === "post") {
           await api.postVoucher(row.id);
         } else {
           const mapped = ACTION_TO_STATUS[action];
           if (!mapped) throw new Error(`Unsupported action: ${action}`);
-          await api.updateVoucherStatus(row.id, mapped);
+          await api.updateVoucherStatus(row.id, mapped, { reason });
         }
       } else if (row.doc_type === "PAYMENT_RUN") {
         if (action === "approve") await api.approvePaymentRun(row.id);
@@ -277,7 +314,10 @@ export function AllApprovalsPage() {
       </div>
       <div className="no-print">
         <h1 className="text-2xl font-semibold text-text-primary">All Approvals</h1>
-        <p className="mt-1 text-sm text-text-muted">Generic cross-document approval hub for vouchers, payment runs, reconciliation, and accounting periods.</p>
+        <p className="mt-1 text-sm text-text-muted">
+          One inbox for everything waiting on you: vouchers, payment runs, reconciliations, accounting periods, purchase orders,
+          requisitions, BOMs, leave requests and payroll runs.
+        </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <span className="text-xs font-medium text-text-muted">Quick links:</span>
           <Link to="/app/accounts/vouchers/approval-queue" className="rounded border border-border bg-surface-raised px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle">Voucher Approvals</Link>
@@ -314,6 +354,11 @@ export function AllApprovalsPage() {
           <option value="PAYMENT_RUN">Payment Run</option>
           <option value="BANK_RECONCILIATION">Bank Reconciliation</option>
           <option value="ACCOUNTING_PERIOD">Accounting Period</option>
+          {(Object.keys(OPS_DOC_LABEL) as OpsDocType[]).map((k) => (
+            <option key={k} value={k}>
+              {OPS_DOC_LABEL[k]}
+            </option>
+          ))}
         </select>
         <select className="rounded border px-3 py-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="ALL">All Statuses</option>
@@ -325,6 +370,8 @@ export function AllApprovalsPage() {
           <option value="PROCESSED">Processed</option>
           <option value="OPEN">Open</option>
           <option value="CLOSED">Closed</option>
+          <option value="PENDING">Pending</option>
+          <option value="FINALIZED">Finalized</option>
         </select>
         <button className="rounded border px-3 py-2 text-sm" onClick={() => printCurrentPage()}>
           Print
@@ -370,7 +417,7 @@ export function AllApprovalsPage() {
                   <td className="px-3 py-2 text-right">{r.amount == null ? "-" : r.amount.toLocaleString()}</td>
                   <td className="px-3 py-2">{r.details}</td>
                   <td className="px-3 py-2">
-                    {r.actions.length === 0 ? (
+                    {r.actions.length === 0 && !r.href ? (
                       <span className="text-xs text-text-muted">No action</span>
                     ) : (
                       <RowActionsMenu
@@ -378,13 +425,16 @@ export function AllApprovalsPage() {
                         openId={openActionsId}
                         onOpenChange={setOpenActionsId}
                         label={busyKey === `${r.doc_type}-${r.id}` ? "Working…" : "Actions"}
-                        items={r.actions.map((action) => ({
-                          key: action,
-                          label: ACTION_LABEL[action] ?? action,
-                          danger: action === "reject" || action === "cancel",
-                          disabled: busyKey != null,
-                          onClick: () => void takeAction(r, action),
-                        }))}
+                        items={[
+                          ...(r.href ? [{ key: "open", label: "Open", href: r.href }] : []),
+                          ...r.actions.map((action) => ({
+                            key: action,
+                            label: ACTION_LABEL[action] ?? action,
+                            danger: action === "reject" || action === "cancel",
+                            disabled: busyKey != null,
+                            onClick: () => requestAction(r, action),
+                          })),
+                        ]}
                       />
                     )}
                   </td>
@@ -394,6 +444,19 @@ export function AllApprovalsPage() {
           </tbody>
         </table>
       </div>
+
+      <VoucherActionReasonModal
+        open={reasonFor != null}
+        title={reasonFor ? `${ACTION_LABEL[reasonFor.action] ?? reasonFor.action} ${docTypeLabel(reasonFor.row.doc_type)} ${reasonFor.row.number}` : "Confirm"}
+        description="The reason is saved with the document's history."
+        confirmLabel={reasonFor ? ACTION_LABEL[reasonFor.action] ?? "Confirm" : "Confirm"}
+        onClose={() => setReasonFor(null)}
+        onConfirm={(reason) => {
+          const pending = reasonFor;
+          setReasonFor(null);
+          if (pending) void takeAction(pending.row, pending.action, reason);
+        }}
+      />
     </div>
   );
 }

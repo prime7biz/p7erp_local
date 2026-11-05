@@ -229,6 +229,8 @@ async def upload_scans(
         if bundle.order_id:
             if bundle.order_id not in ob_cache:
                 order = await db.get(Order, bundle.order_id)
+                if order is not None and order.tenant_id != tenant.id:
+                    order = None
                 ob_cache[bundle.order_id] = await _bulletin_for_order(db, tenant.id, order) if order else None
             ob = ob_cache[bundle.order_id]
             if not ob or op.ob_id != ob.id:

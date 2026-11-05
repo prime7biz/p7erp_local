@@ -187,7 +187,7 @@ export function ShellTopHeader({
             </button>
             {newOpen && (
               <div className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-border bg-surface-raised p-1 shadow-lg">
-                {createActions.map((action) => {
+                {createActions.filter((a) => !a.paletteOnly).map((action) => {
                   const Icon = action.icon;
                   return (
                     <Link

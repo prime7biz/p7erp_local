@@ -45,8 +45,13 @@ async def allocate_series_voucher_number(
     voucher_type: str,
     branch_code: str | None,
 ) -> tuple[str, int, str, int]:
-    """Returns (voucher_number, series_sequence, number_series_key, fiscal_year)."""
-    fy = fiscal_year_calendar(voucher_date)
+    """Returns (voucher_number, series_sequence, number_series_key, fiscal_year).
+
+    Fiscal year follows the tenant's `fiscal_year_start_month` (calendar year when not set).
+    """
+    from app.modules.finance.fiscal_year import fiscal_year_of, tenant_fy_start_month
+
+    fy = fiscal_year_of(voucher_date, await tenant_fy_start_month(db, tenant_id))
     series_key = build_number_series_key(fiscal_year=fy, voucher_type=voucher_type, branch_code=_slug_branch(branch_code))
     entity_key = f"voucher_series:{tenant_id}:{series_key}"[:128]
     seq_str = await next_tenant_code_entity_key(

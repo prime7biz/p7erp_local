@@ -13,11 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.auth import get_current_user
 from app.common.cache import cache_delete, cache_get_json, cache_set_json, tax_config_cache_key
 from app.common.money_schema import MoneyStrNonNeg
+from app.common.ownership import ensure_owned
 from app.common.permissions import assert_delegate_manager_or_permission
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db, safe_async_session_rollback
-from app.models import Tenant, User
+from app.models import BtbLc, Tenant, TradeCase, User
 from app.models.compliance import BondedWarehouseEntry, PayrollStatutorySummary, TenantStatutoryTaxConfig
 from app.modules.compliance.statutory_tax_service import (
     apply_taxes_to_line,
@@ -242,6 +243,8 @@ async def create_bonded_entry(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await ensure_owned(db, TradeCase, body.trade_case_id, tenant.id, "Trade case")
+    await ensure_owned(db, BtbLc, body.btb_lc_id, tenant.id, "BTB LC")
     try:
         row = BondedWarehouseEntry(
             tenant_id=tenant.id,

@@ -85,13 +85,37 @@ async def count_pending_approvals_queues(db: AsyncSession, tenant_id: int) -> in
             func.lower(PayrollApproval.action) == "pending",
         )
     )
+    ops_pending = await _count_ops_pending(db, tenant_id)
     return (
         int(vouchers_pending.scalar() or 0)
         + int(runs_draft.scalar() or 0)
         + int(recons_open.scalar() or 0)
         + int(leave_pending.scalar() or 0)
         + int(payroll_pending.scalar() or 0)
+        + ops_pending
     )
+
+
+async def _count_ops_pending(db: AsyncSession, tenant_id: int) -> int:
+    """Draft POs, submitted requisitions and submitted BOMs (same queues as /app/approvals)."""
+    from app.models.inventory import PurchaseOrder
+    from app.models.merch import Bom
+    from app.models.procurement import PurchaseRequisition
+
+    total = 0
+    for model, status in ((PurchaseOrder, "DRAFT"), (PurchaseRequisition, "SUBMITTED"), (Bom, "SUBMITTED")):
+        try:
+            total += int(
+                (
+                    await db.execute(
+                        select(func.count()).select_from(model).where(model.tenant_id == tenant_id, model.status == status)
+                    )
+                ).scalar()
+                or 0
+            )
+        except Exception:
+            await safe_async_session_rollback(db)
+    return total
 
 
 async def sum_quoted_this_month(db: AsyncSession, tenant_id: int, *, now: datetime | None = None) -> float:

@@ -38,12 +38,14 @@ from app.common.tenant_feature_keys import (
     is_stock_transfer_voucher_enabled,
     is_voucher_class_enabled,
 )
+from app.common.ownership import ensure_owned
 from app.database import get_db, safe_async_session_rollback
 from app.models import Tenant, User
 from app.models.advanced_vouchers import RecurringVoucherTemplate, VoucherClass
-from app.models.finance import Voucher, VoucherType
+from app.models.finance import ChartOfAccount, CostCenter, Voucher, VoucherType
 from app.modules.finance.advanced_voucher_service import (
     activate_due_post_dated,
+    assert_voucher_line_refs,
     convert_memorandum_to_regular,
     convert_optional_to_books,
     create_note_voucher,
@@ -61,6 +63,21 @@ router = APIRouter(tags=["finance-advanced-vouchers"])
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
     if user.tenant_id != tenant.id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")
+
+
+async def _validate_voucher_class_refs(db: AsyncSession, tenant_id: int, body: "VoucherClassBody") -> None:
+    await ensure_owned(db, ChartOfAccount, body.default_ledger_id, tenant_id, "Account")
+    await ensure_owned(db, CostCenter, body.default_cost_center_id, tenant_id, "Cost center")
+    tpl_lines = [ln for ln in (body.line_templates or []) if ln.get("account_id") not in (None, "")]
+    if tpl_lines:
+        await assert_voucher_line_refs(db, tenant_id, tpl_lines)
+
+
+async def _validate_recurring_refs(db: AsyncSession, tenant_id: int, body: "RecurringBody") -> None:
+    await ensure_owned(db, VoucherClass, body.voucher_class_id, tenant_id, "Voucher class")
+    lines = (body.voucher_template or {}).get("lines") or []
+    if lines:
+        await assert_voucher_line_refs(db, tenant_id, lines)
 
 
 def _require_flag(enabled: bool, flag_name: str) -> None:
@@ -271,6 +288,7 @@ async def create_voucher_class(
     _ensure_tenant(user, tenant)
     _require_flag(is_voucher_class_enabled(tenant.feature_flags), "voucher_class_enabled")
     await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_VOUCHER_CLASS_CREATE)
+    await _validate_voucher_class_refs(db, tenant.id, body)
     row = VoucherClass(
         tenant_id=tenant.id,
         name=body.name.strip(),
@@ -324,6 +342,7 @@ async def update_voucher_class(
     row = await db.get(VoucherClass, class_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Voucher class not found")
+    await _validate_voucher_class_refs(db, tenant.id, body)
     row.name = body.name.strip()
     row.voucher_type = body.voucher_type.strip().upper()
     row.default_ledger_id = body.default_ledger_id
@@ -423,6 +442,7 @@ async def create_recurring(
     _ensure_tenant(user, tenant)
     _require_flag(is_recurring_voucher_enabled(tenant.feature_flags), "recurring_voucher_enabled")
     await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_RECURRING_VOUCHER_CREATE)
+    await _validate_recurring_refs(db, tenant.id, body)
     row = RecurringVoucherTemplate(
         tenant_id=tenant.id,
         name=body.name.strip(),
@@ -461,6 +481,7 @@ async def update_recurring(
     row = await db.get(RecurringVoucherTemplate, template_id)
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Template not found")
+    await _validate_recurring_refs(db, tenant.id, body)
     row.name = body.name.strip()
     row.voucher_type = body.voucher_type.strip().upper()
     row.voucher_class_id = body.voucher_class_id
@@ -694,6 +715,7 @@ async def create_special_voucher(
         _require_flag(is_optional_voucher_enabled(tenant.feature_flags), "optional_voucher_enabled")
     if body.is_post_dated:
         _require_flag(is_post_dated_voucher_enabled(tenant.feature_flags), "post_dated_voucher_enabled")
+    await assert_voucher_line_refs(db, tenant.id, body.lines)
 
     await ensure_voucher_type_row(
         db,

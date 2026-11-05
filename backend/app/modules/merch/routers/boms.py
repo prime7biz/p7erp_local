@@ -11,6 +11,7 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.ownership import ensure_owned
 from app.common.permissions import PERMISSION_BOM_PRICE_OVERRIDE, assert_delegate_manager_or_permission
 from app.database import get_db, safe_async_session_rollback
 from app.models import (
@@ -434,6 +435,8 @@ async def patch_bom_line(
     else:
         raise HTTPException(status_code=400, detail="BOM status does not allow line edits")
 
+    await ensure_owned(db, Item, body.item_id, tenant.id, "Item")
+    await ensure_owned(db, Vendor, body.preferred_vendor_id, tenant.id, "Vendor")
     if body.bom_net_consumption_per_unit is not None:
         line.bom_net_consumption_per_unit = body.bom_net_consumption_per_unit
     if body.wastage_pct is not None:
@@ -472,6 +475,7 @@ async def add_bom_line(
         raise HTTPException(status_code=404, detail="BOM not found")
     if (bom.status or "").upper() != "DRAFT":
         raise HTTPException(status_code=400, detail="Only DRAFT BOM can add lines")
+    await ensure_owned(db, Item, body.item_id, tenant.id, "Item")
     oq = bom.order_qty_snapshot or 0
     mx = await db.execute(select(func.max(BomItem.sort_order)).where(BomItem.bom_id == bom_id))
     sort_order = int(mx.scalar() or 0) + 1
@@ -771,6 +775,7 @@ async def refresh_vendor_suggested_price(
     line = await db.get(BomItem, line_id)
     if not line or line.tenant_id != tenant.id or not line.item_id:
         raise HTTPException(status_code=404, detail="BOM line not found")
+    await ensure_owned(db, Vendor, vendor_id, tenant.id, "Vendor", status_code=404)
     r = await db.execute(
         select(PurchaseOrderItem.unit_price)
         .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)

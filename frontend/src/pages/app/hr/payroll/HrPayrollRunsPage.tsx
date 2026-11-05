@@ -482,7 +482,16 @@ export function HrPayrollRunsPage() {
                             <PayrollEmployeeBreakdown employee={e} />
                           ) : null}
                         </td>
-                        <td className="px-3 py-1.5">{e.base_salary}</td>
+                        <td className="px-3 py-1.5">
+                          {e.base_salary}
+                          {e.pay_basis && e.pay_basis !== "SALARY" ? (
+                            <div className="text-[11px] text-text-muted">
+                              {e.pay_basis === "PIECE"
+                                ? `Piece rate · ${Number(e.pieces ?? 0)} pcs · ${Number(e.earned_minutes ?? 0)} SAM min`
+                                : `Daily wage · ${Number(e.days_present)} days`}
+                            </div>
+                          ) : null}
+                        </td>
                         <td className="px-3 py-1.5">{e.gross_pay}</td>
                         <td className="px-3 py-1.5">{e.deductions}</td>
                         <td className="px-3 py-1.5">{e.gross_pay}</td>

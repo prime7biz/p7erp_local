@@ -3,8 +3,10 @@
 Supported calculation_type values on PayrollComponent:
   FIXED          — use line/default amount as-is
   PERCENT_OF_BASE — amount is a percent of base_salary (e.g. 40 → 40% of base)
-  PER_DAY        — amount × paid days (present + paid leave)
+  PER_DAY        — amount × paid days (present + paid leave)   (daily-wage workers)
   PER_HOUR_OT    — amount × ot_hours
+  PER_PIECE      — amount × pieces scanned by the worker in the period   (piece-rate workers)
+  PER_SAM_MINUTE — amount × standard minutes earned (pieces × SMV) in the period
 """
 
 from __future__ import annotations
@@ -12,7 +14,10 @@ from __future__ import annotations
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
-ALLOWED_CALCULATION_TYPES = frozenset({"FIXED", "PERCENT_OF_BASE", "PER_DAY", "PER_HOUR_OT"})
+ALLOWED_CALCULATION_TYPES = frozenset(
+    {"FIXED", "PERCENT_OF_BASE", "PER_DAY", "PER_HOUR_OT", "PER_PIECE", "PER_SAM_MINUTE"}
+)
+OUTPUT_BASED_TYPES = frozenset({"PER_PIECE", "PER_SAM_MINUTE"})
 
 _MONEY_QUANT = Decimal("0.0001")
 
@@ -52,6 +57,8 @@ def calculate_component_amount(
     base_salary: Decimal | str | float | int | None = None,
     days_present: Decimal | str | float | int | None = None,
     ot_hours: Decimal | str | float | int | None = None,
+    pieces: Decimal | str | float | int | None = None,
+    earned_minutes: Decimal | str | float | int | None = None,
     strict: bool = False,
 ) -> Decimal:
     """Compute one component amount from a known calculation_type (no eval)."""
@@ -73,6 +80,12 @@ def calculate_component_amount(
     if calc == "PER_DAY":
         days = _to_decimal(days_present)
         return quantize_money(rate * days)
+
+    if calc == "PER_PIECE":
+        return quantize_money(rate * _to_decimal(pieces))
+
+    if calc == "PER_SAM_MINUTE":
+        return quantize_money(rate * _to_decimal(earned_minutes))
 
     # PER_HOUR_OT
     hours = _to_decimal(ot_hours)

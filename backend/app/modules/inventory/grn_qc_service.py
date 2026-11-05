@@ -502,6 +502,8 @@ async def vendor_scorecard(
         rej_d = _d(rej)
         rate = float((rej_d / recv_d) * 100) if recv_d > ZERO else 0.0
         vendor = await db.get(Vendor, vendor_id) if vendor_id else None
+        if vendor is not None and vendor.tenant_id != tenant_id:
+            vendor = None
         out.append(
             {
                 "vendor_id": vendor_id,

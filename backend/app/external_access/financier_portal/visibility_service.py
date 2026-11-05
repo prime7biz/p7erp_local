@@ -137,13 +137,17 @@ async def build_raw_material_rows(
         btb_id = po.btb_lc_id
         btb = btb_map.get(int(btb_id)) if btb_id else None
         item = await db.get(Item, poi.item_id)
+        if item is not None and item.tenant_id != tenant_id:
+            item = None
         cat_name = None
         if item:
             cat = await db.get(ItemCategory, item.category_id)
-            cat_name = cat.name if cat else None
+            cat_name = cat.name if cat and cat.tenant_id == tenant_id else None
         wh = await db.get(Warehouse, poi.warehouse_id) if poi.warehouse_id else None
         if not wh and item and item.default_warehouse_id:
             wh = await db.get(Warehouse, item.default_warehouse_id)
+        if wh is not None and wh.tenant_id != tenant_id:
+            wh = None
         ordered = _float_qty(poi.quantity)
         received = 0.0
         gri_rows = list(
@@ -168,7 +172,7 @@ async def build_raw_material_rows(
         order_code = None
         if poi.source_order_id:
             o = await db.get(Order, poi.source_order_id)
-            order_code = o.order_code if o else None
+            order_code = o.order_code if o and o.tenant_id == tenant_id else None
         lc_open = bool(btb and (btb.status or "").upper() not in ("DRAFT", "CANCELLED"))
         out.append(
             {
@@ -539,6 +543,8 @@ async def build_raw_material_rows_for_order(
     """RM lines scoped to one order (party BTB chain)."""
     all_rows, _ = await build_raw_material_rows(db, tenant_id=tenant_id, party_id=party_id)
     orow = await db.get(Order, order_id)
+    if orow is not None and orow.tenant_id != tenant_id:
+        return []
     code = orow.order_code if orow else None
     out = [r for r in all_rows if r.get("order_code") == code]
     if out:
@@ -587,6 +593,8 @@ async def build_commercial_links_for_order(
                     "expiry_date": mc.expiry_date.isoformat() if mc.expiry_date else None,
                 }
     orow = await db.get(Order, order_id)
+    if orow is not None and orow.tenant_id != tenant_id:
+        orow = None
     return {
         "btb_lcs": btb_refs,
         "master_contract": mc_ref,

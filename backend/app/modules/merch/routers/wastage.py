@@ -13,6 +13,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db
 from app.models import (
@@ -449,6 +450,8 @@ async def create_wastage_transaction(
     order = await db.get(Order, body.order_id)
     if not order or order.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Order not found")
+    await ensure_owned(db, Item, body.item_id, tenant.id, "Item")
+    await ensure_owned(db, WastageReason, body.reason_id, tenant.id, "Wastage reason")
     qty = _to_float_safe(body.quantity)
     cost = _to_float_safe(body.unit_cost)
     rec = _to_float_safe(body.recoverable_value)

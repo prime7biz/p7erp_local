@@ -267,7 +267,7 @@ async def order_lifecycle_alerts_for_party(db: AsyncSession, *, tenant_id: int, 
         if not oid:
             continue
         ord_row = await db.get(Order, oid)
-        if not ord_row or ord_row.shipped_at:
+        if not ord_row or ord_row.tenant_id != tenant_id or ord_row.shipped_at:
             continue
         add(
             "FINANCED_STOCK_AGING",

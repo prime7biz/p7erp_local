@@ -6,7 +6,17 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.codegen import next_tenant_code
-from app.models import Bom, BomItem, GoodsReceiving, GoodsReceivingItem, PurchaseOrder, PurchaseOrderItem, Vendor
+from app.models import (
+    Bom,
+    BomItem,
+    GoodsReceiving,
+    GoodsReceivingItem,
+    Item,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    Vendor,
+    Warehouse,
+)
 
 
 async def has_po_lines_for_bom_line(db: AsyncSession, tenant_id: int, bom_line_id: int) -> bool:
@@ -193,6 +203,13 @@ async def create_po_from_bom_line(
     warnings: list[str] = []
     if not line.item_id:
         raise ValueError("BOM line has no item_id; link inventory item first")
+    item = await db.get(Item, line.item_id)
+    if not item or item.tenant_id != tenant_id:
+        raise ValueError("BOM line item not found")
+    if warehouse_id is not None:
+        wh = await db.get(Warehouse, warehouse_id)
+        if not wh or wh.tenant_id != tenant_id:
+            raise ValueError(f"Warehouse {warehouse_id} not found")
 
     supplier_name = supplier_name_fallback
     vid = vendor_id
@@ -257,8 +274,14 @@ async def bulk_create_pos_by_vendor(
     from collections import defaultdict
 
     groups: dict[int | None, list[BomItem]] = defaultdict(list)
+    owned_items: set[int] = set()
+    item_ids = {ln.item_id for ln in lines if ln.item_id}
+    if item_ids:
+        owned_items = set(
+            (await db.execute(select(Item.id).where(Item.tenant_id == tenant_id, Item.id.in_(item_ids)))).scalars().all()
+        )
     for line in lines:
-        if not line.item_id:
+        if not line.item_id or line.item_id not in owned_items:
             continue
         groups[line.preferred_vendor_id].append(line)
 

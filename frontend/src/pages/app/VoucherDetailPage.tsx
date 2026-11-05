@@ -14,8 +14,11 @@ import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
 import { VoucherPrintSheets } from "@/components/print/VoucherPrintSheets";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { LinkedRecordsSection, type LinkedRecordRow } from "@/components/app/LinkedRecordsSection";
+import { VoucherHistoryPanel } from "@/components/vouchers/VoucherHistoryPanel";
 import { WorkflowSummaryStrip } from "@/components/app/WorkflowSummaryStrip";
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
+import { useAuth } from "@/context/AuthContext";
+import { resolveRole } from "@/lib/roles";
 import { logApiError } from "@/utils/logApiError";
 import { voucherPrintVerificationUrl } from "@/utils/verifyPrintUrl";
 
@@ -62,6 +65,8 @@ function StatusBadge({ status }: { status: string }) {
 export function VoucherDetailPage() {
   const { voucherId } = useParams<{ voucherId: string }>();
   const navigate = useNavigate();
+  const { me } = useAuth();
+  const directPostOn = me?.feature_flags?.direct_post_vouchers === true && resolveRole(me?.role_name).isElevated;
   const [voucher, setVoucher] = useState<VoucherResponse | null>(null);
   useRecordBreadcrumb(voucher?.voucher_number);
   const [accounts, setAccounts] = useState<ChartOfAccountResponse[]>([]);
@@ -211,7 +216,7 @@ export function VoucherDetailPage() {
         else {
           const nextStatus = ACTION_TO_STATUS[action];
           if (!nextStatus) throw new Error(`Unsupported action: ${action}`);
-          await api.updateVoucherStatus(voucher.id, nextStatus);
+          await api.updateVoucherStatus(voucher.id, nextStatus, { reason });
         }
         const label = ACTION_LABEL[action] ?? action;
         setSuccess(reason.trim() ? `Action complete: ${label} — ${reason.trim()}` : `Action complete: ${label}`);
@@ -774,6 +779,40 @@ export function VoucherDetailPage() {
         >
           Open print page
         </button>
+        {directPostOn && ["DRAFT", "SUBMITTED", "CHECKED", "RECOMMENDED", "APPROVED"].includes(voucher.status) ? (
+          <button
+            type="button"
+            disabled={posting}
+            className="rounded-lg border border-status-success/30 bg-status-success-subtle px-4 py-2 text-sm font-medium text-status-success-foreground disabled:opacity-50"
+            title="Run every remaining approval step and post now (direct posting is on for this company)"
+            onClick={async () => {
+              setError(null);
+              setSuccess(null);
+              setPosting(true);
+              try {
+                await api.directPostVoucher(voucher.id);
+                setSuccess("Voucher posted.");
+                await loadVoucher();
+              } catch (e) {
+                setError((e as Error).message);
+                await loadVoucher();
+              } finally {
+                setPosting(false);
+              }
+            }}
+          >
+            {posting ? "Posting…" : "Post now"}
+          </button>
+        ) : null}
+        {(voucher.voucher_type || "").toUpperCase() === "PAYMENT" ? (
+          <button
+            type="button"
+            className="rounded-lg border border-border-strong px-4 py-2 text-sm text-text-secondary hover:bg-surface-subtle"
+            onClick={() => navigate(`/app/accounts/vouchers/${voucher.id}/cheque`)}
+          >
+            Print cheque
+          </button>
+        ) : null}
         {actions.map((action) => (
           <button
             key={action}
@@ -818,10 +857,12 @@ export function VoucherDetailPage() {
         </PrintPreviewModal>
       ) : null}
 
+      <VoucherHistoryPanel voucherId={voucher.id} refreshKey={`${voucher.status}|${voucher.updated_at ?? ""}`} />
+
       <VoucherActionReasonModal
         open={pendingAction != null}
         title={pendingAction ? `Confirm ${ACTION_LABEL[pendingAction] ?? pendingAction}` : "Confirm"}
-        description="A short reason helps your team during review. Full audit storage in the database is planned (see docs/voucher_backend_gaps.md)."
+        description="A short reason helps your team during review. It is saved in the voucher's History."
         confirmLabel={pendingAction ? ACTION_LABEL[pendingAction] ?? "Confirm" : "Confirm"}
         onClose={() => setPendingAction(null)}
         onConfirm={(reason) => {

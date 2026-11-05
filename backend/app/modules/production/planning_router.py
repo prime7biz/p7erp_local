@@ -9,11 +9,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db
 from app.models import (
     FactoryCalendarOverride,
+    GarmentStyle,
+    OperationBulletin,
     ProductionShift,
     Role,
     SewingLine,
@@ -188,6 +191,11 @@ async def assign_style(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure(user, tenant)
+    await ensure_owned(db, SewingLine, body.line_id, tenant.id, "Sewing line")
+    await ensure_owned(db, Order, body.order_id, tenant.id, "Order")
+    await ensure_owned(db, GarmentStyle, body.style_id, tenant.id, "Style")
+    await ensure_owned(db, OperationBulletin, body.ob_id, tenant.id, "Operation bulletin")
+    await ensure_owned(db, ProductionShift, body.shift_id, tenant.id, "Shift")
     s = await _get_or_create_settings(db, tenant.id)
     weekend = list(s.weekend_days or [])
     ov = await _calendar_map(db, tenant.id)
@@ -303,6 +311,7 @@ async def move_config(
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(404, "Not found")
     if body.line_id is not None:
+        await ensure_owned(db, SewingLine, body.line_id, tenant.id, "Sewing line")
         row.line_id = body.line_id
     if body.start_date:
         new_start = date.fromisoformat(body.start_date)

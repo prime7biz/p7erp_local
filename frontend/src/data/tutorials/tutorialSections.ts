@@ -589,6 +589,7 @@ Under **Export & Import** you manage export selling room workflows: commercial r
 - **Proforma Invoices** — \`/app/commercial/proforma-invoices\`
 - **Commercial Invoices** — \`/app/commercial/invoices\` (from posted delivery challans)
 - **BTB LCs** — \`/app/commercial/btb-lcs\`
+- **LC Performance** — \`/app/commercial/lc-performance\`: for every open export LC / sales contract, the **LC value**, **shipped** (issued commercial invoices on its orders, with % bar), **realised** (posted receipts; pending receipts shown separately), **shipped but not realised**, **left to ship**, **BTB opened** (count and % of LC) and **days to expiry**. The **Watch** column flags LCs that expire within 30 days or have expired with goods still to ship, were shipped above value, or have BTB above 75% of the LC. Tick **Show only these** to work through the risky ones. Link orders to the master contract so their invoices count.
 
 ## Trade and logistics (when enabled)
 
@@ -603,8 +604,8 @@ If **trade** is enabled for your tenant:
 - From an **Order** detail page you can open related BOM, POs, production planning, commercial invoices, or create an export case with the order prefilled.
 - Create a commercial invoice from a **posted** delivery challan (Create Invoice), then **Issue** to raise a draft AR voucher.
 - If these links are missing, trade may be disabled for your tenant.`,
-        tags: ["commercial", "LC", "proforma", "export", "trade", "invoice"],
-        lastUpdated: "2026-07-25",
+        tags: ["commercial", "LC", "proforma", "export", "trade", "invoice", "LC performance", "realisation"],
+        lastUpdated: "2026-11-04",
         coverImage: "/images/hero-factory.svg",
         infographics: [
           {
@@ -670,7 +671,7 @@ Pick the order, the factory (if the factory pays you), the shipment or invoice r
       },
       {
         id: "commercial-bd-registers",
-        title: "Bond & VAT registers: UD utilization, bond register, Mushak 6.1 / 6.2",
+        title: "Bond & VAT registers: UD utilization, bond register, Mushak 6.1 / 6.2 / 6.3 / 6.10 / 9.1",
         summary: "Record each UD and its permitted imports, track imports and consumption in bond, and export monthly purchase and sales VAT registers.",
         content: `## Overview
 
@@ -701,15 +702,24 @@ The **Bond register** tab lists every movement in date order with a running bala
 ## 4. Mushak 6.1 and 6.2
 
 - **Mushak 6.1 (purchases)** — recorded vendor bills for the month (drafts and cancelled bills are left out), with supplier BIN from the vendor's tax ID, taxable value and VAT in your base currency.
-- **Mushak 6.2 (sales)** — issued and posted commercial invoices, treated as **zero-rated exports**. Add local sales manually.
+- **Mushak 6.2 (sales)** — issued and posted commercial invoices, treated as **zero-rated exports**. Add local sales manually. Each row has a **Mushak 6.3** link that opens a printable **tax invoice** (seller BIN, buyer BIN, lines, SD, VAT and totals in BDT).
+
+## 5. Mushak 6.10 and 9.1
+
+- **Mushak 6.10 (> 2 lakh)** — purchases and sales in the month whose total is above **BDT 2,00,000**, with **Export Excel**.
+- **Mushak 9.1 (draft return)** — a monthly summary built from 6.1 and 6.2: zero-rated export supply, standard-rated supply and output VAT, purchases and input VAT, then **net VAT payable** or **credit to carry forward**. The return is due by the 15th of the following month.
+
+Set your company's **VAT BIN** first in **Settings → Configuration → Finance & costing**; it is printed on 6.3 and 9.1.
+
+> These are figures prepared from P7 records. P7 is not NBR-enlisted VAT software and does not create the NBR e-filing file — have your VAT consultant check them before you file.
 
 ## Tips
 
 - Use the same item description on the UD and in bond entries; linking movements to a UD line keeps utilization exact.
 - Mushak tabs need finance access; UD and bond tabs need Export & Import access.`,
         tags: ["UD", "utilization declaration", "bond", "bonded warehouse", "Mushak", "VAT", "BGMEA", "BKMEA", "customs"],
-        keywords: ["Mushak 6.1", "Mushak 6.2", "purchase register", "sales register", "bond licence", "UP"],
-        lastUpdated: "2026-11-02",
+        keywords: ["Mushak 6.1", "Mushak 6.2", "Mushak 6.3", "Mushak 6.10", "Mushak 9.1", "tax invoice", "VAT return", "purchase register", "sales register", "bond licence", "UP"],
+        lastUpdated: "2026-11-04",
         relatedAppRoutes: ["/app/commercial/bd-compliance"],
         relatedArticleIds: ["commercial-overview"],
       },
@@ -849,6 +859,36 @@ Purchase orders and GRNs have a **Print** action that opens a printable document
         relatedArticleIds: ["mfg-overview", "inv-po-deep", "inv-grn-deep", "inv-transfer-adjust"],
       },
       {
+        id: "inv-requisition-cs",
+        title: "Step-by-step: requisition and comparative statement (CS)",
+        content: `## Overview
+
+Use this when buying should be **approved and compared** before a PO is raised: someone requests material, a manager approves, buyers collect **supplier quotations**, the **Comparative Statement (CS)** shows them side by side, and the chosen supplier becomes a PO. The reason for choosing a supplier is always recorded for audit.
+
+Turn it on in **Settings → Configuration** (choose **More features** at the top) **→ Procurement → Requisitions & comparative statement (CS)**. It then appears at **Inventory → Procurement → Requisitions & CS** (\`/app/procurement/requisitions\`).
+
+## Steps
+
+1. **New requisition** — department, required-by date, purpose, and one line per item with quantity (estimated price optional). **Save draft**.
+2. Open it and click **Submit**.
+3. An **admin or manager** clicks **Approve** (or **Reject** with a reason; the requester can then edit and resubmit).
+4. **Add a supplier quotation** for each supplier: choose the supplier (or **+ New**), currency, delivery days, payment terms, and a unit price per line. Add at least two to compare.
+5. Read the **Comparative Statement**: the lowest price on each line is green; totals are ranked among suppliers that priced **every** line.
+6. A manager clicks **Select** under the chosen supplier and types the **reason** (required — especially if it is not the lowest, e.g. "delivers in 10 days").
+7. Click **Create PO**. A **DRAFT** purchase order is created with that supplier's prices and the requisition quantities; continue under **Purchase Orders**.
+
+## Good to know
+
+- Quotations can only be added or removed while the requisition is **Approved** (before a supplier is selected).
+- If suppliers quote in different currencies, the CS warns you — totals are not converted.
+- **History** at the bottom shows every step, who did it and why.`,
+        tags: ["requisition", "purchase requisition", "comparative statement", "CS", "quotation", "procurement"],
+        keywords: ["rfq", "supplier quote", "compare", "cheapest", "approval"],
+        lastUpdated: "2026-11-04",
+        relatedAppRoutes: ["/app/procurement/requisitions"],
+        relatedArticleIds: ["inv-po-deep"],
+      },
+      {
         id: "inv-po-deep",
         title: "Step-by-step: create a purchase order",
         content: `## Overview
@@ -863,9 +903,10 @@ Purchase orders and GRNs have a **Print** action that opens a printable document
 ## Steps
 
 1. Open **Purchase Orders**.
-2. In the form, set **supplier** details: link a **vendor** from the master where possible (fields marked ** are mandatory per the page).
+2. In the form, set **supplier** details: link a **vendor** from the master where possible (fields marked ** are mandatory per the page). New supplier? Click **+ New** next to the vendor list (or press **Alt+C** on it); a supplier code like \`VEN-0001\` is generated and the new supplier is selected.
 3. Set **currency** and **exchange rate** if buying in foreign currency.
-4. Add lines: pick **item**, **warehouse** (if required), **quantity**, and **unit price**.
+4. Add lines: pick **item**, **warehouse** (if required), **quantity**, and **unit price**. New item? Click **+ New** next to the item list (or **Alt+C**) to create it with a category and unit.
+   - **Alternate units:** if the item has an alternate unit (set on **Inventory → Items → Edit**: e.g. *Alternate unit* = Roll, *1 Roll = 50 Yard*), choose **Enter in: Roll**, type the quantity and price per roll, and adjust the factor for this PO if the supplier's roll differs. The PO saves the quantity and price in the base unit (e.g. 4 Roll @ 100 → 200 Yard @ 2).
 5. Click **Add Line** for each additional SKU.
 6. Click **Create Purchase Order** to save (usually starts as **DRAFT** until your approval flow advances it).
 
@@ -873,6 +914,10 @@ Purchase orders and GRNs have a **Print** action that opens a printable document
 
 - Use **Actions** on the list row to open, edit, or progress status as your role allows.
 - When goods arrive, record them under **Goods Receiving** (see the GRN guide).
+
+## Pre-close a PO (supplier will not ship the balance)
+
+Use **Actions → Close (pre-close)** on an **Approved** or **Partially received** PO. You must type a **reason** (for example "Supplier cannot ship balance"). The PO stops showing as pending, and **Actions → Receipt progress & vendor bill → History** shows who closed it, when, why, and the **quantity still pending at that moment**. **Cancel** also asks for a reason. Bulk Close / Cancel from the list asks for one reason for all selected POs.
 
 ## Common mistakes
 
@@ -890,8 +935,8 @@ Open **Actions → Receipt progress & vendor bill** on a PO and use **Colour / s
 ## Tips
 
 - The page description notes that POs link vendors from the supplier master and receive into stock via **Goods Receiving**.`,
-        tags: ["purchase order", "PO", "procurement", "vendor", "colour size breakdown"],
-        lastUpdated: "2026-11-02",
+        tags: ["purchase order", "PO", "procurement", "vendor", "colour size breakdown", "quick create"],
+        lastUpdated: "2026-11-04",
         featured: true,
         coverImage: "/images/hero-bg.svg",
         images: [
@@ -1527,6 +1572,17 @@ Use the sidebar subsection labels to find the exact screen.
 
 **Payroll auto-calculate** (feature flag \`payroll_auto_calculate_enabled\`, default off): assign a structure under \`/app/hr/payroll/assignments\`, then on a DRAFT run use **Auto-calculate** → preview → apply.
 
+**Salaried, daily-wage and piece-rate workers in one run** — the pay basis comes from the components in each worker's structure (set the **calculation type** on **Payroll → Components**):
+
+| Worker | Component calculation type | Paid as |
+|---|---|---|
+| Monthly staff | **Fixed amount** / **% of base salary** | the amount each month |
+| Daily wage | **Per day present** | rate × days present (+ paid leave) |
+| Piece rate | **Per piece scanned** | rate × pieces the worker scanned at the **Scan station** in the period |
+| SAM-based | **Per standard minute earned** | rate × (pieces × SMV) |
+
+For piece rate, the **operator code** typed or scanned at the Scan station must be the worker's **employee code**. The auto-calculate preview shows "Piece rate · N pcs · M SAM min" under the base, and warns when piece earnings are **below the base salary / minimum wage** — piece-rated workers must still be paid at least the minimum wage, so add a top-up before paying.
+
 **Payroll rules worth knowing**
 
 - Each period allows **one active payroll run**. To redo a run, **Reject** it first (Payroll Approvals), then create a new one.
@@ -1589,9 +1645,34 @@ Bank accounts, reconciliation, payment runs, advice, settlement audit — \`/app
 
 ## Reports and planning
 
-Financial statements, trial balance, day book, analytics, budgets, cash forecast, **Loans & facilities**, **Business overview**, and related planning pages — see sidebar entries under **Reports** and **Planning**.`,
-        tags: ["finance", "vouchers", "accounts", "banking"],
-        lastUpdated: "2026-04-07",
+Financial statements, trial balance, day book, analytics, budgets, cash forecast, **Loans & facilities**, **Business overview**, and related planning pages — see sidebar entries under **Reports** and **Planning**.
+
+## Drill down from reports to vouchers
+
+Every figure can be traced to its source voucher:
+
+1. **Financial Statements** (\`/app/accounts/reports/financial-statements\`) — click **Income**, **Expense**, **Assets**, **Liabilities** or **Equity** to open the Trial Balance showing only those accounts.
+2. **Trial Balance** (\`/app/accounts/reports/trial-balance\`) — click an account name to open its **Ledger Activity** from 1 January to the report date.
+3. **Ledger Activity** (\`/app/accounts/reports/ledger-activity\`) — click a voucher number to open the voucher.
+4. **Day Book** (\`/app/accounts/reports/day-book\`) — click a voucher number to open the voucher directly.
+
+**Financial year (no year-end closing):** set **Settings → Configuration → Finance & costing → Financial year starts in** (e.g. **July** for the Bangladesh July–June year). Trial Balance and Financial Statements then show income and expense for **this financial year** only, and earlier years' profit appears as **Profit & Loss brought forward** — you do not post a closing entry. Use the **This financial year / Since start** switch on those reports to see all years together. New voucher numbers use the financial year (e.g. \`VCH-2026-…\` from 1 July 2026). Change the start month only at a year boundary.
+
+**Excel:** these four reports have **Export Excel** (numbers stay numbers) next to **Export CSV**. **Chart of Accounts → Import** and **Settings → Data import** accept **.xlsx** files as well as CSV (the first sheet is read, with the same column headings as the CSV sample).
+
+## Exception reports (fix before month-end)
+
+**Finance → Reports → Exception Reports** (\`/app/accounts/reports/exceptions\`) lists things that are stuck between documents or should never happen:
+
+- **Goods received, not billed** — GRNs with no vendor bill yet. Use **Actions → Create vendor bill draft** to fix it from the report.
+- **Delivered, not invoiced** — posted delivery challans with no commercial invoice for the challan or its orders.
+- **Negative cash / bank** — cash or bank ledgers with a credit balance (click to open the ledger).
+- **Negative stock** — items where more went out than came in, per warehouse.
+- **Overdue bills** — receivables and payables past their due date.
+
+Click a card to see its list. A count of **0** everywhere means your books are clean.`,
+        tags: ["finance", "vouchers", "accounts", "banking", "drill-down"],
+        lastUpdated: "2026-11-04",
         infographics: [
           {
             type: "flow",
@@ -1652,6 +1733,19 @@ Manage bank / lender **facilities**, **drawdown utilizations**, repayment **sche
 1. Go to **Finance → Transactions → Vouchers**.
 2. Click **+ New Voucher** (top right). To edit an existing voucher, use **Actions → Edit** on a row (if allowed).
 
+### Keyboard shortcuts (Tally-style)
+
+On the Vouchers page you can open a new voucher of a given type with one key:
+
+| Key | Voucher type | Fallback |
+|---|---|---|
+| **F4** | Contra | Alt+4 |
+| **F5** | Payment | Alt+5 |
+| **F6** | Receipt | Alt+6 |
+| **F7** | Journal | Alt+7 |
+
+While the form is open, **Ctrl+Enter** saves a draft and **Ctrl+Shift+Enter** saves and submits. On this page F5 opens a Payment voucher instead of refreshing the browser. You can also press **Ctrl+K** and type "payment voucher" from anywhere. Press **?** to see all shortcuts.
+
 ## Header — voucher information
 
 1. Choose **Voucher Type** (e.g. **JOURNAL** or types loaded for your tenant).
@@ -1669,7 +1763,7 @@ Manage bank / lender **facilities**, **drawdown utilizations**, repayment **sche
 
 ## Lines
 
-1. For each row, pick a **Chart of Accounts** account (search control).
+1. For each row, pick a **Chart of Accounts** account (search control). If the ledger does not exist yet, press **Alt+C** in the account box (or click **+ New ledger** at the bottom of the list), choose its **account group**, and it is created and selected without leaving the voucher.
 2. Set **Debit** or **Credit** and the **amount** (must be greater than zero).
 3. Optional: **cost center**, **notes / narration** per line, bill-wise fields when the account requires them.
 4. Use **Add line**, **copy line**, or **remove line** as needed.
@@ -1679,11 +1773,20 @@ Manage bank / lender **facilities**, **drawdown utilizations**, repayment **sche
 
 - **Save Draft** — creates or updates without forcing submit workflow.
 - **Save & Submit** — saves and moves status to **SUBMITTED** in one step.
+- **Save & Post** (only when **Direct posting** is switched on in **Settings → Configuration → More features → Advanced vouchers**, and only for admins / managers) — Tally-style "save = post" for small teams: the voucher is submitted, checked, recommended, approved and posted in one click. Every step still appears in the voucher **History** as "Direct post". If a step fails (e.g. closed period), the voucher stays at the last step reached. Open drafts also get **Post now** on the voucher page.
 - After save, the form closes and the voucher appears in the list.
 
 ## List workflow (after draft)
 
 From **Actions** on a row you may see **Submit**, **Check**, **Recommend**, **Approve**, **Post**, **Reject**, **Reverse**, etc., depending on status and role. Some actions ask for a **reason** in a modal.
+
+## Print a cheque (Payment vouchers)
+
+On a **Payment** voucher, click **Print cheque**. The page fills in the **date** (DDMMYYYY boxes), the **payee** (the party ledger on the debit side — you can edit it), the **amount in words** (Taka … Lakh … Thousand … Only) and in **figures** (12,50,000.00/=), with an optional **A/C Payee only** stamp. Load a blank 8 × 3.5 inch cheque leaf, test once on plain paper, and use **Shift right / Shift down (mm)** to line up with your bank's leaf — the shift is remembered on that computer. Print only after the payment is approved.
+
+## History (edit log)
+
+Open a voucher (\`/app/accounts/vouchers/:id\`) and scroll to **History**. It lists every step, newest first: who **created** it, each **edit** (old → new narration, date, totals), every **status change** with the reason typed in the confirm box, **posting cancelled**, **reversed**, and **deleted**. History is kept even after a draft is deleted. Vouchers created before this feature only show events from then on.
 
 ## Common mistakes
 
@@ -1699,8 +1802,8 @@ From **Actions** on a row you may see **Submit**, **Check**, **Recommend**, **Ap
 
 - Use **Approval queue** in the page header to jump to \`/app/accounts/vouchers/approval-queue\`.
 - **Analytics** link goes to voucher analytics report.`,
-        tags: ["voucher", "journal", "debit", "credit", "posting"],
-        lastUpdated: "2026-04-04",
+        tags: ["voucher", "journal", "debit", "credit", "posting", "shortcuts"],
+        lastUpdated: "2026-11-04",
         featured: true,
         coverImage: "/images/logo.svg",
         infographics: [
@@ -1817,13 +1920,26 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
         title: "All Approvals",
         content: `## Overview
 
-**Workflow → All Approvals** (\`/app/approvals\`) is the central place to see items waiting for approval across modules (exact types depend on your tenant and role).
+**Workflow → All Approvals** (\`/app/approvals\`) is one inbox for everything waiting on you, across modules:
+
+| Document | Waiting when | Actions |
+|---|---|---|
+| Voucher | Submitted / Checked / Recommended / Approved | Check, Recommend, Approve, Post, Reject |
+| Payment run, Bank reconciliation, Accounting period | Draft / open | Approve, Process, Finalize, Close |
+| Purchase order | Draft | Approve, Cancel (reason) |
+| Requisition (if enabled) | Submitted | Approve, Reject (reason) |
+| BOM | Submitted | Approve |
+| Leave request | Pending | Approve, Reject (reason) |
+| Payroll run | Finalized / Checked | Approve, Reject (reason) |
+
+Use **Actions → Open** to jump to the document. **Reject** and **Cancel** always ask for a reason, which is saved in that document's history. The **Pending approvals** number on the dashboard and bell counts the same queues. What you can act on depends on your role (admin / manager for most; HR roles for leave and payroll).
 
 ## Tips
 
-- Finance voucher approvals also have a dedicated queue at \`/app/accounts/vouchers/approval-queue\`.`,
-        tags: ["approvals", "workflow"],
-        lastUpdated: "2026-04-04",
+- Finance voucher approvals also have a dedicated queue at \`/app/accounts/vouchers/approval-queue\`.
+- Filter by **document type** to work through one queue at a time.`,
+        tags: ["approvals", "workflow", "inbox", "leave", "payroll", "purchase order", "requisition"],
+        lastUpdated: "2026-11-04",
         infographics: [
           {
             type: "flow",
@@ -1891,12 +2007,13 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 ## Common routes
 
 - **Settings** — \`/app/settings\`
-- **Configuration** — \`/app/settings/config\`
+- **Configuration** — \`/app/settings/config\`. Company switches are grouped like Tally's F11: choose **Essential**, **More features** or **All features** at the top. Essentials (trade module, financial year, VAT BIN, budgets, MIS, party ledger, stock hierarchy, GST) are always shown; **More features** adds advanced vouchers, order execution spine, Bond & VAT registers, procurement (requisitions & CS), knitting, control tower and payroll auto-calculate; **All features** adds TDS / statutory payroll and HR compliance / OCR / AI. Hidden switches keep their saved values, and a note tells you how many hidden switches are on.
 - **User Mgmt** — \`/app/settings/users\`
 - **Roles** — \`/app/settings/roles\`
 - **Tenant** — \`/app/settings/tenant\`
 - **Statutory compliance** — \`/app/settings/statutory-compliance\` (VAT/VDS/TDS rates, bonded warehouse UD/UP register, payroll statutory calculator)
 - **Data import** — \`/app/settings/data-import\` (CSV dry-run then commit for customers, vendors, items, chart of accounts)
+- **Backup & Restore** — \`/app/settings/backup\` shows the **real** server backup status: **Requested** (you asked; waiting for the platform operator), **Running**, **Completed** (archive verified, size shown), **Failed**, or **Unavailable** (no server backup recorded yet). **Request backup** records a request only; it never shows Completed until the server backup actually finishes. Restores are done by the platform operator — contact support with the backup time you need.
 - **Bulk tenant onboarding** — \`/app/settings/bulk-tenant-onboarding\` (platform-admin batch tenant creation with generated company codes)
 - **External access** — \`/app/settings/external-access\` (feature flags, invites, audit). **Customer portal** invites: open **Invite customer**, pick the **customer** from the dropdown (email and name pre-fill from the customer master; you can edit), choose **portal role**, then create the invite. Invites are sent by email with secure activation links (\`/portal/customer/accept-invite\`, \`/portal/financier/accept-invite\`), then users sign in on the **unified login** page (\`/login\`) choosing **Customer portal** or **Financier portal** (bookmark \`/login?role=customer\` or \`/login?role=financier\`; older \`/portal/*/login\` URLs redirect there). **Staff invitations** use \`/accept-invite?token=…\`. **Forgot password** for portals: \`/forgot-password?role=customer\` or \`/forgot-password?role=financier\` (legacy \`/portal/*/forgot-password\` redirects). Reset links still open \`/portal/*/reset-password\`. Staff can open portal shortcuts from **Portals** in the app header.
 - **Financier portal (credit monitoring scope)** — after sign-in, the top nav can include lender-focused views such as **Contracts** (\`/portal/financier/contracts\` — master contract command center: OTD, BTB maturity, cash/CM ladder, **Production** tab per contract, optional AI brief), **Credit lines** (\`/portal/financier/credit-lines\`), **Stock / collateral** (\`/portal/financier/stock-collateral\`), **BTB liabilities** (\`/portal/financier/btb-liabilities\`), **Inventory** (\`/portal/financier/inventory\`), **Order finance** (\`/portal/financier/order-finance\`), **Recovery outlook** (\`/portal/financier/recovery-outlook\` — coverage ratio and recovery band per financed order), **Raw materials** (\`/portal/financier/raw-materials\`), **Production** (\`/portal/financier/production\`), **Export finance** (\`/portal/financier/financial-visibility\`), **Business health**, **AI confidence**, **Reports** (\`/portal/financier/reports\` — JSON snapshots for recovery, production status, and bank portfolio summary), plus **Alerts** and **Risk panel** (includes **Recovery** signals). **Order book** (\`/portal/financier/order-book\`) lists **financed orders only** when you have credit monitoring scope; open an order for tabs: **Overview** (pipeline ribbon, export path), **Production** (floor % and 14-day sewing trend), **Finance & recovery**, **Materials**. Visibility depends on **financier access scope** and linked party / BTB data.
@@ -1904,8 +2021,8 @@ The **Voucher Approvals** page (\`/app/accounts/vouchers/approval-queue\`) lists
 ## Tips
 
 - Changes here can affect **who sees which sidebar items** and **feature flags** for the whole tenant.`,
-        tags: ["settings", "users", "roles", "admin"],
-        lastUpdated: "2026-06-28",
+        tags: ["settings", "users", "roles", "admin", "backup", "features", "F11"],
+        lastUpdated: "2026-11-04",
         infographics: [
           {
             type: "highlight",

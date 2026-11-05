@@ -4,16 +4,19 @@ import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { useAuth } from "@/context/AuthContext";
 import { BondRegisterTab } from "./BondRegisterTab";
+import { Mushak610Tab, Mushak91Tab } from "./MushakReturnTabs";
 import { MushakTab } from "./MushakTab";
 import { UdRegisterTab } from "./UdRegisterTab";
 
-type Tab = "ud" | "bond" | "m61" | "m62";
+type Tab = "ud" | "bond" | "m61" | "m62" | "m610" | "m91";
 
 const TABS: [Tab, string][] = [
   ["ud", "UD register"],
   ["bond", "Bond register"],
   ["m61", "Mushak 6.1 (purchases)"],
   ["m62", "Mushak 6.2 (sales)"],
+  ["m610", "Mushak 6.10 (> 2 lakh)"],
+  ["m91", "Mushak 9.1 (draft return)"],
 ];
 
 /** Bangladesh bond, UD and VAT registers (flag `bd_bond_compliance_enabled`). */
@@ -25,7 +28,7 @@ export function BdCompliancePage() {
   const header = (
     <AppPageHeader
       title="Bond & VAT registers"
-      description="UD entitlements and utilization, bonded-warehouse movements, and Mushak 6.1 / 6.2 registers with CSV/XLSX export."
+      description="UD entitlements and utilization, bonded-warehouse movements, Mushak 6.1 / 6.2 registers, 6.10 (> 2 lakh), a 9.1 draft return and 6.3 tax invoices."
     />
   );
 
@@ -70,6 +73,8 @@ export function BdCompliancePage() {
       {tab === "bond" ? <BondRegisterTab /> : null}
       {tab === "m61" ? <MushakTab register="6-1" /> : null}
       {tab === "m62" ? <MushakTab register="6-2" /> : null}
+      {tab === "m610" ? <Mushak610Tab /> : null}
+      {tab === "m91" ? <Mushak91Tab /> : null}
     </div>
   );
 }

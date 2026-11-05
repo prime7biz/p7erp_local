@@ -14,8 +14,9 @@ from app.common.authz import ensure_user_is_tenant_admin
 from app.common.tenant import require_tenant
 from app.common.tenant_feature_keys import normalize_feature_flags, with_effective_default_flags
 from app.database import get_db
-from app.models import AuditLog, CommissionMode, Role, Tenant, User
+from app.models import AuditLog, BackupJob, CommissionMode, Role, Tenant, User
 from app.modules.audit.service import log_action
+from app.modules.settings import backup_status
 from app.external_access.admin.router import router as external_access_admin_router
 from app.modules.staff_invite.router import router as staff_invite_router
 from app.modules.settings.schemas import (
@@ -663,6 +664,25 @@ async def list_settings_audit_logs(
     )
 
 
+async def _backup_status_response(db: AsyncSession, tenant_id: int) -> BackupStatusResponse:
+    latest_full = await backup_status.latest_full_backup(db)
+    open_request = await backup_status.open_backup_request(db, tenant_id, latest_full)
+    st = backup_status.derive_backup_state(latest_full, open_request)
+    return BackupStatusResponse(
+        enabled=latest_full is not None,
+        provider="server-pg_dump" if latest_full is not None else "not-configured",
+        retention_days=backup_status.DEFAULT_RETENTION_DAYS,
+        last_backup_at=st.at,
+        last_backup_status=st.state,
+        last_backup_note=st.note,
+        state=st.state,
+        requested_at=st.requested_at,
+        size_bytes=st.size_bytes,
+        checksum_recorded=st.checksum_recorded,
+        restore_available=False,
+    )
+
+
 @router.get("/backup/history", response_model=list[BackupHistoryRow])
 async def list_backup_history(
     tenant: Tenant = Depends(require_tenant),
@@ -672,23 +692,37 @@ async def list_backup_history(
 ):
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
-    result = await db.execute(
-        select(AuditLog)
-        .where(AuditLog.tenant_id == tenant.id, AuditLog.resource == "settings.backup")
-        .order_by(desc(AuditLog.created_at))
-        .limit(limit)
-    )
-    rows = result.scalars().all()
-    return [
-        BackupHistoryRow(
-            id=r.id,
-            created_at=r.created_at,
-            status="restore_triggered" if r.action == "BACKUP_RESTORE_TRIGGERED" else "success",
-            note=r.details,
-            initiated_by_user_id=r.user_id,
+    jobs = await backup_status.tenant_backup_history(db, tenant.id, limit)
+    fulls = [j for j in jobs if j.backup_type == backup_status.BACKUP_TYPE_FULL]
+    request_ids = [j.id for j in jobs if j.backup_type == backup_status.BACKUP_TYPE_REQUEST]
+    requested_by: dict[int, int | None] = {}
+    if request_ids:
+        logs = (
+            await db.execute(
+                select(AuditLog).where(
+                    AuditLog.tenant_id == tenant.id,
+                    AuditLog.action == "BACKUP_REQUESTED",
+                    AuditLog.details.in_([f"backup_job:{rid}" for rid in request_ids]),
+                )
+            )
+        ).scalars().all()
+        for lg in logs:
+            requested_by[int(str(lg.details).split(":", 1)[1])] = lg.user_id
+    rows: list[BackupHistoryRow] = []
+    for j in jobs:
+        is_request = j.backup_type == backup_status.BACKUP_TYPE_REQUEST
+        rows.append(
+            BackupHistoryRow(
+                id=j.id,
+                created_at=j.created_at,
+                status=backup_status.history_row_state(j, fulls),
+                note="Backup requested from Settings" if is_request else "Server database backup",
+                initiated_by_user_id=requested_by.get(j.id) if is_request else None,
+                kind="tenant_request" if is_request else "server_backup",
+                size_bytes=None if is_request else j.size_bytes,
+            )
         )
-        for r in rows
-    ]
+    return rows
 
 
 @router.post("/backup/restore/{backup_log_id}", response_model=BackupStatusResponse)
@@ -698,36 +732,15 @@ async def trigger_backup_restore(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """In-app restore is not available: restores are done by the platform operator (restore runbook)."""
     _ensure_user_tenant(user, tenant)
     await ensure_user_is_tenant_admin(db, user, tenant.id)
-    backup_log = await db.get(AuditLog, backup_log_id)
-    if not backup_log or backup_log.tenant_id != tenant.id or backup_log.resource != "settings.backup":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backup snapshot not found")
-
-    message = f"Restore triggered from snapshot #{backup_log_id}."
-    await log_action(
-        db,
-        tenant_id=tenant.id,
-        user_id=user.id,
-        action="BACKUP_RESTORE_TRIGGERED",
-        resource="settings.backup",
-        details=message,
-    )
-
-    latest = await db.execute(
-        select(AuditLog)
-        .where(AuditLog.tenant_id == tenant.id, AuditLog.resource == "settings.backup")
-        .order_by(desc(AuditLog.created_at))
-        .limit(1)
-    )
-    row = latest.scalar_one_or_none()
-    return BackupStatusResponse(
-        enabled=True,
-        provider="local-storage",
-        retention_days=30,
-        last_backup_at=row.created_at if row else None,
-        last_backup_status="restore_triggered",
-        last_backup_note=message,
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail=(
+            "In-app restore is unavailable. A restore replaces the whole database, so it is performed by "
+            "the platform operator. Contact support with the backup time you need."
+        ),
     )
 
 
@@ -738,22 +751,7 @@ async def get_backup_status(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_user_tenant(user, tenant)
-
-    latest = await db.execute(
-        select(AuditLog)
-        .where(AuditLog.tenant_id == tenant.id, AuditLog.action == "BACKUP_TRIGGERED")
-        .order_by(desc(AuditLog.created_at))
-        .limit(1)
-    )
-    row = latest.scalar_one_or_none()
-    return BackupStatusResponse(
-        enabled=True,
-        provider="local-storage",
-        retention_days=30,
-        last_backup_at=row.created_at if row else None,
-        last_backup_status="success" if row else "never_run",
-        last_backup_note=row.details if row else "No backup has been triggered yet.",
-    )
+    return await _backup_status_response(db, tenant.id)
 
 
 @router.post("/backup/trigger", response_model=BackupStatusResponse)
@@ -762,34 +760,28 @@ async def trigger_backup(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Record a backup request for the platform operator. This does not claim a backup has run."""
     _ensure_user_tenant(user, tenant)
-
-    message = "Manual backup triggered from Settings module."
-    await log_action(
-        db,
-        tenant_id=tenant.id,
-        user_id=user.id,
-        action="BACKUP_TRIGGERED",
-        resource="settings.backup",
-        details=message,
-    )
-
-    latest = await db.execute(
-        select(AuditLog)
-        .where(AuditLog.tenant_id == tenant.id, AuditLog.action == "BACKUP_TRIGGERED")
-        .order_by(desc(AuditLog.created_at))
-        .limit(1)
-    )
-    row = latest.scalar_one_or_none()
-
-    return BackupStatusResponse(
-        enabled=True,
-        provider="local-storage",
-        retention_days=30,
-        last_backup_at=row.created_at if row else None,
-        last_backup_status="success",
-        last_backup_note=row.details if row else message,
-    )
+    await ensure_user_is_tenant_admin(db, user, tenant.id)
+    latest_full = await backup_status.latest_full_backup(db)
+    if await backup_status.open_backup_request(db, tenant.id, latest_full) is None:
+        job = BackupJob(
+            tenant_id=tenant.id,
+            backup_type=backup_status.BACKUP_TYPE_REQUEST,
+            status="queued",
+            created_at=datetime.utcnow(),
+        )
+        db.add(job)
+        await db.flush()
+        await log_action(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            action="BACKUP_REQUESTED",
+            resource="settings.backup",
+            details=f"backup_job:{job.id}",
+        )
+    return await _backup_status_response(db, tenant.id)
 
 
 @router.get("/pricing", response_model=SettingsPricingResponse)

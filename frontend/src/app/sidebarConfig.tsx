@@ -228,6 +228,7 @@ export const menuSections: MenuSection[] = [
       { icon: FileText, label: "Proforma Invoices", href: `${PREFIX}/commercial/proforma-invoices` },
       { icon: FileText, label: "Commercial Invoices", href: `${PREFIX}/commercial/invoices` },
       { icon: ArrowRightLeft, label: "BTB LCs", href: `${PREFIX}/commercial/btb-lcs` },
+      { icon: Gauge, label: "LC Performance", href: `${PREFIX}/commercial/lc-performance` },
       {
         icon: FileText,
         label: "Commission",
@@ -303,6 +304,12 @@ export const menuSections: MenuSection[] = [
       {
         label: "Procurement",
         items: [
+          {
+            icon: ClipboardList,
+            label: "Requisitions & CS",
+            href: `${PREFIX}/procurement/requisitions`,
+            requiresFeatureFlag: "procurement_cs_enabled",
+          },
           { icon: ShoppingCart, label: "Purchase Orders", href: `${PREFIX}/inventory/purchase-orders` },
           { icon: ClipboardCheck, label: "Goods Receiving", href: `${PREFIX}/inventory/goods-receiving` },
           { icon: Factory, label: "Process Orders", href: `${PREFIX}/inventory/process-orders` },
@@ -850,6 +857,7 @@ export const menuSections: MenuSection[] = [
           { icon: TrendingUp, label: "Cash Flow", href: `${PREFIX}/accounts/reports/cash-flow` },
           { icon: FileText, label: "AR/AP Aging", href: `${PREFIX}/accounts/reports/ar-ap-aging` },
           { icon: BookOpen, label: "Ledger Activity", href: `${PREFIX}/accounts/reports/ledger-activity` },
+          { icon: AlertTriangle, label: "Exception Reports", href: `${PREFIX}/accounts/reports/exceptions` },
           { icon: Activity, label: "Voucher Analytics", href: `${PREFIX}/accounts/reports/voucher-analytics` },
           { icon: PieChart, label: "Group Summary", href: `${PREFIX}/accounts/reports/group-summary` },
           { icon: Activity, label: "Ratio Analysis", href: `${PREFIX}/accounts/reports/ratio-analysis` },

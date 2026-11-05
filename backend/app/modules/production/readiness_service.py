@@ -207,7 +207,7 @@ async def get_order_chain_readiness(db: AsyncSession, tenant_id: int, order_id: 
 
             item_name = ""
             it = await db.get(Item, bi.item_id)
-            if it:
+            if it and it.tenant_id == tenant_id:
                 item_name = it.name
 
             short = max(0.0, required - available)

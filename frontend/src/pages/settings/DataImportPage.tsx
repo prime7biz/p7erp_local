@@ -30,7 +30,7 @@ export function DataImportPage() {
 
   async function runImport(dryRun: boolean) {
     if (!file) {
-      setError("Choose a CSV file first.");
+      setError("Choose a CSV or Excel (.xlsx) file first.");
       return;
     }
     if (!dryRun) {
@@ -84,7 +84,8 @@ export function DataImportPage() {
       <div>
         <h2 className="text-xl font-bold text-text-primary">Data import</h2>
         <p className="text-sm text-text-muted">
-          Upload CSV files to migrate customers, vendors, items, and more. Always run a dry-run preview first.
+          Upload CSV or Excel (.xlsx, first sheet) files to migrate customers, vendors, items, and more. Always run a dry-run
+          preview first.
         </p>
       </div>
 
@@ -124,10 +125,10 @@ export function DataImportPage() {
         )}
 
         <label className="block text-sm">
-          <span className="text-text-muted">CSV file</span>
+          <span className="text-text-muted">CSV or Excel file</span>
           <input
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="mt-1 block w-full max-w-md text-sm"
             onChange={(e) => {
               setFile(e.target.files?.[0] ?? null);

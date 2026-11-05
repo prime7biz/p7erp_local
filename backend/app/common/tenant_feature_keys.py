@@ -145,6 +145,23 @@ DEFAULT_ON_FEATURE_FLAGS: tuple[str, ...] = (
 KITTING_ENABLED = "kitting_enabled"
 CONSIGNMENT_STOCK_ENABLED = "consignment_stock_enabled"
 
+# Benchmark roadmap item 8: requisition -> quotations -> comparative statement -> PO (default OFF).
+PROCUREMENT_CS_ENABLED = "procurement_cs_enabled"
+
+# Benchmark roadmap item 12: month (1-12) the financial year starts in; missing = 1 (calendar year).
+# Bangladesh companies usually use 7 (July-June).
+FISCAL_YEAR_START_MONTH = "fiscal_year_start_month"
+
+# Benchmark roadmap item 13: company VAT Business Identification Number printed on Mushak forms.
+VAT_BIN = "vat_bin"
+
+# Benchmark roadmap item 15: Tally-style "save = post" for small teams (default OFF; maker-checker stays the default).
+DIRECT_POST_VOUCHERS = "direct_post_vouchers"
+
+
+def is_direct_post_vouchers_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, DIRECT_POST_VOUCHERS)
+
 
 def _flag_true(feature_flags: Any, key: str) -> bool:
     if not isinstance(feature_flags, dict):
@@ -431,6 +448,10 @@ def is_mrp_engine_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, MRP_ENGINE_ENABLED)
 
 
+def is_procurement_cs_enabled(feature_flags: Any) -> bool:
+    return _flag_true(feature_flags, PROCUREMENT_CS_ENABLED)
+
+
 def is_auto_reorder_enabled(feature_flags: Any) -> bool:
     return _flag_true(feature_flags, AUTO_REORDER_ENABLED)
 
@@ -523,6 +544,21 @@ def normalize_feature_flag_value(key: str, value: Any) -> Any:
     taught about yet) and ``None`` values pass through untouched, which keeps
     feature rollouts forward-compatible.
     """
+    if key == VAT_BIN and value is not None:
+        cleaned = str(value).strip().replace("-", "").replace(" ", "")
+        if cleaned == "":
+            return None
+        if not cleaned.isdigit() or not 9 <= len(cleaned) <= 13:
+            raise ValueError(f"feature_flags['{key}'] must be a 9-13 digit BIN (got {value!r})")
+        return cleaned
+    if key == FISCAL_YEAR_START_MONTH and value is not None:
+        try:
+            month = int(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"feature_flags['{key}'] must be a month number 1-12") from None
+        if isinstance(value, bool) or not 1 <= month <= 12 or float(value) != month:
+            raise ValueError(f"feature_flags['{key}'] must be a month number 1-12 (got {value!r})")
+        return month
     allowed = ENUM_FEATURE_FLAG_VALUES.get(key)
     if allowed is None or value is None:
         return value

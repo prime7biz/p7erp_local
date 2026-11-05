@@ -17,6 +17,8 @@ export type CreateAction = {
   icon: LucideIcon;
   /** Extra words the command palette matches on. */
   keywords?: string;
+  /** Shown only in the Ctrl+K palette, not in the New menu or mobile + button. */
+  paletteOnly?: boolean;
 };
 
 /** Role-aware create actions shared by the top-bar New menu, Ctrl+K palette and mobile + button. */
@@ -51,7 +53,13 @@ export function getCreateActions(opts: {
   }
 
   if (isElevated || isFinance) {
-    actions.push({ label: "New voucher", href: "/app/accounts/vouchers", icon: FileText, keywords: "payment receipt journal" });
+    actions.push(
+      { label: "New voucher", href: "/app/accounts/vouchers", icon: FileText, keywords: "payment receipt journal" },
+      { label: "New payment voucher", href: "/app/accounts/vouchers?new=PAYMENT", icon: FileText, keywords: "f5 pay supplier", paletteOnly: true },
+      { label: "New receipt voucher", href: "/app/accounts/vouchers?new=RECEIPT", icon: FileText, keywords: "f6 collect customer", paletteOnly: true },
+      { label: "New journal voucher", href: "/app/accounts/vouchers?new=JOURNAL", icon: FileText, keywords: "f7 jv adjustment", paletteOnly: true },
+      { label: "New contra voucher", href: "/app/accounts/vouchers?new=CONTRA", icon: FileText, keywords: "f4 cash bank transfer", paletteOnly: true },
+    );
   }
 
   if (actions.length === 0) {

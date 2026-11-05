@@ -490,6 +490,8 @@ async def create_material_return(
         raise HTTPException(status_code=404, detail="Material issue not found")
     if body.qty_returned > float(issue.qty_issued):
         raise HTTPException(status_code=400, detail="Returned quantity cannot exceed issued quantity")
+    if body.warehouse_id is not None:
+        await _assert_tenant_refs(db, tenant.id, [(Warehouse, body.warehouse_id, "Warehouse")])
 
     movement = StockMovement(
         tenant_id=tenant.id,

@@ -148,7 +148,7 @@ export function VoucherApprovalsPage() {
         else {
           const mappedStatus = ACTION_TO_STATUS[action];
           if (!mappedStatus) throw new Error(`Unsupported action: ${action}`);
-          await api.updateVoucherStatus(voucherId, mappedStatus);
+          await api.updateVoucherStatus(voucherId, mappedStatus, { reason });
         }
         const label = ACTION_LABEL[action] ?? action;
         setSuccess(reason.trim() ? `Completed: ${label} — ${reason.trim()}` : `Completed: ${label}`);
@@ -331,7 +331,7 @@ export function VoucherApprovalsPage() {
             ? `Confirm ${ACTION_LABEL[pendingWorkflowAction.action] ?? pendingWorkflowAction.action}`
             : "Confirm"
         }
-        description="A short reason helps your team during review. Full audit storage in the database is planned (see docs/voucher_backend_gaps.md)."
+        description="A short reason helps your team during review. It is saved in the voucher's History."
         confirmLabel={pendingWorkflowAction ? ACTION_LABEL[pendingWorkflowAction.action] ?? "Confirm" : "Confirm"}
         onClose={() => setPendingWorkflowAction(null)}
         onConfirm={(reason) => {

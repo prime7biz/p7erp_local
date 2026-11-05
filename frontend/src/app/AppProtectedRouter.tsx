@@ -563,6 +563,24 @@ const PayrollStatutoryConfigPage = lazy(() =>
     default: m.PayrollStatutoryConfigPage,
   })),
 );
+const LcPerformancePage = lazy(() =>
+  import("@/pages/app/commercial/LcPerformancePage").then((m) => ({ default: m.LcPerformancePage })),
+);
+const Mushak63PrintPage = lazy(() =>
+  import("@/pages/app/commercial/bd-compliance/Mushak63PrintPage").then((m) => ({ default: m.Mushak63PrintPage })),
+);
+const ChequePrintPage = lazy(() =>
+  import("@/pages/app/finance/ChequePrintPage").then((m) => ({ default: m.ChequePrintPage })),
+);
+const RequisitionsPage = lazy(() =>
+  import("@/pages/app/procurement/RequisitionsPage").then((m) => ({ default: m.RequisitionsPage })),
+);
+const RequisitionDetailPage = lazy(() =>
+  import("@/pages/app/procurement/RequisitionDetailPage").then((m) => ({ default: m.RequisitionDetailPage })),
+);
+const ExceptionReportsPage = lazy(() =>
+  import("@/pages/app/finance/ExceptionReportsPage").then((m) => ({ default: m.ExceptionReportsPage })),
+);
 const LedgerActivityPage = lazy(() =>
   import("@/pages/app/LedgerActivityPage").then((m) => ({ default: m.LedgerActivityPage })),
 );
@@ -818,6 +836,8 @@ export function AppProtectedRouter() {
         <Route path="orders/:id/print" element={<OrderPrintPage />} />
         <Route path="merchandising/styles/:id/print" element={<StylePrintPage />} />
         <Route path="commercial/proforma-invoices/:id/print" element={<ProformaInvoicePrintPage />} />
+        <Route path="accounts/vouchers/:voucherId/cheque" element={<ChequePrintPage />} />
+        <Route path="commercial/bd-compliance/mushak-6-3/:invoiceId" element={<Mushak63PrintPage />} />
       <Route element={<PermissionRouteGuard permissionKey={ROUTE_PERMISSION.inventory} />}>
         <Route path="inventory/purchase-orders/:id/print" element={<PurchaseOrderPrintPage />} />
         <Route path="inventory/goods-receiving/:id/print" element={<GoodsReceivingPrintPage />} />
@@ -973,6 +993,7 @@ export function AppProtectedRouter() {
           <Route path="commercial/export-cases/new" element={<ExportCaseFormPage />} />
           <Route path="commercial/export-cases/:id/edit" element={<ExportCaseFormPage />} />
           <Route path="commercial/master-contracts" element={<MasterContractsPage />} />
+          <Route path="commercial/lc-performance" element={<LcPerformancePage />} />
           <Route path="commercial/proforma-invoices" element={<ProformaInvoicesPage />} />
           <Route path="commercial/commission" element={<CommissionPage />} />
           <Route path="commercial/bd-compliance" element={<BdCompliancePage />} />
@@ -1063,6 +1084,9 @@ export function AppProtectedRouter() {
           <Route path="finance/mis/comparative" element={<ComparativeStatementsPage />} />
           <Route path="finance/mis/cash-scenarios" element={<CashFlowScenarioPage />} />
           <Route path="accounts/reports/ledger-activity" element={<LedgerActivityPage />} />
+          <Route path="accounts/reports/exceptions" element={<ExceptionReportsPage />} />
+          <Route path="procurement/requisitions" element={<RequisitionsPage />} />
+          <Route path="procurement/requisitions/:requisitionId" element={<RequisitionDetailPage />} />
           <Route path="accounts/reports/voucher-analytics" element={<VoucherAnalyticsPage />} />
           <Route path="accounts/reports/group-summary" element={<GroupSummaryPage />} />
           <Route path="accounts/reports/ratio-analysis" element={<RatioAnalysisPage />} />

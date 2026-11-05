@@ -11,17 +11,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.codegen import next_tenant_code
+from app.common.ownership import ensure_owned
 from app.common.permissions import require_internal_permission
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db
 from app.external_access.constants import PRINCIPAL_FINANCIER
 from app.models import (
+    BankAccount,
+    BtbLc,
+    ChartOfAccount,
     ExternalPrincipal,
     Facility,
     FacilityTransaction,
     FacilityUtilization,
     InterestAccrual,
+    MasterContract,
+    PurchaseOrder,
     RepaymentScheduleLine,
     Tenant,
     User,
@@ -58,6 +64,24 @@ router = APIRouter(
 def _require_facility_enabled() -> None:
     if not get_settings().facility_management_enabled:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Facility management is disabled")
+
+
+_FACILITY_GL_FIELDS = (
+    "gl_liability_account_id",
+    "gl_interest_expense_account_id",
+    "gl_interest_payable_account_id",
+    "gl_penalty_expense_account_id",
+    "repayment_source_account_id",
+)
+
+
+async def _validate_facility_links(db: AsyncSession, tenant_id: int, data: dict) -> None:
+    """Every related-record ID on a facility must belong to the caller's tenant."""
+    await ensure_owned(db, MasterContract, data.get("linked_master_contract_id"), tenant_id, "Master contract")
+    await ensure_owned(db, BtbLc, data.get("linked_btb_lc_id"), tenant_id, "BTB LC")
+    await ensure_owned(db, BankAccount, data.get("linked_bank_account_id"), tenant_id, "Bank account")
+    for field in _FACILITY_GL_FIELDS:
+        await ensure_owned(db, ChartOfAccount, data.get(field), tenant_id, "Account")
 
 
 @router.get("/financier-principals")
@@ -116,6 +140,7 @@ async def create_facility(
         ep = await db.get(ExternalPrincipal, body.financier_party_id)
         if not ep or ep.tenant_id != tenant.id or ep.principal_type != PRINCIPAL_FINANCIER:
             raise HTTPException(status_code=400, detail="Invalid financier principal")
+    await _validate_facility_links(db, tenant.id, body.model_dump())
     code = await next_tenant_code(db, model=Facility, tenant_id=tenant.id, prefix="FC-", width=5)
     fac = Facility(
         tenant_id=tenant.id,
@@ -195,6 +220,7 @@ async def patch_facility(
             if getattr(body, k, None) is not None:
                 raise HTTPException(status_code=400, detail="Cannot change key fields on active facility")
     data = body.model_dump(exclude_unset=True)
+    await _validate_facility_links(db, tenant.id, data)
     for k, v in data.items():
         setattr(fac, k, v)
     await db.commit()
@@ -257,6 +283,8 @@ async def create_utilization(
         raise HTTPException(status_code=404, detail="Facility not found")
     if fac.status not in ("draft", "active"):
         raise HTTPException(status_code=400, detail="Facility not open for utilizations")
+    await ensure_owned(db, BtbLc, body.linked_btb_lc_id, tenant.id, "BTB LC")
+    await ensure_owned(db, PurchaseOrder, body.linked_purchase_order_id, tenant.id, "Purchase order")
     code = await next_tenant_code(db, model=FacilityUtilization, tenant_id=tenant.id, prefix="FU-", width=5)
     util = FacilityUtilization(
         tenant_id=tenant.id,

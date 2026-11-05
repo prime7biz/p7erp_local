@@ -27,6 +27,7 @@ from app.models import (
     PayrollStructureLine,
 )
 from app.modules.hr_payroll.formula_engine import (
+    OUTPUT_BASED_TYPES,
     assert_valid_calculation_type,
     calculate_component_amount,
     quantize_money,
@@ -72,6 +73,10 @@ class EmployeeCalcPreview:
     has_manual_override: bool = False
     calculation_source: str = "AUTO"
     trace: dict[str, Any] = field(default_factory=dict)
+    # Piece-rate output (shop-floor scans where operator_code = employee_code); 0 when not used.
+    pieces: str = "0.0000"
+    earned_minutes: str = "0.0000"
+    pay_basis: str = "SALARY"  # SALARY | DAILY | PIECE (derived from the structure's components)
 
 
 def _employee_display_name(employee: Employee) -> str:
@@ -93,6 +98,38 @@ def _override_payload(overrides: dict | None, component: PayrollComponent) -> tu
         ftype = raw.get("formula_type") or raw.get("calculation_type")
         return amount, str(ftype) if ftype is not None else None
     return api_money_to_decimal(raw), None
+
+
+async def piece_output_in_period(
+    db: AsyncSession, *, tenant_id: int, employee_code: str, start: date, end: date
+) -> tuple[Decimal, Decimal]:
+    """(pieces, standard minutes earned) from shop-floor bundle scans for one worker.
+
+    Scans carry the operator code typed / scanned at the station; it must match the employee code.
+    """
+    from datetime import datetime, time
+
+    from sqlalchemy import func
+
+    from app.models.shop_floor_scan import BundleOperationScan
+
+    code = (employee_code or "").strip().lower()
+    if not code:
+        return Decimal("0"), Decimal("0")
+    pieces, minutes = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(BundleOperationScan.pieces), 0),
+                func.coalesce(func.sum(BundleOperationScan.pieces * BundleOperationScan.smv), 0),
+            ).where(
+                BundleOperationScan.tenant_id == tenant_id,
+                func.lower(func.trim(BundleOperationScan.operator_code)) == code,
+                BundleOperationScan.scanned_at >= datetime.combine(start, time.min),
+                BundleOperationScan.scanned_at <= datetime.combine(end, time.max),
+            )
+        )
+    ).one()
+    return Decimal(str(pieces or 0)), Decimal(str(minutes or 0))
 
 
 async def count_present_days(
@@ -296,6 +333,23 @@ async def calculate_employee_payroll(
     if not lines:
         warnings.append("Structure has no active component lines")
 
+    def _line_calc_type(component: PayrollComponent) -> str:
+        _amt, ftype = _override_payload(asgn.component_overrides, component)
+        return (ftype or component.calculation_type or "FIXED").strip().upper()
+
+    line_types = {_line_calc_type(c) for _sl, c in lines}
+    pieces = earned_minutes = Decimal("0")
+    if line_types & OUTPUT_BASED_TYPES:
+        pieces, earned_minutes = await piece_output_in_period(
+            db, tenant_id=tenant_id, employee_code=employee.employee_code, start=period.start_date, end=period.end_date
+        )
+        if pieces == 0:
+            warnings.append(
+                f"Piece-rate structure but no scanned pieces for operator code '{employee.employee_code}' in this period"
+            )
+    pay_basis = "PIECE" if line_types & OUTPUT_BASED_TYPES else "DAILY" if "PER_DAY" in line_types else "SALARY"
+    piece_earnings = Decimal("0")
+
     gross = Decimal("0")
     deductions = Decimal("0")
     overtime_amount = Decimal("0")
@@ -321,6 +375,8 @@ async def calculate_employee_payroll(
             base_salary=base,
             days_present=paid_days_for_allowance,
             ot_hours=ot_hours,
+            pieces=pieces,
+            earned_minutes=earned_minutes,
             strict=True,
         )
         ctype = (component.component_type or "EARNING").strip().upper()
@@ -330,6 +386,8 @@ async def calculate_employee_payroll(
             gross += amount
             if calc_type == "PER_HOUR_OT":
                 overtime_amount += amount
+            if calc_type in OUTPUT_BASED_TYPES:
+                piece_earnings += amount
 
         component_out.append(
             ComponentCalcLine(
@@ -355,6 +413,12 @@ async def calculate_employee_payroll(
 
     if unpaid_leave > 0:
         warnings.append(f"Unpaid leave days in period: {unpaid_leave}")
+    if pay_basis == "PIECE" and base > 0 and piece_earnings < base:
+        # Bangladesh Labour Act: piece-rated workers must still receive at least the minimum wage.
+        warnings.append(
+            f"Piece earnings {quantize_money(piece_earnings)} are below the base salary / minimum wage {quantize_money(base)} "
+            "— add a top-up before paying"
+        )
 
     statutory_trace: dict[str, Any] = {}
     from app.common.tenant_feature_keys import is_statutory_payroll_enabled
@@ -461,6 +525,10 @@ async def calculate_employee_payroll(
         "leave_days_unpaid": decimal_to_money_response(unpaid_leave),
         "paid_days_for_per_day": decimal_to_money_response(paid_days_for_allowance),
         "ot_hours": decimal_to_money_response(ot_hours),
+        "pay_basis": pay_basis,
+        "pieces": decimal_to_money_response(pieces),
+        "earned_minutes": decimal_to_money_response(earned_minutes),
+        "piece_earnings": decimal_to_money_response(quantize_money(piece_earnings)),
         "components": component_trace,
         "statutory": statutory_trace,
         "gross_pay": decimal_to_money_response(quantize_money(gross)),
@@ -492,6 +560,9 @@ async def calculate_employee_payroll(
         has_manual_override=has_manual_override,
         calculation_source="AUTO",
         trace=trace,
+        pieces=decimal_to_money_response(pieces),
+        earned_minutes=decimal_to_money_response(earned_minutes),
+        pay_basis=pay_basis,
     )
 
 

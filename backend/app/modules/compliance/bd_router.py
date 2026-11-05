@@ -24,12 +24,9 @@ from app.common.tenant import require_tenant
 from app.common.tenant_feature_keys import is_bd_bond_compliance_enabled
 from app.database import get_db, safe_async_session_rollback
 from app.models import Tenant, User
-from app.models.commercial import CommercialInvoice
 from app.models.compliance import BondedWarehouseEntry, UdEntitlement, UtilizationDeclaration
-from app.models.customer import Customer
-from app.models.finance import VendorBill
-from app.models.inventory import Vendor
 from app.models.trade import TradeCase
+from app.modules.compliance import mushak_service
 from app.modules.compliance.bd_registers_service import bond_register_rows, compute_utilization
 
 bd_trade_router = APIRouter(prefix="/compliance/bd", tags=["compliance-bd"])
@@ -38,8 +35,6 @@ bd_vat_router = APIRouter(prefix="/compliance/bd", tags=["compliance-bd"])
 UD_ISSUERS = {"BGMEA", "BKMEA", "BEPZA", "OTHER"}
 UD_STATUSES = {"DRAFT", "APPROVED", "CLOSED"}
 UD_TRANSITIONS = {"DRAFT": {"APPROVED"}, "APPROVED": {"DRAFT", "CLOSED"}, "CLOSED": set()}
-EXCLUDED_BILL_STATUSES = {"DRAFT", "CANCELLED", "REJECTED", "VOID"}
-SALES_INVOICE_STATUSES = {"ISSUED", "POSTED"}
 MAX_ENTITLEMENTS = 200
 
 
@@ -605,12 +600,6 @@ def _month_range(year: int, month: int) -> tuple[date, date]:
     return date(year, month, 1), date(year, month, last)
 
 
-def _to_base(amount: Decimal | None, rate) -> Decimal:
-    amt = amount or Decimal("0")
-    r = Decimal(str(rate)) if rate not in (None, 0) else Decimal("1")
-    return (amt * r).quantize(Decimal("0.01"))
-
-
 @bd_vat_router.get("/mushak/6-1")
 async def mushak_purchase_register(
     tenant: Tenant = Depends(require_tenant),
@@ -622,51 +611,13 @@ async def mushak_purchase_register(
     """Mushak 6.1-style purchase register from recorded vendor bills (amounts in base currency)."""
     _guard(user, tenant)
     start, end = _month_range(year, month)
-    bill_date = func.coalesce(VendorBill.bill_date, VendorBill.vendor_invoice_date)
-    rows = (
-        await db.execute(
-            select(VendorBill, Vendor.name, Vendor.tax_id)
-            .join(Vendor, Vendor.id == VendorBill.vendor_id)
-            .where(
-                VendorBill.tenant_id == tenant.id,
-                Vendor.tenant_id == tenant.id,
-                bill_date >= start,
-                bill_date <= end,
-                func.upper(VendorBill.status).notin_(EXCLUDED_BILL_STATUSES),
-            )
-            .order_by(bill_date, VendorBill.id)
-            .limit(5000)
-        )
-    ).all()
-    out = []
-    tot_value = tot_vat = Decimal("0")
-    for bill, vname, vbin in rows:
-        value = _to_base(bill.subtotal_amount if bill.subtotal_amount is not None else bill.total_amount, bill.exchange_rate_to_base)
-        vat = _to_base(bill.tax_amount, bill.exchange_rate_to_base)
-        tot_value += value
-        tot_vat += vat
-        d = bill.bill_date or bill.vendor_invoice_date
-        out.append(
-            {
-                "bill_id": bill.id,
-                "date": d.isoformat() if d else None,
-                "bill_code": bill.bill_code,
-                "supplier_invoice_no": bill.vendor_invoice_ref,
-                "supplier_name": vname,
-                "supplier_bin": vbin,
-                "currency": bill.currency,
-                "taxable_value": str(value),
-                "vat_amount": str(vat),
-                "total": str(value + vat),
-                "status": bill.status,
-            }
-        )
+    out, totals = await mushak_service.purchase_register(db, tenant.id, start, end)
     return {
         "register": "6.1",
         "title": "Purchase register (Mushak 6.1 style)",
         "period": f"{year}-{month:02d}",
         "rows": out,
-        "totals": {"taxable_value": str(tot_value), "vat_amount": str(tot_vat), "total": str(tot_value + tot_vat)},
+        "totals": totals,
         "note": "Generated from recorded vendor bills. Verify against NBR Mushak 6.1 before filing.",
     }
 
@@ -682,48 +633,57 @@ async def mushak_sales_register(
     """Mushak 6.2-style sales register from issued commercial invoices (exports treated as zero-rated)."""
     _guard(user, tenant)
     start, end = _month_range(year, month)
-    rows = (
-        await db.execute(
-            select(CommercialInvoice, Customer.name, Customer.tax_id_vat_number)
-            .join(Customer, Customer.id == CommercialInvoice.customer_id)
-            .where(
-                CommercialInvoice.tenant_id == tenant.id,
-                Customer.tenant_id == tenant.id,
-                CommercialInvoice.invoice_date >= start,
-                CommercialInvoice.invoice_date <= end,
-                func.upper(CommercialInvoice.status).in_(SALES_INVOICE_STATUSES),
-            )
-            .order_by(CommercialInvoice.invoice_date, CommercialInvoice.id)
-            .limit(5000)
-        )
-    ).all()
-    out = []
-    tot_value = Decimal("0")
-    for inv, cname, cbin in rows:
-        base = inv.base_total_amount if inv.base_total_amount else _to_base(inv.total_amount, inv.exchange_rate_to_base)
-        base = Decimal(str(base)).quantize(Decimal("0.01"))
-        tot_value += base
-        out.append(
-            {
-                "invoice_id": inv.id,
-                "date": inv.invoice_date.isoformat() if inv.invoice_date else None,
-                "invoice_code": inv.invoice_code,
-                "buyer_name": cname,
-                "buyer_bin": cbin,
-                "currency": inv.currency,
-                "fc_value": str(inv.total_amount),
-                "taxable_value": str(base),
-                "vat_rate_pct": "0",
-                "vat_amount": "0.00",
-                "supply_type": "Export (zero-rated)",
-                "status": inv.status,
-            }
-        )
+    out, totals = await mushak_service.sales_register(db, tenant.id, start, end)
     return {
         "register": "6.2",
         "title": "Sales register (Mushak 6.2 style)",
         "period": f"{year}-{month:02d}",
         "rows": out,
-        "totals": {"taxable_value": str(tot_value), "vat_amount": "0.00"},
+        "totals": {"taxable_value": totals["taxable_value"], "vat_amount": totals["vat_amount"]},
         "note": "Commercial invoices are treated as zero-rated exports. Add local sales manually before filing.",
     }
+
+
+@bd_vat_router.get("/mushak/6-10")
+async def mushak_6_10(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+):
+    """Purchases and sales above BDT 2 lakh in the month (Mushak 6.10)."""
+    _guard(user, tenant)
+    start, end = _month_range(year, month)
+    data = await mushak_service.mushak_6_10(db, tenant.id, start, end)
+    return {"form": "6.10", "period": f"{year}-{month:02d}", **data}
+
+
+@bd_vat_router.get("/mushak/9-1")
+async def mushak_9_1(
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+):
+    """Draft monthly return summary (Mushak 9.1) from the 6.1 / 6.2 registers."""
+    _guard(user, tenant)
+    start, end = _month_range(year, month)
+    data = await mushak_service.mushak_9_1_summary(db, tenant, start, end)
+    return {"period": f"{year}-{month:02d}", **data}
+
+
+@bd_vat_router.get("/mushak/6-3/{invoice_id}")
+async def mushak_6_3(
+    invoice_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Tax invoice (Mushak 6.3) data for one commercial invoice."""
+    _guard(user, tenant)
+    data = await mushak_service.mushak_6_3(db, tenant, invoice_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return data

@@ -18,6 +18,10 @@ import {
 } from "@/components/inventory/InventoryListStates";
 import { InventoryListViewToggle, touchFieldClass } from "@/components/inventory/InventoryMobileList";
 import { PoColorSizeGrid } from "@/components/inventory/PoColorSizeGrid";
+import { MasterQuickAddModal } from "@/components/app/MasterQuickAddModal";
+import { VendorQuickCreateModal } from "@/components/quick-create/VendorQuickCreateModal";
+import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
+import { alternateToBase, parseFactor, type LineUnitMode } from "@/lib/unitConversion";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
 import { logApiError } from "@/utils/logApiError";
 import { useAuth } from "@/context/AuthContext";
@@ -82,8 +86,65 @@ export function PurchaseOrdersPage() {
     vendorBillBusyId: number | null;
   } | null>(null);
   const [poBanner, setPoBanner] = useState("");
+  const [vendorCreateOpen, setVendorCreateOpen] = useState(false);
+  const [itemCreateLists, setItemCreateLists] = useState<{
+    categories: { id: number; name: string }[];
+    subcategories: { id: number; name: string; category_id: number }[];
+    units: { id: number; name: string }[];
+  } | null>(null);
 
   const itemName = useMemo(() => new Map(items.map((i) => [i.id, i.name])), [items]);
+
+  const [lineUnit, setLineUnit] = useState<LineUnitMode>("base");
+  const [lineFactor, setLineFactor] = useState("");
+  const lineItem = items.find((i) => i.id === line.item_id);
+  const lineAltUnit = (lineItem?.alternate_unit ?? "").trim() || null;
+  const lineBaseUnit = (lineItem?.base_unit ?? "").trim() || "base unit";
+  const lineFactorNum = parseFactor(lineFactor);
+
+  useEffect(() => {
+    setLineUnit("base");
+    setLineFactor(lineItem?.conversion_factor ?? "");
+  }, [lineItem?.id, lineItem?.conversion_factor]);
+
+  function addPoLine() {
+    if (lineUnit === "alternate" && lineAltUnit) {
+      if (!lineFactorNum) {
+        setError(`Enter how many ${lineBaseUnit} make one ${lineAltUnit}.`);
+        return;
+      }
+      const base = alternateToBase(line.quantity, line.unit_price, lineFactorNum);
+      setForm((p) => ({ ...p, items: [...p.items, { ...line, ...base }] }));
+      setLineHint(`Added ${line.quantity} ${lineAltUnit} = ${base.quantity} ${lineBaseUnit} @ ${base.unit_price}`);
+      return;
+    }
+    setForm((p) => ({ ...p, items: [...p.items, line] }));
+  }
+
+  async function openItemCreate() {
+    try {
+      const [categories, subcategories, units] = await Promise.all([
+        api.listInventoryItemCategories({ limit: 500 }),
+        api.listInventoryItemSubcategories({ limit: 500 }),
+        api.listInventoryItemUnits({ limit: 500 }),
+      ]);
+      if (categories.length === 0 || units.length === 0) {
+        toast.error("Add at least one item category and unit first (Inventory → Items).");
+        return;
+      }
+      setItemCreateLists({ categories, subcategories, units });
+    } catch (e) {
+      logApiError("PurchaseOrdersPage.openItemCreate", e);
+      toast.error("Could not load categories and units.");
+    }
+  }
+
+  const altC = (open: () => void) => (e: React.KeyboardEvent) => {
+    if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key.toLowerCase() === "c" || e.code === "KeyC")) {
+      e.preventDefault();
+      open();
+    }
+  };
 
   useEffect(() => {
     const close = () => setOpenActionsId(null);
@@ -177,11 +238,17 @@ export function PurchaseOrdersPage() {
     [navigate, load],
   );
 
+  const [statusReason, setStatusReason] = useState<{
+    ids: number[];
+    target: "CLOSED" | "CANCELLED";
+    clear?: () => void;
+  } | null>(null);
+
   const patchPoStatus = useCallback(
-    async (id: number, nextStatus: string) => {
+    async (id: number, nextStatus: string, reason?: string) => {
       setError("");
       try {
-        await api.updatePurchaseOrderStatus(id, nextStatus);
+        await api.updatePurchaseOrderStatus(id, nextStatus, reason);
         await load();
       } catch (e) {
         logApiError(`PurchaseOrdersPage.updateStatus(${nextStatus})`, e);
@@ -189,6 +256,15 @@ export function PurchaseOrdersPage() {
       }
     },
     [load],
+  );
+
+  /** Close / Cancel ask for a reason first (kept in the PO history); other status changes run directly. */
+  const requestPoStatus = useCallback(
+    (id: number, nextStatus: string) => {
+      if (nextStatus === "CLOSED" || nextStatus === "CANCELLED") setStatusReason({ ids: [id], target: nextStatus });
+      else void patchPoStatus(id, nextStatus);
+    },
+    [patchPoStatus],
   );
 
   useEffect(() => {
@@ -199,24 +275,14 @@ export function PurchaseOrdersPage() {
   const confirm = useConfirm();
   const vendorName = useMemo(() => new Map(vendors.map((v) => [v.id, v.name])), [vendors]);
 
-  const bulkSetPoStatus = useCallback(
-    async (selected: PurchaseOrderResponse[], target: "APPROVED" | "CLOSED" | "CANCELLED", clear: () => void) => {
-      const verb = target === "APPROVED" ? "Approve" : target === "CLOSED" ? "Close" : "Cancel";
-      const ok = await confirm({
-        title: `${verb} ${selected.length} purchase order${selected.length === 1 ? "" : "s"}?`,
-        description: "Orders whose current status does not allow this change are skipped.",
-        confirmLabel: verb,
-        danger: target === "CANCELLED",
-      });
-      if (!ok) return;
+  const runBulkPoStatus = useCallback(
+    async (ids: number[], target: "APPROVED" | "CLOSED" | "CANCELLED", clear: () => void, reason?: string) => {
+      const verb = target === "APPROVED" ? "approve" : target === "CLOSED" ? "close" : "cancel";
       setBulkBusy(true);
       try {
-        const res = await api.bulkPurchaseOrderStatus(
-          selected.map((r) => r.id),
-          target,
-        );
+        const res = await api.bulkPurchaseOrderStatus(ids, target, reason);
         const skipped = res.skipped?.length ?? 0;
-        if (skipped) toast.warning(`${res.updated} updated, ${skipped} skipped (status does not allow ${verb.toLowerCase()})`);
+        if (skipped) toast.warning(`${res.updated} updated, ${skipped} skipped (status does not allow ${verb})`);
         else toast.success(`${res.updated} purchase order${res.updated === 1 ? "" : "s"} updated`);
         clear();
         await load();
@@ -227,7 +293,26 @@ export function PurchaseOrdersPage() {
         setBulkBusy(false);
       }
     },
-    [confirm, load],
+    [load],
+  );
+
+  const bulkSetPoStatus = useCallback(
+    async (selected: PurchaseOrderResponse[], target: "APPROVED" | "CLOSED" | "CANCELLED", clear: () => void) => {
+      if (target !== "APPROVED") {
+        setStatusReason({ ids: selected.map((r) => r.id), target, clear });
+        return;
+      }
+      const verb = "Approve";
+      const ok = await confirm({
+        title: `${verb} ${selected.length} purchase order${selected.length === 1 ? "" : "s"}?`,
+        description: "Orders whose current status does not allow this change are skipped.",
+        confirmLabel: verb,
+        danger: false,
+      });
+      if (!ok) return;
+      await runBulkPoStatus(selected.map((r) => r.id), target, clear);
+    },
+    [confirm, runBulkPoStatus],
   );
 
   const poColumns = useMemo<GridColumn<PurchaseOrderResponse>[]>(
@@ -275,9 +360,9 @@ export function PurchaseOrdersPage() {
           ];
           if (st === "DRAFT") items.push({ key: "approve", label: "Approve", onClick: () => void patchPoStatus(r.id, "APPROVED") });
           if (st === "APPROVED" || st === "PARTIALLY_RECEIVED")
-            items.push({ key: "close", label: "Close", onClick: () => void patchPoStatus(r.id, "CLOSED") });
+            items.push({ key: "close", label: "Close (pre-close)", onClick: () => requestPoStatus(r.id, "CLOSED") });
           if (st === "DRAFT" || st === "APPROVED" || st === "PARTIALLY_RECEIVED")
-            items.push({ key: "cancel", label: "Cancel", danger: true, onClick: () => void patchPoStatus(r.id, "CANCELLED") });
+            items.push({ key: "cancel", label: "Cancel", danger: true, onClick: () => requestPoStatus(r.id, "CANCELLED") });
           return (
             <div onClick={(e) => e.stopPropagation()}>
               <RowActionsMenu rowId={r.id} openId={openActionsId} onOpenChange={(id) => setOpenActionsId(id as number | null)} items={items} />
@@ -286,7 +371,7 @@ export function PurchaseOrdersPage() {
         },
       },
     ],
-    [itemName, vendorName, openActionsId, openPoTrace, patchPoStatus],
+    [itemName, vendorName, openActionsId, openPoTrace, patchPoStatus, requestPoStatus],
   );
 
   const selectedVendor = useMemo(
@@ -384,9 +469,12 @@ export function PurchaseOrdersPage() {
       >
         <h2 className="text-sm font-semibold text-text-primary">New Purchase Order</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <div className="flex gap-1">
           <select
-            className="rounded border px-3 py-2 text-sm"
+            className="min-w-0 flex-1 rounded border px-3 py-2 text-sm"
             value={form.vendor_id ?? ""}
+            title="Alt+C: create a new supplier"
+            onKeyDown={altC(() => setVendorCreateOpen(true))}
             onChange={(e) => {
               const nextId = e.target.value ? Number(e.target.value) : null;
               const nextVendor = vendors.find((v) => v.id === nextId) ?? null;
@@ -405,6 +493,15 @@ export function PurchaseOrdersPage() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            className="shrink-0 rounded border px-2 text-xs font-medium text-brand-primary hover:bg-surface-subtle"
+            title="New supplier (Alt+C)"
+            onClick={() => setVendorCreateOpen(true)}
+          >
+            + New
+          </button>
+          </div>
           <input
             className="rounded border px-3 py-2 text-sm"
             placeholder="Supplier name **"
@@ -444,9 +541,12 @@ export function PurchaseOrdersPage() {
           <input className="rounded border px-3 py-2 text-sm" placeholder="Notes" value={form.notes ?? ""} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+          <div className="flex gap-1">
           <select
-            className="rounded border px-3 py-2 text-sm"
+            className="min-w-0 flex-1 rounded border px-3 py-2 text-sm"
             value={line.item_id || ""}
+            title="Alt+C: create a new item"
+            onKeyDown={altC(() => void openItemCreate())}
             onChange={(e) => {
               const itemId = Number(e.target.value);
               const it = items.find((i) => i.id === itemId);
@@ -493,15 +593,70 @@ export function PurchaseOrdersPage() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            className="shrink-0 rounded border px-2 text-xs font-medium text-brand-primary hover:bg-surface-subtle"
+            title="New item (Alt+C)"
+            onClick={() => void openItemCreate()}
+          >
+            + New
+          </button>
+          </div>
           <select className="rounded border px-3 py-2 text-sm" value={line.warehouse_id ?? ""} onChange={(e) => setLine((p) => ({ ...p, warehouse_id: e.target.value ? Number(e.target.value) : null }))}>
             {warehouses.map((wh) => <option key={wh.id} value={wh.id}>{wh.name}</option>)}
           </select>
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Qty" value={line.quantity} onChange={(e) => setLine((p) => ({ ...p, quantity: e.target.value }))} />
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Unit price" value={line.unit_price} onChange={(e) => setLine((p) => ({ ...p, unit_price: e.target.value }))} />
-          <button type="button" className="rounded border border-border-strong px-3 py-2 text-sm" onClick={() => setForm((p) => ({ ...p, items: [...p.items, line] }))}>
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder={lineUnit === "alternate" && lineAltUnit ? `Qty (${lineAltUnit})` : "Qty"}
+            value={line.quantity}
+            onChange={(e) => setLine((p) => ({ ...p, quantity: e.target.value }))}
+          />
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder={lineUnit === "alternate" && lineAltUnit ? `Price per ${lineAltUnit}` : "Unit price"}
+            value={line.unit_price}
+            onChange={(e) => setLine((p) => ({ ...p, unit_price: e.target.value }))}
+          />
+          <button type="button" className="rounded border border-border-strong px-3 py-2 text-sm" onClick={addPoLine}>
             Add Line
           </button>
         </div>
+        {lineAltUnit ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+            <span>Enter in:</span>
+            <select
+              className="rounded border px-2 py-1 text-xs"
+              value={lineUnit}
+              onChange={(e) => setLineUnit(e.target.value as LineUnitMode)}
+            >
+              <option value="base">{lineBaseUnit} (base unit)</option>
+              <option value="alternate">{lineAltUnit} (alternate unit)</option>
+            </select>
+            {lineUnit === "alternate" ? (
+              <>
+                <span>1 {lineAltUnit} =</span>
+                <input
+                  className="w-24 rounded border px-2 py-1 text-xs"
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  value={lineFactor}
+                  onChange={(e) => setLineFactor(e.target.value)}
+                  title="Override for this PO only (e.g. this supplier's roll is 48 yards)"
+                />
+                <span>{lineBaseUnit}</span>
+                {lineFactorNum ? (
+                  <span className="text-text-muted">
+                    → saved as {alternateToBase(line.quantity, line.unit_price, lineFactorNum).quantity} {lineBaseUnit} @{" "}
+                    {alternateToBase(line.quantity, line.unit_price, lineFactorNum).unit_price}
+                  </span>
+                ) : (
+                  <span className="text-status-danger-foreground">Enter a factor greater than 0</span>
+                )}
+              </>
+            ) : null}
+          </div>
+        ) : null}
         {lineHint ? <p className="text-xs text-text-muted">{lineHint}</p> : null}
         {form.items.length > 0 && (
           <div className="text-xs text-text-secondary">
@@ -616,7 +771,7 @@ export function PurchaseOrdersPage() {
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   setOpenActionsId(null);
-                                  await patchPoStatus(row.id, "CLOSED");
+                                  requestPoStatus(row.id, "CLOSED");
                                 }}
                               >
                                 Close
@@ -629,7 +784,7 @@ export function PurchaseOrdersPage() {
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   setOpenActionsId(null);
-                                  await patchPoStatus(row.id, "CANCELLED");
+                                  requestPoStatus(row.id, "CANCELLED");
                                 }}
                               >
                                 Cancel
@@ -813,12 +968,110 @@ export function PurchaseOrdersPage() {
                 ))}
               </ul>
             )}
+            <PoHistory poId={poTrace.po.id} status={poTrace.po.status} />
             {supplierPortalOn ? <PoSupplierUpdates poId={poTrace.po.id} /> : null}
             {poGridOn ? <PoColorSizeGrid poId={poTrace.po.id} /> : null}
           </div>
         </div>
       ) : null}
+
+      <VoucherActionReasonModal
+        open={statusReason != null}
+        title={
+          statusReason
+            ? `${statusReason.target === "CLOSED" ? "Close" : "Cancel"} ${statusReason.ids.length > 1 ? `${statusReason.ids.length} purchase orders` : "purchase order"}`
+            : "Confirm"
+        }
+        description={
+          statusReason?.target === "CLOSED"
+            ? "Pre-close stops waiting for the remaining quantity. The reason and the pending quantity are kept in the PO history."
+            : "Cancelled POs cannot be received against. The reason is kept in the PO history."
+        }
+        confirmLabel={statusReason?.target === "CLOSED" ? "Close PO" : "Cancel PO"}
+        onClose={() => setStatusReason(null)}
+        onConfirm={(reason) => {
+          if (!statusReason) return;
+          const { ids, target, clear } = statusReason;
+          setStatusReason(null);
+          if (clear) void runBulkPoStatus(ids, target, clear, reason);
+          else if (ids[0] != null) void patchPoStatus(ids[0], target, reason);
+        }}
+      />
+
+      <VendorQuickCreateModal
+        open={vendorCreateOpen}
+        initialName={form.vendor_id ? "" : form.supplier_name ?? ""}
+        defaultCurrency={form.currency ?? "USD"}
+        onClose={() => setVendorCreateOpen(false)}
+        onCreated={(v) => {
+          setVendors((prev) => [...prev, v]);
+          setForm((p) => ({
+            ...p,
+            vendor_id: v.id,
+            supplier_name: v.name,
+            currency: v.default_currency || p.currency || "USD",
+          }));
+          toast.success(`Supplier ${v.vendor_code} created and selected.`);
+        }}
+      />
+      {itemCreateLists ? (
+        <MasterQuickAddModal
+          open
+          masterType="item"
+          categories={itemCreateLists.categories}
+          subcategories={itemCreateLists.subcategories}
+          units={itemCreateLists.units}
+          onClose={() => setItemCreateLists(null)}
+          onCreated={(rec) => {
+            const created = rec as InventoryItemResponse;
+            setItems((prev) => [...prev, created]);
+            setLine((p) => ({ ...p, item_id: created.id, warehouse_id: created.default_warehouse_id ?? p.warehouse_id }));
+            toast.success(`Item ${created.name} created and selected.`);
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function PoHistory({ poId, status }: { poId: number; status: string }) {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof api.getPurchaseOrderHistory>>["events"] | null>(null);
+  useEffect(() => {
+    api
+      .getPurchaseOrderHistory(poId)
+      .then((r) => setRows(r.events))
+      .catch((e) => logApiError("PurchaseOrdersPage.history", e));
+  }, [poId, status]);
+  return (
+    <>
+      <h3 className="mt-6 text-sm font-semibold text-text-primary">History</h3>
+      {rows == null ? (
+        <p className="mt-1 text-xs text-text-muted">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="mt-1 text-xs text-text-muted">No status changes recorded yet.</p>
+      ) : (
+        <ul className="mt-2 space-y-1.5 text-sm">
+          {rows.map((ev) => {
+            const pending = (ev.extra?.pending_lines as { item_id: number; pending_qty: number }[] | undefined) ?? [];
+            return (
+              <li key={ev.id} className="rounded border border-border px-2 py-1.5">
+                <span className="font-medium">{ev.summary ?? ev.event}</span>
+                <span className="text-xs text-text-muted">
+                  {" "}
+                  · {ev.username ?? "system"} · {ev.at ? new Date(`${ev.at}Z`).toLocaleString() : ""}
+                </span>
+                {ev.reason ? <p className="text-xs text-text-secondary">Reason: {ev.reason}</p> : null}
+                {pending.length > 0 ? (
+                  <p className="text-xs text-text-muted">
+                    Pending when closed: {pending.map((p) => `item #${p.item_id} × ${p.pending_qty}`).join(", ")}
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
   );
 }
 

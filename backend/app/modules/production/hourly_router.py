@@ -8,10 +8,22 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
+from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.common.tenant_feature_keys import is_require_order_id_on_shop_floor
 from app.database import get_db, safe_async_session_rollback
-from app.models import HourlyProductionEntry, OperationBulletin, SewingLineStyleConfig, Tenant, User
+from app.models import (
+    DepartmentMachine,
+    GarmentStyle,
+    HourlyProductionEntry,
+    OperationBulletin,
+    Order,
+    ProductionShift,
+    SewingLine,
+    SewingLineStyleConfig,
+    Tenant,
+    User,
+)
 from app.modules.production.schemas import HourlyEntryUpsert
 
 router = APIRouter(prefix="/production/hourly", tags=["production-hourly"])
@@ -73,6 +85,12 @@ async def upsert_hourly(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="order_id is required when require_order_id_on_shop_floor is enabled",
         )
+    await ensure_owned(db, SewingLine, body.line_id, tenant.id, "Sewing line")
+    await ensure_owned(db, DepartmentMachine, body.machine_id, tenant.id, "Machine")
+    await ensure_owned(db, SewingLineStyleConfig, body.line_style_config_id, tenant.id, "Line plan")
+    await ensure_owned(db, Order, body.order_id, tenant.id, "Order")
+    await ensure_owned(db, GarmentStyle, body.style_id, tenant.id, "Style")
+    await ensure_owned(db, ProductionShift, body.shift_id, tenant.id, "Shift")
     d = date.fromisoformat(body.production_date)
     target_qty = body.target_qty
     if target_qty is None or float(target_qty or 0) == 0:
@@ -232,7 +250,7 @@ async def summary(
     total_smv = 12.0
     if cfg.ob_id:
         ob = await db.get(OperationBulletin, cfg.ob_id)
-        if ob:
+        if ob and ob.tenant_id == tenant.id:
             total_smv = float(ob.total_smv or 12)
     earned = good * total_smv
     ops = cfg.operator_count or 1

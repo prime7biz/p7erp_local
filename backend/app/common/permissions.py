@@ -116,6 +116,10 @@ PERMISSION_COMMERCIAL_INVOICE_ISSUE = "commercial.invoice.issue"
 PERMISSION_COMMERCIAL_EXPORT_CASE_CREATE = "commercial.export_case.create"
 PERMISSION_COMMERCIAL_EXPORT_CASE_EDIT = "commercial.export_case.edit"
 PERMISSION_HR_PAYROLL_AUTO_CALCULATE = "hr.payroll.auto_calculate"
+# Fail-closed: pay setup, run lines and pay-affecting HR edits need admin/manager or an explicit grant.
+PERMISSION_HR_PAYROLL_MANAGE = "hr.payroll.manage"
+PERMISSION_HR_ATTENDANCE_MANAGE = "hr.attendance.manage"
+PERMISSION_HR_LEAVE_TYPES_MANAGE = "hr.leave.types.manage"
 PERMISSION_HR_COMPLIANCE_VIEW = "hr.compliance.view"
 PERMISSION_HR_COMPLIANCE_MANAGE = "hr.compliance.manage"
 PERMISSION_HR_OCR_USE = "hr.ocr.use"
@@ -132,6 +136,21 @@ PERMISSION_AI_MAINTENANCE_PREDICT = "ai.maintenance_predict"
 PERMISSION_AI_LINE_BALANCE = "ai.line_balance"
 
 MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
+    {
+        "key": PERMISSION_HR_PAYROLL_MANAGE,
+        "label": "Edit payroll setup and run lines (components, structures, periods, runs, assignments)",
+        "group": "HR & payroll",
+    },
+    {
+        "key": PERMISSION_HR_ATTENDANCE_MANAGE,
+        "label": "Edit attendance entries directly (outside regularization)",
+        "group": "HR & payroll",
+    },
+    {
+        "key": PERMISSION_HR_LEAVE_TYPES_MANAGE,
+        "label": "Create or change leave types (incl. approval requirement)",
+        "group": "HR & payroll",
+    },
     {
         "key": PERMISSION_BOM_PRICE_OVERRIDE,
         "label": "Override BOM expected unit price after BOM is approved/frozen",
@@ -843,6 +862,29 @@ async def assert_delegate_manager_or_permission(
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail=f"Requires admin/manager role or permission '{permission_key}'",
+    )
+
+
+HR_SETUP_BYPASS_ROLES = frozenset({"admin", "manager", "super_admin", "superadmin", "owner"})
+
+
+async def assert_hr_manager_or_permission(
+    db: AsyncSession,
+    user: User,
+    tenant_id: int,
+    *,
+    permission_key: str,
+) -> None:
+    """Fail-closed gate for pay-affecting HR writes: manager-type role or an explicit True grant."""
+    role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
+    rn = (role.name if role else "").strip().lower()
+    if rn in HR_SETUP_BYPASS_ROLES:
+        return
+    if internal_permission_granted(role=role, permission_key=permission_key):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"Requires manager/admin role or permission '{permission_key}'",
     )
 
 

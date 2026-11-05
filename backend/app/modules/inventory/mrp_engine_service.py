@@ -165,6 +165,8 @@ async def explode_bom_for_order(
                 req = _q(_d(bi.required_gross_qty) * (parent_qty / max(_d(bi.order_qty_snapshot) or parent_qty, Decimal("1"))))
 
             item = await db.get(Item, bi.item_id)
+            if item is None or item.tenant_id != tenant_id:
+                continue
             lines.append(
                 BOMExplosionLine(
                     level=level,
@@ -497,6 +499,8 @@ async def release_planned_order(
             vendor = await db.get(Vendor, vendor_id)
             if vendor and vendor.tenant_id == tenant_id:
                 supplier_name = vendor.name
+            else:
+                vendor_id = None
         po_code = await next_tenant_code(db, model=PurchaseOrder, tenant_id=tenant_id, prefix="PO-", width=4)
         unit_price = _d(item.avg_cost) or _d(item.default_cost) or _d(item.standard_price)
         po = PurchaseOrder(

@@ -12,15 +12,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.codegen import next_tenant_code
 from app.common.auth import get_current_user
 from app.common.knitting_feature_flags import require_knitting_enabled
+from app.common.ownership import ensure_owned
 from app.common.tenant import require_tenant
 from app.database import get_db, safe_async_session_rollback
 from app.models import (
     Customer,
+    DeliveryChallan,
     DepartmentMachine,
+    EnhancedGatePass,
     Item,
     KnittingChargeRate,
     KnittingPlan,
     KnittingWorkOrder,
+    Order,
     ProcessOrder,
     Tenant,
     User,
@@ -329,6 +333,8 @@ async def _validate_wo_assets(
         v = await db.get(Vendor, body.vendor_id)
         if not v or v.tenant_id != tenant_id:
             raise HTTPException(status_code=400, detail="Invalid vendor for tenant")
+    await ensure_owned(db, KnittingPlan, body.knitting_plan_id, tenant_id, "Knitting plan")
+    await ensure_owned(db, Order, body.linked_order_id, tenant_id, "Order")
 
 
 @router.get("/work-orders")
@@ -431,6 +437,14 @@ async def patch_work_order(
     if not row or row.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Work order not found")
     patch = body.model_dump(exclude_unset=True)
+    if patch.get("machine_id") is not None:
+        m = await db.get(DepartmentMachine, patch["machine_id"])
+        if not m or m.tenant_id != tenant.id or (m.department_type or "").lower() != "knitting":
+            raise HTTPException(status_code=400, detail="Invalid knitting machine allocation")
+    await ensure_owned(db, DeliveryChallan, patch.get("delivery_challan_id"), tenant.id, "Delivery challan")
+    await ensure_owned(db, EnhancedGatePass, patch.get("gate_pass_id"), tenant.id, "Gate pass")
+    await ensure_owned(db, Warehouse, patch.get("warehouse_id"), tenant.id, "Warehouse")
+    await ensure_owned(db, Warehouse, patch.get("output_warehouse_id"), tenant.id, "Warehouse")
     for k, v in patch.items():
         setattr(row, k, v)
     await db.commit()

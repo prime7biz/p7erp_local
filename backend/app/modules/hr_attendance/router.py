@@ -15,8 +15,10 @@ from app.common.pagination import (
     HR_REPORT_SUB_LIMIT,
     HR_REPORT_SUB_MAX,
 )
+from app.common.permissions import PERMISSION_HR_ATTENDANCE_MANAGE, assert_hr_manager_or_permission
 from app.common.tenant import require_tenant
 from app.database import get_db, safe_async_session_rollback
+from app.modules.audit.service import log_action
 from app.models import (
     AttendanceEntry,
     AttendanceHoliday,
@@ -26,6 +28,7 @@ from app.models import (
     Employee,
     OvertimeEntry,
     OvertimeRule,
+    PayrollPeriod,
     Tenant,
     User,
 )
@@ -67,6 +70,22 @@ async def _require_manager_or_admin(db: AsyncSession, user: User, tenant_id: int
     role_name = (role.name if role else "").strip().lower()
     if role_name not in {"admin", "manager", "super_admin", "superadmin", "owner"}:
         raise HTTPException(status_code=403, detail="Only manager/admin can perform this action")
+
+
+async def _assert_attendance_date_open(db: AsyncSession, tenant_id: int, day: date) -> None:
+    """Attendance inside a locked (finalized) payroll period must not change."""
+    locked = (
+        await db.execute(
+            select(PayrollPeriod.id).where(
+                PayrollPeriod.tenant_id == tenant_id,
+                PayrollPeriod.is_locked.is_(True),
+                PayrollPeriod.start_date <= day,
+                PayrollPeriod.end_date >= day,
+            ).limit(1)
+        )
+    ).scalar_one_or_none()
+    if locked is not None:
+        raise HTTPException(status_code=400, detail="Attendance date falls in a locked payroll period")
 
 
 async def _employee_or_404(db: AsyncSession, tenant_id: int, employee_id: int) -> Employee:
@@ -388,6 +407,7 @@ async def create_entry(
 ):
     _ensure_tenant(user, tenant)
     await _employee_or_404(db, tenant.id, body.employee_id)
+    await _assert_attendance_date_open(db, tenant.id, body.attendance_date)
     payload = body.model_dump()
     payload["status"] = payload["status"].strip().upper()
     payload["source"] = payload["source"].strip().upper()
@@ -411,14 +431,28 @@ async def update_entry(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_ATTENDANCE_MANAGE)
     row = await _entry_or_404(db, tenant.id, entry_id)
+    await _assert_attendance_date_open(db, tenant.id, row.attendance_date)
     payload = body.model_dump(exclude_unset=True)
+    if payload.get("attendance_date") is not None:
+        await _assert_attendance_date_open(db, tenant.id, payload["attendance_date"])
     if payload.get("status") is not None:
         payload["status"] = payload["status"].strip().upper()
     if payload.get("source") is not None:
         payload["source"] = payload["source"].strip().upper()
+    changes = {k: (str(getattr(row, k, None)), str(v)) for k, v in payload.items() if getattr(row, k, None) != v}
     for key, value in payload.items():
         setattr(row, key, value)
+    if changes:
+        await log_action(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            action="ATTENDANCE_ENTRY_EDITED",
+            resource="hr.attendance",
+            details=f"entry:{row.id} " + "; ".join(f"{k}: {a} -> {b}" for k, (a, b) in changes.items()),
+        )
     await db.commit()
     await db.refresh(row)
     return _entry_out(row)
@@ -545,6 +579,7 @@ async def approve_regularization(
     if req.status != "PENDING":
         raise HTTPException(status_code=400, detail="Only pending requests can be approved")
     entry = await _entry_or_404(db, tenant.id, req.attendance_entry_id)
+    await _assert_attendance_date_open(db, tenant.id, entry.attendance_date)
     if req.requested_in_time is not None:
         entry.in_time = req.requested_in_time
     if req.requested_out_time is not None:
@@ -782,6 +817,7 @@ async def bulk_create_entries(
     n = 0
     for r in body.rows:
         await _employee_or_404(db, tenant.id, r.employee_id)
+        await _assert_attendance_date_open(db, tenant.id, r.attendance_date)
         values = {
             "tenant_id": tenant.id,
             "employee_id": r.employee_id,

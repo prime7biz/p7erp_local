@@ -1581,7 +1581,7 @@ Use the sidebar subsection labels to find the exact screen.
 | Piece rate | **Per piece scanned** | rate × pieces the worker scanned at the **Scan station** in the period |
 | SAM-based | **Per standard minute earned** | rate × (pieces × SMV) |
 
-For piece rate, the **operator code** typed or scanned at the Scan station must be the worker's **employee code**. The auto-calculate preview shows "Piece rate · N pcs · M SAM min" under the base, and warns when piece earnings are **below the base salary / minimum wage** — piece-rated workers must still be paid at least the minimum wage, so add a top-up before paying.
+For piece rate, the **operator code** typed or scanned at the Scan station must be the worker's **employee code**. The auto-calculate preview shows "Piece rate · N pcs · M SAM min" under the base, and warns when the worker's regular earnings (piece pay plus any fixed pay, not counting overtime) are **below the base salary / minimum wage** — piece-rated workers must still be paid at least the minimum wage, so add a top-up before paying. A fixed basic salary with a piece bonus on top does not trigger the warning as long as the total reaches the base.
 
 **Payroll rules worth knowing**
 
@@ -1594,7 +1594,7 @@ For piece rate, the **operator code** typed or scanned at the Scan station must 
 
 **Sprint H1 compliance** (flags default off): enable \`compliance_tracking_enabled\`, \`age_verification_required\`, and \`medical_certificate_tracking_enabled\` on the tenant, then activate BSCI/WRAP/SEDEX templates on the Compliance page. See \`docs/HR_COMPLIANCE_H1.md\`.`,
         tags: ["HR", "payroll", "attendance", "leave", "compliance", "Bangla", "বাংলা", "language"],
-        lastUpdated: "2026-11-02",
+        lastUpdated: "2026-11-05",
         coverImage: "/images/hero-bg.svg",
         infographics: [
           {

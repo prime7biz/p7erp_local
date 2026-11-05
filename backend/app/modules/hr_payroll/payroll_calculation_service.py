@@ -413,11 +413,13 @@ async def calculate_employee_payroll(
 
     if unpaid_leave > 0:
         warnings.append(f"Unpaid leave days in period: {unpaid_leave}")
-    if pay_basis == "PIECE" and base > 0 and piece_earnings < base:
-        # Bangladesh Labour Act: piece-rated workers must still receive at least the minimum wage.
+    # Bangladesh Labour Act: piece-rated workers must still receive at least the minimum wage.
+    # Mixed structures (FIXED basic + piece bonus) count every regular earning; overtime does not count.
+    regular_earnings = gross - overtime_amount
+    if pay_basis == "PIECE" and base > 0 and regular_earnings < base:
         warnings.append(
-            f"Piece earnings {quantize_money(piece_earnings)} are below the base salary / minimum wage {quantize_money(base)} "
-            "— add a top-up before paying"
+            f"Earnings {quantize_money(regular_earnings)} (piece {quantize_money(piece_earnings)}) are below the "
+            f"base salary / minimum wage {quantize_money(base)} — add a top-up before paying"
         )
 
     statutory_trace: dict[str, Any] = {}

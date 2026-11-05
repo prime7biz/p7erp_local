@@ -251,6 +251,9 @@ class PayrollEmployeeCalcPreviewOut(BaseModel):
     status: str = "Ready"
     has_manual_override: bool = False
     calculation_source: str = "AUTO"
+    pay_basis: str = "SALARY"
+    pieces: str = "0.0000"
+    earned_minutes: str = "0.0000"
 
 
 class PayrollAutoCalculatePreviewOut(BaseModel):

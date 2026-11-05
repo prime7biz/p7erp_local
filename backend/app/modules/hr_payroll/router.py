@@ -1568,6 +1568,9 @@ async def auto_calculate_preview(
                 status=e.status,
                 has_manual_override=e.has_manual_override,
                 calculation_source=e.calculation_source,
+                pay_basis=e.pay_basis,
+                pieces=e.pieces,
+                earned_minutes=e.earned_minutes,
                 components=[
                     PayrollComponentCalcOut(
                         component_id=c.component_id,

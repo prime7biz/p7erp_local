@@ -6600,7 +6600,7 @@ def _phys_session_out(row: PhysicalInventorySession, lines: list[PhysicalInvento
                 id=ln.id,
                 session_id=ln.session_id,
                 item_id=ln.item_id,
-                expected_qty=ln.expected_qty,
+                expected_qty=decimal_to_money_response(ln.expected_qty),
                 counted_qty=ln.counted_qty,
             )
             for ln in lines

@@ -5,13 +5,11 @@ from __future__ import annotations
 import logging
 from datetime import date
 
-from sqlalchemy import select
-
 from app.common.celery_app import celery_app
 from app.workers.async_runner import run_async
 from app.common.tenant_feature_keys import is_statutory_payroll_enabled
-from app.database import AsyncSessionLocal
-from app.models.tenant import Tenant
+from app.database import AsyncSessionLocal, safe_async_session_rollback
+from app.workers.tenant_rows import active_tenant_rows
 
 logger = logging.getLogger(__name__)
 
@@ -20,16 +18,16 @@ async def _run_all_tenants() -> dict:
     results: list[dict] = []
     today = date.today()
     async with AsyncSessionLocal() as db:
-        tenants = list((await db.execute(select(Tenant).where(Tenant.is_active.is_(True)))).scalars().all())
-        for tenant in tenants:
+        tenant_rows = await active_tenant_rows(db)
+        for tenant_id, flags in tenant_rows:
             try:
-                if not is_statutory_payroll_enabled(tenant.feature_flags):
-                    results.append({"tenant_id": tenant.id, "skipped": True})
+                if not is_statutory_payroll_enabled(flags):
+                    results.append({"tenant_id": tenant_id, "skipped": True})
                     continue
                 # Soft alert: due by 15th of following month for prior month remittance
                 due_soon = today.day >= 10 and today.day <= 15
                 payload = {
-                    "tenant_id": tenant.id,
+                    "tenant_id": tenant_id,
                     "as_of": today.isoformat(),
                     "remittance_window": due_soon,
                     "alerts": [],
@@ -49,14 +47,14 @@ async def _run_all_tenants() -> dict:
                     )
                     logger.info(
                         "statutory_remittance_due tenant=%s month=%s",
-                        tenant.id,
+                        tenant_id,
                         f"{today.year}-{today.month:02d}",
                     )
                 results.append(payload)
             except Exception:
-                logger.exception("monthly statutory remittance failed tenant=%s", tenant.id)
-                await db.rollback()
-                results.append({"tenant_id": tenant.id, "error": True})
+                logger.exception("monthly statutory remittance failed tenant=%s", tenant_id)
+                await safe_async_session_rollback(db)
+                results.append({"tenant_id": tenant_id, "error": True})
     return {"tenants": len(results), "results": results}
 
 

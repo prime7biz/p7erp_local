@@ -6,14 +6,12 @@ import logging
 from calendar import monthrange
 from datetime import date
 
-from sqlalchemy import select
-
 from app.common.celery_app import celery_app
 from app.workers.async_runner import run_async
 from app.common.tenant_feature_keys import is_gst_system_enabled
-from app.database import AsyncSessionLocal
-from app.models import Tenant
+from app.database import AsyncSessionLocal, safe_async_session_rollback
 from app.modules.finance.gst_return_service import monthly_gst_reconciliation
+from app.workers.tenant_rows import active_tenant_rows
 
 logger = logging.getLogger(__name__)
 
@@ -33,23 +31,24 @@ async def _run() -> dict:
     processed = 0
     flagged = 0
     async with AsyncSessionLocal() as db:
-        tenants = list((await db.execute(select(Tenant).where(Tenant.is_active.is_(True)))).scalars().all())
-        for tenant in tenants:
-            if not is_gst_system_enabled(tenant.feature_flags):
+        tenant_rows = await active_tenant_rows(db)
+        for tenant_id, flags in tenant_rows:
+            if not is_gst_system_enabled(flags):
                 continue
             try:
-                result = await monthly_gst_reconciliation(db, tenant.id, period_from, period_to)
+                result = await monthly_gst_reconciliation(db, tenant_id, period_from, period_to)
+                await db.commit()
                 processed += 1
                 flagged += int(result.get("mismatch_count") or 0)
                 if result.get("flags"):
                     logger.info(
                         "gst_reconciliation tenant=%s flags=%s",
-                        tenant.id,
+                        tenant_id,
                         result["flags"],
                     )
             except Exception:
-                logger.exception("monthly_gst_reconciliation failed tenant=%s", tenant.id)
-        await db.commit()
+                logger.exception("monthly_gst_reconciliation failed tenant=%s", tenant_id)
+                await safe_async_session_rollback(db)
     return {
         "period_from": period_from.isoformat(),
         "period_to": period_to.isoformat(),

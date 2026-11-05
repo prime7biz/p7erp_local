@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.db_datetime import utc_naive_plus
 from app.models import (
     Bom,
     BomItem,
@@ -756,7 +757,7 @@ async def rule_trade_case_stuck(
 ) -> list[dict[str, Any]]:
     """Trade case not updated for configured days and not settled."""
     days = int((config or {}).get("trade_case_stuck_days", 10))
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = utc_naive_plus(days=-days)
     rows = (
         await db.execute(
             select(TradeCase).where(

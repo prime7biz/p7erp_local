@@ -198,21 +198,40 @@ async def run_scan(
         )
     )
     definitions = list(defs_result.scalars().all())
+    total_created, total_updated = await _run_definitions(db, tenant_id, definitions, trigger)
+    return {
+        "instances_created": total_created,
+        "instances_updated": total_updated,
+        "rules_run": len(definitions),
+    }
+
+
+async def _run_definitions(
+    db: AsyncSession,
+    tenant_id: int,
+    definitions: list[AlertDefinition],
+    trigger: str,
+) -> tuple[int, int]:
+    """Run each rule inside a savepoint so one failing rule does not discard the others' results."""
+    # Plain values: a savepoint rollback expires ORM objects touched inside it.
+    def_rows = [
+        (d.id, d.rule_key, d.config_json if isinstance(d.config_json, dict) else None) for d in definitions
+    ]
     total_created = total_updated = 0
-    for defn in definitions:
-        if defn.rule_key not in RULE_REGISTRY:
+    for defn_id, rule_key, config in def_rows:
+        if rule_key not in RULE_REGISTRY:
             continue
         log_row = AlertScanLog(
             tenant_id=tenant_id,
-            rule_key=defn.rule_key,
+            rule_key=rule_key,
             trigger=trigger,
             status="running",
         )
         db.add(log_row)
         await db.flush()
         try:
-            config = defn.config_json if isinstance(defn.config_json, dict) else None
-            created, updated = await run_rule(db, tenant_id, defn.rule_key, defn.id, config)
+            async with db.begin_nested():
+                created, updated = await run_rule(db, tenant_id, rule_key, defn_id, config)
             total_created += created
             total_updated += updated
             log_row.status = "completed"
@@ -225,11 +244,7 @@ async def run_scan(
             log_row.error_message = str(e)[:2000]
             # Continue remaining rules; scan log row records the failure
         await db.flush()
-    return {
-        "instances_created": total_created,
-        "instances_updated": total_updated,
-        "rules_run": len(definitions),
-    }
+    return total_created, total_updated
 
 
 async def run_scan_trade_rules_only(
@@ -247,33 +262,7 @@ async def run_scan_trade_rules_only(
         )
     )
     definitions = list(defs_result.scalars().all())
-    total_created = total_updated = 0
-    for defn in definitions:
-        if defn.rule_key not in RULE_REGISTRY:
-            continue
-        log_row = AlertScanLog(
-            tenant_id=tenant_id,
-            rule_key=defn.rule_key,
-            trigger=trigger,
-            status="running",
-        )
-        db.add(log_row)
-        await db.flush()
-        try:
-            config = defn.config_json if isinstance(defn.config_json, dict) else None
-            created, updated = await run_rule(db, tenant_id, defn.rule_key, defn.id, config)
-            total_created += created
-            total_updated += updated
-            log_row.status = "completed"
-            log_row.finished_at = datetime.now(timezone.utc)
-            log_row.instances_created = created
-            log_row.instances_updated = updated
-        except Exception as e:
-            log_row.status = "failed"
-            log_row.finished_at = datetime.now(timezone.utc)
-            log_row.error_message = str(e)[:2000]
-            # Continue remaining rules; scan log row records the failure
-        await db.flush()
+    total_created, total_updated = await _run_definitions(db, tenant_id, definitions, trigger)
     return {
         "instances_created": total_created,
         "instances_updated": total_updated,

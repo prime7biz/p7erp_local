@@ -14,6 +14,7 @@ import {
   InventoryErrorPanel,
   InventoryTableSkeleton,
 } from "@/components/inventory/InventoryListStates";
+import { escapeHtml } from "@/utils/escapeHtml";
 import { logApiError } from "@/utils/logApiError";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
@@ -188,14 +189,20 @@ export function GoodsReceivingPage() {
 
   const openPrintData = useCallback(async (grnId: number) => {
     setError("");
+    // Open before the request so the browser treats it as a click popup. The "noopener" feature
+    // would make window.open return null, so detach the opener manually instead.
+    const w = window.open("", "_blank");
+    if (w) w.opener = null;
     try {
       const data = await api.getGoodsReceivingPrintData(grnId);
-      const w = window.open("", "_blank", "noopener,noreferrer");
       if (w) {
-        w.document.write(`<pre style="font:12px monospace;padding:12px">${JSON.stringify(data, null, 2)}</pre>`);
+        w.document.write(
+          `<pre style="font:12px monospace;padding:12px">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`,
+        );
         w.document.close();
       }
     } catch (e) {
+      w?.close();
       logApiError("GoodsReceivingPage.getGoodsReceivingPrintData", e);
       setError(e instanceof Error ? e.message : "Failed to load print payload");
     }

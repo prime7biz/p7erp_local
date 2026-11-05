@@ -9,6 +9,7 @@ import {
   type MasterContractUpdate,
 } from "@/api/client";
 import { X } from "lucide-react";
+import { escapeHtml } from "@/utils/escapeHtml";
 import { logApiError } from "@/utils/logApiError";
 import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel";
 import { ExtractionAlertsBanner } from "@/components/ai-extract/ExtractionAlertsBanner";
@@ -398,16 +399,18 @@ export function MasterContractsPage() {
     if (!selectedContract || !utilization || !readiness) return;
     const printable = window.open("", "_blank", "width=980,height=720");
     if (!printable) return;
+    printable.opener = null;
+    const esc = escapeHtml;
     const rowsHtml = selectedLcs
       .map(
         (lc) => `
           <tr>
-            <td>${lc.reference || `#${lc.id}`}</td>
-            <td>${lc.status || "—"}</td>
-            <td>${lc.accounting_status || "—"}</td>
-            <td>${lc.maturity_date ? new Date(lc.maturity_date).toLocaleDateString() : "—"}</td>
-            <td>${lc.currency || "—"}</td>
-            <td style="text-align:right">${Number(lc.amount || 0).toLocaleString()}</td>
+            <td>${esc(lc.reference || `#${lc.id}`)}</td>
+            <td>${esc(lc.status || "—")}</td>
+            <td>${esc(lc.accounting_status || "—")}</td>
+            <td>${esc(lc.maturity_date ? new Date(lc.maturity_date).toLocaleDateString() : "—")}</td>
+            <td>${esc(lc.currency || "—")}</td>
+            <td style="text-align:right">${esc(Number(lc.amount || 0).toLocaleString())}</td>
           </tr>
         `
       )
@@ -415,7 +418,7 @@ export function MasterContractsPage() {
     printable.document.write(`
       <html>
         <head>
-          <title>Master Contract Readiness - ${selectedContract.reference || selectedContract.id}</title>
+          <title>Master Contract Readiness - ${esc(selectedContract.reference || selectedContract.id)}</title>
           <style>
             body { font-family: Arial, sans-serif; margin: 20px; color: #111827; }
             h1 { font-size: 20px; margin: 0 0 8px; }
@@ -430,20 +433,20 @@ export function MasterContractsPage() {
         <body>
           <h1>Master Contract Readiness Summary</h1>
           <div class="meta">
-            Ref: ${selectedContract.reference || `#${selectedContract.id}`} | Date: ${new Date().toLocaleString()}
+            Ref: ${esc(selectedContract.reference || `#${selectedContract.id}`)} | Date: ${esc(new Date().toLocaleString())}
           </div>
 
           <h2>Contract & Readiness</h2>
           <div class="grid">
-            <div>Type: ${selectedContract.contract_type || "—"}</div>
-            <div>Status: ${selectedContract.status || "—"}</div>
-            <div>Cost Center: ${selectedContract.cost_center_id ? `#${selectedContract.cost_center_id}` : "Missing"}</div>
-            <div>Currency: ${selectedContract.currency || "—"}</div>
-            <div>Utilization: ${utilization.percent.toFixed(1)}%</div>
-            <div>Band: ${bandLabel(utilization.band)}</div>
-            <div>Due soon (unrealized): ${readiness.dueSoonUnrealized}</div>
-            <div>Overdue (unrealized): ${readiness.overdueUnrealized}</div>
-            <div>Active alerts: ${readiness.activeAlertCount}</div>
+            <div>Type: ${esc(selectedContract.contract_type || "—")}</div>
+            <div>Status: ${esc(selectedContract.status || "—")}</div>
+            <div>Cost Center: ${esc(selectedContract.cost_center_id ? `#${selectedContract.cost_center_id}` : "Missing")}</div>
+            <div>Currency: ${esc(selectedContract.currency || "—")}</div>
+            <div>Utilization: ${esc(utilization.percent.toFixed(1))}%</div>
+            <div>Band: ${esc(bandLabel(utilization.band))}</div>
+            <div>Due soon (unrealized): ${esc(readiness.dueSoonUnrealized)}</div>
+            <div>Overdue (unrealized): ${esc(readiness.overdueUnrealized)}</div>
+            <div>Active alerts: ${esc(readiness.activeAlertCount)}</div>
           </div>
 
           <h2>BTB LC Lifecycle</h2>

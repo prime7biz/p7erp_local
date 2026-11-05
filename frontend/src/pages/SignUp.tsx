@@ -104,7 +104,10 @@ export function SignUp() {
     return (
       <div className="min-h-screen flex">
         <div className="hidden lg:flex lg:w-[55%] relative flex-col items-center justify-center p-12 overflow-hidden">
-          <img src="/images/auth-bg-register.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <picture>
+            <source srcSet="/images/auth-bg-register.webp" type="image/webp" />
+            <img src="/images/auth-bg-register.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+          </picture>
           <div className="absolute inset-0 bg-gradient-to-br from-surface-inverse/80 via-surface-inverse/60 to-primary/25" />
           <div className="absolute top-1/4 -left-20 w-64 h-64 bg-primary/20 rounded-full blur-3xl" />
           <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
@@ -178,7 +181,10 @@ export function SignUp() {
   return (
     <div className="min-h-screen flex">
       <div className="hidden lg:flex lg:w-[55%] relative flex-col items-center justify-center p-12 overflow-hidden">
-        <img src="/images/auth-bg-register.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <picture>
+          <source srcSet="/images/auth-bg-register.webp" type="image/webp" />
+          <img src="/images/auth-bg-register.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+        </picture>
         <div className="absolute inset-0 bg-gradient-to-br from-surface-inverse/80 via-surface-inverse/60 to-primary/25" />
         <div className="absolute top-1/4 -left-20 w-64 h-64 bg-primary/20 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse, Response
@@ -270,27 +271,9 @@ def _posting_out(row: PayrollPosting) -> PayrollPostingOut:
     )
 
 
-async def _create_statutory_remittance_voucher(
-    db: AsyncSession,
-    *,
-    tenant_id: int,
-    run_id: int,
-    payment_date: date,
-    user_id: int | None,
-) -> int | None:
-    """Combine PF+ESI+PT employer/employee dues into one remittance JOURNAL if accounts exist."""
-    from decimal import Decimal
-
-    from app.models.hr_payroll import PayrollAccountingConfig, PayrollCalculationSnapshot
-    from app.modules.finance.voucher_controls import allocate_series_voucher_number, fiscal_year_calendar
-
-    acct_cfg = (
-        await db.execute(
-            select(PayrollAccountingConfig).where(PayrollAccountingConfig.tenant_id == tenant_id).limit(1)
-        )
-    ).scalar_one_or_none()
-    if not acct_cfg or not acct_cfg.bank_account_id:
-        return None
+async def _payroll_statutory_totals(db: AsyncSession, *, tenant_id: int, run_id: int) -> dict[str, Decimal]:
+    """Sum PF / ESI / PT amounts recorded in the run's calculation snapshots."""
+    from app.models.hr_payroll import PayrollCalculationSnapshot
 
     snaps = list(
         (
@@ -306,31 +289,161 @@ async def _create_statutory_remittance_voucher(
         .scalars()
         .all()
     )
-    pf_total = Decimal("0")
-    esi_total = Decimal("0")
-    pt_total = Decimal("0")
+    keys = ("employee_pf", "employer_pf", "employee_esi", "employer_esi", "pt")
+    totals = {k: Decimal("0") for k in keys}
     for snap in snaps:
         trace = snap.trace_json or {}
         statutory = trace.get("statutory") or {}
         pf = statutory.get("pf") or {}
         esi = statutory.get("esi") or {}
         try:
-            pf_total += Decimal(str(pf.get("employee_pf") or 0)) + Decimal(str(pf.get("employer_pf") or 0))
-            esi_total += Decimal(str(esi.get("employee_esi") or 0)) + Decimal(str(esi.get("employer_esi") or 0))
-            pt_total += Decimal(str(statutory.get("pt_amount") or 0))
+            row = {
+                "employee_pf": Decimal(str(pf.get("employee_pf") or 0)),
+                "employer_pf": Decimal(str(pf.get("employer_pf") or 0)),
+                "employee_esi": Decimal(str(esi.get("employee_esi") or 0)),
+                "employer_esi": Decimal(str(esi.get("employer_esi") or 0)),
+                "pt": Decimal(str(statutory.get("pt_amount") or 0)),
+            }
         except Exception:
             continue
+        for k in keys:
+            totals[k] += row[k]
+    return {k: v.quantize(Decimal("0.01")) for k, v in totals.items()}
+
+
+def _statutory_liability_accounts(acct_cfg: PayrollAccountingConfig | None) -> dict[str, int | None]:
+    """PF / ESI / PT liability accounts, falling back to the tax payable account."""
+    if acct_cfg is None:
+        return {"pf": None, "esi": None, "pt": None, "tax": None}
+    tax = acct_cfg.tax_payable_account_id
+    return {
+        "pf": acct_cfg.pf_payable_account_id or tax,
+        "esi": getattr(acct_cfg, "esi_payable_account_id", None) or tax,
+        "pt": getattr(acct_cfg, "pt_payable_account_id", None) or tax,
+        "tax": tax,
+    }
+
+
+async def _gross_payroll_entries(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    run_id: int,
+    total_gross: Decimal,
+    total_net: Decimal,
+    expense_account_id: int,
+    payable_account_id: int,
+) -> list[tuple[int, str, Decimal, str]]:
+    """Lines for flag ``payroll_gross_posting``.
+
+    Dr Salary expense (gross + employer PF/ESI) / Cr PF, ESI, PT payable (employee share, from the
+    calculation snapshots) / Cr tax payable (any other deductions) / Cr PF, ESI payable (employer
+    share) / Cr Salary payable (net).
+    """
+    acct_cfg = (
+        await db.execute(
+            select(PayrollAccountingConfig).where(PayrollAccountingConfig.tenant_id == tenant_id).limit(1)
+        )
+    ).scalar_one_or_none()
+    accts = _statutory_liability_accounts(acct_cfg)
+    st = await _payroll_statutory_totals(db, tenant_id=tenant_id, run_id=run_id)
+
+    deductions_total = (total_gross - total_net).quantize(Decimal("0.01"))
+    if deductions_total < 0:
+        raise HTTPException(status_code=400, detail="Payroll net pay exceeds gross pay; check the run lines")
+    remaining = deductions_total
+    parts: list[tuple[str, Decimal, str]] = []
+    for key, acct_key, label in (
+        ("employee_pf", "pf", "PF employee deduction"),
+        ("employee_esi", "esi", "ESI employee deduction"),
+        ("pt", "pt", "Professional tax deduction"),
+    ):
+        amount = min(st[key], remaining)
+        if amount > 0:
+            parts.append((acct_key, amount, label))
+            remaining -= amount
+    if remaining > 0:
+        parts.append(("tax", remaining, "Other payroll deductions (income tax etc.)"))
+    employer = [
+        (k, amt, label)
+        for k, amt, label in (
+            ("pf", st["employer_pf"], "PF employer contribution"),
+            ("esi", st["employer_esi"], "ESI employer contribution"),
+        )
+        if amt > 0
+    ]
+
+    names = {"pf": "PF payable", "esi": "ESI payable", "pt": "PT payable", "tax": "Tax payable"}
+    missing = sorted({names[k] for k, _amt, _label in parts + employer if not accts[k]})
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Gross payroll posting needs these accounts in Payroll accounting settings: "
+                + ", ".join(missing)
+                + ". Set them or turn off the payroll_gross_posting flag."
+            ),
+        )
+    for account_id in {accts[k] for k, _amt, _label in parts + employer}:
+        acct = await db.get(ChartOfAccount, account_id)
+        if not acct or acct.tenant_id != tenant_id:
+            raise HTTPException(status_code=400, detail=f"Payroll liability account {account_id} not found")
+
+    employer_total = sum((amt for _k, amt, _label in employer), Decimal("0"))
+    entries: list[tuple[int, str, Decimal, str]] = [
+        (expense_account_id, "DEBIT", total_gross + employer_total, "Salary expense (gross + employer contributions)")
+    ]
+    entries += [(accts[k], "CREDIT", amt, label) for k, amt, label in parts + employer]  # type: ignore[misc]
+    entries.append((payable_account_id, "CREDIT", total_net, "Net salary payable"))
+    return entries
+
+
+async def _create_statutory_remittance_voucher(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    run_id: int,
+    payment_date: date,
+    user_id: int | None,
+) -> int | None:
+    """Combine PF+ESI+PT employer/employee dues into one remittance JOURNAL if accounts exist.
+
+    Nothing is posted when a due amount has no liability account (the bank credit would not
+    balance). The voucher moves ledger balances like any posted voucher.
+    """
+    import logging
+
+    from app.modules.finance.voucher_controls import allocate_series_voucher_number
+
+    acct_cfg = (
+        await db.execute(
+            select(PayrollAccountingConfig).where(PayrollAccountingConfig.tenant_id == tenant_id).limit(1)
+        )
+    ).scalar_one_or_none()
+    if not acct_cfg or not acct_cfg.bank_account_id:
+        return None
+
+    st = await _payroll_statutory_totals(db, tenant_id=tenant_id, run_id=run_id)
+    pf_total = st["employee_pf"] + st["employer_pf"]
+    esi_total = st["employee_esi"] + st["employer_esi"]
+    pt_total = st["pt"]
 
     total = (pf_total + esi_total + pt_total).quantize(Decimal("0.01"))
     if total <= 0:
         return None
 
-    # Prefer liability accounts; fall back to payable for missing ESI/PT
-    pf_acct = acct_cfg.pf_payable_account_id or acct_cfg.tax_payable_account_id
-    esi_acct = getattr(acct_cfg, "esi_payable_account_id", None) or acct_cfg.tax_payable_account_id
-    pt_acct = getattr(acct_cfg, "pt_payable_account_id", None) or acct_cfg.tax_payable_account_id
+    accts = _statutory_liability_accounts(acct_cfg)
+    pf_acct, esi_acct, pt_acct = accts["pf"], accts["esi"], accts["pt"]
     bank = acct_cfg.bank_account_id
-    if not bank:
+    missing = [
+        name
+        for name, acct, amount in (("PF", pf_acct, pf_total), ("ESI", esi_acct, esi_total), ("PT", pt_acct, pt_total))
+        if amount > 0 and not acct
+    ]
+    if missing:
+        logging.getLogger(__name__).warning(
+            "statutory remittance not posted run=%s: no liability account for %s", run_id, ", ".join(missing)
+        )
         return None
 
     voucher_number, series_seq, series_key, fy = await allocate_series_voucher_number(
@@ -348,12 +461,12 @@ async def _create_statutory_remittance_voucher(
         status="POSTED",
         description=f"Statutory remittance payroll run {run_id}",
         reference=f"STAT_REM_{run_id}",
-        fiscal_year=fy or fiscal_year_calendar(payment_date),
+        fiscal_year=fy,
         series_sequence=series_seq,
         number_series_key=series_key,
         source_module="PAYROLL_STATUTORY",
         source_module_ref=str(run_id),
-        books_applied=True,
+        books_applied=False,
         created_by=user_id,
     )
     db.add(voucher)
@@ -369,6 +482,7 @@ async def _create_statutory_remittance_voucher(
                 account_id=account_id,
                 entry_type="DEBIT",
                 amount=f"{amount:.2f}",
+                base_amount=f"{amount:.2f}",
                 notes=note,
             )
         )
@@ -383,9 +497,18 @@ async def _create_statutory_remittance_voucher(
             account_id=bank,
             entry_type="CREDIT",
             amount=f"{total:.2f}",
+            base_amount=f"{total:.2f}",
             notes="Statutory remittance bank",
         )
     )
+    await db.flush()
+    from app.modules.finance.posting_core import apply_voucher_to_books, load_voucher_lines
+    from app.modules.finance.voucher_controls import finalize_posted_voucher_metadata
+
+    vlines = await load_voucher_lines(db, voucher.id)
+    await finalize_posted_voucher_metadata(db, tenant_id, voucher, vlines, strict_duplicate_check=False)
+    # Refuses (400) if debits and credits differ; sets books_applied.
+    await apply_voucher_to_books(db, tenant_id, voucher, vlines)
     await db.flush()
     return voucher.id
 
@@ -908,7 +1031,17 @@ async def post_run(
 ):
     _ensure_tenant(user, tenant)
     await _require_manager_or_admin(db, user, tenant.id)
-    run = await _run_or_404(db, tenant.id, run_id)
+    # Row lock: two concurrent post requests must not both create a payroll voucher.
+    run = (
+        await db.execute(
+            select(PayrollRun)
+            .where(PayrollRun.id == run_id, PayrollRun.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if run is None:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
     if run.status not in {"APPROVED", "POSTED"}:
         raise HTTPException(status_code=400, detail="Only approved run can be posted")
 
@@ -949,7 +1082,8 @@ async def post_run(
     if not lines:
         raise HTTPException(status_code=400, detail="Cannot post run without payroll lines")
 
-    total_net = sum(_to_float(x.net_pay) for x in lines)
+    total_net = sum((Decimal(str(x.net_pay or 0)) for x in lines), Decimal("0")).quantize(Decimal("0.01"))
+    total_gross = sum((Decimal(str(x.gross_pay or 0)) for x in lines), Decimal("0")).quantize(Decimal("0.01"))
     if total_net <= 0:
         raise HTTPException(status_code=400, detail="Payroll net total must be greater than zero")
 
@@ -979,7 +1113,28 @@ async def post_run(
     if not payable_acc or payable_acc.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Payroll payable account not found")
 
-    from app.modules.finance.voucher_controls import finalize_posted_voucher_metadata, fiscal_year_calendar
+    from app.common.tenant_feature_keys import is_payroll_gross_posting_enabled
+    from app.modules.finance.fiscal_year import fiscal_year_of, tenant_fy_start_month
+    from app.modules.finance.posting_core import apply_voucher_to_books
+    from app.modules.finance.voucher_controls import finalize_posted_voucher_metadata
+
+    # (account_id, entry_type, amount, note)
+    entries: list[tuple[int, str, Decimal, str]] = []
+    if is_payroll_gross_posting_enabled(tenant.feature_flags):
+        entries = await _gross_payroll_entries(
+            db,
+            tenant_id=tenant.id,
+            run_id=run.id,
+            total_gross=total_gross,
+            total_net=total_net,
+            expense_account_id=expense_account_id,
+            payable_account_id=payable_account_id,
+        )
+    else:
+        entries = [
+            (expense_account_id, "DEBIT", total_net, "Payroll expense"),
+            (payable_account_id, "CREDIT", total_net, "Payroll payable"),
+        ]
 
     voucher = Voucher(
         tenant_id=tenant.id,
@@ -990,7 +1145,7 @@ async def post_run(
         description=f"Payroll posting for run {run.run_code}",
         reference=f"PAYROLL_RUN_{run.id}",
         branch_code="MAIN",
-        fiscal_year=fiscal_year_calendar(period.payment_date),
+        fiscal_year=fiscal_year_of(period.payment_date, await tenant_fy_start_month(db, tenant.id)),
         source_module="PAYROLL",
         source_module_ref=f"run:{run.id}",
         allow_manual_edit=False,
@@ -999,29 +1154,25 @@ async def post_run(
     db.add(voucher)
     await db.flush()
 
-    db.add(
-        VoucherLine(
-            tenant_id=tenant.id,
-            voucher_id=voucher.id,
-            account_id=expense_account_id,
-            entry_type="DEBIT",
-            amount=f"{total_net:.2f}",
-            notes="Payroll expense",
+    for account_id, entry_type, amount, note in entries:
+        if amount <= 0:
+            continue
+        db.add(
+            VoucherLine(
+                tenant_id=tenant.id,
+                voucher_id=voucher.id,
+                account_id=account_id,
+                entry_type=entry_type,
+                amount=f"{amount:.2f}",
+                base_amount=f"{amount:.2f}",
+                notes=note,
+            )
         )
-    )
-    db.add(
-        VoucherLine(
-            tenant_id=tenant.id,
-            voucher_id=voucher.id,
-            account_id=payable_account_id,
-            entry_type="CREDIT",
-            amount=f"{total_net:.2f}",
-            notes="Payroll payable",
-        )
-    )
     await db.flush()
     vlines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all())
     await finalize_posted_voucher_metadata(db, tenant.id, voucher, vlines, strict_duplicate_check=True)
+    # Locks the accounts, refuses an unbalanced entry and moves ledger balances.
+    await apply_voucher_to_books(db, tenant.id, voucher, vlines)
 
     posting = PayrollPosting(
         tenant_id=tenant.id,
@@ -1039,14 +1190,17 @@ async def post_run(
 
     if is_statutory_payroll_enabled(tenant.feature_flags):
         try:
-            remittance_voucher_id = await _create_statutory_remittance_voucher(
-                db,
-                tenant_id=tenant.id,
-                run_id=run.id,
-                payment_date=period.payment_date,
-                user_id=user.id,
-            )
+            # Savepoint: a failed remittance must not leave a half-built voucher behind.
+            async with db.begin_nested():
+                remittance_voucher_id = await _create_statutory_remittance_voucher(
+                    db,
+                    tenant_id=tenant.id,
+                    run_id=run.id,
+                    payment_date=period.payment_date,
+                    user_id=user.id,
+                )
         except Exception:
+            remittance_voucher_id = None
             import logging
 
             logging.getLogger(__name__).exception("statutory remittance skipped run=%s", run.id)

@@ -179,6 +179,7 @@ class PayrollPostingOut(BaseModel):
     posted_at: str
     posted_by: int | None
     note: str | None
+    statutory_remittance_voucher_id: int | None = None
 
 
 # --- Phase 1.4: structure assignments + auto-calculate ---

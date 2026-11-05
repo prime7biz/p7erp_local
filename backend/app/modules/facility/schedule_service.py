@@ -5,12 +5,14 @@ from __future__ import annotations
 import calendar
 from datetime import date, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facility import Facility, FacilityUtilization, RepaymentScheduleLine
 
 from app.modules.facility.emi_service import preview_emi
+
+PAID_LINE_STATUSES = ("paid", "partially_paid")
 
 
 def add_months(base_date: date, months: int) -> date:
@@ -50,10 +52,29 @@ async def replace_schedule_for_utilization(
     util: FacilityUtilization,
     grace_days: int,
 ) -> None:
-    """Delete future schedule lines and rebuild from preview (draft/active)."""
-    await db.execute(
-        delete(RepaymentScheduleLine).where(RepaymentScheduleLine.facility_utilization_id == util.id)
+    """Delete unpaid schedule lines and rebuild them from preview (draft/active).
+
+    Paid / partly paid installments (and any line already linked to a payment voucher) are kept
+    as they are; the rebuilt schedule only fills the installment numbers that are still open.
+    """
+    kept = list(
+        (
+            await db.execute(
+                select(RepaymentScheduleLine).where(
+                    RepaymentScheduleLine.facility_utilization_id == util.id,
+                    or_(
+                        RepaymentScheduleLine.status.in_(PAID_LINE_STATUSES),
+                        RepaymentScheduleLine.payment_voucher_id.is_not(None),
+                    ),
+                )
+            )
+        ).scalars().all()
     )
+    kept_numbers = {ln.installment_number for ln in kept}
+    stmt = delete(RepaymentScheduleLine).where(RepaymentScheduleLine.facility_utilization_id == util.id)
+    if kept:
+        stmt = stmt.where(RepaymentScheduleLine.id.not_in([ln.id for ln in kept]))
+    await db.execute(stmt)
     await db.flush()
 
     policy = (util.repayment_policy or "emi_reducing").lower()
@@ -71,7 +92,7 @@ async def replace_schedule_for_utilization(
     if policy == "one_time_settlement" or n <= 0:
         util.emi_amount = None
         util.total_interest = None
-        util.total_repayable = _d(principal)
+        util.total_repayable = principal
         await db.flush()
         return
 
@@ -89,6 +110,8 @@ async def replace_schedule_for_utilization(
     util.total_repayable = float(preview.total_repayable) if preview.total_repayable else None
 
     for row in preview.rows:
+        if row.installment_number in kept_numbers:
+            continue
         due = add_period(first_due, freq, row.installment_number - 1)
         gd = due + timedelta(days=max(0, int(grace_days)))
         pr = float(row.principal_component)

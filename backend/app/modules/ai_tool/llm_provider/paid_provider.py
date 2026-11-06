@@ -67,11 +67,13 @@ def _sanitize_conv(
 class PaidLlmProvider(BaseLlmProvider):
     """Tier-2 paid provider (OpenAI-compatible, OpenRouter, or Anthropic)."""
 
-    async def generate(self, prompt: str) -> str:
-        # Backward-compatible thin wrapper.
+    async def generate(self, prompt: str, *, tenant_id: int | None = None) -> str:
+        # Thin wrapper; the tenant must always come from the caller.
+        if tenant_id is None or int(tenant_id) <= 0:
+            raise ValueError("PaidLlmProvider.generate() requires the caller's tenant_id")
         return await self.generate_with_mcp_loop(
             conversation=[{"role": "user", "content": prompt}],
-            tenant_id=1,
+            tenant_id=int(tenant_id),
             requested_tool=None,
             tenant_system_prefix=None,
         )

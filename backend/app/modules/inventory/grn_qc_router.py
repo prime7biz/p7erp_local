@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
@@ -23,6 +24,8 @@ from app.database import get_db, safe_async_session_rollback
 from app.models import Tenant, User
 from app.models.inventory import GoodsReceiving, GoodsReceivingItem, GrnQualityInspection
 from app.modules.inventory import grn_qc_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/inventory", tags=["inventory-grn-qc"])
 
@@ -202,7 +205,10 @@ async def grn_inspect(
         raise
     except Exception as exc:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("GRN inspection failed tenant_id=%s grn_id=%s", tenant.id, grn_id)
+        raise HTTPException(
+            status_code=500, detail="Could not save GRN inspection. Please try again or contact support."
+        ) from exc
 
 
 @router.get("/quality/inspections", response_model=list[InspectionOut])

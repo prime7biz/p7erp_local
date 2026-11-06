@@ -23,6 +23,35 @@ from app.models import BackupJob
 logger = logging.getLogger(__name__)
 
 
+EXPORT_SECRET_COLUMNS = frozenset(
+    {
+        "password",
+        "password_hash",
+        "password_reset_token_hash",
+        "totp_secret",
+        "api_key",
+    }
+)
+EXPORT_SECRET_SUFFIXES = ("_hash", "_secret", "token", "api_key")
+
+
+def is_secret_export_column(name: str) -> bool:
+    """Return True if a column must never be written to a tenant export.
+
+    A column is secret when its name (case-insensitive) is in ``EXPORT_SECRET_COLUMNS``
+    or ends with one of ``EXPORT_SECRET_SUFFIXES`` (``_hash``, ``_secret``, ``token``,
+    ``api_key``). New secret columns that follow these naming rules are excluded
+    automatically.
+    """
+    n = name.lower()
+    return n in EXPORT_SECRET_COLUMNS or n.endswith(EXPORT_SECRET_SUFFIXES)
+
+
+def strip_secret_columns(row: dict[str, Any]) -> dict[str, Any]:
+    """Copy of ``row`` without secret columns (see ``is_secret_export_column``)."""
+    return {k: v for k, v in row.items() if not is_secret_export_column(str(k))}
+
+
 def backup_root() -> Path:
     p = Path(get_settings().backup_dir or "./backups").resolve()
     p.mkdir(parents=True, exist_ok=True)
@@ -96,7 +125,10 @@ async def run_full_backup_job(db: AsyncSession, job_id: int) -> None:
 
 
 async def run_tenant_export_job(db: AsyncSession, job_id: int, tenant_id: int) -> None:
-    """Export key tenant-scoped tables to JSONL in a tar.gz (simplified)."""
+    """Export key tenant-scoped tables to JSONL in a tar.gz (simplified).
+
+    Secret columns (password hashes, tokens, API keys) are left out of every row.
+    """
     job = await db.get(BackupJob, job_id)
     if not job:
         return
@@ -126,7 +158,7 @@ async def run_tenant_export_job(db: AsyncSession, job_id: int, tenant_id: int) -
                 async with db.begin_nested():
                     r = await db.execute(text(f'SELECT * FROM "{tbl}" WHERE tenant_id = :tid'), {"tid": tenant_id})
                     cols = r.keys()
-                    rows = [dict(zip(cols, row)) for row in r.all()]
+                    rows = [strip_secret_columns(dict(zip(cols, row))) for row in r.all()]
                 payload = json.dumps(rows, default=str)
                 await asyncio.to_thread((tmp / f"{tbl}.json").write_text, payload, encoding="utf-8")
             except Exception:

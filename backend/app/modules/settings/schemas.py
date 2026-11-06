@@ -97,7 +97,7 @@ class SettingsUserCreate(BaseModel):
     role_id: int
     email: str = Field(min_length=5, max_length=255)
     username: str | None = Field(default=None, min_length=3, max_length=128)
-    password: str = Field(min_length=6, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
     first_name: str | None = Field(default=None, max_length=128)
     last_name: str | None = Field(default=None, max_length=128)
     is_active: bool = True
@@ -110,7 +110,7 @@ class SettingsUserUpdate(BaseModel):
     first_name: str | None = Field(default=None, max_length=128)
     last_name: str | None = Field(default=None, max_length=128)
     is_active: bool | None = None
-    password: str | None = Field(default=None, min_length=6, max_length=128)
+    password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
 class SettingsAuditLogRow(BaseModel):

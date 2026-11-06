@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
 from app.common.authz import get_user_role_scoped_to_tenant
-from app.common.tenant_feature_keys import RBAC_MODE_ENFORCE, RBAC_MODE_OFF, get_tenant_rbac_mode
+from app.common.tenant_feature_keys import (
+    RBAC_MODE_ENFORCE,
+    RBAC_MODE_OFF,
+    get_tenant_rbac_mode,
+    is_strict_sensitive_permissions,
+)
 from app.database import get_db
 from app.models import Role, Tenant, User
 
@@ -125,6 +130,7 @@ PERMISSION_HR_COMPLIANCE_MANAGE = "hr.compliance.manage"
 PERMISSION_HR_OCR_USE = "hr.ocr.use"
 PERMISSION_HR_AI_INSIGHTS_VIEW = "hr.ai.insights.view"
 PERMISSION_HR_DOCUMENTS_GENERATE = "hr.documents.generate"
+PERMISSION_HR_DOCUMENTS_VIEW = "hr.documents.view"
 PERMISSION_HR_AGE_VERIFY = "hr.age_verification.verify"
 PERMISSION_HR_MEDICAL_MANAGE = "hr.medical.manage"
 PERMISSION_AI_HR_EXTRACT = "ai.hr_extract"
@@ -134,6 +140,8 @@ PERMISSION_AI_FINANCE_FORECAST = "ai.finance_forecast"
 PERMISSION_AI_DEFECT_PREDICT = "ai.defect_predict"
 PERMISSION_AI_MAINTENANCE_PREDICT = "ai.maintenance_predict"
 PERMISSION_AI_LINE_BALANCE = "ai.line_balance"
+PERMISSION_AI_TOOLS_FINANCE_READ = "ai.tools.finance.read"
+PERMISSION_AI_TOOLS_HR_READ = "ai.tools.hr.read"
 
 MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
     {
@@ -378,12 +386,17 @@ MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
     },
     {
         "key": PERMISSION_HR_AI_INSIGHTS_VIEW,
-        "label": "View HR AI insights (attendance, turnover, anomalies)",
+        "label": "View HR AI insights (attendance, turnover, compliance) — required for non-manager roles",
         "group": "HR",
     },
     {
         "key": PERMISSION_HR_DOCUMENTS_GENERATE,
         "label": "Generate HR PDFs (ID card, letters, payslip)",
+        "group": "HR",
+    },
+    {
+        "key": PERMISSION_HR_DOCUMENTS_VIEW,
+        "label": "Download stored HR documents (required for non-manager roles)",
         "group": "HR",
     },
     {
@@ -683,7 +696,17 @@ MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
     },
     {
         "key": PERMISSION_AI_FINANCE_FORECAST,
-        "label": "Run AI finance cash-flow / P&L forecast",
+        "label": "Run AI finance cash-flow / P&L forecast — required for non-manager roles",
+        "group": "AI",
+    },
+    {
+        "key": PERMISSION_AI_TOOLS_FINANCE_READ,
+        "label": "AI assistant: read finance data — required for non-manager roles",
+        "group": "AI",
+    },
+    {
+        "key": PERMISSION_AI_TOOLS_HR_READ,
+        "label": "AI assistant: read HR data — required for non-manager roles",
         "group": "AI",
     },
     {
@@ -911,13 +934,32 @@ async def assert_soft_permission_allowed(
     *,
     permission_key: str,
 ) -> None:
-    """Raise 403 only when role.permissions explicitly sets permission_key to false."""
+    """Raise 403 only when role.permissions explicitly sets permission_key to false.
+
+    Tenants with ``strict_sensitive_permissions`` on: finance.* / hr.* keys need an explicit
+    grant instead (manager-type roles bypass).
+    """
     role = await get_user_role_scoped_to_tenant(db, user, tenant_id)
+    if permission_key.startswith(STRICT_SENSITIVE_PREFIXES):
+        flags = (
+            await db.execute(select(Tenant.feature_flags).where(Tenant.id == tenant_id))
+        ).scalar_one_or_none()
+        if is_strict_sensitive_permissions(flags):
+            rn = (role.name if role else "").strip().lower()
+            if rn in HR_SETUP_BYPASS_ROLES or internal_permission_granted(role=role, permission_key=permission_key):
+                return
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Missing permission: {permission_key}",
+            )
     if soft_permission_denied(role=role, permission_key=permission_key):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Missing permission: {permission_key}",
         )
+
+
+STRICT_SENSITIVE_PREFIXES = ("finance.", "hr.")
 
 
 async def get_user_role_for_tenant(db: AsyncSession, user: User, tenant_id: int) -> Role | None:
@@ -946,6 +988,17 @@ def internal_permission_granted(*, role: Role | None, permission_key: str) -> bo
 
 def require_internal_permission(permission_key: str):
     """FastAPI Depends() factory for a single permission key on internal JWT users."""
+    return require_any_internal_permission(permission_key)
+
+
+def require_any_internal_permission(*permission_keys: str):
+    """Like ``require_internal_permission`` but passes when the role grants any one of the keys.
+
+    For screens shared by several modules (e.g. control tower). Same RBAC modes: off = no check,
+    shadow = log only, enforce = 403.
+    """
+    keys = tuple(k for k in permission_keys if k)
+    label = " | ".join(keys)
 
     async def _dep(
         request: Request,
@@ -965,7 +1018,7 @@ def require_internal_permission(permission_key: str):
             return
 
         role = await get_user_role_for_tenant(db, user, user.tenant_id)
-        granted = internal_permission_granted(role=role, permission_key=permission_key)
+        granted = any(internal_permission_granted(role=role, permission_key=k) for k in keys)
         if granted:
             return
 
@@ -976,7 +1029,7 @@ def require_internal_permission(permission_key: str):
                 user.tenant_id,
                 user.id,
                 role_name,
-                permission_key,
+                label,
                 request.method,
                 request.url.path,
                 request.headers.get("X-Request-Id"),
@@ -985,7 +1038,9 @@ def require_internal_permission(permission_key: str):
         if not granted:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied: {permission_key}",
+                detail=f"Permission denied: {label}",
             )
 
+    # Lets the route-inventory test see which module key protects each router.
+    _dep.permission_keys = keys  # type: ignore[attr-defined]
     return _dep

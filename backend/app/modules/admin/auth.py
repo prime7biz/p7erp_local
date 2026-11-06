@@ -11,6 +11,7 @@ from app.common.jwt_compat import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.client_ip import client_ip_from_request
 from app.config import get_settings
 from app.database import get_db
 from app.models import AdminSession, PlatformAdmin, PlatformAdminAuditLog
@@ -21,7 +22,7 @@ ADMIN_TOKEN_TYPE = "platform_admin"
 _bearer = HTTPBearer(auto_error=True)
 
 
-def create_admin_access_token(*, admin_id: int, session_id: int) -> str:
+def create_admin_access_token(*, admin_id: int, session_id: int, mfa_enrol_only: bool = False) -> str:
     settings = get_settings()
     expire = datetime.utcnow() + timedelta(minutes=settings.platform_admin_jwt_expire_minutes)
     to_encode = {
@@ -31,6 +32,8 @@ def create_admin_access_token(*, admin_id: int, session_id: int) -> str:
         "typ": ADMIN_TOKEN_TYPE,
         "exp": expire,
     }
+    if mfa_enrol_only:
+        to_encode["mfa_enrol_only"] = True
     return jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
@@ -53,15 +56,30 @@ def decode_admin_token(token: str) -> dict:
 class AdminContext:
     """Authenticated platform admin + optional DB session row."""
 
-    def __init__(self, admin: PlatformAdmin, session: AdminSession | None = None):
+    def __init__(self, admin: PlatformAdmin, session: AdminSession | None = None, *, mfa_enrol_only: bool = False):
         self.admin = admin
         self.session = session
+        self.mfa_enrol_only = mfa_enrol_only
 
 
 async def get_current_admin(
     db: Annotated[AsyncSession, Depends(get_db)],
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
 ) -> AdminContext:
+    ctx = await get_current_admin_allow_mfa_enrolment(db=db, credentials=credentials)
+    if ctx.mfa_enrol_only:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "mfa_enrolment_required", "message": "Set up two-factor authentication to continue"},
+        )
+    return ctx
+
+
+async def get_current_admin_allow_mfa_enrolment(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
+) -> AdminContext:
+    """Like ``get_current_admin`` but also accepts the limited token issued while MFA enrolment is pending."""
     payload = decode_admin_token(credentials.credentials)
     if payload.get("typ") != ADMIN_TOKEN_TYPE:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
@@ -88,7 +106,10 @@ async def get_current_admin(
     admin = admin_result.scalar_one_or_none()
     if not admin:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin not found or inactive")
-    return AdminContext(admin=admin, session=session)
+    enrol_only = bool(payload.get("mfa_enrol_only")) and not admin.totp_enabled
+    if not enrol_only and get_settings().platform_admin_mfa_required and not admin.totp_enabled:
+        enrol_only = True
+    return AdminContext(admin=admin, session=session, mfa_enrol_only=enrol_only)
 
 
 def require_admin_roles(*allowed: str) -> Callable:
@@ -106,6 +127,9 @@ def require_admin_roles(*allowed: str) -> Callable:
 
 
 # Common role groups (plan matrix)
+# For /auth/me and the MFA enrolment endpoints: also accepts the enrolment-only token.
+any_admin_mfa_enrolment = get_current_admin_allow_mfa_enrolment
+
 super_only = require_admin_roles("super_admin")
 super_or_support = require_admin_roles("super_admin", "support_agent")
 super_or_billing = require_admin_roles("super_admin", "billing_admin")
@@ -139,6 +163,5 @@ async def log_admin_action(
 def client_ip(request: Request | None) -> str | None:
     if request is None:
         return None
-    if request.client:
-        return request.client.host
-    return None
+    ip = client_ip_from_request(request)
+    return None if ip == "unknown" else ip[:45]

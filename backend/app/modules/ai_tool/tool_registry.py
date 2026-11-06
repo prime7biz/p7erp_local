@@ -5,6 +5,7 @@ from typing import Awaitable, Callable, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models import User
 from app.modules.ai_tool.schemas import AiIntent
 
 SafetyClass = Literal["READ_ONLY", "DRAFT_ONLY", "COMMIT_REQUIRED"]
@@ -45,6 +46,8 @@ class ToolDefinition:
     is_read_only: bool
     safety_class: SafetyClass
     handler: ToolHandler
+    # True when the handler also accepts ``user=`` (needed for per-document permission checks).
+    passes_user: bool = False
 
 
 async def _dashboard_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
@@ -120,7 +123,9 @@ async def _calendar_manage_handler(db: AsyncSession, tenant_id: int, prompt: str
     return await calendar_manage_tool(db, tenant_id, prompt)
 
 
-async def _analyze_structured_metrics_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
+async def _analyze_structured_metrics_handler(
+    db: AsyncSession, tenant_id: int, prompt: str, user: User | None = None
+) -> dict:
     # Imported here so pandas only loads when an analysis actually runs.
     from app.modules.ai_tool.analysis.registry import detect_analysis_type, run_analysis
 
@@ -134,12 +139,15 @@ async def _analyze_structured_metrics_handler(db: AsyncSession, tenant_id: int, 
         parameters={},
         include_semantic_context=include_sem,
         semantic_query=prompt if include_sem else None,
+        user=user,
     )
     summary = str(out.get("commentary") or f"Completed {mtype} analysis.")
     return {"summary": summary, "data": out}
 
 
-async def _search_unstructured_handler(db: AsyncSession, tenant_id: int, prompt: str) -> dict:
+async def _search_unstructured_handler(
+    db: AsyncSession, tenant_id: int, prompt: str, user: User | None = None
+) -> dict:
     text = prompt.lower()
     domain = "merch"
     if "policy" in text or " hr" in text or text.strip().startswith("hr "):
@@ -155,7 +163,7 @@ async def _search_unstructured_handler(db: AsyncSession, tenant_id: int, prompt:
         domain=domain,
         filters=None,
         top_k=5,
-        user=None,
+        user=user,
     )
     summary = f"Retrieved {out.get('total_found', 0)} sources via {out.get('retrieval_method')}."
     return {"summary": summary, "data": out}
@@ -341,6 +349,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         is_read_only=True,
         safety_class="READ_ONLY",
         handler=_search_unstructured_handler,
+        passes_user=True,
     ),
     "analyze_structured_metrics": ToolDefinition(
         name="analyze_structured_metrics",
@@ -351,6 +360,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         is_read_only=True,
         safety_class="READ_ONLY",
         handler=_analyze_structured_metrics_handler,
+        passes_user=True,
     ),
 }
 

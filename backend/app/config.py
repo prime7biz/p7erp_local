@@ -20,28 +20,43 @@ class Settings(BaseSettings):
     external_jwt_refresh_expire_days: int = 14
     external_login_max_attempts: int = 8
     external_login_lockout_minutes: int = 30
-    # Staff (internal) login lockout — mirrors external portal behaviour.
+    # Staff (internal) login lockout. After staff_login_max_attempts failures from one IP, that IP is
+    # blocked for this account for staff_login_lockout_minutes (other IPs, e.g. the real user, still work).
     staff_login_max_attempts: int = 8
     staff_login_lockout_minutes: int = 30
+    # Account-wide lock (all IPs) only after this many failures in total — slows distributed guessing
+    # without letting one attacker lock a user out. 0 = never lock the whole account.
+    staff_login_account_lock_threshold: int = 40
     # Platform super-admin login: failures per username before a temporary lock (cache-backed, no DB column).
     platform_admin_login_max_attempts: int = 5
     platform_admin_login_lockout_minutes: int = 15
+    # true: platform admins without TOTP enrolled can only reach the MFA enrolment endpoints until they enrol.
+    platform_admin_mfa_required: bool = False
+    platform_admin_mfa_issuer: str = "Prime7 ERP"
     # Soft rate limit for POST /auth/login and external login (per IP + company), requests per minute.
     login_rate_limit_per_minute: int = 20
     # true: every staff user may be logged in on only one device at a time (newest login wins),
     # for all tenants. false: fall back to per-tenant feature flag `single_session_enforced`.
     single_session_global: bool = True
+    # While single-session is enforced, staff tokens without the `sv` claim are refused. Set an ISO
+    # date/time (UTC) here to keep accepting them until then, e.g. "2026-12-01T00:00:00".
+    legacy_token_without_sv_grace_until: str = ""
     # true: alert scans / weekly AI reports / platform maintenance run as loops inside each API
     # process (advisory-locked so one runs). false: the Celery beat service schedules them.
     inprocess_schedulers_enabled: bool = True
     # Where website "Book a demo" leads are emailed (leads are always stored in marketing_leads).
     sales_notification_email: str = ""
+    # Module RBAC for tenants that have no `rbac_enforcement` flag: off | shadow (log only) | enforce.
+    # Keep "off" until rbac_access_report.py has been reviewed; "shadow" never blocks anyone.
+    rbac_default_mode: str = "off"
     tenant_strategy: str = "header"  # header | subdomain | path
     cors_origins: str = ""
     redis_url: str | None = None
     # Global per-tenant API cap (Redis). All /api/v1 routes with X-Tenant-Id count, except exclusions in rate_limiter.
     # Set to 0 to disable this middleware limit when Redis is enabled.
     tenant_rate_limit_requests_per_minute: int = 2000
+    # Requests without a valid access token (login pages, public sign-up, webhooks), per client IP. 0 = off.
+    anon_rate_limit_requests_per_minute: int = 300
     api_v1_prefix: str = "/api/v1"
     # Absolute path to media root (tenant dirs: {media_root}/{tenant_id}/...). Empty = backend/media next to app package.
     media_root: str = ""
@@ -51,6 +66,10 @@ class Settings(BaseSettings):
     # or bootstrap_key in RegisterRequest (Finding #4). Per-tenant alternative: tenants.bootstrap_token_hash.
     # In non-dev environments, bootstrap requires that key or tenant hash unless you rely on dev-only bypass below.
     bootstrap_registration_key: str = ""
+    # Public company sign-up (POST /tenants). false: requires X-Bootstrap-Key = BOOTSTRAP_REGISTRATION_KEY
+    # or a platform-admin token. Always limited per client IP (tenant_signup_rate_limit_per_hour, 0 = off).
+    public_tenant_signup_enabled: bool = True
+    tenant_signup_rate_limit_per_hour: int = 10
     ai_rate_limit_window_seconds: int = 60
     ai_rate_limit_chat_per_window: int = 30
     ai_rate_limit_read_per_window: int = 50
@@ -221,7 +240,31 @@ class Settings(BaseSettings):
     # Max audit rows written at the same time (each write uses one DB connection).
     audit_log_max_concurrency: int = 4
 
+    # Minimum length for JWT_SECRET / AI_CONFIRMATION_TOKEN_PEPPER outside development.
+    secret_min_length: int = 32
+
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+
+_KNOWN_PLACEHOLDER_SECRETS = frozenset(
+    {
+        "change-me-in-production",
+        "change-me-ai-token-pepper",
+        "dev-secret-change-in-production",
+        "dev-local-mcp-approval-secret",
+    }
+)
+
+
+def _require_strong_secret(name: str, value: str | None, min_length: int) -> None:
+    v = (value or "").strip()
+    if not v or v in _KNOWN_PLACEHOLDER_SECRETS:
+        raise RuntimeError(f"{name} must be set to a strong value in non-development environments.")
+    if len(v) < min_length:
+        raise RuntimeError(
+            f"{name} must be at least {min_length} characters in non-development environments "
+            f"(currently {len(v)}). Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+        )
 
 
 @lru_cache
@@ -229,12 +272,9 @@ def get_settings() -> Settings:
     settings = Settings()
     is_dev = settings.app_env.lower() in {"dev", "development", "local", "test", "testing"}
     if not is_dev:
-        if settings.jwt_secret == "change-me-in-production":
-            raise RuntimeError("JWT_SECRET must be set to a strong value in non-development environments.")
-        if settings.ai_confirmation_token_pepper == "change-me-ai-token-pepper":
-            raise RuntimeError(
-                "AI_CONFIRMATION_TOKEN_PEPPER must be set to a strong value in non-development environments."
-            )
+        min_len = max(0, int(settings.secret_min_length or 0))
+        _require_strong_secret("JWT_SECRET", settings.jwt_secret, min_len)
+        _require_strong_secret("AI_CONFIRMATION_TOKEN_PEPPER", settings.ai_confirmation_token_pepper, min_len)
         if settings.mcp_enabled and not settings.mcp_commit_bypass and not (
             settings.mcp_human_approval_secret or ""
         ).strip():

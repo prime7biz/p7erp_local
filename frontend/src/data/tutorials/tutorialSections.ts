@@ -2092,8 +2092,8 @@ If a voucher is **rejected** and sent back to draft, the earlier Checked / Recom
 
 - **Settings** — \`/app/settings\`
 - **Configuration** — \`/app/settings/config\`. Company switches are grouped like Tally's F11: choose **Essential**, **More features** or **All features** at the top. Essentials (trade module, financial year, VAT BIN, budgets, MIS, party ledger, stock hierarchy, GST) are always shown; **More features** adds advanced vouchers, order execution spine, Bond & VAT registers, procurement (requisitions & CS), knitting, control tower and payroll auto-calculate; **All features** adds TDS / statutory payroll and HR compliance / OCR / AI. Hidden switches keep their saved values, and a note tells you how many hidden switches are on.
-- **User Mgmt** — \`/app/settings/users\`
-- **Roles** — \`/app/settings/roles\`
+- **User Mgmt** — \`/app/settings/users\`. New or changed passwords need at least **8 characters** (existing passwords keep working).
+- **Roles** — \`/app/settings/roles\`. A banner at the top says whether **module permissions** are enforced for your company: *not enforced* (every user can open every module), *watch-only* (users are not blocked, but missed permissions are logged) or enforced (no banner). Some sensitive switches are always required for non-manager roles, e.g. **HR & payroll** keys and the AI **finance / HR data** keys.
 - **Tenant** — \`/app/settings/tenant\`
 - **Statutory compliance** — \`/app/settings/statutory-compliance\` (VAT/VDS/TDS rates, bonded warehouse UD/UP register, payroll statutory calculator)
 - **Data import** — \`/app/settings/data-import\` (CSV dry-run then commit for customers, vendors, items, chart of accounts)
@@ -2106,7 +2106,7 @@ If a voucher is **rejected** and sent back to draft, the earlier Checked / Recom
 
 - Changes here can affect **who sees which sidebar items** and **feature flags** for the whole tenant.`,
         tags: ["settings", "users", "roles", "admin", "backup", "features", "F11"],
-        lastUpdated: "2026-11-04",
+        lastUpdated: "2026-11-06",
         infographics: [
           {
             type: "highlight",

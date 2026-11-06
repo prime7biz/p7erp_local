@@ -50,16 +50,31 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     const detail = (err as { detail?: string | unknown }).detail;
+    if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+      const d = detail as { code?: string; message?: string };
+      throw new ApiError(d.message || res.statusText, d.code);
+    }
     const msg =
       typeof detail === "string"
         ? detail
         : Array.isArray(detail)
           ? JSON.stringify(detail)
           : res.statusText;
-    throw new Error(msg);
+    throw new ApiError(msg);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+/** Error with an optional machine-readable code from `detail.code` (e.g. "mfa_required"). */
+export class ApiError extends Error {
+  code?: string;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+  }
 }
 
 /** Download binary (backup file). */
@@ -107,6 +122,7 @@ export type AdminTokenResponse = {
   access_token: string;
   token_type?: string;
   expires_in_minutes: number;
+  mfa_enrolment_required?: boolean;
 };
 
 export type AdminMeResponse = {
@@ -117,15 +133,37 @@ export type AdminMeResponse = {
   is_active: boolean;
   last_login: string | null;
   capabilities: Record<string, boolean>;
+  totp_enabled?: boolean;
+  mfa_enrolment_required?: boolean;
 };
 
-export async function adminLogin(username: string, password: string) {
+export async function adminLogin(username: string, password: string, totpCode?: string) {
   return request<AdminTokenResponse>("/api/v1/admin/auth/login", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, totp_code: totpCode || undefined }),
+  });
+}
+
+export type AdminTotpSetupResponse = { secret: string; otpauth_uri: string };
+
+export async function adminTotpSetup() {
+  return request<AdminTotpSetupResponse>("/api/v1/admin/auth/mfa/totp/setup", { method: "POST" });
+}
+
+export async function adminTotpEnable(code: string) {
+  return request<{ ok: boolean; totp_enabled: boolean; relogin_required: boolean }>(
+    "/api/v1/admin/auth/mfa/totp/enable",
+    { method: "POST", body: JSON.stringify({ code }) },
+  );
+}
+
+export async function adminTotpDisable(current_password: string, code: string) {
+  return request<{ ok: boolean; totp_enabled: boolean }>("/api/v1/admin/auth/mfa/totp/disable", {
+    method: "POST",
+    body: JSON.stringify({ current_password, code }),
   });
 }
 
@@ -892,7 +930,12 @@ export type PlatformAdminItem = {
   email: string;
   role: string;
   is_active: boolean;
+  totp_enabled?: boolean;
 };
+
+export async function resetPlatformAdminMfa(id: number) {
+  return request<{ ok: boolean }>(`/api/v1/admin/security/admins/${id}/mfa/reset`, { method: "POST" });
+}
 
 export type PlatformAdminsResponse = { items: PlatformAdminItem[] };
 

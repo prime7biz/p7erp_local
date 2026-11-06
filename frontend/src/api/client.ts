@@ -165,6 +165,8 @@ export interface TenantResponse {
   allow_negative_stock?: boolean;
   default_rm_warehouse_id?: number | null;
   default_fg_warehouse_id?: number | null;
+  /** Only on sign-up (POST /tenants): one-time key for registering the first admin user. */
+  bootstrap_token?: string | null;
 }
 
 export interface TenantInventoryPatch {

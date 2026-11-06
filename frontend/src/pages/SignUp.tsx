@@ -74,6 +74,7 @@ export function SignUp() {
         password,
         first_name: firstName.trim() || undefined,
         last_name: lastName.trim() || undefined,
+        bootstrap_key: tenant.bootstrap_token ?? undefined,
         accepted_legal_terms: acceptedLegalTerms,
         legal_acceptance_version: CURRENT_LEGAL_ACCEPTANCE_VERSION,
       });

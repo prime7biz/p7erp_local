@@ -35,6 +35,11 @@ class PlatformAdmin(Base):
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    # Optional TOTP (RFC 6238) second factor. Secret is set at enrolment; enabled only after a verified code.
+    totp_secret: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # Last accepted 30-second time step; a code for the same or an earlier step is refused (no replay).
+    totp_last_used_step: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
 
 class PlatformAdminAuditLog(Base):
@@ -213,6 +218,26 @@ class LemonsqueezyWebhookEvent(Base):
     tenant_id: Mapped[int | None] = mapped_column(ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class LemonsqueezyCheckoutSession(Base):
+    """Server-side record of a checkout started by a tenant admin.
+
+    The random ``checkout_ref`` travels in Lemon Squeezy ``custom_data``; webhooks trust the tenant
+    stored here, not a tenant id typed into the checkout URL.
+    """
+
+    __tablename__ = "lemonsqueezy_checkout_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    checkout_ref: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    variant_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    lemonsqueezy_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lemonsqueezy_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class BillingInvoice(Base):

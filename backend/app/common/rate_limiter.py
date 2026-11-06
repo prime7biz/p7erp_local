@@ -1,4 +1,9 @@
-"""Redis-backed per-tenant rate limiting (optional)."""
+"""Redis-backed API rate limiting (optional).
+
+Authenticated requests count against the tenant taken from the verified JWT (never from the
+``X-Tenant-Id`` header, which any caller can set). Requests without a valid token count against
+the caller's IP address with a separate, smaller budget.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +14,8 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+from app.common.client_ip import client_ip_from_request
+from app.common.jwt_compat import JWTError, jwt
 from app.common.redis_client import get_redis
 from app.config import get_settings
 
@@ -24,8 +31,53 @@ def _is_rate_limit_exempt_path(*, path: str, method: str, api_v1_prefix: str) ->
     return False
 
 
+def _as_int(value: object) -> int | None:
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def rate_limit_bucket(request: Request) -> tuple[str, int]:
+    """Return ``(redis_key_prefix, per_minute_limit)`` for this request.
+
+    Staff and external portal access tokens carry ``tid`` (staff tokens issued before that claim
+    fall back to the user id). Anything else is treated as anonymous.
+    """
+    settings = get_settings()
+    auth = request.headers.get("authorization") or ""
+    if auth.lower().startswith("bearer "):
+        token = auth.split(" ", 1)[1].strip()
+        payload: dict | None = None
+        if token:
+            try:
+                payload = jwt.decode(
+                    token,
+                    settings.jwt_secret,
+                    algorithms=[settings.jwt_algorithm],
+                    options={"verify_aud": False},
+                )
+            except JWTError:
+                payload = None
+        if payload:
+            tenant_limit = int(settings.tenant_rate_limit_requests_per_minute or 0)
+            sub = str(payload.get("sub") or "")
+            if payload.get("typ") == "external" and payload.get("use") == "access":
+                tid = _as_int(payload.get("tid"))
+                if tid is not None:
+                    return f"rl:min:{tid}", tenant_limit
+            elif payload.get("typ") is None and payload.get("aud") is None and payload.get("use") is None and sub:
+                tid = _as_int(payload.get("tid"))
+                if tid is not None:
+                    return f"rl:min:{tid}", tenant_limit
+                uid = _as_int(sub)
+                if uid is not None:
+                    return f"rl:user:{uid}", tenant_limit
+    return f"rl:ip:{client_ip_from_request(request)}", int(settings.anon_rate_limit_requests_per_minute or 0)
+
+
 class TenantRateLimitMiddleware(BaseHTTPMiddleware):
-    """Apply per-tenant request limits when Redis is available (see config tenant_rate_limit_requests_per_minute)."""
+    """Apply per-tenant / per-IP request limits when Redis is available."""
 
     async def dispatch(self, request: Request, call_next: Callable):
         settings = get_settings()
@@ -34,22 +86,13 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
             path=request.url.path, method=request.method, api_v1_prefix=api_p
         ):
             return await call_next(request)
-        tenant_hdr = request.headers.get("x-tenant-id")
-        if not tenant_hdr:
-            return await call_next(request)
-        try:
-            tid = int(tenant_hdr)
-        except ValueError:
-            return await call_next(request)
         r = get_redis()
         if r is None:
             return await call_next(request)
-        limit = settings.tenant_rate_limit_requests_per_minute
+        key, limit = rate_limit_bucket(request)
         if limit <= 0:
             return await call_next(request)
-        key = f"rl:min:{tid}"
-        now = int(time.time())
-        window = now // 60
+        window = int(time.time()) // 60
         k = f"{key}:{window}"
         try:
             n = await r.incr(k)

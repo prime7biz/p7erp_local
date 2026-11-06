@@ -9,7 +9,7 @@ type Ctx = {
   token: string | null;
   me: Me | null;
   loading: boolean;
-  login: (u: string, p: string) => Promise<void>;
+  login: (u: string, p: string, totpCode?: string) => Promise<void>;
   logout: () => void;
   refetch: () => Promise<void>;
   can: (capability: AdminCapability) => boolean;
@@ -41,8 +41,8 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const res = await adminLogin(username, password);
+  const login = useCallback(async (username: string, password: string, totpCode?: string) => {
+    const res = await adminLogin(username, password, totpCode);
     setAdminToken(res.access_token);
     setTok(res.access_token);
     await refetch();

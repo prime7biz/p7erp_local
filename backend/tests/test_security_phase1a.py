@@ -192,7 +192,7 @@ async def test_staff_jwt_still_accepted_on_me(db_session_integration):
     await db.flush()
     await db.commit()
 
-    token = create_access_token(subject=user.id)
+    token = create_access_token(subject=user.id, session_version=0, tenant_id=tenant.id)
 
     async def override_db():
         yield db

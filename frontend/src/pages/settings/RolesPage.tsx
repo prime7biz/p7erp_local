@@ -8,6 +8,8 @@ import {
   type SettingsRoleResponse,
   type SettingsRoleUpdate,
 } from "@/api/client";
+import { getRbacMode } from "@/components/auth/rbacMode";
+import { useAuth } from "@/context/AuthContext";
 
 /** Level columns shown left-to-right when present in the registry. */
 const LEVEL_COLUMN_ORDER = ["read", "write", "edit", "approve", "export"] as const;
@@ -158,6 +160,8 @@ export function RolesPage() {
   });
 
   const levelColumns = useMemo(() => (registry ? columnsForRegistry(registry) : []), [registry]);
+  const { me } = useAuth();
+  const rbacMode = getRbacMode(me?.feature_flags);
 
   const load = async () => {
     setLoading(true);
@@ -356,6 +360,14 @@ export function RolesPage() {
   return (
     <div className="space-y-4">
       <h1 style={{ marginTop: 0 }}>Roles</h1>
+
+      {rbacMode !== "enforce" && (
+        <div className="rounded border border-status-warning/30 bg-status-warning-subtle px-3 py-2 text-sm text-status-warning-foreground">
+          {rbacMode === "shadow"
+            ? "Module permissions are in watch-only mode: users are not blocked yet, but every screen they could not open under these roles is logged. Review the log, then ask your platform administrator to switch enforcement on."
+            : "Module permissions are not enforced for your company yet: every user can open every module, whatever their role says. Fine-grained finance and HR controls still apply. Ask your platform administrator to turn on watch-only mode first, then enforcement."}
+        </div>
+      )}
 
       {(error || success) && (
         <div className="space-y-2">

@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.config import get_settings
-from app.common.permissions import require_internal_permission
+from app.common.permissions import require_any_internal_permission, require_internal_permission
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
 from app.modules.tenant.router import router as tenant_router
@@ -328,21 +328,27 @@ app.include_router(
     prefix=settings.api_v1_prefix,
     dependencies=[Depends(require_internal_permission("merch.access"))],
 )
+_inventory_access = [Depends(require_internal_permission("inventory.access"))]
+_finance_access = [Depends(require_internal_permission("finance.access"))]
 app.include_router(inventory_router, prefix=settings.api_v1_prefix)
-app.include_router(stock_hierarchy_router, prefix=settings.api_v1_prefix)
-app.include_router(mrp_idt_router, prefix=settings.api_v1_prefix)
-app.include_router(grn_qc_router, prefix=settings.api_v1_prefix)
-app.include_router(inventory_analytics_router, prefix=settings.api_v1_prefix)
-app.include_router(serial_kit_consignment_router, prefix=settings.api_v1_prefix)
+app.include_router(stock_hierarchy_router, prefix=settings.api_v1_prefix, dependencies=_inventory_access)
+app.include_router(mrp_idt_router, prefix=settings.api_v1_prefix, dependencies=_inventory_access)
+app.include_router(grn_qc_router, prefix=settings.api_v1_prefix, dependencies=_inventory_access)
+app.include_router(inventory_analytics_router, prefix=settings.api_v1_prefix, dependencies=_inventory_access)
+app.include_router(serial_kit_consignment_router, prefix=settings.api_v1_prefix, dependencies=_inventory_access)
 app.include_router(finance_router, prefix=settings.api_v1_prefix)
-app.include_router(party_ledger_router, prefix=settings.api_v1_prefix)
-app.include_router(gst_tax_router, prefix=settings.api_v1_prefix)
-app.include_router(advanced_voucher_router, prefix=settings.api_v1_prefix)
-app.include_router(tds_router, prefix=settings.api_v1_prefix)
-app.include_router(mis_reports_router, prefix=settings.api_v1_prefix)
-app.include_router(exception_reports_router, prefix=settings.api_v1_prefix)
+app.include_router(party_ledger_router, prefix=settings.api_v1_prefix, dependencies=_finance_access)
+app.include_router(gst_tax_router, prefix=settings.api_v1_prefix, dependencies=_finance_access)
+app.include_router(advanced_voucher_router, prefix=settings.api_v1_prefix, dependencies=_finance_access)
+app.include_router(tds_router, prefix=settings.api_v1_prefix, dependencies=_finance_access)
+app.include_router(mis_reports_router, prefix=settings.api_v1_prefix, dependencies=_finance_access)
+app.include_router(exception_reports_router, prefix=settings.api_v1_prefix, dependencies=_finance_access)
 app.include_router(voucher_entry_assist_router, prefix=settings.api_v1_prefix)
-app.include_router(procurement_router, prefix=settings.api_v1_prefix)
+app.include_router(
+    procurement_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_any_internal_permission("inventory.access", "merch.access"))],
+)
 app.include_router(facility_router, prefix=settings.api_v1_prefix)
 app.include_router(manufacturing_router, prefix=settings.api_v1_prefix)
 app.include_router(production_router, prefix=settings.api_v1_prefix)
@@ -457,8 +463,18 @@ app.include_router(
     prefix=settings.api_v1_prefix,
     dependencies=[Depends(require_internal_permission("trade.access"))],
 )
-app.include_router(control_tower_router, prefix=settings.api_v1_prefix)
-app.include_router(compliance_router, prefix=settings.api_v1_prefix)
+app.include_router(
+    control_tower_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_any_internal_permission("merch.access", "production.access"))],
+)
+app.include_router(
+    compliance_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[
+        Depends(require_any_internal_permission("settings.access", "finance.access", "hr.access", "trade.access"))
+    ],
+)
 app.include_router(
     bd_trade_router,
     prefix=settings.api_v1_prefix,
@@ -469,7 +485,11 @@ app.include_router(
     prefix=settings.api_v1_prefix,
     dependencies=[Depends(require_internal_permission("finance.access"))],
 )
-app.include_router(data_migration_router, prefix=settings.api_v1_prefix)
+app.include_router(
+    data_migration_router,
+    prefix=settings.api_v1_prefix,
+    dependencies=[Depends(require_internal_permission("settings.access"))],
+)
 app.include_router(admin_router, prefix=settings.api_v1_prefix + "/admin")
 app.include_router(announcements_router, prefix=settings.api_v1_prefix)
 app.include_router(tenant_support_router, prefix=settings.api_v1_prefix)

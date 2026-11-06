@@ -15,12 +15,14 @@ from app.common.login_lockout import (
     platform_admin_login_locked,
     record_platform_admin_failed_login,
 )
+from app.common.totp import generate_totp_secret, totp_provisioning_uri, verify_totp
 from app.config import get_settings
 from app.database import get_db
 from app.models import AdminSession, PlatformAdmin
 from app.modules.admin.auth import (
     AdminContext,
     any_admin,
+    any_admin_mfa_enrolment,
     client_ip,
     create_admin_access_token,
     log_admin_action,
@@ -31,6 +33,9 @@ from app.modules.admin.schemas import (
     AdminLoginRequest,
     AdminMeResponse,
     AdminTokenResponse,
+    AdminTotpCodeRequest,
+    AdminTotpDisableRequest,
+    AdminTotpSetupResponse,
 )
 
 router = APIRouter(prefix="/auth", tags=["platform-admin-auth"])
@@ -56,7 +61,22 @@ async def admin_login(
     if not admin or not admin.is_active or not password_ok:
         await record_platform_admin_failed_login(username)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    if admin.totp_enabled:
+        if not (body.totp_code or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "mfa_required", "message": "Enter the 6-digit code from your authenticator app"},
+            )
+        step = verify_totp(admin.totp_secret or "", body.totp_code, last_used_step=admin.totp_last_used_step)
+        if step is None:
+            await record_platform_admin_failed_login(username)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "mfa_invalid", "message": "Invalid or expired authenticator code"},
+            )
+        admin.totp_last_used_step = step
     await clear_platform_admin_failed_login(username)
+    enrol_only = bool(settings.platform_admin_mfa_required and not admin.totp_enabled)
     now = datetime.utcnow()
     expires = now + timedelta(minutes=settings.platform_admin_jwt_expire_minutes)
     sess = AdminSession(
@@ -69,24 +89,25 @@ async def admin_login(
     db.add(sess)
     await db.flush()
     admin.last_login = now
-    token = create_admin_access_token(admin_id=admin.id, session_id=sess.id)
+    token = create_admin_access_token(admin_id=admin.id, session_id=sess.id, mfa_enrol_only=enrol_only)
     await log_admin_action(
         db,
         admin_id=admin.id,
         action="ADMIN_LOGIN",
         resource="platform_admin",
-        details=f"session_id={sess.id}",
+        details=f"session_id={sess.id} mfa={'totp' if admin.totp_enabled else 'none'}",
         ip_address=client_ip(request),
     )
     await db.commit()
     return AdminTokenResponse(
         access_token=token,
         expires_in_minutes=settings.platform_admin_jwt_expire_minutes,
+        mfa_enrolment_required=enrol_only,
     )
 
 
 @router.get("/me", response_model=AdminMeResponse)
-async def admin_me(ctx: AdminContext = Depends(any_admin)):
+async def admin_me(ctx: AdminContext = Depends(any_admin_mfa_enrolment)):
     a = ctx.admin
     return AdminMeResponse(
         id=a.id,
@@ -96,6 +117,8 @@ async def admin_me(ctx: AdminContext = Depends(any_admin)):
         is_active=a.is_active,
         last_login=a.last_login,
         capabilities=compute_capabilities(a.role),
+        totp_enabled=bool(a.totp_enabled),
+        mfa_enrolment_required=ctx.mfa_enrol_only,
     )
 
 
@@ -118,3 +141,95 @@ async def admin_change_password(
     )
     await db.commit()
     return None
+
+
+@router.post("/mfa/totp/setup", response_model=AdminTotpSetupResponse)
+async def admin_totp_setup(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(any_admin_mfa_enrolment),
+):
+    """Start (or restart) enrolment: returns a new secret to add to an authenticator app."""
+    admin = ctx.admin
+    if admin.totp_enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Two-factor authentication is already enabled")
+    secret = generate_totp_secret()
+    admin.totp_secret = secret
+    admin.totp_last_used_step = None
+    await log_admin_action(
+        db,
+        admin_id=admin.id,
+        action="ADMIN_MFA_SETUP_STARTED",
+        resource="platform_admin",
+        ip_address=client_ip(request),
+    )
+    await db.commit()
+    issuer = get_settings().platform_admin_mfa_issuer or "Prime7 ERP"
+    return AdminTotpSetupResponse(
+        secret=secret,
+        otpauth_uri=totp_provisioning_uri(secret, account_name=admin.username, issuer=issuer),
+    )
+
+
+@router.post("/mfa/totp/enable")
+async def admin_totp_enable(
+    body: AdminTotpCodeRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(any_admin_mfa_enrolment),
+):
+    """Confirm enrolment with a code from the app. After this, login needs the code."""
+    admin = ctx.admin
+    if admin.totp_enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Two-factor authentication is already enabled")
+    if not admin.totp_secret:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Start setup first")
+    step = verify_totp(admin.totp_secret, body.code, last_used_step=admin.totp_last_used_step)
+    if step is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired authenticator code")
+    admin.totp_enabled = True
+    admin.totp_last_used_step = step
+    await log_admin_action(
+        db,
+        admin_id=admin.id,
+        action="ADMIN_MFA_ENABLED",
+        resource="platform_admin",
+        ip_address=client_ip(request),
+    )
+    await db.commit()
+    return {"ok": True, "totp_enabled": True, "relogin_required": ctx.mfa_enrol_only}
+
+
+@router.post("/mfa/totp/disable")
+async def admin_totp_disable(
+    body: AdminTotpDisableRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(any_admin),
+):
+    """Turn off two-factor authentication (needs password and a current code)."""
+    admin = ctx.admin
+    if get_settings().platform_admin_mfa_required:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Two-factor authentication is required for platform admins and cannot be turned off",
+        )
+    if not admin.totp_enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Two-factor authentication is not enabled")
+    if not await verify_password(body.current_password, admin.password_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+    step = verify_totp(admin.totp_secret or "", body.code, last_used_step=admin.totp_last_used_step)
+    if step is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired authenticator code")
+    admin.totp_enabled = False
+    admin.totp_secret = None
+    admin.totp_last_used_step = None
+    await log_admin_action(
+        db,
+        admin_id=admin.id,
+        action="ADMIN_MFA_DISABLED",
+        resource="platform_admin",
+        ip_address=client_ip(request),
+    )
+    await db.commit()
+    return {"ok": True, "totp_enabled": False}

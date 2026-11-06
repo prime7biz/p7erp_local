@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.ai_tool import AiEmbeddingChunk
 from app.modules.ai_tool.retrieval.embeddings import MODEL_NAME, embed_texts
 from app.modules.ai_tool.retrieval.ingestion import EmbeddingChunkingAdapter
-from app.modules.ai_tool.retrieval.source_registry import SOURCE_REGISTRY
+from app.modules.ai_tool.retrieval.source_registry import SOURCE_REGISTRY, permission_key_for_module
+
+ERP_RECORD_VISIBILITY = "internal"
 
 
 async def mark_stale(
@@ -47,6 +49,8 @@ async def reindex_stale(db: AsyncSession, *, tenant_id: int, batch_size: int = 1
     for row, vec in zip(rows, vectors):
         row.embedding = vec
         row.is_stale = False
+        if not row.permission_key:
+            row.permission_key = permission_key_for_module(row.source_module)
         row.indexed_at = now
         row.embedding_model = MODEL_NAME
     await db.flush()
@@ -87,6 +91,8 @@ async def full_reindex_source_type(db: AsyncSession, *, tenant_id: int, source_t
         chunks = chunker.chunk(text)
         if not chunks:
             continue
+        permission_key = rec.get("permission_key") or permission_key_for_module(source.source_module)
+        visibility = rec.get("visibility") or ERP_RECORD_VISIBILITY
         vectors = embed_texts([c["content_text"] for c in chunks])
         for idx, (ch, vec) in enumerate(zip(chunks, vectors)):
             db.add(
@@ -109,6 +115,8 @@ async def full_reindex_source_type(db: AsyncSession, *, tenant_id: int, source_t
                     is_stale=False,
                     indexed_at=now,
                     source_updated_at=now,
+                    permission_key=permission_key,
+                    visibility=visibility,
                 )
             )
             count += 1

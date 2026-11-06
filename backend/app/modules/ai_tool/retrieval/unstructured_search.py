@@ -46,8 +46,8 @@ async def search_unstructured_context(
     top_k: int,
     user: User | None = None,
 ) -> dict[str, Any]:
-    vec = PgVectorRetrievalAdapter(db=db, tenant_id=tenant_id, domain=domain, filters=filters)
-    bm25 = BM25EmbeddingChunksAdapter(db=db, tenant_id=tenant_id, domain=domain, filters=filters)
+    vec = PgVectorRetrievalAdapter(db=db, tenant_id=tenant_id, domain=domain, user=user, filters=filters)
+    bm25 = BM25EmbeddingChunksAdapter(db=db, tenant_id=tenant_id, domain=domain, user=user, filters=filters)
 
     # Each search runs in a SAVEPOINT so a failed query (e.g. pgvector missing) is rolled back
     # without aborting the caller's transaction or the fallback searches below.

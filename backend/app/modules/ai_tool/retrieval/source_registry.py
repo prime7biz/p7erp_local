@@ -13,6 +13,30 @@ from app.models.merch import Followup, GarmentStyle, Order
 
 SourceFetchFn = Callable[[AsyncSession, int], Awaitable[list[dict]]]
 
+# AI tool permission needed to read indexed chunks of each source module.
+SOURCE_MODULE_PERMISSION_KEYS: dict[str, str] = {
+    "finance": "ai.tools.finance.read",
+    "accounting": "ai.tools.finance.read",
+    "vouchers": "ai.tools.finance.read",
+    "hr": "ai.tools.hr.read",
+    "payroll": "ai.tools.hr.read",
+    "attendance": "ai.tools.hr.read",
+    "inventory": "ai.tools.inventory.read",
+    "production": "ai.tools.production.read",
+    "qa": "ai.tools.production.read",
+    "orders": "ai.tools.orders.read",
+    "merch": "ai.tools.orders.read",
+    "commercial": "ai.tools.orders.read",
+    "logistics": "ai.tools.orders.read",
+    "knowledge": "ai.tools.knowledge.read",
+}
+DEFAULT_SOURCE_PERMISSION_KEY = "ai.tools.dashboard.read"
+
+
+def permission_key_for_module(source_module: str | None) -> str:
+    module = (source_module or "").strip().lower()
+    return SOURCE_MODULE_PERMISSION_KEYS.get(module, DEFAULT_SOURCE_PERMISSION_KEY)
+
 
 @dataclass(frozen=True, slots=True)
 class IngestionSource:
@@ -110,6 +134,8 @@ async def _fetch_hr_policy_docs(db: AsyncSession, tenant_id: int) -> list[dict]:
                 "order_id": None,
                 "style_id": None,
                 "date_reference": None,
+                "permission_key": doc.permission_key,
+                "visibility": doc.visibility,
             }
         )
     return rows
@@ -135,6 +161,8 @@ async def _fetch_sop_docs(db: AsyncSession, tenant_id: int) -> list[dict]:
                 "order_id": None,
                 "style_id": None,
                 "date_reference": None,
+                "permission_key": doc.permission_key,
+                "visibility": doc.visibility,
             }
         )
     return rows

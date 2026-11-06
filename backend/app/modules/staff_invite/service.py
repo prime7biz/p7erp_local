@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import secrets
 
 from fastapi import HTTPException, status
@@ -14,6 +16,48 @@ from app.common.username import generate_unique_username_for_tenant
 from app.models import Role, StaffInvitation, Tenant, User
 
 INVITE_EXPIRE_DAYS = 7
+# Invitations created before selector tokens (revision 251) are matched by checking at most this
+# many of the newest still-pending ones; they all expire within INVITE_EXPIRE_DAYS of the upgrade.
+LEGACY_INVITE_SCAN_LIMIT = 50
+_VERIFIER_HASH_PREFIX = "sha256$"
+
+
+def _hash_verifier(verifier: str) -> str:
+    return _VERIFIER_HASH_PREFIX + hashlib.sha256(verifier.encode("utf-8")).hexdigest()
+
+
+async def _find_pending_invitation(db: AsyncSession, token_plain: str) -> StaffInvitation | None:
+    now = utc_now_naive()
+    if "." in token_plain:
+        selector, verifier = token_plain.split(".", 1)
+        result = await db.execute(
+            select(StaffInvitation).where(
+                StaffInvitation.token_selector == selector,
+                StaffInvitation.status == "pending",
+                StaffInvitation.expires_at > now,
+            ).limit(1)
+        )
+        inv = result.scalar_one_or_none()
+        if inv is None or not verifier:
+            return None
+        if hmac.compare_digest(inv.token_hash, _hash_verifier(verifier)):
+            return inv
+        return None
+
+    result = await db.execute(
+        select(StaffInvitation)
+        .where(
+            StaffInvitation.token_selector.is_(None),
+            StaffInvitation.status == "pending",
+            StaffInvitation.expires_at > now,
+        )
+        .order_by(StaffInvitation.created_at.desc())
+        .limit(LEGACY_INVITE_SCAN_LIMIT)
+    )
+    for inv in result.scalars().all():
+        if await verify_password(token_plain, inv.token_hash):
+            return inv
+    return None
 
 
 async def create_staff_invitation(
@@ -49,15 +93,17 @@ async def create_staff_invitation(
     if pending.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A pending invitation already exists for this email")
 
-    plain = secrets.token_urlsafe(48)
-    token_hash = await hash_password(plain)
+    selector = secrets.token_urlsafe(12)
+    verifier = secrets.token_urlsafe(32)
+    plain = f"{selector}.{verifier}"
     inv = StaffInvitation(
         tenant_id=tenant.id,
         email=em,
         first_name=(first_name or "").strip() or None,
         last_name=(last_name or "").strip() or None,
         role_id=role.id,
-        token_hash=token_hash,
+        token_hash=_hash_verifier(verifier),
+        token_selector=selector,
         invited_by_user_id=invited_by.id,
         status="pending",
         expires_at=utc_naive_plus(days=INVITE_EXPIRE_DAYS),
@@ -113,18 +159,7 @@ async def accept_staff_invitation(
     if len(token_plain) < 16:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
 
-    result = await db.execute(
-        select(StaffInvitation).where(
-            StaffInvitation.status == "pending",
-            StaffInvitation.expires_at > utc_now_naive(),
-        )
-    )
-    invitations = result.scalars().all()
-    matched: StaffInvitation | None = None
-    for inv in invitations:
-        if await verify_password(token_plain, inv.token_hash):
-            matched = inv
-            break
+    matched = await _find_pending_invitation(db, token_plain)
     if not matched:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired invitation")
 

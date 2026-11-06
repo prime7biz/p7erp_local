@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import logging
 from datetime import date, datetime
 from typing import Any
 
@@ -14,6 +15,8 @@ from app.database import safe_async_session_rollback
 
 from app.common.codegen import next_tenant_code
 from app.models import Department, Designation, Employee, EmployeeDocument, EmployeeStatusHistory, HrSection, Tenant, User
+
+logger = logging.getLogger(__name__)
 
 
 async def next_section_code(db: AsyncSession, tenant_id: int) -> str:
@@ -201,11 +204,18 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
                     )
                 )
                 created += 1
-        except Exception as e:  # noqa: BLE001
+        except (ValueError, TypeError) as e:
             errors.append(f"Row {idx}: {e!s}")
+        except Exception:  # noqa: BLE001
+            logger.exception("employee_import_row_failed tenant_id=%s row=%s", tenant.id, idx)
+            errors.append(f"Row {idx}: could not be imported")
     try:
         await db.commit()
     except IntegrityError as e:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail=f"Import failed: {e!s}") from e
+        logger.exception("employee_import_commit_failed tenant_id=%s", tenant.id)
+        raise HTTPException(
+            status_code=400,
+            detail="Import failed: a row duplicates an existing employee code or refers to a missing record.",
+        ) from e
     return {"created": created, "updated": updated, "errors": errors[:50]}

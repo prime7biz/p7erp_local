@@ -109,11 +109,12 @@ async def test_single_session_new_login_invalidates_old_token(db_session_integra
 
 
 @pytest.mark.asyncio
-async def test_legacy_token_without_sv_remains_valid_during_grace_window(db_session_integration):
+async def test_legacy_token_without_sv_valid_only_during_grace_window(db_session_integration, monkeypatch):
     db = db_session_integration
     await _ensure_auth_session_version_column(db)
     tenant, user = await _seed_user(db, single_session_enforced=True)
     legacy_token = create_access_token(subject=user.id)
+    headers = {"Authorization": f"Bearer {legacy_token}", "X-Tenant-Id": str(tenant.id)}
 
     async def override_db():
         yield db
@@ -122,13 +123,12 @@ async def test_legacy_token_without_sv_remains_valid_during_grace_window(db_sess
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            me_response = await ac.get(
-                "/api/v1/auth/me",
-                headers={
-                    "Authorization": f"Bearer {legacy_token}",
-                    "X-Tenant-Id": str(tenant.id),
-                },
-            )
+            rejected = await ac.get("/api/v1/auth/me", headers=headers)
+            assert rejected.status_code == 401, rejected.text
+            assert (rejected.json().get("detail") or {}).get("code") == "session_superseded"
+
+            monkeypatch.setattr(get_settings(), "legacy_token_without_sv_grace_until", "2999-01-01T00:00:00")
+            me_response = await ac.get("/api/v1/auth/me", headers=headers)
             assert me_response.status_code == 200, me_response.text
     finally:
         app.dependency_overrides.pop(get_db, None)

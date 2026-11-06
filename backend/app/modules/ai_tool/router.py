@@ -724,10 +724,10 @@ async def finance_forecast(
     """Cash-flow projection heuristic + optional LLM narrative (Phase 4 MVP)."""
     ensure_tenant_access(user, tenant)
     await require_ai_access(db, user)
-    from app.common.permissions import PERMISSION_AI_FINANCE_FORECAST, assert_soft_permission_allowed
+    from app.common.permissions import PERMISSION_AI_FINANCE_FORECAST, assert_hr_manager_or_permission
     from app.modules.ai_tool.finance_forecast_service import build_finance_forecast
 
-    await assert_soft_permission_allowed(
+    await assert_hr_manager_or_permission(
         db, user, tenant.id, permission_key=PERMISSION_AI_FINANCE_FORECAST
     )
     req = body or AiFinanceForecastRequest()
@@ -818,13 +818,13 @@ async def hr_attendance_analysis(
 ):
     ensure_tenant_access(user, tenant)
     await require_ai_access(db, user)
-    from app.common.permissions import PERMISSION_HR_AI_INSIGHTS_VIEW, assert_soft_permission_allowed
+    from app.common.permissions import PERMISSION_HR_AI_INSIGHTS_VIEW, assert_hr_manager_or_permission
     from app.common.tenant_feature_keys import is_ai_attendance_analysis_enabled
     from app.modules.ai_tool.ai_attendance_analysis_service import analyze_attendance_patterns
 
     if not is_ai_attendance_analysis_enabled(tenant.feature_flags):
         raise HTTPException(status_code=403, detail="Attendance analysis is disabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_AI_INSIGHTS_VIEW)
+    await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_AI_INSIGHTS_VIEW)
     return await analyze_attendance_patterns(
         db,
         tenant.id,
@@ -844,13 +844,13 @@ async def hr_turnover_risk(
 ):
     ensure_tenant_access(user, tenant)
     await require_ai_access(db, user)
-    from app.common.permissions import PERMISSION_HR_AI_INSIGHTS_VIEW, assert_soft_permission_allowed
+    from app.common.permissions import PERMISSION_HR_AI_INSIGHTS_VIEW, assert_hr_manager_or_permission
     from app.common.tenant_feature_keys import is_ai_turnover_prediction_enabled
     from app.modules.ai_tool.ai_turnover_prediction_service import predict_turnover_risk
 
     if not is_ai_turnover_prediction_enabled(tenant.feature_flags):
         raise HTTPException(status_code=403, detail="Turnover prediction is disabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_AI_INSIGHTS_VIEW)
+    await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_AI_INSIGHTS_VIEW)
     return await predict_turnover_risk(db, tenant.id)
 
 
@@ -864,13 +864,13 @@ async def hr_payroll_anomalies(
 ):
     ensure_tenant_access(user, tenant)
     await require_ai_access(db, user)
-    from app.common.permissions import PERMISSION_HR_AI_INSIGHTS_VIEW, assert_soft_permission_allowed
+    from app.common.permissions import PERMISSION_HR_PAYROLL_MANAGE, assert_hr_manager_or_permission
     from app.common.tenant_feature_keys import is_ai_payroll_anomaly_detection_enabled
     from app.modules.ai_tool.ai_payroll_anomaly_service import detect_payroll_anomalies
 
     if not is_ai_payroll_anomaly_detection_enabled(tenant.feature_flags):
         raise HTTPException(status_code=403, detail="Payroll anomaly detection is disabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_AI_INSIGHTS_VIEW)
+    await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
     return await detect_payroll_anomalies(db, tenant.id, run_id)
 
 
@@ -884,11 +884,11 @@ async def hr_compliance_risk(
 ):
     ensure_tenant_access(user, tenant)
     await require_ai_access(db, user)
-    from app.common.permissions import PERMISSION_HR_AI_INSIGHTS_VIEW, assert_soft_permission_allowed
+    from app.common.permissions import PERMISSION_HR_AI_INSIGHTS_VIEW, assert_hr_manager_or_permission
     from app.common.tenant_feature_keys import is_ai_compliance_risk_prediction_enabled
     from app.modules.ai_tool.ai_compliance_risk_service import predict_compliance_risks
 
     if not is_ai_compliance_risk_prediction_enabled(tenant.feature_flags):
         raise HTTPException(status_code=403, detail="Compliance risk prediction is disabled")
-    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_AI_INSIGHTS_VIEW)
+    await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_AI_INSIGHTS_VIEW)
     return await predict_compliance_risks(db, tenant.id, framework_id)

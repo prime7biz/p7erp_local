@@ -19,6 +19,7 @@ from app.modules.admin.schemas import AdminUserResetPasswordResponse, Impersonat
 from app.modules.audit.service import log_action
 
 router = APIRouter(prefix="/tenants/{tenant_id}/users", tags=["platform-admin-users"])
+IMPERSONATION_MINUTES = 15
 
 
 def _random_password(length: int = 14) -> str:
@@ -191,24 +192,33 @@ async def impersonate(
     user = u.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=404, detail="User not found or inactive")
-    token = create_access_token(subject=user.id, expires_delta=timedelta(minutes=15))
-    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    exp = datetime.utcnow() + timedelta(minutes=15)
+    exp = datetime.utcnow() + timedelta(minutes=IMPERSONATION_MINUTES)
     sess = ImpersonationSession(
         admin_id=ctx.admin.id,
         tenant_id=tenant_id,
         user_id=user_id,
-        token_hash=token_hash,
+        token_hash="-",
         expires_at=exp,
     )
     db.add(sess)
+    await db.flush()
+    # Carries the user's current session version, so the real user's next login also ends it.
+    token = create_access_token(
+        subject=user.id,
+        expires_delta=timedelta(minutes=IMPERSONATION_MINUTES),
+        session_version=int(user.auth_session_version or 0),
+        tenant_id=tenant_id,
+        impersonator_admin_id=ctx.admin.id,
+        impersonation_session_id=sess.id,
+    )
+    sess.token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     await log_action(
         db,
         tenant_id=tenant_id,
         action="IMPERSONATE_START",
         user_id=user.id,
         resource="auth",
-        details=f"platform_admin_id={ctx.admin.id}",
+        details=f"platform_admin_id={ctx.admin.id} impersonation_session_id={sess.id}",
     )
     await log_admin_action(
         db,
@@ -217,7 +227,43 @@ async def impersonate(
         target_tenant_id=tenant_id,
         target_user_id=user_id,
         resource="auth",
+        details=f"impersonation_session_id={sess.id}",
         ip_address=client_ip(request),
     )
     await db.commit()
-    return ImpersonateResponse(access_token=token, tenant_id=tenant_id, expires_in_minutes=15)
+    return ImpersonateResponse(access_token=token, tenant_id=tenant_id, expires_in_minutes=IMPERSONATION_MINUTES)
+
+
+@router.post("/{user_id}/impersonation/revoke")
+async def revoke_impersonation(
+    tenant_id: int,
+    user_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: AdminContext = Depends(super_or_support),
+):
+    """End every active impersonation session for this user (tokens stop working immediately)."""
+    now = datetime.utcnow()
+    result = await db.execute(
+        select(ImpersonationSession).where(
+            ImpersonationSession.tenant_id == tenant_id,
+            ImpersonationSession.user_id == user_id,
+            ImpersonationSession.revoked_at.is_(None),
+            ImpersonationSession.expires_at > now,
+        )
+    )
+    rows = list(result.scalars().all())
+    for row in rows:
+        row.revoked_at = now
+    await log_admin_action(
+        db,
+        admin_id=ctx.admin.id,
+        action="ADMIN_IMPERSONATE_REVOKE",
+        target_tenant_id=tenant_id,
+        target_user_id=user_id,
+        resource="auth",
+        details=f"revoked={len(rows)}",
+        ip_address=client_ip(request),
+    )
+    await db.commit()
+    return {"ok": True, "revoked": len(rows)}

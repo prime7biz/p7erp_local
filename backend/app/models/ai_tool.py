@@ -268,6 +268,9 @@ class AiEmbeddingChunk(Base):
     indexed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     source_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    # Access control captured at indexing time. NULL permission_key = derive from source_module at query time.
+    permission_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    visibility: Mapped[str | None] = mapped_column(String(24), nullable=True)
 
 
 class AiAutomationRule(Base):

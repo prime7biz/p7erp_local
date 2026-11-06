@@ -8,10 +8,42 @@ from datetime import date, datetime
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.permissions import HR_SETUP_BYPASS_ROLES
 from app.models import User
 from app.modules.ai_tool import repository
-from app.modules.ai_tool.authz import has_tool_permission
+from app.modules.ai_tool.authz import get_role_name, has_tool_permission
 from app.modules.ai_tool.retrieval.base import BaseRetrievalAdapter, RetrievalHit
+from app.modules.ai_tool.retrieval.source_registry import permission_key_for_module
+
+PUBLIC_VISIBILITIES = frozenset({"", "public"})
+
+
+def is_public_visibility(visibility: str | None) -> bool:
+    return (visibility or "").strip().lower() in PUBLIC_VISIBILITIES
+
+
+async def filter_chunk_rows_for_user(db: AsyncSession, user: User | None, rows: list) -> list:
+    """Keep only ai_embedding_chunks rows the user may read.
+
+    Each row needs ``permission_key``, ``visibility`` and ``source_module``. Non-public rows
+    without their own permission_key are limited to manager-type roles.
+    """
+    if user is None:
+        return []
+    allowed_by_key: dict[str | None, bool] = {}
+    allowed_rows = []
+    for row in rows:
+        key = row.get("permission_key") or None
+        if key is None and is_public_visibility(row.get("visibility")):
+            key = permission_key_for_module(row.get("source_module"))
+        if key not in allowed_by_key:
+            if key is None:
+                allowed_by_key[key] = (await get_role_name(db, user)) in HR_SETUP_BYPASS_ROLES
+            else:
+                allowed_by_key[key] = await has_tool_permission(db, user, key)
+        if allowed_by_key[key]:
+            allowed_rows.append(row)
+    return allowed_rows
 
 
 def _terms(query: str) -> list[str]:
@@ -60,6 +92,8 @@ class SqlKeywordRetrievalAdapter(BaseRetrievalAdapter):
         )
         scored: list[RetrievalHit] = []
         for chunk, document in rows:
+            if self.user is None and not is_public_visibility(document.visibility):
+                continue
             if document.permission_key:
                 if self.user is None:
                     continue
@@ -100,11 +134,14 @@ class PgVectorRetrievalAdapter(BaseRetrievalAdapter):
     db: AsyncSession
     tenant_id: int
     domain: str
+    user: User | None
     filters: dict | None = None
 
     async def search(self, query: str, *, top_k: int = 5) -> list[RetrievalHit]:
         from app.modules.ai_tool.retrieval.embeddings import embed_query
 
+        if self.user is None:
+            return []
         top_k = max(1, min(20, top_k))
         # CPU-bound model call (and first-time model load): keep it off the event loop.
         qvec = await asyncio.to_thread(embed_query, query)
@@ -115,7 +152,8 @@ class PgVectorRetrievalAdapter(BaseRetrievalAdapter):
             "is_stale = false",
             "(:domain = '' OR source_module = :domain)",
         ]
-        params: dict = {"tid": self.tenant_id, "domain": (self.domain or "").strip(), "qv": vec_lit, "lim": top_k * 8}
+        # Over-fetch so permission filtering below still leaves enough hits.
+        params: dict = {"tid": self.tenant_id, "domain": (self.domain or "").strip(), "qv": vec_lit, "lim": top_k * 20}
         if filt.get("document_type"):
             clauses.append("document_type = :document_type")
             params["document_type"] = str(filt["document_type"])
@@ -136,7 +174,7 @@ class PgVectorRetrievalAdapter(BaseRetrievalAdapter):
         sql = text(
             f"""
             SELECT id, source_type, source_ref, source_module, heading, content_text,
-                   indexed_at,
+                   indexed_at, permission_key, visibility,
                    (embedding <=> CAST(:qv AS vector)) AS dist
             FROM ai_embedding_chunks
             WHERE {where_sql}
@@ -144,11 +182,14 @@ class PgVectorRetrievalAdapter(BaseRetrievalAdapter):
             LIMIT :lim
             """
         )
+        # The savepoint rolls back only this query on failure, keeping the caller's transaction usable.
         try:
-            result = await self.db.execute(sql, params)
-            raw_rows = result.mappings().all()
+            async with self.db.begin_nested():
+                result = await self.db.execute(sql, params)
+                raw_rows = result.mappings().all()
         except Exception:
             return []
+        raw_rows = await filter_chunk_rows_for_user(self.db, self.user, raw_rows)
 
         best_by_ref: dict[str, tuple[float, dict]] = {}
         for row in raw_rows:

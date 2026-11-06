@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
@@ -17,10 +18,20 @@ from app.common.db_datetime import utc_now_naive
 from app.common.tenant import require_tenant
 from app.config import get_settings
 from app.database import get_db, safe_async_session_rollback
-from app.models import LemonsqueezyWebhookEvent, Tenant, User
+from app.models import LemonsqueezyCheckoutSession, LemonsqueezyWebhookEvent, Tenant, User
 from app.modules.billing_lemonsqueezy import client as ls_client
 from app.modules.billing_lemonsqueezy.schemas import LemonSqueezyCheckoutRequest, LemonSqueezyCheckoutResponse
-from app.modules.billing_lemonsqueezy.service import handle_order_created, handle_subscription_created
+from app.modules.billing_lemonsqueezy.service import (
+    SUBSCRIPTION_LIFECYCLE_EVENTS,
+    SUBSCRIPTION_PAYMENT_EVENTS,
+    WebhookResult,
+    handle_order_created,
+    handle_subscription_created,
+    handle_subscription_lifecycle,
+    handle_subscription_payment,
+    resolve_plan_for_variant,
+    store_matches,
+)
 from app.modules.billing_lemonsqueezy.signature import verify_x_signature
 
 logger = logging.getLogger(__name__)
@@ -37,7 +48,7 @@ async def create_lemon_squeezy_checkout(
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
 ):
-    """Create a hosted checkout URL; `custom_data` is filled with tenant_id and user_id for webhooks."""
+    """Create a hosted checkout URL; `custom_data` carries the server-side `checkout_ref` for webhooks."""
     await ensure_user_is_tenant_admin(db, user, tenant.id)
 
     settings = get_settings()
@@ -59,20 +70,46 @@ async def create_lemon_squeezy_checkout(
             detail="Email is required for checkout",
         )
 
+    variant_id = str(body.variant_id).strip()
+    plan, _cycle = await resolve_plan_for_variant(db, variant_id)
+    if plan is None or not plan.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unknown plan variant",
+        )
+
     redirect = (settings.lemonsqueezy_checkout_success_url or "").strip()
     if not redirect:
         base = (settings.frontend_url or "").rstrip("/")
         redirect = f"{base}/app/settings?ls_success=1" if base else None
+
+    checkout_session = LemonsqueezyCheckoutSession(
+        checkout_ref=secrets.token_urlsafe(24),
+        tenant_id=tenant.id,
+        user_id=user.id,
+        variant_id=variant_id,
+    )
+    db.add(checkout_session)
+    try:
+        await db.commit()
+    except Exception as exc:
+        logger.exception("Could not save Lemon Squeezy checkout session for tenant_id=%s", tenant.id)
+        await safe_async_session_rollback(db)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not start checkout",
+        ) from exc
 
     try:
         checkout_url = await ls_client.create_checkout(
             api_base_url=settings.lemonsqueezy_api_base_url,
             api_key=settings.lemonsqueezy_api_key.strip(),
             store_id=str(settings.lemonsqueezy_store_id).strip(),
-            variant_id=str(body.variant_id).strip(),
+            variant_id=variant_id,
             email=email,
             tenant_id=tenant.id,
             user_id=user.id,
+            checkout_ref=checkout_session.checkout_ref,
             redirect_url=redirect,
         )
     except Exception as exc:
@@ -87,7 +124,11 @@ async def create_lemon_squeezy_checkout(
 
 @webhook_router.post("/webhooks/lemonsqueezy")
 async def lemon_squeezy_webhook(request: Request, db: AsyncSession = Depends(get_db)):
-    """Verify HMAC, persist idempotency row, upsert subscription for order/subscription events."""
+    """Verify HMAC, persist idempotency row, apply order/subscription events to the bound tenant.
+
+    Events that cannot be applied are stored with `error` set and still answered with 200,
+    so Lemon Squeezy does not keep retrying them.
+    """
     settings = get_settings()
     secret = (settings.lemonsqueezy_webhook_secret or "").strip()
     raw = await request.body()
@@ -139,17 +180,32 @@ async def lemon_squeezy_webhook(request: Request, db: AsyncSession = Depends(get
         await safe_async_session_rollback(db)
         return Response(status_code=200)
 
-    tenant_id_for_row: int | None = None
+    body = payload if isinstance(payload, dict) else {}
+    result = WebhookResult()
     try:
-        if event_name == "subscription_created":
-            tenant_id_for_row = await handle_subscription_created(db, payload)
+        if not store_matches(body, settings.lemonsqueezy_store_id):
+            result = WebhookResult(error="store_mismatch")
+        elif event_name == "subscription_created":
+            result = await handle_subscription_created(db, body)
         elif event_name == "order_created":
-            tenant_id_for_row = await handle_order_created(db, payload)
+            result = await handle_order_created(db, body)
+        elif event_name in SUBSCRIPTION_LIFECYCLE_EVENTS:
+            result = await handle_subscription_lifecycle(db, event_name, body)
+        elif event_name in SUBSCRIPTION_PAYMENT_EVENTS:
+            result = await handle_subscription_payment(db, event_name, body)
         else:
             logger.info("Lemon Squeezy webhook ignored event_name=%s", event_name)
 
+        if result.error:
+            logger.warning(
+                "Lemon Squeezy webhook not applied event_name=%s error=%s tenant_id=%s",
+                event_name,
+                result.error,
+                result.tenant_id,
+            )
         row.processed_at = utc_now_naive()
-        row.tenant_id = tenant_id_for_row
+        row.tenant_id = result.tenant_id
+        row.error = result.error
         await db.commit()
     except Exception:
         logger.exception("Lemon Squeezy webhook handler failed event_name=%s", event_name)

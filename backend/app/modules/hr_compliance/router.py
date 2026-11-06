@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +21,7 @@ from app.common.tenant_feature_keys import (
     is_compliance_tracking_enabled,
     is_medical_certificate_tracking_enabled,
 )
-from app.database import get_db
+from app.database import get_db, safe_async_session_rollback
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.modules.hr_compliance import service as svc
@@ -42,6 +44,8 @@ from app.modules.hr_compliance.schemas import (
     MedicalRecordResponse,
     MedicalRecordUpdate,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/hr/compliance", tags=["hr-compliance"])
 
@@ -194,8 +198,21 @@ async def get_audit_readiness(
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_COMPLIANCE_VIEW)
     try:
         return await generate_audit_readiness_report(db, tenant.id, framework_id)
-    except Exception as e:
+    except HTTPException:
+        await safe_async_session_rollback(db)
+        raise
+    except ValueError as e:
+        await safe_async_session_rollback(db)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except Exception as e:
+        await safe_async_session_rollback(db)
+        logger.exception(
+            "Audit readiness report failed tenant_id=%s framework_id=%s", tenant.id, framework_id
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not build the audit readiness report. Please try again or contact support.",
+        ) from e
 
 
 # Age + medical under /hr/compliance/employees/... for clear mounting

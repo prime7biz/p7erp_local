@@ -4,6 +4,7 @@ from typing import Any, Type
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models import User
 from app.modules.ai_tool.analysis.base import BaseAnalysisPipeline
 from app.modules.ai_tool.analysis.output_formatter import analysis_result_to_dict
 from app.modules.ai_tool.analysis.pipelines import (
@@ -52,6 +53,7 @@ async def run_analysis(
     parameters: dict[str, Any] | None = None,
     include_semantic_context: bool = False,
     semantic_query: str | None = None,
+    user: User | None = None,
 ) -> dict[str, Any]:
     cls = PIPELINES.get(metric_type, MarginAnalysisPipeline)
     pipeline = cls(db, tenant_id)
@@ -69,7 +71,7 @@ async def run_analysis(
             domain="merch",
             filters=None,
             top_k=3,
-            user=None,
+            user=user,
         )
         out["semantic_context"] = sem.get("results", [])
     return out

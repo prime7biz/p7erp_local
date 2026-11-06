@@ -25,8 +25,9 @@ from app.common.auth import get_current_user
 from app.common.business_date import business_timezone
 from app.common.ownership import ensure_owned
 from app.common.permissions import PERMISSION_HR_ATTENDANCE_MANAGE, assert_hr_manager_or_permission
+from app.common.rls import bind_session_bypass, bind_session_tenant
 from app.common.tenant import require_tenant
-from app.database import get_db, safe_async_session_rollback
+from app.database import get_db, rls_request_scope, safe_async_session_rollback
 from app.models import AttendanceDevice, AttendanceShift, Tenant, User
 from app.modules.audit.service import log_action
 from app.modules.hr_attendance.device_adapters import (
@@ -342,22 +343,43 @@ async def import_device_punches(
 # --- Device push (API key, no staff login) ------------------------------------------------------
 
 
+async def pin_device_tenant(db: AsyncSession, device: AttendanceDevice | None) -> Tenant:
+    """Active company of an authenticated device; pins the session to it (RLS) or raises 401."""
+    tenant = await db.get(Tenant, device.tenant_id) if device is not None else None
+    if device is None or tenant is None or not tenant.is_active or tenant.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or inactive device key")
+    await bind_session_tenant(db, tenant.id)
+    return tenant
+
+
+async def authenticate_device_and_pin_tenant(
+    db: AsyncSession, raw_key: str | None
+) -> tuple[AttendanceDevice, Tenant]:
+    """Find the device by its key prefix across all companies, then scope the request to its company.
+
+    With RLS on, the lookup must run in bypass (no company is known yet); everything after it
+    only sees the device's own company.
+    """
+    await bind_session_bypass(db)
+    device = await authenticate_device(db, raw_key)
+    tenant = await pin_device_tenant(db, device)
+    return device, tenant
+
+
 @push_router.post("/device-push", response_model=PunchImportSummaryOut)
 async def device_push(
     request: Request,
     format: str | None = Query(default=None, description="csv | json | zkteco (guessed when empty)"),
     x_device_key: str | None = Header(default=None, alias="X-Device-Key"),
     db: AsyncSession = Depends(get_db),
+    _rls_scope: None = Depends(rls_request_scope),
 ):
     """A device (or a small bridge program next to it) sends punches with its own API key.
 
     The company comes from the device record, never from the request, so a key can only add
     punches for its own company's employees.
     """
-    device = await authenticate_device(db, x_device_key)
-    tenant = await db.get(Tenant, device.tenant_id) if device is not None else None
-    if device is None or tenant is None or not tenant.is_active or tenant.deleted_at is not None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or inactive device key")
+    device, tenant = await authenticate_device_and_pin_tenant(db, x_device_key)
     fmt, payload = await _read_punch_payload(request, format)
     parsed = _parse_or_400(fmt, payload, tenant)
     return await _process_and_commit(

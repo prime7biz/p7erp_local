@@ -12,14 +12,20 @@ class ExternalLoginRequest(BaseModel):
 
 class ExternalTokenResponse(BaseModel):
     access_token: str
+    # Empty when refresh_cookie is true and the client sent X-Requested-With: p7 (token is in the cookie).
     refresh_token: str
     token_type: str = "bearer"
     tenant_id: int
     principal_type: str
+    refresh_cookie: bool = Field(
+        default=False,
+        description="True when the server keeps the refresh token in an HttpOnly cookie.",
+    )
 
 
 class ExternalRefreshRequest(BaseModel):
-    refresh_token: str = Field(..., min_length=10)
+    # Optional only while the HttpOnly cookie is enabled; otherwise /refresh still requires it.
+    refresh_token: str | None = Field(default=None, min_length=10)
 
 
 class ExternalMeResponse(BaseModel):

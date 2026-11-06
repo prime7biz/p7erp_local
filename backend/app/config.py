@@ -18,6 +18,16 @@ class Settings(BaseSettings):
     # External portal JWT (customer / financier); subject uses ext:{id} to avoid collision with internal user ids.
     external_jwt_expire_minutes: int = 45
     external_jwt_refresh_expire_days: int = 14
+    # Portal refresh token in an HttpOnly cookie (scoped to /api/external/auth) instead of only the
+    # JSON body. Off = unchanged behaviour. While on, /refresh still accepts the body token so
+    # browsers running the previous frontend keep working (see docs/FRONTEND_SECURITY_HEADERS.md).
+    auth_refresh_cookie_enabled: bool = False
+    # Secure cookies are only sent over HTTPS; set false only for plain-http local development.
+    auth_cookie_secure: bool = True
+    # strict | lax | none ("none" also forces Secure). Strict needs the API and frontend on one site.
+    auth_cookie_samesite: str = "strict"
+    # Empty = host-only cookie (recommended). Set e.g. ".prime7erp.com" only if the API is on a subdomain.
+    auth_cookie_domain: str = ""
     external_login_max_attempts: int = 8
     external_login_lockout_minutes: int = 30
     # Staff (internal) login lockout. After staff_login_max_attempts failures from one IP, that IP is

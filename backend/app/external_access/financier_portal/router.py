@@ -436,9 +436,12 @@ async def financier_credit_lines(
     from app.external_access.financier_portal.visibility_service import load_rows_by_id
 
     facs = await fsel.list_facilities_for_financier(db, principal.tenant_id, party_id)
-    btbs_by_id = await load_rows_by_id(db, BtbLc, {int(f.linked_btb_lc_id) for f in facs if f.linked_btb_lc_id})
+    tid = principal.tenant_id
+    btbs_by_id = await load_rows_by_id(
+        db, BtbLc, {int(f.linked_btb_lc_id) for f in facs if f.linked_btb_lc_id}, tenant_id=tid
+    )
     mcs_by_id = await load_rows_by_id(
-        db, MasterContract, {int(f.linked_master_contract_id) for f in facs if f.linked_master_contract_id}
+        db, MasterContract, {int(f.linked_master_contract_id) for f in facs if f.linked_master_contract_id}, tenant_id=tid
     )
     items = []
     for f in facs:

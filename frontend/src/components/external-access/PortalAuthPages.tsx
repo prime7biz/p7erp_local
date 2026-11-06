@@ -60,7 +60,7 @@ export function PortalAcceptInvitePage({ portal }: { portal: ExternalPrincipalTy
     try {
       const res = await externalAcceptInvite({ token, full_name: fullName.trim(), password, phone: phone.trim() || undefined });
       if (res.principal_type !== portal) throw new Error("This invitation is for a different portal.");
-      setExtAuth(res.access_token, res.refresh_token, res.tenant_id, res.principal_type);
+      setExtAuth(res.access_token, res.refresh_token, res.tenant_id, res.principal_type, res.refresh_cookie);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invitation acceptance failed");

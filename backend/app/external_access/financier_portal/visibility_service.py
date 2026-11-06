@@ -37,13 +37,30 @@ def _float_qty(s: str | None) -> float:
         return 0.0
 
 
-async def load_rows_by_id(db: AsyncSession, model: Any, ids: set[int]) -> dict[int, Any]:
-    """Load many rows of `model` in one query, keyed by id. Callers still apply their own tenant checks."""
+async def load_rows_by_id(
+    db: AsyncSession, model: Any, ids: set[int], *, tenant_id: int | None = None
+) -> dict[int, Any]:
+    """Load many rows of `model` in one query, keyed by id.
+
+    With ``tenant_id`` rows of other tenants are never loaded. Without it the caller must check
+    ``row.tenant_id`` itself before showing anything from the row.
+    """
     ids = {i for i in ids if i is not None}
     if not ids:
         return {}
-    rows = (await db.execute(select(model).where(model.id.in_(ids)))).scalars().all()
+    stmt = select(model).where(model.id.in_(ids))
+    if tenant_id is not None:
+        stmt = stmt.where(model.tenant_id == tenant_id)
+    rows = (await db.execute(stmt)).scalars().all()
     return {r.id: r for r in rows}
+
+
+async def _get_owned(db: AsyncSession, model: Any, row_id: int | None, tenant_id: int) -> Any | None:
+    """``db.get`` that returns None for missing ids and for rows of another tenant."""
+    if row_id is None:
+        return None
+    row = await db.get(model, row_id)
+    return row if row is not None and row.tenant_id == tenant_id else None
 
 
 def _fob_from_order(order: Order, quotation: Quotation | None, style: GarmentStyle | None) -> tuple[float | None, str | None]:
@@ -84,10 +101,10 @@ async def build_order_finance_rows(
         orow = await db.get(Order, oid)
         if not orow or orow.tenant_id != tenant_id:
             continue
-        cust = await db.get(Customer, orow.customer_id)
+        cust = await _get_owned(db, Customer, orow.customer_id, tenant_id)
         buyer = cust.name if cust else None
-        q = await db.get(Quotation, orow.quotation_id) if orow.quotation_id else None
-        st = await db.get(GarmentStyle, q.style_id) if q and q.style_id else None
+        q = await _get_owned(db, Quotation, orow.quotation_id, tenant_id)
+        st = await _get_owned(db, GarmentStyle, q.style_id, tenant_id) if q else None
         fob_val, fob_ccy = _fob_from_order(orow, q, st)
 
         ulist: list[FacilityUtilization] = []
@@ -439,47 +456,17 @@ async def build_production_row_for_order(
     return rows[0]
 
 
-async def _order_btb_links_batched(db: AsyncSession, tenant_id: int, btb_rows: list[BtbLc]) -> dict[int, set[int]]:
-    """Same result as ``fsel.order_btb_links_for_party`` in two queries instead of one per BTB LC."""
-    out: dict[int, set[int]] = defaultdict(set)
-    if not btb_rows:
-        return dict(out)
-    btb_ids_by_mc: dict[int, list[int]] = defaultdict(list)
-    for b in btb_rows:
-        if b.master_contract_id:
-            btb_ids_by_mc[int(b.master_contract_id)].append(int(b.id))
-    if btb_ids_by_mc:
-        mc_rows = await db.execute(
-            select(Order.id, Order.master_contract_id).where(
-                Order.tenant_id == tenant_id, Order.master_contract_id.in_(list(btb_ids_by_mc))
-            )
-        )
-        for oid, mc_id in mc_rows.all():
-            out[int(oid)].update(btb_ids_by_mc[int(mc_id)])
-    po_rows = await db.execute(
-        select(PurchaseOrder.source_order_id, PurchaseOrder.btb_lc_id).where(
-            PurchaseOrder.tenant_id == tenant_id,
-            PurchaseOrder.btb_lc_id.in_([b.id for b in btb_rows]),
-            PurchaseOrder.source_order_id.isnot(None),
-        )
-    )
-    for soid, bid in po_rows.all():
-        if soid and bid:
-            out[int(soid)].add(int(bid))
-    return dict(out)
-
-
 async def build_production_tracker_rows(
     db: AsyncSession, *, tenant_id: int, party_id: int
 ) -> tuple[list[dict[str, Any]], str | None]:
     btb_rows = await fsel.party_btb_lc_rows(db, tenant_id, party_id)
-    order_btbs = await _order_btb_links_batched(db, tenant_id, btb_rows)
+    order_btbs = await fsel.order_btb_links_for_party(db, tenant_id, btb_rows)
     if not order_btbs:
         return [], "No financed orders in scope."
     order_rows = await db.execute(select(Order).where(Order.tenant_id == tenant_id, Order.id.in_(list(order_btbs))))
     orders_by_id = {o.id: o for o in order_rows.scalars().all()}
     orders = [orders_by_id[oid] for oid in sorted(order_btbs.keys()) if oid in orders_by_id]
-    customers_by_id = await load_rows_by_id(db, Customer, {o.customer_id for o in orders})
+    customers_by_id = await load_rows_by_id(db, Customer, {o.customer_id for o in orders}, tenant_id=tenant_id)
     buyer_names = {
         o.id: customers_by_id[o.customer_id].name if o.customer_id in customers_by_id else None for o in orders
     }
@@ -512,7 +499,9 @@ async def build_financial_visibility_rows(
     )
     doc_count_by_btb = {int(bid): int(n or 0) for bid, n in doc_rows.all()}
 
-    mcs_by_id = await load_rows_by_id(db, MasterContract, {b.master_contract_id for b in btb_rows if b.master_contract_id})
+    mcs_by_id = await load_rows_by_id(
+        db, MasterContract, {b.master_contract_id for b in btb_rows if b.master_contract_id}, tenant_id=tenant_id
+    )
 
     utils = await fsel.utilizations_for_party_btbs(db, tenant_id, party_id, btb_ids)
     util_ids_by_btb: dict[int, list[int]] = defaultdict(list)
@@ -685,8 +674,8 @@ async def build_order_finance_for_order(
     orow = await db.get(Order, order_id)
     if not orow or orow.tenant_id != tenant_id:
         return None
-    q = await db.get(Quotation, orow.quotation_id) if orow.quotation_id else None
-    st = await db.get(GarmentStyle, q.style_id) if q and q.style_id else None
+    q = await _get_owned(db, Quotation, orow.quotation_id, tenant_id)
+    st = await _get_owned(db, GarmentStyle, q.style_id, tenant_id) if q else None
     fob_val, fob_ccy = _fob_from_order(orow, q, st)
     utils = await fsel.utilizations_for_party_btbs(db, tenant_id, party_id, list(bset))
     if not utils:
@@ -797,7 +786,7 @@ async def build_trade_summary_for_order(db: AsyncSession, *, tenant_id: int, ord
     eta = str(shipments[0].eta) if shipments and shipments[0].eta else None
     fx_status = None
     if tc.btb_lc_id:
-        btb = await db.get(BtbLc, tc.btb_lc_id)
+        btb = await _get_owned(db, BtbLc, tc.btb_lc_id, tenant_id)
         ref = btb.reference if btb else None
         if ref:
             fx = (
@@ -832,7 +821,7 @@ async def build_order_detail_enriched(
         return None
     row = await db.execute(
         select(Order, Customer.name)
-        .outerjoin(Customer, Order.customer_id == Customer.id)
+        .outerjoin(Customer, (Order.customer_id == Customer.id) & (Customer.tenant_id == tenant_id))
         .where(Order.tenant_id == tenant_id, Order.id == order_id)
     )
     fetched = row.first()
@@ -888,7 +877,7 @@ async def build_financed_order_book_rows(
         return [], total
     fetched = await db.execute(
         select(Order, Customer.name)
-        .outerjoin(Customer, Order.customer_id == Customer.id)
+        .outerjoin(Customer, (Order.customer_id == Customer.id) & (Customer.tenant_id == tenant_id))
         .where(Order.tenant_id == tenant_id, Order.id.in_(page_ids))
     )
     order_rows = {o.id: (o, name) for o, name in fetched.all()}

@@ -54,7 +54,7 @@ export function FinancierAcceptInvitePage() {
         password,
         phone: phone.trim() || undefined,
       });
-      setExtAuth(res.access_token, res.refresh_token, res.tenant_id, res.principal_type);
+      setExtAuth(res.access_token, res.refresh_token, res.tenant_id, res.principal_type, res.refresh_cookie);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invitation acceptance failed");

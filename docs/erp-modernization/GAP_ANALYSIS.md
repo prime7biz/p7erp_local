@@ -24,6 +24,10 @@ Security findings are summarized here; exploit-level detail is held privately by
 | HR-02 | Partially resolved: edits gated, locked-period protection, audit entry; leave types gated | same test file | Device adapter (HR-06), OT/proration (HR-03) |
 | SEC-01 / SEC-02 | Observation tooling only | `backend/scripts/rbac_access_report.py` | Role mapping per tenant, then shadow → enforce |
 | BD-03 | Partially resolved (link ownership validated) | code | Retire legacy route |
+| SEC-01 | Mechanism added (stage 2): platform default `RBAC_DEFAULT_MODE` (off), Roles-page notice; tenant default unchanged | `tests/test_security_round2_auth.py` | Shadow → enforce per tenant after role review |
+| SEC-02 | Resolved in code (stage 2): every module router carries its key; route inventory test | `tests/test_route_permission_inventory.py` | Effective once a tenant leaves RBAC "off" |
+| SEC-05 | Mechanism added (stage 2): tenant flag `strict_sensitive_permissions` | `tests/test_security_round2_auth.py` | Enable per tenant after granting roles |
+| SEC-06, SEC-07, SEC-09, SEC-08, OPS-03 (Watchtower) | Resolved in code (stage 2) | see [STAGE2_SECURITY_REMEDIATION.md](STAGE2_SECURITY_REMEDIATION.md) | OPS-03 CI gate; SEC-04 deferred |
 | All other findings | Unchanged | — | See [STAGE1_REMEDIATION.md](STAGE1_REMEDIATION.md) §7 for the next batch |
 
 The overall tenant-isolation assessment remains **Verified partial**: the reviewed candidates are fixed, but the

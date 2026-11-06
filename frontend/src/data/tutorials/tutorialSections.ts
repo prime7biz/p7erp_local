@@ -78,18 +78,20 @@ Prime7 ERP is **multi-tenant**: your company’s data is isolated. You sign in w
 
 - If your organization uses SSO or other login options, follow the prompts shown on the login screen.
 - After login you land on the **Dashboard** (\`/app\`).
+- **One session per browser:** signing in (as staff, or to the customer / financier / supplier portal) signs out any other Prime7 session that was open in the same browser, including other tabs. Use a separate browser profile if you really need two accounts at once.
 
 ## If something fails
 
 - Double-check the company code and password.
 - Ask your administrator to confirm your user is active and assigned a role.
+- **"A new version is available"**: Prime7 ERP was updated while your tab was open. Click **Reload**; the app normally reloads by itself once. Unsaved form entries on that screen are lost, so save drafts before long breaks.
 
 ## Forgot your password?
 
 - On the login screen, use **Forgot password?** to open \`/forgot-password\`.
 - Enter your **company code** and **email**. If the account exists, you will receive an email with a link to \`/reset-password\` to choose a new password.`,
         tags: ["login", "company code", "password", "tenant"],
-        lastUpdated: "2026-04-05",
+        lastUpdated: "2026-11-06",
         relatedAppRoutes: ["/login", "/forgot-password", "/reset-password", "/app"],
         relatedArticleIds: ["gs-dashboard", "gs-sidebar", "gs-at-a-glance"],
       },
@@ -805,7 +807,7 @@ Enable tenant flags as needed: \`mrp_engine_enabled\`, \`auto_reorder_enabled\`,
 - **GRN Inspection** — \`/app/inventory/grn-inspection\` (quarantine accept/reject/hold)
 - **Quality Dashboard** — \`/app/inventory/quality-dashboard\`
 - **Vendor Scorecard** — \`/app/inventory/vendor-scorecard\`
-- **ABC Analysis** — \`/app/inventory/abc-analysis\`
+- **ABC Analysis** — \`/app/inventory/abc-analysis\` (**Export CSV** downloads a file for the selected class)
 - **EOQ** — \`/app/inventory/eoq\`
 - **Stock Aging** — \`/app/inventory/stock-aging\`
 - **Cycle Count** — \`/app/inventory/cycle-count\` (flag \`cycle_counting_enabled\`)
@@ -841,7 +843,7 @@ Purchase orders and GRNs have a **Print** action that opens a printable document
 
 - Manufacturing orders for production are under **Manufacturing** (\`/app/production/manufacturing-orders\`), not inside Inventory.`,
         tags: ["inventory", "PO", "GRN", "stock", "warehouse", "QC", "ABC", "EOQ"],
-        lastUpdated: "2026-10-31",
+        lastUpdated: "2026-11-06",
         infographics: [
           {
             type: "flow",
@@ -1784,7 +1786,7 @@ Admins can switch the assistant off per company with feature flag \`voucher_entr
 
 1. In **Multi-Currency Entry**, check **Enable Multi-Currency**.
 2. Pick **Transaction currency** and **Base currency**.
-3. Enter **Exchange rate** manually or click **Live Rate** (fetches from open.er-api.com when available).
+3. Enter **Exchange rate** manually or click **Live Rate**. Prime7 asks its own server for today's rate (the server uses open.er-api.com). If that service cannot be reached, the server's built-in fallback rate is used and the source says **fallback** — check it before saving. A missing, zero or negative rate is never filled in.
 4. Line amounts are interpreted in the transaction currency when multi-currency is on.
 
 ## Entries (lines)
@@ -1794,7 +1796,7 @@ Admins can switch the assistant off per company with feature flag \`voucher_entr
 3. Type the amount in **Debit** or **Credit** (must be greater than zero).
 4. Optional (second row of each line): **cost center**, **cost nature**, **line note**; bill-wise fields when the account requires them.
 5. Use **+ Debit line** / **+ Credit line**, and the line **Actions** menu for **Copy line**, **Switch to Debit / Credit**, or **Delete line**.
-6. Totals must **balance** (debits = credits). Use **Auto balance** to insert a balancing line.
+6. Totals must **balance** exactly (debits = credits, to 4 decimal places, the same precision the server stores). Use **Auto balance** to insert a balancing line for the exact difference.
 
 ## Save
 
@@ -1830,7 +1832,7 @@ Open a voucher (\`/app/accounts/vouchers/:id\`) and scroll to **History**. It li
 - Use **Approval queue** in the page header to jump to \`/app/accounts/vouchers/approval-queue\`.
 - **Analytics** link goes to voucher analytics report.`,
         tags: ["voucher", "journal", "debit", "credit", "posting", "shortcuts", "financial year", "ai"],
-        lastUpdated: "2026-11-05",
+        lastUpdated: "2026-11-06",
         featured: true,
         coverImage: "/images/logo.svg",
         infographics: [

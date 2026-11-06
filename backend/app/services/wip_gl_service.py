@@ -223,20 +223,25 @@ async def maybe_post_idt_receive_wip(
     user_id: int | None,
     idt: Any,
     notes: str,
+    *,
+    movement_id: int | None = None,
 ) -> int | None:
-    """Fail-soft WIP GL for IDT receive."""
+    """Fail-soft WIP GL for one IDT receipt (``movement_id`` = that receipt's IN movement)."""
     if not is_auto_post_wip_journal_enabled(tenant.feature_flags):
         return None
     try:
-        await post_idt_receive_gl(
-            db,
-            tenant.id,
-            user_id,
-            idt.id,
-            idt.source_item_id,
-            idt.target_item_id,
-            notes,
-        )
+        # Savepoint: a failed posting is undone without losing the stock receipt.
+        async with db.begin_nested():
+            await post_idt_receive_gl(
+                db,
+                tenant.id,
+                user_id,
+                idt.id,
+                idt.source_item_id,
+                idt.target_item_id,
+                notes,
+                movement_id=movement_id,
+            )
     except Exception:
         logger.exception("wip_gl IDT receive failed tenant_id=%s idt_id=%s", tenant.id, idt.id)
     return None

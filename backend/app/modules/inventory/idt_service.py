@@ -407,6 +407,7 @@ async def receive_idt(
         user_id,
         idt,
         notes=f"IDT {idt.idt_number}: received from {idt.process_name}",
+        movement_id=mv_in.id,
     )
     if voucher_id:
         idt.target_voucher_id = voucher_id

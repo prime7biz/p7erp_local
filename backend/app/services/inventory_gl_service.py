@@ -474,20 +474,42 @@ async def post_idt_receive_gl(
     source_item_id: int,
     target_item_id: int,
     notes: str,
+    *,
+    movement_id: int | None = None,
 ) -> None:
-    """Dr FG/WIP-next / Cr WIP-current for IDT receive."""
-    mv = (
-        await db.execute(
-            select(StockMovement).where(
-                StockMovement.tenant_id == tenant_id,
-                StockMovement.reference_type == "IDT",
-                StockMovement.reference_id == idt_id,
-                StockMovement.item_id == target_item_id,
-                StockMovement.movement_type == "IN",
+    """Dr FG/WIP-next / Cr WIP-current for one IDT receipt.
+
+    Each receipt (IN movement) gets its own voucher for the value it brought into stock.
+    The first receipt keeps the original posting key (action ``RECEIVE``); later partial
+    receipts use ``RECEIVE:<movement id>`` so a retry of the same receipt is skipped.
+    Without ``movement_id`` the first receipt is posted (old behaviour).
+    """
+    receipts = list(
+        (
+            await db.execute(
+                select(StockMovement)
+                .where(
+                    StockMovement.tenant_id == tenant_id,
+                    StockMovement.reference_type == "IDT",
+                    StockMovement.reference_id == idt_id,
+                    StockMovement.item_id == target_item_id,
+                    StockMovement.movement_type == "IN",
+                )
+                .order_by(StockMovement.id)
             )
-        )
-    ).scalars().first()
-    val = _f(mv.movement_value) if mv else 0.0
+        ).scalars().all()
+    )
+    if not receipts:
+        return
+    mv = receipts[0]
+    if movement_id is not None:
+        mv = next((r for r in receipts if r.id == movement_id), None)
+        if mv is None:
+            return
+    is_first_receipt = mv.id == receipts[0].id
+    action = "RECEIVE" if is_first_receipt else f"RECEIVE:{mv.id}"
+    reference = f"IDT-RECV-{idt_id}" if is_first_receipt else f"IDT-RECV-{idt_id}-{mv.id}"
+    val = _f(mv.movement_value)
     if val <= 0:
         return
     src_acc = await resolve_inventory_accounts(db, tenant_id, source_item_id)
@@ -506,12 +528,12 @@ async def post_idt_receive_gl(
         tenant_id,
         user_id,
         v_date,
-        f"IDT receive #{idt_id}",
-        f"IDT-RECV-{idt_id}",
+        f"IDT receive #{idt_id}" if is_first_receipt else f"IDT receive #{idt_id} (receipt MV#{mv.id})",
+        reference,
         entries,
         source_system="IDT",
         source_id=idt_id,
-        action="RECEIVE",
+        action=action,
     )
 
 

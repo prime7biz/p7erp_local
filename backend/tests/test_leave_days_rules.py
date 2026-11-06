@@ -64,13 +64,20 @@ async def test_days_skip_weekend_and_holidays(db_session_integration):
 
 
 @pytest.mark.asyncio
-async def test_weekend_comes_from_factory_calendar_or_hr_override(db_session_integration):
+async def test_weekend_comes_from_hr_setting_not_production_calendar(db_session_integration):
     db = db_session_integration
     tenant, user, emp, ltype = await _seed(db)
+    # The production planning calendar (default Friday + Saturday) does not change HR leave days.
     db.add(TenantProductionSettings(tenant_id=tenant.id, weekend_days=["friday", "saturday"]))
     await db.commit()
     async with api_client(db, tenant, user) as ac:
         r = await ac.post(URL, json=_body(emp, ltype, "2026-10-05", "2026-10-11"))
+        assert r.status_code == 201, r.text
+        assert Decimal(r.json()["days_requested"]) == Decimal("6")
+
+    tenant3, user3, emp3, ltype3 = await _seed(db, flags={"hr_weekend_days": ["friday", "saturday"]})
+    async with api_client(db, tenant3, user3) as ac:
+        r = await ac.post(URL, json=_body(emp3, ltype3, "2026-10-05", "2026-10-11"))
         assert r.status_code == 201, r.text
         assert Decimal(r.json()["days_requested"]) == Decimal("5")
 

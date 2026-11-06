@@ -5,10 +5,11 @@ The server decides how many days a leave request uses:
 - except weekly off days (weekend) and company holidays,
 - a single working day may be requested as a half day (0.5).
 
-Weekend days, in this order:
-1. ``tenants.feature_flags["hr_weekend_days"]`` (optional HR override, e.g. ``["friday"]``),
-2. the factory calendar weekend (Production settings -> ``weekend_days``),
-3. Friday only (Bangladesh default).
+Weekend days:
+1. ``tenants.feature_flags["hr_weekend_days"]`` (HR setting, e.g. ``["friday", "saturday"]``),
+2. otherwise Friday only (Bangladesh weekly holiday).
+The production planning calendar is not used here: its weekend defaults to Friday + Saturday for
+every tenant that opens Production settings, which is not an HR decision.
 
 Holidays come from HR attendance holidays (``hr_attendance_holidays``); optional holidays still count
 as working days. Factory-calendar holidays marked "affects HR" are synced into that table.
@@ -24,7 +25,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AttendanceHoliday, Employee, LeaveRequest, TenantProductionSettings
+from app.models import AttendanceHoliday, Employee, LeaveRequest
 
 HR_WEEKEND_DAYS_KEY = "hr_weekend_days"
 DEFAULT_WEEKEND_DAYS = ("friday",)
@@ -62,14 +63,6 @@ async def load_weekend_weekdays(db: AsyncSession, tenant: Any) -> set[int]:
         override = weekday_numbers(flags.get(HR_WEEKEND_DAYS_KEY))
         if override:
             return override
-    settings_row = (
-        await db.execute(
-            select(TenantProductionSettings.weekend_days).where(TenantProductionSettings.tenant_id == tenant.id)
-        )
-    ).scalar_one_or_none()
-    factory = weekday_numbers(settings_row)
-    if factory:
-        return factory
     return weekday_numbers(list(DEFAULT_WEEKEND_DAYS))
 
 

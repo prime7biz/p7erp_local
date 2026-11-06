@@ -66,8 +66,8 @@ async def build_recovery_outlook_for_order(
     o = await db.get(Order, order_id)
     if not o or o.tenant_id != tenant_id:
         return None
-    cust = await db.get(Customer, o.customer_id)
-    buyer = cust.name if cust else None
+    cust = await db.get(Customer, o.customer_id) if o.customer_id else None
+    buyer = cust.name if cust and cust.tenant_id == tenant_id else None
     finance = await build_order_finance_for_order(
         db, tenant_id=tenant_id, party_id=party_id, order_id=order_id, order_btbs=order_btbs
     )

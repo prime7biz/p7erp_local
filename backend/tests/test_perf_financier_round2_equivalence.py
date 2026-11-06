@@ -54,6 +54,7 @@ from app.models.production import (
     SewingLineStyleConfig,
 )
 from app.models.trade import Shipment, TradeCase, TradeDocument
+from tests.test_financier_tenant_scoping import _old_order_btb_links_for_party
 from tests.test_perf_financier_equivalence import _ensure_financier_role, _json, _new_tenant, financier_client
 
 API = "/api/external/financier"
@@ -249,7 +250,8 @@ async def _old_production_tracker_rows(db, *, tenant_id: int, party_id: int):
         if not o or o.tenant_id != tenant_id:
             continue
         cust = await db.get(Customer, o.customer_id)
-        buyer = cust.name if cust else None
+        # Tenant check added with the tenant-leak fix (tests/test_financier_tenant_scoping.py).
+        buyer = cust.name if cust and cust.tenant_id == tenant_id else None
         items.append(await _old_production_row_for_order(db, tenant_id=tenant_id, order=o, buyer_name=buyer))
     return items, None
 
@@ -283,7 +285,7 @@ async def _old_financial_visibility_rows(db, *, tenant_id: int, party_id: int):
         mc_exp = None
         if b.master_contract_id:
             mc = await db.get(MasterContract, b.master_contract_id)
-            if mc and mc.expiry_date:
+            if mc and mc.tenant_id == tenant_id and mc.expiry_date:
                 mc_exp = mc.expiry_date.isoformat()
         exp_coll = None
         if b.maturity_date:
@@ -1332,7 +1334,7 @@ async def test_financier_round2_matches_old_algorithm(db_session_integration, mo
     btb1, btb2, btb3 = s["btbs"]
 
     btb_rows = await fsel.party_btb_lc_rows(db, tid, party_id)
-    assert await vis_svc._order_btb_links_batched(db, tid, btb_rows) == await fsel.order_btb_links_for_party(
+    assert await fsel.order_btb_links_for_party(db, tid, btb_rows) == await _old_order_btb_links_for_party(
         db, tid, btb_rows
     )
 
@@ -1366,6 +1368,7 @@ async def test_financier_round2_matches_old_algorithm(db_session_integration, mo
         assert prod[o2.order_code]["sewing_status"] == "in_progress"
         assert prod[o3.order_code]["inspection_pass_rate"] is None
         assert prod[o3.order_code]["actual_shipment_date"] is None
+        assert prod[o3.order_code]["buyer_name"] is None  # its customer belongs to tenant B
 
         fin = {row["btb_lc_id"]: row for row in (await _get(ac, db, "financial-visibility"))[0].json()["items"]}
         assert fin[btb1.id]["bank_charges_status"] == "import_bill_posted"

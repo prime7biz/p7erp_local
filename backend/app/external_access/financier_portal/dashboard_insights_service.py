@@ -129,7 +129,7 @@ async def build_financier_dashboard_party_insights(
     completed = float(completed_f or 0)
     pct = round(100.0 * completed / planned, 1) if planned > 0 else None
 
-    glance_raw = await build_recovery_dashboard_glance(db, tenant_id, party_id)
+    glance_raw = await build_recovery_dashboard_glance(db, tenant_id=tenant_id, party_id=party_id)
     prod_risk = await count_production_risk_orders(db, tenant_id=tenant_id, party_id=party_id)
     glance_raw["at_risk_orders_count"] = max(int(glance_raw.get("at_risk_orders_count") or 0), prod_risk)
     recovery_glance = FinancierDashboardRecoveryGlance(**glance_raw)

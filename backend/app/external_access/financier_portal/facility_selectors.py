@@ -139,23 +139,29 @@ async def utilizations_for_party_btbs(
 async def order_btb_links_for_party(
     db: AsyncSession, tenant_id: int, btb_rows: list[BtbLc]
 ) -> dict[int, set[int]]:
-    """order_id -> BTB LC ids linking that order to the financier chain."""
+    """order_id -> BTB LC ids linking that order to the financier chain.
+
+    Two queries in total: orders under the BTB LCs' master contracts, then POs raised on the BTB LCs.
+    """
     from collections import defaultdict
 
     out: dict[int, set[int]] = defaultdict(set)
     if not btb_rows:
         return dict(out)
     btb_ids = [b.id for b in btb_rows]
+    btb_ids_by_mc: dict[int, list[int]] = defaultdict(list)
     for b in btb_rows:
         if b.master_contract_id:
-            r = await db.execute(
-                select(Order.id).where(
-                    Order.tenant_id == tenant_id,
-                    Order.master_contract_id == b.master_contract_id,
-                )
+            btb_ids_by_mc[int(b.master_contract_id)].append(int(b.id))
+    if btb_ids_by_mc:
+        r = await db.execute(
+            select(Order.id, Order.master_contract_id).where(
+                Order.tenant_id == tenant_id,
+                Order.master_contract_id.in_(list(btb_ids_by_mc)),
             )
-            for (oid,) in r.all():
-                out[int(oid)].add(int(b.id))
+        )
+        for oid, mc_id in r.all():
+            out[int(oid)].update(btb_ids_by_mc[int(mc_id)])
     pr = await db.execute(
         select(PurchaseOrder.source_order_id, PurchaseOrder.btb_lc_id).where(
             PurchaseOrder.tenant_id == tenant_id,

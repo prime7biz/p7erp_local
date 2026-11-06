@@ -45,7 +45,7 @@ async def order_book(
     cust = aliased(Customer)
     stmt = (
         select(Order, cust.name)
-        .outerjoin(cust, Order.customer_id == cust.id)
+        .outerjoin(cust, (Order.customer_id == cust.id) & (cust.tenant_id == tenant_id))
         .where(Order.tenant_id == tenant_id)
         .order_by(Order.updated_at.desc())
         .limit(limit)
@@ -59,7 +59,7 @@ async def get_order_with_buyer(db: AsyncSession, tenant_id: int, order_id: int) 
     cust = aliased(Customer)
     r = await db.execute(
         select(Order, cust.name)
-        .outerjoin(cust, Order.customer_id == cust.id)
+        .outerjoin(cust, (Order.customer_id == cust.id) & (cust.tenant_id == tenant_id))
         .where(Order.tenant_id == tenant_id, Order.id == order_id)
     )
     row = r.first()

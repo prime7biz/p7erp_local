@@ -8,6 +8,8 @@ Run: docker compose exec backend pytest tests/test_attendance_device_push_rls.py
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
@@ -86,6 +88,46 @@ async def test_device_push_under_rls_pins_device_tenant(owner_session, rls_flag_
     assert rls.session_rls_tenant_id(db) is None
     assert await _db_context(db) == ("", "on")
 
+    counts = (
+        await db.execute(
+            text(
+                "SELECT tenant_id, count(*) FROM hr_attendance_punches WHERE tenant_id IN (:a, :b) GROUP BY tenant_id"
+            ),
+            {"a": tenant_a.id, "b": tenant_b.id},
+        )
+    ).all()
+    assert dict(counts) == {tenant_a.id: 1}
+
+
+@pytest.mark.asyncio
+async def test_iclock_upload_under_rls_pins_device_tenant(owner_session, rls_flag_on):  # noqa: F811
+    db = owner_session
+    tenant_a, _ua, _ra, shift_a, emp_a = await _setup(db)
+    tenant_b, _ub, _rb, _shift_b, emp_b = await _setup(db)
+    device_a, _key = await _device(db, tenant_a, shift_a)
+    device_a.serial_number = f"RLS{uuid.uuid4().hex[:8].upper()}"
+    device_a.push_allowed_ips = "103.4.145.10/32"
+    await db.flush()
+    await _become_probe_role(db)
+    await rls.bind_session_tenant(db, tenant_b.id)
+
+    async def o_db():
+        yield db
+
+    app.dependency_overrides[get_db] = o_db
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            body = f"{emp_a.employee_code}\t2026-06-03 08:00:00\t0\t1\n{emp_b.employee_code}\t2026-06-03 08:01:00\t0\t1\n"
+            r = await ac.post(
+                "/iclock/cdata",
+                params={"SN": device_a.serial_number, "table": "ATTLOG"},
+                content=body.encode(),
+                headers={"X-Forwarded-For": "103.4.145.10"},
+            )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+    assert (r.status_code, r.text) == (200, "OK: 2")
+    assert await _db_context(db) == ("", "on")
     counts = (
         await db.execute(
             text(

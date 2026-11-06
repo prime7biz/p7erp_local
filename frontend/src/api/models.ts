@@ -504,6 +504,8 @@ export interface HrEmployeeResponse {
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
+  /** User number on the attendance machine when it is not the employee code. */
+  attendance_device_pin?: string | null;
 }
 
 export interface HrEmployeeCreate {
@@ -533,6 +535,7 @@ export interface HrEmployeeCreate {
   user_id?: number | null;
   joining_date?: string | null;
   is_active?: boolean;
+  attendance_device_pin?: string | null;
 }
 
 export interface HrEmployeeUpdate {
@@ -562,6 +565,7 @@ export interface HrEmployeeUpdate {
   user_id?: number | null;
   joining_date?: string | null;
   is_active?: boolean;
+  attendance_device_pin?: string | null;
 }
 
 export interface HrEmployeeDocumentResponse {

@@ -26,6 +26,10 @@ def _is_rate_limit_exempt_path(*, path: str, method: str, api_v1_prefix: str) ->
         return True
     if path in ("/health", "/docs", "/openapi.json"):
         return True
+    # Attendance machines: limited per device serial + IP in hr_attendance.iclock_router instead,
+    # so a factory's machines do not use up the anonymous budget of everyone behind the same IP.
+    if path.startswith("/iclock/"):
+        return True
     if method.upper() == "GET" and path.rstrip("/") == f"{api_v1_prefix}/auth/me".rstrip("/"):
         return True
     return False

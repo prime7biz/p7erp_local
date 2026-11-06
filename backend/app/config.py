@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     tenant_rate_limit_requests_per_minute: int = 2000
     # Requests without a valid access token (login pages, public sign-up, webhooks), per client IP. 0 = off.
     anon_rate_limit_requests_per_minute: int = 300
+    # ZKTeco cloud push (/iclock/cdata). Only devices with a serial number AND allowed IPs can use it;
+    # false = endpoint answers 404 for everyone (kill switch). Own limits (not the anon limit above):
+    # per device serial and per client IP, requests per minute (Redis, else per process). 0 = no limit.
+    attendance_iclock_enabled: bool = True
+    attendance_iclock_rate_limit_per_device_per_minute: int = 600
+    attendance_iclock_rate_limit_per_ip_per_minute: int = 1200
     api_v1_prefix: str = "/api/v1"
     # Absolute path to media root (tenant dirs: {media_root}/{tenant_id}/...). Empty = backend/media next to app package.
     media_root: str = ""

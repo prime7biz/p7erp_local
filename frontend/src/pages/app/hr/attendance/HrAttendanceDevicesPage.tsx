@@ -21,15 +21,27 @@ interface DeviceForm {
   device_type: HrAttendanceDeviceType;
   serial_number: string;
   default_shift_id: string;
+  push_allowed_ips: string;
 }
 
-const EMPTY_FORM: DeviceForm = { code: "", name: "", device_type: "ZKTECO", serial_number: "", default_shift_id: "" };
+const EMPTY_FORM: DeviceForm = {
+  code: "",
+  name: "",
+  device_type: "ZKTECO",
+  serial_number: "",
+  default_shift_id: "",
+  push_allowed_ips: "",
+};
 
 const MENU_ITEM = "block w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50";
 
 function pushUrl(): string {
   const base = API_BASE || (typeof window !== "undefined" ? window.location.origin : "");
   return `${base}/api/v1/hr/attendance/device-push`;
+}
+
+function serverHost(): string {
+  return typeof window !== "undefined" ? window.location.host : "";
 }
 
 function errorText(err: unknown, fallback: string): string {
@@ -102,6 +114,7 @@ export function HrAttendanceDevicesPage() {
       device_type: d.device_type === "GENERIC" ? "GENERIC" : "ZKTECO",
       serial_number: d.serial_number ?? "",
       default_shift_id: d.default_shift_id != null ? String(d.default_shift_id) : "",
+      push_allowed_ips: (d.push_allowed_ips ?? "").split(",").join(", "),
     });
     setFormOpen(true);
     setOpenActionsId(null);
@@ -118,6 +131,7 @@ export function HrAttendanceDevicesPage() {
       device_type: form.device_type,
       serial_number: form.serial_number.trim() || null,
       default_shift_id: form.default_shift_id ? Number(form.default_shift_id) : null,
+      push_allowed_ips: form.push_allowed_ips.trim() || null,
     };
     try {
       if (editId == null) {
@@ -206,7 +220,8 @@ export function HrAttendanceDevicesPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-text-muted">
-          The device user code (PIN) must be the employee code. Weekend days and overtime pay are set on{" "}
+          The device user code (PIN) is matched to the employee&apos;s <strong>Device PIN</strong> (on the employee
+          form), otherwise to the employee code. Weekend days and overtime pay are set on{" "}
           <Link to={`${PREFIX}/settings`} className="underline">
             HR Settings
           </Link>
@@ -249,7 +264,10 @@ export function HrAttendanceDevicesPage() {
                   <td className="px-4 py-2 text-xs text-text-muted">
                     {d.last_seen_at ? new Date(`${d.last_seen_at}Z`).toLocaleString() : "Never"}
                   </td>
-                  <td className="px-4 py-2 text-sm">{d.is_active ? "Active" : "Inactive"}</td>
+                  <td className="px-4 py-2 text-sm">
+                    {d.is_active ? "Active" : "Inactive"}
+                    {d.iclock_ready && <div className="text-xs text-text-muted">Cloud push on</div>}
+                  </td>
                   <td className="px-4 py-2 text-right">
                     <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
                       <button
@@ -345,6 +363,21 @@ export function HrAttendanceDevicesPage() {
                 maxLength={64}
                 onChange={(e) => setForm((f) => ({ ...f, serial_number: e.target.value }))}
               />
+            </label>
+            <label className="block text-sm">
+              Cloud push: allowed IP addresses (optional)
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5 text-sm"
+                value={form.push_allowed_ips}
+                maxLength={1024}
+                placeholder="e.g. 103.4.145.10 or 103.4.145.0/24"
+                onChange={(e) => setForm((f) => ({ ...f, push_allowed_ips: e.target.value }))}
+              />
+              <span className="mt-1 block text-xs text-text-muted">
+                For ZKTeco machines with a &quot;Cloud Server&quot; setting: enter the factory&apos;s public internet IP
+                (comma-separated). Cloud push works only when the serial number and this list are both filled in. On the
+                machine, set the server address to <code>{serverHost()}</code>.
+              </span>
             </label>
             <label className="block text-sm">
               Default shift (used when an employee has no roster for the day)

@@ -157,6 +157,7 @@ class EmployeeCreate(BaseModel):
     reporting_manager_id: int | None = None
     user_id: int | None = None
     is_active: bool = True
+    attendance_device_pin: str | None = Field(None, max_length=32)
 
 
 class EmployeeUpdate(BaseModel):
@@ -186,6 +187,7 @@ class EmployeeUpdate(BaseModel):
     reporting_manager_id: int | None = None
     user_id: int | None = None
     is_active: bool | None = None
+    attendance_device_pin: str | None = Field(None, max_length=32)
 
 
 class EmployeeResponse(BaseModel):
@@ -219,3 +221,4 @@ class EmployeeResponse(BaseModel):
     is_active: bool
     created_at: str
     updated_at: str
+    attendance_device_pin: str | None = None

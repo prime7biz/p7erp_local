@@ -302,6 +302,25 @@ portal logout removes the cookie. Host Nginx must not hide or strip `Set-Cookie`
 Rollback: set the line to `false` (or remove it) and run the same `up -d backend`. Portal users in
 cookie mode log in again once when their access token expires.
 
+### ZKTeco cloud push for attendance machines (`/iclock/*`)
+
+ZKTeco machines with a "Cloud Server / ADMS" setting call `/iclock/cdata` and `/iclock/getrequest`
+on the server (fixed paths). The frontend Nginx (`frontend/nginx.prod.conf`) proxies `/iclock/` to
+the backend. A device is accepted only when HR has filled in **both** its serial number and its
+allowed IPs on **HR → Attendance Devices**, so nothing changes until a company configures a machine.
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ATTENDANCE_ICLOCK_ENABLED` | `true` | `false` = `/iclock/*` answers 404 for everyone (kill switch) |
+| `ATTENDANCE_ICLOCK_RATE_LIMIT_PER_DEVICE_PER_MINUTE` | `600` | Per serial number (Redis, else per process). 0 = no limit |
+| `ATTENDANCE_ICLOCK_RATE_LIMIT_PER_IP_PER_MINUTE` | `1200` | Per client IP. 0 = no limit |
+
+Host Nginx: many machines only speak plain HTTP for cloud push. If the host redirects all HTTP to
+HTTPS, add an exception for `location /iclock/ { proxy_pass http://127.0.0.1:5173; ... }` in the
+port-80 server block (keep `X-Forwarded-For`), or use machines that support HTTPS. The allowed-IP
+check uses the right-most **public** IP in `X-Forwarded-For`, so machines on a private LAN talking
+to an on-premise server cannot be matched (use the `X-Device-Key` push with a bridge there).
+
 ---
 
 ## Rollback

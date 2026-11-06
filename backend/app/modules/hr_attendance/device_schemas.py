@@ -15,6 +15,8 @@ class AttendanceDeviceCreate(BaseModel):
     device_type: str = Field("GENERIC", min_length=1, max_length=24)
     serial_number: str | None = Field(None, max_length=64)
     default_shift_id: int | None = None
+    # ZKTeco cloud push (/iclock): IPs / CIDR ranges the device connects from (comma-separated).
+    push_allowed_ips: str | None = Field(None, max_length=1024)
 
 
 class AttendanceDeviceUpdate(BaseModel):
@@ -24,6 +26,7 @@ class AttendanceDeviceUpdate(BaseModel):
     serial_number: str | None = Field(None, max_length=64)
     default_shift_id: int | None = None
     is_active: bool | None = None
+    push_allowed_ips: str | None = Field(None, max_length=1024)
 
 
 class AttendanceDeviceOut(BaseModel):
@@ -40,6 +43,9 @@ class AttendanceDeviceOut(BaseModel):
     created_by: int | None
     created_at: str
     updated_at: str
+    push_allowed_ips: str | None = None
+    # True when the device can use ZKTeco cloud push (/iclock): active + serial + allowed IPs.
+    iclock_ready: bool = False
 
 
 class AttendanceDeviceWithKeyOut(AttendanceDeviceOut):

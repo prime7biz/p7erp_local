@@ -131,6 +131,7 @@ export function HrEmployeeDetailPage() {
         section_id: row.section_id,
         employee_category: row.employee_category,
         reporting_manager_id: row.reporting_manager_id,
+        attendance_device_pin: row.attendance_device_pin ?? null,
         joining_date: row.joining_date,
       });
     } catch (e) {
@@ -250,6 +251,7 @@ export function HrEmployeeDetailPage() {
         section_id: form.section_id ?? null,
         employee_category: form.employee_category ?? null,
         reporting_manager_id: form.reporting_manager_id ?? null,
+        attendance_device_pin: form.attendance_device_pin?.trim() || null,
         employment_type: form.employment_type?.trim() || null,
         joining_date: form.joining_date || null,
         confirmation_date: form.confirmation_date || null,
@@ -537,6 +539,14 @@ export function HrEmployeeDetailPage() {
         <form onSubmit={saveJob} className="rounded-xl border border-border bg-surface-raised p-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <input className="rounded border px-3 py-2 text-sm" placeholder="Employee code" value={form.employee_code ?? ""} onChange={(e) => setForm((p) => ({ ...p, employee_code: e.target.value }))} required />
           <input className="rounded border px-3 py-2 text-sm" placeholder="Employment type" value={form.employment_type ?? ""} onChange={(e) => setForm((p) => ({ ...p, employment_type: e.target.value }))} />
+          <input
+            className="rounded border px-3 py-2 text-sm"
+            placeholder="Device PIN (attendance machine user no., if not the employee code)"
+            title="Device PIN: the user number enrolled on the attendance machine. Leave empty when it is the employee code."
+            maxLength={32}
+            value={form.attendance_device_pin ?? ""}
+            onChange={(e) => setForm((p) => ({ ...p, attendance_device_pin: e.target.value }))}
+          />
           <select
             className="rounded border px-3 py-2 text-sm"
             value={form.department_id ?? ""}

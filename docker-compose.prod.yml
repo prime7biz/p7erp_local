@@ -95,6 +95,8 @@ services:
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
       AUTH_COOKIE_SAMESITE: ${AUTH_COOKIE_SAMESITE:-strict}
       AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
+      # ZKTeco cloud push (/iclock/*); only devices with serial + allowed IPs. false = kill switch.
+      ATTENDANCE_ICLOCK_ENABLED: ${ATTENDANCE_ICLOCK_ENABLED:-true}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       GEMINI_ENABLED: ${GEMINI_ENABLED:-false}

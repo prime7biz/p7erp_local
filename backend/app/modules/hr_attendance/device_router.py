@@ -48,6 +48,9 @@ from app.modules.hr_attendance.device_service import (
     PUNCH_SOURCE_PUSH,
     authenticate_device,
     generate_api_key,
+    iclock_ready,
+    normalize_allowed_ips,
+    normalize_serial,
     process_punches,
 )
 
@@ -55,6 +58,7 @@ router = APIRouter(prefix="/hr/attendance", tags=["hr-attendance-devices"])
 push_router = APIRouter(prefix="/hr/attendance", tags=["hr-attendance-device-push"])
 
 MAX_PAYLOAD_BYTES = 2 * 1024 * 1024
+DEVICE_DUPLICATE_DETAIL = "Device code or serial number already exists"
 
 
 def _ensure_tenant(user: User, tenant: Tenant) -> None:
@@ -77,7 +81,16 @@ def _device_out(row: AttendanceDevice) -> AttendanceDeviceOut:
         created_by=row.created_by,
         created_at=row.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
+        push_allowed_ips=row.push_allowed_ips,
+        iclock_ready=iclock_ready(row),
     )
+
+
+def _clean_allowed_ips(value: str | None) -> str | None:
+    try:
+        return normalize_allowed_ips(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _with_key(row: AttendanceDevice, api_key: str) -> AttendanceDeviceWithKeyOut:
@@ -226,7 +239,8 @@ async def create_device(
         code=body.code.strip(),
         name=body.name.strip(),
         device_type=_clean_device_type(body.device_type),
-        serial_number=(body.serial_number or "").strip() or None,
+        serial_number=normalize_serial(body.serial_number),
+        push_allowed_ips=_clean_allowed_ips(body.push_allowed_ips),
         api_key_hash=key_hash,
         api_key_prefix=prefix,
         default_shift_id=body.default_shift_id,
@@ -247,7 +261,7 @@ async def create_device(
         await db.commit()
     except IntegrityError:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail="Device code already exists") from None
+        raise HTTPException(status_code=400, detail=DEVICE_DUPLICATE_DETAIL) from None
     await db.refresh(row)
     return _with_key(row, api_key)
 
@@ -274,7 +288,9 @@ async def update_device(
         if payload.get(key) is not None:
             payload[key] = payload[key].strip()
     if "serial_number" in payload:
-        payload["serial_number"] = (payload["serial_number"] or "").strip() or None
+        payload["serial_number"] = normalize_serial(payload["serial_number"])
+    if "push_allowed_ips" in payload:
+        payload["push_allowed_ips"] = _clean_allowed_ips(payload["push_allowed_ips"])
     changes = {k: (getattr(row, k), v) for k, v in payload.items() if getattr(row, k) != v}
     for key, (_old, value) in changes.items():
         setattr(row, key, value)
@@ -291,7 +307,7 @@ async def update_device(
         await db.commit()
     except IntegrityError:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=400, detail="Device code already exists") from None
+        raise HTTPException(status_code=400, detail=DEVICE_DUPLICATE_DETAIL) from None
     await db.refresh(row)
     return _device_out(row)
 

@@ -148,6 +148,13 @@ async def _can_view_employee_sensitive(db: AsyncSession, user: User, tenant_id: 
     )
 
 
+EMPLOYEE_DUPLICATE_DETAIL = "Employee code or attendance device PIN already exists"
+
+
+def _clean_device_pin(value: str | None) -> str | None:
+    return (value or "").strip() or None
+
+
 def _employee_to_response(row: Employee, *, mask_sensitive: bool = False) -> EmployeeResponse:
     out = _employee_to_response_full(row)
     if mask_sensitive:
@@ -187,6 +194,7 @@ def _employee_to_response_full(row: Employee) -> EmployeeResponse:
         is_active=row.is_active,
         created_at=row.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
+        attendance_device_pin=row.attendance_device_pin,
     )
 
 
@@ -603,13 +611,14 @@ async def create_employee(
         reporting_manager_id=body.reporting_manager_id,
         user_id=body.user_id,
         is_active=body.is_active,
+        attendance_device_pin=_clean_device_pin(body.attendance_device_pin),
     )
     db.add(row)
     try:
         await db.commit()
     except IntegrityError:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Employee code already exists")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=EMPLOYEE_DUPLICATE_DETAIL)
     await db.refresh(row)
     return _employee_to_response(row)
 
@@ -702,11 +711,13 @@ async def update_employee(
         row.user_id = payload["user_id"]
     if "is_active" in payload:
         row.is_active = bool(payload["is_active"])
+    if "attendance_device_pin" in payload:
+        row.attendance_device_pin = _clean_device_pin(payload["attendance_device_pin"])
     try:
         await db.commit()
     except IntegrityError:
         await safe_async_session_rollback(db)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Employee code already exists")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=EMPLOYEE_DUPLICATE_DETAIL)
     await db.refresh(row)
     return _employee_to_response(row, mask_sensitive=not can_view_sensitive)
 

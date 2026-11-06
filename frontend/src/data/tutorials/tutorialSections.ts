@@ -1665,11 +1665,23 @@ Only a **manager / admin** or a role with **hr.attendance.manage** can open this
 - **ZKTeco attendance log** — \`attlog.dat\` / .txt from the machine's USB export.
 - **JSON** — a list of \`{"employee_code": "...", "punched_at": "..."}\`.
 
-The device user number (PIN) must be the **employee code**. The summary shows new punches, punches already imported, attendance days created / updated, unknown employee codes and lines that could not be read. Importing the same file again adds nothing.
+The device user number (PIN) is matched to the employee's **Device PIN** (employee page → **Job** tab) when one is filled in, otherwise to the **employee code**. The summary shows new punches, punches already imported, attendance days created / updated, unknown employee codes and lines that could not be read. Importing the same file again adds nothing.
 
 ## Automatic push
 
 A device or a small bridge program can send punches to \`POST /api/v1/hr/attendance/device-push\` with the header \`X-Device-Key\` (JSON list or ZKTeco log lines). The key decides the company, so it can only add punches for its own employees. **Last push** on the list shows when the device last sent data.
+
+## ZKTeco cloud push (no bridge program)
+
+ZKTeco machines with a **Cloud Server / ADMS** setting can send punches directly:
+
+1. **Actions → Edit** the device and fill **Serial number** (from the machine's System Info) and **Cloud push: allowed IP addresses** — the factory's public internet IP (ask your IT team or ISP; several can be separated by commas, ranges like \`103.4.145.0/24\` work too).
+2. On the machine, set the cloud server address to this ERP's address (shown under the field) and enable the connection.
+3. **Status** on the list shows **Cloud push on** once both fields are filled in; **Last push** updates when the machine checks in.
+
+The machine is recognised by its serial number **and** the IP it connects from; a request from any other IP is refused. Cloud push stays off for a device until both fields are filled in.
+
+> **Warning:** Many machines only speak plain HTTP for cloud push. Your server administrator must allow the \`/iclock/\` path over HTTP (or use a machine with HTTPS support) — see the deployment notes.
 
 ## How a day is built
 
@@ -1681,7 +1693,7 @@ A device or a small bridge program can send punches to \`POST /api/v1/hr/attenda
 
 > **Tip:** Overtime minutes on attendance are for information. Paid overtime still comes from approved entries on **Overtime** (\`/app/hr/attendance/overtime\`).`,
         tags: ["HR", "attendance", "device", "biometric", "fingerprint", "ZKTeco", "punch", "import"],
-        keywords: ["machine", "attlog", "card", "clock in", "API key"],
+        keywords: ["machine", "attlog", "card", "clock in", "API key", "cloud push", "ADMS", "iclock", "device PIN"],
         lastUpdated: "2026-11-06",
         infographics: [
           {

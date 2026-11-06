@@ -1,8 +1,9 @@
 """Attendance devices: API keys, storing punches and building daily attendance from them.
 
 How punches become attendance (one entry per employee per day, source ``DEVICE``):
-1. The device user code (PIN) must equal the employee code (exact match first, then ignoring
-   upper/lower case when that finds exactly one employee). Unknown codes are reported, not stored.
+1. The device user code (PIN) is matched to the employee's ``attendance_device_pin`` when one is
+   set, otherwise to the employee code (exact match first, then ignoring upper/lower case when
+   that finds exactly one employee). Unknown codes are reported, not stored.
 2. Punches are stored once: the same device + employee + time is skipped (``duplicates``).
 3. For every day that received a punch, the entry is rebuilt from ALL stored punches of that day
    (every device): in time = first punch, out time = last punch (only when there are 2+ punches).
@@ -21,13 +22,15 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
+import re
 import secrets
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -89,6 +92,46 @@ async def authenticate_device(db: AsyncSession, raw_key: str | None) -> Attendan
     return device
 
 
+def normalize_serial(value: str | None) -> str | None:
+    return (value or "").strip().upper() or None
+
+
+def normalize_allowed_ips(value: str | None) -> str | None:
+    """``"203.0.113.7, 198.51.100.0/24"`` -> canonical comma list; raises ValueError on a bad entry."""
+    entries = [e for e in re.split(r"[\s,;]+", value or "") if e]
+    networks: list[str] = []
+    for entry in entries:
+        try:
+            net = ipaddress.ip_network(entry, strict=False)
+        except ValueError:
+            raise ValueError(f"'{entry[:45]}' is not an IP address or range (example: 203.0.113.7 or 203.0.113.0/24)") from None
+        if str(net) not in networks:
+            networks.append(str(net))
+    joined = ",".join(networks)
+    if len(joined) > 512:
+        raise ValueError("Too many allowed IP entries (max 512 characters)")
+    return joined or None
+
+
+def ip_is_allowed(allowed: str | None, client_ip: str) -> bool:
+    try:
+        ip = ipaddress.ip_address((client_ip or "").strip())
+    except ValueError:
+        return False
+    for entry in (allowed or "").split(","):
+        try:
+            if entry and ip in ipaddress.ip_network(entry, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def iclock_ready(device: AttendanceDevice) -> bool:
+    """/iclock push is on for a device only when it is active and has a serial AND an IP allow-list."""
+    return bool(device.is_active and device.serial_number and device.push_allowed_ips)
+
+
 # --- Import summary -----------------------------------------------------------------------------
 
 
@@ -114,33 +157,51 @@ class PunchImportSummary:
 # --- Matching employees -------------------------------------------------------------------------
 
 
+def _match_one(code: str, exact: dict[str, int], by_lower: dict[str, set[int]]) -> int | None:
+    if code in exact:
+        return exact[code]
+    candidates = by_lower.get(code.lower(), set())
+    return next(iter(candidates)) if len(candidates) == 1 else None
+
+
 async def match_employee_codes(db: AsyncSession, tenant_id: int, codes: set[str]) -> dict[str, int]:
-    """{device user code: employee id} for the codes that match exactly one employee of the tenant."""
+    """{device user code: employee id} for the codes that match exactly one employee of the tenant.
+
+    The employee's ``attendance_device_pin`` wins when it is filled in; otherwise the device code
+    is compared with the employee code (exact first, then ignoring upper / lower case).
+    """
     if not codes:
         return {}
     lowered = {c.strip().lower() for c in codes}
+    pin_col = func.lower(func.trim(Employee.attendance_device_pin))
+    code_col = func.lower(func.trim(Employee.employee_code))
     rows = (
         await db.execute(
-            select(Employee.id, Employee.employee_code).where(
+            select(Employee.id, Employee.employee_code, Employee.attendance_device_pin).where(
                 Employee.tenant_id == tenant_id,
-                func.lower(func.trim(Employee.employee_code)).in_(lowered),
+                or_(code_col.in_(lowered), pin_col.in_(lowered)),
             )
         )
     ).all()
-    exact: dict[str, int] = {}
-    by_lower: dict[str, set[int]] = defaultdict(set)
-    for emp_id, emp_code in rows:
+    pin_exact: dict[str, int] = {}
+    pin_lower: dict[str, set[int]] = defaultdict(set)
+    code_exact: dict[str, int] = {}
+    code_lower: dict[str, set[int]] = defaultdict(set)
+    for emp_id, emp_code, emp_pin in rows:
+        pin = (emp_pin or "").strip()
+        if pin:
+            pin_exact[pin] = emp_id
+            pin_lower[pin.lower()].add(emp_id)
         clean = (emp_code or "").strip()
-        exact[clean] = emp_id
-        by_lower[clean.lower()].add(emp_id)
+        code_exact[clean] = emp_id
+        code_lower[clean.lower()].add(emp_id)
     matched: dict[str, int] = {}
     for code in codes:
-        if code in exact:
-            matched[code] = exact[code]
-            continue
-        candidates = by_lower.get(code.lower(), set())
-        if len(candidates) == 1:
-            matched[code] = next(iter(candidates))
+        emp_id = _match_one(code, pin_exact, pin_lower)
+        if emp_id is None:
+            emp_id = _match_one(code, code_exact, code_lower)
+        if emp_id is not None:
+            matched[code] = emp_id
     return matched
 
 

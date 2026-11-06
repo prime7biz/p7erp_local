@@ -22,6 +22,10 @@ export interface HrAttendanceDevice {
   created_by: number | null;
   created_at: string;
   updated_at: string;
+  /** ZKTeco cloud push (/iclock): comma-separated IPs / CIDR ranges the machine connects from. */
+  push_allowed_ips?: string | null;
+  /** True when cloud push works for this device: active + serial number + allowed IPs. */
+  iclock_ready?: boolean;
 }
 
 /** Returned only by create and rotate-key: the full key is shown once and never again. */
@@ -35,6 +39,7 @@ export interface HrAttendanceDeviceCreate {
   device_type?: HrAttendanceDeviceType;
   serial_number?: string | null;
   default_shift_id?: number | null;
+  push_allowed_ips?: string | null;
 }
 
 export type HrAttendanceDeviceUpdate = Partial<HrAttendanceDeviceCreate> & { is_active?: boolean };

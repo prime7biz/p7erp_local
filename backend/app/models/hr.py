@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -107,11 +107,20 @@ class Employee(Base):
         ),
         UniqueConstraint("tenant_id", "employee_code", name="uq_hr_employees_tenant_employee_code"),
         Index("uq_hr_employees_user_id", "user_id", unique=True),
+        Index(
+            "uq_hr_employees_tenant_attendance_device_pin",
+            "tenant_id",
+            "attendance_device_pin",
+            unique=True,
+            postgresql_where=text("attendance_device_pin IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     employee_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    # User number enrolled on the attendance machine when it differs from employee_code.
+    attendance_device_pin: Mapped[str | None] = mapped_column(String(32), nullable=True)
     first_name: Mapped[str] = mapped_column(String(128), nullable=False)
     last_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)

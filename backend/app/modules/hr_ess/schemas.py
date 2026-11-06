@@ -1,6 +1,8 @@
 from datetime import date
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.modules.hr_leave.validation import normalize_leave_days
 
 
 class EssPreferenceUpdate(BaseModel):
@@ -58,6 +60,11 @@ class LeaveRequestCreate(BaseModel):
     to_date: date
     reason: str | None = None
     days_requested: str = "1"
+
+    @field_validator("days_requested", mode="before")
+    @classmethod
+    def _v_days(cls, v: object) -> str:
+        return normalize_leave_days(v)
 
 
 class AttendanceSummaryResponse(BaseModel):

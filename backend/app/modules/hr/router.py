@@ -576,6 +576,12 @@ async def update_employee(
     _ensure_user_tenant(user, tenant)
     row = await _get_employee_or_404(db, tenant.id, employee_id)
     payload = body.model_dump(exclude_unset=True)
+    # The linked login decides whose payslips/ESS data a user sees, and activation has
+    # its own manager-only endpoints, so these two fields need a manager/admin.
+    links_change = "user_id" in payload and payload["user_id"] != row.user_id
+    active_change = "is_active" in payload and bool(payload["is_active"]) != bool(row.is_active)
+    if links_change or active_change:
+        await _require_manager_or_admin(db, user, tenant.id)
     if "date_of_birth" in payload:
         assert_dob_allowed(
             payload.get("date_of_birth"),

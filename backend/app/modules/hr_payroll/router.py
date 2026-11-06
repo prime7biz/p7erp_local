@@ -124,6 +124,20 @@ async def _own_employee_id_or_all(db: AsyncSession, user: User, tenant_id: int) 
     return int(own)
 
 
+async def _salary_scope_employee_id(db: AsyncSession, user: User, tenant_id: int) -> int | None:
+    """None = may see every employee's pay; else only the caller's own employee id.
+
+    Payroll processors (``hr.payroll.manage``) and payslip viewers see everyone; anyone
+    else only sees their own salary rows.
+    """
+    try:
+        await _require_payroll_manage(db, user, tenant_id)
+        return None
+    except HTTPException:
+        pass
+    return await _own_employee_id_or_all(db, user, tenant_id)
+
+
 async def _employee_or_404(db: AsyncSession, tenant_id: int, employee_id: int) -> Employee:
     row = await db.get(Employee, employee_id)
     if not row or row.tenant_id != tenant_id:
@@ -292,15 +306,21 @@ async def _create_statutory_remittance_voucher(
     if not acct_cfg or not acct_cfg.bank_account_id:
         return None
 
+    # Auto-calculate can be applied several times; each apply adds a snapshot. Only the
+    # newest snapshot per run line reflects the pay being posted.
+    latest_snap_ids = (
+        select(func.max(PayrollCalculationSnapshot.id))
+        .join(PayrollRunLine, PayrollRunLine.id == PayrollCalculationSnapshot.payroll_run_line_id)
+        .where(
+            PayrollCalculationSnapshot.tenant_id == tenant_id,
+            PayrollRunLine.run_id == run_id,
+        )
+        .group_by(PayrollCalculationSnapshot.payroll_run_line_id)
+    )
     snaps = list(
         (
             await db.execute(
-                select(PayrollCalculationSnapshot)
-                .join(PayrollRunLine, PayrollRunLine.id == PayrollCalculationSnapshot.payroll_run_line_id)
-                .where(
-                    PayrollCalculationSnapshot.tenant_id == tenant_id,
-                    PayrollRunLine.run_id == run_id,
-                )
+                select(PayrollCalculationSnapshot).where(PayrollCalculationSnapshot.id.in_(latest_snap_ids))
             )
         )
         .scalars()
@@ -719,10 +739,13 @@ async def list_run_lines(
 ):
     _ensure_tenant(user, tenant)
     await _run_or_404(db, tenant.id, run_id)
+    own_employee_id = await _salary_scope_employee_id(db, user, tenant.id)
+    stmt = select(PayrollRunLine).where(PayrollRunLine.tenant_id == tenant.id, PayrollRunLine.run_id == run_id)
+    if own_employee_id is not None:
+        stmt = stmt.where(PayrollRunLine.employee_id == own_employee_id)
     rows = (
         await db.execute(
-            select(PayrollRunLine)
-            .where(PayrollRunLine.tenant_id == tenant.id, PayrollRunLine.run_id == run_id)
+            stmt
             .order_by(PayrollRunLine.id.desc())
             .offset(offset)
             .limit(limit)
@@ -1295,7 +1318,11 @@ async def list_advances(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    rows = (await db.execute(select(EmployeeAdvance).where(EmployeeAdvance.tenant_id == tenant.id).limit(500))).scalars().all()
+    own_employee_id = await _salary_scope_employee_id(db, user, tenant.id)
+    stmt = select(EmployeeAdvance).where(EmployeeAdvance.tenant_id == tenant.id)
+    if own_employee_id is not None:
+        stmt = stmt.where(EmployeeAdvance.employee_id == own_employee_id)
+    rows = (await db.execute(stmt.limit(500))).scalars().all()
     return [
         {
             "id": r.id,
@@ -1475,6 +1502,11 @@ async def list_assignments(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
+    own_employee_id = await _salary_scope_employee_id(db, user, tenant.id)
+    if own_employee_id is not None:
+        if employee_id is not None and employee_id != own_employee_id:
+            raise HTTPException(status_code=403, detail="You can only view your own salary assignment")
+        employee_id = own_employee_id
     rows = await payroll_service.list_structure_assignments(
         db, tenant_id=tenant.id, employee_id=employee_id, limit=limit, offset=offset
     )
@@ -1535,6 +1567,7 @@ async def auto_calculate_preview(
     await assert_soft_permission_allowed(
         db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_AUTO_CALCULATE
     )
+    await _require_payroll_manage(db, user, tenant.id)
     preview = await payroll_service.preview_auto_calculate(db, tenant=tenant, run_id=run_id)
     return PayrollAutoCalculatePreviewOut(
         run_id=preview.run_id,
@@ -1631,7 +1664,7 @@ async def get_statutory_config(
 
     if not is_statutory_payroll_enabled(tenant.feature_flags):
         raise HTTPException(status_code=404, detail="Enable statutory_payroll_enabled feature flag")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_HR_PAYROLL_STATUTORY_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_STATUTORY_VIEW)
     row = (
         await db.execute(
             select(PayrollStatutoryConfig).where(PayrollStatutoryConfig.tenant_id == tenant.id).limit(1)
@@ -1669,7 +1702,7 @@ async def put_statutory_config(
 
     if not is_statutory_payroll_enabled(tenant.feature_flags):
         raise HTTPException(status_code=404, detail="Enable statutory_payroll_enabled feature flag")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_HR_PAYROLL_STATUTORY_EDIT)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_STATUTORY_EDIT)
     await _require_payroll_manage(db, user, tenant.id)
     row = (
         await db.execute(
@@ -1717,7 +1750,7 @@ async def preview_statutory(
 
     if not is_statutory_payroll_enabled(tenant.feature_flags):
         raise HTTPException(status_code=404, detail="Enable statutory_payroll_enabled feature flag")
-    await assert_soft_permission_allowed(db, user, tenant.id, PERMISSION_HR_PAYROLL_STATUTORY_VIEW)
+    await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_STATUTORY_VIEW)
     row = (
         await db.execute(
             select(PayrollStatutoryConfig).where(PayrollStatutoryConfig.tenant_id == tenant.id).limit(1)

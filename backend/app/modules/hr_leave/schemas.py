@@ -1,6 +1,8 @@
 from datetime import date
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.modules.hr_leave.validation import normalize_leave_days
 
 
 class LeaveTypeCreate(BaseModel):
@@ -96,12 +98,22 @@ class LeaveRequestCreate(BaseModel):
     days_requested: str
     reason: str | None = None
 
+    @field_validator("days_requested", mode="before")
+    @classmethod
+    def _v_days(cls, v: object) -> str:
+        return normalize_leave_days(v)
+
 
 class LeaveRequestUpdate(BaseModel):
     from_date: date | None = None
     to_date: date | None = None
     days_requested: str | None = None
     reason: str | None = None
+
+    @field_validator("days_requested", mode="before")
+    @classmethod
+    def _v_days(cls, v: object) -> str | None:
+        return None if v is None else normalize_leave_days(v)
 
 
 class LeaveDecision(BaseModel):

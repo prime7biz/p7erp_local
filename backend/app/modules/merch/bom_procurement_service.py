@@ -6,6 +6,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.codegen import next_tenant_code
+from app.common.orm_numeric import decimal_to_money_response
 from app.models import (
     Bom,
     BomItem,
@@ -242,9 +243,7 @@ async def create_po_from_bom_line(
     db.add(po)
     await db.flush()
 
-    qty_str = f"{quantity:.4g}".strip()
-    if qty_str == "0":
-        qty_str = "0"
+    qty_str = decimal_to_money_response(quantity)
 
     poi = PurchaseOrderItem(
         tenant_id=tenant_id,
@@ -287,7 +286,14 @@ async def bulk_create_pos_by_vendor(
 
     created: list[tuple[PurchaseOrder, list[PurchaseOrderItem]]] = []
     for vid, grp in groups.items():
-        if not grp:
+        pending_lines: list[tuple[BomItem, float]] = []
+        for line in grp:
+            already = await total_po_qty_for_line(db, tenant_id, line.id)
+            need = float(line.required_gross_qty or 0)
+            remaining = max(0.0, need - already)
+            if remaining > 0:
+                pending_lines.append((line, remaining))
+        if not pending_lines:
             continue
         po_code = await next_tenant_code(
             db,
@@ -318,14 +324,9 @@ async def bulk_create_pos_by_vendor(
         db.add(po)
         await db.flush()
         pois: list[PurchaseOrderItem] = []
-        for line in grp:
-            already = await total_po_qty_for_line(db, tenant_id, line.id)
-            need = float(line.required_gross_qty or 0)
-            remaining = max(0.0, need - already)
-            if remaining <= 0:
-                continue
+        for line, remaining in pending_lines:
             price = str(line.bom_expected_unit_price) if line.bom_expected_unit_price is not None else "0"
-            qty_str = f"{remaining:.4g}"
+            qty_str = decimal_to_money_response(remaining)
             poi = PurchaseOrderItem(
                 tenant_id=tenant_id,
                 purchase_order_id=po.id,

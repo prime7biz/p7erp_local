@@ -24,6 +24,7 @@ from app.models import (
     Tenant,
     User,
 )
+from app.modules.hr_leave.validation import assert_leave_dates_and_days, assert_no_overlapping_leave
 from app.modules.hr_leave.schemas import (
     LeaveBalanceOut,
     LeaveBalanceUpsert,
@@ -447,6 +448,10 @@ async def create_leave_request(
     _ensure_tenant(user, tenant)
     await _employee_or_404(db, tenant.id, body.employee_id)
     leave_type = await _leave_type_or_404(db, tenant.id, body.leave_type_id)
+    assert_leave_dates_and_days(body.from_date, body.to_date, body.days_requested)
+    await assert_no_overlapping_leave(
+        db, tenant_id=tenant.id, employee_id=body.employee_id, from_date=body.from_date, to_date=body.to_date
+    )
     initial_status = "PENDING" if leave_type.requires_approval else "APPROVED"
     row = LeaveRequest(
         tenant_id=tenant.id,
@@ -500,6 +505,16 @@ async def update_leave_request(
     old_days = _to_float(row.days_requested)
     for key, value in payload.items():
         setattr(row, key, value)
+    assert_leave_dates_and_days(row.from_date, row.to_date, row.days_requested)
+    if row.status == "PENDING":
+        await assert_no_overlapping_leave(
+            db,
+            tenant_id=tenant.id,
+            employee_id=row.employee_id,
+            from_date=row.from_date,
+            to_date=row.to_date,
+            exclude_request_id=row.id,
+        )
     if row.status == "PENDING":
         delta = _to_float(row.days_requested) - old_days
         if abs(delta) > 1e-9:
@@ -522,6 +537,15 @@ async def submit_leave_request(
     if row.status not in {"DRAFT", "PENDING"}:
         raise HTTPException(status_code=400, detail="Only draft/pending requests can be submitted")
     if row.status == "DRAFT":
+        assert_leave_dates_and_days(row.from_date, row.to_date, row.days_requested)
+        await assert_no_overlapping_leave(
+            db,
+            tenant_id=tenant.id,
+            employee_id=row.employee_id,
+            from_date=row.from_date,
+            to_date=row.to_date,
+            exclude_request_id=row.id,
+        )
         lt = await _leave_type_or_404(db, tenant.id, row.leave_type_id)
         await _adjust_leave_balance(
             db, row, pending_delta=_to_float(row.days_requested), validate=True, is_paid=lt.is_paid

@@ -23,6 +23,7 @@ from app.models.finance import (
     VoucherLine,
     VoucherType,
 )
+from app.modules.finance.coa_balance import apply_account_balance_impact
 from app.modules.finance.system_coa_seeding_service import resolve_system_ledger
 from app.modules.finance.voucher_controls import (
     allocate_series_voucher_number,
@@ -52,12 +53,7 @@ def _to_float(v: object) -> float:
 
 
 def _apply_voucher_impact(account: ChartOfAccount, entry_type: str, amount: float) -> None:
-    current_balance = _to_float(account.balance)
-    if account.normal_balance == "debit":
-        current_balance += amount if entry_type == "DEBIT" else -amount
-    else:
-        current_balance += amount if entry_type == "CREDIT" else -amount
-    account.balance = str(round(current_balance, 4))
+    apply_account_balance_impact(account, entry_type, amount)
 
 
 def _voucher_signature_payload(voucher: Voucher, lines: list[VoucherLine]) -> dict:

@@ -15,11 +15,13 @@ from app.models import (
     EmployeeTicket,
     EssPreference,
     LeaveRequest,
+    LeaveType,
     PayrollPayslip,
     PayrollRunLine,
     Tenant,
     User,
 )
+from app.modules.hr_leave.validation import assert_leave_dates_and_days, assert_no_overlapping_leave
 from app.modules.hr_ess.schemas import (
     AttendanceSummaryResponse,
     EssPreferenceResponse,
@@ -212,6 +214,13 @@ async def create_my_leave_request(
 ):
     _ensure_user_tenant(user, tenant)
     employee = await _get_my_employee_or_404(db, tenant.id, user.id)
+    leave_type = await db.get(LeaveType, body.leave_type_id)
+    if not leave_type or leave_type.tenant_id != tenant.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Leave type not found")
+    assert_leave_dates_and_days(body.from_date, body.to_date, body.days_requested)
+    await assert_no_overlapping_leave(
+        db, tenant_id=tenant.id, employee_id=employee.id, from_date=body.from_date, to_date=body.to_date
+    )
     row = LeaveRequest(
         tenant_id=tenant.id,
         employee_id=employee.id,

@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, Up
 from fastapi.responses import Response as BytesResponse
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
+from app.common.money import safe_decimal
 from app.common.money_schema import MoneyLineStr, MoneyStrNonNeg, MoneyStrNonNegOpt, RateStrNonNeg, RateStrNonNegOpt
 from app.common.orm_numeric import (
     decimal_money_passthrough,
@@ -39,6 +40,7 @@ from app.common.permissions import (
 from app.common.authz import get_user_role_scoped_to_tenant
 from app.modules.finance.advanced_voucher_service import voucher_book_impact_applied, voucher_in_books_clause
 from app.modules.finance.budget_enforcement_service import evaluate_voucher_budget
+from app.modules.finance.coa_balance import apply_account_balance_impact
 from app.modules.finance.voucher_history import (
     diff_voucher,
     header_snapshot,
@@ -1310,13 +1312,31 @@ async def _find_or_create_supplier_ap_account(db: AsyncSession, tenant_id: int, 
     return account
 
 
-def _apply_voucher_impact(account: ChartOfAccount, entry_type: str, amount: float) -> None:
-    current_balance = _to_float(account.balance)
-    if account.normal_balance == "debit":
-        current_balance += amount if entry_type == "DEBIT" else -amount
-    else:
-        current_balance += amount if entry_type == "CREDIT" else -amount
-    account.balance = str(round(current_balance, 4))
+def _apply_voucher_impact(account: ChartOfAccount, entry_type: str, amount: float | str | Decimal) -> None:
+    apply_account_balance_impact(account, entry_type, amount)
+
+
+def _assert_lines_balanced_for_posting(lines: list[VoucherLine]) -> None:
+    """Last check before a voucher touches account balances, whichever path created it."""
+    if not lines:
+        raise HTTPException(status_code=400, detail="Voucher has no lines")
+    total_dr = Decimal("0")
+    total_cr = Decimal("0")
+    for line in lines:
+        amount = safe_decimal(line.amount)
+        if amount < 0:
+            raise HTTPException(status_code=400, detail="Voucher line amounts cannot be negative")
+        if line.entry_type == "DEBIT":
+            total_dr += amount
+        elif line.entry_type == "CREDIT":
+            total_cr += amount
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid voucher line entry type: {line.entry_type}")
+    if abs(total_dr - total_cr) > Decimal("0.01"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Voucher is not balanced: debit {total_dr.quantize(Decimal('0.01'))} vs credit {total_cr.quantize(Decimal('0.01'))}",
+        )
 
 
 async def _lock_chart_accounts_for_subset(
@@ -2868,6 +2888,7 @@ async def update_voucher_status(
                 raise HTTPException(status_code=400, detail="No open accounting period for this voucher date")
             lines_result = await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))
             line_rows = list(lines_result.scalars().all())
+            _assert_lines_balanced_for_posting(line_rows)
             budget_check = await evaluate_voucher_budget(
                 db,
                 tenant_id=tenant.id,
@@ -2921,13 +2942,7 @@ async def update_voucher_status(
                 account = locked_accounts.get(line.account_id)
                 if not account:
                     continue
-                current_balance = _to_float(account.balance)
-                amount = _to_float(line.amount)
-                if account.normal_balance == "debit":
-                    current_balance += amount if line.entry_type == "DEBIT" else -amount
-                else:
-                    current_balance += amount if line.entry_type == "CREDIT" else -amount
-                account.balance = str(round(current_balance, 4))
+                apply_account_balance_impact(account, line.entry_type, line.amount)
             row.books_applied = True
         else:
             row.books_applied = False

@@ -44,6 +44,7 @@ import {
   hydrateTradeCase,
 } from "@/lib/remoteSelectFetchers";
 import { logApiError } from "@/utils/logApiError";
+import { useSubmitGuard } from "@/hooks/useSubmitGuard";
 import { useAuth } from "@/context/AuthContext";
 import { resolveRole } from "@/lib/roles";
 import type { TaxPreviewResponse } from "@/api/client";
@@ -100,6 +101,7 @@ export function VouchersPage() {
   const billWiseFetchedRef = useRef<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const saveGuard = useSubmitGuard();
   const [loading, setLoading] = useState(true);
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [editingVoucherId, setEditingVoucherId] = useState<number | null>(null);
@@ -427,7 +429,11 @@ export function VouchersPage() {
     }
   }
 
-  async function submitVoucher(quickSubmit: boolean, directPost = false) {
+  function submitVoucher(quickSubmit: boolean, directPost = false) {
+    return saveGuard.run(() => saveVoucher(quickSubmit, directPost));
+  }
+
+  async function saveVoucher(quickSubmit: boolean, directPost: boolean) {
     setError(null);
     setSuccess(null);
     try {
@@ -1274,26 +1280,29 @@ export function VouchersPage() {
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  className="rounded-lg border border-status-info/30 bg-status-info-subtle px-4 py-2 text-sm font-medium text-status-info-foreground hover:bg-status-info-subtle/80"
+                  className="rounded-lg border border-status-info/30 bg-status-info-subtle px-4 py-2 text-sm font-medium text-status-info-foreground hover:bg-status-info-subtle/80 disabled:opacity-50"
+                  disabled={saveGuard.busy}
                   onClick={() => void submitVoucher(true)}
                 >
-                  {editingVoucherId ? "Update & Submit" : "Save & Submit"}
+                  {saveGuard.busy ? "Saving…" : editingVoucherId ? "Update & Submit" : "Save & Submit"}
                 </button>
                 {directPostOn ? (
                   <button
                     type="button"
-                    className="rounded-lg border border-status-success/30 bg-status-success-subtle px-4 py-2 text-sm font-medium text-status-success-foreground hover:bg-status-success-subtle/80"
+                    className="rounded-lg border border-status-success/30 bg-status-success-subtle px-4 py-2 text-sm font-medium text-status-success-foreground hover:bg-status-success-subtle/80 disabled:opacity-50"
                     title="Save and post in one step (direct posting is on for this company)"
+                    disabled={saveGuard.busy}
                     onClick={() => void submitVoucher(false, true)}
                   >
-                    {editingVoucherId ? "Update & Post" : "Save & Post"}
+                    {saveGuard.busy ? "Saving…" : editingVoucherId ? "Update & Post" : "Save & Post"}
                   </button>
                 ) : null}
                 <button
                   type="submit"
-                  className="rounded-lg bg-brand-primary px-5 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+                  className="rounded-lg bg-brand-primary px-5 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 disabled:opacity-50"
+                  disabled={saveGuard.busy}
                 >
-                  {editingVoucherId ? "Update Draft" : "Save Draft"}
+                  {saveGuard.busy ? "Saving…" : editingVoucherId ? "Update Draft" : "Save Draft"}
                 </button>
               </div>
             </div>

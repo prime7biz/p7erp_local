@@ -18,6 +18,7 @@ import {
   touchFieldClass,
 } from "@/components/inventory/InventoryMobileList";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
+import { useSubmitGuard } from "@/hooks/useSubmitGuard";
 import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
 
 const REASONS = ["COUNT", "DAMAGE", "SYSTEM", "OTHER"] as const;
@@ -38,6 +39,7 @@ export function StockAdjustmentsPage() {
     notes: "",
   });
   const [loading, setLoading] = useState(true);
+  const saveGuard = useSubmitGuard();
   const { isNarrow, view, setView, showCards } = useListViewPreference();
 
   const load = useCallback(async () => {
@@ -87,15 +89,16 @@ export function StockAdjustmentsPage() {
     [itemLabels],
   );
 
-  const postAdjustment = async (id: number) => {
-    setError("");
-    try {
-      await api.postStockAdjustment(id);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Post failed");
-    }
-  };
+  const postAdjustment = (id: number) =>
+    saveGuard.run(async () => {
+      setError("");
+      try {
+        await api.postStockAdjustment(id);
+        await load();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Post failed");
+      }
+    });
 
   return (
     <div className="min-w-0 space-y-6">
@@ -124,17 +127,20 @@ export function StockAdjustmentsPage() {
         className="grid grid-cols-1 gap-2 rounded-xl border border-border bg-surface-raised p-4 md:grid-cols-2 lg:grid-cols-6"
         onSubmit={async (e) => {
           e.preventDefault();
-          setError("");
-          try {
-            await api.createStockAdjustment({
-              ...form,
-              adjustment_date: form.adjustment_date || null,
-              notes: form.notes || null,
-            });
-            await load();
-          } catch (err) {
-            setError(err instanceof Error ? err.message : "Create failed");
-          }
+          await saveGuard.run(async () => {
+            setError("");
+            try {
+              await api.createStockAdjustment({
+                ...form,
+                adjustment_date: form.adjustment_date || null,
+                notes: form.notes || null,
+              });
+              setForm((p) => ({ ...p, item_id: 0, quantity: "0", notes: "" }));
+              await load();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Create failed");
+            }
+          });
         }}
       >
         <select
@@ -195,9 +201,10 @@ export function StockAdjustmentsPage() {
         />
         <button
           type="submit"
-          className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-brand-primary-foreground lg:col-span-6"
+          className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-brand-primary-foreground disabled:opacity-50 lg:col-span-6"
+          disabled={saveGuard.busy}
         >
-          Save draft adjustment
+          {saveGuard.busy ? "Saving…" : "Save draft adjustment"}
         </button>
       </form>
 

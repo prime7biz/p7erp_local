@@ -4,8 +4,10 @@ import { api, type OutstandingBillCreate, type OutstandingBillResponse, type Bil
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useSubmitGuard } from "@/hooks/useSubmitGuard";
 
 export function OutstandingBillsPage() {
+  const actionGuard = useSubmitGuard();
   const [rows, setRows] = useState<OutstandingBillResponse[]>([]);
   const [aging, setAging] = useState<BillsAgingResponse | null>(null);
   const [billType, setBillType] = useState<"PAYABLE" | "RECEIVABLE">("RECEIVABLE");
@@ -32,7 +34,6 @@ export function OutstandingBillsPage() {
   const load = useCallback(async () => {
     const token = latest.begin();
     try {
-      setSuccess("");
       setError("");
       const [bills, ag] = await Promise.all([
         api.listOutstandingBills({ bill_type: billType, status_filter: statusFilter || undefined }),
@@ -60,31 +61,43 @@ export function OutstandingBillsPage() {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    try {
-      setSuccess("");
-      if (!form.party_name.trim()) throw new Error("Party name is required");
-      if (!form.bill_date || !form.due_date) throw new Error("Bill date and due date are required");
-      if (Number(form.amount) <= 0) throw new Error("Amount must be greater than zero");
-      await api.createOutstandingBill(form);
-      setForm((p) => ({ ...p, bill_no: "", party_name: "", amount: "0", notes: "" }));
-      setSuccess("Bill created successfully.");
-      await load();
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    await actionGuard.run(async () => {
+      try {
+        setSuccess("");
+        setError("");
+        if (!form.party_name.trim()) throw new Error("Party name is required");
+        if (!form.bill_date || !form.due_date) throw new Error("Bill date and due date are required");
+        if (Number(form.amount) <= 0) throw new Error("Amount must be greater than zero");
+        await api.createOutstandingBill(form);
+        setForm((p) => ({ ...p, bill_no: "", party_name: "", amount: "0", notes: "" }));
+        await load();
+        setSuccess("Bill created successfully.");
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    });
   }
 
   async function settle(id: number) {
-    try {
-      const amount = settleMap[id] || "0";
-      if (Number(amount) <= 0) throw new Error("Settle amount must be greater than zero");
-      await api.settleOutstandingBill(id, amount);
-      setSuccess("Bill settlement applied.");
-      await load();
-    } catch (e) {
-      logApiError("OutstandingBillsPage.settle", e);
-      setError((e as Error).message);
-    }
+    await actionGuard.run(async () => {
+      try {
+        setSuccess("");
+        setError("");
+        const amount = settleMap[id] || "0";
+        if (Number(amount) <= 0) throw new Error("Settle amount must be greater than zero");
+        await api.settleOutstandingBill(id, amount);
+        setSettleMap((p) => {
+          const next = { ...p };
+          delete next[id];
+          return next;
+        });
+        await load();
+        setSuccess("Bill settlement applied.");
+      } catch (e) {
+        logApiError("OutstandingBillsPage.settle", e);
+        setError((e as Error).message);
+      }
+    });
   }
 
   async function runAutoCreateBillRefs() {
@@ -93,15 +106,18 @@ export function OutstandingBillsPage() {
       setError("Enter a valid voucher ID for auto-create.");
       return;
     }
-    try {
-      setError("");
-      const res = await api.autoCreateBillRefs(vid);
-      setSuccess(`Created ${res.bills_created} bill reference(s): ${res.bill_numbers.join(", ") || "—"}`);
-      await load();
-    } catch (e) {
-      logApiError("OutstandingBillsPage.autoCreateBillRefs", e);
-      setError((e as Error).message);
-    }
+    await actionGuard.run(async () => {
+      try {
+        setSuccess("");
+        setError("");
+        const res = await api.autoCreateBillRefs(vid);
+        await load();
+        setSuccess(`Created ${res.bills_created} bill reference(s): ${res.bill_numbers.join(", ") || "—"}`);
+      } catch (e) {
+        logApiError("OutstandingBillsPage.autoCreateBillRefs", e);
+        setError((e as Error).message);
+      }
+    });
   }
 
   async function runAutoCreateBillFromVoucher() {
@@ -114,19 +130,22 @@ export function OutstandingBillsPage() {
       setError("Party name is required for outstanding bill auto-create.");
       return;
     }
-    try {
-      setError("");
-      await api.autoCreateBillFromVoucher(vid, {
-        party_name: autoPartyName.trim(),
-        bill_type: billType,
-        due_in_days: 30,
-      });
-      setSuccess("Outstanding bill created from voucher.");
-      await load();
-    } catch (e) {
-      logApiError("OutstandingBillsPage.autoCreateBillFromVoucher", e);
-      setError((e as Error).message);
-    }
+    await actionGuard.run(async () => {
+      try {
+        setSuccess("");
+        setError("");
+        await api.autoCreateBillFromVoucher(vid, {
+          party_name: autoPartyName.trim(),
+          bill_type: billType,
+          due_in_days: 30,
+        });
+        await load();
+        setSuccess("Outstanding bill created from voucher.");
+      } catch (e) {
+        logApiError("OutstandingBillsPage.autoCreateBillFromVoucher", e);
+        setError((e as Error).message);
+      }
+    });
   }
 
   return (
@@ -175,10 +194,10 @@ export function OutstandingBillsPage() {
               placeholder="Matches customer/vendor name"
             />
           </div>
-          <button type="button" className="rounded border border-border-strong px-3 py-1.5 text-sm" onClick={() => void runAutoCreateBillRefs()}>
+          <button type="button" className="rounded border border-border-strong px-3 py-1.5 text-sm disabled:opacity-50" disabled={actionGuard.busy} onClick={() => void runAutoCreateBillRefs()}>
             Auto-create bill references
           </button>
-          <button type="button" className="rounded bg-brand-primary px-3 py-1.5 text-sm text-brand-primary-foreground" onClick={() => void runAutoCreateBillFromVoucher()}>
+          <button type="button" className="rounded bg-brand-primary px-3 py-1.5 text-sm text-brand-primary-foreground disabled:opacity-50" disabled={actionGuard.busy} onClick={() => void runAutoCreateBillFromVoucher()}>
             Auto-create outstanding bill
           </button>
         </div>
@@ -222,9 +241,10 @@ export function OutstandingBillsPage() {
         <input className="rounded border px-3 py-2 text-sm" placeholder="Currency" value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value.toUpperCase() }))} />
         <button
           type="submit"
-          className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90"
+          className="rounded-xl bg-brand-primary px-3 py-2 text-sm font-semibold text-brand-primary-foreground shadow hover:bg-brand-primary/90 disabled:opacity-50"
+          disabled={actionGuard.busy}
         >
-          Create Bill
+          {actionGuard.busy ? "Saving…" : "Create Bill"}
         </button>
       </form>
 
@@ -256,7 +276,7 @@ export function OutstandingBillsPage() {
                 <td className="px-2 py-1">
                   <div className="flex flex-wrap gap-1">
                     <input className="w-24 rounded border px-2 py-1 text-xs" value={settleMap[r.id] ?? ""} onChange={(e) => setSettleMap((p) => ({ ...p, [r.id]: e.target.value }))} />
-                    <button className="rounded border px-2 py-1 text-xs" onClick={() => void settle(r.id)}>
+                    <button className="rounded border px-2 py-1 text-xs disabled:opacity-50" disabled={actionGuard.busy} onClick={() => void settle(r.id)}>
                       Settle
                     </button>
                   </div>

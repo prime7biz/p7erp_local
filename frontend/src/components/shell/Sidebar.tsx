@@ -9,7 +9,7 @@ import {
 } from "@/app/sidebarConfig";
 import { prefetchSidebarRoute } from "@/app/prefetchRoutes";
 import { getRbacMode } from "@/components/auth/rbacMode";
-import { getNavFavorites, getNavRecents, pushNavRecent } from "@/components/shell/navShortcuts";
+import { getNavFavorites } from "@/components/shell/navShortcuts";
 import { SidebarNavLink } from "@/components/shell/SidebarNavLink";
 import { SidebarSection } from "@/components/shell/SidebarSection";
 import { SidebarShortcuts } from "@/components/shell/SidebarShortcuts";
@@ -34,6 +34,26 @@ export type SidebarProps = {
   compact?: boolean;
 };
 
+const OPEN_SECTION_KEY = "p7_sidebar_open_section";
+
+function readSavedOpenSection(): string | null {
+  try {
+    const saved = localStorage.getItem(OPEN_SECTION_KEY);
+    if (saved === null) return "Dashboard";
+    return saved || null;
+  } catch {
+    return "Dashboard";
+  }
+}
+
+function saveOpenSection(section: string | null) {
+  try {
+    localStorage.setItem(OPEN_SECTION_KEY, section ?? "");
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
 export function Sidebar({
   tenantType,
   tenantName,
@@ -48,21 +68,18 @@ export function Sidebar({
   compact = false,
 }: SidebarProps) {
   const location = useLocation();
-  const [openSection, setOpenSection] = useState<string | null>("Dashboard");
+  // Saved section is only a fallback; the route effect below opens the current page's section.
+  const [openSection, setOpenSection] = useState<string | null>(readSavedOpenSection);
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
   const [userPopoverOpen, setUserPopoverOpen] = useState(false);
-  const [shortcutTick, setShortcutTick] = useState(0);
   const activeLinkRef = useRef<HTMLAnchorElement | null>(null);
   const userPopoverRef = useRef<HTMLDivElement>(null);
 
-  const recents = useMemo(() => {
-    void shortcutTick;
-    return getNavRecents(userId);
-  }, [userId, shortcutTick]);
+  // Re-read on navigation so favorites starred in the command palette show up.
   const favorites = useMemo(() => {
-    void shortcutTick;
+    void location.pathname;
     return getNavFavorites(userId);
-  }, [userId, shortcutTick]);
+  }, [userId, location.pathname]);
 
   const filtered = useMemo(() => {
     const rbacMode = getRbacMode(featureFlags);
@@ -110,34 +127,11 @@ export function Sidebar({
       }
       return mod.items.some((item) => isSidebarNavItemActive(path, item.href, item.exact));
     });
-    if (activeModule) setOpenSection(activeModule.section);
-
-    let label = activeModule?.section ?? path;
-    let href = path;
-    if (activeModule?.directLink && isSidebarNavItemActive(path, activeModule.directLink, true)) {
-      href = activeModule.directLink;
-      label = activeModule.section;
-    } else if (activeModule?.subsections?.length) {
-      for (const sub of activeModule.subsections) {
-        const hit = sub.items.find((item) => isSidebarNavItemActive(path, item.href, item.exact));
-        if (hit) {
-          href = hit.href;
-          label = hit.label;
-          break;
-        }
-      }
-    } else if (activeModule) {
-      const hit = activeModule.items.find((item) => isSidebarNavItemActive(path, item.href, item.exact));
-      if (hit) {
-        href = hit.href;
-        label = hit.label;
-      }
+    if (activeModule) {
+      setOpenSection(activeModule.section);
+      saveOpenSection(activeModule.section);
     }
-    if (href.startsWith("/app")) {
-      pushNavRecent(userId, { href, label, section: activeModule?.section });
-      setShortcutTick((n) => n + 1);
-    }
-  }, [location.pathname, filtered, userId]);
+  }, [location.pathname, filtered]);
 
   useEffect(() => {
     if (!isCollapsed && activeLinkRef.current) {
@@ -235,7 +229,7 @@ export function Sidebar({
         className={`sidebar-scroll flex-1 overflow-y-auto space-y-0.5 ${compact ? "p-1.5" : "p-2"}`}
         aria-label="Main navigation"
       >
-        <SidebarShortcuts favorites={favorites} recents={recents} isCollapsed={isCollapsed} />
+        <SidebarShortcuts favorites={favorites} isCollapsed={isCollapsed} />
 
         {filtered.map((mod, index) => {
           const hasSubsections = Boolean(mod.subsections && mod.subsections.length > 0);
@@ -260,7 +254,11 @@ export function Sidebar({
                 items={mod.items}
                 subsections={mod.subsections}
                 isOpen={openSection === mod.section}
-                onToggle={() => setOpenSection(openSection === mod.section ? null : mod.section)}
+                onToggle={() => {
+                  const next = openSection === mod.section ? null : mod.section;
+                  setOpenSection(next);
+                  saveOpenSection(next);
+                }}
                 isActive={hasActiveItem}
                 pathname={location.pathname}
                 isCollapsed={isCollapsed}

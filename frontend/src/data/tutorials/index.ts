@@ -1,4 +1,11 @@
-export type { TutorialArticle, TutorialImageAsset, TutorialInfographic, TutorialSection } from "./types";
+export type {
+  TutorialArticle,
+  TutorialImageAsset,
+  TutorialInfographic,
+  TutorialSection,
+  TutorialStep,
+  TutorialVideoAsset,
+} from "./types";
 export { tutorialSections } from "./tutorialSections";
 export {
   flattenArticles,

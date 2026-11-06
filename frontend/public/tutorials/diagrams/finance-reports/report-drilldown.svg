@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <title>Finance report drill-down: Financial Statements to Trial Balance to Ledger Activity to Voucher</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="420" fill="#ffffff"/>
+  <text x="480" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#0f766e">Drill down: from a report figure to the voucher behind it</text>
+  <text x="480" y="56" text-anchor="middle" font-size="13" fill="#334155">Orange links on each report take you one level deeper. Use the browser Back button to come back up.</text>
+
+  <!-- Box 1 -->
+  <rect x="20" y="90" width="200" height="150" rx="14" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+  <text x="120" y="118" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">1. Financial Statements</text>
+  <text x="120" y="142" text-anchor="middle" font-size="12" fill="#334155">P&amp;L + Balance Sheet</text>
+  <text x="120" y="172" text-anchor="middle" font-size="12" fill="#334155">Click a heading:</text>
+  <text x="120" y="190" text-anchor="middle" font-size="12" font-weight="600" fill="#ea580c">Income &#183; Expense</text>
+  <text x="120" y="208" text-anchor="middle" font-size="12" font-weight="600" fill="#ea580c">Assets &#183; Liabilities &#183; Equity</text>
+
+  <!-- Box 2 -->
+  <rect x="260" y="90" width="200" height="150" rx="14" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+  <text x="360" y="118" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">2. Trial Balance</text>
+  <text x="360" y="142" text-anchor="middle" font-size="12" fill="#334155">Only accounts of that</text>
+  <text x="360" y="158" text-anchor="middle" font-size="12" fill="#334155">nature (e.g. Expense)</text>
+  <text x="360" y="190" text-anchor="middle" font-size="12" fill="#334155">Click an</text>
+  <text x="360" y="208" text-anchor="middle" font-size="12" font-weight="600" fill="#ea580c">account name</text>
+
+  <!-- Box 3 -->
+  <rect x="500" y="90" width="200" height="150" rx="14" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+  <text x="600" y="118" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">3. Ledger Activity</text>
+  <text x="600" y="142" text-anchor="middle" font-size="12" fill="#334155">Opening &#183; each voucher &#183;</text>
+  <text x="600" y="158" text-anchor="middle" font-size="12" fill="#334155">running balance &#183; Closing</text>
+  <text x="600" y="190" text-anchor="middle" font-size="12" fill="#334155">Click a</text>
+  <text x="600" y="208" text-anchor="middle" font-size="12" font-weight="600" fill="#ea580c">voucher number</text>
+
+  <!-- Box 4 -->
+  <rect x="740" y="90" width="200" height="150" rx="14" fill="#0f766e"/>
+  <text x="840" y="118" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">4. Voucher</text>
+  <text x="840" y="142" text-anchor="middle" font-size="12" fill="#ffffff">Debit / credit lines,</text>
+  <text x="840" y="158" text-anchor="middle" font-size="12" fill="#ffffff">narration, status,</text>
+  <text x="840" y="174" text-anchor="middle" font-size="12" fill="#ffffff">approval history</text>
+  <text x="840" y="208" text-anchor="middle" font-size="12" fill="#ccfbf1">The source of the figure</text>
+
+  <line x1="222" y1="165" x2="256" y2="165" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="462" y1="165" x2="496" y2="165" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="702" y1="165" x2="736" y2="165" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Shortcut row -->
+  <rect x="20" y="280" width="440" height="110" rx="14" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="40" y="306" font-size="14" font-weight="700" fill="#ea580c">Shortcuts straight to a voucher</text>
+  <text x="40" y="330" font-size="12" fill="#334155">&#8226; Day Book &#8594; click a voucher number</text>
+  <text x="40" y="350" font-size="12" fill="#334155">&#8226; Exception Reports &#8594; Negative cash / bank &#8594; click the ledger</text>
+  <text x="40" y="370" font-size="12" fill="#334155">&#8226; Exception Reports &#8594; Overdue bills &#8594; click the bill number</text>
+
+  <rect x="500" y="280" width="440" height="110" rx="14" fill="#f1f5f9" stroke="#334155" stroke-width="1"/>
+  <text x="520" y="306" font-size="14" font-weight="700" fill="#334155">Dates carry over when you drill down</text>
+  <text x="520" y="330" font-size="12" fill="#334155">&#8226; Statements &#8594; Trial Balance keep the same "as of" date</text>
+  <text x="520" y="350" font-size="12" fill="#334155">&#8226; Trial Balance &#8594; Ledger Activity uses financial-year start</text>
+  <text x="520" y="370" font-size="12" fill="#334155">   to the "as of" date (change dates there if needed)</text>
+</svg>

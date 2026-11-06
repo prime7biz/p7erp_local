@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" width="960" height="430" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <title>RMG export document chain in P7 ERP</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="430" fill="#ffffff"/>
+  <text x="24" y="34" font-size="18" font-weight="700" fill="#0f766e">Export document chain &#8212; from buyer PI to money received</text>
+  <text x="24" y="56" font-size="13" fill="#334155">Each box is a screen under Export &amp; Import. Arrows show which record the next one links to.</text>
+
+  <g font-size="13">
+    <rect x="24" y="84" width="140" height="96" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="94" y="108" text-anchor="middle" font-weight="700" fill="#0f766e">1. Proforma</text>
+    <text x="94" y="126" text-anchor="middle" font-weight="700" fill="#0f766e">Invoice (PI)</text>
+    <text x="94" y="148" text-anchor="middle" fill="#334155">Our offer to the</text>
+    <text x="94" y="165" text-anchor="middle" fill="#334155">buyer (EXPORT)</text>
+
+    <rect x="182" y="84" width="140" height="96" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="252" y="108" text-anchor="middle" font-weight="700" fill="#0f766e">2. Master LC /</text>
+    <text x="252" y="126" text-anchor="middle" font-weight="700" fill="#0f766e">Sales Contract</text>
+    <text x="252" y="148" text-anchor="middle" fill="#334155">Buyer's bank</text>
+    <text x="252" y="165" text-anchor="middle" fill="#334155">promise to pay</text>
+
+    <rect x="340" y="84" width="140" height="96" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="410" y="108" text-anchor="middle" font-weight="700" fill="#ea580c">3. BTB LC</text>
+    <text x="410" y="130" text-anchor="middle" fill="#334155">LC we open for</text>
+    <text x="410" y="147" text-anchor="middle" fill="#334155">fabric / trims,</text>
+    <text x="410" y="164" text-anchor="middle" fill="#334155">backed by step 2</text>
+
+    <rect x="498" y="84" width="140" height="96" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="568" y="108" text-anchor="middle" font-weight="700" fill="#0f766e">4. Shipment</text>
+    <text x="568" y="130" text-anchor="middle" fill="#334155">Packing list,</text>
+    <text x="568" y="147" text-anchor="middle" fill="#334155">containers,</text>
+    <text x="568" y="164" text-anchor="middle" fill="#334155">BL / AWB, ETD</text>
+
+    <rect x="656" y="84" width="140" height="96" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="726" y="108" text-anchor="middle" font-weight="700" fill="#0f766e">5. Documents</text>
+    <text x="726" y="130" text-anchor="middle" fill="#334155">Commercial invoice,</text>
+    <text x="726" y="147" text-anchor="middle" fill="#334155">packing list, BL,</text>
+    <text x="726" y="164" text-anchor="middle" fill="#334155">COO to the bank</text>
+
+    <rect x="814" y="84" width="122" height="96" rx="12" fill="#0f766e" stroke="#0f766e" stroke-width="2"/>
+    <text x="875" y="108" text-anchor="middle" font-weight="700" fill="#ffffff">6. Realisation</text>
+    <text x="875" y="130" text-anchor="middle" fill="#ffffff">Buyer pays;</text>
+    <text x="875" y="147" text-anchor="middle" fill="#ffffff">receipt voucher</text>
+    <text x="875" y="164" text-anchor="middle" fill="#ffffff">is posted</text>
+  </g>
+  <g stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <line x1="164" y1="132" x2="180" y2="132"/>
+    <line x1="322" y1="132" x2="338" y2="132"/>
+    <line x1="480" y1="132" x2="496" y2="132"/>
+    <line x1="638" y1="132" x2="654" y2="132"/>
+    <line x1="796" y1="132" x2="812" y2="132"/>
+  </g>
+
+  <text x="24" y="214" font-size="14" font-weight="700" fill="#334155">Where you do it in P7 ERP</text>
+  <g font-size="12" fill="#334155">
+    <rect x="24" y="226" width="140" height="70" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="94" y="248" text-anchor="middle">Proforma Invoices</text>
+    <text x="94" y="266" text-anchor="middle">Save as Draft &#8594; Issue</text>
+    <text x="94" y="284" text-anchor="middle">&#8594; Print</text>
+
+    <rect x="182" y="226" width="140" height="70" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="252" y="248" text-anchor="middle">Master Contracts</text>
+    <text x="252" y="266" text-anchor="middle">DRAFT &#8594; ACTIVE</text>
+    <text x="252" y="284" text-anchor="middle">&#8594; CLOSED</text>
+
+    <rect x="340" y="226" width="140" height="70" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="410" y="248" text-anchor="middle">BTB LCs</text>
+    <text x="410" y="266" text-anchor="middle">Opening &#8594; Docs</text>
+    <text x="410" y="284" text-anchor="middle">acceptance &#8594; Realization</text>
+
+    <rect x="498" y="226" width="140" height="70" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="568" y="248" text-anchor="middle">Logistics</text>
+    <text x="568" y="266" text-anchor="middle">Shipments tab +</text>
+    <text x="568" y="284" text-anchor="middle">Packing Lists tab</text>
+
+    <rect x="656" y="226" width="140" height="70" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="726" y="248" text-anchor="middle">Commercial Invoices</text>
+    <text x="726" y="266" text-anchor="middle">+ Trade Case</text>
+    <text x="726" y="284" text-anchor="middle">Documents</text>
+
+    <rect x="814" y="226" width="122" height="70" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="875" y="248" text-anchor="middle">Invoice detail</text>
+    <text x="875" y="266" text-anchor="middle">Record Payment;</text>
+    <text x="875" y="284" text-anchor="middle">LC Performance</text>
+  </g>
+
+  <rect x="24" y="318" width="912" height="92" rx="12" fill="#f1f5f9" stroke="#e2e8f0"/>
+  <text x="44" y="344" font-size="14" font-weight="700" fill="#0f766e">Running alongside the chain</text>
+  <g font-size="12.5" fill="#334155">
+    <text x="44" y="368"><tspan font-weight="700">Trade Case</tspan> &#8212; one folder per export/import job: DRAFT &#8594; COMMERCIAL &#8594; LC_OPEN &#8594; BOOKING &#8594; DOCS &#8594; SHIPPED &#8594; SETTLED.</text>
+    <text x="44" y="388"><tspan font-weight="700">UD + bond register</tspan> &#8212; UD lists what you may import duty-free for this export; the bond register tracks imports and use.</text>
+    <text x="44" y="406"><tspan font-weight="700">LC Performance</tspan> &#8212; per Master LC: shipped, realised, left to ship, BTB opened and days to expiry.</text>
+  </g>
+</svg>

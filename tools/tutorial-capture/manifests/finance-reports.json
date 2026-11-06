@@ -1,0 +1,137 @@
+{
+  "screenshots": [
+    {
+      "name": "fin-rpt-tb-expense-only",
+      "route": "/app/accounts/reports/trial-balance?nature=Expense",
+      "waitMs": 2500
+    },
+    {
+      "name": "fin-rpt-fs-cumulative",
+      "route": "/app/accounts/reports/financial-statements",
+      "waitMs": 2000,
+      "actions": [{ "select": ["select:has(option[value=cumulative])", "cumulative"], "waitMs": 2000 }]
+    },
+    {
+      "name": "fin-rpt-ledger-activity-drill",
+      "route": "/app/accounts/reports/trial-balance",
+      "waitMs": 2500,
+      "actions": [{ "click": "table tbody a:has-text('Bank - Main')", "waitMs": 2500 }]
+    },
+    {
+      "name": "fin-rpt-voucher-from-ledger",
+      "route": "/app/accounts/reports/trial-balance",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "table tbody a:has-text('Bank - Main')", "waitMs": 2500 },
+        { "click": "table tbody a >> nth=0", "waitMs": 2500 }
+      ]
+    },
+    {
+      "name": "fin-rpt-daybook-filters",
+      "route": "/app/accounts/reports/day-book",
+      "waitMs": 2500,
+      "actions": [{ "fill": ["input[type=date] >> nth=0", "2026-01-01"], "waitMs": 2500 }]
+    },
+    {
+      "name": "fin-rpt-finance-config",
+      "route": "/app/settings/config",
+      "waitMs": 2500,
+      "actions": [{ "hover": "text=Financial year starts in" }, { "scroll": 200 }]
+    },
+    {
+      "name": "fin-rpt-aging-payable",
+      "route": "/app/accounts/reports/ar-ap-aging",
+      "waitMs": 2000,
+      "actions": [{ "select": ["select:has(option[value=PAYABLE])", "PAYABLE"], "waitMs": 2000 }]
+    },
+    {
+      "name": "fin-rpt-exceptions-overdue",
+      "route": "/app/accounts/reports/exceptions?check=overdue_bills",
+      "waitMs": 3000
+    },
+    {
+      "name": "fin-rpt-periods-check-lock",
+      "route": "/app/accounts/accounting-periods",
+      "waitMs": 2000,
+      "actions": [{ "click": "role=button[name='Check Date Lock']", "waitMs": 1500 }]
+    },
+    {
+      "name": "fin-rpt-periods-actions",
+      "route": "/app/accounts/accounting-periods",
+      "waitMs": 2000,
+      "actions": [{ "click": "role=button[name='Actions'] >> nth=0", "waitMs": 800 }]
+    },
+    {
+      "name": "fin-rpt-cost-center-dashboard",
+      "route": "/app/accounts/cost-centers",
+      "waitMs": 2000,
+      "fullPage": true,
+      "actions": [{ "click": "role=button[name='Actions'] >> nth=0" }, { "click": "text=View dashboard", "waitMs": 1200 }]
+    }
+  ],
+  "videos": [
+    {
+      "name": "fin-rpt-trial-balance-drilldown",
+      "title": "Trial Balance drill-down: report → ledger → voucher",
+      "steps": [
+        { "goto": "/app/accounts/reports/trial-balance", "waitMs": 2500 },
+        { "caption": "Goal: trace a Trial Balance figure back to the voucher that created it", "ms": 3000 },
+        { "hover": "input[type=date]" },
+        { "caption": "The date box is the 'as of' date — balances are shown up to this day", "ms": 2800 },
+        { "select": ["select:has(option[value=cumulative])", "cumulative"], "waitMs": 1500 },
+        { "caption": "'Since start (all years)' adds every year together", "ms": 2500 },
+        { "select": ["select:has(option[value=cumulative])", "fy"], "waitMs": 1500 },
+        { "caption": "'This financial year' shows income and expense for the current year only", "ms": 2500 },
+        { "hover": "table tbody tr:last-child" },
+        { "caption": "The Total row: total Debit must equal total Credit", "ms": 2500 },
+        { "caption": "Click an account name, for example Bank - Main", "ms": 2200 },
+        { "click": "table tbody a:has-text('Bank - Main')", "waitMs": 2500 },
+        { "caption": "Ledger Activity opens: opening balance, each voucher, running balance", "ms": 3500 },
+        { "click": "table tbody a >> nth=0", "waitMs": 2500 },
+        { "caption": "Clicking a voucher number opens the voucher itself — lines, status and history", "ms": 3500 },
+        { "caption": "Use the browser Back button to return to the report", "ms": 2200 }
+      ]
+    },
+    {
+      "name": "fin-rpt-pnl-tour",
+      "title": "Read the Profit & Loss and Balance Sheet",
+      "steps": [
+        { "goto": "/app/accounts/reports/financial-statements", "waitMs": 2500 },
+        { "caption": "Finance → Reports → Financial Statements: Profit & Loss and Balance Sheet on one page", "ms": 3200 },
+        { "hover": "h2:has-text('Profit & Loss')" },
+        { "caption": "Profit & Loss: Income minus Expense = Net Profit for this financial year", "ms": 3000 },
+        { "hover": "h2:has-text('Balance Sheet')" },
+        { "caption": "Balance Sheet: what the company owns (Assets) and owes (Liabilities), plus Equity", "ms": 3200 },
+        { "select": ["select:has(option[value=cumulative])", "cumulative"], "waitMs": 1500 },
+        { "caption": "Switch to 'Since start (all years)' to add all years together", "ms": 2600 },
+        { "select": ["select:has(option[value=cumulative])", "fy"], "waitMs": 1500 },
+        { "click": "role=link[name='Expense']", "waitMs": 2500 },
+        { "caption": "Clicking a heading (here: Expense) opens the Trial Balance with only those accounts", "ms": 3200 },
+        { "click": "role=link[name='Show all']", "waitMs": 2000 },
+        { "caption": "Click 'Show all' to see every account again", "ms": 2400 }
+      ]
+    },
+    {
+      "name": "fin-rpt-month-end-tour",
+      "title": "Month-end checks before closing a period",
+      "steps": [
+        { "goto": "/app/accounts/reports/exceptions", "waitMs": 2500 },
+        { "caption": "Month-end step 1: Exception Reports — every card should be 0 before you close", "ms": 3200 },
+        { "click": "role=button[name=/Overdue bills/]", "waitMs": 2000 },
+        { "caption": "Click a card to see the records that need fixing", "ms": 2600 },
+        { "goto": "/app/accounts/reports/ar-ap-aging", "waitMs": 2500 },
+        { "caption": "Step 2: AR/AP Aging — who owes us, and whom we owe, by days overdue", "ms": 3000 },
+        { "select": ["select:has(option[value=PAYABLE])", "PAYABLE"], "waitMs": 2000 },
+        { "caption": "Switch between Receivable and Payable", "ms": 2400 },
+        { "goto": "/app/accounts/accounting-periods", "waitMs": 2500 },
+        { "caption": "Last step: Accounting Periods — one row per month, Open or Closed", "ms": 3000 },
+        { "click": "role=button[name='Check Date Lock']", "waitMs": 1500 },
+        { "caption": "Check Date Lock tells you whether vouchers can still be posted on a date", "ms": 3000 },
+        { "click": "role=button[name='Actions'] >> nth=0", "waitMs": 1000 },
+        { "caption": "After sign-off, use Actions → Close on the month (not clicked in this demo)", "ms": 3200 },
+        { "press": "Escape" },
+        { "click": "h1:text-is('Accounting Periods')", "waitMs": 600 }
+      ]
+    }
+  ]
+}

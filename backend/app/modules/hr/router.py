@@ -637,6 +637,9 @@ async def update_employee(
     # The linked login decides whose payslips and ESS data a user sees.
     if "user_id" in payload and payload["user_id"] != row.user_id:
         await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
+    # Activation has its own manager-only endpoints, so a plain edit must not flip it.
+    if "is_active" in payload and bool(payload["is_active"]) != bool(row.is_active):
+        await _require_manager_or_admin(db, user, tenant.id)
     can_view_sensitive = await _can_view_employee_sensitive(db, user, tenant.id)
     if not can_view_sensitive:
         # These fields are masked for this caller, so a resubmitted form must not overwrite them.

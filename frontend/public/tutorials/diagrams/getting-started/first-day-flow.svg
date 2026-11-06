@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="960" height="560" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="560" fill="#ffffff"/>
+  <text x="24" y="34" font-size="20" font-weight="700" fill="#334155">Your first day in Prime7 ERP</text>
+  <text x="24" y="56" font-size="13" fill="#64748b">Follow the numbers. Steps 1&#8211;4 are done once; steps 5&#8211;8 are your normal daily routine.</text>
+
+  <!-- Row label -->
+  <rect x="24" y="74" width="120" height="22" rx="11" fill="#ffedd5"/>
+  <text x="84" y="89" font-size="12" font-weight="700" fill="#ea580c" text-anchor="middle">ONCE</text>
+
+  <!-- Row 1 -->
+  <g>
+    <rect x="24" y="104" width="204" height="128" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="46" cy="126" r="13" fill="#0f766e"/><text x="46" y="131" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+    <text x="66" y="131" font-size="14" font-weight="700" fill="#334155">Get your access</text>
+    <text x="38" y="156" font-size="12" fill="#334155">Admin sends an invite email</text>
+    <text x="38" y="174" font-size="12" fill="#334155">or gives you: Company Code,</text>
+    <text x="38" y="192" font-size="12" fill="#334155">your Email and a password.</text>
+    <text x="38" y="216" font-size="12" fill="#0f766e" font-weight="600">Invite link &#8594; Activate account</text>
+  </g>
+  <line x1="228" y1="168" x2="256" y2="168" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="260" y="104" width="204" height="128" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="282" cy="126" r="13" fill="#0f766e"/><text x="282" y="131" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+    <text x="302" y="131" font-size="14" font-weight="700" fill="#334155">Sign in</text>
+    <text x="274" y="156" font-size="12" fill="#334155">/login: Company Code,</text>
+    <text x="274" y="174" font-size="12" fill="#334155">Login as (Staff or Tenant</text>
+    <text x="274" y="192" font-size="12" fill="#334155">admin), Email, Password</text>
+    <text x="274" y="216" font-size="12" fill="#0f766e" font-weight="600">Click Sign In</text>
+  </g>
+  <line x1="464" y1="168" x2="492" y2="168" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="496" y="104" width="208" height="128" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="518" cy="126" r="13" fill="#0f766e"/><text x="518" y="131" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+    <text x="538" y="131" font-size="14" font-weight="700" fill="#334155">Set your signature</text>
+    <text x="510" y="156" font-size="12" fill="#334155">Your name (top right) &#8594;</text>
+    <text x="510" y="174" font-size="12" fill="#334155">My Signature: Designation</text>
+    <text x="510" y="192" font-size="12" fill="#334155">+ signature image (PNG/JPG)</text>
+    <text x="510" y="216" font-size="12" fill="#0f766e" font-weight="600">Prints on what you approve</text>
+  </g>
+  <line x1="704" y1="168" x2="732" y2="168" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="736" y="104" width="200" height="128" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="758" cy="126" r="13" fill="#0f766e"/><text x="758" y="131" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+    <text x="778" y="131" font-size="14" font-weight="700" fill="#334155">Learn the screen</text>
+    <text x="750" y="156" font-size="12" fill="#334155">Sidebar, Ctrl+K search,</text>
+    <text x="750" y="174" font-size="12" fill="#334155">+ New menu, bell, Actions</text>
+    <text x="750" y="192" font-size="12" fill="#334155">button on every list row</text>
+    <text x="750" y="216" font-size="12" fill="#0f766e" font-weight="600">Star your main pages</text>
+  </g>
+
+  <!-- Down connector -->
+  <line x1="836" y1="232" x2="836" y2="300" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="24" y="268" width="120" height="22" rx="11" fill="#ccfbf1"/>
+  <text x="84" y="283" font-size="12" font-weight="700" fill="#0f766e" text-anchor="middle">EVERY DAY</text>
+
+  <!-- Row 2 (right to left) -->
+  <g>
+    <rect x="736" y="304" width="200" height="128" rx="12" fill="#ffffff" stroke="#ea580c" stroke-width="2"/>
+    <circle cx="758" cy="326" r="13" fill="#ea580c"/><text x="758" y="331" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">5</text>
+    <text x="778" y="331" font-size="14" font-weight="700" fill="#334155">Open Dashboard</text>
+    <text x="750" y="356" font-size="12" fill="#334155">Check Needs attention:</text>
+    <text x="750" y="374" font-size="12" fill="#334155">approvals, TNA overdue,</text>
+    <text x="750" y="392" font-size="12" fill="#334155">critical alerts, late orders</text>
+    <text x="750" y="416" font-size="12" fill="#ea580c" font-weight="600">Click a tile to open the list</text>
+  </g>
+  <line x1="736" y1="368" x2="708" y2="368" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="496" y="304" width="208" height="128" rx="12" fill="#ffffff" stroke="#ea580c" stroke-width="2"/>
+    <circle cx="518" cy="326" r="13" fill="#ea580c"/><text x="518" y="331" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">6</text>
+    <text x="538" y="331" font-size="14" font-weight="700" fill="#334155">Do your work</text>
+    <text x="510" y="356" font-size="12" fill="#334155">Open your module from the</text>
+    <text x="510" y="374" font-size="12" fill="#334155">sidebar or Favorites; create</text>
+    <text x="510" y="392" font-size="12" fill="#334155">with + New, edit via Actions</text>
+    <text x="510" y="416" font-size="12" fill="#ea580c" font-weight="600">Save, then Submit if needed</text>
+  </g>
+  <line x1="496" y1="368" x2="468" y2="368" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="260" y="304" width="204" height="128" rx="12" fill="#ffffff" stroke="#ea580c" stroke-width="2"/>
+    <circle cx="282" cy="326" r="13" fill="#ea580c"/><text x="282" y="331" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">7</text>
+    <text x="302" y="331" font-size="14" font-weight="700" fill="#334155">Approve &amp; follow up</text>
+    <text x="274" y="356" font-size="12" fill="#334155">Bell: your notifications.</text>
+    <text x="274" y="374" font-size="12" fill="#334155">Workflow &#8594; All Approvals</text>
+    <text x="274" y="392" font-size="12" fill="#334155">for items waiting on you</text>
+    <text x="274" y="416" font-size="12" fill="#ea580c" font-weight="600">Reject always needs a reason</text>
+  </g>
+  <line x1="260" y1="368" x2="232" y2="368" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="24" y="304" width="204" height="128" rx="12" fill="#ffffff" stroke="#ea580c" stroke-width="2"/>
+    <circle cx="46" cy="326" r="13" fill="#ea580c"/><text x="46" y="331" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">8</text>
+    <text x="66" y="331" font-size="14" font-weight="700" fill="#334155">Get help</text>
+    <text x="38" y="356" font-size="12" fill="#334155">Help &amp; Tutorials (bottom</text>
+    <text x="38" y="374" font-size="12" fill="#334155">of sidebar) for guides.</text>
+    <text x="38" y="392" font-size="12" fill="#334155">Support &#8594; New ticket for</text>
+    <text x="38" y="416" font-size="12" fill="#ea580c" font-weight="600">problems or access requests</text>
+  </g>
+
+  <!-- Footer tips -->
+  <rect x="24" y="456" width="912" height="84" rx="12" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="40" y="480" font-size="13" font-weight="700" fill="#0f766e">Good to know</text>
+  <text x="40" y="502" font-size="12" fill="#334155">&#8226; One user = one active device. If you sign in on a second computer or phone, the first one is signed out.</text>
+  <text x="40" y="522" font-size="12" fill="#334155">&#8226; You only see the menus your company type, switched-on features and role allow. Missing a screen? Ask your admin.</text>
+</svg>

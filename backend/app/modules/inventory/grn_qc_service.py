@@ -259,6 +259,8 @@ async def create_inspection(
         raise HTTPException(status_code=404, detail="QC inspection not found for GRN item")
     if insp.status == "COMPLETED":
         raise HTTPException(status_code=400, detail="Inspection already completed")
+    if min(_d(accepted_qty), _d(rejected_qty), _d(hold_qty)) < ZERO:
+        raise HTTPException(status_code=400, detail="QC quantities cannot be negative")
 
     line = await db.get(GoodsReceivingItem, grn_item_id)
     if not line or line.tenant_id != tenant.id:

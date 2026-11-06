@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="960" height="440" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect width="960" height="440" fill="#ffffff"/>
+  <text x="480" y="32" text-anchor="middle" font-size="18" font-weight="700" fill="#334155">From buying to dispatch &#8212; how stock moves in P7 ERP</text>
+  <text x="480" y="54" text-anchor="middle" font-size="13" fill="#64748b">Teal = getting material in &#183; Orange = using and sending material out &#183; Dashed box = optional (turn on in Settings)</text>
+
+  <!-- Row 1: inbound -->
+  <g font-size="14">
+    <rect x="20" y="80" width="160" height="72" rx="12" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="100" y="110" text-anchor="middle" font-weight="700" fill="#0f766e">1. Requisition &amp; CS</text>
+    <text x="100" y="131" text-anchor="middle" font-size="12" fill="#334155">ask, approve, compare</text>
+
+    <rect x="210" y="80" width="160" height="72" rx="12" fill="#f0fdfa" stroke="#0f766e" stroke-width="2"/>
+    <text x="290" y="110" text-anchor="middle" font-weight="700" fill="#0f766e">2. Purchase order</text>
+    <text x="290" y="131" text-anchor="middle" font-size="12" fill="#334155">promise to buy (PO)</text>
+
+    <rect x="400" y="80" width="160" height="72" rx="12" fill="#f0fdfa" stroke="#0f766e" stroke-width="2"/>
+    <text x="480" y="110" text-anchor="middle" font-weight="700" fill="#0f766e">3. Goods receiving</text>
+    <text x="480" y="131" text-anchor="middle" font-size="12" fill="#334155">GRN &#8212; goods arrive</text>
+
+    <rect x="590" y="80" width="160" height="72" rx="12" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="670" y="110" text-anchor="middle" font-weight="700" fill="#0f766e">4. QC inspection</text>
+    <text x="670" y="131" text-anchor="middle" font-size="12" fill="#334155">accept / reject / hold</text>
+
+    <rect x="780" y="80" width="160" height="72" rx="12" fill="#0f766e" stroke="#0f766e" stroke-width="2"/>
+    <text x="860" y="110" text-anchor="middle" font-weight="700" fill="#ffffff">5. Stock</text>
+    <text x="860" y="131" text-anchor="middle" font-size="12" fill="#ccfbf1">on hand per warehouse</text>
+  </g>
+  <g stroke="#334155" stroke-width="2" marker-end="url(#arr)">
+    <line x1="180" y1="116" x2="207" y2="116"/>
+    <line x1="370" y1="116" x2="397" y2="116"/>
+    <line x1="560" y1="116" x2="587" y2="116"/>
+    <line x1="750" y1="116" x2="777" y2="116"/>
+  </g>
+
+  <!-- Finance side note -->
+  <line x1="480" y1="152" x2="480" y2="184" stroke="#334155" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+  <rect x="390" y="186" width="180" height="50" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="480" y="207" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">Vendor bill draft</text>
+  <text x="480" y="225" text-anchor="middle" font-size="12" fill="#475569">Finance pays the supplier</text>
+
+  <!-- Down from stock -->
+  <line x1="860" y1="152" x2="860" y2="266" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Row 2: use and outbound (right to left) -->
+  <g font-size="14">
+    <rect x="780" y="270" width="160" height="72" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="860" y="300" text-anchor="middle" font-weight="700" fill="#c2410c">6. Use stock</text>
+    <text x="860" y="321" text-anchor="middle" font-size="12" fill="#334155">material issue &#183; process order</text>
+
+    <rect x="590" y="270" width="160" height="72" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="670" y="300" text-anchor="middle" font-weight="700" fill="#c2410c">7. Move or correct</text>
+    <text x="670" y="321" text-anchor="middle" font-size="12" fill="#334155">transfers &#183; adjustments</text>
+
+    <rect x="400" y="270" width="160" height="72" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="480" y="300" text-anchor="middle" font-weight="700" fill="#c2410c">8. Delivery challan</text>
+    <text x="480" y="321" text-anchor="middle" font-size="12" fill="#334155">POSTED = goods leave stock</text>
+
+    <rect x="210" y="270" width="160" height="72" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="290" y="300" text-anchor="middle" font-weight="700" fill="#c2410c">9. Gate pass</text>
+    <text x="290" y="321" text-anchor="middle" font-size="12" fill="#334155">security releases the truck</text>
+
+    <rect x="20" y="270" width="160" height="72" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="2"/>
+    <text x="100" y="300" text-anchor="middle" font-weight="700" fill="#334155">10. Invoice &amp; ship</text>
+    <text x="100" y="321" text-anchor="middle" font-size="12" fill="#334155">Create Invoice from challan</text>
+  </g>
+  <g stroke="#334155" stroke-width="2" marker-end="url(#arr)">
+    <line x1="780" y1="306" x2="753" y2="306"/>
+    <line x1="590" y1="306" x2="563" y2="306"/>
+    <line x1="400" y1="306" x2="373" y2="306"/>
+    <line x1="210" y1="306" x2="183" y2="306"/>
+  </g>
+
+  <!-- Reports strip -->
+  <rect x="20" y="372" width="920" height="48" rx="12" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="480" y="393" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">Check stock any time</text>
+  <text x="480" y="411" text-anchor="middle" font-size="12" fill="#475569">Stock Summary (how much) &#183; Ledger (every movement) &#183; Valuation &amp; Inventory Summary FIFO (how much money) &#183; Reconciliation (all documents)</text>
+</svg>

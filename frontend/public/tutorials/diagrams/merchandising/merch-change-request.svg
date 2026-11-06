@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 330" width="960" height="330" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <title>Commercial change request flow for locked quotations and orders</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect width="960" height="330" fill="#ffffff"/>
+  <text x="480" y="30" text-anchor="middle" font-size="19" font-weight="700" fill="#334155">Changing a locked price or date: the change request</text>
+  <text x="480" y="52" text-anchor="middle" font-size="13" fill="#64748b">Locked = quotation APPROVED / SENT / CONVERTED, or order CONFIRMED / IN PROGRESS / COMPLETED</text>
+
+  <g>
+    <rect x="20" y="86" width="170" height="86" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="105" y="114" text-anchor="middle" font-size="14" font-weight="700" fill="#9a3412">Locked record</text>
+    <text x="105" y="136" text-anchor="middle" font-size="12" fill="#475569">Commercial change</text>
+    <text x="105" y="152" text-anchor="middle" font-size="12" fill="#475569">requests panel</text>
+  </g>
+  <g>
+    <rect x="230" y="86" width="170" height="86" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="2"/>
+    <text x="315" y="114" text-anchor="middle" font-size="14" font-weight="700" fill="#334155">Propose change</text>
+    <text x="315" y="136" text-anchor="middle" font-size="12" fill="#475569">pick field, new value,</text>
+    <text x="315" y="152" text-anchor="middle" font-size="12" fill="#475569">write the reason</text>
+  </g>
+  <g>
+    <rect x="440" y="86" width="170" height="86" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
+    <text x="525" y="114" text-anchor="middle" font-size="14" font-weight="700" fill="#92400e">pending approval</text>
+    <text x="525" y="136" text-anchor="middle" font-size="12" fill="#475569">old value still in use</text>
+    <text x="525" y="152" text-anchor="middle" font-size="12" fill="#475569">&#8594; Approve / Reject</text>
+  </g>
+  <g>
+    <rect x="650" y="86" width="130" height="86" rx="12" fill="#e0f2fe" stroke="#0369a1" stroke-width="2"/>
+    <text x="715" y="114" text-anchor="middle" font-size="14" font-weight="700" fill="#075985">approved</text>
+    <text x="715" y="136" text-anchor="middle" font-size="12" fill="#475569">click Apply</text>
+  </g>
+  <g>
+    <rect x="820" y="86" width="120" height="86" rx="12" fill="#ecfdf5" stroke="#0f766e" stroke-width="2.5"/>
+    <text x="880" y="114" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">applied</text>
+    <text x="880" y="136" text-anchor="middle" font-size="12" fill="#475569">new value saved</text>
+    <text x="880" y="152" text-anchor="middle" font-size="12" fill="#475569">+ timeline entry</text>
+  </g>
+  <g stroke="#334155" stroke-width="2" marker-end="url(#arr)">
+    <line x1="190" y1="129" x2="226" y2="129"/>
+    <line x1="400" y1="129" x2="436" y2="129"/>
+    <line x1="610" y1="129" x2="646" y2="129"/>
+    <line x1="780" y1="129" x2="816" y2="129"/>
+  </g>
+
+  <rect x="400" y="214" width="120" height="44" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="1.6"/>
+  <text x="460" y="241" text-anchor="middle" font-size="13" font-weight="700" fill="#991b1b">rejected</text>
+  <rect x="540" y="214" width="120" height="44" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.6"/>
+  <text x="600" y="241" text-anchor="middle" font-size="13" font-weight="700" fill="#475569">cancelled</text>
+  <line x1="505" y1="172" x2="470" y2="210" stroke="#334155" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="545" y1="172" x2="585" y2="210" stroke="#334155" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <rect x="20" y="276" width="920" height="40" rx="10" fill="#f1f5f9"/>
+  <text x="40" y="301" font-size="12.5" fill="#334155"><tspan font-weight="700">Order fields:</tspan> delivery date, quantity, commission, shipping term.  <tspan font-weight="700">Quotation fields:</tspan> prices, currency, FX rate, qty, dates, terms.</text>
+</svg>

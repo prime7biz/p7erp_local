@@ -1,0 +1,1582 @@
+{
+  "screenshots": [
+    {
+      "name": "dashboard",
+      "route": "/app",
+      "section": "Dashboard",
+      "label": "Dashboard"
+    },
+    {
+      "name": "support-tickets",
+      "route": "/app/support/tickets",
+      "section": "Support",
+      "label": "My tickets"
+    },
+    {
+      "name": "support-tickets-new",
+      "route": "/app/support/tickets/new",
+      "section": "Support",
+      "label": "New ticket"
+    },
+    {
+      "name": "customers",
+      "route": "/app/customers",
+      "section": "Merchandising",
+      "label": "Customers"
+    },
+    {
+      "name": "inquiries",
+      "route": "/app/inquiries",
+      "section": "Merchandising",
+      "label": "Inquiries"
+    },
+    {
+      "name": "quotations",
+      "route": "/app/quotations",
+      "section": "Merchandising",
+      "label": "Quotations"
+    },
+    {
+      "name": "orders",
+      "route": "/app/orders",
+      "section": "Merchandising",
+      "label": "Orders"
+    },
+    {
+      "name": "bom-orders",
+      "route": "/app/bom/orders",
+      "section": "Merchandising",
+      "label": "Consumption Plans"
+    },
+    {
+      "name": "bom",
+      "route": "/app/bom",
+      "section": "Merchandising",
+      "label": "BOM Builder"
+    },
+    {
+      "name": "merchandising-pipeline",
+      "route": "/app/merchandising/pipeline",
+      "section": "Merchandising",
+      "label": "Order Pipeline"
+    },
+    {
+      "name": "merchandising-consumption-reconciliation",
+      "route": "/app/merchandising/consumption-reconciliation",
+      "section": "Merchandising",
+      "label": "Consumption Recon"
+    },
+    {
+      "name": "merchandising-pipeline-analytics",
+      "route": "/app/merchandising/pipeline-analytics",
+      "section": "Merchandising",
+      "label": "Pipeline Analytics"
+    },
+    {
+      "name": "merch-profitability",
+      "route": "/app/merch/profitability",
+      "section": "Merchandising",
+      "label": "Order Profitability"
+    },
+    {
+      "name": "merchandising-alerts",
+      "route": "/app/merchandising/alerts",
+      "section": "Merchandising",
+      "label": "Critical Alerts"
+    },
+    {
+      "name": "merchandising-wastage-report",
+      "route": "/app/merchandising/wastage-report",
+      "section": "Merchandising",
+      "label": "Wastage Report"
+    },
+    {
+      "name": "merchandising-styles",
+      "route": "/app/merchandising/styles",
+      "section": "Merchandising",
+      "label": "Garment Styles"
+    },
+    {
+      "name": "merchandising-samples",
+      "route": "/app/merchandising/samples",
+      "section": "Merchandising",
+      "label": "Sample Development"
+    },
+    {
+      "name": "merchandising-control-tower",
+      "route": "/app/merchandising/control-tower",
+      "section": "Merchandising",
+      "label": "Control Tower"
+    },
+    {
+      "name": "followup",
+      "route": "/app/followup",
+      "section": "Merchandising",
+      "label": "Follow-up TNA"
+    },
+    {
+      "name": "parties",
+      "route": "/app/parties",
+      "section": "Merchandising",
+      "label": "Parties"
+    },
+    {
+      "name": "flow",
+      "route": "/app/flow",
+      "section": "Merchandising",
+      "label": "Document Flow"
+    },
+    {
+      "name": "commercial",
+      "route": "/app/commercial",
+      "section": "Export & Import",
+      "label": "Commercial"
+    },
+    {
+      "name": "commercial-export-cases",
+      "route": "/app/commercial/export-cases",
+      "section": "Export & Import",
+      "label": "Export Cases"
+    },
+    {
+      "name": "commercial-master-contracts",
+      "route": "/app/commercial/master-contracts",
+      "section": "Export & Import",
+      "label": "Master Contracts"
+    },
+    {
+      "name": "commercial-proforma-invoices",
+      "route": "/app/commercial/proforma-invoices",
+      "section": "Export & Import",
+      "label": "Proforma Invoices"
+    },
+    {
+      "name": "commercial-invoices",
+      "route": "/app/commercial/invoices",
+      "section": "Export & Import",
+      "label": "Commercial Invoices"
+    },
+    {
+      "name": "commercial-btb-lcs",
+      "route": "/app/commercial/btb-lcs",
+      "section": "Export & Import",
+      "label": "BTB LCs"
+    },
+    {
+      "name": "commercial-lc-performance",
+      "route": "/app/commercial/lc-performance",
+      "section": "Export & Import",
+      "label": "LC Performance"
+    },
+    {
+      "name": "commercial-commission",
+      "route": "/app/commercial/commission",
+      "section": "Export & Import",
+      "label": "Commission"
+    },
+    {
+      "name": "commercial-bd-compliance",
+      "route": "/app/commercial/bd-compliance",
+      "section": "Export & Import",
+      "label": "Bond & VAT registers"
+    },
+    {
+      "name": "trade-cases",
+      "route": "/app/trade/cases",
+      "section": "Export & Import",
+      "label": "Trade Cases"
+    },
+    {
+      "name": "trade-dashboard",
+      "route": "/app/trade/dashboard",
+      "section": "Export & Import",
+      "label": "Trade Control Tower"
+    },
+    {
+      "name": "logistics",
+      "route": "/app/logistics",
+      "section": "Export & Import",
+      "label": "Logistics"
+    },
+    {
+      "name": "operations-control-tower",
+      "route": "/app/operations/control-tower",
+      "section": "Operations",
+      "label": "Control Tower"
+    },
+    {
+      "name": "inventory",
+      "route": "/app/inventory",
+      "section": "Inventory",
+      "label": "Stock Master"
+    },
+    {
+      "name": "inventory-stock-groups",
+      "route": "/app/inventory/stock-groups",
+      "section": "Inventory",
+      "label": "Stock Groups"
+    },
+    {
+      "name": "inventory-stock-items",
+      "route": "/app/inventory/stock-items",
+      "section": "Inventory",
+      "label": "Stock Items (hierarchy)"
+    },
+    {
+      "name": "inventory-godown-stock",
+      "route": "/app/inventory/godown-stock",
+      "section": "Inventory",
+      "label": "Godown Stock"
+    },
+    {
+      "name": "inventory-vendors",
+      "route": "/app/inventory/vendors",
+      "section": "Inventory",
+      "label": "Vendors"
+    },
+    {
+      "name": "procurement-requisitions",
+      "route": "/app/procurement/requisitions",
+      "section": "Inventory",
+      "label": "Requisitions & CS"
+    },
+    {
+      "name": "inventory-purchase-orders",
+      "route": "/app/inventory/purchase-orders",
+      "section": "Inventory",
+      "label": "Purchase Orders"
+    },
+    {
+      "name": "inventory-goods-receiving",
+      "route": "/app/inventory/goods-receiving",
+      "section": "Inventory",
+      "label": "Goods Receiving"
+    },
+    {
+      "name": "inventory-process-orders",
+      "route": "/app/inventory/process-orders",
+      "section": "Inventory",
+      "label": "Process Orders"
+    },
+    {
+      "name": "inventory-mrp",
+      "route": "/app/inventory/mrp",
+      "section": "Inventory",
+      "label": "MRP Run"
+    },
+    {
+      "name": "inventory-reorder-suggestions",
+      "route": "/app/inventory/reorder-suggestions",
+      "section": "Inventory",
+      "label": "Reorder Suggestions"
+    },
+    {
+      "name": "inventory-idt",
+      "route": "/app/inventory/idt",
+      "section": "Inventory",
+      "label": "Inter-Dept Transfers"
+    },
+    {
+      "name": "inventory-idt-receive",
+      "route": "/app/inventory/idt-receive",
+      "section": "Inventory",
+      "label": "Receive IDT"
+    },
+    {
+      "name": "inventory-process-loss-report",
+      "route": "/app/inventory/process-loss-report",
+      "section": "Inventory",
+      "label": "Process Loss Report"
+    },
+    {
+      "name": "inventory-post-costing",
+      "route": "/app/inventory/post-costing",
+      "section": "Inventory",
+      "label": "Post-Costing"
+    },
+    {
+      "name": "inventory-process-loss-settings",
+      "route": "/app/inventory/process-loss-settings",
+      "section": "Inventory",
+      "label": "Process Loss Standards"
+    },
+    {
+      "name": "inventory-grn-inspection",
+      "route": "/app/inventory/grn-inspection",
+      "section": "Inventory",
+      "label": "GRN Inspection"
+    },
+    {
+      "name": "inventory-quality-dashboard",
+      "route": "/app/inventory/quality-dashboard",
+      "section": "Inventory",
+      "label": "Quality Dashboard"
+    },
+    {
+      "name": "inventory-vendor-scorecard",
+      "route": "/app/inventory/vendor-scorecard",
+      "section": "Inventory",
+      "label": "Vendor Scorecard"
+    },
+    {
+      "name": "inventory-abc-analysis",
+      "route": "/app/inventory/abc-analysis",
+      "section": "Inventory",
+      "label": "ABC Analysis"
+    },
+    {
+      "name": "inventory-eoq",
+      "route": "/app/inventory/eoq",
+      "section": "Inventory",
+      "label": "EOQ"
+    },
+    {
+      "name": "inventory-stock-aging",
+      "route": "/app/inventory/stock-aging",
+      "section": "Inventory",
+      "label": "Stock Aging"
+    },
+    {
+      "name": "inventory-cycle-count",
+      "route": "/app/inventory/cycle-count",
+      "section": "Inventory",
+      "label": "Cycle Count"
+    },
+    {
+      "name": "inventory-serials",
+      "route": "/app/inventory/serials",
+      "section": "Inventory",
+      "label": "Serial Tracking"
+    },
+    {
+      "name": "inventory-kits",
+      "route": "/app/inventory/kits",
+      "section": "Inventory",
+      "label": "Kit Builder"
+    },
+    {
+      "name": "inventory-consignment",
+      "route": "/app/inventory/consignment",
+      "section": "Inventory",
+      "label": "Consignment Stock"
+    },
+    {
+      "name": "inventory-warehouse-transfers",
+      "route": "/app/inventory/warehouse-transfers",
+      "section": "Inventory",
+      "label": "Transfers"
+    },
+    {
+      "name": "inventory-stock-transfers",
+      "route": "/app/inventory/stock-transfers",
+      "section": "Inventory",
+      "label": "Batch Stock Transfer"
+    },
+    {
+      "name": "inventory-stock-adjustments",
+      "route": "/app/inventory/stock-adjustments",
+      "section": "Inventory",
+      "label": "Adjustments"
+    },
+    {
+      "name": "inventory-consumption-control",
+      "route": "/app/inventory/consumption-control",
+      "section": "Inventory",
+      "label": "Consumption Control"
+    },
+    {
+      "name": "inventory-reconciliation",
+      "route": "/app/inventory/reconciliation",
+      "section": "Inventory",
+      "label": "Reconciliation"
+    },
+    {
+      "name": "inventory-stock-summary",
+      "route": "/app/inventory/stock-summary",
+      "section": "Inventory",
+      "label": "Stock Summary"
+    },
+    {
+      "name": "inventory-stock-inventory-summary",
+      "route": "/app/inventory/stock-inventory-summary",
+      "section": "Inventory",
+      "label": "Inventory Summary (FIFO)"
+    },
+    {
+      "name": "inventory-stock-dashboard",
+      "route": "/app/inventory/stock-dashboard",
+      "section": "Inventory",
+      "label": "Dashboard"
+    },
+    {
+      "name": "inventory-stock-ledger",
+      "route": "/app/inventory/stock-ledger",
+      "section": "Inventory",
+      "label": "Ledger"
+    },
+    {
+      "name": "inventory-stock-valuation",
+      "route": "/app/inventory/stock-valuation",
+      "section": "Inventory",
+      "label": "Valuation"
+    },
+    {
+      "name": "inventory-delivery-challans",
+      "route": "/app/inventory/delivery-challans",
+      "section": "Inventory",
+      "label": "Delivery Challans"
+    },
+    {
+      "name": "inventory-enhanced-gate-passes",
+      "route": "/app/inventory/enhanced-gate-passes",
+      "section": "Inventory",
+      "label": "Gate Passes"
+    },
+    {
+      "name": "inventory-lots",
+      "route": "/app/inventory/lots",
+      "section": "Inventory",
+      "label": "Lot Traceability"
+    },
+    {
+      "name": "inventory-traceability",
+      "route": "/app/inventory/traceability",
+      "section": "Inventory",
+      "label": "Certificates & order trace"
+    },
+    {
+      "name": "production",
+      "route": "/app/production",
+      "section": "Manufacturing",
+      "label": "Production Overview"
+    },
+    {
+      "name": "production-manufacturing-orders",
+      "route": "/app/production/manufacturing-orders",
+      "section": "Manufacturing",
+      "label": "Manufacturing Orders"
+    },
+    {
+      "name": "production-setup",
+      "route": "/app/production/setup",
+      "section": "Manufacturing",
+      "label": "Production setup"
+    },
+    {
+      "name": "production-calendar",
+      "route": "/app/production/calendar",
+      "section": "Manufacturing",
+      "label": "Factory calendar"
+    },
+    {
+      "name": "production-line-plan",
+      "route": "/app/production/line-plan",
+      "section": "Manufacturing",
+      "label": "Line plan board"
+    },
+    {
+      "name": "production-planning",
+      "route": "/app/production/planning",
+      "section": "Manufacturing",
+      "label": "Planning"
+    },
+    {
+      "name": "production-ie-operations",
+      "route": "/app/production/ie/operations",
+      "section": "Manufacturing",
+      "label": "Operations library"
+    },
+    {
+      "name": "production-ie-bulletins",
+      "route": "/app/production/ie/bulletins",
+      "section": "Manufacturing",
+      "label": "Operation bulletins"
+    },
+    {
+      "name": "production-ie-line-balance",
+      "route": "/app/production/ie/line-balance",
+      "section": "Manufacturing",
+      "label": "Line balancing"
+    },
+    {
+      "name": "production-ie",
+      "route": "/app/production/ie",
+      "section": "Manufacturing",
+      "label": "IE & Efficiency"
+    },
+    {
+      "name": "production-cutting",
+      "route": "/app/production/cutting",
+      "section": "Manufacturing",
+      "label": "Cutting (shop floor)"
+    },
+    {
+      "name": "production-cutting-pipeline",
+      "route": "/app/production/cutting/pipeline",
+      "section": "Manufacturing",
+      "label": "Cutting pipeline"
+    },
+    {
+      "name": "production-scan-station",
+      "route": "/app/production/scan-station",
+      "section": "Manufacturing",
+      "label": "Scan station"
+    },
+    {
+      "name": "production-hourly-cutting",
+      "route": "/app/production/hourly/cutting",
+      "section": "Manufacturing",
+      "label": "Hourly — Cutting"
+    },
+    {
+      "name": "production-sewing",
+      "route": "/app/production/sewing",
+      "section": "Manufacturing",
+      "label": "Sewing (shop floor)"
+    },
+    {
+      "name": "production-hourly-sewing",
+      "route": "/app/production/hourly/sewing",
+      "section": "Manufacturing",
+      "label": "Hourly — Sewing"
+    },
+    {
+      "name": "production-crew-daily",
+      "route": "/app/production/crew-daily",
+      "section": "Manufacturing",
+      "label": "Daily crew sheet"
+    },
+    {
+      "name": "production-crew-roster",
+      "route": "/app/production/crew-roster",
+      "section": "Manufacturing",
+      "label": "Weekly crew roster"
+    },
+    {
+      "name": "production-quality",
+      "route": "/app/production/quality",
+      "section": "Manufacturing",
+      "label": "Shop-floor QC"
+    },
+    {
+      "name": "production-hourly-iron",
+      "route": "/app/production/hourly/iron",
+      "section": "Manufacturing",
+      "label": "Hourly — Iron"
+    },
+    {
+      "name": "production-finishing-packing",
+      "route": "/app/production/finishing-packing",
+      "section": "Manufacturing",
+      "label": "Finishing (shop floor)"
+    },
+    {
+      "name": "production-hourly-finishing",
+      "route": "/app/production/hourly/finishing",
+      "section": "Manufacturing",
+      "label": "Hourly — Finishing"
+    },
+    {
+      "name": "production-knitting",
+      "route": "/app/production/knitting",
+      "section": "Manufacturing",
+      "label": "Knitting"
+    },
+    {
+      "name": "production-hourly-knitting",
+      "route": "/app/production/hourly/knitting",
+      "section": "Manufacturing",
+      "label": "Hourly — Knitting"
+    },
+    {
+      "name": "production-dyeing",
+      "route": "/app/production/dyeing",
+      "section": "Manufacturing",
+      "label": "Dyeing"
+    },
+    {
+      "name": "production-hourly-dyeing",
+      "route": "/app/production/hourly/dyeing",
+      "section": "Manufacturing",
+      "label": "Hourly — Dyeing"
+    },
+    {
+      "name": "production-dept-printing",
+      "route": "/app/production/dept/printing",
+      "section": "Manufacturing",
+      "label": "Printing"
+    },
+    {
+      "name": "production-hourly-printing",
+      "route": "/app/production/hourly/printing",
+      "section": "Manufacturing",
+      "label": "Hourly — Printing"
+    },
+    {
+      "name": "production-dept-aop",
+      "route": "/app/production/dept/aop",
+      "section": "Manufacturing",
+      "label": "AOP"
+    },
+    {
+      "name": "production-hourly-aop",
+      "route": "/app/production/hourly/aop",
+      "section": "Manufacturing",
+      "label": "Hourly — AOP"
+    },
+    {
+      "name": "production-dept-embroidery",
+      "route": "/app/production/dept/embroidery",
+      "section": "Manufacturing",
+      "label": "Embroidery"
+    },
+    {
+      "name": "production-hourly-embroidery",
+      "route": "/app/production/hourly/embroidery",
+      "section": "Manufacturing",
+      "label": "Hourly — Embroidery"
+    },
+    {
+      "name": "production-dept-elastic",
+      "route": "/app/production/dept/elastic",
+      "section": "Manufacturing",
+      "label": "Elastic"
+    },
+    {
+      "name": "production-hourly-elastic",
+      "route": "/app/production/hourly/elastic",
+      "section": "Manufacturing",
+      "label": "Hourly — Elastic"
+    },
+    {
+      "name": "production-dept-washing",
+      "route": "/app/production/dept/washing",
+      "section": "Manufacturing",
+      "label": "Washing"
+    },
+    {
+      "name": "production-hourly-washing",
+      "route": "/app/production/hourly/washing",
+      "section": "Manufacturing",
+      "label": "Hourly — Washing"
+    },
+    {
+      "name": "production-costs",
+      "route": "/app/production/costs",
+      "section": "Manufacturing",
+      "label": "Cost & CM"
+    },
+    {
+      "name": "samples-requests",
+      "route": "/app/samples/requests",
+      "section": "Manufacturing",
+      "label": "Sample Requests"
+    },
+    {
+      "name": "tna-dashboard",
+      "route": "/app/tna/dashboard",
+      "section": "Manufacturing",
+      "label": "TNA Dashboard"
+    },
+    {
+      "name": "tna-templates",
+      "route": "/app/tna/templates",
+      "section": "Manufacturing",
+      "label": "TNA Templates"
+    },
+    {
+      "name": "tna-plans",
+      "route": "/app/tna/plans",
+      "section": "Manufacturing",
+      "label": "TNA Plans"
+    },
+    {
+      "name": "quality-dashboard",
+      "route": "/app/quality/dashboard",
+      "section": "Quality",
+      "label": "QC Dashboard"
+    },
+    {
+      "name": "quality-inspections",
+      "route": "/app/quality/inspections",
+      "section": "Quality",
+      "label": "Inspections"
+    },
+    {
+      "name": "quality-lab-tests",
+      "route": "/app/quality/lab-tests",
+      "section": "Quality",
+      "label": "Lab Tests"
+    },
+    {
+      "name": "quality-capa",
+      "route": "/app/quality/capa",
+      "section": "Quality",
+      "label": "CAPA"
+    },
+    {
+      "name": "quality-returns",
+      "route": "/app/quality/returns",
+      "section": "Quality",
+      "label": "Returns"
+    },
+    {
+      "name": "quality-qc",
+      "route": "/app/quality/qc",
+      "section": "Quality",
+      "label": "QC (Classic)"
+    },
+    {
+      "name": "ai-assistant",
+      "route": "/app/ai/assistant",
+      "section": "AI Tools",
+      "label": "AI Assistant"
+    },
+    {
+      "name": "ai-automation",
+      "route": "/app/ai/automation",
+      "section": "AI Tools",
+      "label": "AI Automation"
+    },
+    {
+      "name": "ai-predictions",
+      "route": "/app/ai/predictions",
+      "section": "AI Tools",
+      "label": "AI Predictions"
+    },
+    {
+      "name": "ai-weekly-reports",
+      "route": "/app/ai/weekly-reports",
+      "section": "AI Tools",
+      "label": "Weekly AI reports"
+    },
+    {
+      "name": "ai-agents",
+      "route": "/app/ai/agents",
+      "section": "AI Tools",
+      "label": "Exception agents"
+    },
+    {
+      "name": "hr",
+      "route": "/app/hr",
+      "section": "HR",
+      "label": "HR Dashboard"
+    },
+    {
+      "name": "hr-departments",
+      "route": "/app/hr/departments",
+      "section": "HR",
+      "label": "Departments"
+    },
+    {
+      "name": "hr-designations",
+      "route": "/app/hr/designations",
+      "section": "HR",
+      "label": "Designations"
+    },
+    {
+      "name": "hr-sections",
+      "route": "/app/hr/sections",
+      "section": "HR",
+      "label": "Sections & Lines"
+    },
+    {
+      "name": "hr-employees",
+      "route": "/app/hr/employees",
+      "section": "HR",
+      "label": "Employees"
+    },
+    {
+      "name": "hr-employees-ai-onboard",
+      "route": "/app/hr/employees/ai-onboard",
+      "section": "HR",
+      "label": "AI Onboarding"
+    },
+    {
+      "name": "hr-attendance-shifts",
+      "route": "/app/hr/attendance/shifts",
+      "section": "HR",
+      "label": "Shifts"
+    },
+    {
+      "name": "hr-attendance-holidays",
+      "route": "/app/hr/attendance/holidays",
+      "section": "HR",
+      "label": "Holidays"
+    },
+    {
+      "name": "hr-attendance-roster",
+      "route": "/app/hr/attendance/roster",
+      "section": "HR",
+      "label": "Roster"
+    },
+    {
+      "name": "hr-attendance-entries",
+      "route": "/app/hr/attendance/entries",
+      "section": "HR",
+      "label": "Daily Entry"
+    },
+    {
+      "name": "hr-attendance-regularizations",
+      "route": "/app/hr/attendance/regularizations",
+      "section": "HR",
+      "label": "Regularizations"
+    },
+    {
+      "name": "hr-attendance-overtime-rules",
+      "route": "/app/hr/attendance/overtime-rules",
+      "section": "HR",
+      "label": "Overtime Rules"
+    },
+    {
+      "name": "hr-attendance-overtime",
+      "route": "/app/hr/attendance/overtime",
+      "section": "HR",
+      "label": "Overtime"
+    },
+    {
+      "name": "hr-attendance-summary",
+      "route": "/app/hr/attendance/summary",
+      "section": "HR",
+      "label": "Summary"
+    },
+    {
+      "name": "hr-leave-types",
+      "route": "/app/hr/leave/types",
+      "section": "HR",
+      "label": "Leave Types"
+    },
+    {
+      "name": "hr-leave-policies",
+      "route": "/app/hr/leave/policies",
+      "section": "HR",
+      "label": "Policies"
+    },
+    {
+      "name": "hr-leave-balances",
+      "route": "/app/hr/leave/balances",
+      "section": "HR",
+      "label": "Balances"
+    },
+    {
+      "name": "hr-leave-requests",
+      "route": "/app/hr/leave/requests",
+      "section": "HR",
+      "label": "Requests"
+    },
+    {
+      "name": "hr-leave-approvals",
+      "route": "/app/hr/leave/approvals",
+      "section": "HR",
+      "label": "Approvals"
+    },
+    {
+      "name": "hr-leave-calendar",
+      "route": "/app/hr/leave/calendar",
+      "section": "HR",
+      "label": "Calendar"
+    },
+    {
+      "name": "hr-payroll-components",
+      "route": "/app/hr/payroll/components",
+      "section": "HR",
+      "label": "Components"
+    },
+    {
+      "name": "hr-payroll-salary-structures",
+      "route": "/app/hr/payroll/salary-structures",
+      "section": "HR",
+      "label": "Salary Structures"
+    },
+    {
+      "name": "hr-payroll-assignments",
+      "route": "/app/hr/payroll/assignments",
+      "section": "HR",
+      "label": "Structure Assignments"
+    },
+    {
+      "name": "hr-payroll-periods",
+      "route": "/app/hr/payroll/periods",
+      "section": "HR",
+      "label": "Periods"
+    },
+    {
+      "name": "hr-payroll-runs",
+      "route": "/app/hr/payroll/runs",
+      "section": "HR",
+      "label": "Runs"
+    },
+    {
+      "name": "hr-payroll-advances",
+      "route": "/app/hr/payroll/advances",
+      "section": "HR",
+      "label": "Advances & Loans"
+    },
+    {
+      "name": "hr-payroll-bonuses",
+      "route": "/app/hr/payroll/bonuses",
+      "section": "HR",
+      "label": "Bonuses"
+    },
+    {
+      "name": "hr-payroll-accounting-config",
+      "route": "/app/hr/payroll/accounting-config",
+      "section": "HR",
+      "label": "Accounting Config"
+    },
+    {
+      "name": "hr-payroll-statutory",
+      "route": "/app/hr/payroll/statutory",
+      "section": "HR",
+      "label": "Statutory Config"
+    },
+    {
+      "name": "hr-payroll-approvals",
+      "route": "/app/hr/payroll/approvals",
+      "section": "HR",
+      "label": "Approvals"
+    },
+    {
+      "name": "hr-payroll-payslips",
+      "route": "/app/hr/payroll/payslips",
+      "section": "HR",
+      "label": "Payslips"
+    },
+    {
+      "name": "hr-performance-cycles",
+      "route": "/app/hr/performance/cycles",
+      "section": "HR",
+      "label": "Performance Cycles"
+    },
+    {
+      "name": "hr-performance-goals",
+      "route": "/app/hr/performance/goals",
+      "section": "HR",
+      "label": "Goals"
+    },
+    {
+      "name": "hr-performance-reviews",
+      "route": "/app/hr/performance/reviews",
+      "section": "HR",
+      "label": "Reviews"
+    },
+    {
+      "name": "hr-performance-dashboard",
+      "route": "/app/hr/performance/dashboard",
+      "section": "HR",
+      "label": "Performance Dashboard"
+    },
+    {
+      "name": "hr-recruitment-requisitions",
+      "route": "/app/hr/recruitment/requisitions",
+      "section": "HR",
+      "label": "Job Requisitions"
+    },
+    {
+      "name": "hr-recruitment-candidates",
+      "route": "/app/hr/recruitment/candidates",
+      "section": "HR",
+      "label": "Candidates"
+    },
+    {
+      "name": "hr-recruitment-interviews",
+      "route": "/app/hr/recruitment/interviews",
+      "section": "HR",
+      "label": "Interviews"
+    },
+    {
+      "name": "hr-recruitment-offers",
+      "route": "/app/hr/recruitment/offers",
+      "section": "HR",
+      "label": "Offers"
+    },
+    {
+      "name": "hr-ess-profile",
+      "route": "/app/hr/ess/profile",
+      "section": "HR",
+      "label": "My Profile"
+    },
+    {
+      "name": "hr-ess-attendance",
+      "route": "/app/hr/ess/attendance",
+      "section": "HR",
+      "label": "My Attendance"
+    },
+    {
+      "name": "hr-ess-leave",
+      "route": "/app/hr/ess/leave",
+      "section": "HR",
+      "label": "My Leave"
+    },
+    {
+      "name": "hr-ess-payslips",
+      "route": "/app/hr/ess/payslips",
+      "section": "HR",
+      "label": "My Payslips"
+    },
+    {
+      "name": "hr-ess-tickets",
+      "route": "/app/hr/ess/tickets",
+      "section": "HR",
+      "label": "My Tickets"
+    },
+    {
+      "name": "hr-compliance",
+      "route": "/app/hr/compliance",
+      "section": "HR",
+      "label": "Compliance"
+    },
+    {
+      "name": "hr-ai-insights",
+      "route": "/app/hr/ai-insights",
+      "section": "HR",
+      "label": "AI Insights"
+    },
+    {
+      "name": "hr-reports",
+      "route": "/app/hr/reports",
+      "section": "HR",
+      "label": "HR Reports"
+    },
+    {
+      "name": "accounts-advance-options",
+      "route": "/app/accounts/advance-options",
+      "section": "Finance",
+      "label": "Advance Options"
+    },
+    {
+      "name": "accounts-groups",
+      "route": "/app/accounts/groups",
+      "section": "Finance",
+      "label": "Account Groups"
+    },
+    {
+      "name": "accounts",
+      "route": "/app/accounts",
+      "section": "Finance",
+      "label": "Chart of Accounts"
+    },
+    {
+      "name": "accounts-cost-centers",
+      "route": "/app/accounts/cost-centers",
+      "section": "Finance",
+      "label": "Cost Centers"
+    },
+    {
+      "name": "accounts-currency",
+      "route": "/app/accounts/currency",
+      "section": "Finance",
+      "label": "Multi-Currency"
+    },
+    {
+      "name": "accounts-accounting-periods",
+      "route": "/app/accounts/accounting-periods",
+      "section": "Finance",
+      "label": "Accounting Periods"
+    },
+    {
+      "name": "accounts-vouchers",
+      "route": "/app/accounts/vouchers",
+      "section": "Finance",
+      "label": "Vouchers"
+    },
+    {
+      "name": "accounts-vouchers-print",
+      "route": "/app/accounts/vouchers/print",
+      "section": "Finance",
+      "label": "Voucher Print"
+    },
+    {
+      "name": "accounts-vouchers-approval-queue",
+      "route": "/app/accounts/vouchers/approval-queue",
+      "section": "Finance",
+      "label": "Voucher Approvals"
+    },
+    {
+      "name": "accounts-outstanding-bills",
+      "route": "/app/accounts/outstanding-bills",
+      "section": "Finance",
+      "label": "Bills"
+    },
+    {
+      "name": "finance-party-ledgers",
+      "route": "/app/finance/party-ledgers",
+      "section": "Finance",
+      "label": "Party Ledgers"
+    },
+    {
+      "name": "finance-tax-ledgers",
+      "route": "/app/finance/tax-ledgers",
+      "section": "Finance",
+      "label": "Tax Ledgers"
+    },
+    {
+      "name": "finance-gst-returns",
+      "route": "/app/finance/gst/returns",
+      "section": "Finance",
+      "label": "GST Returns"
+    },
+    {
+      "name": "finance-gst-settings",
+      "route": "/app/finance/gst/settings",
+      "section": "Finance",
+      "label": "Tax Settings"
+    },
+    {
+      "name": "finance-voucher-types",
+      "route": "/app/finance/voucher-types",
+      "section": "Finance",
+      "label": "Voucher types (advanced)"
+    },
+    {
+      "name": "finance-voucher-classes",
+      "route": "/app/finance/voucher-classes",
+      "section": "Finance",
+      "label": "Voucher Classes"
+    },
+    {
+      "name": "finance-recurring-vouchers",
+      "route": "/app/finance/recurring-vouchers",
+      "section": "Finance",
+      "label": "Recurring Vouchers"
+    },
+    {
+      "name": "finance-registers-post-dated",
+      "route": "/app/finance/registers/post-dated",
+      "section": "Finance",
+      "label": "Post-dated Register"
+    },
+    {
+      "name": "finance-registers-memorandum",
+      "route": "/app/finance/registers/memorandum",
+      "section": "Finance",
+      "label": "Memorandum Register"
+    },
+    {
+      "name": "finance-credit-notes-new",
+      "route": "/app/finance/credit-notes/new",
+      "section": "Finance",
+      "label": "Credit Note"
+    },
+    {
+      "name": "finance-debit-notes-new",
+      "route": "/app/finance/debit-notes/new",
+      "section": "Finance",
+      "label": "Debit Note"
+    },
+    {
+      "name": "finance-stock-transfer-vouchers-new",
+      "route": "/app/finance/stock-transfer-vouchers/new",
+      "section": "Finance",
+      "label": "Stock Transfer Voucher"
+    },
+    {
+      "name": "finance-tds",
+      "route": "/app/finance/tds",
+      "section": "Finance",
+      "label": "TDS Settings"
+    },
+    {
+      "name": "finance-tds-reports",
+      "route": "/app/finance/tds/reports",
+      "section": "Finance",
+      "label": "TDS Reports"
+    },
+    {
+      "name": "accounts-vendor-bills",
+      "route": "/app/accounts/vendor-bills",
+      "section": "Finance",
+      "label": "Vendor bills (GRN)"
+    },
+    {
+      "name": "accounts-purchase-workflow",
+      "route": "/app/accounts/purchase-workflow",
+      "section": "Finance",
+      "label": "Purchase & AP"
+    },
+    {
+      "name": "banking-accounts",
+      "route": "/app/banking/accounts",
+      "section": "Finance",
+      "label": "Bank Accounts"
+    },
+    {
+      "name": "banking-reconciliation",
+      "route": "/app/banking/reconciliation",
+      "section": "Finance",
+      "label": "Bank Reconciliation"
+    },
+    {
+      "name": "banking-payment-runs",
+      "route": "/app/banking/payment-runs",
+      "section": "Finance",
+      "label": "Payment Runs"
+    },
+    {
+      "name": "banking-payment-advice",
+      "route": "/app/banking/payment-advice",
+      "section": "Finance",
+      "label": "Payment Advice"
+    },
+    {
+      "name": "banking-settlement-audit",
+      "route": "/app/banking/settlement-audit",
+      "section": "Finance",
+      "label": "Settlement Audit"
+    },
+    {
+      "name": "finance-fx-receipts",
+      "route": "/app/finance/fx-receipts",
+      "section": "Finance",
+      "label": "FX Receipts"
+    },
+    {
+      "name": "accounts-reports-day-book",
+      "route": "/app/accounts/reports/day-book",
+      "section": "Finance",
+      "label": "Day Book"
+    },
+    {
+      "name": "accounts-reports-trial-balance",
+      "route": "/app/accounts/reports/trial-balance",
+      "section": "Finance",
+      "label": "Trial Balance"
+    },
+    {
+      "name": "accounts-reports-financial-statements",
+      "route": "/app/accounts/reports/financial-statements",
+      "section": "Finance",
+      "label": "Financial Statements"
+    },
+    {
+      "name": "accounts-reports-cash-flow",
+      "route": "/app/accounts/reports/cash-flow",
+      "section": "Finance",
+      "label": "Cash Flow"
+    },
+    {
+      "name": "accounts-reports-ar-ap-aging",
+      "route": "/app/accounts/reports/ar-ap-aging",
+      "section": "Finance",
+      "label": "AR/AP Aging"
+    },
+    {
+      "name": "accounts-reports-ledger-activity",
+      "route": "/app/accounts/reports/ledger-activity",
+      "section": "Finance",
+      "label": "Ledger Activity"
+    },
+    {
+      "name": "accounts-reports-exceptions",
+      "route": "/app/accounts/reports/exceptions",
+      "section": "Finance",
+      "label": "Exception Reports"
+    },
+    {
+      "name": "accounts-reports-voucher-analytics",
+      "route": "/app/accounts/reports/voucher-analytics",
+      "section": "Finance",
+      "label": "Voucher Analytics"
+    },
+    {
+      "name": "accounts-reports-group-summary",
+      "route": "/app/accounts/reports/group-summary",
+      "section": "Finance",
+      "label": "Group Summary"
+    },
+    {
+      "name": "accounts-reports-ratio-analysis",
+      "route": "/app/accounts/reports/ratio-analysis",
+      "section": "Finance",
+      "label": "Ratio Analysis"
+    },
+    {
+      "name": "finance-mis",
+      "route": "/app/finance/mis",
+      "section": "Finance",
+      "label": "Financial MIS Dashboard"
+    },
+    {
+      "name": "finance-mis-fund-flow",
+      "route": "/app/finance/mis/fund-flow",
+      "section": "Finance",
+      "label": "Fund Flow"
+    },
+    {
+      "name": "finance-mis-ratios",
+      "route": "/app/finance/mis/ratios",
+      "section": "Finance",
+      "label": "MIS Ratios"
+    },
+    {
+      "name": "finance-mis-comparative",
+      "route": "/app/finance/mis/comparative",
+      "section": "Finance",
+      "label": "Comparative"
+    },
+    {
+      "name": "finance-mis-cash-scenarios",
+      "route": "/app/finance/mis/cash-scenarios",
+      "section": "Finance",
+      "label": "Cash Scenarios"
+    },
+    {
+      "name": "accounts-budgets",
+      "route": "/app/accounts/budgets",
+      "section": "Finance",
+      "label": "Budgets"
+    },
+    {
+      "name": "finance-cash-forecast",
+      "route": "/app/finance/cash-forecast",
+      "section": "Finance",
+      "label": "Cash Forecast"
+    },
+    {
+      "name": "cashflow-calendar",
+      "route": "/app/cashflow/calendar",
+      "section": "Finance",
+      "label": "Cashflow Calendar"
+    },
+    {
+      "name": "finance-style-profitability",
+      "route": "/app/finance/style-profitability",
+      "section": "Finance",
+      "label": "Style Profitability"
+    },
+    {
+      "name": "finance-lc-profitability",
+      "route": "/app/finance/lc-profitability",
+      "section": "Finance",
+      "label": "LC Profitability"
+    },
+    {
+      "name": "finance-costing-variance",
+      "route": "/app/finance/costing-variance",
+      "section": "Finance",
+      "label": "Costing Variance"
+    },
+    {
+      "name": "finance-facilities-dashboard",
+      "route": "/app/finance/facilities/dashboard",
+      "section": "Finance",
+      "label": "Facilities dashboard"
+    },
+    {
+      "name": "finance-facilities",
+      "route": "/app/finance/facilities",
+      "section": "Finance",
+      "label": "All facilities"
+    },
+    {
+      "name": "finance-business-overview",
+      "route": "/app/finance/business-overview",
+      "section": "Finance",
+      "label": "Business overview"
+    },
+    {
+      "name": "approvals",
+      "route": "/app/approvals",
+      "section": "Workflow",
+      "label": "All Approvals"
+    },
+    {
+      "name": "reports",
+      "route": "/app/reports",
+      "section": "Reports",
+      "label": "Analytics"
+    },
+    {
+      "name": "reports-merchandising",
+      "route": "/app/reports/merchandising",
+      "section": "Reports",
+      "label": "Merchandising"
+    },
+    {
+      "name": "reports-style-360",
+      "route": "/app/reports/style-360",
+      "section": "Reports",
+      "label": "Style 360"
+    },
+    {
+      "name": "reports-purchase-orders",
+      "route": "/app/reports/purchase-orders",
+      "section": "Reports",
+      "label": "Purchase Orders"
+    },
+    {
+      "name": "reports-grn",
+      "route": "/app/reports/grn",
+      "section": "Reports",
+      "label": "GRN Summary"
+    },
+    {
+      "name": "reports-sales-orders",
+      "route": "/app/reports/sales-orders",
+      "section": "Reports",
+      "label": "Sales Orders"
+    },
+    {
+      "name": "reports-lc-outstanding",
+      "route": "/app/reports/lc-outstanding",
+      "section": "Reports",
+      "label": "LC Outstanding"
+    },
+    {
+      "name": "reports-btb-maturity",
+      "route": "/app/reports/btb-maturity",
+      "section": "Reports",
+      "label": "BTB LC Maturity"
+    },
+    {
+      "name": "reports-production-efficiency",
+      "route": "/app/reports/production-efficiency",
+      "section": "Reports",
+      "label": "Production Efficiency"
+    },
+    {
+      "name": "reports-qc-summary",
+      "route": "/app/reports/qc-summary",
+      "section": "Reports",
+      "label": "QC Summary"
+    },
+    {
+      "name": "reports-employee",
+      "route": "/app/reports/employee",
+      "section": "Reports",
+      "label": "Employee Summary"
+    },
+    {
+      "name": "reports-payroll",
+      "route": "/app/reports/payroll",
+      "section": "Reports",
+      "label": "Payroll Summary"
+    },
+    {
+      "name": "reports-shipments",
+      "route": "/app/reports/shipments",
+      "section": "Reports",
+      "label": "Shipment Tracking"
+    },
+    {
+      "name": "reports-gate-passes",
+      "route": "/app/reports/gate-passes",
+      "section": "Reports",
+      "label": "Gate Pass Register"
+    },
+    {
+      "name": "reports-challans",
+      "route": "/app/reports/challans",
+      "section": "Reports",
+      "label": "Delivery Challans"
+    },
+    {
+      "name": "reports-reconciliation",
+      "route": "/app/reports/reconciliation",
+      "section": "Reports",
+      "label": "Data Reconciliation"
+    },
+    {
+      "name": "reports-exceptions",
+      "route": "/app/reports/exceptions",
+      "section": "Reports",
+      "label": "Exceptions"
+    },
+    {
+      "name": "reports-trade-overview",
+      "route": "/app/reports/trade-overview",
+      "section": "Reports",
+      "label": "Trade overview"
+    },
+    {
+      "name": "settings-config",
+      "route": "/app/settings/config",
+      "section": "Settings",
+      "label": "Configuration"
+    },
+    {
+      "name": "settings",
+      "route": "/app/settings",
+      "section": "Settings",
+      "label": "Settings"
+    },
+    {
+      "name": "settings-users",
+      "route": "/app/settings/users",
+      "section": "Settings",
+      "label": "User Mgmt"
+    },
+    {
+      "name": "my-signature",
+      "route": "/app/my-signature",
+      "section": "Settings",
+      "label": "My Signature"
+    },
+    {
+      "name": "settings-roles",
+      "route": "/app/settings/roles",
+      "section": "Settings",
+      "label": "Roles"
+    },
+    {
+      "name": "settings-tenant",
+      "route": "/app/settings/tenant",
+      "section": "Settings",
+      "label": "Tenant"
+    },
+    {
+      "name": "settings-pricing",
+      "route": "/app/settings/pricing",
+      "section": "Settings",
+      "label": "Pricing"
+    },
+    {
+      "name": "settings-activity-logs",
+      "route": "/app/settings/activity-logs",
+      "section": "Settings",
+      "label": "Activity Logs"
+    },
+    {
+      "name": "settings-external-access",
+      "route": "/app/settings/external-access",
+      "section": "Settings",
+      "label": "External access"
+    },
+    {
+      "name": "settings-currency",
+      "route": "/app/settings/currency",
+      "section": "Settings",
+      "label": "Currency"
+    },
+    {
+      "name": "settings-backup",
+      "route": "/app/settings/backup",
+      "section": "Settings",
+      "label": "Backup & Restore"
+    },
+    {
+      "name": "settings-statutory-compliance",
+      "route": "/app/settings/statutory-compliance",
+      "section": "Settings",
+      "label": "Statutory compliance"
+    },
+    {
+      "name": "settings-data-import",
+      "route": "/app/settings/data-import",
+      "section": "Settings",
+      "label": "Data import"
+    },
+    {
+      "name": "settings-bulk-tenant-onboarding",
+      "route": "/app/settings/bulk-tenant-onboarding",
+      "section": "Settings",
+      "label": "Bulk tenant onboarding"
+    },
+    {
+      "name": "settings-cheque-templates",
+      "route": "/app/settings/cheque-templates",
+      "section": "Settings",
+      "label": "Cheque Templates"
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="520" fill="#ffffff"/>
+  <text x="24" y="34" font-size="18" font-weight="700" fill="#0f172a">Purchase to pay &#8212; from supplier order to bank statement</text>
+  <text x="24" y="56" font-size="12" fill="#475569">Grey boxes = Inventory (store / purchase team). Teal boxes = Finance. Orange = the accounting entry each step makes.</text>
+
+  <!-- Row 1: inventory -->
+  <g text-anchor="middle">
+    <rect x="24" y="84" width="200" height="70" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+    <text x="124" y="110" font-size="13" font-weight="700" fill="#0f172a">1. Purchase Order</text>
+    <text x="124" y="128" font-size="11" fill="#475569">Inventory &#8594; Purchase Orders</text>
+    <text x="124" y="144" font-size="11" fill="#475569">status APPROVED</text>
+
+    <rect x="264" y="84" width="200" height="70" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+    <text x="364" y="110" font-size="13" font-weight="700" fill="#0f172a">2. Goods Receiving (GRN)</text>
+    <text x="364" y="128" font-size="11" fill="#475569">store receives &amp; QC accepts</text>
+    <text x="364" y="144" font-size="11" fill="#475569">status RECEIVED</text>
+  </g>
+  <line x1="224" y1="119" x2="262" y2="119" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <rect x="264" y="164" width="200" height="30" rx="6" fill="#fff7ed" stroke="#ea580c"/>
+  <text x="364" y="184" font-size="11" fill="#9a3412" text-anchor="middle">Stock up &#183; GRNI = received, not billed</text>
+
+  <!-- Row 2: AP bill options -->
+  <text x="504" y="80" font-size="12" font-weight="700" fill="#0f766e">3. Book the supplier bill &#8212; choose one way</text>
+  <g text-anchor="middle">
+    <rect x="504" y="88" width="212" height="86" rx="10" fill="#f0fdfa" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="610" y="110" font-size="13" font-weight="700" fill="#0f172a">Vendor bills (GRN)</text>
+    <text x="610" y="128" font-size="11" fill="#334155">enter Vendor invoice ref</text>
+    <text x="610" y="144" font-size="11" fill="#334155">Mark approved &#8594; Post AP</text>
+    <text x="610" y="160" font-size="11" fill="#475569">needs finance.ap_posting_approve</text>
+
+    <rect x="728" y="88" width="208" height="86" rx="10" fill="#f0fdfa" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="832" y="110" font-size="13" font-weight="700" fill="#0f172a">Purchase &amp; AP</text>
+    <text x="832" y="128" font-size="11" fill="#334155">Actions &#8594; Create AP bill</text>
+    <text x="832" y="144" font-size="11" fill="#334155">from a PO or a received GRN</text>
+    <text x="832" y="160" font-size="11" fill="#475569">due in 30 days by default</text>
+  </g>
+  <line x1="464" y1="119" x2="502" y2="119" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <rect x="504" y="182" width="212" height="30" rx="6" fill="#fff7ed" stroke="#ea580c"/>
+  <text x="610" y="202" font-size="11" fill="#9a3412" text-anchor="middle">Dr GRNI &#183; Cr Trade payables (posted)</text>
+
+  <!-- Row 3: outstanding bill -->
+  <g text-anchor="middle">
+    <rect x="600" y="250" width="240" height="70" rx="10" fill="#0f766e" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="720" y="276" font-size="13" font-weight="700" fill="#ffffff">4. Payable bill is OPEN</text>
+    <text x="720" y="294" font-size="11" fill="#ccfbf1">Finance &#8594; Transactions &#8594; Bills (Payable)</text>
+    <text x="720" y="310" font-size="11" fill="#ccfbf1">OPEN &#8594; PARTIAL &#8594; PAID</text>
+  </g>
+  <path d="M832,174 L832,212 L760,212 L740,248" stroke="#334155" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <path d="M610,212 L640,248" stroke="#334155" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- Row 4: pay -->
+  <text x="24" y="246" font-size="12" font-weight="700" fill="#0f766e">5. Pay the supplier &#8212; choose one way</text>
+  <g text-anchor="middle">
+    <rect x="24" y="254" width="250" height="86" rx="10" fill="#f0fdfa" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="149" y="276" font-size="13" font-weight="700" fill="#0f172a">Payment Runs (batch)</text>
+    <text x="149" y="294" font-size="11" fill="#334155">tick bills &#8594; Create Run (Draft)</text>
+    <text x="149" y="310" font-size="11" fill="#334155">Approve &#8594; Process &#8594; Execute</text>
+    <text x="149" y="326" font-size="11" fill="#475569">manager / admin</text>
+
+    <rect x="300" y="254" width="250" height="86" rx="10" fill="#f0fdfa" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="425" y="276" font-size="13" font-weight="700" fill="#0f172a">Payment voucher (F5)</text>
+    <text x="425" y="294" font-size="11" fill="#334155">Dr supplier &#183; Cr bank</text>
+    <text x="425" y="310" font-size="11" fill="#334155">approve &amp; post, then</text>
+    <text x="425" y="326" font-size="11" fill="#334155">Print cheque from the voucher</text>
+  </g>
+  <path d="M600,285 L552,295" stroke="#334155" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <path d="M650,320 C610,400 340,400 276,330" stroke="#334155" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/>
+  <rect x="24" y="348" width="250" height="30" rx="6" fill="#fff7ed" stroke="#ea580c"/>
+  <text x="149" y="368" font-size="11" fill="#9a3412" text-anchor="middle">Execute posts a PAYMENT voucher</text>
+
+  <!-- Row 5: advice + recon -->
+  <g text-anchor="middle">
+    <rect x="24" y="414" width="250" height="70" rx="10" fill="#f0fdfa" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="149" y="440" font-size="13" font-weight="700" fill="#0f172a">6. Payment Advice</text>
+    <text x="149" y="458" font-size="11" fill="#334155">Open Advice &#8594; print / send to</text>
+    <text x="149" y="474" font-size="11" fill="#334155">bank and supplier</text>
+
+    <rect x="330" y="414" width="290" height="70" rx="10" fill="#f0fdfa" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="475" y="440" font-size="13" font-weight="700" fill="#0f172a">7. Bank Reconciliation</text>
+    <text x="475" y="458" font-size="11" fill="#334155">statement line &#8596; executed payment run</text>
+    <text x="475" y="474" font-size="11" fill="#334155">Auto Match / Match &#8594; Finalize</text>
+  </g>
+  <line x1="149" y1="378" x2="149" y2="412" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="274" y1="449" x2="328" y2="449" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <rect x="660" y="384" width="276" height="112" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="676" y="408" font-size="12" font-weight="700" fill="#0f172a">Check it is complete</text>
+  <text x="676" y="428" font-size="12" fill="#334155">&#8226; Exception Reports &#8594; Goods received,</text>
+  <text x="676" y="444" font-size="12" fill="#334155">   not billed (GRNs with no bill yet)</text>
+  <text x="676" y="464" font-size="12" fill="#334155">&#8226; AR/AP Aging &#8594; overdue payables</text>
+  <text x="676" y="484" font-size="12" fill="#334155">&#8226; Purchase &amp; AP &#8594; Due 7 Days card</text>
+</svg>

@@ -55,39 +55,42 @@ export function SidebarSection({
 
   return (
     <div className={sectionWrapperClass}>
-      <SidebarTooltip label={section} enabled={isCollapsed}>
-        <button
-          type="button"
-          id={buttonDomId(section)}
-          aria-expanded={isOpen}
-          aria-controls={sectionDomId(section)}
-          aria-label={isCollapsed ? section : undefined}
-          onMouseEnter={() => isCollapsed && onHoverChange(true)}
-          onMouseLeave={() => isCollapsed && onHoverChange(false)}
-          onClick={onToggle}
-          className={`relative flex items-center gap-2 w-full h-9 rounded-md transition text-left ${
-            isCollapsed ? "justify-center px-2" : "px-3"
-          } ${
-            isOpen
-              ? "text-brand-primary bg-brand-primary/5"
-              : "text-text-secondary hover:text-text-primary hover:bg-surface-subtle"
-          }`}
-        >
-          {isCollapsed && isActive && (
-            <span
-              aria-hidden
-              className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-brand-primary"
-            />
-          )}
-          <SectionIcon className="h-4 w-4 shrink-0" />
-          {!isCollapsed && (
-            <>
-              <span className="flex-1 truncate text-sm font-medium">{section}</span>
-              {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            </>
-          )}
-        </button>
-      </SidebarTooltip>
+      {/* Opaque background: the open-state colour is translucent and items scroll underneath. */}
+      <div className={isCollapsed ? undefined : "sticky top-0 z-10 rounded-md bg-surface-subtle"}>
+        <SidebarTooltip label={section} enabled={isCollapsed}>
+          <button
+            type="button"
+            id={buttonDomId(section)}
+            aria-expanded={isOpen}
+            aria-controls={sectionDomId(section)}
+            aria-label={isCollapsed ? section : undefined}
+            onMouseEnter={() => isCollapsed && onHoverChange(true)}
+            onMouseLeave={() => isCollapsed && onHoverChange(false)}
+            onClick={onToggle}
+            className={`relative flex items-center gap-2 w-full h-9 rounded-md transition text-left ${
+              isCollapsed ? "justify-center px-2" : "px-3"
+            } ${
+              isOpen
+                ? "text-brand-primary bg-brand-primary/5"
+                : "text-text-secondary hover:text-text-primary hover:bg-surface-subtle"
+            }`}
+          >
+            {isCollapsed && isActive && (
+              <span
+                aria-hidden
+                className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-brand-primary"
+              />
+            )}
+            <SectionIcon className="h-4 w-4 shrink-0" />
+            {!isCollapsed && (
+              <>
+                <span className="flex-1 truncate text-sm font-medium">{section}</span>
+                {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </>
+            )}
+          </button>
+        </SidebarTooltip>
+      </div>
 
       {!isCollapsed && isOpen && (
         <div
@@ -152,12 +155,19 @@ export function SidebarSection({
                 to={item.href}
                 role="menuitem"
                 onMouseEnter={() => prefetchSidebarRoute(item.href)}
-                className={`flex items-center gap-2 px-3 py-1.5 text-sm no-underline ${
+                aria-current={active ? "page" : undefined}
+                className={`relative flex items-center gap-2 px-3 py-1.5 text-sm no-underline ${
                   active
                     ? "bg-brand-primary/10 text-brand-primary font-medium"
                     : "text-text-secondary hover:bg-surface-subtle"
                 }`}
               >
+                {active && (
+                  <span
+                    aria-hidden
+                    className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-brand-primary"
+                  />
+                )}
                 <ItemIcon className="h-4 w-4 shrink-0" />
                 <span className="flex-1 truncate">{item.label}</span>
                 {item.badge ? (

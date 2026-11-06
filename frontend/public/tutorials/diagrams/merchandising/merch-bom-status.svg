@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="960" height="400" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <title>Order BOM status: Draft, Submitted, Approved, Frozen, with reject loop and permission keys</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect width="960" height="400" fill="#ffffff"/>
+  <text x="480" y="30" text-anchor="middle" font-size="19" font-weight="700" fill="#334155">Order BOM status (BOM Builder)</text>
+  <text x="480" y="52" text-anchor="middle" font-size="13" fill="#64748b">Lines can be edited only in DRAFT. Purchase orders can be made only from APPROVED or FROZEN.</text>
+
+  <g>
+    <rect x="30" y="96" width="190" height="84" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="2"/>
+    <text x="125" y="126" text-anchor="middle" font-size="16" font-weight="700" fill="#334155">DRAFT</text>
+    <text x="125" y="148" text-anchor="middle" font-size="12" fill="#475569">Edit lines, add manual</text>
+    <text x="125" y="164" text-anchor="middle" font-size="12" fill="#475569">lines, set vendor</text>
+  </g>
+  <g>
+    <rect x="270" y="96" width="190" height="84" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
+    <text x="365" y="126" text-anchor="middle" font-size="16" font-weight="700" fill="#92400e">SUBMITTED</text>
+    <text x="365" y="148" text-anchor="middle" font-size="12" fill="#475569">Waiting for a checker</text>
+    <text x="365" y="164" text-anchor="middle" font-size="12" fill="#475569">to approve or reject</text>
+  </g>
+  <g>
+    <rect x="510" y="96" width="190" height="84" rx="12" fill="#ecfdf5" stroke="#0f766e" stroke-width="2"/>
+    <text x="605" y="126" text-anchor="middle" font-size="16" font-weight="700" fill="#0f766e">APPROVED</text>
+    <text x="605" y="148" text-anchor="middle" font-size="12" fill="#475569">Quantities recalculated.</text>
+    <text x="605" y="164" text-anchor="middle" font-size="12" fill="#475569">POs can be raised</text>
+  </g>
+  <g>
+    <rect x="750" y="96" width="180" height="84" rx="12" fill="#e0f2fe" stroke="#0369a1" stroke-width="2.5"/>
+    <text x="840" y="126" text-anchor="middle" font-size="16" font-weight="700" fill="#075985">FROZEN</text>
+    <text x="840" y="148" text-anchor="middle" font-size="12" fill="#475569">Final version.</text>
+    <text x="840" y="164" text-anchor="middle" font-size="12" fill="#475569">No more changes</text>
+  </g>
+
+  <line x1="220" y1="138" x2="266" y2="138" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="460" y1="138" x2="506" y2="138" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="700" y1="138" x2="746" y2="138" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <g font-size="12" fill="#0f766e" text-anchor="middle" font-weight="600">
+    <text x="243" y="88">Submit</text>
+    <text x="483" y="88">Approve</text>
+    <text x="725" y="88">Freeze</text>
+  </g>
+
+  <!-- reject loop -->
+  <path d="M 365 180 C 365 250, 125 250, 125 184" fill="none" stroke="#dc2626" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="245" y="246" text-anchor="middle" font-size="12" fill="#991b1b" font-weight="600">Reject (with a comment) &#8594; goes back to DRAFT</text>
+  <text x="840" y="214" text-anchor="middle" font-size="12" fill="#64748b">Freeze is optional: use it when</text>
+  <text x="840" y="230" text-anchor="middle" font-size="12" fill="#64748b">the buyer has signed off</text>
+
+  <!-- permissions -->
+  <rect x="30" y="306" width="900" height="80" rx="12" fill="#f1f5f9"/>
+  <text x="50" y="330" font-size="13" font-weight="700" fill="#334155">Who may click (role permission keys in Settings &#8594; Roles):</text>
+  <g font-size="12" fill="#334155">
+    <rect x="50" y="342" width="250" height="30" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="175" y="362" text-anchor="middle">Approve / Reject &#8594; <tspan font-family="ui-monospace, Consolas, monospace" fill="#0f766e">merch.bom.approve</tspan></text>
+    <rect x="320" y="342" width="230" height="30" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="435" y="362" text-anchor="middle">Freeze &#8594; <tspan font-family="ui-monospace, Consolas, monospace" fill="#0f766e">merch.bom.freeze</tspan></text>
+    <rect x="570" y="342" width="340" height="30" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="740" y="362" text-anchor="middle">Generate Purchase Orders &#8594; <tspan font-family="ui-monospace, Consolas, monospace" fill="#0f766e">merch.po.generate</tspan></text>
+  </g>
+</svg>

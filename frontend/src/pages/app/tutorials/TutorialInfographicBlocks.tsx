@@ -1,6 +1,7 @@
 import type { TutorialInfographic } from "@/data/tutorials/types";
 import { TutorialFlowDiagram } from "./TutorialFlowDiagram";
 import { TutorialImage } from "./TutorialImage";
+import { TutorialStepsBlock } from "./TutorialStepsBlock";
 import { CalloutBox } from "./CalloutBox";
 import ReactMarkdown from "react-markdown";
 
@@ -32,6 +33,9 @@ export function TutorialInfographicBlocks({ items }: TutorialInfographicBlocksPr
         const key = `ig-${i}`;
         if (item.type === "flow") {
           return <TutorialFlowDiagram key={key} title={item.title} steps={item.steps} />;
+        }
+        if (item.type === "steps") {
+          return <TutorialStepsBlock key={key} title={item.title} steps={item.steps} />;
         }
         if (item.type === "diagram") {
           return (

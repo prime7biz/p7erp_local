@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="960" height="400" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect width="960" height="400" fill="#ffffff"/>
+  <text x="480" y="32" text-anchor="middle" font-size="18" font-weight="700" fill="#334155">Goods receiving (GRN) &#8212; from the truck to stock</text>
+
+  <!-- Main row -->
+  <rect x="20" y="70" width="190" height="64" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="2"/>
+  <text x="115" y="98" text-anchor="middle" font-size="14" font-weight="700" fill="#334155">Create GRN (header)</text>
+  <text x="115" y="118" text-anchor="middle" font-size="12" fill="#475569">PO lines copied with pending qty</text>
+
+  <rect x="250" y="70" width="140" height="64" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="2"/>
+  <text x="320" y="98" text-anchor="middle" font-size="14" font-weight="700" fill="#334155">DRAFT</text>
+  <text x="320" y="118" text-anchor="middle" font-size="12" fill="#475569">no stock yet</text>
+
+  <rect x="430" y="78" width="210" height="48" rx="24" fill="#334155"/>
+  <text x="535" y="107" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">Actions &#8594; Receive to stock</text>
+
+  <rect x="680" y="70" width="140" height="64" rx="12" fill="#0f766e" stroke="#0f766e" stroke-width="2"/>
+  <text x="750" y="98" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">RECEIVED</text>
+  <text x="750" y="118" text-anchor="middle" font-size="12" fill="#ccfbf1">stock IN + GL posted</text>
+
+  <g stroke="#334155" stroke-width="2" marker-end="url(#arr)">
+    <line x1="210" y1="102" x2="247" y2="102"/>
+    <line x1="390" y1="102" x2="427" y2="102"/>
+    <line x1="640" y1="102" x2="677" y2="102"/>
+  </g>
+
+  <!-- Follow-ups after RECEIVED -->
+  <text x="840" y="160" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">Then, from Actions:</text>
+  <g stroke="#94a3b8" stroke-width="1.5" fill="none">
+    <path d="M750 134 V176"/>
+  </g>
+  <g font-size="12" fill="#334155">
+    <rect x="680" y="176" width="260" height="34" rx="8" fill="#f0fdfa" stroke="#0f766e"/>
+    <text x="810" y="198" text-anchor="middle">Create vendor bill draft (Finance)</text>
+    <rect x="680" y="218" width="260" height="34" rx="8" fill="#f0fdfa" stroke="#0f766e"/>
+    <text x="810" y="240" text-anchor="middle">Issue acknowledgement (to supplier)</text>
+    <rect x="680" y="260" width="260" height="34" rx="8" fill="#f0fdfa" stroke="#0f766e"/>
+    <text x="810" y="282" text-anchor="middle">GL postings &#183; Print (layout)</text>
+  </g>
+
+  <!-- Checks -->
+  <rect x="20" y="170" width="620" height="190" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text x="40" y="198" font-size="14" font-weight="700" fill="#c2410c">Checks when you click Receive to stock</text>
+  <g font-size="12.5" fill="#334155">
+    <text x="40" y="226"><tspan font-weight="700">Non-PO receipt</tspan> (no purchase order): a reason is required, and only admin / manager</text>
+    <text x="52" y="244">or a role with <tspan font-family="ui-monospace, Consolas, monospace">inventory.non_po_receipt_approve</tspan> can receive it.</text>
+    <text x="40" y="270"><tspan font-weight="700">More than the PO quantity</tspan> (over-receipt): only admin / manager or</text>
+    <text x="52" y="288"><tspan font-family="ui-monospace, Consolas, monospace">inventory.over_receipt_approve</tspan>. Others get a "Requires admin/manager&#8230;" error.</text>
+    <text x="40" y="314"><tspan font-weight="700">Closed or cancelled PO</tspan>: a GRN cannot be created against it.</text>
+    <text x="40" y="340"><tspan font-weight="700">QC inspection on</tspan>: goods go to a quarantine warehouse first; GRN Inspection accepts them.</text>
+  </g>
+  <text x="480" y="388" text-anchor="middle" font-size="12" fill="#64748b">Received quantity is checked against the PO line; accepted quantity can never be more than received quantity.</text>
+</svg>

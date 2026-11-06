@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, Up
 from fastapi.responses import Response as BytesResponse
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
+from app.common.money import safe_decimal
 from app.common.money_schema import MoneyLineStr, MoneyStrNonNeg, MoneyStrNonNegOpt, RateStrNonNeg, RateStrNonNegOpt
 from app.common.orm_numeric import (
     decimal_money_passthrough,
@@ -48,11 +49,13 @@ from app.common.authz import get_user_role_scoped_to_tenant
 from app.modules.finance.advanced_voucher_service import voucher_book_impact_applied, voucher_in_books_clause
 from app.modules.finance.budget_enforcement_service import evaluate_voucher_budget
 from app.modules.finance.posting_core import (
+    apply_amount_to_account,
     apply_voucher_to_books,
     assert_lines_balanced,
     line_base_amount,
     line_base_amount_sql,
     mark_balance_basis,
+    to_decimal,
     voucher_balance_basis,
 )
 from app.modules.finance.voucher_history import (
@@ -1322,13 +1325,17 @@ async def _find_or_create_supplier_ap_account(db: AsyncSession, tenant_id: int, 
     return account
 
 
-def _apply_voucher_impact(account: ChartOfAccount, entry_type: str, amount: float) -> None:
-    current_balance = _to_float(account.balance)
-    if account.normal_balance == "debit":
-        current_balance += amount if entry_type == "DEBIT" else -amount
-    else:
-        current_balance += amount if entry_type == "CREDIT" else -amount
-    account.balance = str(round(current_balance, 4))
+def _apply_voucher_impact(account: ChartOfAccount, entry_type: str, amount: float | str | Decimal) -> None:
+    apply_amount_to_account(account, entry_type, to_decimal(amount))
+
+
+def _assert_posting_line_amounts(lines: list[VoucherLine]) -> None:
+    """Reject negative amounts and unknown entry types before posting, whichever path created the lines."""
+    for line in lines:
+        if (line.entry_type or "").upper() not in ("DEBIT", "CREDIT"):
+            raise HTTPException(status_code=400, detail=f"Invalid voucher line entry type: {line.entry_type}")
+        if safe_decimal(line.amount) < 0:
+            raise HTTPException(status_code=400, detail="Voucher line amounts cannot be negative")
 
 
 async def _lock_chart_accounts_for_subset(
@@ -2952,6 +2959,7 @@ async def update_voucher_status(
             (await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == row.id))).scalars().all()
         )
         if affect_books or pre_post_lines:
+            _assert_posting_line_amounts(pre_post_lines)
             assert_lines_balanced(pre_post_lines)
         if affect_books:
             open_period = (

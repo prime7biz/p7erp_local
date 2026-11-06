@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" width="960" height="640" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="640" fill="#ffffff"/>
+  <text x="24" y="34" font-size="20" font-weight="700" fill="#334155">From gross to net: how Auto-calculate works out one worker's pay</text>
+  <text x="24" y="56" font-size="13" fill="#64748b">The same order is used for every employee in the run. Steps run top to bottom.</text>
+
+  <!-- Steps column -->
+  <g font-size="12" fill="#334155">
+    <rect x="24" y="72" width="560" height="62" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="46" cy="94" r="13" fill="#0f766e"/><text x="46" y="99" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+    <text x="68" y="99" font-size="14" font-weight="700">Find the structure assignment</text>
+    <text x="68" y="121">Assignment effective on the run date &#8594; salary structure + base salary (+ overrides)</text>
+    <line x1="304" y1="134" x2="304" y2="146" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <rect x="24" y="148" width="560" height="80" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="46" cy="170" r="13" fill="#0f766e"/><text x="46" y="175" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+    <text x="68" y="175" font-size="14" font-weight="700">Collect the period's inputs</text>
+    <text x="68" y="197">Paid days = present + late (full day) + half day (0.5) + paid leave</text>
+    <text x="68" y="215">Approved overtime hours  &#8226;  Pieces and SAM minutes from the Scan station</text>
+    <line x1="304" y1="228" x2="304" y2="240" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <rect x="24" y="242" width="560" height="80" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="46" cy="264" r="13" fill="#0f766e"/><text x="46" y="269" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+    <text x="68" y="269" font-size="14" font-weight="700">Work out each structure line (in sort order)</text>
+    <text x="68" y="291">Rate = override &#8594; line amount &#8594; component default amount</text>
+    <text x="68" y="309">Fixed &#8226; % of base &#8226; per day &#8226; per OT hour &#8226; per piece &#8226; per SAM minute</text>
+    <line x1="304" y1="322" x2="304" y2="334" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <rect x="24" y="336" width="560" height="62" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <circle cx="46" cy="358" r="13" fill="#0f766e"/><text x="46" y="363" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+    <text x="68" y="363" font-size="14" font-weight="700">Add up</text>
+    <text x="68" y="385">EARNING lines &#8594; Gross pay   &#8226;   DEDUCTION lines &#8594; Deductions</text>
+    <line x1="304" y1="398" x2="304" y2="410" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <rect x="24" y="412" width="560" height="62" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <circle cx="46" cy="434" r="13" fill="#ea580c"/><text x="46" y="439" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">5</text>
+    <text x="68" y="439" font-size="14" font-weight="700">Minimum-wage check (piece-rate workers)</text>
+    <text x="68" y="461">Regular earnings = Gross &#8722; overtime. Warning if below the base salary.</text>
+    <line x1="304" y1="474" x2="304" y2="486" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <rect x="24" y="488" width="560" height="62" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2" stroke-dasharray="6 4"/>
+    <circle cx="46" cy="510" r="13" fill="#0f766e"/><text x="46" y="515" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">6</text>
+    <text x="68" y="515" font-size="14" font-weight="700">Statutory lines (only if Statutory payroll is on)</text>
+    <text x="68" y="537">Employee share &#8594; Deductions. Employer share is shown but not paid to the worker.</text>
+    <line x1="304" y1="550" x2="304" y2="562" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <rect x="24" y="564" width="560" height="56" rx="12" fill="#0f766e"/>
+    <text x="46" y="598" font-size="16" font-weight="700" fill="#ffffff">7  Net pay = Gross pay &#8722; Deductions</text>
+  </g>
+
+  <!-- Example column -->
+  <g font-size="12" fill="#334155">
+    <rect x="612" y="72" width="324" height="548" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="630" y="98" font-size="14" font-weight="700" fill="#0f766e">Example (illustrative numbers)</text>
+    <text x="630" y="118" fill="#64748b">Base salary on assignment: 12,500</text>
+    <text x="630" y="136" fill="#64748b">Approved overtime: 20 hours</text>
+
+    <text x="630" y="166" font-weight="700">Line</text>
+    <text x="760" y="166" font-weight="700">Type</text>
+    <text x="918" y="166" font-weight="700" text-anchor="end">Amount</text>
+    <line x1="630" y1="174" x2="918" y2="174" stroke="#cbd5e1"/>
+
+    <text x="630" y="194">Basic</text><text x="760" y="194">Fixed</text><text x="918" y="194" text-anchor="end">8,000</text>
+    <text x="630" y="216">House rent</text><text x="760" y="216">20% of base</text><text x="918" y="216" text-anchor="end">2,500</text>
+    <text x="630" y="238">Medical</text><text x="760" y="238">Fixed</text><text x="918" y="238" text-anchor="end">750</text>
+    <text x="630" y="260">Transport</text><text x="760" y="260">Fixed</text><text x="918" y="260" text-anchor="end">450</text>
+    <text x="630" y="282">Food</text><text x="760" y="282">Fixed</text><text x="918" y="282" text-anchor="end">800</text>
+    <text x="630" y="304">Overtime</text><text x="760" y="304">80 &#215; 20 h</text><text x="918" y="304" text-anchor="end">1,600</text>
+    <line x1="630" y1="314" x2="918" y2="314" stroke="#cbd5e1"/>
+    <text x="630" y="334" font-weight="700">Gross pay</text><text x="918" y="334" font-weight="700" text-anchor="end">14,100</text>
+    <text x="630" y="354" fill="#64748b">Regular earnings (gross &#8722; OT)</text><text x="918" y="354" fill="#64748b" text-anchor="end">12,500</text>
+
+    <text x="630" y="386">Advance recovery</text><text x="760" y="386">Deduction</text><text x="918" y="386" text-anchor="end">&#8722;1,000</text>
+    <line x1="630" y1="396" x2="918" y2="396" stroke="#cbd5e1"/>
+    <text x="630" y="416" font-weight="700">Deductions</text><text x="918" y="416" font-weight="700" text-anchor="end">1,000</text>
+
+    <rect x="630" y="432" width="288" height="40" rx="10" fill="#f0fdfa" stroke="#0f766e"/>
+    <text x="644" y="457" font-size="14" font-weight="700" fill="#0f766e">Net pay</text>
+    <text x="904" y="457" font-size="14" font-weight="700" fill="#0f766e" text-anchor="end">13,100</text>
+
+    <text x="630" y="500" fill="#64748b">Absent days and unpaid leave are NOT</text>
+    <text x="630" y="518" fill="#64748b">deducted from Fixed lines automatically &#8212;</text>
+    <text x="630" y="536" fill="#64748b">the preview only warns about unpaid leave.</text>
+    <text x="630" y="566" fill="#64748b">Overtime rate is used as entered: put the</text>
+    <text x="630" y="584" fill="#64748b">final hourly OT rate on the component.</text>
+  </g>
+</svg>

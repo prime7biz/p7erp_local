@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" width="960" height="600" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="600" fill="#ffffff"/>
+  <text x="24" y="34" font-size="20" font-weight="700" fill="#334155">What shows up in All Approvals, and what each step does</text>
+  <text x="24" y="56" font-size="13" fill="#64748b">Workflow &#8594; All Approvals (/app/approvals). Actions on each row = the next allowed step for YOUR role.</text>
+
+  <!-- Voucher chain -->
+  <text x="24" y="82" font-size="14" font-weight="700" fill="#0f766e">Vouchers (payment, receipt, journal, contra)</text>
+  <g font-size="12" font-weight="700" text-anchor="middle">
+    <rect x="24" y="106" width="118" height="44" rx="10" fill="#f1f5f9" stroke="#94a3b8"/>
+    <text x="83" y="133" fill="#334155">DRAFT</text>
+    <rect x="182" y="106" width="118" height="44" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/>
+    <text x="241" y="133" fill="#ea580c">SUBMITTED</text>
+    <rect x="340" y="106" width="118" height="44" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/>
+    <text x="399" y="133" fill="#ea580c">CHECKED</text>
+    <rect x="498" y="106" width="130" height="44" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/>
+    <text x="563" y="133" fill="#ea580c">RECOMMENDED</text>
+    <rect x="668" y="106" width="118" height="44" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/>
+    <text x="727" y="133" fill="#ea580c">APPROVED</text>
+    <rect x="826" y="106" width="110" height="44" rx="10" fill="#ccfbf1" stroke="#0f766e" stroke-width="2"/>
+    <text x="881" y="133" fill="#0f766e">POSTED</text>
+  </g>
+  <g stroke="#334155" stroke-width="2">
+    <line x1="142" y1="128" x2="178" y2="128" marker-end="url(#arrow)"/>
+    <line x1="300" y1="128" x2="336" y2="128" marker-end="url(#arrow)"/>
+    <line x1="458" y1="128" x2="494" y2="128" marker-end="url(#arrow)"/>
+    <line x1="628" y1="128" x2="664" y2="128" marker-end="url(#arrow)"/>
+    <line x1="786" y1="128" x2="822" y2="128" marker-end="url(#arrow)"/>
+  </g>
+  <g font-size="11" fill="#334155" text-anchor="middle">
+    <text x="160" y="100">Submit</text>
+    <text x="318" y="100">Check</text>
+    <text x="476" y="100">Recommend</text>
+    <text x="646" y="100">Approve</text>
+    <text x="804" y="100">Post</text>
+  </g>
+  <g font-size="11" fill="#64748b" text-anchor="middle">
+    <text x="83" y="168">Prepared By</text>
+    <text x="399" y="168">Checked By</text>
+    <text x="563" y="168">Recommended By</text>
+    <text x="727" y="168">Approved By</text>
+    <text x="881" y="168">Posted By</text>
+  </g>
+  <path d="M 780 150 L 780 188 L 12 188 L 12 128 L 20 128" fill="none" stroke="#ea580c" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrowOrange)"/>
+  <text x="400" y="206" font-size="12" font-weight="700" fill="#ea580c" text-anchor="middle">Reject at any step (reason needed) &#8594; back to draft, earlier signatures cleared</text>
+  <text x="24" y="232" font-size="11" fill="#64748b">Grey labels under the boxes = the signature block filled on the printed voucher. Some companies skip steps (e.g. Check / Recommend) in their setup.</text>
+
+  <!-- Other documents table -->
+  <text x="24" y="262" font-size="14" font-weight="700" fill="#0f766e">Other documents in the same inbox</text>
+  <rect x="24" y="272" width="912" height="30" rx="8" fill="#334155"/>
+  <g font-size="12" font-weight="700" fill="#ffffff">
+    <text x="40" y="292">Document</text>
+    <text x="250" y="292">Waiting when status is</text>
+    <text x="470" y="292">Actions you may see</text>
+    <text x="720" y="292">Who can act</text>
+  </g>
+  <g font-size="12" fill="#334155">
+    <rect x="24" y="302" width="912" height="30" fill="#f8fafc"/>
+    <text x="40" y="322">Purchase Order</text><text x="250" y="322">Draft</text><text x="470" y="322">Approve, Cancel (reason)</text><text x="720" y="322">Admin / manager</text>
+    <text x="40" y="352">Requisition*</text><text x="250" y="352">Submitted</text><text x="470" y="352">Approve, Reject (reason)</text><text x="720" y="352">Admin / manager</text>
+    <rect x="24" y="362" width="912" height="30" fill="#f8fafc"/>
+    <text x="40" y="382">BOM</text><text x="250" y="382">Submitted</text><text x="470" y="382">Approve</text><text x="720" y="382">Admin / manager</text>
+    <text x="40" y="412">Leave Request</text><text x="250" y="412">Pending</text><text x="470" y="412">Approve, Reject (reason)</text><text x="720" y="412">Admin / manager / HR</text>
+    <rect x="24" y="422" width="912" height="30" fill="#f8fafc"/>
+    <text x="40" y="442">Payroll Run</text><text x="250" y="442">Finalized, Checked</text><text x="470" y="442">Approve, Reject (reason)</text><text x="720" y="442">Admin / manager / HR</text>
+    <text x="40" y="472">Payment Run</text><text x="250" y="472">Draft &#8594; Approved &#8594; Processed</text><text x="470" y="472">Approve, Process, Execute</text><text x="720" y="472">Admin / manager</text>
+    <rect x="24" y="482" width="912" height="30" fill="#f8fafc"/>
+    <text x="40" y="502">Bank Reconciliation</text><text x="250" y="502">Open (not finalized)</text><text x="470" y="502">Finalize</text><text x="720" y="502">Admin / manager</text>
+    <text x="40" y="532">Accounting Period</text><text x="250" y="532">Open / Closed</text><text x="470" y="532">Close, Reopen</text><text x="720" y="532">Admin / manager</text>
+  </g>
+  <rect x="24" y="302" width="912" height="240" fill="none" stroke="#cbd5e1"/>
+  <text x="24" y="566" font-size="11" fill="#64748b">* Requisitions appear only when Procurement (comparative statement) is switched on. Voucher actions come from your voucher approval setup and role.</text>
+  <text x="24" y="584" font-size="11" fill="#64748b">Every row also has Actions &#8594; Open (or a link to its own approval page) so you can read the document before you decide.</text>
+</svg>

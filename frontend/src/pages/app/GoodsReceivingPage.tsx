@@ -34,6 +34,7 @@ import {
 import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useListPagination } from "@/hooks/useListPagination";
+import { useSubmitGuard } from "@/hooks/useSubmitGuard";
 import { cn } from "@/lib/utils";
 
 /** Phase 3.4: ~44px min touch targets for warehouse floor / mobile use */
@@ -75,6 +76,7 @@ export function GoodsReceivingPage() {
   const [expandedGrnId, setExpandedGrnId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [apMessage, setApMessage] = useState("");
+  const saveGuard = useSubmitGuard();
   const { pageSize, setPageSize } = useListPagination();
   const [grPage, setGrPage] = useState(1);
   const [grTotal, setGrTotal] = useState(0);
@@ -212,6 +214,50 @@ export function GoodsReceivingPage() {
     }
   }, []);
 
+  async function createGrnHeader() {
+    setError("");
+    const st = (form.source_type || "PO").toUpperCase();
+    if (st === "NON_PO" && !(form.non_po_reason || "").trim()) {
+      setError("Non-PO receipts require a reason (governance).");
+      return;
+    }
+    if (st === "NON_PO" && form.purchase_order_id) {
+      setError("Non-PO receipt should not include a purchase order.");
+      return;
+    }
+    if (st === "PO" && !form.purchase_order_id) {
+      setError("Select a purchase order for a PO receipt, or choose Non-PO receipt.");
+      return;
+    }
+    try {
+      const payload: GoodsReceivingCreate = {
+        ...form,
+        source_type: st,
+        non_po_reason: st === "NON_PO" ? (form.non_po_reason || "").trim() : undefined,
+        supplier_delivery_challan_no: form.supplier_delivery_challan_no?.trim() || undefined,
+        supplier_invoice_no: form.supplier_invoice_no?.trim() || undefined,
+        vehicle_info: form.vehicle_info?.trim() || undefined,
+      };
+      await api.createGoodsReceiving(payload);
+      setForm({
+        purchase_order_id: poFilterFromUrl,
+        vendor_id: null,
+        default_warehouse_id: null,
+        source_type: "PO",
+        non_po_reason: "",
+        supplier_delivery_challan_no: "",
+        supplier_invoice_no: "",
+        vehicle_info: "",
+        status: "DRAFT",
+        items: [],
+      });
+      await load();
+    } catch (err) {
+      logApiError("GoodsReceivingPage.createGoodsReceiving", err);
+      setError(err instanceof Error ? err.message : "Failed to create GRN");
+    }
+  }
+
   return (
     <div className={cn(listPageRootClass, "touch-manipulation")}>
       <AppPageHeader
@@ -251,45 +297,9 @@ export function GoodsReceivingPage() {
       </div>
 
       <form
-        onSubmit={async (e) => {
+        onSubmit={(e) => {
           e.preventDefault();
-          setError("");
-          const st = (form.source_type || "PO").toUpperCase();
-          if (st === "NON_PO" && !(form.non_po_reason || "").trim()) {
-            setError("Non-PO receipts require a reason (governance).");
-            return;
-          }
-          if (st === "NON_PO" && form.purchase_order_id) {
-            setError("Non-PO receipt should not include a purchase order.");
-            return;
-          }
-          try {
-            const payload: GoodsReceivingCreate = {
-              ...form,
-              source_type: st,
-              non_po_reason: st === "NON_PO" ? (form.non_po_reason || "").trim() : undefined,
-              supplier_delivery_challan_no: form.supplier_delivery_challan_no?.trim() || undefined,
-              supplier_invoice_no: form.supplier_invoice_no?.trim() || undefined,
-              vehicle_info: form.vehicle_info?.trim() || undefined,
-            };
-            await api.createGoodsReceiving(payload);
-            setForm({
-              purchase_order_id: poFilterFromUrl,
-              vendor_id: null,
-              default_warehouse_id: null,
-              source_type: poFilterFromUrl ? "PO" : "PO",
-              non_po_reason: "",
-              supplier_delivery_challan_no: "",
-              supplier_invoice_no: "",
-              vehicle_info: "",
-              status: "DRAFT",
-              items: [],
-            });
-            await load();
-          } catch (err) {
-            logApiError("GoodsReceivingPage.createGoodsReceiving", err);
-            setError(err instanceof Error ? err.message : "Failed to create GRN");
-          }
+          void saveGuard.run(() => createGrnHeader());
         }}
         className="grid grid-cols-1 gap-3 rounded-xl border border-border bg-surface-raised p-4 shadow-sm md:grid-cols-2 lg:grid-cols-4 md:gap-2"
       >
@@ -376,8 +386,12 @@ export function GoodsReceivingPage() {
           value={form.notes ?? ""}
           onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
         />
-        <button type="submit" className={`${touchPrimary} md:col-span-2 lg:col-span-1`}>
-          Create GRN (header)
+        <button
+          type="submit"
+          className={`${touchPrimary} disabled:opacity-50 md:col-span-2 lg:col-span-1`}
+          disabled={saveGuard.busy}
+        >
+          {saveGuard.busy ? "Saving…" : "Create GRN (header)"}
         </button>
         <p className="text-xs text-text-muted md:col-span-2 lg:col-span-3">
           Line items are usually added when receiving from an approved PO via the backend workflow. Use <strong>Receive to stock</strong> on a draft GRN to post quantities.

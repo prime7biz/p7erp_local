@@ -45,9 +45,9 @@ def _require_qc(tenant: Tenant) -> None:
 
 class InspectLineBody(BaseModel):
     grn_item_id: int
-    accepted_qty: Decimal = Decimal("0")
-    rejected_qty: Decimal = Decimal("0")
-    hold_qty: Decimal = Decimal("0")
+    accepted_qty: Decimal = Field(default=Decimal("0"), ge=0)
+    rejected_qty: Decimal = Field(default=Decimal("0"), ge=0)
+    hold_qty: Decimal = Field(default=Decimal("0"), ge=0)
     parameters: dict | None = None
     notes: str | None = None
     photos: list[str] | None = None

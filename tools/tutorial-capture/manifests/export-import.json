@@ -1,0 +1,224 @@
+{
+  "screenshots": [
+    {
+      "name": "commercial-pi-new-form",
+      "route": "/app/commercial/proforma-invoices/new",
+      "waitMs": 2500
+    },
+    {
+      "name": "commercial-pi-import-linkage",
+      "route": "/app/commercial/proforma-invoices/new",
+      "waitMs": 2500,
+      "actions": [{ "select": ["select:has(option[value='IMPORT'])", "IMPORT"] }, { "waitMs": 800 }],
+      "clipSelector": "section:has(h2:has-text('Flow linkage'))"
+    },
+    {
+      "name": "commercial-pi-actions-menu",
+      "route": "/app/commercial/proforma-invoices",
+      "waitMs": 2500,
+      "actions": [{ "click": "tbody tr >> nth=0 >> button:has-text('Actions')" }]
+    },
+    {
+      "name": "commercial-pi-issued-payments",
+      "route": "/app/commercial/proforma-invoices/3/edit",
+      "waitMs": 3000
+    },
+    {
+      "name": "commercial-mc-register",
+      "route": "/app/commercial/master-contracts",
+      "waitMs": 2500,
+      "clipSelector": "section:has(h2:has-text('Master Contract Register'))"
+    },
+    {
+      "name": "commercial-mc-drawer",
+      "route": "/app/commercial/master-contracts",
+      "waitMs": 2500,
+      "actions": [{ "click": "tr:has-text('MCWF-2026-001')", "waitMs": 2000 }]
+    },
+    {
+      "name": "commercial-export-case-form",
+      "route": "/app/commercial/export-cases/new",
+      "waitMs": 2500
+    },
+    {
+      "name": "commercial-btb-register",
+      "route": "/app/commercial/btb-lcs",
+      "waitMs": 2500,
+      "clipSelector": "section:has(th:has-text('Lifecycle'))"
+    },
+    {
+      "name": "commercial-btb-actions-menu",
+      "route": "/app/commercial/btb-lcs",
+      "waitMs": 2500,
+      "actions": [{ "click": "tbody tr >> nth=0 >> button:has-text('Actions')" }]
+    },
+    {
+      "name": "commercial-btb-accounting",
+      "route": "/app/commercial/btb-lcs",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "tbody tr >> nth=0 >> button:has-text('Actions')" },
+        { "click": "div.absolute button:text-is('Accounting')", "waitMs": 2000 }
+      ]
+    },
+    {
+      "name": "commercial-lc-performance-wide",
+      "route": "/app/commercial/lc-performance",
+      "waitMs": 2500,
+      "viewport": { "width": 1920, "height": 1000 },
+      "actions": [{ "click": "label:has-text('Show only these') input", "waitMs": 800 }]
+    },
+    {
+      "name": "commercial-ud-form",
+      "route": "/app/commercial/bd-compliance",
+      "waitMs": 2500,
+      "actions": [{ "click": "button:has-text('New UD')", "waitMs": 1200 }]
+    },
+    {
+      "name": "commercial-ud-utilization",
+      "route": "/app/commercial/bd-compliance",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "tr:has-text('UD-DEMO-2026-01') button:has-text('Actions')" },
+        { "click": "text=View utilization", "waitMs": 2000 }
+      ]
+    },
+    {
+      "name": "commercial-bond-register",
+      "route": "/app/commercial/bd-compliance",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "role=tab[name='Bond register']", "waitMs": 2000 },
+        { "fill": ["input[type=date] >> nth=0", "2026-01-01"] },
+        { "click": "button:has-text('Refresh')", "waitMs": 2000 }
+      ]
+    },
+    {
+      "name": "commercial-mushak-62",
+      "route": "/app/commercial/bd-compliance",
+      "waitMs": 2500,
+      "actions": [{ "click": "role=tab[name='Mushak 6.2 (sales)']", "waitMs": 2000 }]
+    },
+    {
+      "name": "commercial-mushak-91",
+      "route": "/app/commercial/bd-compliance",
+      "waitMs": 2500,
+      "actions": [{ "click": "role=tab[name='Mushak 9.1 (draft return)']", "waitMs": 2000 }]
+    },
+    {
+      "name": "trade-case-actions-menu",
+      "route": "/app/trade/cases",
+      "waitMs": 2500,
+      "actions": [{ "click": "tbody tr >> nth=0 >> button:has-text('Actions')" }]
+    },
+    {
+      "name": "trade-case-detail",
+      "route": "/app/trade/cases/9",
+      "waitMs": 3000
+    },
+    {
+      "name": "trade-case-stage-transition",
+      "route": "/app/trade/cases/9",
+      "waitMs": 3000,
+      "actions": [{ "select": ["select:has(option[value='SETTLED'])", "DOCS"] }, { "waitMs": 600 }],
+      "clipSelector": "section:has(h2:has-text('Stage Transition'))"
+    },
+    {
+      "name": "trade-case-documents",
+      "route": "/app/trade/cases/9",
+      "waitMs": 3000,
+      "clipSelector": "section:has(#trade-case-documents)"
+    },
+    {
+      "name": "logistics-shipments-list",
+      "route": "/app/logistics",
+      "waitMs": 2500,
+      "clipSelector": "section:has(th:has-text('BL/AWB'))"
+    },
+    {
+      "name": "logistics-packing-tab",
+      "route": "/app/logistics?tab=packing",
+      "waitMs": 2500
+    },
+    {
+      "name": "logistics-packing-detail",
+      "route": "/app/logistics/packing-lists/157",
+      "waitMs": 3000
+    }
+  ],
+  "videos": [
+    {
+      "name": "trade-sales-contract-tour",
+      "title": "Record a Master LC / Sales Contract and check BTB utilization",
+      "steps": [
+        { "goto": "/app/commercial/master-contracts", "waitMs": 2500 },
+        { "caption": "Master Contracts: record the buyer's Master Export LC or Sales Contract here", "ms": 3000 },
+        { "hover": "text=Extract from LC document" },
+        { "caption": "Optional: upload the LC PDF and review the fields it reads — nothing is saved automatically", "ms": 3000 },
+        { "select": ["select:has(option[value='SALES_CONTRACT'])", "SALES_CONTRACT"] },
+        { "caption": "Choose the Type: Master Export LC or Sales Contract", "ms": 2200 },
+        { "fill": ["input[placeholder='e.g. ELC-2026-001']", "SC-DEMO-2026-01"] },
+        { "fill": ["input[placeholder='Customer / buyer']", "Demo Buyer GmbH"] },
+        { "fill": ["input[placeholder='Lien bank']", "Demo Lien Bank"] },
+        { "caption": "Type the contract number, buyer and lien bank; add amount, currency and dates", "ms": 2600 },
+        { "hover": "button:has-text('Create Master Contract')" },
+        { "caption": "Click Create Master Contract to finish (this demo does not save)", "ms": 2600 },
+        { "click": "h2:has-text('Master Contract Register')" },
+        { "caption": "The register lists every contract with its BTB utilization band", "ms": 2600 },
+        { "click": "tr:has-text('MCWF-2026-001')", "waitMs": 2000 },
+        { "caption": "Click a row: see used vs remaining value, readiness and the child BTB LCs", "ms": 3200 },
+        { "caption": "Under 50% is Very Good; above 70% is a red flag for the bank", "ms": 2800 },
+        { "click": "div.fixed.inset-0 h2 + button" },
+        { "caption": "Close the drawer when you are done", "ms": 1600 }
+      ]
+    },
+    {
+      "name": "trade-btb-lc-tour",
+      "title": "Open a BTB LC for fabric or trims",
+      "steps": [
+        { "goto": "/app/commercial/btb-lcs", "waitMs": 2500 },
+        { "caption": "BTB LCs: open back-to-back LCs for fabric and trims against the buyer's master LC", "ms": 3000 },
+        { "fill": ["input[placeholder='BTB-2026-001']", "BTB-DEMO-2026-01"] },
+        { "select": ["form select >> nth=1", "5"] },
+        { "caption": "Pick the parent Master Contract — a utilization bar appears under the form", "ms": 2800 },
+        { "select": ["form select >> nth=2", "51"] },
+        { "caption": "Pick the supplier. Vendor PI and Purchase Order lists show only that supplier", "ms": 2800 },
+        { "fill": ["form input[type=number] >> nth=0", "25000"] },
+        { "caption": "Enter the LC amount and check the band stays under 70%", "ms": 2400 },
+        { "hover": "button:has-text('Open BTB LC')" },
+        { "caption": "Click Open BTB LC to finish (this demo does not save)", "ms": 2400 },
+        { "click": "th:has-text('Lifecycle')" },
+        { "caption": "The register shows each BTB LC with lifecycle, maturity and alerts", "ms": 2400 },
+        { "click": "tbody tr >> nth=0 >> button:has-text('Actions')" },
+        { "caption": "Actions: Accounting, Record LC open, and Set Draft / Open / Amended / Closed", "ms": 2800 },
+        { "click": "div.absolute button:text-is('Accounting')", "waitMs": 2000 },
+        { "caption": "Accounting: 1) Record Opening 2) Documents Acceptance 3) Realization — each makes a voucher", "ms": 3600 },
+        { "click": "button:text-is('Close')" }
+      ]
+    },
+    {
+      "name": "logistics-packing-list",
+      "title": "Plan a shipment and fill a packing list",
+      "steps": [
+        { "goto": "/app/logistics", "waitMs": 2500 },
+        { "caption": "Logistics → Shipments: every shipment belongs to a trade case", "ms": 2600 },
+        { "select": ["form select >> nth=0", "9"] },
+        { "fill": ["input[placeholder='SHIP-2026-001']", "SHIP-DEMO-01"] },
+        { "select": ["form select >> nth=1", "BOOKED"] },
+        { "caption": "Choose the trade case, type a reference, set status, carrier, BL/AWB, ETD and ETA", "ms": 3000 },
+        { "hover": "button:has-text('Create Shipment')" },
+        { "caption": "Click Create Shipment to finish (this demo does not save)", "ms": 2400 },
+        { "click": "button:has-text('Packing Lists')", "waitMs": 1500 },
+        { "caption": "Packing Lists tab: create a header with order, shipment and carton count", "ms": 2800 },
+        { "click": "tr:has-text('PL-DEMO-CTN-01') a:has-text('Open')", "waitMs": 2500 },
+        { "caption": "Open a packing list to enter carton detail by colour and size", "ms": 2600 },
+        { "hover": "h2:has-text('Carton detail')" },
+        { "caption": "One row per carton range; the copy button adds another size for assorted cartons", "ms": 3000 },
+        { "hover": "button:has-text('Add carton range')" },
+        { "caption": "Click Save cartons to update totals, weights and CBM", "ms": 2400 },
+        { "hover": "h2:text-is('Containers')" },
+        { "caption": "Link a shipment, add containers, then Finalize to lock the list", "ms": 2800 }
+      ]
+    }
+  ]
+}

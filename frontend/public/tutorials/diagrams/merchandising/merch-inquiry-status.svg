@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="960" height="300" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <title>Inquiry status lifecycle: Draft, Submitted, Converted, Lost, Cancelled</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect width="960" height="300" fill="#ffffff"/>
+  <text x="480" y="32" text-anchor="middle" font-size="19" font-weight="700" fill="#334155">Inquiry status</text>
+  <text x="480" y="54" text-anchor="middle" font-size="13" fill="#64748b">Only these moves are allowed. Converted, Lost and Cancelled are final.</text>
+
+  <rect x="60" y="90" width="200" height="70" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="2"/>
+  <text x="160" y="120" text-anchor="middle" font-size="16" font-weight="700" fill="#334155">DRAFT</text>
+  <text x="160" y="142" text-anchor="middle" font-size="12" fill="#475569">You can still edit freely</text>
+
+  <rect x="380" y="90" width="200" height="70" rx="12" fill="#e0f2fe" stroke="#0369a1" stroke-width="2"/>
+  <text x="480" y="120" text-anchor="middle" font-size="16" font-weight="700" fill="#075985">SUBMITTED</text>
+  <text x="480" y="142" text-anchor="middle" font-size="12" fill="#475569">Ready to be priced</text>
+
+  <rect x="700" y="90" width="200" height="70" rx="12" fill="#ecfdf5" stroke="#0f766e" stroke-width="2.5"/>
+  <text x="800" y="120" text-anchor="middle" font-size="16" font-weight="700" fill="#0f766e">CONVERTED</text>
+  <text x="800" y="142" text-anchor="middle" font-size="12" fill="#475569">A quotation now exists</text>
+
+  <line x1="260" y1="125" x2="376" y2="125" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="318" y="115" text-anchor="middle" font-size="12" fill="#0f766e">Submit inquiry</text>
+  <line x1="580" y1="125" x2="696" y2="125" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="638" y="108" text-anchor="middle" font-size="12" fill="#0f766e">Convert to</text>
+  <text x="638" y="121" text-anchor="middle" font-size="12" fill="#0f766e">quotation</text>
+
+  <rect x="380" y="214" width="200" height="56" rx="12" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
+  <text x="480" y="240" text-anchor="middle" font-size="15" font-weight="700" fill="#92400e">LOST</text>
+  <text x="480" y="258" text-anchor="middle" font-size="12" fill="#475569">Buyer went elsewhere</text>
+
+  <rect x="700" y="214" width="200" height="56" rx="12" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+  <text x="800" y="240" text-anchor="middle" font-size="15" font-weight="700" fill="#991b1b">CANCELLED</text>
+  <text x="800" y="258" text-anchor="middle" font-size="12" fill="#475569">Request withdrawn</text>
+
+  <line x1="480" y1="160" x2="480" y2="210" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <path d="M 540 160 C 600 190, 700 200, 740 210" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <path d="M 160 160 C 200 290, 600 300, 696 250" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arr)"/>
+  <text x="250" y="248" font-size="12" fill="#64748b">Draft can also be cancelled</text>
+</svg>

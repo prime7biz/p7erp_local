@@ -1,0 +1,279 @@
+{
+  "screenshots": [
+    {
+      "name": "gs-login-form",
+      "route": "/login",
+      "waitMs": 1500,
+      "actions": [
+        { "fill": ["#companyCode", "LAKH806201"] },
+        { "press": "Tab", "waitMs": 1500 }
+      ]
+    },
+    {
+      "name": "gs-login-session-replaced",
+      "route": "/login?reason=session_replaced",
+      "waitMs": 1500
+    },
+    {
+      "name": "gs-forgot-password",
+      "route": "/forgot-password",
+      "waitMs": 1500
+    },
+    {
+      "name": "gs-dashboard-attention",
+      "route": "/app",
+      "waitMs": 3000,
+      "clipSelector": "section:has(> h2:text-is(\"Needs attention\"))"
+    },
+    {
+      "name": "gs-dashboard-kpis",
+      "route": "/app",
+      "waitMs": 3000,
+      "clipSelector": "section:has(h2:text-is(\"Key Metrics\"))"
+    },
+    {
+      "name": "gs-dashboard-brief",
+      "route": "/app",
+      "waitMs": 3000,
+      "clipSelector": "section:has(> h2:text-is(\"Pipeline & brief\"))"
+    },
+    {
+      "name": "gs-dashboard-quick-actions",
+      "route": "/app",
+      "waitMs": 3000,
+      "clipSelector": "section:has(> h2:text-is(\"Quick Actions\"))"
+    },
+    {
+      "name": "gs-new-menu",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [{ "click": "header button:has-text(\"New\")", "waitMs": 700 }]
+    },
+    {
+      "name": "gs-portals-menu",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [{ "click": "header button:has-text(\"Portals\")", "waitMs": 700 }]
+    },
+    {
+      "name": "gs-search-palette",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [{ "press": "Control+k", "waitMs": 900 }]
+    },
+    {
+      "name": "gs-search-records",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [
+        { "press": "Control+k", "waitMs": 700 },
+        { "fill": ["input[aria-label=\"Search pages and records\"]", "ORD-000"], "waitMs": 2500 }
+      ]
+    },
+    {
+      "name": "gs-bell-panel",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [{ "click": "button[title=\"Notifications and work waiting\"]", "waitMs": 1500 }]
+    },
+    {
+      "name": "gs-user-menu",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [{ "click": "header button[aria-haspopup=\"true\"]", "waitMs": 700 }]
+    },
+    {
+      "name": "gs-shortcuts-sheet",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [{ "click": "button[aria-label=\"Keyboard shortcuts\"]", "waitMs": 700 }]
+    },
+    {
+      "name": "gs-ai-drawer",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [{ "click": "button[title=\"Prime7 AI\"]", "waitMs": 1500 }]
+    },
+    {
+      "name": "gs-sidebar-merch-open",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [{ "click": "nav[aria-label=\"Main navigation\"] button:has-text(\"Merchandising\")", "waitMs": 800 }]
+    },
+    {
+      "name": "gs-list-columns",
+      "route": "/app/customers",
+      "waitMs": 2500,
+      "actions": [{ "click": "button:has-text(\"Columns\")", "waitMs": 700 }]
+    },
+    {
+      "name": "gs-list-views",
+      "route": "/app/customers",
+      "waitMs": 2500,
+      "actions": [{ "click": "button:has-text(\"Views\")", "waitMs": 700 }]
+    },
+    {
+      "name": "gs-list-export",
+      "route": "/app/customers",
+      "waitMs": 2500,
+      "actions": [{ "click": "button:has(svg.lucide-download):has-text(\"Export\")", "waitMs": 700 }]
+    },
+    {
+      "name": "gs-list-bulk",
+      "route": "/app/customers",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "table tbody tr >> nth=0 >> input[type=checkbox]", "waitMs": 400 },
+        { "click": "table tbody tr >> nth=1 >> input[type=checkbox]", "waitMs": 700 }
+      ]
+    },
+    {
+      "name": "gs-row-actions-open",
+      "route": "/app/customers",
+      "waitMs": 2500,
+      "actions": [{ "click": "table tbody tr >> nth=0 >> button[aria-haspopup=\"menu\"]", "waitMs": 700 }]
+    },
+    {
+      "name": "gs-mobile-home",
+      "route": "/app",
+      "waitMs": 3000,
+      "viewport": { "width": 390, "height": 844 }
+    },
+    {
+      "name": "gs-mobile-more",
+      "route": "/app",
+      "waitMs": 3000,
+      "viewport": { "width": 390, "height": 844 },
+      "actions": [{ "click": "button[aria-controls=\"mobile-more-menu\"]", "waitMs": 900 }]
+    },
+    {
+      "name": "gs-mobile-quick-create",
+      "route": "/app",
+      "waitMs": 3000,
+      "viewport": { "width": 390, "height": 844 },
+      "actions": [{ "click": "button[aria-label=\"Quick create menu\"]", "waitMs": 900 }]
+    },
+    {
+      "name": "sup-new-ticket-filled",
+      "route": "/app/support/tickets/new",
+      "waitMs": 2000,
+      "actions": [
+        { "fill": ["input[placeholder=\"Short summary\"]", "Delivery challan print preview is blank"] },
+        { "select": ["form select >> nth=0", "technical"] },
+        { "select": ["form select >> nth=1", "high"] },
+        {
+          "fill": [
+            "textarea",
+            "Steps: Inventory > Delivery challans > open DC-0012 > Print. The preview window opens but stays blank. Started today around 10:15. Other users see the same. Company code LAKH806201."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "wf-approvals-actions-open",
+      "route": "/app/approvals",
+      "waitMs": 4000,
+      "actions": [
+        { "select": ["main select >> nth=0", "PURCHASE_ORDER"], "waitMs": 900 },
+        { "click": "table tbody tr >> nth=0 >> button[aria-haspopup=\"menu\"]", "waitMs": 700 }
+      ]
+    },
+    {
+      "name": "wf-approvals-filter-po",
+      "route": "/app/approvals",
+      "waitMs": 4000,
+      "actions": [{ "select": ["main select >> nth=0", "PURCHASE_ORDER"], "waitMs": 900 }]
+    },
+    {
+      "name": "wf-voucher-approval-queue",
+      "route": "/app/accounts/vouchers/approval-queue",
+      "waitMs": 3000
+    },
+    {
+      "name": "wf-voucher-print-signatures",
+      "route": "/app/accounts/vouchers/print?voucher_id=15",
+      "waitMs": 3500,
+      "viewport": { "width": 1440, "height": 1500 },
+      "clipSelector": "article.vp-sheet"
+    },
+    {
+      "name": "gs-sidebar-collapsed",
+      "route": "/app",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "button[aria-label=\"Toggle sidebar\"]", "waitMs": 800 },
+        { "hover": "nav[aria-label=\"Main navigation\"] button[aria-label=\"Merchandising\"]", "waitMs": 900 }
+      ]
+    }
+  ],
+  "videos": [
+    {
+      "name": "gs-tour-app-shell",
+      "title": "Tour of the P7 ERP screen",
+      "steps": [
+        { "goto": "/app", "waitMs": 3000 },
+        { "caption": "This is the Dashboard, your home screen after you sign in", "ms": 3000 },
+        { "hover": "section:has(> h2:text-is(\"Needs attention\"))", "waitMs": 400 },
+        { "caption": "Needs attention tiles show work waiting for you. Click a tile to open that list.", "ms": 3200 },
+        { "click": "nav[aria-label=\"Main navigation\"] button:has-text(\"Merchandising\")", "waitMs": 700 },
+        { "caption": "Click a section in the left sidebar to see its pages", "ms": 2400 },
+        { "click": "nav[aria-label=\"Main navigation\"] a[href=\"/app/orders\"]", "waitMs": 2500 },
+        { "caption": "Lists have a toolbar (Views, Columns, Export) and one Actions button per row", "ms": 3200 },
+        { "press": "Control+k", "waitMs": 800 },
+        { "caption": "Press Ctrl+K on any page to search for a page or a record", "ms": 2600 },
+        { "fill": ["input[aria-label=\"Search pages and records\"]", "ORD-000"], "waitMs": 2200 },
+        { "caption": "Type 2 or more letters of an order, customer, PO or voucher, then press Enter", "ms": 3200 },
+        { "press": "Escape", "waitMs": 500 },
+        { "click": "header button:has-text(\"New\")", "waitMs": 800 },
+        { "caption": "The + New menu starts a new inquiry, quotation, order, customer, PO, challan or voucher", "ms": 3400 },
+        { "click": "header button:has-text(\"New\")", "waitMs": 400 },
+        { "click": "button[title=\"Notifications and work waiting\"]", "waitMs": 1500 },
+        { "caption": "The bell shows team work waiting plus your own notifications", "ms": 3000 },
+        { "press": "Escape", "waitMs": 400 },
+        { "click": "a[href=\"/app/tutorials\"]", "waitMs": 2000 },
+        { "caption": "Help & Tutorials at the bottom of the sidebar opens these guides at any time", "ms": 3000 }
+      ]
+    },
+    {
+      "name": "sup-create-ticket",
+      "title": "Raise a support ticket",
+      "steps": [
+        { "goto": "/app/support/tickets", "waitMs": 2500 },
+        { "caption": "Support > My tickets lists every ticket raised by your company", "ms": 2800 },
+        { "click": "main a[href=\"/app/support/tickets/new\"]", "waitMs": 1500 },
+        { "caption": "Write a short Title that names the problem", "ms": 2400 },
+        { "fill": ["input[placeholder=\"Short summary\"]", "Delivery challan print preview is blank"] },
+        { "caption": "Pick a Category and a Priority", "ms": 2200 },
+        { "select": ["form select >> nth=0", "technical"] },
+        { "select": ["form select >> nth=1", "high"] },
+        { "caption": "In Description, write the steps, the exact error and when it started", "ms": 2800 },
+        {
+          "fill": [
+            "textarea",
+            "Steps: Inventory > Delivery challans > open DC-0012 > Print. The preview stays blank. Started today around 10:15."
+          ]
+        },
+        { "hover": "button[type=submit]", "waitMs": 600 },
+        { "caption": "Click Submit ticket to send it. The ticket thread opens and the team replies there.", "ms": 3600 }
+      ]
+    },
+    {
+      "name": "wf-approvals-tour",
+      "title": "Work through All Approvals",
+      "steps": [
+        { "goto": "/app/approvals", "waitMs": 4000 },
+        { "caption": "Workflow > All Approvals is one inbox for everything waiting on you", "ms": 3000 },
+        { "hover": "main div.grid >> nth=0", "waitMs": 400 },
+        { "caption": "The counters show the whole queue, what you can act on now, and what the filters show", "ms": 3400 },
+        { "select": ["main select >> nth=0", "PURCHASE_ORDER"], "waitMs": 900 },
+        { "caption": "Filter by document type to work through one queue at a time", "ms": 2800 },
+        { "click": "table tbody tr >> nth=0 >> button[aria-haspopup=\"menu\"]", "waitMs": 800 },
+        { "caption": "Actions lists what you may do. Use Open first to check the document.", "ms": 3200 },
+        { "caption": "Approve moves it to the next step. Reject and Cancel always ask for a reason.", "ms": 3200 },
+        { "press": "Escape", "waitMs": 500 },
+        { "click": "a:has-text(\"Voucher Approvals\")", "waitMs": 2500 },
+        { "caption": "Accountants can also use the dedicated voucher approval queue", "ms": 3000 }
+      ]
+    }
+  ]
+}

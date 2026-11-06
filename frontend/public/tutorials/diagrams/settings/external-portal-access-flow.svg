@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 500" width="960" height="500" role="img" aria-labelledby="t d">
+  <title id="t">External portal access: invite, accept, sign in, use the portal</title>
+  <desc id="d">An admin enables a portal in Settings, External access, then invites a buyer, bank or supplier user. The person opens the emailed link, sets a password, signs in on the unified login page by choosing Customer, Financier or Supplier portal, and sees only the data linked to them. Every step is written to the external access audit log.</desc>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #334155; }
+    .h { font-size: 14px; font-weight: 700; }
+    .b { font-size: 12px; }
+    .s { font-size: 11px; fill: #64748b; }
+    .m { font-family: ui-monospace, Consolas, monospace; font-size: 11px; fill: #0f766e; }
+    .w { fill: #ffffff; }
+  </style>
+  <rect x="0" y="0" width="960" height="500" fill="#ffffff"/>
+  <text x="480" y="30" text-anchor="middle" class="h" style="font-size:18px">Giving buyers, banks and suppliers their own portal login</text>
+
+  <rect x="20" y="52" width="920" height="26" rx="6" fill="#f1f5f9"/>
+  <text x="250" y="70" text-anchor="middle" class="b" style="font-weight:700">Your admin (inside P7 ERP)</text>
+  <text x="720" y="70" text-anchor="middle" class="b" style="font-weight:700">The outside person (email + browser)</text>
+  <line x1="480" y1="52" x2="480" y2="330" stroke="#cbd5e1" stroke-dasharray="4 4"/>
+
+  <rect x="30" y="94" width="200" height="110" rx="12" fill="#f0fdfa" stroke="#0f766e" stroke-width="1.5"/>
+  <circle cx="54" cy="118" r="14" fill="#0f766e"/><text x="54" y="123" text-anchor="middle" class="b w" style="font-weight:700">1</text>
+  <text x="76" y="123" class="h">Enable portal</text>
+  <text x="44" y="148" class="b">Settings &#8594; External access</text>
+  <text x="44" y="168" class="b">Click Enable portal on the</text>
+  <text x="44" y="186" class="b">Customer / Financier card</text>
+
+  <rect x="260" y="94" width="200" height="110" rx="12" fill="#f0fdfa" stroke="#0f766e" stroke-width="1.5"/>
+  <circle cx="284" cy="118" r="14" fill="#0f766e"/><text x="284" y="123" text-anchor="middle" class="b w" style="font-weight:700">2</text>
+  <text x="306" y="123" class="h">Invite</text>
+  <text x="274" y="148" class="b">Pick the customer (buyer) or</text>
+  <text x="274" y="166" class="b">financier party + scope,</text>
+  <text x="274" y="184" class="b">portal role &#8594; Create invite</text>
+
+  <line x1="232" y1="149" x2="256" y2="149" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="500" y="94" width="200" height="110" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+  <circle cx="524" cy="118" r="14" fill="#ea580c"/><text x="524" y="123" text-anchor="middle" class="b w" style="font-weight:700">3</text>
+  <text x="546" y="123" class="h">Accept invite</text>
+  <text x="514" y="148" class="b">Opens the emailed link</text>
+  <text x="514" y="166" class="m">/portal/customer/accept-invite</text>
+  <text x="514" y="184" class="b">and sets a password</text>
+
+  <line x1="462" y1="149" x2="496" y2="149" stroke="#ea580c" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="479" y="140" text-anchor="middle" class="s">email</text>
+
+  <rect x="730" y="94" width="200" height="110" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+  <circle cx="754" cy="118" r="14" fill="#ea580c"/><text x="754" y="123" text-anchor="middle" class="b w" style="font-weight:700">4</text>
+  <text x="776" y="123" class="h">Unified login</text>
+  <text x="744" y="148" class="m">/login?role=customer</text>
+  <text x="744" y="166" class="b">Company code + email +</text>
+  <text x="744" y="184" class="b">password, choose the portal</text>
+
+  <line x1="702" y1="149" x2="726" y2="149" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="500" y="226" width="430" height="96" rx="12" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+  <circle cx="524" cy="250" r="14" fill="#334155"/><text x="524" y="255" text-anchor="middle" class="b w" style="font-weight:700">5</text>
+  <text x="546" y="255" class="h">Uses the portal &#8212; sees only linked data</text>
+  <text x="514" y="280" class="b">Customer: own orders, approvals, shipments, notes</text>
+  <text x="514" y="298" class="b">Financier: financed orders, contracts, credit lines (by scope)</text>
+  <text x="514" y="314" class="b">Supplier: own approved POs, confirm + ship dates</text>
+
+  <line x1="830" y1="206" x2="830" y2="222" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="30" y="226" width="430" height="96" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+  <circle cx="54" cy="250" r="14" fill="#334155"/><text x="54" y="255" text-anchor="middle" class="b w" style="font-weight:700">6</text>
+  <text x="76" y="255" class="h">Manage and watch</text>
+  <text x="44" y="280" class="b">Actions &#8594; Deactivate / Reactivate a portal user</text>
+  <text x="44" y="298" class="b">Financier: Actions &#8594; Edit access (scope, party)</text>
+  <text x="44" y="314" class="b">External access audit: logins and admin actions</text>
+
+  <line x1="498" y1="274" x2="464" y2="274" stroke="#334155" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+
+  <rect x="20" y="346" width="920" height="138" rx="12" fill="#ffffff" stroke="#0f766e"/>
+  <text x="36" y="372" class="h" style="fill:#0f766e">Financier access scope (smallest &#8594; largest)</text>
+  <rect x="36" y="386" width="164" height="40" rx="8" fill="#f1f5f9"/><text x="118" y="411" text-anchor="middle" class="m">tenant_summary</text>
+  <rect x="214" y="386" width="190" height="40" rx="8" fill="#f1f5f9"/><text x="309" y="411" text-anchor="middle" class="m">orders_and_pipeline</text>
+  <rect x="418" y="386" width="164" height="40" rx="8" fill="#f1f5f9"/><text x="500" y="411" text-anchor="middle" class="m">financial_summary</text>
+  <rect x="596" y="386" width="164" height="40" rx="8" fill="#f0fdfa" stroke="#0f766e"/><text x="678" y="411" text-anchor="middle" class="m">credit_monitoring</text>
+  <rect x="774" y="386" width="150" height="40" rx="8" fill="#f0fdfa" stroke="#0f766e"/><text x="849" y="411" text-anchor="middle" class="m">full_financier_portal</text>
+  <line x1="200" y1="406" x2="212" y2="406" stroke="#334155" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="404" y1="406" x2="416" y2="406" stroke="#334155" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="582" y1="406" x2="594" y2="406" stroke="#334155" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="760" y1="406" x2="772" y2="406" stroke="#334155" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="36" y="452" class="b">Credit lines, BTB liabilities, stock collateral and recovery views need credit_monitoring or higher, plus the same</text>
+  <text x="36" y="470" class="b">financier party you set on the bank facility. Staff (your own employees) use Invite staff in User Mgmt instead.</text>
+</svg>

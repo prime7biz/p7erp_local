@@ -1,0 +1,261 @@
+{
+  "screenshots": [
+    {
+      "name": "inv-po-form-filled",
+      "route": "/app/inventory/purchase-orders",
+      "waitMs": 2500,
+      "actions": [
+        { "select": ["select:has(option:has-text(\"Select vendor (optional)\"))", "LKH-VEND-FABRIC-01 - Lakhsma Fabric Suppliers Ltd"] },
+        { "fill": ["input[placeholder=\"Notes\"]", "Fabric for order ORD-0007"] },
+        { "select": ["select:has(option:has-text(\"LKH-FAB-JERSEY-160\"))", "LKH-FAB-JERSEY-160 - 160 GSM cotton jersey"] },
+        { "select": ["select:has(option:has-text(\"Lakhsma Main RM Warehouse\"))", "Lakhsma Main RM Warehouse"] },
+        { "fill": ["input[placeholder=\"Qty\"]", "2500"] },
+        { "fill": ["input[placeholder=\"Unit price\"]", "3.55"] },
+        { "click": "button:has-text(\"Add Line\")" }
+      ]
+    },
+    {
+      "name": "inv-po-actions-menu",
+      "route": "/app/inventory/purchase-orders",
+      "waitMs": 2500,
+      "actions": [{ "click": "button:has-text(\"Actions\") >> nth=0" }]
+    },
+    {
+      "name": "inv-po-receipt-progress",
+      "route": "/app/inventory/purchase-orders",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "button:has-text(\"Actions\") >> nth=0" },
+        { "click": "text=Receipt progress & vendor bill", "waitMs": 2500 }
+      ]
+    },
+    {
+      "name": "inv-po-colour-size",
+      "route": "/app/inventory/purchase-orders",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "button:has-text(\"Actions\") >> nth=0" },
+        { "click": "text=Receipt progress & vendor bill", "waitMs": 2500 },
+        { "click": "[role=dialog] button:has-text(\"Edit\") >> nth=0", "waitMs": 2000 }
+      ]
+    },
+    {
+      "name": "inv-grn-from-po",
+      "route": "/app/inventory/purchase-orders",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "button:has-text(\"Actions\") >> nth=0" },
+        { "click": "text=Goods receiving (this PO)", "waitMs": 2500 },
+        { "fill": ["input[placeholder=\"Supplier challan no.\"]", "SCH-2026-118"] },
+        { "fill": ["input[placeholder=\"Supplier invoice no.\"]", "INV-77821"] },
+        { "fill": ["input[placeholder=\"Vehicle info\"]", "Dhaka Metro-Ta 11-2345"] }
+      ]
+    },
+    {
+      "name": "inv-grn-lines",
+      "route": "/app/inventory/goods-receiving",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "button:has-text(\"Lines\") >> nth=0" },
+        { "scroll": 350 }
+      ]
+    },
+    {
+      "name": "inv-grn-actions-menu",
+      "route": "/app/inventory/goods-receiving",
+      "waitMs": 2500,
+      "actions": [
+        { "scroll": 250 },
+        { "click": "button:has-text(\"Actions\") >> nth=0" }
+      ]
+    },
+    {
+      "name": "inv-stock-master-masters",
+      "route": "/app/inventory?tab=masters",
+      "waitMs": 2500
+    },
+    {
+      "name": "inv-stock-master-units",
+      "route": "/app/inventory?tab=units",
+      "waitMs": 2500
+    },
+    {
+      "name": "inv-stock-master-warehouses",
+      "route": "/app/inventory?tab=warehouses",
+      "waitMs": 2500
+    },
+    {
+      "name": "inv-item-edit",
+      "route": "/app/inventory?tab=items",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "table tbody button:has-text(\"Actions\") >> nth=0" },
+        { "click": "table tbody button:has-text(\"Edit\") >> nth=0", "waitMs": 1500 }
+      ]
+    },
+    {
+      "name": "inv-vendor-add",
+      "route": "/app/inventory/vendors",
+      "waitMs": 2500,
+      "actions": [{ "click": "button:has-text(\"Add vendor\")", "waitMs": 1500 }]
+    },
+    {
+      "name": "inv-requisition-new-form",
+      "route": "/app/procurement/requisitions",
+      "waitMs": 2500,
+      "clipSelector": "div:has(> h2:has-text(\"New requisition\"))",
+      "actions": [{ "click": "button:has-text(\"New requisition\")", "waitMs": 1500 }]
+    },
+    {
+      "name": "inv-dc-new-form",
+      "route": "/app/inventory/delivery-challans/new",
+      "waitMs": 2500,
+      "actions": [
+        { "fill": ["label:has-text(\"Customer name\") input", "ABC"] },
+        { "fill": ["label:has-text(\"Notes\") input", "Carton dispatch for order ORD-0007"] }
+      ]
+    },
+    {
+      "name": "inv-dc-detail",
+      "route": "/app/inventory/delivery-challans",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "button:has-text(\"Actions\") >> nth=0" },
+        { "click": "role=menuitem[name=\"View\"]", "waitMs": 2500 }
+      ]
+    },
+    {
+      "name": "inv-dc-print-preview",
+      "route": "/app/inventory/delivery-challans",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "button:has-text(\"Actions\") >> nth=0" },
+        { "click": "role=menuitem[name=\"Print\"]", "waitMs": 3000 }
+      ]
+    },
+    {
+      "name": "inv-gp-new-form",
+      "route": "/app/inventory/enhanced-gate-passes/new",
+      "waitMs": 2500,
+      "actions": [
+        { "fill": ["label:has-text(\"Purpose\") input", "Goods out — finished cartons to buyer forwarder"] },
+        { "fill": ["label:has-text(\"Destination\") input", "Chattogram port — forwarder warehouse"] },
+        { "fill": ["label:has-text(\"Vehicle\") input", "Dhaka Metro-Ta 11-2345"] }
+      ]
+    },
+    {
+      "name": "inv-gp-detail",
+      "route": "/app/inventory/enhanced-gate-passes",
+      "waitMs": 2500,
+      "actions": [
+        { "click": "button:has-text(\"Actions\") >> nth=0" },
+        { "click": "role=menuitem[name=\"View\"]", "waitMs": 2500 }
+      ]
+    },
+    {
+      "name": "inv-consumption-pmi",
+      "route": "/app/inventory/consumption-control",
+      "waitMs": 3500,
+      "clipSelector": "div.rounded-xl:has(> h2:has-text(\"New production material issue\"))"
+    },
+    {
+      "name": "inv-consumption-reserved",
+      "route": "/app/inventory/consumption-control",
+      "waitMs": 3500,
+      "clipSelector": "div.rounded-xl:has(> h2:has-text(\"Issue Reserved Material\"))"
+    },
+    {
+      "name": "inv-fifo-by-warehouse",
+      "route": "/app/inventory/stock-inventory-summary",
+      "waitMs": 3000,
+      "actions": [{ "click": "button:has-text(\"By warehouse\")", "waitMs": 2000 }]
+    },
+    {
+      "name": "inv-reconciliation-grn",
+      "route": "/app/inventory/reconciliation",
+      "waitMs": 3000,
+      "actions": [{ "click": "role=button[name=\"GRN\"s]", "waitMs": 2000 }]
+    },
+    {
+      "name": "inv-traceability-certificates",
+      "route": "/app/inventory/traceability",
+      "waitMs": 2500,
+      "actions": [{ "click": "button:has-text(\"Certificates\")", "waitMs": 2000 }]
+    },
+    {
+      "name": "inv-supplier-access",
+      "route": "/app/settings/external-access/suppliers",
+      "waitMs": 3000
+    }
+  ],
+  "videos": [
+    {
+      "name": "inv-create-po",
+      "title": "Create a purchase order",
+      "steps": [
+        { "goto": "/app/inventory/purchase-orders", "waitMs": 2500 },
+        { "caption": "Goal: create a purchase order (PO) to buy fabric from a supplier.", "ms": 3000 },
+        { "caption": "The New Purchase Order form is at the top of Inventory → Purchase Orders." },
+        { "select": ["select:has(option:has-text(\"Select vendor (optional)\"))", "LKH-VEND-FABRIC-01 - Lakhsma Fabric Suppliers Ltd"] },
+        { "caption": "Pick the vendor. The supplier name and currency fill in by themselves." },
+        { "fill": ["input[placeholder=\"Notes\"]", "Fabric for order ORD-0007"] },
+        { "caption": "Optional: set Order date and Expected date, and write a short note." },
+        { "select": ["select:has(option:has-text(\"LKH-FAB-JERSEY-160\"))", "LKH-FAB-JERSEY-160 - 160 GSM cotton jersey"] },
+        { "caption": "Choose the item. Its default warehouse and price are suggested." },
+        { "select": ["select:has(option:has-text(\"Lakhsma Main RM Warehouse\"))", "Lakhsma Main RM Warehouse"] },
+        { "fill": ["input[placeholder=\"Qty\"]", "2500"] },
+        { "fill": ["input[placeholder=\"Unit price\"]", "3.55"] },
+        { "caption": "Enter the quantity and unit price, then click Add Line." },
+        { "click": "button:has-text(\"Add Line\")" },
+        { "caption": "The line shows under the form with the estimated total. Add more lines the same way.", "ms": 3000 },
+        { "hover": "button:has-text(\"Create Purchase Order\")" },
+        { "caption": "Check everything, then click Create Purchase Order to save it as DRAFT.", "ms": 3200 },
+        { "caption": "Next: a manager opens Actions → Approve on the new PO row.", "ms": 3000 }
+      ]
+    },
+    {
+      "name": "inv-grn-from-po",
+      "title": "Receive goods against a PO (GRN)",
+      "steps": [
+        { "goto": "/app/inventory/purchase-orders", "waitMs": 2500 },
+        { "caption": "Goal: record goods that arrived against a purchase order (a GRN).", "ms": 3000 },
+        { "click": "button:has-text(\"Actions\") >> nth=0" },
+        { "caption": "Open Actions on the PO row and choose Goods receiving (this PO)." },
+        { "click": "text=Goods receiving (this PO)", "waitMs": 2500 },
+        { "caption": "The GRN form opens with this PO already selected." },
+        { "fill": ["input[placeholder=\"Supplier challan no.\"]", "SCH-2026-118"] },
+        { "fill": ["input[placeholder=\"Supplier invoice no.\"]", "INV-77821"] },
+        { "fill": ["input[placeholder=\"Vehicle info\"]", "Dhaka Metro-Ta 11-2345"] },
+        { "caption": "Copy the supplier challan number, invoice number and vehicle from the paperwork.", "ms": 3000 },
+        { "hover": "button:has-text(\"Create GRN (header)\")" },
+        { "caption": "Click Create GRN (header) to save a DRAFT GRN. PO lines are copied with the pending quantity.", "ms": 3500 },
+        { "goto": "/app/inventory/goods-receiving", "waitMs": 2500 },
+        { "caption": "In the GRN list, click Lines to see received, accepted and rejected quantities." },
+        { "click": "button:has-text(\"Lines\") >> nth=0" },
+        { "scroll": 300 },
+        { "click": "button:has-text(\"Actions\") >> nth=0" },
+        { "caption": "On a DRAFT GRN, Actions → Receive to stock adds the goods to stock. Do this only after counting.", "ms": 3800 }
+      ]
+    },
+    {
+      "name": "inv-stock-summary-tour",
+      "title": "Check stock on hand, history and value",
+      "steps": [
+        { "goto": "/app/inventory/stock-summary", "waitMs": 2500 },
+        { "caption": "Goal: see how much stock you have, where it came from, and what it is worth.", "ms": 3000 },
+        { "fill": ["input[placeholder=\"Search item code or name…\"]", "jersey"], "waitMs": 1500 },
+        { "caption": "Search by item code or name. Each row is one item in one warehouse." },
+        { "caption": "On Hand = In Qty − Out Qty. A negative number means more went out than came in — check it.", "ms": 3500 },
+        { "fill": ["input[placeholder=\"Search item code or name…\"]", ""], "waitMs": 1200 },
+        { "select": ["select", { "index": 1 }], "waitMs": 1500 },
+        { "caption": "Filter by warehouse, or tick Hide zero on-hand to shorten the list." },
+        { "goto": "/app/inventory/stock-ledger", "waitMs": 2500 },
+        { "caption": "Ledger lists every stock movement, newest first, with a running balance.", "ms": 3000 },
+        { "caption": "Reference tells you which document moved the stock: GRN, PRODUCTION, ADJUSTMENT and so on.", "ms": 3000 },
+        { "goto": "/app/inventory/stock-valuation", "waitMs": 2500 },
+        { "caption": "Valuation shows the money value of each stock line using FIFO cost.", "ms": 3000 },
+        { "caption": "Use Export CSV on these reports to open them in Excel.", "ms": 2500 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="960" height="400" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <title>Quality module map: where each check is recorded</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="400" fill="#ffffff"/>
+  <text x="24" y="34" font-size="18" font-weight="700" fill="#334155">Quality map &#8212; which screen for which check</text>
+  <text x="24" y="56" font-size="12" fill="#64748b">Record checks on the left, follow up problems in the middle, review results on the right.</text>
+
+  <g font-size="13">
+    <text x="24" y="88" font-size="13" font-weight="700" fill="#0f766e">RECORD</text>
+    <rect x="24" y="98" width="270" height="62" rx="12" fill="#ccfbf1" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="40" y="122" font-weight="700" fill="#0f766e">Shop-floor QC</text>
+    <text x="40" y="142" font-size="11.5" fill="#115e59">hourly inline checks per sewing line</text>
+
+    <rect x="24" y="172" width="270" height="62" rx="12" fill="#ccfbf1" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="40" y="196" font-weight="700" fill="#0f766e">Quality &#8594; Inspections</text>
+    <text x="40" y="216" font-size="11.5" fill="#115e59">In Process / Final check per work order</text>
+
+    <rect x="24" y="246" width="270" height="62" rx="12" fill="#ccfbf1" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="40" y="270" font-weight="700" fill="#0f766e">Lab Tests</text>
+    <text x="40" y="290" font-size="11.5" fill="#115e59">fabric, trim or garment test results</text>
+
+    <text x="344" y="88" font-size="13" font-weight="700" fill="#c2410c">FOLLOW UP</text>
+    <rect x="344" y="98" width="270" height="62" rx="12" fill="#ffedd5" stroke="#ea580c" stroke-width="1.5"/>
+    <text x="360" y="122" font-weight="700" fill="#c2410c">NCR (on the CAPA page)</text>
+    <text x="360" y="142" font-size="11.5" fill="#9a3412">what went wrong: defect code + severity</text>
+
+    <rect x="344" y="172" width="270" height="62" rx="12" fill="#ffedd5" stroke="#ea580c" stroke-width="1.5"/>
+    <text x="360" y="196" font-weight="700" fill="#c2410c">CAPA</text>
+    <text x="360" y="216" font-size="11.5" fill="#9a3412">corrective + preventive action, due date</text>
+
+    <rect x="344" y="246" width="270" height="62" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+    <text x="360" y="270" font-weight="700" fill="#334155">Returns</text>
+    <text x="360" y="290" font-size="11.5" fill="#475569">material returned from production (view)</text>
+
+    <text x="664" y="88" font-size="13" font-weight="700" fill="#334155">REVIEW</text>
+    <rect x="664" y="98" width="272" height="136" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+    <text x="680" y="122" font-weight="700" fill="#334155">QC Dashboard</text>
+    <text x="680" y="144" font-size="11.5" fill="#475569">&#8226; Total Inspections, Pass Rate</text>
+    <text x="680" y="162" font-size="11.5" fill="#475569">&#8226; Pending CAPA, Open NCR</text>
+    <text x="680" y="180" font-size="11.5" fill="#475569">&#8226; Pass / Fail by Inspection Stage</text>
+    <text x="680" y="198" font-size="11.5" fill="#475569">&#8226; Defect Distribution</text>
+    <text x="680" y="216" font-size="11.5" fill="#475569">&#8226; Today's High-Risk Lines</text>
+
+    <rect x="664" y="246" width="272" height="62" rx="12" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+    <text x="680" y="270" font-weight="700" fill="#9a3412">Delivery challan gate</text>
+    <text x="680" y="290" font-size="11.5" fill="#7c2d12">capa_blocks_challan: open CAPA stops posting</text>
+  </g>
+
+  <line x1="294" y1="203" x2="340" y2="134" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="300" y="222" font-size="11" fill="#64748b">Fail /</text>
+  <text x="300" y="236" font-size="11" fill="#64748b">Reject</text>
+  <line x1="479" y1="160" x2="479" y2="168" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="614" y1="203" x2="660" y2="270" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="614" y1="129" x2="660" y2="150" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+
+  <rect x="24" y="326" width="912" height="56" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="40" y="348" font-size="12" font-weight="700" fill="#334155">Not here:</text>
+  <text x="108" y="348" font-size="12" fill="#475569">incoming fabric / trims inspection lives under Inventory &#8594; GRN Inspection (when your company enables it).</text>
+  <text x="40" y="368" font-size="12" fill="#475569">QC (Classic) opens the same screen as Inspections &#8212; use either link.</text>
+</svg>

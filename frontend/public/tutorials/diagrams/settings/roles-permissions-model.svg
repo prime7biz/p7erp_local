@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="960" height="560" role="img" aria-labelledby="t d">
+  <title id="t">How users, roles and permissions fit together</title>
+  <desc id="d">Each user has exactly one role. A role holds permission keys: module Access switches, Read/Write/Edit/Approve/Export levels per area, and extra governance switches. Company feature switches in Configuration decide which modules exist at all. Admin and manager roles get the governance powers automatically.</desc>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #334155; }
+    .h { font-size: 14px; font-weight: 700; }
+    .b { font-size: 12px; }
+    .s { font-size: 11px; fill: #64748b; }
+    .m { font-family: ui-monospace, Consolas, monospace; font-size: 11px; fill: #0f766e; }
+    .w { fill: #ffffff; }
+  </style>
+  <rect x="0" y="0" width="960" height="560" fill="#ffffff"/>
+  <text x="480" y="30" text-anchor="middle" class="h" style="font-size:18px">Who can do what: user &#8594; role &#8594; permissions</text>
+
+  <rect x="20" y="70" width="190" height="200" rx="12" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+  <text x="115" y="96" text-anchor="middle" class="h">Users</text>
+  <text x="115" y="114" text-anchor="middle" class="s">Settings &#8594; User Mgmt</text>
+  <rect x="36" y="128" width="158" height="30" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="115" y="148" text-anchor="middle" class="b">Rahim (store)</text>
+  <rect x="36" y="166" width="158" height="30" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="115" y="186" text-anchor="middle" class="b">Nasrin (accounts)</text>
+  <rect x="36" y="204" width="158" height="30" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="115" y="224" text-anchor="middle" class="b">Karim (merchandiser)</text>
+  <text x="115" y="256" text-anchor="middle" class="s">one role per user</text>
+
+  <line x1="212" y1="170" x2="262" y2="170" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="266" y="70" width="190" height="200" rx="12" fill="#f0fdfa" stroke="#0f766e" stroke-width="2"/>
+  <text x="361" y="96" text-anchor="middle" class="h" style="fill:#0f766e">Role</text>
+  <text x="361" y="114" text-anchor="middle" class="s">Settings &#8594; Roles</text>
+  <text x="282" y="142" class="b">System name: store_keeper</text>
+  <text x="282" y="162" class="b">Display name: Store keeper</text>
+  <text x="282" y="190" class="b">Start from a template:</text>
+  <text x="282" y="208" class="s">Full access &#183; Manager (no approve)</text>
+  <text x="282" y="224" class="s">Viewer (read) &#183; Data entry</text>
+  <text x="282" y="254" class="s">admin role = everything, locked</text>
+
+  <line x1="458" y1="170" x2="508" y2="170" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="512" y="70" width="428" height="290" rx="12" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+  <text x="726" y="96" text-anchor="middle" class="h">Permission keys stored on the role</text>
+
+  <rect x="528" y="110" width="396" height="66" rx="8" fill="#f1f5f9"/>
+  <text x="540" y="130" class="b" style="font-weight:700">1. Module Access (whole module on/off)</text>
+  <text x="540" y="150" class="m">merch.access  inventory.access  finance.access</text>
+  <text x="540" y="166" class="m">hr.access  trade.access  reports.access  ai.access</text>
+
+  <rect x="528" y="184" width="396" height="66" rx="8" fill="#f1f5f9"/>
+  <text x="540" y="204" class="b" style="font-weight:700">2. Levels per area: Read &#183; Write &#183; Edit &#183; Approve &#183; Export</text>
+  <text x="540" y="224" class="m">merch.orders.approve   inventory.items.write</text>
+  <text x="540" y="240" class="m">reports.all.export   finance.payments.approve</text>
+
+  <rect x="528" y="258" width="396" height="88" rx="8" fill="#fff7ed" stroke="#ea580c"/>
+  <text x="540" y="278" class="b" style="font-weight:700">3. Governance switches (extra powers)</text>
+  <text x="540" y="296" class="m">inventory.over_receipt_approve  bom.price_override</text>
+  <text x="540" y="312" class="m">finance.ap_posting_approve  hr.payroll.manage</text>
+  <text x="540" y="334" class="s">Admin + manager roles always have these. Tick them for custom roles.</text>
+
+  <rect x="20" y="300" width="436" height="110" rx="12" fill="#f1f5f9" stroke="#334155" stroke-dasharray="6 4"/>
+  <text x="36" y="326" class="h">Company feature switches (above all roles)</text>
+  <text x="36" y="346" class="s">Settings &#8594; Configuration &#183; Essential / More features / All features</text>
+  <text x="36" y="370" class="b">If a module is switched OFF for the company, nobody sees it,</text>
+  <text x="36" y="388" class="b">whatever their role says. Example: Enable Trade module.</text>
+
+  <rect x="20" y="430" width="920" height="110" rx="12" fill="#ffffff" stroke="#0f766e"/>
+  <text x="36" y="456" class="h" style="fill:#0f766e">Optional JSON keys for admins (merch.* and trade.*)</text>
+  <text x="36" y="478" class="b">Keys such as</text>
+  <text x="120" y="478" class="m">merch.bom.approve  merch.po.generate  merch.tna.manage  trade.create  trade.transition</text>
+  <text x="36" y="500" class="b">follow a soft rule: key missing = allowed &#183; set to false = denied &#183; merch.* or trade.* or * set to true = grant all.</text>
+  <text x="36" y="522" class="b">Exception agents: only admin, manager, or a role with</text>
+  <text x="352" y="522" class="m">ai.agents.confirm = true</text>
+  <text x="530" y="522" class="b">can click Confirm &amp; send.</text>
+
+  <line x1="456" y1="355" x2="508" y2="300" stroke="#334155" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+</svg>

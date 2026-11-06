@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="960" height="560" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <title>Merchandising module map: customer, inquiry, quotation, order, order BOM, TNA, samples, production handoff</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0f766e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="960" height="560" fill="#ffffff"/>
+  <text x="480" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#334155">Merchandising: from buyer request to production handoff</text>
+  <text x="480" y="56" text-anchor="middle" font-size="13" fill="#64748b">Follow the numbers. Each box is a screen under Merchandising in the sidebar.</text>
+
+  <!-- Row A: selling -->
+  <text x="30" y="88" font-size="12" font-weight="700" fill="#0f766e" letter-spacing="1">SELLING (BEFORE THE ORDER)</text>
+  <g>
+    <rect x="30" y="98" width="190" height="78" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="125" y="126" text-anchor="middle" font-size="15" font-weight="700" fill="#334155">1  Customer</text>
+    <text x="125" y="146" text-anchor="middle" font-size="12" fill="#475569">Buyer profile, contacts,</text>
+    <text x="125" y="162" text-anchor="middle" font-size="12" fill="#475569">addresses, currency</text>
+  </g>
+  <g>
+    <rect x="270" y="98" width="190" height="78" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="365" y="126" text-anchor="middle" font-size="15" font-weight="700" fill="#334155">2  Inquiry</text>
+    <text x="365" y="146" text-anchor="middle" font-size="12" fill="#475569">Buyer request: style, qty,</text>
+    <text x="365" y="162" text-anchor="middle" font-size="12" fill="#475569">target price. Draft &#8594; Submitted</text>
+  </g>
+  <g>
+    <rect x="510" y="98" width="190" height="78" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="605" y="126" text-anchor="middle" font-size="15" font-weight="700" fill="#334155">3  Quotation + costing</text>
+    <text x="605" y="146" text-anchor="middle" font-size="12" fill="#475569">Materials, CM, margin.</text>
+    <text x="605" y="162" text-anchor="middle" font-size="12" fill="#475569">Submit &#8594; Approve &#8594; Send</text>
+  </g>
+  <g>
+    <rect x="750" y="98" width="180" height="78" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2.5"/>
+    <text x="840" y="126" text-anchor="middle" font-size="15" font-weight="700" fill="#9a3412">4  Order (the hub)</text>
+    <text x="840" y="146" text-anchor="middle" font-size="12" fill="#475569">Confirmed job. Pipeline,</text>
+    <text x="840" y="162" text-anchor="middle" font-size="12" fill="#475569">colour/size, all links</text>
+  </g>
+  <line x1="220" y1="137" x2="266" y2="137" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="460" y1="137" x2="506" y2="137" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="700" y1="137" x2="746" y2="137" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="485" y="92" text-anchor="middle" font-size="11" fill="#0f766e">convert</text>
+  <text x="725" y="92" text-anchor="middle" font-size="11" fill="#0f766e">create order</text>
+
+  <!-- Down from order -->
+  <line x1="840" y1="176" x2="840" y2="224" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Row B: execution -->
+  <text x="30" y="214" font-size="12" font-weight="700" fill="#ea580c" letter-spacing="1">PREPARING THE ORDER (AFTER IT IS CONFIRMED)</text>
+  <g>
+    <rect x="750" y="228" width="180" height="78" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="840" y="256" text-anchor="middle" font-size="15" font-weight="700" fill="#334155">5  Order BOM</text>
+    <text x="840" y="276" text-anchor="middle" font-size="12" fill="#475569">Materials per piece.</text>
+    <text x="840" y="292" text-anchor="middle" font-size="12" fill="#475569">Submit &#8594; Approve &#8594; Freeze</text>
+  </g>
+  <g>
+    <rect x="510" y="228" width="190" height="78" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="605" y="256" text-anchor="middle" font-size="15" font-weight="700" fill="#334155">6  Follow-up TNA</text>
+    <text x="605" y="276" text-anchor="middle" font-size="12" fill="#475569">Time &amp; action calendar:</text>
+    <text x="605" y="292" text-anchor="middle" font-size="12" fill="#475569">who does what, by when</text>
+  </g>
+  <g>
+    <rect x="270" y="228" width="190" height="78" rx="12" fill="#f1f5f9" stroke="#0f766e" stroke-width="2"/>
+    <text x="365" y="256" text-anchor="middle" font-size="15" font-weight="700" fill="#334155">7  Samples</text>
+    <text x="365" y="276" text-anchor="middle" font-size="12" fill="#475569">Proto, fit, PP, size set...</text>
+    <text x="365" y="292" text-anchor="middle" font-size="12" fill="#475569">buyer approval</text>
+  </g>
+  <g>
+    <rect x="30" y="228" width="190" height="78" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="125" y="256" text-anchor="middle" font-size="15" font-weight="700" fill="#9a3412">8  Purchase orders</text>
+    <text x="125" y="276" text-anchor="middle" font-size="12" fill="#475569">Generate POs from the</text>
+    <text x="125" y="292" text-anchor="middle" font-size="12" fill="#475569">approved / frozen BOM</text>
+  </g>
+  <line x1="750" y1="267" x2="704" y2="267" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="510" y1="267" x2="464" y2="267" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="270" y1="267" x2="224" y2="267" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Row C: handoff -->
+  <line x1="125" y1="306" x2="125" y2="350" stroke="#334155" stroke-width="2" marker-end="url(#arr)"/>
+  <rect x="30" y="354" width="900" height="74" rx="14" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="48" y="376" font-size="12" font-weight="700" fill="#334155" letter-spacing="1">HANDOFF TO OTHER MODULES (THE ORDER PIPELINE MOVES BY ITSELF)</text>
+  <g font-size="12" fill="#334155">
+    <rect x="48" y="388" width="128" height="28" rx="8" fill="#f1f5f9"/><text x="112" y="406" text-anchor="middle">GRN: goods in</text>
+    <rect x="196" y="388" width="140" height="28" rx="8" fill="#f1f5f9"/><text x="266" y="406" text-anchor="middle">Line plan</text>
+    <rect x="356" y="388" width="140" height="28" rx="8" fill="#f1f5f9"/><text x="426" y="406" text-anchor="middle">Daily production</text>
+    <rect x="516" y="388" width="110" height="28" rx="8" fill="#f1f5f9"/><text x="571" y="406" text-anchor="middle">Quality / CAPA</text>
+    <rect x="646" y="388" width="130" height="28" rx="8" fill="#f1f5f9"/><text x="711" y="406" text-anchor="middle">Delivery challan</text>
+    <rect x="796" y="388" width="116" height="28" rx="8" fill="#f1f5f9"/><text x="854" y="406" text-anchor="middle">Payment</text>
+  </g>
+  <g stroke="#0f766e" stroke-width="1.6" marker-end="url(#arrT)">
+    <line x1="176" y1="402" x2="192" y2="402"/>
+    <line x1="336" y1="402" x2="352" y2="402"/>
+    <line x1="496" y1="402" x2="512" y2="402"/>
+    <line x1="626" y1="402" x2="642" y2="402"/>
+    <line x1="776" y1="402" x2="792" y2="402"/>
+  </g>
+
+  <!-- Row D: helpers -->
+  <text x="30" y="462" font-size="12" font-weight="700" fill="#64748b" letter-spacing="1">HELPER SCREENS (WATCH AND MEASURE)</text>
+  <g font-size="12" fill="#334155">
+    <rect x="30" y="472" width="170" height="58" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="115" y="496" text-anchor="middle" font-weight="700">Garment Styles</text>
+    <text x="115" y="514" text-anchor="middle" fill="#64748b">colours, sizes, style BOM</text>
+    <rect x="212" y="472" width="170" height="58" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="297" y="496" text-anchor="middle" font-weight="700">Control Tower</text>
+    <text x="297" y="514" text-anchor="middle" fill="#64748b">health of all merch work</text>
+    <rect x="394" y="472" width="170" height="58" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="479" y="496" text-anchor="middle" font-weight="700">Critical Alerts</text>
+    <text x="479" y="514" text-anchor="middle" fill="#64748b">late TNA, LC expiry...</text>
+    <rect x="576" y="472" width="170" height="58" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="661" y="496" text-anchor="middle" font-weight="700">Order Pipeline</text>
+    <text x="661" y="514" text-anchor="middle" fill="#64748b">Kanban + analytics</text>
+    <rect x="758" y="472" width="172" height="58" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="844" y="496" text-anchor="middle" font-weight="700">Recon / Wastage</text>
+    <text x="844" y="514" text-anchor="middle" fill="#64748b">BOM plan vs actual use</text>
+  </g>
+</svg>

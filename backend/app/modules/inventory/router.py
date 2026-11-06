@@ -3113,7 +3113,14 @@ async def create_goods_receiving(
         grn_code = body.grn_code
     else:
         grn_code = await next_tenant_code(db, model=GoodsReceiving, tenant_id=tenant.id, prefix="GRN-", width=4)
-    src_type = (body.source_type or "").strip().upper() or ("PO" if body.purchase_order_id else "NON_PO")
+    requested_src = (body.source_type or "").strip().upper()
+    if requested_src == "PO" and not body.purchase_order_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Select a purchase order for a PO receipt, or choose Non-PO receipt",
+        )
+    # Derived on the server: a client-supplied label must not skip non-PO approval.
+    src_type = "PO" if body.purchase_order_id else "NON_PO"
     po: PurchaseOrder | None = None
     if body.purchase_order_id:
         po = await db.get(PurchaseOrder, body.purchase_order_id)
@@ -3295,7 +3302,7 @@ async def _apply_grn_receive_goods(
     items = list(items_result.scalars().all())
     if not items:
         raise HTTPException(status_code=400, detail="GRN has no items")
-    st_src = (getattr(row, "source_type", None) or "").upper()
+    st_src = "PO" if row.purchase_order_id else "NON_PO"
     if st_src == "NON_PO" and not (getattr(row, "non_po_reason", None) or "").strip():
         raise HTTPException(status_code=400, detail="NON_PO receipt requires non_po_reason before receive")
     if st_src == "NON_PO":
@@ -6530,12 +6537,15 @@ async def post_warehouse_transfer(
 
     await _lock_stock_items(db, tenant.id, (ln.item_id for ln in lines))
     allow_neg = await tenant_allows_negative_stock(db, tenant.id)
+    # Several lines can move the same item, so check the total per item.
+    required_by_item: dict[int, float] = defaultdict(float)
     for line in lines:
-        req = _to_float(line.quantity)
-        available = await _on_hand_qty(db, tenant.id, line.item_id, row.from_warehouse_id)
+        required_by_item[line.item_id] += _to_float(line.quantity)
+    for item_id, req in required_by_item.items():
+        available = await _on_hand_qty(db, tenant.id, item_id, row.from_warehouse_id)
         if not allow_neg and available + 1e-9 < req:
-            item = await db.get(Item, line.item_id)
-            icode = item.item_code if item else str(line.item_id)
+            item = await db.get(Item, item_id)
+            icode = item.item_code if item else str(item_id)
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient stock for {icode} at source. Available={round(available, 3)}, required={round(req, 3)}",

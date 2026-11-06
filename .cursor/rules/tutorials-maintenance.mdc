@@ -8,12 +8,16 @@ alwaysApply: false
 ## Source of truth
 
 - Tutorial **content and structure** live under `frontend/src/data/tutorials/`.
-  - `tutorialSections.ts` — articles (Markdown bodies), tags, `lastUpdated`, **`relatedAppRoutes`** (must match real app paths such as `/app/orders`), optional **`summary`**, **`keywords`**, **`coverImage`**, **`images`**, **`infographics`**, **`featured`**, **`order`**.
+  - `sections/*.ts` — one file per sidebar area: articles (Markdown bodies), tags, `lastUpdated`, **`relatedAppRoutes`** (must match real app paths such as `/app/orders`), optional **`summary`**, **`keywords`**, **`coverImage`**, **`images`**, **`videos`**, **`infographics`** (`steps` / `flow` / `diagram` / `highlight`), **`estimatedMinutes`**, **`featured`**, **`order`**, **`audience`**.
+  - `tutorialSections.ts` — aggregates the section files (hub order).
   - `types.ts` — article/section interfaces.
   - `tutorialRegistry.ts` — helpers (`getArticleById`, `getArticlesForAppPath`, `getFeaturedArticles`, etc.).
   - `tutorialArticleEnrich.ts` — derives `summary` / `sectionId` / `keywords` when omitted.
-- UI: `frontend/src/pages/app/tutorials/` (`TutorialsPage`, `TutorialArticlePage`, `TutorialMarkdown.tsx`, flow/images/callout components).
-- Screenshot assets: `frontend/public/tutorials/` (see `README.md` there). Use **local** paths only in content.
+- UI: `frontend/src/pages/app/tutorials/` (`TutorialsPage`, `TutorialArticlePage`, `TutorialMarkdown.tsx`, flow/steps/images/video/callout components, `tutorialUi.ts` for sorting + heading ids).
+  - Help hub lists in `TutorialsPage.tsx`: `START_HERE_IDS`, `QUICK_GUIDE_LINKS` (missing ids are skipped), `SECTION_ICONS` (add an icon for a new section), **`HELP_ROLES`** (role chips → section ids / tags / `audience` values).
+  - Markdown: `##` headings feed the article's “On this page” list; `> **Tip:** …` renders a green callout, `> **Warning:** …` an amber one. No GitHub tables (no `remark-gfm`) — use lists or `steps` instead.
+  - Header **Help** button (`frontend/src/components/shell/PageHelpButton.tsx`) shows up to 5 articles whose `relatedAppRoutes` match the current page (a bare `/app` route only matches the dashboard). It loads tutorial content with a dynamic `import()` — do not import `@/data/tutorials` statically from the app shell.
+- Screenshot / video assets: `frontend/public/tutorials/` (see `README.md` there), regenerated with `tools/tutorial-capture/`. Use **local** paths only in content.
 
 ## When to update (mandatory)
 
@@ -27,11 +31,12 @@ Whenever you change any of the following, update Help & Tutorials in the **same 
 ## What to change
 
 - Prefer **two layers** per major module: a short **overview** article plus **step-by-step** articles for common tasks (e.g. voucher entry, PO creation). Keep deep articles aligned with real button labels and validation messages on the page.
-- Edit or add **articles** in `tutorialSections.ts`; set **`relatedAppRoutes`** to the exact paths users open (prefixes allowed; use paths as in the sidebar `href`s). Reconcile **`relatedArticleIds`** so every id exists.
+- Edit or add **articles** in `sections/<area>.ts`; set **`relatedAppRoutes`** to the exact paths users open (prefixes allowed; use paths as in the sidebar `href`s). Reconcile **`relatedArticleIds`** so every id exists.
 - Add **`summary`** (or rely on `## Overview`) for cards and article headers; add **`keywords`** when search should match synonyms not in `tags`.
 - Use **`infographics`** (`flow` / `diagram` / `highlight`) and **`images`** / **`coverImage`** where a visual reduces confusion; keep **alt** and **caption** on every image.
 - Bump **`lastUpdated`** to the current date (`YYYY-MM-DD`) for every article you touch.
 - Remove or rewrite articles for **deprecated** features; do not leave obsolete steps.
+- When a screen's look changes, re-capture its screenshots/videos with `tools/tutorial-capture/` (`node capture.mjs --name=<entry>`) instead of leaving outdated images; never commit screenshots that show real people's names or emails (keep `redact.local.json` up to date), and run `compress-videos.ps1` after recording.
 
 ## How to verify
 
@@ -39,6 +44,9 @@ Whenever you change any of the following, update Help & Tutorials in the **same 
 - Confirm “Related screens in the app” links reach the correct pages.
 - Confirm **featured** articles (if any) look correct in the hub strip and that **flow** diagram links navigate.
 
-## Optional discovery API
+- Open a screen listed in `relatedAppRoutes` and check the header **Help** button lists the article.
+- Run `npm run check` in `tools/tutorial-capture/` (missing images/videos, unknown `relatedArticleIds`, unused files) and `npx vitest run src/app/routeLinks.test.ts` in `frontend/` (every `/app/...` link is a real route).
 
-- `getArticlesForAppPath(tutorialSections, pathname)` returns articles relevant to a route — suitable for future “Help for this page” entry points.
+## Discovery API
+
+- `getArticlesForAppPath(tutorialSections, pathname)` returns articles relevant to a route — used by the header “Help for this page” button.

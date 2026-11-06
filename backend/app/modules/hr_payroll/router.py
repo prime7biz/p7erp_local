@@ -272,15 +272,21 @@ async def _payroll_statutory_totals(db: AsyncSession, *, tenant_id: int, run_id:
     """Sum PF / ESI / PT amounts recorded in the run's calculation snapshots."""
     from app.models.hr_payroll import PayrollCalculationSnapshot
 
+    # Auto-calculate can be applied several times; each apply adds a snapshot. Only the
+    # newest snapshot per run line reflects the pay being posted.
+    latest_snap_ids = (
+        select(func.max(PayrollCalculationSnapshot.id))
+        .join(PayrollRunLine, PayrollRunLine.id == PayrollCalculationSnapshot.payroll_run_line_id)
+        .where(
+            PayrollCalculationSnapshot.tenant_id == tenant_id,
+            PayrollRunLine.run_id == run_id,
+        )
+        .group_by(PayrollCalculationSnapshot.payroll_run_line_id)
+    )
     snaps = list(
         (
             await db.execute(
-                select(PayrollCalculationSnapshot)
-                .join(PayrollRunLine, PayrollRunLine.id == PayrollCalculationSnapshot.payroll_run_line_id)
-                .where(
-                    PayrollCalculationSnapshot.tenant_id == tenant_id,
-                    PayrollRunLine.run_id == run_id,
-                )
+                select(PayrollCalculationSnapshot).where(PayrollCalculationSnapshot.id.in_(latest_snap_ids))
             )
         )
         .scalars()

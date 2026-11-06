@@ -13,8 +13,37 @@ export interface TutorialImageAsset {
   alt: string;
 }
 
+/**
+ * Short screen-recorded walkthrough (local `.webm` / `.mp4` under `public/tutorials/videos/`).
+ * Recorded from the real app with `tools/tutorial-capture/`.
+ */
+export interface TutorialVideoAsset {
+  src: string;
+  title: string;
+  /** Still frame shown before the video plays (e.g. a screenshot of the first screen). */
+  poster?: string;
+  caption?: string;
+  durationSeconds?: number;
+}
+
+/** One numbered step in a `steps` infographic (optional screenshot of that step). */
+export interface TutorialStep {
+  title: string;
+  /** Short markdown (bold, inline code, links). */
+  body?: string;
+  imageSrc?: string;
+  imageAlt?: string;
+  /** Optional in-app link to open the screen for this step. */
+  href?: string;
+}
+
 /** Lightweight visual workflow / diagram metadata (rendered by tutorial UI components). */
 export type TutorialInfographic =
+  | {
+      type: "steps";
+      title?: string;
+      steps: TutorialStep[];
+    }
   | {
       type: "flow";
       title?: string;
@@ -53,7 +82,11 @@ export interface TutorialArticle {
   /** Optional hero image path (public URL). */
   coverImage?: string;
   images?: TutorialImageAsset[];
+  /** Walkthrough videos shown near the top of the article. */
+  videos?: TutorialVideoAsset[];
   infographics?: TutorialInfographic[];
+  /** Approximate reading / doing time in minutes (shown in the article header). */
+  estimatedMinutes?: number;
   /** Sort order within section (lower first; derived from index if omitted). */
   order?: number;
   /** Show in “Featured workflows” on the help hub. */

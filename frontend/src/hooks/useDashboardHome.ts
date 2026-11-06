@@ -17,6 +17,7 @@ import {
   type UnifiedTnaSummaryResponse,
 } from "@/api/client";
 import { chartColorAt } from "@/lib/chartColors";
+import { tenantKey } from "@/lib/queryKeys";
 import {
   STALE_DASHBOARD_ATTENTION,
   STALE_DASHBOARD_CUSTOMER_MAP,
@@ -170,12 +171,12 @@ export function useDashboardHome({ dateRange }: UseDashboardHomeOptions) {
 
       return Promise.allSettled([
         queryClient.fetchQuery({
-          queryKey: ["dashboard", "kpis"],
+          queryKey: tenantKey("dashboard", "kpis"),
           queryFn: () => api.getDashboardKpis(),
           staleTime: bypass ? 0 : STALE_DASHBOARD_KPIS,
         }),
         queryClient.fetchQuery({
-          queryKey: ["dashboard", "attention"],
+          queryKey: tenantKey("dashboard", "attention"),
           queryFn: () => api.getDashboardAttentionSummary(),
           staleTime: bypass ? 0 : STALE_DASHBOARD_ATTENTION,
         }),
@@ -185,7 +186,7 @@ export function useDashboardHome({ dateRange }: UseDashboardHomeOptions) {
         api.getDashboardTasks(),
         api.getDashboardRevenueTrend(rangeParams),
         queryClient.fetchQuery({
-          queryKey: ["dashboard", "customerMap"],
+          queryKey: tenantKey("dashboard", "customerMap"),
           queryFn: () => api.getDashboardCustomerMap(),
           staleTime: bypass ? 0 : STALE_DASHBOARD_CUSTOMER_MAP,
         }),

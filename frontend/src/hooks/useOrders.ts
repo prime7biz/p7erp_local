@@ -1,5 +1,6 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { api, ApiError, type OrderListPageResponse } from "@/api/client";
+import { tenantKey } from "@/lib/queryKeys";
 import { STALE_ORDER_LISTS } from "@/lib/queryStaleTimes";
 
 /** Filters for paginated orders list (matches API query params). */
@@ -36,7 +37,7 @@ export function useOrders(
   } = filters;
 
   return useQuery({
-    queryKey: ["orders", "list", filters],
+    queryKey: tenantKey("orders", "list", filters),
     queryFn: async () =>
       api.listOrdersPaginated({
         status,

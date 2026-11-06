@@ -17,6 +17,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import event, select
 
 from app.common.tenant_feature_keys import PARTY_LEDGER_ENABLED
@@ -581,3 +582,46 @@ async def test_party_ledger_query_count_does_not_grow_with_rows(db_session_integ
     assert aging_large == aging_small
     assert list_large <= 10
     assert aging_large <= 8
+
+
+async def _reference_allocations(db, ledger_id: int) -> list[dict[str, Any]]:
+    """Old ``GET /{ledger_id}/allocations``: two db.get calls per allocation."""
+    from app.modules.finance.party_ledger_bill_service import allocation_out
+
+    bill_ids = (
+        await db.execute(select(PartyLedgerBill.id).where(PartyLedgerBill.party_ledger_id == ledger_id))
+    ).scalars().all()
+    if not bill_ids:
+        return []
+    allocs = (
+        await db.execute(
+            select(PartyLedgerBillAllocation)
+            .where(PartyLedgerBillAllocation.bill_id.in_(list(bill_ids)))
+            .order_by(PartyLedgerBillAllocation.allocated_date.desc())
+        )
+    ).scalars().all()
+    out = []
+    for a in allocs:
+        row = allocation_out(a)
+        bill = await db.get(PartyLedgerBill, a.bill_id)
+        row["bill_number"] = bill.bill_number if bill else None
+        voucher = await db.get(Voucher, a.voucher_id)
+        row["voucher_number"] = voucher.voucher_number if voucher else None
+        out.append(row)
+    return out
+
+
+@pytest.mark.asyncio
+async def test_party_ledger_allocations_match_reference(db_session_integration):
+    db = db_session_integration
+    world = await _seed_party_world(db)
+    tenant, user = world["tenant"], world["user"]
+    async with api_client(db, tenant, user) as ac:
+        for pl in world["ledgers"]:
+            expected = jsonable_encoder(await _reference_allocations(db, pl.id))
+            with _count_queries(db) as counter:
+                r = await ac.get(f"/api/v1/finance/party-ledgers/{pl.id}/allocations")
+            assert r.status_code == 200, r.text
+            assert r.json() == expected, pl.id
+            if len(expected) > 1:
+                print(f"\n[party-ledger allocations] {len(expected)} rows -> {counter['n']} queries")

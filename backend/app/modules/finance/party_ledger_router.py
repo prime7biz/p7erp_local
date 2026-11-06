@@ -677,13 +677,26 @@ async def list_allocations(
             .order_by(PartyLedgerBillAllocation.allocated_date.desc())
         )
     ).scalars().all()
+    bill_numbers: dict[int, str] = {}
+    voucher_numbers: dict[int, str] = {}
+    if allocs:
+        bill_rows = await db.execute(
+            select(PartyLedgerBill.id, PartyLedgerBill.bill_number).where(
+                PartyLedgerBill.id.in_({a.bill_id for a in allocs})
+            )
+        )
+        bill_numbers = {bid: number for bid, number in bill_rows.all()}
+        voucher_ids = {a.voucher_id for a in allocs if a.voucher_id is not None}
+        if voucher_ids:
+            voucher_rows = await db.execute(
+                select(Voucher.id, Voucher.voucher_number).where(Voucher.id.in_(voucher_ids))
+            )
+            voucher_numbers = {vid: number for vid, number in voucher_rows.all()}
     out = []
     for a in allocs:
         row = allocation_out(a)
-        bill = await db.get(PartyLedgerBill, a.bill_id)
-        row["bill_number"] = bill.bill_number if bill else None
-        voucher = await db.get(Voucher, a.voucher_id)
-        row["voucher_number"] = voucher.voucher_number if voucher else None
+        row["bill_number"] = bill_numbers.get(a.bill_id)
+        row["voucher_number"] = voucher_numbers.get(a.voucher_id)
         out.append(row)
     return out
 

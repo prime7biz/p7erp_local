@@ -610,7 +610,7 @@ Under **Export & Import** you manage export selling room workflows: commercial r
 
 If **trade** is enabled for your tenant:
 
-- **Trade Cases** — \`/app/trade/cases\`
+- **Trade Cases** — \`/app/trade/cases\`. On a trade case, **Estimated Margin** shows revenue, cost and margin in your **base currency**. Hover revenue to see the original currency amount and exchange rate; if no rate is set, the original amount is shown with a warning and the margin stays blank until you add a rate under currency settings.
 - **Trade Control Tower** — \`/app/trade/dashboard\`
 - **Logistics** — \`/app/logistics\`
 
@@ -620,7 +620,7 @@ If **trade** is enabled for your tenant:
 - Create a commercial invoice from a **posted** delivery challan (Create Invoice), then **Issue** to raise a draft AR voucher.
 - If these links are missing, trade may be disabled for your tenant.`,
         tags: ["commercial", "LC", "proforma", "export", "trade", "invoice", "LC performance", "realisation"],
-        lastUpdated: "2026-11-04",
+        lastUpdated: "2026-11-06",
         coverImage: "/images/hero-factory.svg",
         infographics: [
           {

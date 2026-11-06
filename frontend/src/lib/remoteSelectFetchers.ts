@@ -6,6 +6,8 @@ import {
   type CustomerResponse,
   type InventoryItemResponse,
   type OrderResponse,
+  type PartyLedgerResponse,
+  type StockItemListRow,
   type TradeCaseRow,
   type VendorResponse,
 } from "@/api/client";
@@ -300,6 +302,68 @@ export async function hydrateBtbLc(id: number): Promise<RemoteSelectOption<BtbLc
     return { value: b.id, label: btbLcLabel(b), meta: b };
   } catch (e) {
     logApiError("remoteSelectFetchers.hydrateBtbLc", e);
+    return null;
+  }
+}
+
+function partyLedgerLabel(p: PartyLedgerResponse): string {
+  return `${p.party_name} (${p.party_type})`;
+}
+
+/** Party ledgers (customer / vendor accounts) for RemoteSearchSelect (server search). */
+export async function fetchPartyLedgerPage(
+  query: string,
+  page: number,
+  pageSize: number,
+): Promise<{ options: RemoteSelectOption<PartyLedgerResponse>[]; total: number }> {
+  const res = await api.listPartyLedgers({ search: query || undefined, page, page_size: pageSize });
+  return {
+    options: res.items.map((p) => ({ value: p.id, label: partyLedgerLabel(p), meta: p })),
+    total: res.total,
+  };
+}
+
+export async function hydratePartyLedger(id: number): Promise<RemoteSelectOption<PartyLedgerResponse> | null> {
+  try {
+    const p = await api.getPartyLedger(id);
+    return { value: p.id, label: partyLedgerLabel(p), meta: p };
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydratePartyLedger", e);
+    return null;
+  }
+}
+
+/** Find the party ledger linked to a chart-of-accounts ledger, searching every page (not just the first). */
+export async function findPartyLedgerByAccount(accountId: number): Promise<PartyLedgerResponse | null> {
+  const pageSize = 200;
+  for (let page = 1; page <= 100; page += 1) {
+    const res = await api.listPartyLedgers({ page, page_size: pageSize });
+    const match = res.items.find((p) => p.ledger_account_id === accountId);
+    if (match) return match;
+    if (res.items.length < pageSize || page * pageSize >= res.total) return null;
+  }
+  return null;
+}
+
+/** Stock items (stock hierarchy view of inventory items) for RemoteSearchSelect (server search). */
+export async function fetchStockItemPage(
+  query: string,
+  page: number,
+  pageSize: number,
+): Promise<{ options: RemoteSelectOption<StockItemListRow>[]; total: number }> {
+  const res = await api.listStockItemsEnhanced({ search: query || undefined, page, page_size: pageSize });
+  return {
+    options: (res.items ?? []).map((i) => ({ value: i.id, label: `${i.item_code ?? i.id} — ${i.name}`, meta: i })),
+    total: res.total,
+  };
+}
+
+export async function hydrateStockItem(id: number): Promise<RemoteSelectOption | null> {
+  try {
+    const i = await api.getStockItemDetail(id);
+    return { value: i.id, label: `${i.item_code ?? i.id} — ${i.name}` };
+  } catch (e) {
+    logApiError("remoteSelectFetchers.hydrateStockItem", e);
     return null;
   }
 }

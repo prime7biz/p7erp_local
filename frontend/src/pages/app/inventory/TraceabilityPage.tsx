@@ -11,6 +11,8 @@ import { useConfirm } from "@/components/app/useConfirm";
 import { listPageRootClass, listPageTableCardClass } from "@/components/app/listPageLayout";
 import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchInventoryItemPage, fetchOrderPage, fetchVendorPage, hydrateInventoryItem, hydrateOrder, hydrateVendor } from "@/lib/remoteSelectFetchers";
 
 const CERT_TYPES: { value: CertificateType; label: string }[] = [
   { value: "GOTS", label: "GOTS (organic textile)" },
@@ -82,17 +84,9 @@ export function TraceabilityPage() {
 /* ------------------------------------------------------------------ order report */
 
 function OrderReport() {
-  const [orders, setOrders] = useState<{ id: number; label: string }[]>([]);
   const [orderId, setOrderId] = useState("");
   const [report, setReport] = useState<OrderTraceabilityReport | null>(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    api
-      .listOrdersPaginated({ page: 1, page_size: 200 })
-      .then((r) => setOrders(r.items.map((o) => ({ id: o.id, label: `${o.order_code}${o.customer_name ? ` · ${o.customer_name}` : ""}` }))))
-      .catch((e) => logApiError("TraceabilityPage.orders", e));
-  }, []);
 
   useEffect(() => {
     if (!orderId) {
@@ -154,10 +148,14 @@ function OrderReport() {
       <div className="flex flex-wrap items-end gap-3 print:hidden">
         <div className="w-80 max-w-full">
           <label className={labelClass} htmlFor="tr-order">Order</label>
-          <select id="tr-order" value={orderId} onChange={(e) => setOrderId(e.target.value)} className={inputClass}>
-            <option value="">Select an order…</option>
-            {orders.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
+          <RemoteSearchSelect
+            id="tr-order"
+            value={orderId ? Number(orderId) : ""}
+            onChange={(next) => setOrderId(next === "" ? "" : String(next))}
+            fetchPage={fetchOrderPage}
+            hydrateById={hydrateOrder}
+            placeholder="Select an order…"
+          />
         </div>
         {report ? (
           <>
@@ -276,8 +274,6 @@ function Certificates() {
   const [rows, setRows] = useState<MaterialCertificate[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | number | null>(null);
-  const [vendors, setVendors] = useState<{ id: number; name: string }[]>([]);
-  const [items, setItems] = useState<{ id: number; name: string }[]>([]);
   const empty = { id: 0, cert_type: "GOTS" as CertificateType, certificate_number: "", issuer: "", vendor_id: "", item_id: "", valid_from: "", valid_until: "" };
   const [form, setForm] = useState(empty);
 
@@ -293,13 +289,8 @@ function Certificates() {
   }, []);
   useEffect(() => {
     void load();
-    Promise.all([api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }), api.listInventoryItemsPaginated({ page: 1, page_size: 500 })])
-      .then(([v, i]) => {
-        setVendors(v.items.map((x) => ({ id: x.id, name: x.name })));
-        setItems(i.items.map((x) => ({ id: x.id, name: x.name })));
-      })
-      .catch((e) => logApiError("TraceabilityPage.options", e));
   }, [load]);
+
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -406,17 +397,25 @@ function Certificates() {
         </div>
         <div>
           <label className={labelClass} htmlFor="mc-supplier">Supplier holding it</label>
-          <select id="mc-supplier" value={form.vendor_id} onChange={set("vendor_id")} className={inputClass}>
-            <option value="">—</option>
-            {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-          </select>
+          <RemoteSearchSelect
+            id="mc-supplier"
+            value={form.vendor_id ? Number(form.vendor_id) : ""}
+            onChange={(next) => setForm((f) => ({ ...f, vendor_id: next === "" ? "" : String(next) }))}
+            fetchPage={fetchVendorPage}
+            hydrateById={hydrateVendor}
+            placeholder="Search supplier…"
+          />
         </div>
         <div>
           <label className={labelClass} htmlFor="mc-item">Material it covers</label>
-          <select id="mc-item" value={form.item_id} onChange={set("item_id")} className={inputClass}>
-            <option value="">—</option>
-            {items.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-          </select>
+          <RemoteSearchSelect
+            id="mc-item"
+            value={form.item_id ? Number(form.item_id) : ""}
+            onChange={(next) => setForm((f) => ({ ...f, item_id: next === "" ? "" : String(next) }))}
+            fetchPage={fetchInventoryItemPage}
+            hydrateById={hydrateInventoryItem}
+            placeholder="Search material…"
+          />
         </div>
         <div>
           <label className={labelClass} htmlFor="mc-from">Valid from</label>

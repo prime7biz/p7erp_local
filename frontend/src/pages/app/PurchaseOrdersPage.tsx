@@ -42,7 +42,9 @@ import {
 } from "@/components/app/listPageLayout";
 import { useListPagination } from "@/hooks/useListPagination";
 import { cn } from "@/lib/utils";
-import { getWarehousesCached } from "@/lib/masterData";
+import { getInventoryItemsCached, getVendorsCached, getWarehousesCached } from "@/lib/masterData";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchInventoryItemPage, fetchVendorPage, hydrateInventoryItem, hydrateVendor } from "@/lib/remoteSelectFetchers";
 
 export function PurchaseOrdersPage() {
   const navigate = useNavigate();
@@ -143,13 +145,6 @@ export function PurchaseOrdersPage() {
     }
   }
 
-  const altC = (open: () => void) => (e: React.KeyboardEvent) => {
-    if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key.toLowerCase() === "c" || e.code === "KeyC")) {
-      e.preventDefault();
-      open();
-    }
-  };
-
   useEffect(() => {
     const close = () => setOpenActionsId(null);
     document.addEventListener("click", close);
@@ -168,17 +163,17 @@ export function PurchaseOrdersPage() {
           page: poPage,
           page_size: pageSize,
         }),
-        api.listInventoryItemsPaginated({ page: 1, page_size: 500 }),
+        getInventoryItemsCached(),
         getWarehousesCached(),
-        api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }),
+        getVendorsCached({ is_active: true }),
       ]);
       if (!latest.isCurrent(token)) return;
       setOrders(poRes.items);
       setPoTotal(poRes.total);
-      const itm = itmRes.items;
+      const itm = itmRes;
       setItems(itm);
       setWarehouses(wh);
-      setVendors(vndRes.items);
+      setVendors(vndRes);
       const firstItem = itm[0];
       const firstWarehouse = wh[0];
       setLine((p) => {
@@ -481,14 +476,19 @@ export function PurchaseOrdersPage() {
         <h2 className="text-sm font-semibold text-text-primary">New Purchase Order</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
           <div className="flex gap-1">
-          <select
-            className="min-w-0 flex-1 rounded border px-3 py-2 text-sm"
+          <RemoteSearchSelect<VendorResponse>
+            className="flex-1"
             value={form.vendor_id ?? ""}
-            title="Alt+C: create a new supplier"
-            onKeyDown={altC(() => setVendorCreateOpen(true))}
-            onChange={(e) => {
-              const nextId = e.target.value ? Number(e.target.value) : null;
-              const nextVendor = vendors.find((v) => v.id === nextId) ?? null;
+            aria-label="Vendor"
+            placeholder="Select vendor (optional)"
+            fetchPage={fetchVendorPage}
+            hydrateById={hydrateVendor}
+            onCreateNew={() => setVendorCreateOpen(true)}
+            createLabel="supplier"
+            onChange={(next, opt) => {
+              const nextId = next === "" ? null : next;
+              const nextVendor = opt?.meta ?? vendors.find((v) => v.id === nextId) ?? null;
+              if (nextVendor && !vendors.some((v) => v.id === nextVendor.id)) setVendors((prev) => [...prev, nextVendor]);
               setForm((p) => ({
                 ...p,
                 vendor_id: nextId,
@@ -496,14 +496,7 @@ export function PurchaseOrdersPage() {
                 currency: nextVendor?.default_currency || p.currency || "USD",
               }));
             }}
-          >
-            <option value="">Select vendor (optional)</option>
-            {vendors.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.vendor_code} - {v.name}
-              </option>
-            ))}
-          </select>
+          />
           <button
             type="button"
             className="shrink-0 rounded border px-2 text-xs font-medium text-brand-primary hover:bg-surface-subtle"
@@ -553,14 +546,21 @@ export function PurchaseOrdersPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
           <div className="flex gap-1">
-          <select
-            className="min-w-0 flex-1 rounded border px-3 py-2 text-sm"
+          <RemoteSearchSelect<InventoryItemResponse>
+            className="flex-1"
             value={line.item_id || ""}
-            title="Alt+C: create a new item"
-            onKeyDown={altC(() => void openItemCreate())}
-            onChange={(e) => {
-              const itemId = Number(e.target.value);
-              const it = items.find((i) => i.id === itemId);
+            aria-label="Item"
+            placeholder="Search item…"
+            allowClear={false}
+            fetchPage={fetchInventoryItemPage}
+            hydrateById={hydrateInventoryItem}
+            onCreateNew={() => void openItemCreate()}
+            createLabel="item"
+            onChange={(next, opt) => {
+              if (next === "") return;
+              const itemId = next;
+              const it = opt?.meta ?? items.find((i) => i.id === itemId);
+              if (it && !items.some((i) => i.id === it.id)) setItems((prev) => [...prev, it]);
               const fallbackWh = warehouses[0]?.id ?? null;
               setLine((p) => ({
                 ...p,
@@ -597,13 +597,7 @@ export function PurchaseOrdersPage() {
                   });
               }
             }}
-          >
-            {items.map((it) => (
-              <option key={it.id} value={it.id}>
-                {it.item_code} - {it.name}
-              </option>
-            ))}
-          </select>
+          />
           <button
             type="button"
             className="shrink-0 rounded border px-2 text-xs font-medium text-brand-primary hover:bg-surface-subtle"

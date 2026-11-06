@@ -9,7 +9,6 @@ import {
   type ComparativeStatement,
   type InventoryItemResponse,
   type RequisitionDetail,
-  type VendorResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { VendorQuickCreateModal } from "@/components/quick-create/VendorQuickCreateModal";
@@ -17,6 +16,9 @@ import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionRea
 import { useAuth } from "@/context/AuthContext";
 import { resolveRole } from "@/lib/roles";
 import { logApiError } from "@/utils/logApiError";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { getInventoryItemsCached } from "@/lib/masterData";
+import { fetchVendorPage, hydrateVendor } from "@/lib/remoteSelectFetchers";
 import { RequisitionStatusBadge } from "./RequisitionStatusBadge";
 
 const CTL = "w-full rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm";
@@ -39,7 +41,6 @@ export function RequisitionDetailPage() {
   const [pr, setPr] = useState<RequisitionDetail | null>(null);
   const [cs, setCs] = useState<ComparativeStatement | null>(null);
   const [items, setItems] = useState<InventoryItemResponse[]>([]);
-  const [vendors, setVendors] = useState<VendorResponse[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -69,14 +70,8 @@ export function RequisitionDetailPage() {
   }, [id, load]);
 
   useEffect(() => {
-    void Promise.all([
-      api.listInventoryItemsPaginated({ page: 1, page_size: 500 }),
-      api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }),
-    ])
-      .then(([itm, vnd]) => {
-        setItems(itm.items);
-        setVendors(vnd.items);
-      })
+    void getInventoryItemsCached()
+      .then(setItems)
       .catch((e) => logApiError("RequisitionDetailPage.masters", e));
   }, []);
 
@@ -221,14 +216,15 @@ export function RequisitionDetailPage() {
           <h2 className="text-sm font-semibold text-text-primary">Add a supplier quotation</h2>
           <div className="grid gap-2 md:grid-cols-5">
             <div className="flex gap-1 md:col-span-2">
-              <select className={CTL} value={qVendor} onChange={(e) => setQVendor(e.target.value ? Number(e.target.value) : "")}>
-                <option value="">Supplier…</option>
-                {vendors.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.vendor_code} - {v.name}
-                  </option>
-                ))}
-              </select>
+              <RemoteSearchSelect
+                value={qVendor}
+                onChange={(next) => setQVendor(next)}
+                fetchPage={fetchVendorPage}
+                hydrateById={hydrateVendor}
+                placeholder="Supplier…"
+                aria-label="Supplier"
+                className="flex-1"
+              />
               <button type="button" className={BTN} onClick={() => setVendorCreateOpen(true)} title="New supplier">
                 + New
               </button>
@@ -408,7 +404,6 @@ export function RequisitionDetailPage() {
         defaultCurrency={qCurrency}
         onClose={() => setVendorCreateOpen(false)}
         onCreated={(v) => {
-          setVendors((prev) => [...prev, v]);
           setQVendor(v.id);
         }}
       />

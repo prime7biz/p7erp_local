@@ -666,7 +666,7 @@ It is on for every company; an admin can switch it off in **Settings → Configu
 
 ## 2. Record shipments (Shipments tab)
 
-Pick the order, the factory (if the factory pays you), the shipment or invoice reference, date, **shipped FOB value**, currency and **rate to BDT**. Commission lines are calculated immediately. If you change rules later, use **Actions → Recalculate** on shipments not yet on a statement.
+Pick the order and the factory (if the factory pays you) by typing part of the order code or factory name, then enter the shipment or invoice reference, date, **shipped FOB value**, currency and **rate to BDT**. Commission lines are calculated immediately. If you change rules later, use **Actions → Recalculate** on shipments not yet on a statement.
 
 ## 3. Statements (Statements tab)
 
@@ -680,7 +680,7 @@ Pick the order, the factory (if the factory pays you), the shipment or invoice r
 - A shipment on a statement cannot be deleted or recalculated until its statement is cancelled.`,
         tags: ["commission", "buying house", "agent", "TDS", "VDS", "AIT", "statement", "shipment"],
         keywords: ["brokerage", "commission invoice", "agent commission"],
-        lastUpdated: "2026-11-02",
+        lastUpdated: "2026-11-06",
         relatedAppRoutes: ["/app/commercial/commission"],
         relatedArticleIds: ["commercial-overview"],
       },
@@ -887,7 +887,7 @@ Turn it on in **Settings → Configuration** (choose **More features** at the to
 1. **New requisition** — department, required-by date, purpose, and one line per item with quantity (estimated price optional). **Save draft**.
 2. Open it and click **Submit**.
 3. An **admin or manager** clicks **Approve** (or **Reject** with a reason; the requester can then edit and resubmit).
-4. **Add a supplier quotation** for each supplier: choose the supplier (or **+ New**), currency, delivery days, payment terms, and a unit price per line. Add at least two to compare.
+4. **Add a supplier quotation** for each supplier: choose the supplier (type to search, or **+ New**), currency, delivery days, payment terms, and a unit price per line. Add at least two to compare.
 5. Read the **Comparative Statement**: the lowest price on each line is green; totals are ranked among suppliers that priced **every** line.
 6. A manager clicks **Select** under the chosen supplier and types the **reason** (required — especially if it is not the lowest, e.g. "delivers in 10 days").
 7. Click **Create PO**. A **DRAFT** purchase order is created with that supplier's prices and the requisition quantities; continue under **Purchase Orders**.
@@ -899,7 +899,7 @@ Turn it on in **Settings → Configuration** (choose **More features** at the to
 - **History** at the bottom shows every step, who did it and why.`,
         tags: ["requisition", "purchase requisition", "comparative statement", "CS", "quotation", "procurement"],
         keywords: ["rfq", "supplier quote", "compare", "cheapest", "approval"],
-        lastUpdated: "2026-11-04",
+        lastUpdated: "2026-11-06",
         relatedAppRoutes: ["/app/procurement/requisitions"],
         relatedArticleIds: ["inv-po-deep"],
       },

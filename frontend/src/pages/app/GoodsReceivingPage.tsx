@@ -6,7 +6,6 @@ import {
   type GoodsReceivingResponse,
   type InventoryGlPostingDetail,
   type PurchaseOrderResponse,
-  type VendorResponse,
 } from "@/api/client";
 import { GlPostingsPanel } from "@/components/inventory/GlPostingsPanel";
 import {
@@ -16,6 +15,8 @@ import {
 } from "@/components/inventory/InventoryListStates";
 import { escapeHtml } from "@/utils/escapeHtml";
 import { logApiError } from "@/utils/logApiError";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchVendorPage, hydrateVendor } from "@/lib/remoteSelectFetchers";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { DataTablePagination } from "@/components/app/DataTablePagination";
 import {
@@ -53,7 +54,6 @@ export function GoodsReceivingPage() {
 
   const [rows, setRows] = useState<GoodsReceivingResponse[]>([]);
   const [pos, setPos] = useState<PurchaseOrderResponse[]>([]);
-  const [vendors, setVendors] = useState<VendorResponse[]>([]);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -100,7 +100,7 @@ export function GoodsReceivingPage() {
     setError("");
     setLoading(true);
     try {
-      const [grRes, poRes, vRes] = await Promise.all([
+      const [grRes, poRes] = await Promise.all([
         api.listGoodsReceivingPaginated({
           status_filter: statusFilter.trim() || undefined,
           purchase_order_id: poFilterFromUrl ?? undefined,
@@ -108,13 +108,11 @@ export function GoodsReceivingPage() {
           page_size: pageSize,
         }),
         api.listPurchaseOrdersPaginated({ page: 1, page_size: 500 }),
-        api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }),
       ]);
       if (!latest.isCurrent(token)) return;
       setRows(grRes.items);
       setGrTotal(grRes.total);
       setPos(poRes.items);
-      setVendors(vRes.items);
     } catch (e) {
       logApiError("GoodsReceivingPage.load", e);
       if (!latest.isCurrent(token)) return;
@@ -324,19 +322,14 @@ export function GoodsReceivingPage() {
             </option>
           ))}
         </select>
-        <select
-          className={touchField}
+        <RemoteSearchSelect
           value={form.vendor_id ?? ""}
-          onChange={(e) => setForm((p) => ({ ...p, vendor_id: e.target.value ? Number(e.target.value) : null }))}
+          onChange={(next) => setForm((p) => ({ ...p, vendor_id: next === "" ? null : next }))}
+          fetchPage={fetchVendorPage}
+          hydrateById={hydrateVendor}
+          placeholder="Vendor (optional / non-PO)"
           aria-label="Vendor"
-        >
-          <option value="">Vendor (optional / non-PO)</option>
-          {vendors.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.vendor_code} — {v.name}
-            </option>
-          ))}
-        </select>
+        />
         <input
           className={touchField}
           type="number"

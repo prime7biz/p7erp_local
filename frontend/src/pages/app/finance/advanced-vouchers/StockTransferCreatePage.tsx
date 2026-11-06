@@ -1,16 +1,17 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type StockBatchRow, type StockItemListRow, type WarehouseResponse } from "@/api/client";
+import { api, type StockBatchRow, type WarehouseResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
 import { getWarehousesCached } from "@/lib/masterData";
+import { RemoteSearchSelect } from "@/components/app/RemoteSearchSelect";
+import { fetchStockItemPage, hydrateStockItem } from "@/lib/remoteSelectFetchers";
 
 type ItemRow = { stock_item_id: string; qty: string; batch_id: string };
 
 export function StockTransferCreatePage() {
   const navigate = useNavigate();
   const [godowns, setGodowns] = useState<WarehouseResponse[]>([]);
-  const [items, setItems] = useState<StockItemListRow[]>([]);
   const [batchesByItem, setBatchesByItem] = useState<Record<number, StockBatchRow[]>>({});
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -23,10 +24,9 @@ export function StockTransferCreatePage() {
   const [rows, setRows] = useState<ItemRow[]>([{ stock_item_id: "", qty: "", batch_id: "" }]);
 
   useEffect(() => {
-    void Promise.all([getWarehousesCached(), api.listStockItemsEnhanced({ page_size: 200 })])
-      .then(([wh, stockRes]) => {
+    void getWarehousesCached()
+      .then((wh) => {
         setGodowns(wh);
-        setItems(stockRes.items ?? []);
       })
       .catch((e) => {
         logApiError("StockTransferCreatePage.init", e);
@@ -85,7 +85,6 @@ export function StockTransferCreatePage() {
     }
   }
 
-  const itemLabel = new Map(items.map((i) => [i.id, `${i.item_code ?? i.id} — ${i.name}`]));
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -146,27 +145,26 @@ export function StockTransferCreatePage() {
           <p className="text-xs font-medium text-gray-600">Items</p>
           {rows.map((row, idx) => (
             <div key={idx} className="grid gap-2 sm:grid-cols-4">
-              <select
-                className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm sm:col-span-2"
-                value={row.stock_item_id}
-                onChange={(e) => {
+              <RemoteSearchSelect
+                className="sm:col-span-2"
+                value={row.stock_item_id ? Number(row.stock_item_id) : ""}
+                onChange={(picked) => {
+                  const value = picked === "" ? "" : String(picked);
                   const next = [...rows];
                   const cur = next[idx];
                   if (!cur) return;
-                  next[idx] = { ...cur, stock_item_id: e.target.value, batch_id: "" };
+                  next[idx] = { ...cur, stock_item_id: value, batch_id: "" };
                   setRows(next);
-                  if (e.target.value) {
-                    void loadBatches(Number(e.target.value), form.from_godown_id ? Number(form.from_godown_id) : undefined);
+                  if (value) {
+                    void loadBatches(Number(value), form.from_godown_id ? Number(form.from_godown_id) : undefined);
                   }
                 }}
-              >
-                <option value="">Stock item…</option>
-                {items.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {itemLabel.get(i.id)}
-                  </option>
-                ))}
-              </select>
+                fetchPage={fetchStockItemPage}
+                hydrateById={hydrateStockItem}
+                placeholder="Stock item…"
+                aria-label="Stock item"
+                menuPortal
+              />
               <input
                 className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
                 placeholder="Qty"

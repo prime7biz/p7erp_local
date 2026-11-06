@@ -9,6 +9,7 @@ import { RowActionsMenu } from "@/components/app/RowActionsMenu";
 import { ExternalAccessStatusBadge } from "@/components/external-access/ExternalAccessStatusBadge";
 import { listPageErrorClass, listTableHeadCellClass, listTableRowClass } from "@/components/app/listPageLayout";
 import { logApiError } from "@/utils/logApiError";
+import { getVendorsCached } from "@/lib/masterData";
 
 const inputClass = "mt-1 w-full rounded-lg border border-border-strong px-2.5 py-1.5 text-sm";
 
@@ -58,9 +59,8 @@ export function ExternalSupplierAccessPage() {
 
   useEffect(() => {
     void load();
-    api
-      .listVendorsPaginated({ is_active: true, page: 1, page_size: 500 })
-      .then((r) => setVendors(r.items.map((v) => ({ id: v.id, name: v.name }))))
+    getVendorsCached({ is_active: true })
+      .then((rows) => setVendors(rows.map((v) => ({ id: v.id, name: v.name }))))
       .catch((e) => logApiError("ExternalSupplierAccessPage.vendors", e));
   }, [load]);
 

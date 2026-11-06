@@ -20,6 +20,7 @@ import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionRea
 import { useAuth } from "@/context/AuthContext";
 import { resolveRole } from "@/lib/roles";
 import { logApiError } from "@/utils/logApiError";
+import { findPartyLedgerByAccount } from "@/lib/remoteSelectFetchers";
 import { voucherPrintVerificationUrl } from "@/utils/verifyPrintUrl";
 import { moneyEquals, sumMoneyBy } from "@/lib/money";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
@@ -634,8 +635,7 @@ export function VoucherDetailPage() {
                       // FIFO auto-allocate against party ledger (requires party_ledger_enabled)
                       const partyLine = (voucher.lines || []).find((l) => l.account_id);
                       if (!partyLine) throw new Error("No party account line on this voucher");
-                      const ledgers = await api.listPartyLedgers({ page_size: 200 });
-                      const match = ledgers.items.find((p) => p.ledger_account_id === partyLine.account_id);
+                      const match = await findPartyLedgerByAccount(partyLine.account_id);
                       if (!match) throw new Error("No party ledger linked to this voucher account");
                       const allocs = await api.autoAllocatePartyLedger({
                         party_ledger_id: match.id,

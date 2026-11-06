@@ -5,7 +5,6 @@ import {
   type InventoryGlPostingDetail,
   type ProcessOrderCreate,
   type ProcessOrderResponse,
-  type VendorResponse,
   type WarehouseResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
@@ -21,7 +20,7 @@ import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocume
 import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
 import { logApiError } from "@/utils/logApiError";
-import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
+import { fetchInventoryItemPage, fetchVendorPage, hydrateInventoryItem, hydrateVendor } from "@/lib/remoteSelectFetchers";
 import { getWarehousesCached } from "@/lib/masterData";
 
 const PROCESS_TYPES = ["KNITTING", "DYEING", "FINISHING", "CUTTING", "WASHING", "PRINTING"];
@@ -68,7 +67,6 @@ function defaultForm(warehouses: WarehouseResponse[]): ProcessOrderCreate {
 export function ProcessOrdersPage() {
   const [rows, setRows] = useState<ProcessOrderResponse[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseResponse[]>([]);
-  const [vendors, setVendors] = useState<VendorResponse[]>([]);
   const [itemLabels, setItemLabels] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,11 +110,7 @@ export function ProcessOrdersPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [poRows, whs, vnd] = await Promise.all([
-        api.listProcessOrders(),
-        getWarehousesCached(),
-        api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }),
-      ]);
+      const [poRows, whs] = await Promise.all([api.listProcessOrders(), getWarehousesCached()]);
       const [overview, pendingCrRows, stockRows] = await Promise.all([
         api.getInventoryReconciliationOverview(),
         api.listConsumptionChangeRequests({ status_filter: "PENDING" }),
@@ -132,7 +126,6 @@ export function ProcessOrdersPage() {
         return next;
       });
       setWarehouses(whs);
-      setVendors(vnd.items);
       const nextKpi = {
         openPo: overview.purchase_orders_open,
         openGrn: overview.goods_receiving_open,
@@ -445,18 +438,14 @@ export function ProcessOrdersPage() {
               }))
             }
           />
-          <select
-            className="rounded border px-3 py-2 text-sm"
+          <RemoteSearchSelect
             value={form.vendor_id ?? ""}
-            onChange={(e) => setForm((prev) => ({ ...prev, vendor_id: e.target.value ? Number(e.target.value) : null }))}
-          >
-            <option value="">Vendor / subcontractor</option>
-            {vendors.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.vendor_code} — {v.name}
-              </option>
-            ))}
-          </select>
+            onChange={(next) => setForm((prev) => ({ ...prev, vendor_id: next === "" ? null : next }))}
+            fetchPage={fetchVendorPage}
+            hydrateById={hydrateVendor}
+            placeholder="Vendor / subcontractor"
+            aria-label="Vendor / subcontractor"
+          />
           <RemoteSearchSelect
             className="rounded border px-3 py-2 text-sm"
             placeholder="Search input item…"

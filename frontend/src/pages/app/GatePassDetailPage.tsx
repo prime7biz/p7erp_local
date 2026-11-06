@@ -62,7 +62,10 @@ export function GatePassDetailPage() {
     try {
       const [g, po] = await Promise.all([
         api.getEnhancedGatePass(idNum),
-        api.getGatePassGlPostings(idNum).catch(() => [] as InventoryGlPostingDetail[]),
+        api.getGatePassGlPostings(idNum).catch((e) => {
+          logApiError("GatePassDetailPage.getGatePassGlPostings", e);
+          return [] as InventoryGlPostingDetail[];
+        }),
       ]);
       setRow(g);
       setPostings(po);

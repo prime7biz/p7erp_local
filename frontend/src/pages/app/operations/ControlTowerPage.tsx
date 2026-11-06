@@ -9,12 +9,12 @@ import { MasterLcLadder } from "@/components/control-tower/MasterLcLadder";
 import { OrderExecutionGrid } from "@/components/control-tower/OrderExecutionGrid";
 import { useAuth } from "@/context/AuthContext";
 import { useControlTower } from "@/hooks/useControlTower";
-import { todayLocalISO } from "@/lib/dates";
+import { toLocalISODate, todayLocalISO } from "@/lib/dates";
 
 function addDays(iso: string, days: number) {
   const d = new Date(iso + "T12:00:00");
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return toLocalISODate(d);
 }
 
 function sectionVisibility(roleName: string | undefined) {

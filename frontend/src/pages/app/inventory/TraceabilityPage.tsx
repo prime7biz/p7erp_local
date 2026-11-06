@@ -99,12 +99,23 @@ function OrderReport() {
       setReport(null);
       return;
     }
+    let cancelled = false;
     setLoading(true);
     api
       .getOrderTraceability(Number(orderId))
-      .then(setReport)
-      .catch((e) => toast.error(e instanceof Error ? e.message : "Could not load the report"))
-      .finally(() => setLoading(false));
+      .then((r) => {
+        if (!cancelled) setReport(r);
+      })
+      .catch((e) => {
+        logApiError("TraceabilityPage.getOrderTraceability", e);
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "Could not load the report");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [orderId]);
 
   const exportCsv = () => {

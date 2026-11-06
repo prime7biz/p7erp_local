@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 
 import { api, type MfgTnaPlanCreate } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { todayLocalISO } from "@/lib/dates";
+import { logApiError } from "@/utils/logApiError";
 
 function todayIso() {
   return todayLocalISO();
@@ -26,7 +28,10 @@ export function TnaPlansPage() {
     status: "active",
   });
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     try {
       const [templateRows, planRows, userRows] = await Promise.all([
@@ -34,6 +39,7 @@ export function TnaPlansPage() {
         api.listMfgTnaPlans({ status_filter: statusFilter || undefined }),
         api.listUsers(),
       ]);
+      if (!latest.isCurrent(token)) return;
       setTemplates(templateRows);
       setPlans(planRows);
       setUsers(userRows.filter((row) => row.is_active));
@@ -46,9 +52,11 @@ export function TnaPlansPage() {
         setSelectedPlanId((prev) => (!prev && firstPlan ? firstPlan.id : prev));
       }
     } catch (e) {
+      logApiError("TnaPlansPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load TNA plans");
     }
-  }, [statusFilter]);
+  }, [latest, statusFilter]);
 
   useEffect(() => {
     void load();

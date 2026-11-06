@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -8,6 +8,7 @@ import {
   type WarehouseResponse,
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 
 export function GodownStockPage() {
@@ -24,20 +25,24 @@ export function GodownStockPage() {
     godownLabel: string;
     batches: StockBatchRow[];
   } | null>(null);
+  const latest = useLatestRequest();
 
-  async function load() {
+  const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       setError("");
       const res = await api.getStockByGodownMatrix({
         group_id: groupId ? Number(groupId) : undefined,
         godown_id: godownId ? Number(godownId) : undefined,
       });
+      if (!latest.isCurrent(token)) return;
       setMatrix(res);
     } catch (e) {
       logApiError("GodownStockPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }
+  }, [latest, groupId, godownId]);
 
   useEffect(() => {
     void Promise.all([api.listStockGroups(), api.listWarehouses()])
@@ -50,8 +55,7 @@ export function GodownStockPage() {
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupId, godownId]);
+  }, [load]);
 
   async function openCell(itemId: number, itemLabel: string, whId: number, whLabel: string) {
     try {

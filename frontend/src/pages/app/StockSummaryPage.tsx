@@ -14,8 +14,10 @@ import {
   touchFieldClass,
 } from "@/components/inventory/InventoryMobileList";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { exportPagedCsv } from "@/lib/exportPagedCsv";
 import { todayLocalISO } from "@/lib/dates";
+import { logApiError } from "@/utils/logApiError";
 
 type SortKey = "item" | "warehouse" | "in" | "out" | "on_hand";
 
@@ -44,17 +46,20 @@ export function StockSummaryPage() {
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const { page, setPage, pageSize, setPageSize, offset, limit, allowedSizes } = useListPagination();
   const { isNarrow, view, setView, showCards } = useListViewPreference();
+  const latest = useLatestRequest();
 
   const loadWarehouses = useCallback(async () => {
     try {
       const wh = await api.listWarehouses();
       setWarehouses(wh);
-    } catch {
+    } catch (e) {
+      logApiError("StockSummaryPage.listWarehouses", e);
       setWarehouses([]);
     }
   }, []);
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     setLoading(true);
     try {
@@ -67,16 +72,19 @@ export function StockSummaryPage() {
         sort: sortKey,
         sort_dir: sortDir,
       });
+      if (!latest.isCurrent(token)) return;
       setRows(res.rows);
       setTotal(res.total ?? res.rows.length);
     } catch (e) {
+      logApiError("StockSummaryPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load stock summary");
       setRows([]);
       setTotal(0);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [limit, offset, search, warehouseId, hideZero, sortKey, sortDir]);
+  }, [latest, limit, offset, search, warehouseId, hideZero, sortKey, sortDir]);
 
   useEffect(() => {
     void loadWarehouses();

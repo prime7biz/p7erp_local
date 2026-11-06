@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
 import { AISuggestionModal } from "@/components/production/planning/AISuggestionModal";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import type { OrderReadinessPayload, PipelineOrderRow } from "@/types/productionPlanning";
-import { todayLocalISO } from "@/lib/dates";
+import { toLocalISODate, todayLocalISO } from "@/lib/dates";
 
 function todayISO() {
   return todayLocalISO();
@@ -13,7 +14,7 @@ function todayISO() {
 function addDays(iso: string, days: number) {
   const d = new Date(iso + "T12:00:00");
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return toLocalISODate(d);
 }
 
 function enumerateDates(fromIso: string, toIso: string): string[] {
@@ -22,7 +23,7 @@ function enumerateDates(fromIso: string, toIso: string): string[] {
   const end = new Date(toIso + "T12:00:00");
   if (Number.isNaN(d.getTime()) || Number.isNaN(end.getTime()) || d > end) return out;
   while (d <= end) {
-    out.push(d.toISOString().slice(0, 10));
+    out.push(toLocalISODate(d));
     d.setDate(d.getDate() + 1);
   }
   return out;
@@ -152,6 +153,8 @@ export function ProductionLinePlanPage() {
   const [suggestOrderId, setSuggestOrderId] = useState<number | null>(null);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<Record<string, unknown> | null>(null);
+  const latestBoard = useLatestRequest();
+  const latestCalendar = useLatestRequest();
 
   const days = useMemo(() => enumerateDates(from, to), [from, to]);
   const rangeTooWide = days.length > MAX_RANGE_DAYS;
@@ -166,17 +169,20 @@ export function ProductionLinePlanPage() {
   }, []);
 
   const loadBoard = useCallback(async () => {
+    const token = latestBoard.begin();
     setError("");
     try {
       const res = await api.getPlanBoard(from, to);
+      if (!latestBoard.isCurrent(token)) return;
       setItems((res.items as PlanRow[]) ?? []);
       setConflicts(res.conflicts ?? []);
       setFactoryLoad(res.factory_load ?? []);
     } catch (e) {
       logApiError(e, "ProductionLinePlanPage.loadBoard");
+      if (!latestBoard.isCurrent(token)) return;
       setError("Could not load plan board.");
     }
-  }, [from, to]);
+  }, [latestBoard, from, to]);
 
   const loadPipelineMap = useCallback(async () => {
     try {
@@ -192,8 +198,10 @@ export function ProductionLinePlanPage() {
   }, []);
 
   const loadCalendar = useCallback(async () => {
+    const token = latestCalendar.begin();
     try {
       const rows = await api.listFactoryCalendar(from, to);
+      if (!latestCalendar.isCurrent(token)) return;
       const holi = new Set<string>();
       for (const r of rows) {
         if (r.override_type === "holiday") holi.add(r.override_date.slice(0, 10));
@@ -202,7 +210,7 @@ export function ProductionLinePlanPage() {
     } catch (e) {
       logApiError(e, "ProductionLinePlanPage.loadCalendar");
     }
-  }, [from, to]);
+  }, [latestCalendar, from, to]);
 
   const loadRiskAlerts = useCallback(async () => {
     try {

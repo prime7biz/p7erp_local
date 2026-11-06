@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api, type MfgSampleRequestCreate } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { todayLocalISO } from "@/lib/dates";
+import { logApiError } from "@/utils/logApiError";
 
 function todayIso() {
   return todayLocalISO();
@@ -28,7 +30,10 @@ export function SamplesRequestsPage() {
     item_id: null,
   });
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     try {
       const [sampleRows, orderRows, itemRows, userRows] = await Promise.all([
@@ -37,6 +42,7 @@ export function SamplesRequestsPage() {
         api.listInventoryItems(),
         api.listUsers(),
       ]);
+      if (!latest.isCurrent(token)) return;
       setRows(sampleRows);
       setOrders(orderRows);
       setItems(itemRows);
@@ -50,9 +56,11 @@ export function SamplesRequestsPage() {
         ),
       );
     } catch (e) {
+      logApiError("SamplesRequestsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load samples");
     }
-  }, [statusFilter]);
+  }, [latest, statusFilter]);
 
   useEffect(() => {
     void load();

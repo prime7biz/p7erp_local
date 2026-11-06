@@ -31,6 +31,7 @@ import {
   listTableTrClass,
 } from "@/components/app/listPageLayout";
 import { ResponsiveTableContainer } from "@/components/app/ResponsiveTableContainer";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useListPagination } from "@/hooks/useListPagination";
 import { cn } from "@/lib/utils";
 
@@ -80,6 +81,7 @@ export function GoodsReceivingPage() {
   const [grnPostingsFor, setGrnPostingsFor] = useState<number | null>(null);
   const [grnPostings, setGrnPostings] = useState<InventoryGlPostingDetail[]>([]);
   const [grnPostingsLoading, setGrnPostingsLoading] = useState(false);
+  const latest = useLatestRequest();
 
   useEffect(() => {
     const close = () => setOpenActionsId(null);
@@ -94,6 +96,7 @@ export function GoodsReceivingPage() {
   }, [poFilterFromUrl]);
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     setLoading(true);
     try {
@@ -107,16 +110,19 @@ export function GoodsReceivingPage() {
         api.listPurchaseOrdersPaginated({ page: 1, page_size: 500 }),
         api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setRows(grRes.items);
       setGrTotal(grRes.total);
       setPos(poRes.items);
       setVendors(vRes.items);
     } catch (e) {
+      logApiError("GoodsReceivingPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load GRN");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [statusFilter, grPage, pageSize, poFilterFromUrl]);
+  }, [latest, statusFilter, grPage, pageSize, poFilterFromUrl]);
 
   useEffect(() => {
     void load();

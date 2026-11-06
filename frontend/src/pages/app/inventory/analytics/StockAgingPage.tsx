@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type StockAgingReport } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 
 export function StockAgingPage() {
@@ -8,15 +9,21 @@ export function StockAgingPage() {
   const [bucket, setBucket] = useState("");
   const [error, setError] = useState("");
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     try {
-      setReport(await api.getStockAgingReport({ bucket: bucket || undefined }));
+      const res = await api.getStockAgingReport({ bucket: bucket || undefined });
+      if (!latest.isCurrent(token)) return;
+      setReport(res);
     } catch (e) {
       logApiError("StockAgingPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     }
-  }, [bucket]);
+  }, [latest, bucket]);
 
   useEffect(() => {
     void load();

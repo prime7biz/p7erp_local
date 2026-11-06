@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type ChartOfAccountResponse } from "@/api/client";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
 
@@ -71,6 +72,7 @@ export function ProductionCostsPage() {
   const [overheadRows, setOverheadRows] = useState<OverheadRow[]>([]);
   const [costCenters, setCostCenters] = useState<Array<{ id: number; center_code: string; name: string }>>([]);
   const [recalcBreakdown, setRecalcBreakdown] = useState<{ labor: number; overhead: number; source: string } | null>(null);
+  const latest = useLatestRequest();
 
   const postingAccounts = useMemo(
     () =>
@@ -81,6 +83,7 @@ export function ProductionCostsPage() {
   );
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     try {
       const [cm, al, w, coa] = await Promise.all([
         api.getCmAnalysis(period),
@@ -88,11 +91,13 @@ export function ProductionCostsPage() {
         api.listWipJournals(),
         api.listChartOfAccounts({ active_only: true }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setCmItems((cm.items as CmAnalysisRow[]) ?? []);
       setAlerts((al.items as CmAlertRow[]) ?? []);
       setWip((w.items as WipRow[]) ?? []);
       setAccounts(coa);
       const ovh = await api.listCmOverheadConfig();
+      if (!latest.isCurrent(token)) return;
       setOverheadRows(
         ovh.length
           ? ovh
@@ -105,11 +110,12 @@ export function ProductionCostsPage() {
             ],
       );
       const cc = await api.listCostCenters({ active_only: true });
+      if (!latest.isCurrent(token)) return;
       setCostCenters((cc as Array<{ id: number; center_code: string; name: string }>) ?? []);
     } catch (e) {
       logApiError(e, "ProductionCostsPage.load");
     }
-  }, [period]);
+  }, [latest, period]);
 
   useEffect(() => {
     void load();

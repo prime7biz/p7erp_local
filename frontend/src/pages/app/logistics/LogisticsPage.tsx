@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Download } from "lucide-react";
 
@@ -7,6 +7,7 @@ import { AutofillReviewPanel } from "@/components/ai-extract/AutofillReviewPanel
 import { ExtractionAlertsBanner } from "@/components/ai-extract/ExtractionAlertsBanner";
 import { FileImportCard } from "@/components/ai-extract/FileImportCard";
 import { useCommercialDocExtraction } from "@/hooks/useCommercialDocExtraction";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import type { ConflictResolutionChoice, FieldApplyState } from "@/types/extraction";
 import { buildShippingFieldApplyStates } from "@/utils/extractionHelpers";
 import { logApiError } from "@/utils/logApiError";
@@ -76,8 +77,11 @@ export function LogisticsPage() {
   const [packSaving, setPackSaving] = useState(false);
   const shippingExtract = useCommercialDocExtraction("shipping");
   const [shippingReviewRows, setShippingReviewRows] = useState<FieldApplyState[]>([]);
+  const lastShippingResponseRef = useRef<typeof shippingExtract.response>(null);
+  const latest = useLatestRequest();
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -93,24 +97,30 @@ export function LogisticsPage() {
         }),
         api.listShipmentContainers({ limit: 100 }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setItems(shipments);
       setTradeCases(cases);
       setPackingLists(packs);
       setContainers(conts);
     } catch (e) {
+      logApiError("LogisticsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setItems([]);
       setError(e instanceof Error ? e.message : "Failed to load logistics data");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [filterTradeCaseId, filterStatus, preselectedOrderId]);
+  }, [latest, filterTradeCaseId, filterStatus, preselectedOrderId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
-    if (!shippingExtract.response) {
+    const response = shippingExtract.response;
+    if (response === lastShippingResponseRef.current) return;
+    lastShippingResponseRef.current = response;
+    if (!response) {
       setShippingReviewRows([]);
       return;
     }
@@ -125,12 +135,12 @@ export function LogisticsPage() {
       dest_port: form.dest_port ?? "",
       notes: form.notes ?? "",
     };
-    setShippingReviewRows(buildShippingFieldApplyStates(shippingExtract.response, current));
-    const status = shippingExtract.response.suggested_status;
+    setShippingReviewRows(buildShippingFieldApplyStates(response, current));
+    const status = response.suggested_status;
     if (status) {
       setForm((prev) => ({ ...prev, status: status as ShipmentCreate["status"] }));
     }
-    const matchId = shippingExtract.response.matched_shipment_id;
+    const matchId = response.matched_shipment_id;
     if (matchId) {
       const matched = items.find((s) => s.id === matchId);
       if (matched) {
@@ -150,7 +160,7 @@ export function LogisticsPage() {
         });
       }
     }
-  }, [shippingExtract.response]); // eslint-disable-line react-hooks/exhaustive-deps -- snapshot once per extraction
+  }, [shippingExtract.response, form, items]);
 
   const applyShippingField = (fieldKey: string) => {
     const row = shippingReviewRows.find((r) => r.fieldKey === fieldKey);

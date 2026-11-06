@@ -7,6 +7,7 @@ import {
   type PurchaseApOverviewResponse,
   type PurchaseOrderResponse,
 } from "@/api/client";
+import { subtractMoney } from "@/lib/money";
 
 export function PurchaseWorkflowPage() {
   const [overview, setOverview] = useState<PurchaseApOverviewResponse | null>(null);
@@ -129,7 +130,7 @@ export function PurchaseWorkflowPage() {
           </thead>
           <tbody>
             {openPayables.map((b) => {
-              const outstanding = Math.max(Number(b.amount) - Number(b.paid_amount), 0);
+              const outstanding = Math.max(subtractMoney(b.amount, b.paid_amount), 0);
               return (
                 <tr key={b.id} className="border-t">
                   <td className="px-2 py-1">{b.bill_no}</td>

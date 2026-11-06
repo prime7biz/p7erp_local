@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type MaterialControlStockMovementRow, type StockDashboardResponse } from "@/api/client";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import {
   InventoryErrorPanel,
@@ -16,7 +17,10 @@ export function StockDashboardPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -27,14 +31,17 @@ export function StockDashboardPage() {
           return [];
         }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setData(dash);
       setMaterialTrace(mc);
     } catch (e) {
+      logApiError("StockDashboardPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load dashboard");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [threshold]);
+  }, [latest, threshold]);
 
   useEffect(() => {
     void load();

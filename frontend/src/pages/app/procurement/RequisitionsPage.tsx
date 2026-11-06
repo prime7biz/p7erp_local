@@ -13,6 +13,7 @@ import {
 } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { RowActionsMenu } from "@/components/app/RowActionsMenu";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { REQUISITION_STATUS_LABEL } from "./requisitionStatus";
 import { RequisitionStatusBadge } from "./RequisitionStatusBadge";
@@ -39,20 +40,25 @@ export function RequisitionsPage() {
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
   const [saving, setSaving] = useState(false);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
       const res = await api.listRequisitions({ status: statusFilter || undefined, limit: 100 });
+      if (!latest.isCurrent(token)) return;
       setRows(res.rows);
       setTotal(res.total);
     } catch (e) {
       logApiError("RequisitionsPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [statusFilter]);
+  }, [latest, statusFilter]);
 
   useEffect(() => {
     void load();

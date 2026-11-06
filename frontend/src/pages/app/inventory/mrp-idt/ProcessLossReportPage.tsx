@@ -2,16 +2,14 @@ import { useState } from "react";
 import { api, type ProcessLossReportResponse } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { logApiError } from "@/utils/logApiError";
-import { todayLocalISO } from "@/lib/dates";
+import { addDaysLocalISO, todayLocalISO } from "@/lib/dates";
 
 function todayIso() {
   return todayLocalISO();
 }
 
 function daysAgo(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return addDaysLocalISO(-n);
 }
 
 export function ProcessLossReportPage() {

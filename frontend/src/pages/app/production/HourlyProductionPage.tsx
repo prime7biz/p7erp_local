@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api } from "@/api/client";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { logApiError } from "@/utils/logApiError";
 import { todayLocalISO } from "@/lib/dates";
@@ -28,6 +29,7 @@ export function HourlyProductionPage() {
   const [sheet, setSheet] = useState<Array<{ id: number; hour_slot: number; good_qty: number | null }>>([]);
   const [draft, setDraft] = useState<Record<number, { good: string; reject: string }>>({});
   const [error, setError] = useState("");
+  const latest = useLatestRequest();
 
   const isSewing = department_type === "sewing";
 
@@ -49,6 +51,7 @@ export function HourlyProductionPage() {
   }, [department_type]);
 
   const loadSheet = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     try {
       const res = await api.getHourlySheet({
@@ -57,6 +60,7 @@ export function HourlyProductionPage() {
         line_id: isSewing && lineId ? Number(lineId) : null,
         machine_id: !isSewing && machineId ? Number(machineId) : null,
       });
+      if (!latest.isCurrent(token)) return;
       const items = (res.items as Array<{ id: number; hour_slot: number; good_qty: number | null }>) ?? [];
       setSheet(items);
       const d: Record<number, { good: string; reject: string }> = {};
@@ -69,9 +73,10 @@ export function HourlyProductionPage() {
       setDraft(d);
     } catch (e) {
       logApiError(e, "HourlyProductionPage.loadSheet");
+      if (!latest.isCurrent(token)) return;
       setError(t("hourly.loadFailed"));
     }
-  }, [date, department_type, isSewing, lineId, machineId, t]);
+  }, [latest, date, department_type, isSewing, lineId, machineId, t]);
 
   useEffect(() => {
     void loadRefs();

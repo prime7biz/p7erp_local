@@ -13,7 +13,9 @@ import {
   touchFieldClass,
 } from "@/components/inventory/InventoryMobileList";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { fetchInventoryItemPage, hydrateInventoryItem } from "@/lib/remoteSelectFetchers";
+import { logApiError } from "@/utils/logApiError";
 
 const PAGE_SIZE = 50;
 
@@ -34,6 +36,7 @@ export function StockLedgerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { isNarrow, view, setView, showCards } = useListViewPreference();
+  const latest = useLatestRequest();
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rangeLabel = useMemo(() => {
@@ -44,6 +47,7 @@ export function StockLedgerPage() {
   }, [page, total]);
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -59,15 +63,18 @@ export function StockLedgerPage() {
         }),
         api.listWarehouses(),
       ]);
+      if (!latest.isCurrent(token)) return;
       setRows(ledgerRes.items);
       setTotal(ledgerRes.total);
       setWarehouses(wh);
     } catch (e) {
+      logApiError("StockLedgerPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load stock ledger");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [itemId, warehouseId, dateFrom, dateTo, page]);
+  }, [latest, itemId, warehouseId, dateFrom, dateTo, page]);
 
   useEffect(() => {
     void load();

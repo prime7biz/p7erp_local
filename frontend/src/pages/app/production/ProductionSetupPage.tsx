@@ -175,7 +175,8 @@ export function ProductionSetupPage() {
             user_id: x.user_id ?? null,
           })),
         );
-      } catch {
+      } catch (e) {
+        logApiError(e, "ProductionSetupPage.lineSupervisorOptions");
         setLineSupervisorOptions([]);
       }
     } catch (e) {
@@ -304,7 +305,8 @@ export function ProductionSetupPage() {
             ...prev,
             [key]: (res.items ?? []).map((x) => ({ id: x.id, name: `${x.employee_code} - ${x.name}` })),
           }));
-        } catch {
+        } catch (e) {
+          logApiError(e, "ProductionSetupPage.loadEmployeeOptions");
           setEmployeeOptions((prev) => ({ ...prev, [key]: [] }));
         }
       }

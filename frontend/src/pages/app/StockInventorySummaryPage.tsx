@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Layers, Package, Warehouse, Workflow } from "lucide-react";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 
 type Tab = "overview" | "group" | "warehouse" | "wip";
@@ -22,7 +23,10 @@ export function StockInventorySummaryPage() {
 
   const asOfParam = asOf.trim() || undefined;
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     setLoading(true);
     try {
@@ -32,17 +36,19 @@ export function StockInventorySummaryPage() {
         api.getStockSummaryByWarehouse(asOfParam),
         api.getStockSummaryWip(),
       ]);
+      if (!latest.isCurrent(token)) return;
       setOverview(ov);
       setByGroup(g);
       setByWh(w);
       setWip(wp);
     } catch (e) {
       logApiError("StockInventorySummaryPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load summary");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [asOfParam]);
+  }, [latest, asOfParam]);
 
   useEffect(() => {
     void load();

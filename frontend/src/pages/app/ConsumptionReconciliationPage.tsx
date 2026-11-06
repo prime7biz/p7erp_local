@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import {
   api,
@@ -148,6 +149,8 @@ export function ConsumptionReconciliationPage() {
   > | null>(null);
 
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+  const latestDash = useLatestRequest();
+  const latestDetail = useLatestRequest();
 
   useEffect(() => {
     const oid = searchParams.get("orderId");
@@ -170,16 +173,23 @@ export function ConsumptionReconciliationPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     api
       .listOrders({ search: orderSearch.trim() || undefined, limit: 80 })
-      .then(setOrders)
+      .then((rows) => {
+        if (!cancelled) setOrders(rows);
+      })
       .catch((e) => {
         logApiError("ConsumptionReconciliationPage.listOrders", e);
-        setOrders([]);
+        if (!cancelled) setOrders([]);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [orderSearch]);
 
   const loadDashboard = useCallback(async () => {
+    const token = latestDash.begin();
     setDashLoading(true);
     setDashError("");
     try {
@@ -205,16 +215,20 @@ export function ConsumptionReconciliationPage() {
           tolerance_pct: dashTolerance,
         }),
       ]);
+      if (!latestDash.isCurrent(token)) return;
       setDashboardData(dash);
       setTrendsData(tr);
     } catch (e) {
+      logApiError("ConsumptionReconciliationPage.loadDashboard", e);
+      if (!latestDash.isCurrent(token)) return;
       setDashError(e instanceof Error ? e.message : "Failed to load dashboard");
       setDashboardData(null);
       setTrendsData(null);
     } finally {
-      setDashLoading(false);
+      if (latestDash.isCurrent(token)) setDashLoading(false);
     }
   }, [
+    latestDash,
     dashPage,
     dashBuyerId,
     dashStyleId,
@@ -233,20 +247,24 @@ export function ConsumptionReconciliationPage() {
 
   const loadDetail = useCallback(async () => {
     if (!selectedOrderId.trim()) return;
+    const token = latestDetail.begin();
     setLoading(true);
     setError("");
     try {
       const res = await api.getConsumptionReconciliation(Number(selectedOrderId), {
         tolerance_pct: tolerancePct,
       });
+      if (!latestDetail.isCurrent(token)) return;
       setData(res);
     } catch (e) {
+      logApiError("ConsumptionReconciliationPage.loadDetail", e);
+      if (!latestDetail.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load reconciliation");
       setData(null);
     } finally {
-      setLoading(false);
+      if (latestDetail.isCurrent(token)) setLoading(false);
     }
-  }, [selectedOrderId, tolerancePct]);
+  }, [latestDetail, selectedOrderId, tolerancePct]);
 
   useEffect(() => {
     if (activeTab === "detail" && selectedOrderId.trim()) loadDetail();

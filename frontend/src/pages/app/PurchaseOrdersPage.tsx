@@ -23,6 +23,8 @@ import { VendorQuickCreateModal } from "@/components/quick-create/VendorQuickCre
 import { VoucherActionReasonModal } from "@/components/vouchers/VoucherActionReasonModal";
 import { alternateToBase, parseFactor, type LineUnitMode } from "@/lib/unitConversion";
 import { useListViewPreference } from "@/hooks/useInventoryListView";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { sumMoneyBy } from "@/lib/money";
 import { logApiError } from "@/utils/logApiError";
 import { useAuth } from "@/context/AuthContext";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
@@ -75,6 +77,7 @@ export function PurchaseOrdersPage() {
   const [poPage, setPoPage] = useState(1);
   const [poTotal, setPoTotal] = useState(0);
   const { isNarrow, view, setView, showCards } = useListViewPreference();
+  const latest = useLatestRequest();
 
   /** Receipt progress + received GRNs for vendor bill drafts */
   const [poTrace, setPoTrace] = useState<{
@@ -153,6 +156,7 @@ export function PurchaseOrdersPage() {
   }, []);
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     setLoading(true);
     try {
@@ -167,6 +171,7 @@ export function PurchaseOrdersPage() {
         api.listWarehouses(),
         api.listVendorsPaginated({ is_active: true, page: 1, page_size: 500 }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setOrders(poRes.items);
       setPoTotal(poRes.total);
       const itm = itmRes.items;
@@ -185,11 +190,13 @@ export function PurchaseOrdersPage() {
         return next;
       });
     } catch (e) {
+      logApiError("PurchaseOrdersPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load purchase orders");
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [statusFilter, poPage, pageSize, orderIdFilter]);
+  }, [latest, statusFilter, poPage, pageSize, orderIdFilter]);
 
   useEffect(() => {
     setPoPage(1);
@@ -206,7 +213,10 @@ export function PurchaseOrdersPage() {
           page: 1,
           page_size: 50,
         }),
-        api.getPurchaseOrder(po.id).catch(() => po),
+        api.getPurchaseOrder(po.id).catch((e) => {
+          logApiError("PurchaseOrdersPage.getPurchaseOrder", e);
+          return po;
+        }),
       ]);
       setPoTrace((prev) =>
         prev && prev.po.id === po.id
@@ -379,7 +389,7 @@ export function PurchaseOrdersPage() {
     [vendors, form.vendor_id]
   );
   const lineTotal = useMemo(
-    () => form.items.reduce((acc, ln) => acc + Number(ln.quantity || 0) * Number(ln.unit_price || 0), 0),
+    () => sumMoneyBy(form.items, (ln) => Number(ln.quantity || 0) * Number(ln.unit_price || 0)),
     [form.items]
   );
 
@@ -581,8 +591,8 @@ export function PurchaseOrdersPage() {
                       );
                     }
                   })
-                  .catch(() => {
-                    /* hierarchy flag may be off */
+                  .catch((e) => {
+                    logApiError("PurchaseOrdersPage.getStockItemDetail", e);
                   });
               }
             }}

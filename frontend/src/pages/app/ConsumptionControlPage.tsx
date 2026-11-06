@@ -11,6 +11,7 @@ import {
 import { GlPostingsPanel } from "@/components/inventory/GlPostingsPanel";
 import { InventoryDocumentPrintSheets } from "@/components/print/InventoryDocumentPrintSheets";
 import { PrintPreviewModal } from "@/components/print/PrintPreviewModal";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,7 @@ export function ConsumptionControlPage() {
   const [pmiPostOpen, setPmiPostOpen] = useState(false);
   const [pmiPostRows, setPmiPostRows] = useState<InventoryGlPostingDetail[]>([]);
   const [pmiPostTitle, setPmiPostTitle] = useState("");
+  const latest = useLatestRequest();
 
   const crStatusBadgeClass = (status: string) => {
     const s = status.toUpperCase();
@@ -113,6 +115,7 @@ export function ConsumptionControlPage() {
 
   const loadSnapshot = useCallback(async (orderId: number) => {
     if (!orderId) return;
+    const token = latest.begin();
     try {
       const [snap, resv, recon, variance, pmiAll] = await Promise.all([
         api.getConsumptionSnapshot(orderId),
@@ -130,6 +133,7 @@ export function ConsumptionControlPage() {
           return [];
         }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setSnapshot(snap);
       setReservations(resv);
       setLayerRecon(recon);
@@ -153,12 +157,15 @@ export function ConsumptionControlPage() {
         status_filter: crFilter || undefined,
         order_id: orderId,
       });
+      if (!latest.isCurrent(token)) return;
       setChangeRequests(crRows);
     } catch (e) {
+      logApiError("ConsumptionControl.loadSnapshot", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load snapshot");
       setLayerRecon(null);
     }
-  }, [crFilter]);
+  }, [latest, crFilter]);
 
   useEffect(() => {
     void loadOrders();
@@ -178,7 +185,8 @@ export function ConsumptionControlPage() {
         const mine = users.find((u) => u.id === me.user_id);
         const role = (mine?.role_name ?? "").toLowerCase();
         setCanReview(role === "admin" || role === "manager");
-      } catch {
+      } catch (e) {
+        logApiError("ConsumptionControl.loadPermission", e);
         setCanReview(false);
       }
     };

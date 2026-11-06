@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type ShipmentRow, type TradeCaseRow } from "@/api/client";
+import { addMoney } from "@/lib/money";
 import { logApiError } from "@/utils/logApiError";
 
 export function ReportTradeOverviewPage() {
@@ -39,7 +40,7 @@ export function ReportTradeOverviewPage() {
       const key = (c.current_stage || "—").toUpperCase();
       const cur = m.get(key) ?? { count: 0, amount: 0 };
       cur.count += 1;
-      if (c.amount != null) cur.amount += Number(c.amount);
+      if (c.amount != null) cur.amount = addMoney(cur.amount, c.amount);
       m.set(key, cur);
     }
     return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));

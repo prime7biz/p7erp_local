@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
 import { logApiError } from "@/utils/logApiError";
-import { todayLocalISO } from "@/lib/dates";
+import { toLocalISODate, todayLocalISO } from "@/lib/dates";
 
 function mondayISO(d: Date) {
   const day = d.getDay();
   const diff = (day + 6) % 7;
   const mon = new Date(d);
   mon.setDate(d.getDate() - diff);
-  return mon.toISOString().slice(0, 10);
+  return toLocalISODate(mon);
 }
 
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];

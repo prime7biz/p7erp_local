@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FolderTree, Plus, X, Search } from "lucide-react";
 import { erpControlFocusClass } from "@/components/app/listPageLayout";
 import { cn } from "@/lib/utils";
+import { logApiError } from "@/utils/logApiError";
 
 type TreeNode = StockGroupResponse & { children: TreeNode[] };
 
@@ -151,7 +152,8 @@ export function StockGroupsPage({ embedded = false }: { embedded?: boolean }) {
         };
         walk(tree);
         setTreeMetrics(m);
-      } catch {
+      } catch (e) {
+        logApiError("StockGroupsPage.getStockGroupsTree", e);
         setTreeMetrics(new Map());
       }
     } catch (e) {

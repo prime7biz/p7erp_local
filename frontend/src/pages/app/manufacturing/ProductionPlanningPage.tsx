@@ -113,7 +113,10 @@ export function ProductionPlanningPage() {
       const [itemRows, planRows, woRows] = await Promise.all([
         api.listInventoryItems(),
         api.listMfgProductionPlans(),
-        api.listMfgWorkOrders().catch(() => []),
+        api.listMfgWorkOrders().catch((e) => {
+          logApiError("ProductionPlanningPage.listMfgWorkOrders", e);
+          return [];
+        }),
       ]);
       setItems(itemRows);
       setPlans(planRows);

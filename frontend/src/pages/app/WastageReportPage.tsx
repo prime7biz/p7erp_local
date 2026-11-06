@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { logApiError } from "@/utils/logApiError";
 import {
   api,
@@ -59,8 +60,10 @@ export function WastageReportPage() {
   const [saveViewName, setSaveViewName] = useState("");
   const [saveViewModalOpen, setSaveViewModalOpen] = useState(false);
   const [refreshingSummary, setRefreshingSummary] = useState(false);
+  const latest = useLatestRequest();
 
   const load = useCallback(async () => {
+    const token = latest.begin();
     setLoading(true);
     setError("");
     try {
@@ -95,6 +98,7 @@ export function WastageReportPage() {
           date_to: dateTo || undefined,
         }),
       ]);
+      if (!latest.isCurrent(token)) return;
       setRows(report);
       setSummary(sum);
       setTrendsMonthly(trendsMonth.series ?? []);
@@ -103,6 +107,7 @@ export function WastageReportPage() {
       setLastRefresh(new Date().toLocaleString());
     } catch (e) {
       logApiError("WastageReportPage.load", e);
+      if (!latest.isCurrent(token)) return;
       setError(e instanceof Error ? e.message : "Failed to load wastage report");
       setRows([]);
       setSummary(null);
@@ -110,9 +115,9 @@ export function WastageReportPage() {
       setTrendsByBuyer([]);
       setManagementSummary(null);
     } finally {
-      setLoading(false);
+      if (latest.isCurrent(token)) setLoading(false);
     }
-  }, [orderId, styleId, buyerId, dateFrom, dateTo, thresholdPct, aboveThresholdOnly]);
+  }, [latest, orderId, styleId, buyerId, dateFrom, dateTo, thresholdPct, aboveThresholdOnly]);
 
   useEffect(() => {
     load();

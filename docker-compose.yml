@@ -89,6 +89,8 @@ services:
     restart: always
     environment:
       APP_ENV: ${APP_ENV:-development}
+      # Dev bind-mounts ./backend over /app, so keep running as root here (prod defaults to true).
+      RUN_AS_NON_ROOT: ${RUN_AS_NON_ROOT:-false}
       DATABASE_URL: postgresql://p7erp:p7erp@postgres:5432/p7erp
       USE_PGBOUNCER: ${USE_PGBOUNCER:-false}
       DATABASE_URL_PGBOUNCER: ${DATABASE_URL_PGBOUNCER:-postgresql://p7erp:p7erp@pgbouncer:5432/p7erp}
@@ -185,6 +187,7 @@ services:
     restart: always
     environment:
       APP_ENV: ${APP_ENV:-development}
+      RUN_AS_NON_ROOT: ${RUN_AS_NON_ROOT:-false}
       DATABASE_URL: postgresql://p7erp:p7erp@postgres:5432/p7erp
       USE_PGBOUNCER: ${USE_PGBOUNCER:-false}
       DATABASE_URL_PGBOUNCER: ${DATABASE_URL_PGBOUNCER:-postgresql://p7erp:p7erp@pgbouncer:5432/p7erp}
@@ -212,6 +215,7 @@ services:
     restart: always
     environment:
       APP_ENV: ${APP_ENV:-development}
+      RUN_AS_NON_ROOT: ${RUN_AS_NON_ROOT:-false}
       DATABASE_URL: postgresql://p7erp:p7erp@postgres:5432/p7erp
       USE_PGBOUNCER: ${USE_PGBOUNCER:-false}
       DATABASE_URL_PGBOUNCER: ${DATABASE_URL_PGBOUNCER:-postgresql://p7erp:p7erp@pgbouncer:5432/p7erp}

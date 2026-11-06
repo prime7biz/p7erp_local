@@ -7,6 +7,7 @@
 #
 # Semantic versioning: tags v1.0.0 etc. Each run pushes :latest and :${{ github.ref_name }} (main or v*).
 # Triggers: pushes to main, version tags v*, and manual workflow_dispatch.
+# Images are pushed only after the shared tests (tests.yml) pass.
 
 name: Docker Hub Build
 
@@ -23,8 +24,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Gate: images are pushed only after backend + frontend tests pass (same jobs as CI, tests.yml).
+  tests:
+    name: Tests
+    permissions:
+      contents: read
+    uses: ./.github/workflows/tests.yml
+
   build-and-push:
     name: Build and push to Docker Hub
+    needs: tests
     runs-on: ubuntu-latest
     permissions:
       contents: read

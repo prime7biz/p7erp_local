@@ -10,6 +10,7 @@ alwaysApply: true
 **How production deploy works** (see `.github/workflows/deploy.yml`):
 - Push to **`main`** → CI + Docker image build/push only (no live server update).
 - Push **`v*` tag** → Docker image build/push only (images tagged `vX.Y.Z` on Docker Hub).
+- **Deploy** and **Docker Hub Build** first run the shared tests (`.github/workflows/tests.yml`); the build/push job `needs: tests`, so failing tests ⇒ no image pushed and the workflow concludes `failure`.
 - **Live server** → manual SSH only (`scripts/deploy_production_remote.sh` or commands in `docs/DEPLOYMENT_PROCESS.md`). GitHub does **not** SSH to production.
 
 Human runbook mirror: `docs/DEPLOYMENT_PROCESS.md`. Cutover detail: `docs/GO_LIVE_CUTOVER_RUNBOOK.md`.
@@ -53,7 +54,7 @@ Tell the user: this builds images on GitHub; it does **not** update the live ser
 
 ## Phase 3 — Wait for CI on main
 
-Poll GitHub Actions until **CI**, **Deploy** (build job), and **Docker Hub Build** on `main` are `completed` / `success`. Retry every 60–90s; timeout ~15 min.
+Poll GitHub Actions until **CI**, **Deploy** (build job), and **Docker Hub Build** on `main` are `completed` / `success`. Retry every 60–90s; timeout ~25 min (tests run before the image build).
 
 **Windows:** Do not use host `gh` (npm shim breaks). Poll via Docker Python:
 
@@ -88,7 +89,7 @@ git push origin vX.Y.Z
 
 ## Phase 6 — Wait for tag image build + manual live deploy
 
-Poll workflows where `head_branch` is the new tag until **Deploy** (build-and-push) completes successfully (~10–15 min).
+Poll workflows where `head_branch` is the new tag until **Deploy** (build-and-push) completes successfully (~15–20 min including the test gate).
 
 Then update production **manually** (SSH). Example:
 

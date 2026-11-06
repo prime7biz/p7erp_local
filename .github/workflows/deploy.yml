@@ -1,4 +1,4 @@
-# Build and push Docker images to Docker Hub on main and v* tags.
+# Build and push Docker images to Docker Hub on main and v* tags, only after tests.yml passes.
 # Live server updates are manual (SSH + scripts/deploy_production_remote.sh) — no GitHub SSH deploy.
 name: Deploy
 
@@ -14,8 +14,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Gate: images are pushed only after backend + frontend tests pass (same jobs as CI, tests.yml).
+  tests:
+    name: Tests
+    permissions:
+      contents: read
+    uses: ./.github/workflows/tests.yml
+
   build-and-push:
     name: Build and Push Docker Images
+    needs: tests
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.codegen import next_tenant_code
@@ -97,6 +97,22 @@ def voucher_visible_in_day_book(voucher: Voucher, *, as_of: date | None = None) 
     if getattr(voucher, "is_post_dated", False) and voucher.voucher_date > as_of:
         return False
     return True
+
+
+def voucher_visible_in_day_book_clause(*, as_of: date | None = None):
+    """SQL twin of ``voucher_visible_in_day_book`` (keep the two in sync)."""
+    as_of = as_of or date.today()
+    vtype = func.upper(func.coalesce(Voucher.voucher_type, ""))
+    is_memorandum = func.coalesce(Voucher.is_memorandum, False)
+    is_optional = func.coalesce(Voucher.is_optional, False)
+    include_in_books = func.coalesce(Voucher.include_in_books, False)
+    is_post_dated = func.coalesce(Voucher.is_post_dated, False)
+    return and_(
+        is_memorandum.is_(False),
+        vtype.not_in(("MEMORANDUM", "STOCK_TRANSFER")),
+        not_(and_(is_optional.is_(True), include_in_books.is_(False))),
+        not_(and_(is_post_dated.is_(True), Voucher.voucher_date > as_of)),
+    )
 
 
 async def apply_voucher_line_balances(

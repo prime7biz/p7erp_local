@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import Voucher, VoucherLine
@@ -16,9 +16,15 @@ from app.modules.finance.mis_coa_helpers import account_balances_as_of, financia
 async def _avg_monthly_cashflow(db: AsyncSession, tenant_id: int, *, days: int = 90) -> dict[str, float]:
     end = date.today()
     start = end - timedelta(days=days)
-    rows = (
+    # Rough proxy: DEBIT lines on RECEIPT vouchers = inflow, CREDIT lines on PAYMENT vouchers = outflow.
+    vtype = func.upper(func.coalesce(Voucher.voucher_type, ""))
+    side = func.upper(func.coalesce(VoucherLine.entry_type, ""))
+    inflow_sum, outflow_sum = (
         await db.execute(
-            select(VoucherLine, Voucher)
+            select(
+                func.coalesce(func.sum(VoucherLine.amount).filter(vtype == "RECEIPT", side == "DEBIT"), 0),
+                func.coalesce(func.sum(VoucherLine.amount).filter(vtype == "PAYMENT", side == "CREDIT"), 0),
+            )
             .join(Voucher, VoucherLine.voucher_id == Voucher.id)
             .where(
                 Voucher.tenant_id == tenant_id,
@@ -28,17 +34,9 @@ async def _avg_monthly_cashflow(db: AsyncSession, tenant_id: int, *, days: int =
                 Voucher.voucher_date <= end,
             )
         )
-    ).all()
-    # Rough: CREDIT lines on cash-ish vouchers ≈ inflow proxy via RECEIPT type
-    inflow = 0.0
-    outflow = 0.0
-    for line, voucher in rows:
-        amt = float(_d(line.amount))
-        vtype = (voucher.voucher_type or "").upper()
-        if vtype == "RECEIPT" and (line.entry_type or "").upper() == "DEBIT":
-            inflow += amt
-        elif vtype == "PAYMENT" and (line.entry_type or "").upper() == "CREDIT":
-            outflow += amt
+    ).one()
+    inflow = float(_d(inflow_sum))
+    outflow = float(_d(outflow_sum))
     months = max(days / 30.0, 1.0)
     return {
         "avg_monthly_inflow": _money(inflow / months),

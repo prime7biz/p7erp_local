@@ -146,6 +146,8 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
     setIsEditing,
     duplicatingVersion,
     previousVersionQuote,
+    latestRevision,
+    isSuperseded,
     currencies,
     fetchingRates,
     rateSource,
@@ -266,7 +268,8 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
   }
   if (!quotation) return null;
 
-  const showEditableHeader = isNew || isEditing;
+  const showEditableHeader = isNew || (isEditing && !isSuperseded);
+  const canChangeQuotation = !isNew && !isSuperseded;
   const currencyOptions = currencies.length > 0 ? currencies.map((entry) => entry.code) : ["USD", "BDT", "EUR", "GBP", "JPY"];
   const docCur = quotation.currency ?? "USD";
   const mfgLineInQuotation = (m: QuotationManufacturingLine) =>
@@ -319,6 +322,8 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
             </span>
             {" · "}
             {customer?.name ?? `Customer #${quotation.customer_id}`} · {quotation.status}
+            {!isNew && ` · v${quotation.version_no}`}
+            {isSuperseded && " · Superseded"}
           </p>
           {showEditableHeader && <p className="mt-1 text-xs text-text-muted">Fields marked with ** are mandatory.</p>}
         </div>
@@ -332,7 +337,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               Print / Save PDF
             </button>
           )}
-          {!isNew && (
+          {canChangeQuotation && (
             <button
               type="button"
               onClick={async () => {
@@ -357,7 +362,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               {creatingOrder ? "Creating Order..." : "Create Order"}
             </button>
           )}
-          {!isNew && (
+          {canChangeQuotation && (
             <button
               type="button"
               onClick={duplicateAsNewVersion}
@@ -377,13 +382,15 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
             </button>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => setIsEditing((v) => !v)}
-                className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary"
-              >
-                {isEditing ? "Cancel edit" : "Edit costing"}
-              </button>
+              {!isSuperseded && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditing((v) => !v)}
+                  className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-sm text-text-secondary"
+                >
+                  {isEditing ? "Cancel edit" : "Edit costing"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => navigate("/app/quotations")}
@@ -393,7 +400,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               </button>
             </>
           )}
-          {isEditing && (
+          {isEditing && !isSuperseded && (
             <button
               type="button"
               onClick={handleSave}
@@ -403,7 +410,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               {saving ? "Saving..." : "Save draft"}
             </button>
           )}
-          {!isNew && ["DRAFT", "NEW"].includes(quotation.status) && (
+          {canChangeQuotation && ["DRAFT", "NEW"].includes(quotation.status) && (
             <button
               type="button"
               onClick={submitForReview}
@@ -413,7 +420,7 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
               {runningWorkflowAction === "submit" ? "Submitting..." : "Submit for review"}
             </button>
           )}
-          {!isNew && quotation.status === "SUBMITTED" && (
+          {canChangeQuotation && quotation.status === "SUBMITTED" && (
             <button
               type="button"
               onClick={approveQuotation}
@@ -425,6 +432,23 @@ export function QuotationWorkspacePage({ id }: { id?: string }) {
           )}
         </div>
       </header>
+
+      {isSuperseded && (
+        <div
+          className="no-print flex flex-wrap items-center justify-between gap-2 rounded-lg border border-status-warning/30 bg-status-warning-subtle px-4 py-3 text-sm text-status-warning-foreground"
+          role="status"
+        >
+          <span>
+            <span className="font-semibold">Superseded:</span> this is version v{quotation.version_no} and is read-only
+            because a newer revision replaced it.
+          </span>
+          {latestRevision && latestRevision.id !== quotation.id && (
+            <Link to={`/app/quotations/${latestRevision.id}`} className="font-semibold underline">
+              View latest v{latestRevision.version_no} ({latestRevision.quotation_code})
+            </Link>
+          )}
+        </div>
+      )}
 
       {(error || success || orderCreateError) && (
         <div className="space-y-2">

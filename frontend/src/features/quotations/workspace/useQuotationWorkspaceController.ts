@@ -18,6 +18,7 @@ import {
   type StyleResponse,
 } from "@/api/client";
 import { canConvertInquiryToQuotation, isInquiryOpenForQuotationLink } from "@/features/merch/workflow";
+import { logApiError } from "@/utils/logApiError";
 import { buildQuotationFullUpdatePayload } from "./mappers/buildQuotationFullUpdatePayload";
 import { calculateQuotationTotals } from "./mappers/calculateQuotationTotals";
 import { resolveRate } from "./mappers/currencyFx";
@@ -67,7 +68,7 @@ export function useQuotationWorkspaceController(id?: string) {
   const [runningWorkflowAction, setRunningWorkflowAction] = useState<"" | "submit" | "approve" | "send">("");
   const [useManualQuotedPrice, setUseManualQuotedPrice] = useState(false);
   const [manualQuotedPrice, setManualQuotedPrice] = useState("");
-  const [previousVersionQuote, setPreviousVersionQuote] = useState<QuotationResponse | null>(null);
+  const [revisions, setRevisions] = useState<QuotationResponse[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -176,33 +177,42 @@ export function useQuotationWorkspaceController(id?: string) {
     load();
   }, [id, isNew]);
 
+  // All versions of this quotation (v1 first), from the server lineage.
+  const savedQuotationId = !isNew && quotation ? quotation.id : 0;
   useEffect(() => {
-    const loadPreviousVersion = async () => {
-      if (!quotation || isNew || !quotation.quotation_code) {
-        setPreviousVersionQuote(null);
-        return;
-      }
-      try {
-        const versions = await api.listQuotations({
-          search: quotation.quotation_code,
-          limit: 100,
-          offset: 0,
-        });
-        const related = versions
-          .filter(
-            (v) =>
-              v.customer_id === quotation.customer_id &&
-              v.quotation_code === quotation.quotation_code &&
-              (v.version_no ?? 0) < (quotation.version_no ?? 0)
-          )
-          .sort((a, b) => (b.version_no ?? 0) - (a.version_no ?? 0));
-        setPreviousVersionQuote(related[0] ?? null);
-      } catch {
-        setPreviousVersionQuote(null);
-      }
+    if (!savedQuotationId) {
+      setRevisions([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .listQuotationRevisions(savedQuotationId)
+      .then((rows) => {
+        if (!cancelled) setRevisions(rows);
+      })
+      .catch((e) => {
+        logApiError("QuotationWorkspace.listRevisions", e);
+        if (!cancelled) setRevisions([]);
+      });
+    return () => {
+      cancelled = true;
     };
-    loadPreviousVersion();
-  }, [isNew, quotation]);
+  }, [savedQuotationId]);
+
+  const previousVersionQuote = useMemo(() => {
+    if (!quotation) return null;
+    const direct = revisions.find((r) => r.id === quotation.revision_of_id);
+    if (direct) return direct;
+    const older = revisions.filter((r) => r.version_no < quotation.version_no);
+    return older.length > 0 ? older[older.length - 1] : null;
+  }, [quotation, revisions]);
+
+  const latestRevision = useMemo(
+    () => revisions.find((r) => r.is_latest_revision) ?? null,
+    [revisions],
+  );
+  // Older (replaced) revisions are read-only; the server also rejects edits with 409.
+  const isSuperseded = Boolean(quotation?.superseded_at);
 
   const reloadQuotationDetail = useCallback(async () => {
     if (isNew || !id) return;
@@ -778,6 +788,9 @@ export function useQuotationWorkspaceController(id?: string) {
     manualQuotedPrice,
     setManualQuotedPrice,
     previousVersionQuote,
+    revisions,
+    latestRevision,
+    isSuperseded,
     selectedStyle,
     totals,
     updateQuotationHeader,

@@ -13,6 +13,8 @@ from sqlalchemy import (
     Boolean,
     Numeric,
     ForeignKey,
+    Index,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -87,6 +89,24 @@ class InquiryItem(Base):
 
 class Quotation(Base):
     __tablename__ = "quotations"
+    # Partial unique indexes from migrations 246 / 247 (PostgreSQL only).
+    __table_args__ = (
+        Index(
+            "uq_quotations_tenant_root_version",
+            "tenant_id",
+            "root_quotation_id",
+            "version_no",
+            unique=True,
+            postgresql_where=text("root_quotation_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_quotations_tenant_inquiry_current",
+            "tenant_id",
+            "inquiry_id",
+            unique=True,
+            postgresql_where=text("inquiry_id IS NOT NULL AND superseded_at IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
@@ -132,6 +152,15 @@ class Quotation(Base):
         String(32), nullable=False, default="DRAFT", index=True
     )
     version_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Revision lineage: NULL root_quotation_id means "this row is the root (v1)".
+    root_quotation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("quotations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    revision_of_id: Mapped[int | None] = mapped_column(
+        ForeignKey("quotations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Set when a newer revision replaces this row; superseded rows are read-only.
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
     size_ratio_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False

@@ -79,6 +79,11 @@ class QuotationResponse(BaseModel):
   is_converted_to_order: bool = False
   converted_order_id: int | None = None
   version_no: int
+  # Revision lineage (root_quotation_id is NULL on the first version).
+  root_quotation_id: int | None = None
+  revision_of_id: int | None = None
+  superseded_at: str | None = None
+  is_latest_revision: bool = True
   valid_until: date | None
   notes: str | None
   created_at: str
@@ -197,6 +202,10 @@ class QuotationDetailResponse(BaseModel):
   is_converted_to_order: bool = False
   converted_order_id: int | None = None
   version_no: int
+  root_quotation_id: int | None = None
+  revision_of_id: int | None = None
+  superseded_at: str | None = None
+  is_latest_revision: bool = True
   valid_until: date | None
   size_ratio_enabled: bool
   pack_ratio: str | None

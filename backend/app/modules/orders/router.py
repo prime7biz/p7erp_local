@@ -50,6 +50,10 @@ from app.modules.orders.commercial_snapshot_service import (
   build_order_commercial_snapshot_at_conversion,
 )
 from app.modules.orders.order_list_summary_service import build_order_list_summaries
+from app.modules.quotations.revision_service import (
+  ensure_quotation_not_superseded,
+  lock_quotation_for_update,
+)
 from app.modules.orders.schemas import (
   OrderCommercialAlignmentOut,
   OrderCostVarianceOut,
@@ -500,9 +504,11 @@ async def create_order(
 
   quotation: Quotation | None = None
   if body.quotation_id is not None:
-    quotation = await db.get(Quotation, body.quotation_id)
-    if not quotation or quotation.tenant_id != tenant.id:
+    # Row lock so a parallel "revise" cannot supersede this quotation mid-conversion.
+    quotation = await lock_quotation_for_update(db, tenant_id=tenant.id, quotation_id=body.quotation_id)
+    if not quotation:
       raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quotation not found")
+    ensure_quotation_not_superseded(quotation, action="convert it to an order")
     existing_order = await _get_existing_order_for_quotation(
       db, tenant_id=tenant.id, quotation_id=body.quotation_id
     )
@@ -940,9 +946,11 @@ async def create_order_from_quotation(
   if user.tenant_id != tenant.id:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
-  quotation = await db.get(Quotation, quotation_id)
-  if not quotation or quotation.tenant_id != tenant.id:
+  # Row lock so a parallel "revise" cannot supersede this quotation mid-conversion.
+  quotation = await lock_quotation_for_update(db, tenant_id=tenant.id, quotation_id=quotation_id)
+  if not quotation:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quotation not found")
+  ensure_quotation_not_superseded(quotation, action="convert it to an order")
   existing_order = await _get_existing_order_for_quotation(
     db, tenant_id=tenant.id, quotation_id=quotation_id
   )

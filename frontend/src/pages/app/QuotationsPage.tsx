@@ -52,7 +52,11 @@ export function QuotationsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const { page, setPage, pageSize, setPageSize } = useListPagination();
   const [listTotal, setListTotal] = useState(0);
-  const [quickFilter, setQuickFilter] = useState<"all" | "has_inquiry" | "has_style_image" | "ready_to_convert">("all");
+  const [quickFilter, setQuickFilter] = useState<
+    "all" | "latest_only" | "has_inquiry" | "has_style_image" | "ready_to_convert"
+  >("all");
+  // "Latest only" is filtered on the server so pagination totals stay correct.
+  const latestOnly = quickFilter === "latest_only";
   const debouncedSearch = useDebouncedValue(search);
   const latest = useLatestRequest();
 
@@ -68,6 +72,7 @@ export function QuotationsPage() {
         page_size: pageSize,
         ai_indicators: 1,
         benchmark_hint: 1,
+        latest_only: latestOnly,
       });
       if (!latest.isCurrent(token)) return;
       setItems(res.items);
@@ -85,7 +90,9 @@ export function QuotationsPage() {
     if (quickFilter === "has_inquiry") return items.filter((q) => q.inquiry_id != null);
     if (quickFilter === "has_style_image") return items.filter((q) => Boolean(q.style_image_url));
     if (quickFilter === "ready_to_convert") {
-      return items.filter((q) => canConvertQuotationToOrder(q.status) && !q.is_converted_to_order);
+      return items.filter(
+        (q) => canConvertQuotationToOrder(q.status) && !q.is_converted_to_order && !q.superseded_at,
+      );
     }
     return items;
   }, [items, quickFilter]);
@@ -99,7 +106,7 @@ export function QuotationsPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, statusFilter, page, pageSize]);
+  }, [debouncedSearch, statusFilter, page, pageSize, latestOnly]);
 
   const openCreate = () => {
     navigate("/app/quotations/new");
@@ -173,6 +180,7 @@ export function QuotationsPage() {
       <div className={listPageChipRowClass}>
         {[
           { key: "all", label: "All" },
+          { key: "latest_only", label: "Latest only" },
           { key: "has_inquiry", label: "Has inquiry" },
           { key: "has_style_image", label: "Has style image" },
           { key: "ready_to_convert", label: "Ready to convert" },
@@ -180,7 +188,10 @@ export function QuotationsPage() {
           <button
             key={chip.key}
             type="button"
-            onClick={() => setQuickFilter(chip.key as typeof quickFilter)}
+            onClick={() => {
+              setQuickFilter(chip.key as typeof quickFilter);
+              setPage(1);
+            }}
             className={quickFilter === chip.key ? listPageChipActiveClass : listPageChipInactiveClass}
           >
             {chip.label}
@@ -266,7 +277,8 @@ export function QuotationsPage() {
                 const target = q.target_price ? Number(q.target_price) : null;
                 const quoted = q.total_amount ? Number(q.total_amount) : null;
                 let profitPct: string | null = null;
-                const workflowAction = getQuotationWorkflowAction(q.status);
+                const isSuperseded = Boolean(q.superseded_at);
+                const workflowAction = isSuperseded ? null : getQuotationWorkflowAction(q.status);
                 if (
                   qty != null &&
                   target != null &&
@@ -349,9 +361,25 @@ export function QuotationsPage() {
                     <td className={cn(listTableTdClass, "text-right whitespace-nowrap overflow-hidden text-ellipsis")} title={profitPct ?? undefined}>
                       {profitPct ?? "—"}
                     </td>
-                    <td className={cn(listTableTdClass, "overflow-hidden text-ellipsis")} title={[q.status, q.is_converted_to_order ? "Converted to order" : null].filter(Boolean).join(" · ")}>
+                    <td
+                      className={cn(listTableTdClass, "overflow-hidden text-ellipsis")}
+                      title={[
+                        q.status,
+                        `v${q.version_no}`,
+                        isSuperseded ? "Superseded by a newer revision" : null,
+                        q.is_converted_to_order ? "Converted to order" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    >
                       <div className="flex items-center gap-1.5 flex-wrap whitespace-nowrap min-w-0">
                         <QuotationStatusBadge status={q.status} />
+                        {q.version_no > 1 && <span className="text-xs text-text-muted">v{q.version_no}</span>}
+                        {isSuperseded && (
+                          <span className="inline-flex rounded-full bg-surface-subtle px-2 py-0.5 text-xs font-medium text-text-muted">
+                            Superseded
+                          </span>
+                        )}
                         {q.is_converted_to_order && (
                           <span className="inline-flex rounded-full bg-status-info-subtle px-2 py-0.5 text-xs font-medium text-status-info-foreground">
                             Converted to order
@@ -455,22 +483,24 @@ export function QuotationsPage() {
                                 {workflowAction.label}
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                setOpenActionsId(null);
-                                try {
-                                  setError("");
-                                  const duplicated = await api.reviseQuotation(q.id);
-                                  navigate(`/app/quotations/${duplicated.id}`);
-                                } catch (e) {
-                                  setError(e instanceof Error ? e.message : "Duplicate version failed");
-                                }
-                              }}
-                              className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
-                            >
-                              Duplicate
-                            </button>
+                            {!isSuperseded && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setOpenActionsId(null);
+                                  try {
+                                    setError("");
+                                    const duplicated = await api.reviseQuotation(q.id);
+                                    navigate(`/app/quotations/${duplicated.id}`);
+                                  } catch (e) {
+                                    setError(e instanceof Error ? e.message : "Duplicate version failed");
+                                  }
+                                }}
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-text-secondary hover:bg-surface-subtle"
+                              >
+                                Duplicate
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={async () => {
@@ -491,6 +521,10 @@ export function QuotationsPage() {
                             {q.is_converted_to_order ? (
                               <div className="block rounded-md px-2 py-1.5 text-left text-xs text-text-muted">
                                 Already converted
+                              </div>
+                            ) : isSuperseded ? (
+                              <div className="block rounded-md px-2 py-1.5 text-left text-xs text-text-muted">
+                                Superseded
                               </div>
                             ) : !canConvertQuotationToOrder(q.status) ? (
                               <div className="block rounded-md px-2 py-1.5 text-left text-xs text-text-muted">

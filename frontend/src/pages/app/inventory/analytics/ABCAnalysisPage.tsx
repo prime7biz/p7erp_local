@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type AbcAnalysisReport } from "@/api/client";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { downloadBlob } from "@/lib/reportExport";
 import { logApiError } from "@/utils/logApiError";
 
 export function ABCAnalysisPage() {
@@ -10,15 +12,19 @@ export function ABCAnalysisPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const latest = useLatestRequest();
+
   const load = useCallback(async () => {
+    const token = latest.begin();
     setError("");
     try {
-      setReport(await api.getAbcAnalysisReport({ abc_class: cls || undefined }));
+      const r = await api.getAbcAnalysisReport({ abc_class: cls || undefined });
+      if (latest.isCurrent(token)) setReport(r);
     } catch (e) {
       logApiError("ABCAnalysisPage.load", e);
-      setError((e as Error).message);
+      if (latest.isCurrent(token)) setError((e as Error).message);
     }
-  }, [cls]);
+  }, [cls, latest]);
 
   useEffect(() => {
     void load();
@@ -28,17 +34,26 @@ export function ABCAnalysisPage() {
     setBusy(true);
     setError("");
     try {
+      latest.begin();
       const r = await api.runAbcAnalysis(months);
       setReport(r);
     } catch (e) {
+      logApiError("ABCAnalysisPage.run", e);
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
-  function exportCsv() {
-    window.open(api.abcAnalysisExportUrl({ abc_class: cls || undefined }), "_blank");
+  async function exportCsv() {
+    setError("");
+    try {
+      const blob = await api.exportAbcAnalysisCsv({ abc_class: cls || undefined });
+      downloadBlob(blob, `abc_analysis${cls ? `_${cls}` : ""}`);
+    } catch (e) {
+      logApiError("ABCAnalysisPage.exportCsv", e);
+      setError((e as Error).message);
+    }
   }
 
   const classes = report?.classes;

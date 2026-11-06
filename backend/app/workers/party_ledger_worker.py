@@ -9,6 +9,7 @@ from app.workers.async_runner import run_async
 from app.database import AsyncSessionLocal, safe_async_session_rollback
 from app.modules.finance.party_ledger_hooks import daily_party_ledger_maintenance
 from app.workers.tenant_rows import active_tenant_rows
+from app.common.rls import bind_session_tenant
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ async def _run_all_tenants() -> dict:
         tenant_rows = await active_tenant_rows(db)
         for tenant_id, flags in tenant_rows:
             try:
+                await bind_session_tenant(db, tenant_id)
                 result = await daily_party_ledger_maintenance(
                     db,
                     tenant_id,

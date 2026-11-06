@@ -11,6 +11,7 @@ from app.database import AsyncSessionLocal, safe_async_session_rollback
 from app.models.tenant import Tenant
 from app.modules.inventory import cycle_count_service, stock_aging_service
 from app.workers.tenant_rows import active_tenant_rows
+from app.common.rls import bind_session_tenant
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ async def _weekly_cycle_count() -> dict:
         tenant_rows = await active_tenant_rows(db)
         for tenant_id, flags in tenant_rows:
             try:
+                await bind_session_tenant(db, tenant_id)
                 if not is_cycle_counting_enabled(flags):
                     results.append({"tenant_id": tenant_id, "skipped": True})
                     continue
@@ -50,6 +52,7 @@ async def _monthly_aging_alert() -> dict:
         tenant_rows = await active_tenant_rows(db)
         for tenant_id, flags in tenant_rows:
             try:
+                await bind_session_tenant(db, tenant_id)
                 if not is_stock_aging_enabled(flags):
                     results.append({"tenant_id": tenant_id, "skipped": True})
                     continue

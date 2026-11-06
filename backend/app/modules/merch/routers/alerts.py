@@ -632,10 +632,12 @@ async def assign_alert(
 
 async def _run_scan_background(tenant_id: int) -> None:
     """Background task: run alert scan in its own DB session (avoids request timeout)."""
+    from app.common.rls import bind_session_tenant
     from app.database import AsyncSessionLocal
     from app.modules.merch.alert_engine import run_scan
     async with AsyncSessionLocal() as db:
         try:
+            await bind_session_tenant(db, tenant_id)
             await run_scan(db, tenant_id, trigger="manual")
             await db.commit()
         except Exception:

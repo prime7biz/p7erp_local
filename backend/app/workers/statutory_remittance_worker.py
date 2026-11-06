@@ -11,6 +11,7 @@ from app.workers.async_runner import run_async
 from app.common.tenant_feature_keys import is_statutory_payroll_enabled
 from app.database import AsyncSessionLocal, safe_async_session_rollback
 from app.workers.tenant_rows import active_tenant_rows
+from app.common.rls import bind_session_tenant
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ async def _run_all_tenants() -> dict:
         tenant_rows = await active_tenant_rows(db)
         for tenant_id, flags in tenant_rows:
             try:
+                await bind_session_tenant(db, tenant_id)
                 if not is_statutory_payroll_enabled(flags):
                     results.append({"tenant_id": tenant_id, "skipped": True})
                     continue

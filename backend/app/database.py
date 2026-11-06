@@ -1,11 +1,17 @@
+import logging
 import re
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Session
 from sqlalchemy.sql.dml import Delete, Insert, Update
 from sqlalchemy.sql.elements import TextClause
+from app.common.rls import RLS_REQUEST_OWNED_SESSION, apply_rls_on_begin, reset_session_context
 from app.config import get_settings
+
+_log = logging.getLogger(__name__)
 
 # get_db() skips commit on read-only requests. After flush(), new/dirty/deleted are
 # cleared even though the transaction still holds uncommitted writes — track those paths.
@@ -160,9 +166,28 @@ def _p7_do_orm_execute(orm_execute_state) -> None:
     ):
         orm_execute_state.session.info[_P7_NEEDS_COMMIT] = True
 
+
+# Row-Level Security: tell Postgres the session's tenant at the start of every transaction.
+# Does nothing unless RLS_SESSION_TENANT_ENABLED=true (see app.common.rls).
+event.listen(Session, "after_begin", apply_rls_on_begin)
+
+def select_runtime_database_url(s) -> str:
+    """URL for the API / Celery engine (alembic and scripts with their own engine use DATABASE_URL).
+
+    DATABASE_URL_APP (non-owner role, RLS enforced) is used only while RLS_SESSION_TENANT_ENABLED
+    is true: without the per-transaction tenant settings that role would see no tenant rows.
+    """
+    app_role_url = (s.database_url_app or "").strip()
+    if app_role_url and s.rls_session_tenant_enabled:
+        return app_role_url
+    if app_role_url:
+        _log.warning("DATABASE_URL_APP is ignored because RLS_SESSION_TENANT_ENABLED is false")
+    return s.database_url_pgbouncer if s.use_pgbouncer else s.database_url
+
+
 settings = get_settings()
 # SQLAlchemy async needs postgresql+asyncpg
-_effective_db_url = settings.database_url_pgbouncer if settings.use_pgbouncer else settings.database_url
+_effective_db_url = select_runtime_database_url(settings)
 db_url = _effective_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 _connect_args: dict = {}
@@ -229,6 +254,7 @@ async def get_db() -> AsyncSession:
     Skipping commit on read-only requests avoids an extra round-trip per GET.
     """
     async with AsyncSessionLocal() as session:
+        session.info[RLS_REQUEST_OWNED_SESSION] = True
         try:
             if _timeouts_per_request:
                 if _stmt_timeout_ms > 0:
@@ -250,3 +276,15 @@ async def get_db() -> AsyncSession:
             raise
         finally:
             await session.close()
+
+
+async def rls_request_scope(db: Annotated[AsyncSession, Depends(get_db)]):
+    """Auth dependencies pin the request session to a tenant (RLS); undo that when the request ends.
+
+    Matters when the session outlives the request (tests that override ``get_db``); with the
+    normal ``get_db`` the session closes anyway. No-op while RLS is off.
+    """
+    try:
+        yield
+    finally:
+        await reset_session_context(db)

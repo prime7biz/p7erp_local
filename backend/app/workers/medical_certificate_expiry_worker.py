@@ -14,6 +14,7 @@ from app.common.tenant_feature_keys import is_medical_certificate_tracking_enabl
 from app.database import AsyncSessionLocal, safe_async_session_rollback
 from app.models.hr_compliance_framework import EmployeeMedicalRecord
 from app.workers.tenant_rows import active_tenant_rows
+from app.common.rls import bind_session_tenant
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ async def _run_all_tenants() -> dict:
         tenant_rows = await active_tenant_rows(db)
         for tenant_id, flags in tenant_rows:
             try:
+                await bind_session_tenant(db, tenant_id)
                 if not is_medical_certificate_tracking_enabled(flags):
                     results.append({"tenant_id": tenant_id, "skipped": True})
                     continue

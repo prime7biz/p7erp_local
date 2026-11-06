@@ -14,6 +14,7 @@ from app.modules.inventory.stock_batch_service import (
     mark_expired_batches,
 )
 from app.workers.tenant_rows import active_tenant_rows
+from app.common.rls import bind_session_tenant
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ async def _run_all_tenants() -> dict:
         tenant_rows = await active_tenant_rows(db)
         for tenant_id, flags in tenant_rows:
             try:
+                await bind_session_tenant(db, tenant_id)
                 if not (is_batch_tracking_enabled(flags) or is_stock_hierarchy_enabled(flags)):
                     results.append({"tenant_id": tenant_id, "skipped": True})
                     continue

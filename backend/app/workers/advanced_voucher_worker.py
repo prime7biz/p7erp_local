@@ -16,6 +16,7 @@ from app.modules.finance.advanced_voucher_service import (
     generate_from_recurring_template,
 )
 from app.workers.tenant_rows import active_tenant_rows
+from app.common.rls import bind_session_tenant
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ async def _run_all_tenants() -> dict:
             activated = 0
             generated = 0
             try:
+                await bind_session_tenant(db, tenant_id)
                 if is_post_dated_voucher_enabled(flags):
                     ids = await activate_due_post_dated(db, tenant_id, feature_flags=flags)
                     activated = len(ids)

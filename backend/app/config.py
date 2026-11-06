@@ -221,6 +221,16 @@ class Settings(BaseSettings):
     use_pgbouncer: bool = False
     database_url_pgbouncer: str = "postgresql://p7erp:p7erp@pgbouncer:5432/p7erp"
 
+    # PostgreSQL Row-Level Security (SEC-04). See docs/erp-modernization/RLS_RUNBOOK.md.
+    # When True, every DB transaction tells Postgres which tenant it works for
+    # (set_config('app.tenant_id') after login, or app.rls_bypass='on' before login / for
+    # platform jobs). Policies only *enforce* when the app connects as the non-owner role below.
+    rls_session_tenant_enabled: bool = False
+    # Optional runtime URL for the non-owner role (e.g. postgresql://p7erp_app:...@postgres:5432/p7erp).
+    # Used by the API and Celery engine only while rls_session_tenant_enabled is True; ignored otherwise.
+    # Alembic, pytest fixtures and scripts that build their own engine keep using DATABASE_URL (owner).
+    database_url_app: str = ""
+
     # Async platform jobs (Celery). Off by default for safe rollout.
     platform_bulk_tenant_async_enabled: bool = False
     data_migration_async_enabled: bool = False

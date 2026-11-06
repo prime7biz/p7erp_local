@@ -98,7 +98,7 @@ export function UnifiedLoginPage() {
           password,
           principal_type: loginRole,
         });
-        setExtAuth(res.access_token, res.refresh_token, res.tenant_id, res.principal_type);
+        setExtAuth(res.access_token, res.refresh_token, res.tenant_id, res.principal_type, res.refresh_cookie);
         localStorage.setItem("lastCompanyCode", code);
         navigate(portalHomePath(loginRole), { replace: true });
         return;

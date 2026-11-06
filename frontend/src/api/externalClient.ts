@@ -1,14 +1,21 @@
 /**
  * HTTP client for `/api/external/*` — separate auth from internal ERP (`p7_token`).
+ *
+ * Refresh token: when the API answers `refresh_cookie: true` it keeps the refresh token in an
+ * HttpOnly cookie, so this client stores only the marker `p7_ext_refresh_mode = "cookie"` and
+ * never a refresh token. Otherwise the refresh token is kept in localStorage as before.
  */
 import { API_BASE } from "@/api/apiBase";
 import {
   EXTERNAL_PRINCIPAL_KEY,
+  EXTERNAL_REFRESH_MODE_KEY,
   EXTERNAL_REFRESH_TOKEN_KEY,
   EXTERNAL_TENANT_KEY,
   EXTERNAL_TOKEN_KEY,
+  PORTAL_AUTH_CLIENT_HEADERS,
   clearAllSessionsForNewLogin,
   clearExternalSessionStorage,
+  hasExternalCookieSession,
 } from "@/api/authStorage";
 import { parseFastApiErrorDetail } from "@/utils/fastApiDetail";
 import { redirectToUnifiedLogin } from "@/utils/portalAuthRedirect";
@@ -24,11 +31,11 @@ const EXTERNAL_PREFIX = "/api/external";
 /** One refresh at a time: parallel 401s share it instead of each rotating tokens. */
 let refreshInFlight: Promise<ExternalTokenResponse> | null = null;
 
-function refreshOnce(refreshToken: string): Promise<ExternalTokenResponse> {
+function refreshOnce(refreshToken: string | null): Promise<ExternalTokenResponse> {
   if (!refreshInFlight) {
     refreshInFlight = postRefreshTokens(refreshToken)
       .then((next) => {
-        storeExtTokens(next.access_token, next.refresh_token, next.tenant_id, next.principal_type);
+        storeExtTokens(next.access_token, next.refresh_token, next.tenant_id, next.principal_type, next.refresh_cookie);
         return next;
       })
       .finally(() => {
@@ -55,17 +62,44 @@ export function getExtPrincipalType(): ExternalPrincipalType | null {
   return isExternalPrincipalType(t) ? t : null;
 }
 
-function storeExtTokens(accessToken: string, refreshToken: string, tenantId: number, principalType: ExternalPrincipalType) {
+/** True when a refresh can be attempted: a stored refresh token, or the HttpOnly cookie. */
+export function canRefreshExtSession(): boolean {
+  return Boolean(getExtRefreshToken()) || hasExternalCookieSession();
+}
+
+function storeExtTokens(
+  accessToken: string,
+  refreshToken: string | null | undefined,
+  tenantId: number,
+  principalType: ExternalPrincipalType,
+  refreshCookie?: boolean,
+) {
   localStorage.setItem(EXTERNAL_TOKEN_KEY, accessToken);
-  localStorage.setItem(EXTERNAL_REFRESH_TOKEN_KEY, refreshToken);
+  if (refreshCookie) {
+    localStorage.setItem(EXTERNAL_REFRESH_MODE_KEY, "cookie");
+    localStorage.removeItem(EXTERNAL_REFRESH_TOKEN_KEY);
+  } else {
+    localStorage.removeItem(EXTERNAL_REFRESH_MODE_KEY);
+    if (refreshToken) localStorage.setItem(EXTERNAL_REFRESH_TOKEN_KEY, refreshToken);
+    else localStorage.removeItem(EXTERNAL_REFRESH_TOKEN_KEY);
+  }
   localStorage.setItem(EXTERNAL_TENANT_KEY, String(tenantId));
   localStorage.setItem(EXTERNAL_PRINCIPAL_KEY, principalType);
 }
 
-/** Store a new portal login. Any older staff or portal session in this browser is removed first. */
-export function setExtAuth(accessToken: string, refreshToken: string, tenantId: number, principalType: ExternalPrincipalType) {
+/**
+ * Store a new portal login. Any older staff or portal session in this browser is removed first.
+ * Pass `refreshCookie` from the login response; when true the refresh token is not stored.
+ */
+export function setExtAuth(
+  accessToken: string,
+  refreshToken: string | null | undefined,
+  tenantId: number,
+  principalType: ExternalPrincipalType,
+  refreshCookie?: boolean,
+) {
   clearAllSessionsForNewLogin();
-  storeExtTokens(accessToken, refreshToken, tenantId, principalType);
+  storeExtTokens(accessToken, refreshToken, tenantId, principalType, refreshCookie);
 }
 
 export function clearExtAuth() {
@@ -96,15 +130,19 @@ export class ExternalApiError extends Error {
   }
 }
 
-/** POST /auth/refresh — no Bearer; uses refresh token body + X-Tenant-Id only. */
-async function postRefreshTokens(refreshToken: string): Promise<ExternalTokenResponse> {
+/**
+ * POST /auth/refresh — no Bearer. Sends the stored refresh token in the body when there is one;
+ * in cookie mode the body is empty and the browser sends the HttpOnly cookie instead.
+ */
+async function postRefreshTokens(refreshToken: string | null): Promise<ExternalTokenResponse> {
   const tid = getExtTenantId();
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...PORTAL_AUTH_CLIENT_HEADERS };
   if (tid) headers["X-Tenant-Id"] = tid;
   const res = await fetch(`${API_BASE}${EXTERNAL_PREFIX}/auth/refresh`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ refresh_token: refreshToken }),
+    credentials: "include",
+    body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {}),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -157,10 +195,9 @@ async function extRequest<T>(path: string, init: RequestInit = {}, authRetryAfte
   const res = await fetch(`${API_BASE}${EXTERNAL_PREFIX}${path}`, { ...init, headers });
   if (!res.ok) {
     if (res.status === 401 && sentAuth && !authRetryAfterRefresh) {
-      const rt = getExtRefreshToken();
-      if (rt) {
+      if (canRefreshExtSession()) {
         try {
-          await refreshOnce(rt);
+          await refreshOnce(getExtRefreshToken());
           return extRequest<T>(path, init, true);
         } catch {
           extSessionExpiredRedirect(true);
@@ -194,6 +231,8 @@ export async function externalLogin(body: {
 }): Promise<ExternalTokenResponse> {
   return extRequestPublic<ExternalTokenResponse>("/auth/login", {
     method: "POST",
+    headers: { ...PORTAL_AUTH_CLIENT_HEADERS },
+    credentials: "include",
     body: JSON.stringify(body),
   });
 }
@@ -206,6 +245,8 @@ export async function externalAcceptInvite(body: {
 }): Promise<ExternalTokenResponse> {
   return extRequestPublic<ExternalTokenResponse>("/auth/accept-invite", {
     method: "POST",
+    headers: { ...PORTAL_AUTH_CLIENT_HEADERS },
+    credentials: "include",
     body: JSON.stringify(body),
   });
 }
@@ -230,7 +271,8 @@ export async function externalResetPassword(body: { token: string; new_password:
   });
 }
 
-export async function externalRefresh(refreshToken: string): Promise<ExternalTokenResponse> {
+/** Pass null in cookie mode (the browser sends the HttpOnly cookie). */
+export async function externalRefresh(refreshToken: string | null): Promise<ExternalTokenResponse> {
   return postRefreshTokens(refreshToken);
 }
 
@@ -238,8 +280,13 @@ export async function externalMe(): Promise<ExternalMeResponse> {
   return extRequest<ExternalMeResponse>("/auth/me");
 }
 
+/** Revokes the session on the server and (cookie mode) clears the HttpOnly refresh cookie. */
 export async function externalLogout(): Promise<void> {
-  await extRequest<void>("/auth/logout", { method: "POST" });
+  await extRequest<void>("/auth/logout", {
+    method: "POST",
+    headers: { ...PORTAL_AUTH_CLIENT_HEADERS },
+    credentials: "include",
+  });
 }
 
 export async function externalGet<T>(path: string): Promise<T> {

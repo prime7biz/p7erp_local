@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { hasExternalCookieSession } from "@/api/authStorage";
 import {
   clearExtAuth,
   externalLogin as postExternalLogin,
@@ -49,7 +50,7 @@ export function useExternalAuth(principalType: ExternalPrincipalType) {
         ...args,
         principal_type: principalType,
       });
-      setExtAuth(res.access_token, res.refresh_token, res.tenant_id, res.principal_type);
+      setExtAuth(res.access_token, res.refresh_token, res.tenant_id, res.principal_type, res.refresh_cookie);
       await refetch();
     },
     [principalType, refetch],
@@ -57,7 +58,7 @@ export function useExternalAuth(principalType: ExternalPrincipalType) {
 
   const logout = useCallback(async () => {
     try {
-      if (getExtToken()) await externalLogout();
+      if (getExtToken() || hasExternalCookieSession()) await externalLogout();
     } catch (e) {
       logApiError("useExternalAuth.logout", e);
     }

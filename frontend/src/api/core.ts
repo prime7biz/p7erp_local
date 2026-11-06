@@ -12,6 +12,7 @@ import {
   INTERNAL_TOKEN_KEY,
   clearAllSessionsForNewLogin,
   clearInternalSessionStorage,
+  revokeExternalCookieSession,
 } from "@/api/authStorage";
 import { queryClient } from "@/lib/queryClient";
 
@@ -25,6 +26,7 @@ export function getTenantId(): string | null {
 
 /** Store a new staff login. Any older staff or portal session in this browser is removed first. */
 export function setAuth(token: string, tenantId: number): void {
+  revokeExternalCookieSession();
   clearAllSessionsForNewLogin();
   localStorage.setItem(INTERNAL_TOKEN_KEY, token);
   localStorage.setItem(INTERNAL_TENANT_KEY, String(tenantId));

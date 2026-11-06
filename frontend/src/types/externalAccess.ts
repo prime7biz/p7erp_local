@@ -10,10 +10,13 @@ export function isExternalPrincipalType(v: string | null | undefined): v is Exte
 
 export interface ExternalTokenResponse {
   access_token: string;
+  /** Empty when `refresh_cookie` is true: the refresh token is then only in an HttpOnly cookie. */
   refresh_token: string;
   token_type: string;
   tenant_id: number;
   principal_type: ExternalPrincipalType;
+  /** Sent by newer APIs; true when the server keeps the refresh token in an HttpOnly cookie. */
+  refresh_cookie?: boolean;
 }
 
 export interface ExternalMeResponse {

@@ -59,7 +59,9 @@ operators must do before deploying, and how to roll back.
 
 - Code: `git revert` the stage-2 commits (each area is a separate commit).
 - Database: `alembic downgrade 250` (drops the new columns/table; new-style invitation links and
-  2FA enrolments are lost, older behaviour returns).
+  2FA enrolments are lost, older behaviour returns). On the integration branch revision 265 (order
+  amendment unique index) sits on top of 254, so this also drops that index; use
+  `alembic downgrade 254` to undo only 265.
 - Flags: `RBAC_DEFAULT_MODE=off`, `PUBLIC_TENANT_SIGNUP_ENABLED=true`, `PLATFORM_ADMIN_MFA_REQUIRED=false`,
   `WATCHTOWER_LABEL_ENABLE=false`, `LEGACY_TOKEN_WITHOUT_SV_GRACE_UNTIL=<future date>`.
 

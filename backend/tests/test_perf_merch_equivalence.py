@@ -43,6 +43,7 @@ from app.modules.merch.routers.alerts import _alert_priority_score, _alert_sla_b
 from app.modules.merch.routers.wastage import _resolve_wastage_threshold_pct
 
 from tests.benchmark_fixtures import api_client, seed_tenant_admin
+from tests.query_counting import is_rls_housekeeping
 
 
 @contextmanager
@@ -51,8 +52,9 @@ def count_queries(db):
     counter = {"n": 0}
     engine = db.bind.sync_engine
 
-    def _on_execute(*_args, **_kwargs):
-        counter["n"] += 1
+    def _on_execute(_conn, _cursor, statement, *_rest):
+        if not is_rls_housekeeping(statement):
+            counter["n"] += 1
 
     event.listen(engine, "before_cursor_execute", _on_execute)
     try:

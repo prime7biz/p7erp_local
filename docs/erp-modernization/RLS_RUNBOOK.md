@@ -80,9 +80,8 @@ Both are passed through in `docker-compose.yml` and `docker-compose.prod.yml` (b
 Performance: app queries already filter by `tenant_id`, so Postgres keeps using the `tenant_id` index; the policy adds one
 comparison per row (the settings are read once per query). With the flag on, each transaction starts with one extra
 `SELECT set_config(...)` and an authenticated request sends one more to pin the tenant — about 2 extra small statements per
-request, constant (it does not grow with the number of rows). Query-count tests with fixed ceilings
-(`test_perf_merch_equivalence::test_alert_list_query_count`, `test_perf_party_ledger_equivalence::test_party_ledger_query_count_does_not_grow_with_rows`)
-therefore exceed their limit only in RLS test mode.
+request, constant (it does not grow with the number of rows). Query-count tests skip these statements
+(`backend/tests/query_counting.py` → `is_rls_housekeeping`), so the same ceilings hold with RLS on and off.
 
 ## 5. Enable in stages
 

@@ -39,6 +39,7 @@ from app.models.facility import Facility, FacilityUtilization
 from app.models.inventory import GoodsReceiving, GoodsReceivingItem, PurchaseOrder, PurchaseOrderItem, Warehouse
 from app.models.production import HourlyProductionEntry, SewingLine, SewingLineStyleConfig
 from app.models.tenant import TenantType
+from tests.query_counting import is_rls_housekeeping
 
 API = "/api/external/financier"
 
@@ -49,8 +50,9 @@ def count_queries(db):
     counter = {"n": 0}
     engine = db.bind.sync_engine
 
-    def _on_execute(*_args, **_kwargs):
-        counter["n"] += 1
+    def _on_execute(_conn, _cursor, statement, *_rest):
+        if not is_rls_housekeeping(statement):
+            counter["n"] += 1
 
     event.listen(engine, "before_cursor_execute", _on_execute)
     try:

@@ -413,6 +413,15 @@ async def test_http_request_pins_tenant_and_resets_after(owner_session, rls_flag
     assert await _visible_customer_ids(owner_session, [data.cust_a, data.cust_b]) == {data.cust_a, data.cust_b}
 
 
+def test_query_counters_skip_only_rls_housekeeping():
+    from tests.query_counting import is_rls_housekeeping
+
+    assert is_rls_housekeeping(str(rls._SET_CONTEXT_SQL))
+    assert not is_rls_housekeeping("SELECT customers.id FROM customers WHERE customers.tenant_id = $1")
+    assert not is_rls_housekeeping("SELECT set_config('statement_timeout', '5s', true)")
+    assert not is_rls_housekeeping(None)
+
+
 def test_app_role_url_used_only_with_flag_on():
     base = dict(
         database_url="postgresql://owner@db/p7",

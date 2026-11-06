@@ -29,6 +29,7 @@ from app.models.inventory import (
 )
 from app.modules.inventory import stock_snapshot_service
 from tests.benchmark_fixtures import api_client, seed_item, seed_tenant_admin
+from tests.query_counting import is_rls_housekeeping
 
 
 # ---------------------------------------------------------------------------
@@ -43,8 +44,9 @@ class QueryCounter:
         self._conn = db.bind.sync_connection if hasattr(db.bind, "sync_connection") else db.bind
         self.count = 0
 
-    def _on_execute(self, *_args, **_kwargs):
-        self.count += 1
+    def _on_execute(self, _conn, _cursor, statement, *_rest):
+        if not is_rls_housekeeping(statement):
+            self.count += 1
 
     def __enter__(self):
         event.listen(self._conn, "before_cursor_execute", self._on_execute)

@@ -25,6 +25,7 @@ from app.models import Customer, Vendor
 from app.models.finance import AccountGroup, ChartOfAccount, Voucher
 from app.models.party_ledger import PartyLedger, PartyLedgerBill, PartyLedgerBillAllocation
 from tests.benchmark_fixtures import api_client, seed_tenant_admin
+from tests.query_counting import is_rls_housekeeping
 
 AS_OF = date(2026, 6, 30)
 ZERO = Decimal("0")
@@ -374,7 +375,8 @@ def _count_queries(db):
     counter = {"n": 0}
 
     def _on_execute(conn, cursor, statement, parameters, context, executemany):
-        counter["n"] += 1
+        if not is_rls_housekeeping(statement):
+            counter["n"] += 1
 
     engine = db.bind.sync_engine
     event.listen(engine, "before_cursor_execute", _on_execute)

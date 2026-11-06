@@ -42,6 +42,7 @@ from app.modules.merch.deps import to_float_safe as _to_float_safe
 from app.modules.merch.material_helpers import material_group_from_item
 from app.modules.merch.routers.wastage import DEFAULT_WASTAGE_THRESHOLD_PCT
 from tests.benchmark_fixtures import api_client, seed_tenant_admin
+from tests.query_counting import is_rls_housekeeping
 
 ZERO = Decimal("0")
 FROM = date(2026, 6, 1)
@@ -54,8 +55,9 @@ def count_queries(db):
     counter = {"n": 0}
     engine = db.bind.sync_engine
 
-    def _on_execute(*_args, **_kwargs):
-        counter["n"] += 1
+    def _on_execute(_conn, _cursor, statement, *_rest):
+        if not is_rls_housekeeping(statement):
+            counter["n"] += 1
 
     event.listen(engine, "before_cursor_execute", _on_execute)
     try:

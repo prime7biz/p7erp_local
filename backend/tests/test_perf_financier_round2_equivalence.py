@@ -55,6 +55,7 @@ from app.models.production import (
 )
 from app.models.trade import Shipment, TradeCase, TradeDocument
 from tests.test_financier_tenant_scoping import _old_order_btb_links_for_party
+from tests.query_counting import is_rls_housekeeping
 from tests.test_perf_financier_equivalence import _ensure_financier_role, _json, _new_tenant, financier_client
 
 API = "/api/external/financier"
@@ -66,8 +67,9 @@ def count_queries(db):
     counter = {"n": 0}
     engine = db.bind.sync_engine
 
-    def _on_execute(*_args, **_kwargs):
-        counter["n"] += 1
+    def _on_execute(_conn, _cursor, statement, *_rest):
+        if not is_rls_housekeeping(statement):
+            counter["n"] += 1
 
     event.listen(engine, "before_cursor_execute", _on_execute)
     try:

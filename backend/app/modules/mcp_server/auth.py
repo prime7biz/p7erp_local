@@ -16,6 +16,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from starlette.requests import Request
 
 from app.common.auth import get_current_user
+from app.common.rls import reset_session_context
 from app.common.tenant import get_tenant
 from app.database import AsyncSessionLocal
 from app.models import User
@@ -73,25 +74,29 @@ async def resolve_mcp_user(
 
     async with AsyncSessionLocal() as db:
         try:
-            user = await get_current_user(db=db, request=request, credentials=credentials)
-        except HTTPException as exc:
-            raise McpAuthError(exc.detail, 401) from exc
-
-        if tenant_header:
             try:
-                hdr_tid = int(tenant_header)
-            except (TypeError, ValueError) as exc:
-                raise McpAuthError("X-Tenant-Id header is not a valid integer.") from exc
-            if hdr_tid != user.tenant_id:
-                raise McpAuthError("X-Tenant-Id does not match the authenticated user's tenant.")
+                user = await get_current_user(db=db, request=request, credentials=credentials)
+            except HTTPException as exc:
+                raise McpAuthError(exc.detail, 401) from exc
 
-        if await get_tenant(db, user.tenant_id) is None:
-            raise McpAuthError("Tenant not found or inactive.")
+            if tenant_header:
+                try:
+                    hdr_tid = int(tenant_header)
+                except (TypeError, ValueError) as exc:
+                    raise McpAuthError("X-Tenant-Id header is not a valid integer.") from exc
+                if hdr_tid != user.tenant_id:
+                    raise McpAuthError("X-Tenant-Id does not match the authenticated user's tenant.")
 
-        try:
-            await require_ai_access(db, user)
-        except HTTPException as exc:
-            raise McpAuthError(exc.detail, 403) from exc
+            if await get_tenant(db, user.tenant_id) is None:
+                raise McpAuthError("Tenant not found or inactive.")
+
+            try:
+                await require_ai_access(db, user)
+            except HTTPException as exc:
+                raise McpAuthError(exc.detail, 403) from exc
+        finally:
+            # get_current_user pinned this session to the caller's tenant (RLS); no request scope here.
+            await reset_session_context(db)
 
     return user
 

@@ -9,10 +9,10 @@ reported in the log). Built with CREATE UNIQUE INDEX CONCURRENTLY (no long table
 Read-only duplicate check: `SELECT tenant_id, order_id, amendment_no, count(*) FROM order_amendments
 GROUP BY 1,2,3 HAVING count(*) > 1`.
 
-Rollback: `alembic downgrade 250` (drops the index only).
+Rollback: `alembic downgrade 254` (drops the index only).
 
 Revision ID: 265
-Revises: 250
+Revises: 254
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "265"
-down_revision: Union[str, None] = "250"
+down_revision: Union[str, None] = "254"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

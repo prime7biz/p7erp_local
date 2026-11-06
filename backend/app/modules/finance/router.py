@@ -2364,6 +2364,9 @@ async def list_vouchers(
     voucher_id: int | None = Query(default=None, description="Exact voucher id filter (e.g. ?voucher_id= from deep link)"),
     limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
+    sort: Literal["id", "date"] = Query(
+        default="id", description="id = newest created first (default); date = newest voucher_date first"
+    ),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -2391,7 +2394,8 @@ async def list_vouchers(
         )
     total = int((await db.execute(select(func.count(Voucher.id)).where(*filters))).scalar() or 0)
     response.headers["X-Total-Count"] = str(total)
-    stmt = select(Voucher).where(*filters).order_by(Voucher.id.desc()).offset(offset).limit(limit)
+    order_cols = (Voucher.voucher_date.desc(), Voucher.id.desc()) if sort == "date" else (Voucher.id.desc(),)
+    stmt = select(Voucher).where(*filters).order_by(*order_cols).offset(offset).limit(limit)
     result = await db.execute(stmt)
     rows = list(result.scalars().all())
     if not rows:

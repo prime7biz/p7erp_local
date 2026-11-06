@@ -9910,7 +9910,19 @@ export interface BudgetVsActualResponse {
     actual_amount: number;
     variance: number;
     variance_pct: number;
+    /** "month" | "quarter" | "year" (budget financial year) | "all" (no usable year). */
+    period_type?: string;
+    period_start?: string | null;
+    period_end?: string | null;
+    /** Account group nature (Expense, Income, ...); null for an "Any account" line. */
+    nature?: string | null;
+    /** "debit_minus_credit" | "credit_minus_debit" | "per_account". */
+    net_rule?: string;
+    actual_debit?: number;
+    actual_credit?: number;
   }>;
+  period_start?: string | null;
+  period_end?: string | null;
   total_budget: number;
   total_actual: number;
   total_variance: number;

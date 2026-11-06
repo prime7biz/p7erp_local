@@ -191,12 +191,20 @@ async def _seed(db):
 
 
 async def _old_budget_vs_actual(db, tenant, budget) -> dict:
-    """Row-by-row reference. Since 2026-11 it is limited to the budget's financial year and sums base_amount."""
+    """Row-by-row reference (since 2026-11): each line counts only its own period (month / quarter /
+    financial year), sums base_amount, and nets by account nature (Expense/Asset Dr-Cr, Income/Liability/
+    Equity Cr-Dr; an "any account" line signs each voucher line by its own account)."""
+    from app.modules.finance.budget_vs_actual_service import budget_line_period, net_rule
     from app.modules.finance.fiscal_year import fiscal_year_bounds_from_label, fy_start_month
     from app.modules.finance.posting_core import line_base_amount
 
-    fy_bounds = fiscal_year_bounds_from_label(budget.fiscal_year, fy_start_month(tenant.feature_flags))
-    lines = list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all())
+    start_month = fy_start_month(tenant.feature_flags)
+    fy_bounds = fiscal_year_bounds_from_label(budget.fiscal_year, start_month)
+    lines = list(
+        (await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id).order_by(BudgetLine.id)))
+        .scalars()
+        .all()
+    )
     posted_rows = list(
         (
             await db.execute(
@@ -206,32 +214,62 @@ async def _old_budget_vs_actual(db, tenant, budget) -> dict:
             )
         ).all()
     )
-    if fy_bounds is not None:
-        posted_rows = [(vl, v) for vl, v in posted_rows if fy_bounds[0] <= v.voucher_date <= fy_bounds[1]]
+    accounts = {
+        acct.id: (group.nature, net_rule(group.nature, acct.normal_balance))
+        for acct, group in (
+            await db.execute(
+                select(ChartOfAccount, AccountGroup)
+                .join(AccountGroup, ChartOfAccount.group_id == AccountGroup.id)
+                .where(ChartOfAccount.tenant_id == tenant.id)
+            )
+        ).all()
+    }
     rows = []
-    total_budget = 0.0
-    total_actual = 0.0
+    total_budget = Decimal("0")
+    total_actual = Decimal("0")
     for line in lines:
-        budget_amount = _to_float(line.amount)
-        actual_amount = 0.0
-        for voucher_line, _voucher in posted_rows:
+        period_type, start, end = budget_line_period(line.period_month, fy_bounds, start_month)
+        debit = credit = actual = Decimal("0")
+        for voucher_line, voucher in posted_rows:
             if line.account_id is not None and voucher_line.account_id != line.account_id:
                 continue
             if line.cost_center_id is not None and voucher_line.cost_center_id != line.cost_center_id:
                 continue
-            actual_amount += _to_float(line_base_amount(voucher_line))
+            if start is not None and not (start <= voucher.voucher_date <= end):
+                continue
+            amount = line_base_amount(voucher_line)
+            debit_side = (voucher_line.entry_type or "").upper() == "DEBIT"
+            if debit_side:
+                debit += amount
+            else:
+                credit += amount
+            credit_nature = accounts[voucher_line.account_id][1] == "credit_minus_debit"
+            actual += amount if debit_side != credit_nature else -amount
+        if line.account_id is not None:
+            nature, rule = accounts[line.account_id]
+        else:
+            nature, rule = None, "per_account"
+        budget_amount = Decimal(str(line.amount))
         total_budget += budget_amount
-        total_actual += actual_amount
+        total_actual += actual
+        budget_f, actual_f = float(budget_amount), float(actual)
         rows.append(
             {
                 "line_id": line.id,
                 "period_month": line.period_month,
                 "account_id": line.account_id,
                 "cost_center_id": line.cost_center_id,
-                "budget_amount": round(budget_amount, 2),
-                "actual_amount": round(actual_amount, 2),
-                "variance": round(actual_amount - budget_amount, 2),
-                "variance_pct": round(((actual_amount - budget_amount) / budget_amount * 100) if budget_amount > 0 else 0, 2),
+                "budget_amount": round(budget_f, 2),
+                "actual_amount": round(actual_f, 2),
+                "variance": round(actual_f - budget_f, 2),
+                "variance_pct": round(((actual_f - budget_f) / budget_f * 100) if budget_f > 0 else 0, 2),
+                "period_type": period_type,
+                "period_start": start.isoformat() if start else None,
+                "period_end": end.isoformat() if end else None,
+                "nature": nature,
+                "net_rule": rule,
+                "actual_debit": round(float(debit), 2),
+                "actual_credit": round(float(credit), 2),
             }
         )
     return {
@@ -241,9 +279,9 @@ async def _old_budget_vs_actual(db, tenant, budget) -> dict:
         "period_start": fy_bounds[0].isoformat() if fy_bounds else None,
         "period_end": fy_bounds[1].isoformat() if fy_bounds else None,
         "rows": rows,
-        "total_budget": round(total_budget, 2),
-        "total_actual": round(total_actual, 2),
-        "total_variance": round(total_actual - total_budget, 2),
+        "total_budget": round(float(total_budget), 2),
+        "total_actual": round(float(total_actual), 2),
+        "total_variance": round(float(total_actual - total_budget), 2),
     }
 
 
@@ -453,6 +491,8 @@ async def test_budget_vs_actual_matches_old(db_session_integration):
             BudgetLine(tenant_id=tenant.id, budget_id=budget.id, account_id=acc["sales"].id, cost_center_id=cc1.id, period_month="2026-02", amount=Decimal("1200.55")),
             BudgetLine(tenant_id=tenant.id, budget_id=budget.id, account_id=acc["cogs"].id, cost_center_id=cc2.id, period_month="2026-02", amount=Decimal("0")),
             BudgetLine(tenant_id=tenant.id, budget_id=budget.id, account_id=acc["ap"].id, period_month="2026-03", amount=Decimal("10")),
+            BudgetLine(tenant_id=tenant.id, budget_id=budget.id, account_id=acc["cogs"].id, period_month="2026-Q2", amount=Decimal("900")),
+            BudgetLine(tenant_id=tenant.id, budget_id=budget.id, account_id=acc["cash"].id, period_month="ANNUAL", amount=Decimal("2500")),
         ]
     )
     # A second budget with an "any account" line (account_id NULL) and an empty budget.
@@ -464,6 +504,7 @@ async def test_budget_vs_actual_matches_old(db_session_integration):
         [
             BudgetLine(tenant_id=tenant.id, budget_id=any_budget.id, cost_center_id=cc1.id, period_month="2026-01", amount=Decimal("100")),
             BudgetLine(tenant_id=tenant.id, budget_id=any_budget.id, period_month="2026-01", amount=Decimal("100")),
+            BudgetLine(tenant_id=tenant.id, budget_id=any_budget.id, cost_center_id=cc2.id, period_month="2026-Q3", amount=Decimal("50")),
         ]
     )
     await db.flush()

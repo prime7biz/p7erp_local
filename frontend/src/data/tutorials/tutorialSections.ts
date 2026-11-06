@@ -1800,7 +1800,7 @@ Every figure can be traced to its source voucher:
 
 **Editing a draft voucher's date:** if the new date falls in a different financial year, the voucher gets a new number from that year's series (the voucher's history shows the old and new number). Moving the date inside the same year keeps the number.
 
-**Budget vs actual** (\`/app/accounts/budgets\`): the actual column only counts posted vouchers dated inside the budget's financial year (for example 1 July 2025 – 30 June 2026 for a "2025-26" budget), in your base currency, so foreign-currency vouchers are converted at their voucher rate.
+**Budget vs actual** (\`/app/accounts/budgets\`): each budget line is compared only with posted vouchers in **its own period** — a monthly line (e.g. \`2025-07\`) counts that month only; a line without a month counts the budget's whole financial year (for example 1 July 2025 – 30 June 2026 for a "2025-26" budget). Amounts are in your base currency (foreign-currency vouchers are converted at their voucher rate) and are **netted**: expense and asset accounts = debit − credit (refunds and reversals reduce the actual); income, liability and equity accounts = credit − debit. Hover the **Actual (line period)** figure to see the debit, credit and date range.
 
 **Bank reconciliation** (\`/app/banking/reconciliation\`): the book balance is the bank ledger's balance on the statement date (opening balance plus posted vouchers up to that date). **Payment runs** can only be executed for a bank account linked to a ledger account, because bills are marked paid only together with the posted payment voucher.
 

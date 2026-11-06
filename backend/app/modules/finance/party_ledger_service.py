@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.customer import Customer
@@ -296,6 +297,70 @@ async def get_party_name(db: AsyncSession, pl: PartyLedger) -> str:
     return f"PartyLedger #{pl.id}"
 
 
+async def get_party_names(db: AsyncSession, ledgers: Sequence[PartyLedger]) -> dict[int, str]:
+    """Same names as ``get_party_name``, for many ledgers at once (one query per party type)."""
+    customer_ids = {pl.customer_id for pl in ledgers if pl.party_type == "CUSTOMER" and pl.customer_id}
+    vendor_ids = {
+        pl.vendor_id
+        for pl in ledgers
+        if pl.vendor_id and not (pl.party_type == "CUSTOMER" and pl.customer_id)
+    }
+    customer_names: dict[int, str] = {}
+    if customer_ids:
+        rows = await db.execute(select(Customer.id, Customer.name).where(Customer.id.in_(customer_ids)))
+        customer_names = {row.id: row.name for row in rows}
+    vendor_names: dict[int, str] = {}
+    if vendor_ids:
+        rows = await db.execute(select(Vendor.id, Vendor.name).where(Vendor.id.in_(vendor_ids)))
+        vendor_names = {row.id: row.name for row in rows}
+
+    names: dict[int, str] = {}
+    for pl in ledgers:
+        if pl.party_type == "CUSTOMER" and pl.customer_id:
+            names[pl.id] = customer_names.get(pl.customer_id, f"Customer #{pl.customer_id}")
+        elif pl.vendor_id:
+            names[pl.id] = vendor_names.get(pl.vendor_id, f"Vendor #{pl.vendor_id}")
+        else:
+            names[pl.id] = f"PartyLedger #{pl.id}"
+    return names
+
+
+async def get_overdue_amounts(db: AsyncSession, ledger_ids: Sequence[int]) -> dict[int, Decimal]:
+    """Pending amount of OVERDUE bills per party ledger (ledgers without any are left out)."""
+    if not ledger_ids:
+        return {}
+    rows = await db.execute(
+        select(PartyLedgerBill.party_ledger_id, func.sum(PartyLedgerBill.pending_amount))
+        .where(
+            PartyLedgerBill.party_ledger_id.in_(ledger_ids),
+            PartyLedgerBill.status == "OVERDUE",
+            PartyLedgerBill.pending_amount > 0,
+        )
+        .group_by(PartyLedgerBill.party_ledger_id)
+    )
+    return {ledger_id: _d(total) for ledger_id, total in rows.all()}
+
+
+BILL_SUMMARY_STATUSES = ("PENDING", "PARTIAL", "SETTLED", "OVERDUE", "CANCELLED")
+
+
+async def get_bill_summaries(db: AsyncSession, ledger_ids: Sequence[int]) -> dict[int, dict[str, int]]:
+    """Bill count per status for each party ledger (same shape as ``bill_summary_counts``)."""
+    summaries = {ledger_id: dict.fromkeys(BILL_SUMMARY_STATUSES, 0) for ledger_id in ledger_ids}
+    if not ledger_ids:
+        return summaries
+    rows = await db.execute(
+        select(PartyLedgerBill.party_ledger_id, PartyLedgerBill.status, func.count())
+        .where(PartyLedgerBill.party_ledger_id.in_(ledger_ids))
+        .group_by(PartyLedgerBill.party_ledger_id, PartyLedgerBill.status)
+    )
+    for ledger_id, status, count in rows.all():
+        key = (status or "PENDING").upper()
+        if key in summaries[ledger_id]:
+            summaries[ledger_id][key] += int(count)
+    return summaries
+
+
 async def get_party_ledger_statement(
     db: AsyncSession,
     tenant_id: int,
@@ -401,6 +466,52 @@ async def get_party_ledger_statement(
     }
 
 
+AGING_BUCKETS = ("not_due", "days_1_30", "days_31_60", "days_61_90", "days_91_plus")
+
+
+async def _aging_bucket_totals(
+    db: AsyncSession,
+    tenant_id: int,
+    ledger_filters: list[Any],
+    as_of: date,
+) -> dict[int, dict[str, Decimal]]:
+    """Open pending amount per aging bucket for each matching party ledger, summed in SQL.
+
+    Days past due = as_of - (due_date, or bill_date when there is no due date):
+    0 or less -> not_due, 1-30, 31-60, 61-90, 91+. Ledgers with no open bills are left out.
+    """
+    due = func.coalesce(PartyLedgerBill.due_date, PartyLedgerBill.bill_date)
+    day_30 = as_of - timedelta(days=30)
+    day_60 = as_of - timedelta(days=60)
+    day_90 = as_of - timedelta(days=90)
+    bucket_conditions = {
+        "not_due": due >= as_of,
+        "days_1_30": and_(due < as_of, due >= day_30),
+        "days_31_60": and_(due < day_30, due >= day_60),
+        "days_61_90": and_(due < day_60, due >= day_90),
+        "days_91_plus": due < day_90,
+    }
+    bucket_sums = [
+        func.sum(case((condition, PartyLedgerBill.pending_amount), else_=0)).label(name)
+        for name, condition in bucket_conditions.items()
+    ]
+    rows = await db.execute(
+        select(PartyLedgerBill.party_ledger_id, *bucket_sums)
+        .join(PartyLedger, PartyLedger.id == PartyLedgerBill.party_ledger_id)
+        .where(
+            *ledger_filters,
+            PartyLedgerBill.tenant_id == tenant_id,
+            PartyLedgerBill.status.in_(("PENDING", "PARTIAL", "OVERDUE")),
+            PartyLedgerBill.pending_amount > 0,
+        )
+        .group_by(PartyLedgerBill.party_ledger_id)
+    )
+    return {
+        row.party_ledger_id: {name: _d(getattr(row, name)) for name in AGING_BUCKETS}
+        for row in rows
+    }
+
+
 async def get_party_aging_report(
     db: AsyncSession,
     tenant_id: int,
@@ -419,6 +530,8 @@ async def get_party_aging_report(
         filters.append(PartyLedger.party_type == party_type.strip().upper())
 
     ledgers = (await db.execute(select(PartyLedger).where(*filters).order_by(PartyLedger.id))).scalars().all()
+    bucket_totals = await _aging_bucket_totals(db, tenant_id, filters, as_of)
+    party_names = await get_party_names(db, ledgers)
 
     parties: list[dict[str, Any]] = []
     grand = {
@@ -430,41 +543,8 @@ async def get_party_aging_report(
         "total_overdue": ZERO,
     }
 
-    open_statuses = ("PENDING", "PARTIAL", "OVERDUE")
     for pl in ledgers:
-        bills = (
-            await db.execute(
-                select(PartyLedgerBill).where(
-                    PartyLedgerBill.party_ledger_id == pl.id,
-                    PartyLedgerBill.tenant_id == tenant_id,
-                    PartyLedgerBill.status.in_(open_statuses),
-                    PartyLedgerBill.pending_amount > 0,
-                )
-            )
-        ).scalars().all()
-
-        buckets = {
-            "not_due": ZERO,
-            "days_1_30": ZERO,
-            "days_31_60": ZERO,
-            "days_61_90": ZERO,
-            "days_91_plus": ZERO,
-        }
-        for bill in bills:
-            amt = _d(bill.pending_amount)
-            due = bill.due_date or bill.bill_date
-            days = (as_of - due).days
-            if days <= 0:
-                buckets["not_due"] += amt
-            elif days <= 30:
-                buckets["days_1_30"] += amt
-            elif days <= 60:
-                buckets["days_31_60"] += amt
-            elif days <= 90:
-                buckets["days_61_90"] += amt
-            else:
-                buckets["days_91_plus"] += amt
-
+        buckets = bucket_totals.get(pl.id) or dict.fromkeys(AGING_BUCKETS, ZERO)
         overdue = (
             buckets["days_1_30"]
             + buckets["days_31_60"]
@@ -480,7 +560,7 @@ async def get_party_aging_report(
         parties.append(
             {
                 "party_ledger_id": pl.id,
-                "party_name": await get_party_name(db, pl),
+                "party_name": party_names[pl.id],
                 "party_type": pl.party_type,
                 "current_balance": str(_money(_d(pl.current_balance))),
                 "balance_type": pl.current_balance_type,

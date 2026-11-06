@@ -65,7 +65,7 @@ from app.modules.finance.voucher_controls import (
     collect_bank_cash_control_warnings,
     fiscal_year_calendar,
 )
-from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT
+from app.common.pagination import HR_LIST_DEFAULT_LIMIT, HR_LIST_MAX_LIMIT, MAX_PAGE_SIZE
 from app.common.control_tower_flags import require_control_tower_enabled
 from app.common.ownership import ensure_all_owned, ensure_owned
 from app.common.tenant import require_tenant
@@ -665,6 +665,10 @@ class CashForecastLineOut(BaseModel):
     outflow: str
     net: str
     cumulative: str
+
+    _forecast_money = field_validator("inflow", "outflow", "net", "cumulative", mode="before")(
+        decimal_money_passthrough
+    )
 
     class Config:
         from_attributes = True
@@ -3058,77 +3062,104 @@ async def day_book_report(
     account_id: int | None = Query(default=None),
     group_id: int | None = Query(default=None),
     party_name: str | None = Query(default=None),
+    limit: int | None = Query(default=None, ge=1, le=MAX_PAGE_SIZE, description="Optional page size"),
+    offset: int = Query(default=0, ge=0, description="Optional rows to skip (with limit)"),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Vouchers in the date range with their debit total. All filters run in SQL.
+
+    Without ``limit`` every matching row is returned (original behaviour). ``total_amount`` and
+    ``total_count`` always cover all matching vouchers, not just the page.
+    """
     _ensure_tenant(user, tenant)
+    from app.modules.finance.advanced_voucher_service import voucher_visible_in_day_book_clause
+
     if from_date is None:
         from_date = date.today().replace(day=1)
     if to_date is None:
         to_date = date.today()
-    stmt = (
-        select(Voucher)
-        .where(
-            Voucher.tenant_id == tenant.id,
-            Voucher.voucher_date >= from_date,
-            Voucher.voucher_date <= to_date,
-        )
-        .order_by(Voucher.voucher_date, Voucher.id)
-    )
+    filters = [
+        Voucher.tenant_id == tenant.id,
+        Voucher.voucher_date >= from_date,
+        Voucher.voucher_date <= to_date,
+        voucher_visible_in_day_book_clause(),
+    ]
     if voucher_type:
-        stmt = stmt.where(Voucher.voucher_type == voucher_type.upper())
+        filters.append(Voucher.voucher_type == voucher_type.upper())
     if party_name:
         q = f"%{party_name.strip().lower()}%"
-        stmt = stmt.where(
+        filters.append(
             func.lower(func.coalesce(Voucher.reference, "")).like(q)
             | func.lower(func.coalesce(Voucher.description, "")).like(q)
         )
-    result = await db.execute(stmt)
-    rows = list(result.scalars().all())
-    from app.modules.finance.advanced_voucher_service import voucher_visible_in_day_book
-
-    rows = [r for r in rows if voucher_visible_in_day_book(r)]
-    account_group_map = {
-        account.id: account.group_id
-        for account in (
-            await db.execute(select(ChartOfAccount).where(ChartOfAccount.tenant_id == tenant.id))
-        ).scalars().all()
-    }
-    total_amount = 0.0
-    out = []
-    if rows:
-        voucher_ids = [row.id for row in rows]
-        lines_result = await db.execute(
-            select(VoucherLine)
-            .where(VoucherLine.voucher_id.in_(voucher_ids))
-            .order_by(VoucherLine.voucher_id, VoucherLine.id)
+    if account_id is not None:
+        filters.append(
+            select(VoucherLine.id)
+            .where(VoucherLine.voucher_id == Voucher.id, VoucherLine.account_id == account_id)
+            .exists()
         )
-        lines_by_voucher: dict[int, list[VoucherLine]] = defaultdict(list)
-        for line in lines_result.scalars().all():
-            lines_by_voucher[line.voucher_id].append(line)
-    else:
-        lines_by_voucher = {}
-    for row in rows:
-        lines = lines_by_voucher.get(row.id, [])
-        if account_id is not None and not any(line.account_id == account_id for line in lines):
-            continue
-        if group_id is not None and not any(account_group_map.get(line.account_id) == group_id for line in lines):
-            continue
-        amt = sum(_to_float(line.amount) for line in lines if line.entry_type == "DEBIT")
-        total_amount += amt
+    if group_id is not None:
+        filters.append(
+            select(VoucherLine.id)
+            .join(ChartOfAccount, ChartOfAccount.id == VoucherLine.account_id)
+            .where(
+                VoucherLine.voucher_id == Voucher.id,
+                ChartOfAccount.tenant_id == tenant.id,
+                ChartOfAccount.group_id == group_id,
+            )
+            .exists()
+        )
+    debit_amount = (
+        select(func.coalesce(func.sum(VoucherLine.amount), 0))
+        .where(VoucherLine.voucher_id == Voucher.id, VoucherLine.entry_type == "DEBIT")
+        .scalar_subquery()
+    )
+    stmt = (
+        select(
+            Voucher.id,
+            Voucher.voucher_number,
+            Voucher.voucher_type,
+            Voucher.voucher_date,
+            Voucher.status,
+            Voucher.description,
+            debit_amount.label("debit_amount"),
+        )
+        .where(*filters)
+        .order_by(Voucher.voucher_date, Voucher.id)
+    )
+    if limit is not None:
+        stmt = stmt.limit(limit).offset(offset)
+    elif offset:
+        stmt = stmt.offset(offset)
+    page = (await db.execute(stmt)).mappings().all()
+
+    out = []
+    page_total = 0.0
+    for row in page:
+        amt = float(row["debit_amount"] or 0)
+        page_total += amt
         out.append(
             {
-                "id": row.id,
-                "voucher_number": row.voucher_number,
-                "voucher_type": row.voucher_type,
-                "voucher_date": row.voucher_date,
-                "status": row.status,
-                "description": row.description,
+                "id": row["id"],
+                "voucher_number": row["voucher_number"],
+                "voucher_type": row["voucher_type"],
+                "voucher_date": row["voucher_date"],
+                "status": row["status"],
+                "description": row["description"],
                 "amount": round(amt, 2),
             }
         )
-    return {"rows": out, "total_amount": round(total_amount, 2)}
+    if limit is None and not offset:
+        total_count, total_amount = len(out), page_total
+    else:
+        totals_sq = select(debit_amount.label("debit_amount")).where(*filters).subquery()
+        count_n, amount_sum = (
+            await db.execute(select(func.count(), func.coalesce(func.sum(totals_sq.c.debit_amount), 0)))
+        ).one()
+        total_count, total_amount = int(count_n or 0), float(amount_sum or 0)
+    return {"rows": out, "total_amount": round(total_amount, 2), "total_count": total_count}
 
 
 async def _posted_movement_by_account(
@@ -3668,21 +3699,26 @@ async def generate_cash_forecast(
         await db.delete(line)
     await db.flush()
 
-    posted_vouchers = list(
-        (
-            await db.execute(
-                select(Voucher).where(
-                    Voucher.tenant_id == tenant.id,
-                    Voucher.status == "POSTED",
-                    voucher_in_books_clause(),
-                )
-            )
-        ).scalars().all()
+    # Debit total of the 60 most recent posted, in-books vouchers (latest voucher_date, then id).
+    recent_voucher_ids = (
+        select(Voucher.id)
+        .where(
+            Voucher.tenant_id == tenant.id,
+            Voucher.status == "POSTED",
+            voucher_in_books_clause(),
+        )
+        .order_by(Voucher.voucher_date.desc(), Voucher.id.desc())
+        .limit(60)
     )
-    posted_amount = 0.0
-    for voucher in posted_vouchers[-60:]:
-        lines = list((await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == voucher.id))).scalars().all())
-        posted_amount += sum(_to_float(line.amount) for line in lines if line.entry_type == "DEBIT")
+    posted_debit_sum = (
+        await db.execute(
+            select(func.coalesce(func.sum(VoucherLine.amount), 0)).where(
+                VoucherLine.voucher_id.in_(recent_voucher_ids.scalar_subquery()),
+                VoucherLine.entry_type == "DEBIT",
+            )
+        )
+    ).scalar()
+    posted_amount = float(posted_debit_sum or 0)
 
     avg_monthly = posted_amount / 6.0 if posted_amount > 0 else 100000.0
     fx_open_total = (
@@ -4584,24 +4620,32 @@ async def budget_vs_actual(
     if not budget or budget.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="Budget not found")
     lines = list((await db.execute(select(BudgetLine).where(BudgetLine.budget_id == budget.id))).scalars().all())
-    posted_lines_query = (
-        select(VoucherLine, Voucher)
+
+    # Posted, in-books voucher line amounts summed per (account, cost centre) in SQL.
+    # A budget line with no account matches every account, so only filter when all lines name one.
+    actual_query = (
+        select(VoucherLine.account_id, VoucherLine.cost_center_id, func.sum(VoucherLine.amount))
         .join(Voucher, VoucherLine.voucher_id == Voucher.id)
         .where(VoucherLine.tenant_id == tenant.id, Voucher.status == "POSTED", voucher_in_books_clause())
+        .group_by(VoucherLine.account_id, VoucherLine.cost_center_id)
     )
-    posted_rows = list((await db.execute(posted_lines_query)).all())
+    if lines and all(line.account_id is not None for line in lines):
+        actual_query = actual_query.where(VoucherLine.account_id.in_({line.account_id for line in lines}))
+    actual_by_account_cc = (await db.execute(actual_query)).all() if lines else []
+
     rows = []
     total_budget = 0.0
     total_actual = 0.0
     for line in lines:
         budget_amount = _to_float(line.amount)
-        actual_amount = 0.0
-        for voucher_line, _voucher in posted_rows:
-            if line.account_id is not None and voucher_line.account_id != line.account_id:
+        actual_sum = Decimal("0")
+        for account_id, cost_center_id, amount_sum in actual_by_account_cc:
+            if line.account_id is not None and account_id != line.account_id:
                 continue
-            if line.cost_center_id is not None and voucher_line.cost_center_id != line.cost_center_id:
+            if line.cost_center_id is not None and cost_center_id != line.cost_center_id:
                 continue
-            actual_amount += _to_float(voucher_line.amount)
+            actual_sum += amount_sum or Decimal("0")
+        actual_amount = float(actual_sum)
         total_budget += budget_amount
         total_actual += actual_amount
         rows.append(
@@ -6813,23 +6857,38 @@ async def voucher_report_summary(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    stmt = select(Voucher).where(Voucher.tenant_id == tenant.id)
-    if from_date is not None:
-        stmt = stmt.where(Voucher.voucher_date >= from_date)
-    if to_date is not None:
-        stmt = stmt.where(Voucher.voucher_date <= to_date)
-    if voucher_type:
-        stmt = stmt.where(Voucher.voucher_type == voucher_type.strip().upper())
-    if status_filter:
-        stmt = stmt.where(Voucher.status == status_filter.strip().upper())
-    rows = list((await db.execute(stmt)).scalars().all())
-    status_counts: dict[str, int] = {}
-    for row in rows:
-        status_counts[row.status] = status_counts.get(row.status, 0) + 1
+    filters = _voucher_report_filters(tenant.id, from_date, to_date, voucher_type, status_filter)
+    stmt = (
+        select(Voucher.status, func.count())
+        .where(*filters)
+        .group_by(Voucher.status)
+        .order_by(func.min(Voucher.id))
+    )
+    status_counts: dict[str, int] = {status: int(n) for status, n in (await db.execute(stmt)).all()}
     return {
-        "total_vouchers": len(rows),
+        "total_vouchers": sum(status_counts.values()),
         "status_counts": status_counts,
     }
+
+
+def _voucher_report_filters(
+    tenant_id: int,
+    from_date: date | None,
+    to_date: date | None,
+    voucher_type: str | None,
+    status_filter: str | None,
+) -> list:
+    """WHERE clauses shared by the /voucher-reports/* endpoints."""
+    filters = [Voucher.tenant_id == tenant_id]
+    if from_date is not None:
+        filters.append(Voucher.voucher_date >= from_date)
+    if to_date is not None:
+        filters.append(Voucher.voucher_date <= to_date)
+    if voucher_type:
+        filters.append(Voucher.voucher_type == voucher_type.strip().upper())
+    if status_filter:
+        filters.append(Voucher.status == status_filter.strip().upper())
+    return filters
 
 
 @router.get("/reports/ledger-activity")
@@ -6909,28 +6968,22 @@ async def voucher_report_monthly(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    stmt = select(Voucher).where(Voucher.tenant_id == tenant.id)
-    if from_date is not None:
-        stmt = stmt.where(Voucher.voucher_date >= from_date)
-    if to_date is not None:
-        stmt = stmt.where(Voucher.voucher_date <= to_date)
-    if voucher_type:
-        stmt = stmt.where(Voucher.voucher_type == voucher_type.strip().upper())
-    if status_filter:
-        stmt = stmt.where(Voucher.status == status_filter.strip().upper())
-    rows = list((await db.execute(stmt)).scalars().all())
-    summary: dict[str, dict[str, float | int]] = {}
-    for row in rows:
-        if not row.voucher_date:
-            continue
-        key = row.voucher_date.strftime("%Y-%m")
-        if key not in summary:
-            summary[key] = {"count": 0, "posted_count": 0}
-        summary[key]["count"] = int(summary[key]["count"]) + 1
-        if row.status == "POSTED":
-            summary[key]["posted_count"] = int(summary[key]["posted_count"]) + 1
-    keys = sorted(summary.keys())[-max(months_back, 1):]
-    return {"months": [{"month": key, **summary[key]} for key in keys]}
+    filters = _voucher_report_filters(tenant.id, from_date, to_date, voucher_type, status_filter)
+    month = func.to_char(Voucher.voucher_date, "YYYY-MM")
+    stmt = (
+        select(month.label("month"), func.count(), func.count().filter(Voucher.status == "POSTED"))
+        .where(*filters, Voucher.voucher_date.is_not(None))
+        .group_by(month)
+        .order_by(month.desc())
+        .limit(max(months_back, 1))
+    )
+    latest_first = (await db.execute(stmt)).all()
+    return {
+        "months": [
+            {"month": key, "count": int(count), "posted_count": int(posted)}
+            for key, count, posted in reversed(latest_first)
+        ]
+    }
 
 
 @router.get("/voucher-reports/top-preparers")
@@ -6945,21 +6998,15 @@ async def voucher_report_top_preparers(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_tenant(user, tenant)
-    stmt = select(Voucher).where(Voucher.tenant_id == tenant.id)
-    if from_date is not None:
-        stmt = stmt.where(Voucher.voucher_date >= from_date)
-    if to_date is not None:
-        stmt = stmt.where(Voucher.voucher_date <= to_date)
-    if voucher_type:
-        stmt = stmt.where(Voucher.voucher_type == voucher_type.strip().upper())
-    if status_filter:
-        stmt = stmt.where(Voucher.status == status_filter.strip().upper())
-    rows = list((await db.execute(stmt)).scalars().all())
-    counts: dict[int, int] = {}
-    for row in rows:
-        if row.created_by is not None:
-            counts[row.created_by] = counts.get(row.created_by, 0) + 1
-    ranking = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[: max(limit, 1)]
+    filters = _voucher_report_filters(tenant.id, from_date, to_date, voucher_type, status_filter)
+    stmt = (
+        select(Voucher.created_by, func.count())
+        .where(*filters, Voucher.created_by.is_not(None))
+        .group_by(Voucher.created_by)
+        .order_by(func.count().desc(), func.min(Voucher.id))
+        .limit(max(limit, 1))
+    )
+    ranking = [(int(uid), int(cnt)) for uid, cnt in (await db.execute(stmt)).all()]
     users = {
         u.id: u
         for u in (

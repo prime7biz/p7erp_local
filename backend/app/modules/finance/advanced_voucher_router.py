@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -822,16 +822,20 @@ async def post_dated_register(
         .scalars()
         .all()
     )
+    from app.models.finance import VoucherLine
+
+    debit_by_voucher: dict[int, Decimal] = {}
+    if rows:
+        debit_rows = await db.execute(
+            select(VoucherLine.voucher_id, func.sum(VoucherLine.amount))
+            .where(VoucherLine.voucher_id.in_([v.id for v in rows]), VoucherLine.entry_type == "DEBIT")
+            .group_by(VoucherLine.voucher_id)
+        )
+        debit_by_voucher = {int(vid): Decimal(str(total or 0)) for vid, total in debit_rows.all()}
     out = []
     for v in rows:
         days = (v.voucher_date - today).days
-        amt = Decimal("0")
-        from app.models.finance import VoucherLine
-
-        for ln in (
-            await db.execute(select(VoucherLine).where(VoucherLine.voucher_id == v.id, VoucherLine.entry_type == "DEBIT"))
-        ).scalars().all():
-            amt += Decimal(str(ln.amount or 0))
+        amt = Decimal("0") + debit_by_voucher.get(v.id, Decimal("0"))
         out.append(
             {
                 "id": v.id,

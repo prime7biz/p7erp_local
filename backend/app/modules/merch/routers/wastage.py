@@ -9,7 +9,7 @@ from io import BytesIO
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -99,22 +99,43 @@ async def get_wastage_report(
 ):
     """Report actual issued consumption vs BOM expected by order/item. Actual = CONSUMPTION_ISSUE movements; expected = order qty × BOM base × (1 + wastage%). Returns wastage value and threshold breach for profitability control."""
     _ensure_tenant(user, tenant)
+    return await compute_wastage_rows(
+        db,
+        tenant.id,
+        order_id=order_id,
+        style_id=style_id,
+        buyer_id=buyer_id,
+        date_from=date_from,
+        date_to=date_to,
+        threshold_pct=threshold_pct,
+        above_threshold_only=above_threshold_only,
+    )
+
+
+async def compute_wastage_rows(
+    db: AsyncSession,
+    tenant_id: int,
+    *,
+    order_id: int | None = None,
+    style_id: int | None = None,
+    buyer_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    threshold_pct: float | None = None,
+    above_threshold_only: bool = False,
+) -> list[WastageReportRowOut]:
+    """Rows for the wastage report. Shared by the report, summary, trends, export and alert endpoints."""
     # Load threshold rules for tenant (used to resolve allowed_pct per order)
     thr_result = await db.execute(
-        select(WastageThresholdRule).where(WastageThresholdRule.tenant_id == tenant.id)
+        select(WastageThresholdRule).where(WastageThresholdRule.tenant_id == tenant_id)
     )
     threshold_rules = list(thr_result.scalars().all())
-    mov_result = await db.execute(
-        select(StockMovement.reference_id).where(
-            StockMovement.tenant_id == tenant.id,
-            StockMovement.reference_type == "CONSUMPTION_ISSUE",
-            StockMovement.reference_id.isnot(None),
-        ).distinct()
+    consumed_order_ids = select(StockMovement.reference_id).where(
+        StockMovement.tenant_id == tenant_id,
+        StockMovement.reference_type == "CONSUMPTION_ISSUE",
+        StockMovement.reference_id.isnot(None),
     )
-    oids = [x for x in mov_result.scalars().all() if x is not None]
-    if not oids:
-        return []
-    stmt = select(Order).where(Order.tenant_id == tenant.id, Order.id.in_(oids))
+    stmt = select(Order).where(Order.tenant_id == tenant_id, Order.id.in_(consumed_order_ids))
     if order_id is not None:
         stmt = stmt.where(Order.id == order_id)
     if buyer_id is not None:
@@ -123,7 +144,7 @@ async def get_wastage_report(
         stmt = stmt.where(Order.order_date >= date_from)
     if date_to is not None:
         stmt = stmt.where(Order.order_date <= date_to)
-    orders_result = await db.execute(stmt)
+    orders_result = await db.execute(stmt.order_by(Order.id))
     orders = list(orders_result.scalars().all())
     if not orders:
         return []
@@ -149,7 +170,7 @@ async def get_wastage_report(
     if style_ids:
         br = await db.execute(
             select(Bom).where(
-                Bom.tenant_id == tenant.id,
+                Bom.tenant_id == tenant_id,
                 Bom.style_id.in_(style_ids),
                 Bom.status.in_(GOVERNED_BOM_STATUSES),
             )
@@ -164,7 +185,7 @@ async def get_wastage_report(
     if bom_ids:
         blr = await db.execute(
             select(BomItem).where(
-                BomItem.tenant_id == tenant.id,
+                BomItem.tenant_id == tenant_id,
                 BomItem.bom_id.in_(bom_ids),
                 BomItem.item_id.isnot(None),
             )
@@ -175,7 +196,7 @@ async def get_wastage_report(
     all_item_ids = {bi.item_id for lines in bom_lines_by_bom.values() for bi in lines if bi.item_id}
     items_map: dict[int, Item] = {}
     if all_item_ids:
-        ir = await db.execute(select(Item).where(Item.tenant_id == tenant.id, Item.id.in_(all_item_ids)))
+        ir = await db.execute(select(Item).where(Item.tenant_id == tenant_id, Item.id.in_(all_item_ids)))
         items_map = {i.id: i for i in ir.scalars().all()}
     cat_ids = {it.category_id for it in items_map.values() if it.category_id}
     categories: dict[int, ItemCategory] = {}
@@ -183,26 +204,25 @@ async def get_wastage_report(
         catr = await db.execute(select(ItemCategory).where(ItemCategory.id.in_(cat_ids)))
         categories = {c.id: c for c in catr.scalars().all()}
 
-    order_id_list = [o.id for o in orders]
-    mov_map: dict[tuple[int, int], list[StockMovement]] = defaultdict(list)
-    if order_id_list:
-        movr = await db.execute(
-            select(StockMovement).where(
-                StockMovement.tenant_id == tenant.id,
-                StockMovement.reference_type == "CONSUMPTION_ISSUE",
-                StockMovement.reference_id.in_(order_id_list),
-            )
+    # Actual issued qty per (order, item): only OUT consumption movements count.
+    movr = await db.execute(
+        select(StockMovement.reference_id, StockMovement.item_id, func.sum(StockMovement.quantity))
+        .where(
+            StockMovement.tenant_id == tenant_id,
+            StockMovement.reference_type == "CONSUMPTION_ISSUE",
+            StockMovement.reference_id.in_([o.id for o in orders]),
+            func.upper(StockMovement.movement_type) == "OUT",
         )
-        for m in movr.scalars().all():
-            if m.reference_id is not None and m.item_id is not None:
-                mov_map[(m.reference_id, m.item_id)].append(m)
+        .group_by(StockMovement.reference_id, StockMovement.item_id)
+    )
+    actual_by_order_item = {(ref_id, item_id): _to_float_safe(qty) for ref_id, item_id, qty in movr.all()}
 
     for order in orders:
         allowed_pct = _resolve_wastage_threshold_pct(threshold_rules, order.customer_id)
         if not order.quotation_id:
             continue
         quotation = quotations.get(order.quotation_id)
-        if not quotation or quotation.tenant_id != tenant.id or not quotation.style_id:
+        if not quotation or quotation.tenant_id != tenant_id or not quotation.style_id:
             continue
         sid = quotation.style_id
         if style_id is not None and sid != style_id:
@@ -219,18 +239,14 @@ async def get_wastage_report(
             continue
         for line in bom_lines_by_bom.get(bom.id, []):
             item = items_map.get(line.item_id)
-            if not item or item.tenant_id != tenant.id:
+            if not item or item.tenant_id != tenant_id:
                 continue
             cat = categories.get(item.category_id) if item.category_id else None
             category = material_group_from_item(item, cat)
             base = _to_float_safe(line.base_consumption)
             wastage = _to_float_safe(line.wastage_pct) / 100.0
             expected = order_qty * base * (1.0 + wastage)
-            actual = sum(
-                _to_float_safe(m.quantity)
-                for m in mov_map.get((order.id, line.item_id), [])
-                if (m.movement_type or "").upper() == "OUT"
-            )
+            actual = actual_by_order_item.get((order.id, line.item_id), 0.0)
             if expected <= 0:
                 wastage_pct = 0.0
             else:
@@ -279,17 +295,8 @@ async def get_wastage_summary(
 ):
     """Aggregate wastage: KPIs (total value, fabric/trim avg %, above-threshold count) and by_style."""
     _ensure_tenant(user, tenant)
-    rows = await get_wastage_report(
-        order_id=None,
-        style_id=style_id,
-        buyer_id=buyer_id,
-        date_from=date_from,
-        date_to=date_to,
-        threshold_pct=None,
-        above_threshold_only=False,
-        tenant=tenant,
-        user=user,
-        db=db,
+    rows = await compute_wastage_rows(
+        db, tenant.id, style_id=style_id, buyer_id=buyer_id, date_from=date_from, date_to=date_to
     )
     total_wastage_value = sum(r.wastage_value for r in rows)
     fabric_pcts = [r.wastage_pct_vs_bom for r in rows if r.category == "fabric"]
@@ -388,18 +395,7 @@ async def get_wastage_trends(
 ):
     """Trends: wastage value grouped by month, buyer, or material group (category)."""
     _ensure_tenant(user, tenant)
-    rows = await get_wastage_report(
-        order_id=None,
-        style_id=None,
-        buyer_id=None,
-        date_from=date_from,
-        date_to=date_to,
-        threshold_pct=None,
-        above_threshold_only=False,
-        tenant=tenant,
-        user=user,
-        db=db,
-    )
+    rows = await compute_wastage_rows(db, tenant.id, date_from=date_from, date_to=date_to)
     if group_by == "month":
         by_month: dict[str, float] = defaultdict(float)
         for r in rows:
@@ -488,17 +484,14 @@ async def export_wastage_report(
 ):
     """Export wastage report as Excel (same filters as report)."""
     _ensure_tenant(user, tenant)
-    rows = await get_wastage_report(
+    rows = await compute_wastage_rows(
+        db,
+        tenant.id,
         order_id=order_id,
         style_id=style_id,
         buyer_id=buyer_id,
         date_from=date_from,
         date_to=date_to,
-        threshold_pct=None,
-        above_threshold_only=False,
-        tenant=tenant,
-        user=user,
-        db=db,
     )
     try:
         from openpyxl import Workbook
@@ -718,18 +711,19 @@ async def get_wastage_management_summary(
 ):
     """Management summary: top 10 orders, top 10 materials, top reasons, month-over-month, suggested actions."""
     _ensure_tenant(user, tenant)
-    rows = await get_wastage_report(
-        order_id=None,
-        style_id=None,
-        buyer_id=None,
-        date_from=date_from,
-        date_to=date_to,
-        threshold_pct=None,
-        above_threshold_only=False,
-        tenant=tenant,
-        user=user,
-        db=db,
-    )
+    # Previous period = same number of days just before date_from. Both periods come from one report run.
+    prev_rows: list[WastageReportRowOut] | None = None
+    if date_from and date_to and date_from <= date_to:
+        period_days = (date_to - date_from).days + 1
+        prev_end = date_from - timedelta(days=1)
+        prev_start = prev_end - timedelta(days=period_days - 1)
+        both_periods = await compute_wastage_rows(db, tenant.id, date_from=prev_start, date_to=date_to)
+        rows = [r for r in both_periods if r.order_date is not None and r.order_date >= date_from]
+        prev_rows = [r for r in both_periods if r.order_date is not None and r.order_date <= prev_end]
+    else:
+        rows = await compute_wastage_rows(db, tenant.id, date_from=date_from, date_to=date_to)
+        if date_from and date_to:
+            prev_rows = []
     # Top 10 orders by total wastage value
     order_totals: dict[int, tuple[str, str, float]] = {}
     for r in rows:
@@ -763,7 +757,7 @@ async def get_wastage_management_summary(
         .where(WastageTransaction.tenant_id == tenant.id)
     )
     reason_agg: dict[str, tuple[str, float, int]] = {}
-    for r in reason_result.scalars().all():
+    for r in reason_result.all():
         code = (r.code or "") if r.code else ""
         name = (r.name or "Unknown") if r.name else "Unknown"
         val = _to_float_safe(r.value)
@@ -778,18 +772,7 @@ async def get_wastage_management_summary(
     # Month-over-month: current period vs previous period (same length)
     current_total = sum(r.wastage_value for r in rows)
     current_above = len({r.order_id for r in rows if r.threshold_breach})
-    period_start = date_from
-    period_end = date_to
-    if period_start and period_end:
-        delta = (period_end - period_start).days + 1
-        prev_end = period_start - timedelta(days=1)
-        prev_start = prev_end - timedelta(days=delta - 1)
-        prev_rows = await get_wastage_report(
-            order_id=None, style_id=None, buyer_id=None,
-            date_from=prev_start, date_to=prev_end,
-            threshold_pct=None, above_threshold_only=False,
-            tenant=tenant, user=user, db=db,
-        )
+    if prev_rows is not None:
         previous_total = sum(r.wastage_value for r in prev_rows)
         previous_above = len({r.order_id for r in prev_rows if r.threshold_breach})
     else:
@@ -830,18 +813,7 @@ async def refresh_wastage_order_summary(
 ):
     """Recompute and store wastage order summaries for the tenant (optional date range). Used for management view and KPIs."""
     _ensure_tenant(user, tenant)
-    rows = await get_wastage_report(
-        order_id=None,
-        style_id=None,
-        buyer_id=None,
-        date_from=date_from,
-        date_to=date_to,
-        threshold_pct=None,
-        above_threshold_only=False,
-        tenant=tenant,
-        user=user,
-        db=db,
-    )
+    rows = await compute_wastage_rows(db, tenant.id, date_from=date_from, date_to=date_to)
     order_agg: dict[int, tuple[float, float, float, float, float, bool]] = {}
     for r in rows:
         if r.order_id not in order_agg:

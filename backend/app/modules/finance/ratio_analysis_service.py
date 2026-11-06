@@ -8,7 +8,12 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.finance.mis_coa_helpers import account_balances_as_of, financial_snapshot, _money
+from app.modules.finance.mis_coa_helpers import (
+    _money,
+    account_balances_as_of,
+    account_balances_for_dates,
+    financial_snapshot,
+)
 
 # Soft industry-agnostic benchmarks (SME manufacturing defaults)
 BENCHMARKS: dict[str, dict[str, float]] = {
@@ -161,15 +166,21 @@ async def calculate_ratios(
     rows = await account_balances_as_of(db, tenant_id, as_of_date)
     snap = financial_snapshot(rows)
     # Prior year-end for averages
-    prior_date = date(as_of_date.year - 1, 12, 31)
-    if prior_date >= as_of_date:
-        prior_date = date(as_of_date.year, 1, 1)
+    prior_date = _prior_year_end(as_of_date)
     prior_rows = await account_balances_as_of(db, tenant_id, prior_date)
     prior = financial_snapshot(prior_rows)
     result = ratios_from_snapshot(snap, prior=prior)
     result["as_of_date"] = as_of_date.isoformat()
     result["prior_date"] = prior_date.isoformat()
     return result
+
+
+def _prior_year_end(as_of_date: date) -> date:
+    """Same prior date ``calculate_ratios`` uses for averages."""
+    prior_date = date(as_of_date.year - 1, 12, 31)
+    if prior_date >= as_of_date:
+        prior_date = date(as_of_date.year, 1, 1)
+    return prior_date
 
 
 async def ratio_trend(
@@ -182,17 +193,30 @@ async def ratio_trend(
 ) -> dict[str, Any]:
     as_of = as_of or date.today()
     months = max(1, min(months, 24))
-    points = []
+    point_dates: list[date] = []
     y, m = as_of.year, as_of.month
     for _ in range(months):
         last_day = monthrange(y, m)[1]
-        d = date(y, m, min(as_of.day, last_day))
-        calc = await calculate_ratios(db, tenant_id, as_of_date=d)
-        match = next((r for r in calc["ratios"] if r["name"] == ratio_name), None)
-        points.append({"date": d.isoformat(), "value": match["value"] if match else None})
+        point_dates.append(date(y, m, min(as_of.day, last_day)))
         m -= 1
         if m == 0:
             m = 12
             y -= 1
+
+    # One grouped ledger query for every point date and its prior year-end.
+    all_dates = point_dates + [_prior_year_end(d) for d in point_dates]
+    balances = await account_balances_for_dates(db, tenant_id, all_dates)
+    snapshots: dict[date, dict[str, Any]] = {}
+
+    def snapshot_for(d: date) -> dict[str, Any]:
+        if d not in snapshots:
+            snapshots[d] = financial_snapshot(balances[d])
+        return snapshots[d]
+
+    points = []
+    for d in point_dates:
+        calc = ratios_from_snapshot(snapshot_for(d), prior=snapshot_for(_prior_year_end(d)))
+        match = next((r for r in calc["ratios"] if r["name"] == ratio_name), None)
+        points.append({"date": d.isoformat(), "value": match["value"] if match else None})
     points.reverse()
     return {"ratio_name": ratio_name, "months": months, "points": points}

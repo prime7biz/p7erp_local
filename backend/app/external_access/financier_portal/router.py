@@ -491,19 +491,22 @@ async def financier_procurement_tracker(
     pos = await fsel.purchase_orders_for_btb_ids(db, principal.tenant_id, btb_ids)
     from app.models.inventory import GoodsReceiving
 
+    grn_counts: dict[int, tuple[int, int]] = {}
+    if pos:
+        is_posted = func.upper(func.coalesce(GoodsReceiving.status, "")).in_(("POSTED", "APPROVED", "RECEIVED", "CLOSED"))
+        grn_count_rows = await db.execute(
+            select(GoodsReceiving.purchase_order_id, func.count(), func.count().filter(is_posted))
+            .where(
+                GoodsReceiving.tenant_id == principal.tenant_id,
+                GoodsReceiving.purchase_order_id.in_([po.id for po in pos]),
+            )
+            .group_by(GoodsReceiving.purchase_order_id)
+        )
+        grn_counts = {po_id: (int(total), int(posted)) for po_id, total, posted in grn_count_rows.all()}
+
     items: list[dict] = []
     for po in pos:
-        grn_rows = list(
-            (
-                await db.execute(
-                    select(GoodsReceiving).where(
-                        GoodsReceiving.tenant_id == principal.tenant_id,
-                        GoodsReceiving.purchase_order_id == po.id,
-                    )
-                )
-            ).scalars().all()
-        )
-        posted = sum(1 for g in grn_rows if (g.status or "").upper() in {"POSTED", "APPROVED", "RECEIVED", "CLOSED"})
+        grn_count, posted = grn_counts.get(po.id, (0, 0))
         items.append(
             {
                 "purchase_order_id": po.id,
@@ -512,7 +515,7 @@ async def financier_procurement_tracker(
                 "status": po.status,
                 "currency": po.currency,
                 "base_total_amount": float(po.base_total_amount or 0),
-                "grn_count": len(grn_rows),
+                "grn_count": grn_count,
                 "grn_posted_count": posted,
             }
         )
@@ -552,40 +555,34 @@ async def financier_stock_collateral(
             )
         ).all()
     )
-    out: list[dict] = []
-    for poi, po in poi_rows[:500]:
-        po_code = po.po_code
-        tid = principal.tenant_id
-        item = await db.get(Item, poi.item_id)
-        item = item if item is not None and item.tenant_id == tid else None
-        btb = await db.get(BtbLc, po.btb_lc_id) if po.btb_lc_id else None
-        btb = btb if btb is not None and btb.tenant_id == tid else None
-        wh = await db.get(Warehouse, poi.warehouse_id) if poi.warehouse_id else None
-        wh = wh if wh is not None and wh.tenant_id == tid else None
-        received = 0.0
-        grns = list(
-            (
-                await db.execute(
-                    select(GoodsReceiving.id).where(
-                        GoodsReceiving.tenant_id == principal.tenant_id,
-                        GoodsReceiving.purchase_order_id == poi.purchase_order_id,
-                    )
-                )
-            ).scalars().all()
+    from app.external_access.financier_portal.visibility_service import load_rows_by_id
+
+    tid = principal.tenant_id
+    poi_rows = poi_rows[:500]
+    items_by_id = await load_rows_by_id(db, Item, {poi.item_id for poi, _ in poi_rows})
+    btbs_by_id = await load_rows_by_id(db, BtbLc, {po.btb_lc_id for _, po in poi_rows if po.btb_lc_id})
+    warehouses_by_id = await load_rows_by_id(db, Warehouse, {poi.warehouse_id for poi, _ in poi_rows if poi.warehouse_id})
+    received_rows = await db.execute(
+        select(GoodsReceiving.purchase_order_id, GoodsReceivingItem.item_id, func.sum(GoodsReceivingItem.quantity))
+        .join(GoodsReceiving, GoodsReceivingItem.goods_receiving_id == GoodsReceiving.id)
+        .where(
+            GoodsReceiving.tenant_id == tid,
+            GoodsReceiving.purchase_order_id.in_({poi.purchase_order_id for poi, _ in poi_rows}),
         )
-        for gid in grns:
-            for gri in (
-                await db.execute(
-                    select(GoodsReceivingItem).where(
-                        GoodsReceivingItem.goods_receiving_id == gid,
-                        GoodsReceivingItem.item_id == poi.item_id,
-                    )
-                )
-            ).scalars().all():
-                try:
-                    received += float(gri.quantity or 0)
-                except (TypeError, ValueError):
-                    pass
+        .group_by(GoodsReceiving.purchase_order_id, GoodsReceivingItem.item_id)
+    )
+    received_by_po_item = {(po_id, item_id): float(qty or 0) for po_id, item_id, qty in received_rows.all()}
+
+    out: list[dict] = []
+    for poi, po in poi_rows:
+        po_code = po.po_code
+        item = items_by_id.get(poi.item_id)
+        item = item if item is not None and item.tenant_id == tid else None
+        btb = btbs_by_id.get(po.btb_lc_id) if po.btb_lc_id else None
+        btb = btb if btb is not None and btb.tenant_id == tid else None
+        wh = warehouses_by_id.get(poi.warehouse_id) if poi.warehouse_id else None
+        wh = wh if wh is not None and wh.tenant_id == tid else None
+        received = received_by_po_item.get((poi.purchase_order_id, poi.item_id), 0.0)
         try:
             ordered = float(poi.quantity or 0)
         except (TypeError, ValueError):

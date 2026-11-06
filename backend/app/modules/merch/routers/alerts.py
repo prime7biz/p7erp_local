@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import DateTime, Integer, and_, case, cast, extract, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import get_current_user
@@ -105,19 +105,18 @@ def _alert_mutation_out(row: AlertInstance) -> AlertMutationOut:
     )
 
 
+_SEVERITY_WEIGHT = {"critical": 100, "high": 70, "medium": 40, "low": 20, "informational": 10}
+_SLA_BREACH_HOURS = {"critical": 24, "high": 48, "medium": 72, "low": 120, "informational": 168}
+_MAX_AGE_HOURS_IN_SCORE = 240
+
+
 def _alert_priority_score(alert: AlertInstance, now: datetime) -> int:
-    severity_weight = {
-        "critical": 100,
-        "high": 70,
-        "medium": 40,
-        "low": 20,
-        "informational": 10,
-    }.get((alert.severity or "").lower(), 10)
+    severity_weight = _SEVERITY_WEIGHT.get((alert.severity or "").lower(), 10)
     age_hours = 0
     if alert.created_at:
         age_hours = max(0, int((now - alert.created_at).total_seconds() // 3600))
     escalation_weight = int(alert.escalation_level or 0) * 15
-    return severity_weight + min(age_hours, 240) + escalation_weight
+    return severity_weight + min(age_hours, _MAX_AGE_HOURS_IN_SCORE) + escalation_weight
 
 
 def _alert_sla_bucket(alert: AlertInstance, now: datetime) -> str:
@@ -127,8 +126,37 @@ def _alert_sla_bucket(alert: AlertInstance, now: datetime) -> str:
     if alert.created_at:
         age_hours = max(0, int((now - alert.created_at).total_seconds() // 3600))
     sev = (alert.severity or "").lower()
-    breach_hours = {"critical": 24, "high": 48, "medium": 72, "low": 120, "informational": 168}.get(sev, 72)
+    breach_hours = _SLA_BREACH_HOURS.get(sev, 72)
     return "breach" if age_hours > breach_hours else "at_risk"
+
+
+# SQL versions of the two functions above, so list filters / sorting / paging run in the database.
+# Keep them in sync with the Python versions (tests/test_perf_merch_equivalence.py compares both).
+
+
+def _alert_age_hours_sql(now: datetime):
+    age_seconds = extract("epoch", literal(now, DateTime(timezone=True)) - AlertInstance.created_at)
+    return func.greatest(0, func.floor(func.coalesce(age_seconds, 0) / 3600))
+
+
+def _alert_priority_score_sql(now: datetime):
+    severity = func.lower(func.coalesce(AlertInstance.severity, ""))
+    score = (
+        case(_SEVERITY_WEIGHT, value=severity, else_=10)
+        + func.least(_alert_age_hours_sql(now), _MAX_AGE_HOURS_IN_SCORE)
+        + func.coalesce(AlertInstance.escalation_level, 0) * 15
+    )
+    return cast(score, Integer)
+
+
+def _alert_sla_bucket_sql(now: datetime):
+    severity = func.lower(func.coalesce(AlertInstance.severity, ""))
+    breach_hours = case(_SLA_BREACH_HOURS, value=severity, else_=72)
+    return case(
+        (func.lower(func.coalesce(AlertInstance.status, "")).in_(("resolved", "closed")), "met"),
+        (_alert_age_hours_sql(now) > breach_hours, "breach"),
+        else_="at_risk",
+    )
 
 
 class AlertDefinitionOut(BaseModel):
@@ -268,50 +296,56 @@ async def list_alerts(
             AlertInstance.snoozed_until <= now,
         )
     )
-    needs_python_pagination = (
-        min_priority_score is not None
-        or (sla_bucket is not None and sla_bucket.strip() != "")
-        or sort.lstrip("-") == "priority_score"
-    )
+    if min_priority_score is not None:
+        stmt = stmt.where(_alert_priority_score_sql(now) >= min_priority_score)
+    normalized_sla_bucket = (sla_bucket or "").strip().lower() or None
+    if normalized_sla_bucket:
+        stmt = stmt.where(_alert_sla_bucket_sql(now) == normalized_sla_bucket)
     total_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
     total = total_result.scalar() or 0
-    sort_col = AlertInstance.created_at
-    if sort.lstrip("-") == "created_at":
-        sort_col = AlertInstance.created_at
-    elif sort.lstrip("-") == "updated_at":
-        sort_col = AlertInstance.updated_at
-    elif sort.lstrip("-") == "severity":
-        sort_col = AlertInstance.severity
-    if sort.startswith("-"):
-        stmt = stmt.order_by(sort_col.desc())
+    sort_key = sort.lstrip("-")
+    if sort_key == "priority_score":
+        # Equal scores are ordered by created_at in the same direction.
+        order_cols = [_alert_priority_score_sql(now), AlertInstance.created_at]
+    elif sort_key == "updated_at":
+        order_cols = [AlertInstance.updated_at]
+    elif sort_key == "severity":
+        order_cols = [AlertInstance.severity]
     else:
-        stmt = stmt.order_by(sort_col.asc())
-    if not needs_python_pagination:
-        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+        order_cols = [AlertInstance.created_at]
+    if sort.startswith("-"):
+        stmt = stmt.order_by(*[c.desc() for c in order_cols])
+    else:
+        stmt = stmt.order_by(*[c.asc() for c in order_cols])
+    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(stmt)
     rows = result.scalars().all()
-    # Enrich with order_id / order_code from related_entity
-    items = []
-    normalized_sla_bucket = (sla_bucket or "").strip().lower() or None
-    for r in rows:
-        primary_rel_result = await db.execute(
-            select(AlertRelatedEntity).where(
-                AlertRelatedEntity.alert_id == r.id,
-                AlertRelatedEntity.role == "primary",
-            ).limit(1)
+
+    # Enrich with entity / order_id / order_code from each alert's primary related entity.
+    primary_rel_by_alert: dict[int, tuple[str, int]] = {}
+    if rows:
+        rel_rows = await db.execute(
+            select(AlertRelatedEntity.alert_id, AlertRelatedEntity.entity_type, AlertRelatedEntity.entity_id)
+            .where(AlertRelatedEntity.alert_id.in_([r.id for r in rows]), AlertRelatedEntity.role == "primary")
+            .order_by(AlertRelatedEntity.alert_id, AlertRelatedEntity.id)
         )
-        primary_rel = primary_rel_result.scalar_one_or_none()
-        order_code = None
-        link_order_id = None
-        link_entity_type = primary_rel.entity_type if primary_rel else None
-        link_entity_id = primary_rel.entity_id if primary_rel else None
-        if primary_rel and primary_rel.entity_type == "order":
-            link_order_id = primary_rel.entity_id
-            order_row = await db.get(Order, primary_rel.entity_id)
-            if order_row and order_row.tenant_id == tenant.id:
-                order_code = order_row.order_code
-        priority_score = _alert_priority_score(r, now)
-        item_sla_bucket = _alert_sla_bucket(r, now)
+        for alert_id, rel_entity_type, rel_entity_id in rel_rows.all():
+            primary_rel_by_alert.setdefault(alert_id, (rel_entity_type, rel_entity_id))
+    linked_order_ids = {eid for et, eid in primary_rel_by_alert.values() if et == "order"}
+    order_codes: dict[int, str] = {}
+    if linked_order_ids:
+        order_codes = dict(
+            (
+                await db.execute(
+                    select(Order.id, Order.order_code).where(Order.id.in_(linked_order_ids), Order.tenant_id == tenant.id)
+                )
+            ).all()
+        )
+    items = []
+    for r in rows:
+        link_entity_type, link_entity_id = primary_rel_by_alert.get(r.id, (None, None))
+        link_order_id = link_entity_id if link_entity_type == "order" else None
+        order_code = order_codes.get(link_order_id) if link_order_id is not None else None
         item = {
             "id": r.id,
             "natural_key": r.natural_key,
@@ -328,24 +362,13 @@ async def list_alerts(
             "reason_text": r.reason_text,
             "recommended_action": r.recommended_action,
             "evidence_json": r.evidence_json,
-            "priority_score": priority_score,
-            "sla_bucket": item_sla_bucket,
+            "priority_score": _alert_priority_score(r, now),
+            "sla_bucket": _alert_sla_bucket(r, now),
             "snoozed_until": r.snoozed_until.isoformat() if r.snoozed_until else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "updated_at": r.updated_at.isoformat() if r.updated_at else None,
         }
-        if min_priority_score is not None and priority_score < min_priority_score:
-            continue
-        if normalized_sla_bucket and normalized_sla_bucket != item_sla_bucket:
-            continue
         items.append(item)
-    if sort.lstrip("-") == "priority_score":
-        items.sort(key=lambda x: x["priority_score"], reverse=sort.startswith("-"))
-    if needs_python_pagination:
-        total = len(items)
-        start = (page - 1) * page_size
-        end = start + page_size
-        items = items[start:end]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
@@ -870,7 +893,7 @@ async def get_critical_alerts(
     db: AsyncSession = Depends(get_db),
 ):
     """Legacy aggregate: overdue simple follow-ups plus high-wastage rows from the wastage report."""
-    from app.modules.merch.routers.wastage import get_wastage_report
+    from app.modules.merch.routers.wastage import compute_wastage_rows
 
     _ensure_tenant(user, tenant)
     overdue = await db.execute(
@@ -896,16 +919,7 @@ async def get_critical_alerts(
         for r in rows
         if r.due_date is not None
     ]
-    wastage_rows = await get_wastage_report(
-        order_id=None,
-        style_id=None,
-        date_from=None,
-        date_to=None,
-        threshold_pct=wastage_threshold_pct,
-        tenant=tenant,
-        user=user,
-        db=db,
-    )
+    wastage_rows = await compute_wastage_rows(db, tenant.id, threshold_pct=wastage_threshold_pct)
     for r in wastage_rows:
         alerts.append({
             "id": f"wastage-{r.order_id}-{r.item_id}",

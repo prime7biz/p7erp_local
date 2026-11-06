@@ -37,6 +37,15 @@ def _float_qty(s: str | None) -> float:
         return 0.0
 
 
+async def load_rows_by_id(db: AsyncSession, model: Any, ids: set[int]) -> dict[int, Any]:
+    """Load many rows of `model` in one query, keyed by id. Callers still apply their own tenant checks."""
+    ids = {i for i in ids if i is not None}
+    if not ids:
+        return {}
+    rows = (await db.execute(select(model).where(model.id.in_(ids)))).scalars().all()
+    return {r.id: r for r in rows}
+
+
 def _fob_from_order(order: Order, quotation: Quotation | None, style: GarmentStyle | None) -> tuple[float | None, str | None]:
     snap = order.commercial_snapshot_json or {}
     if isinstance(snap, dict):
@@ -132,36 +141,55 @@ async def build_raw_material_rows(
             )
         ).all()
     )
+    poi_rows = poi_rows[:800]
+    items_by_id = await load_rows_by_id(db, Item, {poi.item_id for poi, _ in poi_rows})
+    tenant_items = {i.id: i for i in items_by_id.values() if i.tenant_id == tenant_id}
+    categories_by_id = await load_rows_by_id(db, ItemCategory, {i.category_id for i in tenant_items.values()})
+    warehouse_ids = {poi.warehouse_id for poi, _ in poi_rows if poi.warehouse_id}
+    warehouse_ids |= {i.default_warehouse_id for i in tenant_items.values() if i.default_warehouse_id}
+    warehouses_by_id = await load_rows_by_id(db, Warehouse, warehouse_ids)
+    source_order_ids = {poi.source_order_id for poi, _ in poi_rows if poi.source_order_id}
+    order_codes: dict[int, str] = {}
+    if source_order_ids:
+        order_codes = dict(
+            (
+                await db.execute(
+                    select(Order.id, Order.order_code).where(Order.id.in_(source_order_ids), Order.tenant_id == tenant_id)
+                )
+            ).all()
+        )
+    # Quantities are free-text strings (may contain commas), so they are parsed and summed in Python.
+    received_by_line: dict[int, float] = defaultdict(float)
+    if poi_rows:
+        gri_rows = await db.execute(
+            select(
+                GoodsReceivingItem.purchase_order_line_id,
+                GoodsReceivingItem.accepted_qty,
+                GoodsReceivingItem.received_qty,
+            ).where(
+                GoodsReceivingItem.tenant_id == tenant_id,
+                GoodsReceivingItem.purchase_order_line_id.in_([poi.id for poi, _ in poi_rows]),
+            )
+        )
+        for line_id, accepted_qty, received_qty in gri_rows.all():
+            received_by_line[line_id] += _float_qty(accepted_qty) or _float_qty(received_qty)
+
     out: list[dict[str, Any]] = []
-    for poi, po in poi_rows[:800]:
+    for poi, po in poi_rows:
         btb_id = po.btb_lc_id
         btb = btb_map.get(int(btb_id)) if btb_id else None
-        item = await db.get(Item, poi.item_id)
-        if item is not None and item.tenant_id != tenant_id:
-            item = None
+        item = tenant_items.get(poi.item_id)
         cat_name = None
         if item:
-            cat = await db.get(ItemCategory, item.category_id)
+            cat = categories_by_id.get(item.category_id)
             cat_name = cat.name if cat and cat.tenant_id == tenant_id else None
-        wh = await db.get(Warehouse, poi.warehouse_id) if poi.warehouse_id else None
+        wh = warehouses_by_id.get(poi.warehouse_id) if poi.warehouse_id else None
         if not wh and item and item.default_warehouse_id:
-            wh = await db.get(Warehouse, item.default_warehouse_id)
+            wh = warehouses_by_id.get(item.default_warehouse_id)
         if wh is not None and wh.tenant_id != tenant_id:
             wh = None
         ordered = _float_qty(poi.quantity)
-        received = 0.0
-        gri_rows = list(
-            (
-                await db.execute(
-                    select(GoodsReceivingItem).where(
-                        GoodsReceivingItem.tenant_id == tenant_id,
-                        GoodsReceivingItem.purchase_order_line_id == poi.id,
-                    )
-                )
-            ).scalars().all()
-        )
-        for gri in gri_rows:
-            received += _float_qty(gri.accepted_qty) or _float_qty(gri.received_qty)
+        received = received_by_line.get(poi.id, 0.0)
         pending = max(ordered - received, 0.0)
         if pending <= 0.001 and ordered > 0:
             in_house = "fully_received"
@@ -169,10 +197,7 @@ async def build_raw_material_rows(
             in_house = "partial"
         else:
             in_house = "pending"
-        order_code = None
-        if poi.source_order_id:
-            o = await db.get(Order, poi.source_order_id)
-            order_code = o.order_code if o and o.tenant_id == tenant_id else None
+        order_code = order_codes.get(poi.source_order_id) if poi.source_order_id else None
         lc_open = bool(btb and (btb.status or "").upper() not in ("DRAFT", "CANCELLED"))
         out.append(
             {
@@ -205,6 +230,63 @@ def _stage_from_pct(pct: float, has_activity: bool) -> tuple[str, float]:
     if pct > 0:
         return "in_progress", pct
     return "in_progress", pct
+
+
+def _sewing_stage(line_configs: list[Any], hourly_sew_qty: float, order_qty: float) -> tuple[str, float]:
+    """Sewing (status, pct) from line bookings; orders without bookings use hourly sewing output instead."""
+    if line_configs:
+        sew_good = 0.0
+        sew_plan = 0.0
+        for c in line_configs:
+            sew_good += float(c.completed_qty or 0)
+            sew_plan += float(c.planned_qty or 0)
+        denom = sew_plan or order_qty or 1.0
+        sew_pct = round(100 * sew_good / denom, 1)
+        statuses = {c.status for c in line_configs}
+        if all((s or "").lower() in ("completed", "closed", "done") for s in statuses):
+            return "completed", min(sew_pct, 100.0)
+        if sew_good > 0:
+            return "in_progress", sew_pct
+        return "in_progress", 0.0
+    sew_pct = round(100 * hourly_sew_qty / order_qty, 1) if order_qty > 0 else 0.0
+    return _stage_from_pct(sew_pct, hourly_sew_qty > 0)
+
+
+async def _sewing_pct_by_order(db: AsyncSession, *, tenant_id: int, orders: list[Order]) -> dict[int, float]:
+    """Same sewing_pct as build_production_row_for_order, for many orders in two queries."""
+    order_ids = [o.id for o in orders]
+    if not order_ids:
+        return {}
+    configs_by_order: dict[int, list[Any]] = defaultdict(list)
+    config_rows = await db.execute(
+        select(
+            SewingLineStyleConfig.order_id,
+            SewingLineStyleConfig.status,
+            SewingLineStyleConfig.completed_qty,
+            SewingLineStyleConfig.planned_qty,
+        ).where(SewingLineStyleConfig.tenant_id == tenant_id, SewingLineStyleConfig.order_id.in_(order_ids))
+    )
+    for row in config_rows.all():
+        configs_by_order[row.order_id].append(row)
+    hourly_by_order: dict[int, float] = {}
+    ids_without_configs = [oid for oid in order_ids if oid not in configs_by_order]
+    if ids_without_configs:
+        hourly_rows = await db.execute(
+            select(HourlyProductionEntry.order_id, func.coalesce(func.sum(HourlyProductionEntry.good_qty), 0))
+            .where(
+                HourlyProductionEntry.tenant_id == tenant_id,
+                HourlyProductionEntry.order_id.in_(ids_without_configs),
+                HourlyProductionEntry.department_type.ilike("%sew%"),
+            )
+            .group_by(HourlyProductionEntry.order_id)
+        )
+        hourly_by_order = {oid: float(qty or 0) for oid, qty in hourly_rows.all()}
+    out: dict[int, float] = {}
+    for o in orders:
+        order_qty = float(o.quantity or 0) or 0.0
+        _, pct = _sewing_stage(configs_by_order.get(o.id, []), hourly_by_order.get(o.id, 0.0), order_qty)
+        out[o.id] = pct
+    return out
 
 
 async def build_production_row_for_order(
@@ -240,22 +322,8 @@ async def build_production_row_for_order(
         .scalars()
         .all()
     )
-    sew_good = 0.0
-    sew_plan = 0.0
-    for c in slcf:
-        sew_good += float(c.completed_qty or 0)
-        sew_plan += float(c.planned_qty or 0)
-    if slcf:
-        denom = sew_plan or oqty or 1.0
-        sew_pct = round(100 * sew_good / denom, 1)
-        st = {x.status for x in slcf}
-        if all((s or "").lower() in ("completed", "closed", "done") for s in st):
-            sewing_status, sewing_pct = "completed", min(sew_pct, 100.0)
-        elif sew_good > 0:
-            sewing_status, sewing_pct = "in_progress", sew_pct
-        else:
-            sewing_status, sewing_pct = "in_progress", 0.0
-    else:
+    hourly_sew_qty = 0.0
+    if not slcf:
         hsew = (
             await db.execute(
                 select(func.coalesce(func.sum(HourlyProductionEntry.good_qty), 0)).where(
@@ -265,9 +333,8 @@ async def build_production_row_for_order(
                 )
             )
         ).scalar_one()
-        g = float(hsew or 0)
-        sew_pct = round(100 * g / oqty, 1) if oqty > 0 else 0.0
-        sewing_status, sewing_pct = _stage_from_pct(sew_pct, g > 0)
+        hourly_sew_qty = float(hsew or 0)
+    sewing_status, sewing_pct = _sewing_stage(slcf, hourly_sew_qty, oqty)
 
     hfin = (
         await db.execute(
@@ -523,13 +590,19 @@ async def build_order_finance_for_order(
     utils = await fsel.utilizations_for_party_btbs(db, tenant_id, party_id, list(bset))
     if not utils:
         return None
+    return {
+        "fob_value": round(fob_val, 4) if fob_val is not None else None,
+        "fob_currency": fob_ccy,
+        **_utilization_totals(utils),
+    }
+
+
+def _utilization_totals(utils: list[FacilityUtilization]) -> dict[str, Any]:
     appr = sum(float(u.principal_amount or 0) for u in utils)
     outst = sum(float(u.outstanding_principal or 0) for u in utils)
     util_amt = max(appr - outst, 0.0)
     cur = next((u.currency for u in utils if u.currency), None)
     return {
-        "fob_value": round(fob_val, 4) if fob_val is not None else None,
-        "fob_currency": fob_ccy,
         "approved_finance_amount": round(appr, 2),
         "utilized_finance_amount": round(util_amt, 2),
         "outstanding_finance_amount": round(outst, 2),
@@ -710,21 +783,27 @@ async def build_financed_order_book_rows(
     oids = sorted(order_btbs.keys(), reverse=True)
     total = len(oids)
     page_ids = oids[offset : offset + limit]
+    if not page_ids:
+        return [], total
+    fetched = await db.execute(
+        select(Order, Customer.name)
+        .outerjoin(Customer, Order.customer_id == Customer.id)
+        .where(Order.tenant_id == tenant_id, Order.id.in_(page_ids))
+    )
+    order_rows = {o.id: (o, name) for o, name in fetched.all()}
+    sewing_pct_by_order = await _sewing_pct_by_order(
+        db, tenant_id=tenant_id, orders=[o for o, _ in order_rows.values()]
+    )
+    page_btb_ids = sorted({bid for oid in page_ids for bid in order_btbs[oid]})
+    page_utils = await fsel.utilizations_for_party_btbs(db, tenant_id, party_id, page_btb_ids)
     items: list[dict[str, Any]] = []
     for oid in page_ids:
-        row = await db.execute(
-            select(Order, Customer.name)
-            .outerjoin(Customer, Order.customer_id == Customer.id)
-            .where(Order.tenant_id == tenant_id, Order.id == oid)
-        )
-        fetched = row.first()
-        if not fetched:
+        if oid not in order_rows:
             continue
-        o, name = fetched[0], fetched[1]
-        prod = await build_production_row_for_order(db, tenant_id=tenant_id, order=o, buyer_name=name)
-        fin = await build_order_finance_for_order(
-            db, tenant_id=tenant_id, party_id=party_id, order_id=oid, order_btbs=order_btbs
-        )
+        o, name = order_rows[oid]
+        bset = order_btbs[oid]
+        order_utils = [u for u in page_utils if u.linked_btb_lc_id in bset]
+        fin = _utilization_totals(order_utils) if order_utils else None
         items.append(
             {
                 "id": o.id,
@@ -736,7 +815,7 @@ async def build_financed_order_book_rows(
                 "expected_delivery": o.delivery_date,
                 "execution_status": o.status,
                 "pipeline_status": o.pipeline_status,
-                "sewing_pct": prod.get("sewing_pct"),
+                "sewing_pct": sewing_pct_by_order.get(oid),
                 "outstanding_finance": fin.get("outstanding_finance_amount") if fin else None,
                 "finance_currency": fin.get("finance_currency") if fin else None,
             }

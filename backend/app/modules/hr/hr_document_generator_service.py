@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import zipfile
 from datetime import date, datetime
+from types import SimpleNamespace
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -252,6 +254,18 @@ async def build_id_card_for_employee(db: AsyncSession, tenant_id: int, employee_
     )
 
 
+_ID_CARD_FIELDS = (
+    "first_name",
+    "last_name",
+    "employee_code",
+    "blood_group",
+    "emergency_contact_name",
+    "emergency_contact_phone",
+    "address_line",
+    "national_id",
+)
+
+
 async def build_bulk_id_cards_zip(db: AsyncSession, tenant_id: int, company_name: str) -> bytes:
     employees = list(
         (
@@ -262,9 +276,33 @@ async def build_bulk_id_cards_zip(db: AsyncSession, tenant_id: int, company_name
         .scalars()
         .all()
     )
+    dept_ids = {e.department_id for e in employees if e.department_id}
+    desig_ids = {e.designation_id for e in employees if e.designation_id}
+    dept_names: dict[int, str] = {}
+    if dept_ids:
+        rows = await db.execute(select(Department.id, Department.name).where(Department.id.in_(dept_ids)))
+        dept_names = {row.id: row.name for row in rows}
+    desig_titles: dict[int, str] = {}
+    if desig_ids:
+        rows = await db.execute(select(Designation.id, Designation.title).where(Designation.id.in_(desig_ids)))
+        desig_titles = {row.id: row.title for row in rows}
+
+    # Plain copies only: the PDF/ZIP work runs in a thread and must not touch the DB session.
+    cards = [
+        (
+            SimpleNamespace(**{f: getattr(emp, f) for f in _ID_CARD_FIELDS}),
+            dept_names.get(emp.department_id) if emp.department_id else None,
+            desig_titles.get(emp.designation_id) if emp.designation_id else None,
+        )
+        for emp in employees
+    ]
+    return await asyncio.to_thread(_zip_id_cards, cards, company_name)
+
+
+def _zip_id_cards(cards: list[tuple[SimpleNamespace, str | None, str | None]], company_name: str) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for emp in employees:
-            pdf = await build_id_card_for_employee(db, tenant_id, emp.id, company_name)
+        for emp, dept_name, desig_title in cards:
+            pdf = generate_id_card_pdf(emp, dept_name=dept_name, desig_title=desig_title, company_name=company_name)
             zf.writestr(f"id-card-{emp.employee_code}.pdf", pdf)
     return buf.getvalue()

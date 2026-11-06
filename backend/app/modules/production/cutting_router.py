@@ -1,6 +1,7 @@
 """Cutting: marker, lay, cut ticket, bundles, barcode PDF."""
 from __future__ import annotations
 
+import asyncio
 import io
 from datetime import date
 
@@ -34,6 +35,8 @@ from app.modules.production.schemas import (
 )
 
 router = APIRouter(prefix="/production/cutting", tags=["production-cutting"])
+
+MAX_BARCODE_PDF_LABELS = 2000
 
 
 def _ensure(user: User, tenant: Tenant) -> None:
@@ -188,33 +191,56 @@ async def bundles_pdf(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure(user, tenant)
-    r = await db.execute(select(CuttingBundle).where(CuttingBundle.tenant_id == tenant.id, CuttingBundle.cut_ticket_id == cut_ticket_id))
-    bundles = list(r.scalars().all())
-    if not bundles:
+    r = await db.execute(
+        select(CuttingBundle.bundle_no, CuttingBundle.qty_in_bundle, CuttingBundle.barcode)
+        .where(CuttingBundle.tenant_id == tenant.id, CuttingBundle.cut_ticket_id == cut_ticket_id)
+        .limit(MAX_BARCODE_PDF_LABELS + 1)
+    )
+    labels = [tuple(row) for row in r.all()]
+    if not labels:
         raise HTTPException(404, "No bundles")
+    if len(labels) > MAX_BARCODE_PDF_LABELS:
+        raise HTTPException(
+            400,
+            f"Too many bundles for one barcode PDF (limit {MAX_BARCODE_PDF_LABELS}). "
+            "Split the cut ticket or print in smaller batches.",
+        )
 
     try:
-        from barcode import Code128
-        from barcode.writer import ImageWriter
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.utils import ImageReader
-        from reportlab.pdfgen import canvas
+        from barcode import Code128  # noqa: F401
+        from barcode.writer import ImageWriter  # noqa: F401
+        from reportlab.pdfgen import canvas  # noqa: F401
     except ImportError as e:
         raise HTTPException(500, f"Barcode/PDF deps missing: {e}") from e
+
+    content = await asyncio.to_thread(_build_bundle_barcode_pdf, labels)
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="bundles-{cut_ticket_id}.pdf"'},
+    )
+
+
+def _build_bundle_barcode_pdf(labels: list[tuple]) -> bytes:
+    from barcode import Code128
+    from barcode.writer import ImageWriter
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
 
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     w, h = A4
     y = h - 40
-    for b in bundles:
+    for bundle_no, qty_in_bundle, barcode_value in labels:
         c.setFont("Helvetica-Bold", 12)
-        c.drawString(40, y, f"Bundle {b.bundle_no}  Qty {b.qty_in_bundle}")
+        c.drawString(40, y, f"Bundle {bundle_no}  Qty {qty_in_bundle}")
         y -= 18
         c.setFont("Helvetica", 10)
-        c.drawString(40, y, f"Barcode: {b.barcode}")
+        c.drawString(40, y, f"Barcode: {barcode_value}")
         y -= 28
         img_buf = io.BytesIO()
-        Code128(b.barcode, writer=ImageWriter()).write(img_buf, options={"write_text": False})
+        Code128(barcode_value, writer=ImageWriter()).write(img_buf, options={"write_text": False})
         img_buf.seek(0)
         c.drawImage(ImageReader(img_buf), 40, y - 60, width=200, height=60)
         y -= 100
@@ -222,12 +248,7 @@ async def bundles_pdf(
             c.showPage()
             y = h - 40
     c.save()
-    buffer.seek(0)
-    return StreamingResponse(
-        buffer,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="bundles-{cut_ticket_id}.pdf"'},
-    )
+    return buffer.getvalue()
 
 
 @router.post("/lay-plans")

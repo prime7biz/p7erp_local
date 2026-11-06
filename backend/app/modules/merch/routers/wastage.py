@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from io import BytesIO
@@ -494,13 +495,22 @@ async def export_wastage_report(
         date_to=date_to,
     )
     try:
-        from openpyxl import Workbook
+        from openpyxl import Workbook  # noqa: F401
     except ImportError:
         raise HTTPException(status_code=500, detail="Excel export not available (openpyxl missing)")
+    content = await asyncio.to_thread(_build_wastage_xlsx, rows)
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="wastage_report.xlsx"'},
+    )
+
+
+def _build_wastage_xlsx(rows: list[WastageReportRowOut]) -> bytes:
+    from openpyxl import Workbook
+
     wb = Workbook()
     ws = wb.active
-    if ws is None:
-        raise HTTPException(status_code=500, detail="Workbook error")
     ws.title = "Wastage detail"
     headers = [
         "Order ID", "Order Code", "Order Date", "Delivery Date", "Buyer", "Style", "Item Code", "Item Name",
@@ -515,12 +525,7 @@ async def export_wastage_report(
         ])
     buf = BytesIO()
     wb.save(buf)
-    buf.seek(0)
-    return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="wastage_report.xlsx"'},
-    )
+    return buf.getvalue()
 
 
 # ---------- Phase 3: thresholds, saved views, management summary ----------

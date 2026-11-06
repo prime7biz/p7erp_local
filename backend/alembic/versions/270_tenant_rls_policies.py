@@ -18,6 +18,9 @@ apply only after the app connects as the non-owner role ``p7erp_app``
 (``backend/scripts/create_rls_app_role.sql``) with ``RLS_SESSION_TENANT_ENABLED=true``.
 Runbook: ``docs/erp-modernization/RLS_RUNBOOK.md``.
 
+Performance: queries already filter on ``tenant_id`` (indexed on almost every table), so the
+index is still used; the policy adds one cheap per-row comparison.
+
 Locks: ENABLE RLS / CREATE POLICY take a short ACCESS EXCLUSIVE lock per table (no rewrite,
 no data scan). lock_timeout makes the migration fail fast (and roll back) instead of queueing
 behind long-running queries; re-run it at a quieter moment.
@@ -47,8 +50,9 @@ depends_on: Union[str, Sequence[str], None] = None
 POLICY_NAME = "p7_tenant_isolation"
 log = logging.getLogger("alembic.runtime.migration")
 
-_BYPASS = "current_setting('app.rls_bypass', true) = 'on'"
-_SAME_TENANT = "tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::integer"
+# (SELECT ...) makes Postgres read each setting once per query (InitPlan) instead of once per row.
+_BYPASS = "(SELECT current_setting('app.rls_bypass', true)) = 'on'"
+_SAME_TENANT = "tenant_id = (SELECT NULLIF(current_setting('app.tenant_id', true), '')::integer)"
 
 
 def _policy_expression(nullable: bool) -> str:

@@ -13,8 +13,15 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 
+def _rls_app_role_mode() -> bool:
+    """RLS test mode: the app (and this fixture) connect as the non-owner role, as in production."""
+    flag = (os.environ.get("RLS_SESSION_TENANT_ENABLED") or "").strip().lower() in {"1", "true", "yes", "on"}
+    return flag and bool((os.environ.get("DATABASE_URL_APP") or "").strip())
+
+
 def _async_database_url() -> str | None:
-    raw = (os.environ.get("DATABASE_URL") or "").strip()
+    raw = (os.environ.get("DATABASE_URL_APP") if _rls_app_role_mode() else os.environ.get("DATABASE_URL")) or ""
+    raw = raw.strip()
     if not raw:
         return None
     if raw.startswith("postgresql://"):

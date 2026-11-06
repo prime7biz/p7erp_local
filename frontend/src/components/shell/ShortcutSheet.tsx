@@ -28,7 +28,7 @@ export function ShortcutSheet({ open, onClose }: { open: boolean; onClose: () =>
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-surface-inverse/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"

@@ -13,11 +13,16 @@ import {
   type HrMedicalRecord,
   type HrSectionResponse,
 } from "@/api/client";
+import { hrBangladeshApi } from "@/api/hrBangladesh";
+import { ActionsMenu } from "@/components/hr/bd/BdUi";
+import { EmployeeBiometricsPanel } from "@/components/hr/bd/EmployeeBiometricsPanel";
+import { EmployeeDocumentUpload, SECURE_FILE_PREFIX } from "@/components/hr/bd/EmployeeDocumentUpload";
+import { EmployeePhotoCapture } from "@/components/hr/bd/EmployeePhotoCapture";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { useAuth } from "@/context/AuthContext";
 import { logApiError } from "@/utils/logApiError";
 
-type Tab = "personal" | "job" | "documents" | "age" | "medical" | "history" | "salary" | "production";
+type Tab = "personal" | "job" | "identity" | "documents" | "age" | "medical" | "history" | "salary" | "production";
 
 const PREFIX = "/app/hr";
 const CAT_OPTS = ["WORKER", "STAFF", "MANAGEMENT"] as const;
@@ -123,6 +128,7 @@ export function HrEmployeeDetailPage() {
         city: row.city,
         country: row.country,
         national_id: row.national_id,
+        birth_registration_no: row.birth_registration_no ?? null,
         employment_type: row.employment_type,
         confirmation_date: row.confirmation_date,
         exit_date: row.exit_date,
@@ -245,7 +251,6 @@ export function HrEmployeeDetailPage() {
     setSuccess("");
     try {
       const updated = await api.updateHrEmployee(employee.id, {
-        employee_code: form.employee_code?.trim(),
         department_id: form.department_id ?? null,
         designation_id: form.designation_id ?? null,
         section_id: form.section_id ?? null,
@@ -288,6 +293,7 @@ export function HrEmployeeDetailPage() {
         city: form.city?.trim() || null,
         country: form.country?.trim() || null,
         national_id: form.national_id?.trim() || null,
+        birth_registration_no: form.birth_registration_no?.trim() || null,
       });
       setEmployee(updated);
       setSuccess("Personal details saved.");
@@ -430,6 +436,7 @@ export function HrEmployeeDetailPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "personal", label: "Personal" },
     { id: "job", label: "Job" },
+    { id: "identity", label: "Photo & biometrics" },
     { id: "documents", label: "Documents" },
     ...(ageEnabled ? [{ id: "age" as const, label: "Age verification" }] : []),
     ...(medicalEnabled ? [{ id: "medical" as const, label: "Medical records" }] : []),
@@ -526,7 +533,9 @@ export function HrEmployeeDetailPage() {
           <input className="sm:col-span-2 rounded border px-3 py-2 text-sm" placeholder="Address" value={form.address_line ?? ""} onChange={(e) => setForm((p) => ({ ...p, address_line: e.target.value }))} />
           <input className="rounded border px-3 py-2 text-sm" placeholder="City" value={form.city ?? ""} onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))} />
           <input className="rounded border px-3 py-2 text-sm" placeholder="Country" value={form.country ?? ""} onChange={(e) => setForm((p) => ({ ...p, country: e.target.value }))} />
-          <input className="sm:col-span-2 rounded border px-3 py-2 text-sm" placeholder="National ID" value={form.national_id ?? ""} onChange={(e) => setForm((p) => ({ ...p, national_id: e.target.value }))} />
+          <input className="rounded border px-3 py-2 text-sm" placeholder="NID (10, 13 or 17 digits)" inputMode="numeric" aria-label="National ID" value={form.national_id ?? ""} onChange={(e) => setForm((p) => ({ ...p, national_id: e.target.value }))} />
+          <input className="rounded border px-3 py-2 text-sm" placeholder="Birth registration no. (17 digits)" inputMode="numeric" aria-label="Birth registration number" value={form.birth_registration_no ?? ""} onChange={(e) => setForm((p) => ({ ...p, birth_registration_no: e.target.value }))} />
+          <p className="sm:col-span-2 text-xs text-text-muted">Bangladesh setup: a mobile number and either the NID or the birth registration number are required.</p>
           <div className="sm:col-span-2 flex justify-end">
             <button type="submit" disabled={saving} className="rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
               {saving ? "Saving..." : "Save personal"}
@@ -537,7 +546,10 @@ export function HrEmployeeDetailPage() {
 
       {tab === "job" && (
         <form onSubmit={saveJob} className="rounded-xl border border-border bg-surface-raised p-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <input className="rounded border px-3 py-2 text-sm" placeholder="Employee code" value={form.employee_code ?? ""} onChange={(e) => setForm((p) => ({ ...p, employee_code: e.target.value }))} required />
+          <div className="rounded border border-border bg-surface-subtle px-3 py-2 text-sm" aria-label="Employee number">
+            <span className="font-medium text-text-primary">{employee.employee_code}</span>
+            <span className="block text-xs text-text-muted">Permanent employee number, never reused</span>
+          </div>
           <input className="rounded border px-3 py-2 text-sm" placeholder="Employment type" value={form.employment_type ?? ""} onChange={(e) => setForm((p) => ({ ...p, employment_type: e.target.value }))} />
           <input
             className="rounded border px-3 py-2 text-sm"
@@ -618,8 +630,20 @@ export function HrEmployeeDetailPage() {
         </form>
       )}
 
+      {tab === "identity" && (
+        <div className="space-y-4">
+          <EmployeePhotoCapture
+            employeeId={employee.id}
+            hasPhoto={Boolean(employee.has_photo)}
+            onChanged={(hasPhoto) => setEmployee((p) => (p ? { ...p, has_photo: hasPhoto } : p))}
+          />
+          <EmployeeBiometricsPanel employeeId={employee.id} />
+        </div>
+      )}
+
       {tab === "documents" && (
         <div className="space-y-4">
+          <EmployeeDocumentUpload employeeId={employee.id} onUploaded={() => void loadDocs()} />
           <form onSubmit={addDocument} className="rounded-xl border border-border bg-surface-raised p-4 grid gap-2 sm:grid-cols-2">
             <input className="rounded border px-2 py-1 text-sm" placeholder="Document type" value={docForm.document_type} onChange={(e) => setDocForm((p) => ({ ...p, document_type: e.target.value }))} />
             <input className="rounded border px-2 py-1 text-sm" placeholder="Document number" value={docForm.document_number ?? ""} onChange={(e) => setDocForm((p) => ({ ...p, document_number: e.target.value }))} />
@@ -639,6 +663,7 @@ export function HrEmployeeDetailPage() {
                   <th className="px-4 py-2 text-left text-xs uppercase">Type</th>
                   <th className="px-4 py-2 text-left text-xs uppercase">Number</th>
                   <th className="px-4 py-2 text-left text-xs uppercase">Expiry</th>
+                  <th className="px-4 py-2 text-right text-xs uppercase">File</th>
                 </tr>
               </thead>
               <tbody>
@@ -647,6 +672,29 @@ export function HrEmployeeDetailPage() {
                     <td className="px-4 py-2">{d.document_type}</td>
                     <td className="px-4 py-2">{d.document_number ?? "—"}</td>
                     <td className="px-4 py-2">{d.expiry_date ?? "—"}</td>
+                    <td className="px-4 py-2 text-right">
+                      {(d.file_path ?? "").startsWith(SECURE_FILE_PREFIX) ? (
+                        <ActionsMenu
+                          items={[
+                            {
+                              label: "Download",
+                              onClick: () =>
+                                void (async () => {
+                                  try {
+                                    const blob = await hrBangladeshApi.employeeDocumentBlob(employee.id, d.id);
+                                    const ext = blob.type === "application/pdf" ? "pdf" : blob.type.split("/")[1] || "bin";
+                                    downloadBlob(blob, `${employee.employee_code}-${d.document_type.toLowerCase()}-${d.id}.${ext}`);
+                                  } catch (err) {
+                                    setError(err instanceof Error ? err.message : "Download failed");
+                                  }
+                                })(),
+                            },
+                          ]}
+                        />
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

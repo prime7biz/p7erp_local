@@ -161,7 +161,7 @@ export function CommandPalette({ open, onClose, routes, createActions, userId }:
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center px-4 pt-[12vh]" role="dialog" aria-modal="true" aria-label="Command palette">
-      <button type="button" className="absolute inset-0 bg-surface-inverse/40" aria-label="Close search" onClick={onClose} />
+      <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close search" onClick={onClose} />
       <div className="relative w-full max-w-lg overflow-hidden rounded-lg border border-border bg-surface-raised shadow-xl">
         <div className="flex items-center gap-2 border-b border-border px-3">
           {searching ? (

@@ -6,7 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-DEVICE_TYPES = ("GENERIC", "ZKTECO")
+# FINGERPRINT / FACE: terminals that match on the device and push ordinary punches (same ingestion).
+DEVICE_TYPES = ("GENERIC", "ZKTECO", "FINGERPRINT", "FACE")
 
 
 class AttendanceDeviceCreate(BaseModel):

@@ -60,11 +60,11 @@ export function UnifiedForgotPasswordPage() {
           <source srcSet="/images/auth-bg-login.webp" type="image/webp" />
           <img src="/images/auth-bg-login.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
         </picture>
-        <div className="absolute inset-0 bg-gradient-to-br from-surface-inverse/85 via-surface-inverse/70 to-brand-primary/30" />
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/85 via-gray-900/70 to-brand-primary/30" />
         <div className="relative z-10 flex flex-col justify-center px-12 xl:px-16 w-full">
           <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-24 w-auto mb-6" />
-          <h1 className="text-2xl xl:text-3xl font-bold text-text-inverse">Reset your password</h1>
-          <p className="text-text-inverse/80 mt-3 max-w-sm">
+          <h1 className="text-2xl xl:text-3xl font-bold text-white">Reset your password</h1>
+          <p className="text-white/80 mt-3 max-w-sm">
             Choose how you sign in, then enter company code and email. If an account matches, we will email you a reset link.
           </p>
         </div>

@@ -9,6 +9,7 @@ import {
   type HrEmployeeUpdate,
   type UserWithRoleResponse,
 } from "@/api/client";
+import { hrBangladeshApi } from "@/api/hrBangladesh";
 import { AppPageHeader } from "@/components/app/AppPageHeader";
 import { listPageRootClass } from "@/components/app/listPageLayout";
 import { useDebouncedValue, useLatestRequest } from "@/hooks/useDebouncedValue";
@@ -27,12 +28,15 @@ export function HrEmployeesPage() {
   const [editing, setEditing] = useState<HrEmployeeResponse | null>(null);
   const [openActionsId, setOpenActionsId] = useState<number | null>(null);
   const [tenantUsers, setTenantUsers] = useState<UserWithRoleResponse[]>([]);
+  const [nextCode, setNextCode] = useState("");
   const [form, setForm] = useState<HrEmployeeCreate>({
     employee_code: "",
     first_name: "",
     last_name: "",
     email: "",
     phone: "",
+    national_id: "",
+    birth_registration_no: "",
     department_id: null,
     designation_id: null,
     joining_date: "",
@@ -92,11 +96,18 @@ export function HrEmployeesPage() {
       last_name: "",
       email: "",
       phone: "",
+      national_id: "",
+      birth_registration_no: "",
       department_id: null,
       designation_id: null,
       joining_date: "",
       user_id: null,
     });
+    setNextCode("");
+    hrBangladeshApi
+      .employeeNumberFormat()
+      .then((f) => setNextCode(f.next_code))
+      .catch((e) => logApiError("HrEmployeesPage.employeeNumberFormat", e));
     setModalOpen(true);
   };
 
@@ -108,6 +119,8 @@ export function HrEmployeesPage() {
       last_name: row.last_name ?? "",
       email: row.email ?? "",
       phone: row.phone ?? "",
+      national_id: row.national_id ?? "",
+      birth_registration_no: row.birth_registration_no ?? "",
       department_id: row.department_id,
       designation_id: row.designation_id,
       joining_date: row.joining_date ?? "",
@@ -123,16 +136,17 @@ export function HrEmployeesPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.employee_code?.trim() || !form.first_name?.trim()) return;
+    if (!form.first_name?.trim()) return;
     setError("");
     try {
       if (editing) {
         const payload: HrEmployeeUpdate = {
-          employee_code: form.employee_code,
           first_name: form.first_name,
           last_name: form.last_name || null,
           email: form.email || null,
           phone: form.phone || null,
+          national_id: form.national_id || null,
+          birth_registration_no: form.birth_registration_no || null,
           department_id: form.department_id ?? null,
           designation_id: form.designation_id ?? null,
           joining_date: form.joining_date || null,
@@ -141,11 +155,12 @@ export function HrEmployeesPage() {
         await api.updateHrEmployee(editing.id, payload);
       } else {
         await api.createHrEmployee({
-          employee_code: form.employee_code,
           first_name: form.first_name,
           last_name: form.last_name || null,
           email: form.email || null,
           phone: form.phone || null,
+          national_id: form.national_id || null,
+          birth_registration_no: form.birth_registration_no || null,
           department_id: form.department_id ?? null,
           designation_id: form.designation_id ?? null,
           joining_date: form.joining_date || null,
@@ -196,6 +211,28 @@ export function HrEmployeesPage() {
               className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary"
             >
               Export Excel
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                setInfo("");
+                setError("");
+                try {
+                  const blob = await api.generateHrBulkIdCards();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "id-cards.zip";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  setInfo("ID cards downloaded (with photo and QR). Each print is recorded in the ID card issue register.");
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "ID card generation failed");
+                }
+              }}
+              className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary"
+            >
+              Print all ID cards
             </button>
             <label className="rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-text-secondary cursor-pointer">
               Import Excel
@@ -307,13 +344,19 @@ export function HrEmployeesPage() {
           <div className="w-full max-w-lg rounded-xl bg-surface-raised p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">{editing ? "Edit employee" : "Add employee"}</h2>
             <form onSubmit={onSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <input
-                className="rounded border border-border-strong px-3 py-2 text-sm"
-                placeholder="Employee code"
-                value={form.employee_code}
-                onChange={(e) => setForm((prev) => ({ ...prev, employee_code: e.target.value }))}
-                required
-              />
+              <div className="rounded border border-border bg-surface-subtle px-3 py-2 text-sm text-text-secondary" aria-label="Employee number">
+                {editing ? (
+                  <>
+                    <span className="font-medium text-text-primary">{editing.employee_code}</span>
+                    <span className="block text-xs text-text-muted">Permanent number, cannot change</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium text-text-primary">{nextCode || "Assigned automatically"}</span>
+                    <span className="block text-xs text-text-muted">New number on save, never reused</span>
+                  </>
+                )}
+              </div>
               <input
                 className="rounded border border-border-strong px-3 py-2 text-sm"
                 placeholder="First name"
@@ -335,9 +378,24 @@ export function HrEmployeesPage() {
               />
               <input
                 className="rounded border border-border-strong px-3 py-2 text-sm"
-                placeholder="Phone"
+                placeholder="Mobile (e.g. 01712345678)"
+                inputMode="tel"
                 value={form.phone ?? ""}
                 onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+              />
+              <input
+                className="rounded border border-border-strong px-3 py-2 text-sm"
+                placeholder="NID (10, 13 or 17 digits)"
+                inputMode="numeric"
+                value={form.national_id ?? ""}
+                onChange={(e) => setForm((prev) => ({ ...prev, national_id: e.target.value }))}
+              />
+              <input
+                className="rounded border border-border-strong px-3 py-2 text-sm"
+                placeholder="Birth registration no. (17 digits)"
+                inputMode="numeric"
+                value={form.birth_registration_no ?? ""}
+                onChange={(e) => setForm((prev) => ({ ...prev, birth_registration_no: e.target.value }))}
               />
               <select
                 className="rounded border border-border-strong px-3 py-2 text-sm"

@@ -6,7 +6,7 @@ export function BlogPage() {
     <>
       <section className="relative bg-gradient-to-br from-brand-primary/5 via-surface-base to-surface-base py-20 lg:py-28 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative">
-          <h1 className="text-4xl sm:text-5xl font-bold text-text-primary leading-tight">
+          <h1 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight text-text-primary leading-tight">
             Blog & <span className="text-brand-primary">Articles</span>
           </h1>
           <p className="mt-6 text-lg text-text-muted max-w-3xl mx-auto leading-relaxed">

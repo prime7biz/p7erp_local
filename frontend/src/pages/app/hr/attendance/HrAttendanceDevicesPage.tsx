@@ -111,7 +111,7 @@ export function HrAttendanceDevicesPage() {
     setForm({
       code: d.code,
       name: d.name,
-      device_type: d.device_type === "GENERIC" ? "GENERIC" : "ZKTECO",
+      device_type: (["GENERIC", "FINGERPRINT", "FACE"].includes(d.device_type) ? d.device_type : "ZKTECO") as HrAttendanceDeviceType,
       serial_number: d.serial_number ?? "",
       default_shift_id: d.default_shift_id != null ? String(d.default_shift_id) : "",
       push_allowed_ips: (d.push_allowed_ips ?? "").split(",").join(", "),
@@ -352,6 +352,8 @@ export function HrAttendanceDevicesPage() {
                 onChange={(e) => setForm((f) => ({ ...f, device_type: e.target.value as HrAttendanceDeviceType }))}
               >
                 <option value="ZKTECO">ZKTeco</option>
+                <option value="FINGERPRINT">Fingerprint terminal</option>
+                <option value="FACE">Face recognition terminal</option>
                 <option value="GENERIC">Other (CSV / JSON)</option>
               </select>
             </label>

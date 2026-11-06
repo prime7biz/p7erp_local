@@ -58,6 +58,12 @@ import {
   GitBranch,
   Percent,
   PenLine,
+  Flag,
+  DoorOpen,
+  ScanLine,
+  Gavel,
+  LogOut,
+  Gift,
 } from "lucide-react";
 
 export type TenantTypeFilter = "manufacturer" | "buying_house" | "both";
@@ -622,6 +628,8 @@ export const menuSections: MenuSection[] = [
         items: [
           { icon: LayoutDashboard, label: "HR Dashboard", href: `${PREFIX}/hr`, exact: true },
           { icon: SlidersHorizontal, label: "HR Settings", href: `${PREFIX}/hr/settings` },
+          { icon: Flag, label: "Bangladesh Setup", href: `${PREFIX}/hr/bangladesh-setup` },
+          { icon: BookOpen, label: "Bangladesh Rules", href: `${PREFIX}/hr/bangladesh-rules` },
         ],
       },
       {
@@ -631,6 +639,10 @@ export const menuSections: MenuSection[] = [
           { icon: UserCog, label: "Designations", href: `${PREFIX}/hr/designations` },
           { icon: Factory, label: "Sections & Lines", href: `${PREFIX}/hr/sections` },
           { icon: UserCheck, label: "Employees", href: `${PREFIX}/hr/employees` },
+          { icon: Gavel, label: "Notices & Cases", href: `${PREFIX}/hr/cases` },
+          { icon: LogOut, label: "Separations & Settlement", href: `${PREFIX}/hr/separations` },
+          { icon: DoorOpen, label: "Gate Passes", href: `${PREFIX}/hr/gate-passes` },
+          { icon: ScanLine, label: "Gate Scan", href: `${PREFIX}/hr/gate-scan` },
           {
             icon: Sparkles,
             label: "AI Onboarding",
@@ -650,6 +662,7 @@ export const menuSections: MenuSection[] = [
           { icon: Calendar, label: "Holidays", href: `${PREFIX}/hr/attendance/holidays` },
           { icon: Calendar, label: "Roster", href: `${PREFIX}/hr/attendance/roster` },
           { icon: ClipboardCheck, label: "Daily Entry", href: `${PREFIX}/hr/attendance/entries` },
+          { icon: PenLine, label: "Manual IN / OUT", href: `${PREFIX}/hr/attendance/manual` },
           { icon: HardDrive, label: "Attendance Devices", href: `${PREFIX}/hr/attendance/devices` },
           { icon: AlertTriangle, label: "Regularizations", href: `${PREFIX}/hr/attendance/regularizations` },
           { icon: Activity, label: "Overtime Rules", href: `${PREFIX}/hr/attendance/overtime-rules` },
@@ -678,6 +691,12 @@ export const menuSections: MenuSection[] = [
           { icon: DollarSign, label: "Runs", href: `${PREFIX}/hr/payroll/runs` },
           { icon: Banknote, label: "Advances & Loans", href: `${PREFIX}/hr/payroll/advances` },
           { icon: TrendingUp, label: "Bonuses", href: `${PREFIX}/hr/payroll/bonuses` },
+          {
+            icon: Gift,
+            label: "Allowances & Bonuses",
+            href: `${PREFIX}/hr/payroll/allowances`,
+            requiresAnyFeatureFlag: ["hr_meal_night_bills_enabled", "hr_production_bonus_enabled", "hr_festival_bonus_enabled"],
+          },
           { icon: Landmark, label: "Accounting Config", href: `${PREFIX}/hr/payroll/accounting-config` },
           {
             icon: ShieldCheck,
@@ -687,6 +706,7 @@ export const menuSections: MenuSection[] = [
           },
           { icon: ShieldCheck, label: "Approvals", href: `${PREFIX}/hr/payroll/approvals` },
           { icon: FileSpreadsheet, label: "Payslips", href: `${PREFIX}/hr/payroll/payslips` },
+          { icon: FileBarChart, label: "Salary Sheets & Registers", href: `${PREFIX}/hr/payroll/registers` },
         ],
       },
       {

@@ -509,6 +509,7 @@ async def calculate_employee_payroll(
     has_manual_override: bool = False,
     apply_lop: bool = False,
     ot_from_salary: bool = False,
+    run_line_id: int | None = None,
 ) -> EmployeeCalcPreview:
     """Build a read-only payroll preview for one employee in a pay period.
 
@@ -764,6 +765,42 @@ async def calculate_employee_payroll(
     # Bangladesh Labour Act: piece-rated workers must still receive at least the minimum wage.
     # Mixed structures (FIXED basic + piece bonus) count every regular earning; overtime does not count.
     regular_earnings = gross - overtime_amount
+
+    # Approved Bangladesh extras (each source row is paid through one owner only; flags default OFF).
+    from app.modules.hr_localization.payroll_extras import collect_extras
+
+    extras = await collect_extras(
+        db,
+        tenant=await db.get(Tenant, tenant_id),
+        employee_id=employee.id,
+        start=period.start_date,
+        end=period.end_date,
+        run_line_id=run_line_id,
+    )
+    for extra in extras.lines:
+        gross += extra.amount
+        component_out.append(
+            ComponentCalcLine(
+                component_id=0,
+                component_code=extra.code,
+                component_name=extra.name,
+                component_type="EARNING",
+                calculation_type="FIXED",
+                amount=decimal_to_money_response(extra.amount),
+                source_amount=decimal_to_money_response(extra.amount),
+            )
+        )
+        component_trace.append(
+            {
+                "component_id": 0,
+                "code": extra.code,
+                "calculation_type": "FIXED",
+                "source_amount": decimal_to_money_response(extra.amount),
+                "amount": decimal_to_money_response(extra.amount),
+                "full_amount": decimal_to_money_response(extra.amount),
+                "component_type": "EARNING",
+            }
+        )
     if pay_basis == "PIECE" and earned_base > 0 and regular_earnings < earned_base:
         warnings.append(
             f"Earnings {quantize_money(regular_earnings)} (piece {quantize_money(piece_earnings)}) are below the "
@@ -909,6 +946,7 @@ async def calculate_employee_payroll(
         # "ot_from_salary" does the same for overtime (see service.run_applies_ot_from_salary).
         **ot_fields,
         **({"ot_salary_entries": salary_ot.entries} if salary_ot is not None else {}),
+        **({"bd_extra_sources": extras.sources} if extras.sources else {}),
     }
     return EmployeeCalcPreview(
         employee_id=employee.id,

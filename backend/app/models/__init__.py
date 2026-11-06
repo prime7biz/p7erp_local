@@ -283,6 +283,35 @@ from app.models.hr_payroll import (
     PayrollCalculationSnapshot,
     PayrollAccountingConfig,
 )
+from app.models.hr_bd import (
+    HrBdEmployeeWageAssignment,
+    HrBdFestivalWorkEntry,
+    HrBdLeaveAccrualEntry,
+    HrBdMaternityCase,
+    HrBdRuleSet,
+    HrBdServiceBenefitCase,
+    HrBdWageScheduleRate,
+)
+from app.models.hr_lifecycle import (
+    HrClearanceItem,
+    HrEmployeeBiometricEnrollment,
+    HrEmployeeCase,
+    HrEmployeeCaseEvent,
+    HrEmployeeGateEvent,
+    HrEmployeeGatePass,
+    HrEmployeePrivacyConsent,
+    HrFinalSettlement,
+    HrPayrollAcknowledgement,
+    HrPayrollDocumentSnapshot,
+    HrSeparation,
+)
+from app.models.hr_allowance import (
+    HrAllowanceEntry,
+    HrAllowanceRule,
+    HrBonusAllocationLine,
+    HrProductionBonusEntry,
+    HrProductionBonusScheme,
+)
 from app.models.hr_compliance import ComplianceCheck
 from app.models.hr_compliance_framework import (
     ComplianceFramework,

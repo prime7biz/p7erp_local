@@ -158,6 +158,7 @@ class EmployeeCreate(BaseModel):
     user_id: int | None = None
     is_active: bool = True
     attendance_device_pin: str | None = Field(None, max_length=32)
+    birth_registration_no: str | None = Field(None, max_length=32)
 
 
 class EmployeeUpdate(BaseModel):
@@ -188,6 +189,7 @@ class EmployeeUpdate(BaseModel):
     user_id: int | None = None
     is_active: bool | None = None
     attendance_device_pin: str | None = Field(None, max_length=32)
+    birth_registration_no: str | None = Field(None, max_length=32)
 
 
 class EmployeeResponse(BaseModel):
@@ -222,3 +224,5 @@ class EmployeeResponse(BaseModel):
     created_at: str
     updated_at: str
     attendance_device_pin: str | None = None
+    birth_registration_no: str | None = None
+    has_photo: bool = False

@@ -506,10 +506,14 @@ export interface HrEmployeeResponse {
   updated_at?: string;
   /** User number on the attendance machine when it is not the employee code. */
   attendance_device_pin?: string | null;
+  birth_registration_no?: string | null;
+  has_photo?: boolean;
 }
 
 export interface HrEmployeeCreate {
-  employee_code: string;
+  /** Leave empty to get the next permanent employee number (e.g. EMP-0000001). */
+  employee_code?: string;
+  birth_registration_no?: string | null;
   first_name: string;
   last_name?: string | null;
   email?: string | null;
@@ -540,6 +544,7 @@ export interface HrEmployeeCreate {
 
 export interface HrEmployeeUpdate {
   employee_code?: string;
+  birth_registration_no?: string | null;
   first_name?: string;
   last_name?: string | null;
   email?: string | null;
@@ -1070,24 +1075,29 @@ export interface HrPayrollPeriodCreate {
   payment_date: string;
 }
 
+/** Backend `PayrollStructureOut`; amounts live on the structure's component lines. */
 export interface HrSalaryStructureResponse {
   id: number;
+  tenant_id: number;
+  code: string;
   name: string;
-  grade: string | null;
-  basic_amount: number;
-  house_rent_amount: number;
-  medical_amount: number;
-  transport_amount: number;
+  description: string | null;
   is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface HrSalaryStructureCreate {
+  code: string;
   name: string;
-  grade?: string | null;
-  basic_amount: number;
-  house_rent_amount?: number;
-  medical_amount?: number;
-  transport_amount?: number;
+  description?: string | null;
+  is_active?: boolean;
+}
+
+/** Structure code is permanent; only these fields change. */
+export interface HrSalaryStructureUpdate {
+  name?: string;
+  description?: string | null;
   is_active?: boolean;
 }
 
@@ -1236,6 +1246,10 @@ export interface HrPayrollStructureLineResponse {
   amount: string;
   formula: string | null;
   sort_order: number;
+  is_pf_component?: boolean;
+  is_esi_component?: boolean;
+  is_pt_component?: boolean;
+  is_gratuity_component?: boolean;
   created_at: string;
 }
 
@@ -1244,6 +1258,14 @@ export interface HrPayrollStructureLineCreate {
   amount: string;
   formula?: string | null;
   sort_order?: number;
+}
+
+/** The component on a line is permanent (delete the line and add another to change it). */
+export interface HrPayrollStructureLineUpdate {
+  amount?: string;
+  formula?: string | null;
+  sort_order?: number;
+  is_gratuity_component?: boolean;
 }
 
 export interface HrPayrollApprovalResponse {
@@ -1339,22 +1361,31 @@ export interface HrJobRequisitionCreate {
   description?: string | null;
 }
 
+/** Backend `CandidateResponse` (hr_recruitment/schemas.py). */
 export interface HrCandidateResponse {
   id: number;
-  candidate_code: string;
+  tenant_id?: number;
+  requisition_id: number | null;
   full_name: string;
   email: string | null;
   phone: string | null;
-  applied_requisition_id: number | null;
+  source?: string | null;
+  current_company?: string | null;
+  current_designation?: string | null;
+  expected_salary?: number | null;
   stage: string;
+  status?: string;
+  notes?: string | null;
+  created_at?: string;
 }
 
 export interface HrCandidateCreate {
-  candidate_code: string;
   full_name: string;
   email?: string | null;
   phone?: string | null;
-  applied_requisition_id?: number | null;
+  requisition_id?: number | null;
+  current_designation?: string | null;
+  notes?: string | null;
 }
 
 export interface HrInterviewResponse {

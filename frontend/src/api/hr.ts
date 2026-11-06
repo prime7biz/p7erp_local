@@ -74,6 +74,7 @@ import type {
   HrPayrollRunResponse,
   HrPayrollStructureLineCreate,
   HrPayrollStructureLineResponse,
+  HrPayrollStructureLineUpdate,
   HrPayslipResponse,
   HrPerformanceCycleResponse,
   HrPerformanceDashboardResponse,
@@ -88,6 +89,7 @@ import type {
   HrRosterEntryUpdate,
   HrSalaryStructureCreate,
   HrSalaryStructureResponse,
+  HrSalaryStructureUpdate,
   HrSectionResponse,
   HrShiftCreate,
   HrShiftResponse,
@@ -687,6 +689,27 @@ export const hrApi = {
     return request<HrSalaryStructureResponse>("/api/v1/hr/payroll/structures", {
       method: "POST",
       body: JSON.stringify(data),
+    });
+  },
+  async updateHrSalaryStructure(id: number, data: HrSalaryStructureUpdate): Promise<HrSalaryStructureResponse> {
+    return request<HrSalaryStructureResponse>(`/api/v1/hr/payroll/structures/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async updateHrSalaryStructureLine(
+    structureId: number,
+    lineId: number,
+    data: HrPayrollStructureLineUpdate
+  ): Promise<HrPayrollStructureLineResponse> {
+    return request<HrPayrollStructureLineResponse>(`/api/v1/hr/payroll/structures/${structureId}/lines/${lineId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async deleteHrSalaryStructureLine(structureId: number, lineId: number): Promise<void> {
+    return request<void>(`/api/v1/hr/payroll/structures/${structureId}/lines/${lineId}?confirm=true`, {
+      method: "DELETE",
     });
   },
   async listHrSalaryStructureLines(structureId: number): Promise<HrPayrollStructureLineResponse[]> {

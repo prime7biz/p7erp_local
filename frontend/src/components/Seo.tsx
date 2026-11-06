@@ -27,10 +27,36 @@ const LANDING_JSON_LD = {
         "AI-powered cloud ERP for garment manufacturers and buying houses. Merchandising, production, inventory, LC management, accounting, and HR in one platform.",
       url: SITE_URL,
       logo: `${SITE_URL}/images/logo.png`,
+      email: "info@prime7erp.com",
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: "Gulshan-2",
+        addressLocality: "Dhaka",
+        postalCode: "1212",
+        addressCountry: "BD",
+      },
+      contactPoint: [
+        {
+          "@type": "ContactPoint",
+          contactType: "sales",
+          telephone: "+880-1892-787220",
+          email: "info@prime7erp.com",
+          availableLanguage: ["English", "Bengali"],
+        },
+        {
+          "@type": "ContactPoint",
+          contactType: "customer support",
+          email: "support@prime7erp.com",
+          availableLanguage: ["English", "Bengali"],
+        },
+      ],
+      sameAs: ["https://www.facebook.com/share/1Cc3vRoqye/"],
     },
     {
       "@type": "SoftwareApplication",
       name: "Prime7 ERP",
+      url: SITE_URL,
+      publisher: { "@id": ORG_ID },
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
       description:
@@ -135,6 +161,7 @@ export function Seo() {
       <meta property="og:description" content={meta.description} />
       <meta property="og:site_name" content="Prime7 ERP" />
       <meta property="og:image" content={DEFAULT_OG_IMAGE} />
+      <meta property="og:image:type" content="image/png" />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
       <meta property="og:image:alt" content={articleOgAlt} />

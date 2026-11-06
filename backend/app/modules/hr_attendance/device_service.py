@@ -225,13 +225,32 @@ def _night_carry_limit(shift: AttendanceShift) -> time:
     return end.time() if end.date() == date(2000, 1, 1) else time(23, 59, 59)
 
 
-def build_entry_values(work_date: date, punch_times: list[datetime], shift: AttendanceShift | None) -> dict[str, Any]:
+def pair_in_out(
+    times: list[datetime], directions: dict[datetime, str] | None
+) -> tuple[datetime | None, datetime | None]:
+    """(in, out) for one work day. The earliest punch is IN and the latest is OUT. Fingerprint / face
+    terminals also report a direction per punch: a day with a single punch that the terminal marked
+    OUT is recorded as an OUT time (IN missing) instead of an IN time, so it shows in the missing-punch
+    queue the right way round."""
+    times = sorted(times)
+    if len(times) == 1:
+        only = times[0]
+        if directions and (directions.get(only) or "").upper() == "OUT":
+            return None, only
+        return only, None
+    return times[0], times[-1]
+
+
+def build_entry_values(
+    work_date: date,
+    punch_times: list[datetime],
+    shift: AttendanceShift | None,
+    directions: dict[datetime, str] | None = None,
+) -> dict[str, Any]:
     """Entry fields (in/out, status, late / early-out / overtime minutes) for one day's punches."""
-    times = sorted(punch_times)
-    first = times[0]
-    last = times[-1] if len(times) > 1 else None
+    first, last = pair_in_out(punch_times, directions)
     values: dict[str, Any] = {
-        "in_time": first.time(),
+        "in_time": first.time() if first is not None else None,
         "out_time": last.time() if last is not None else None,
         "status": "PRESENT",
         "late_minutes": 0,
@@ -241,7 +260,7 @@ def build_entry_values(work_date: date, punch_times: list[datetime], shift: Atte
     if shift is None:
         return values
     start, end = _shift_window(work_date, shift)
-    if first > start + timedelta(minutes=shift.grace_in_minutes or 0):
+    if first is not None and first > start + timedelta(minutes=shift.grace_in_minutes or 0):
         values["status"] = "LATE"
         values["late_minutes"] = _minutes(first - start)
     if last is not None:
@@ -298,9 +317,10 @@ async def _rebuild_entries(
         )
     ).all()
     stored: dict[int, list[datetime]] = defaultdict(list)
-    for emp_id, punched_at in (
+    directions: dict[int, dict[datetime, str]] = defaultdict(dict)
+    for emp_id, punched_at, direction in (
         await db.execute(
-            select(AttendancePunch.employee_id, AttendancePunch.punched_at).where(
+            select(AttendancePunch.employee_id, AttendancePunch.punched_at, AttendancePunch.direction).where(
                 AttendancePunch.tenant_id == tenant_id,
                 AttendancePunch.employee_id.in_(employee_ids),
                 AttendancePunch.punched_at >= datetime.combine(low, time.min),
@@ -309,6 +329,9 @@ async def _rebuild_entries(
         )
     ).all():
         stored[emp_id].append(punched_at)
+        # Several readers can record the same instant; an explicit OUT wins over IN for that instant.
+        if directions[emp_id].get(punched_at) != "OUT":
+            directions[emp_id][punched_at] = (direction or "").upper()
 
     def shift_for(emp_id: int, day: date) -> AttendanceShift | None:
         roster = rosters.get((emp_id, day))
@@ -366,7 +389,7 @@ async def _rebuild_entries(
                 continue
             if not by_day.get(day):
                 continue
-            values = build_entry_values(day, by_day[day], shift_for(emp_id, day))
+            values = build_entry_values(day, by_day[day], shift_for(emp_id, day), directions.get(emp_id))
             entry = existing.get((emp_id, day))
             if entry is None:
                 created_id = (

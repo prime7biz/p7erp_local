@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     # Absolute path to media root (tenant dirs: {media_root}/{tenant_id}/...). Empty = backend/media next to app package.
     media_root: str = ""
+    # Private HR files (photos, CVs): Fernet key for encryption at rest. Empty = key derived from JWT_SECRET
+    # (rotating JWT_SECRET then makes old HR files unreadable, so set a dedicated key in production).
+    hr_file_encryption_key: str = ""
+    # Optional ClamAV daemon "host:port" for HR uploads; empty = no virus scan (images are still re-encoded).
+    hr_clamav_host: str = ""
     ai_confirmation_token_pepper: str = "change-me-ai-token-pepper"
     allow_public_registration: bool = False
     # If set (non-empty), first-user POST /auth/register must send the same value in X-Bootstrap-Key header

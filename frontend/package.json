@@ -17,6 +17,7 @@
     "analyze": "vite build --mode analyze"
   },
   "dependencies": {
+    "@fontsource-variable/crimson-pro": "^5.3.0",
     "@fontsource-variable/inter": "^5.3.0",
     "@radix-ui/react-avatar": "1.1.11",
     "@radix-ui/react-tooltip": "1.2.8",

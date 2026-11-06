@@ -19,7 +19,7 @@ function ArticleIndex() {
     <>
       <section className="relative bg-gradient-to-br from-primary/5 via-white to-white py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl sm:text-5xl font-bold text-text-primary leading-tight">
+          <h1 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight text-text-primary leading-tight">
             Resources &{" "}
             <span className="text-brand-primary">Industry Insights</span>
           </h1>

@@ -86,6 +86,26 @@ class PayrollStructureCreate(BaseModel):
     is_active: bool = True
 
 
+class PayrollStructureUpdate(BaseModel):
+    """Partial update; the structure code is permanent."""
+
+    name: str | None = Field(None, min_length=1, max_length=128)
+    description: str | None = None
+    is_active: bool | None = None
+
+
+class PayrollStructureLineUpdate(BaseModel):
+    """Partial update; the component on a line is permanent (delete and add a line to change it)."""
+
+    amount: PayrollMoneyOpt = None
+    formula: str | None = None
+    sort_order: int | None = None
+    is_pf_component: bool | None = None
+    is_esi_component: bool | None = None
+    is_pt_component: bool | None = None
+    is_gratuity_component: bool | None = None
+
+
 class PayrollStructureOut(BaseModel):
     id: int
     tenant_id: int

@@ -133,6 +133,16 @@ PERMISSION_HR_DOCUMENTS_GENERATE = "hr.documents.generate"
 PERMISSION_HR_DOCUMENTS_VIEW = "hr.documents.view"
 PERMISSION_HR_AGE_VERIFY = "hr.age_verification.verify"
 PERMISSION_HR_MEDICAL_MANAGE = "hr.medical.manage"
+# Bangladesh HR workflows (fail-closed: manager/admin or an explicit grant).
+PERMISSION_HR_IDENTITY_MANAGE = "hr.identity.manage"
+PERMISSION_HR_BIOMETRIC_MANAGE = "hr.biometric.manage"
+PERMISSION_HR_GATE_PASS_MANAGE = "hr.gate_pass.manage"
+PERMISSION_HR_GATE_PASS_SCAN = "hr.gate_pass.scan"
+PERMISSION_HR_DISCIPLINE_MANAGE = "hr.discipline.manage"
+PERMISSION_HR_FINAL_SETTLEMENT_MANAGE = "hr.final_settlement.manage"
+PERMISSION_HR_ALLOWANCE_MANAGE = "hr.allowance.manage"
+PERMISSION_HR_PRODUCTION_BONUS_MANAGE = "hr.production_bonus.manage"
+PERMISSION_HR_BONUS_MANAGE = "hr.bonus.manage"
 PERMISSION_AI_HR_EXTRACT = "ai.hr_extract"
 PERMISSION_AI_LC_EXTRACT = "ai.lc_extract"
 PERMISSION_AI_SHIPPING_EXTRACT = "ai.shipping_extract"
@@ -159,6 +169,15 @@ MATERIAL_CONTROL_GOVERNANCE_KEYS: list[dict[str, str]] = [
         "label": "Create or change leave types (incl. approval requirement)",
         "group": "HR & payroll",
     },
+    {"key": PERMISSION_HR_IDENTITY_MANAGE, "label": "Upload employee photos, CVs and identity documents", "group": "HR & payroll"},
+    {"key": PERMISSION_HR_BIOMETRIC_MANAGE, "label": "Record fingerprint / face enrollment and consent", "group": "HR & payroll"},
+    {"key": PERMISSION_HR_GATE_PASS_MANAGE, "label": "Issue and revoke temporary gate passes", "group": "HR & payroll"},
+    {"key": PERMISSION_HR_GATE_PASS_SCAN, "label": "Scan gate passes at the gate (guard)", "group": "HR & payroll"},
+    {"key": PERMISSION_HR_DISCIPLINE_MANAGE, "label": "Issue notices, memos and disciplinary / absence cases", "group": "HR & payroll"},
+    {"key": PERMISSION_HR_FINAL_SETTLEMENT_MANAGE, "label": "Prepare separations and final settlements", "group": "HR & payroll"},
+    {"key": PERMISSION_HR_ALLOWANCE_MANAGE, "label": "Manage tiffin / dinner / night bills", "group": "HR & payroll"},
+    {"key": PERMISSION_HR_PRODUCTION_BONUS_MANAGE, "label": "Manage production bonus schemes and entries", "group": "HR & payroll"},
+    {"key": PERMISSION_HR_BONUS_MANAGE, "label": "Manage festival bonus allocations", "group": "HR & payroll"},
     {
         "key": PERMISSION_BOM_PRICE_OVERRIDE,
         "label": "Override BOM expected unit price after BOM is approved/frozen",

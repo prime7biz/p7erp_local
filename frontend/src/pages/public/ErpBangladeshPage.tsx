@@ -6,7 +6,7 @@ export function ErpBangladeshPage() {
     <>
       <section className="relative bg-gradient-to-br from-brand-primary/5 via-surface-raised to-surface-raised py-20 lg:py-28 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative">
-          <h1 className="text-4xl sm:text-5xl font-bold text-text-primary leading-tight">
+          <h1 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight text-text-primary leading-tight">
             ERP for <span className="text-brand-primary">Bangladesh</span>
           </h1>
           <p className="mt-6 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">

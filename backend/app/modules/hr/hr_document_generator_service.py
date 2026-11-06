@@ -22,12 +22,54 @@ def _emp_name(emp: Employee) -> str:
     return f"{emp.first_name} {emp.last_name or ''}".strip()
 
 
+def employee_card_qr_payload(tenant_id: int, employee_code: str) -> str:
+    """Internal QR text for an ID card: ``P7EMP:<tenant>:<code>:<signature>``.
+
+    The HMAC signature (key derived from JWT_SECRET) lets the gate scanner reject edited or forged
+    cards; a reprint of the same employee always gives the same text, because the number is permanent.
+    """
+    import hashlib
+    import hmac
+
+    from app.config import get_settings
+
+    key = hashlib.sha256(b"p7-employee-card-v1:" + get_settings().jwt_secret.encode()).digest()
+    msg = f"{tenant_id}:{employee_code}".encode()
+    sig = hmac.new(key, msg, hashlib.sha256).hexdigest()[:20]
+    return f"P7EMP:{tenant_id}:{employee_code}:{sig}"
+
+
+def verify_employee_card_qr(payload: str) -> tuple[int, str] | None:
+    import hmac
+
+    parts = (payload or "").strip().split(":")
+    if len(parts) != 4 or parts[0] != "P7EMP" or not parts[1].isdigit():
+        return None
+    tenant_id, code = int(parts[1]), parts[2]
+    expected = employee_card_qr_payload(tenant_id, code)
+    return (tenant_id, code) if hmac.compare_digest(expected, payload.strip()) else None
+
+
+def _draw_qr(c, text: str, x: float, y: float, size: float) -> None:
+    from reportlab.graphics import renderPDF
+    from reportlab.graphics.barcode.qr import QrCodeWidget
+    from reportlab.graphics.shapes import Drawing
+
+    widget = QrCodeWidget(text)
+    x1, y1, x2, y2 = widget.getBounds()
+    drawing = Drawing(size, size, transform=[size / (x2 - x1), 0, 0, size / (y2 - y1), 0, 0])
+    drawing.add(widget)
+    renderPDF.draw(drawing, c, x, y)
+
+
 def generate_id_card_pdf(
     emp: Employee,
     *,
     dept_name: str | None = None,
     desig_title: str | None = None,
     company_name: str = "Company",
+    photo: bytes | None = None,
+    qr_payload: str | None = None,
 ) -> bytes:
     from reportlab.lib.units import mm
     from reportlab.pdfgen import canvas
@@ -48,8 +90,18 @@ def generate_id_card_pdf(
     c.drawString(8 * mm, h - 40 * mm, f"Department: {(dept_name or '-')[:28]}")
     c.drawString(8 * mm, h - 45 * mm, f"Blood: {emp.blood_group or '-'}")
     c.rect(w - 28 * mm, h - 36 * mm, 20 * mm, 24 * mm)
-    c.setFont("Helvetica", 6)
-    c.drawCentredString(w - 18 * mm, h - 24 * mm, "PHOTO")
+    if photo:
+        from reportlab.lib.utils import ImageReader
+
+        c.drawImage(
+            ImageReader(io.BytesIO(photo)), w - 28 * mm, h - 36 * mm, 20 * mm, 24 * mm,
+            preserveAspectRatio=True, anchor="c",
+        )
+    else:
+        c.setFont("Helvetica", 6)
+        c.drawCentredString(w - 18 * mm, h - 24 * mm, "PHOTO")
+    if qr_payload:
+        _draw_qr(c, qr_payload, w - 24 * mm, 3 * mm, 13 * mm)
     # Back page
     c.showPage()
     c.setFont("Helvetica", 7)
@@ -252,7 +304,20 @@ async def build_id_card_for_employee(db: AsyncSession, tenant_id: int, employee_
         dept_name=dept.name if dept else None,
         desig_title=desig.title if desig else None,
         company_name=company_name,
+        photo=_employee_photo(tenant_id, emp.photo_path),
+        qr_payload=employee_card_qr_payload(tenant_id, emp.employee_code),
     )
+
+
+def _employee_photo(tenant_id: int, photo_path: str | None) -> bytes | None:
+    if not photo_path:
+        return None
+    from app.common import hr_secure_files
+
+    try:
+        return hr_secure_files.read(tenant_id, "photo", photo_path)[0]
+    except Exception:
+        return None
 
 
 _ID_CARD_FIELDS = (
@@ -294,16 +359,35 @@ async def build_bulk_id_cards_zip(db: AsyncSession, tenant_id: int, company_name
             SimpleNamespace(**{f: getattr(emp, f) for f in _ID_CARD_FIELDS}),
             dept_names.get(emp.department_id) if emp.department_id else None,
             desig_titles.get(emp.designation_id) if emp.designation_id else None,
+            emp.photo_path,
         )
         for emp in employees
     ]
-    return await asyncio.to_thread(_zip_id_cards, cards, company_name)
+    return await asyncio.to_thread(_zip_id_cards, cards, company_name, tenant_id)
 
 
-def _zip_id_cards(cards: list[tuple[SimpleNamespace, str | None, str | None]], company_name: str) -> bytes:
+def _zip_id_cards(
+    cards: list[tuple[SimpleNamespace, str | None, str | None, str | None]], company_name: str, tenant_id: int
+) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for emp, dept_name, desig_title in cards:
-            pdf = generate_id_card_pdf(emp, dept_name=dept_name, desig_title=desig_title, company_name=company_name)
+        for emp, dept_name, desig_title, photo_path in cards:
+            pdf = generate_id_card_pdf(
+                emp,
+                dept_name=dept_name,
+                desig_title=desig_title,
+                company_name=company_name,
+                photo=_employee_photo(tenant_id, photo_path),
+                qr_payload=employee_card_qr_payload(tenant_id, emp.employee_code),
+            )
             zf.writestr(f"id-card-{emp.employee_code}.pdf", pdf)
     return buf.getvalue()
+
+
+async def employee_ids_for_bulk_cards(db: AsyncSession, tenant_id: int) -> list[tuple[int, str]]:
+    rows = await db.execute(
+        select(Employee.id, Employee.employee_code)
+        .where(Employee.tenant_id == tenant_id, Employee.is_active.is_(True))
+        .limit(500)
+    )
+    return [(r.id, r.employee_code) for r in rows]

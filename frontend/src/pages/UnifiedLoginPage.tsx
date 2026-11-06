@@ -144,16 +144,16 @@ export function UnifiedLoginPage() {
           <source srcSet="/images/auth-bg-login.webp" type="image/webp" />
           <img src="/images/auth-bg-login.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
         </picture>
-        <div className="absolute inset-0 bg-gradient-to-br from-surface-inverse/85 via-surface-inverse/70 to-brand-primary/30" />
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/85 via-gray-900/70 to-brand-primary/30" />
         <div className="absolute top-[15%] left-[10%] w-64 h-64 bg-brand-primary/20 rounded-full blur-3xl" />
         <div className="absolute bottom-[20%] right-[15%] w-48 h-48 bg-brand-primary/10 rounded-full blur-3xl" />
         <div className="relative z-10 flex flex-col justify-center items-start px-12 xl:px-20 w-full">
           <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-28 xl:h-32 w-auto mb-8 drop-shadow-2xl" role="img" />
-          <h1 className="text-3xl xl:text-4xl font-bold text-text-inverse leading-tight mb-3">
+          <h1 className="text-3xl xl:text-4xl font-bold text-white leading-tight mb-3">
             Complete ERP for<br />
             <span className="text-brand-primary">Garment Manufacturers</span>
           </h1>
-          <p className="text-text-inverse/80 text-base xl:text-lg mb-10 max-w-md leading-relaxed">
+          <p className="text-white/80 text-base xl:text-lg mb-10 max-w-md leading-relaxed">
             Streamline your entire garment manufacturing workflow — from inquiry to shipment — with AI-powered insights.
           </p>
           <div className="grid grid-cols-2 gap-4 mb-12 w-full max-w-sm">
@@ -163,15 +163,15 @@ export function UnifiedLoginPage() {
                 className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-lg px-4 py-3 border border-white/10"
               >
                 <f.icon className="h-5 w-5 text-brand-primary flex-shrink-0" />
-                <span className="text-text-inverse/90 text-sm font-medium">{f.label}</span>
+                <span className="text-white/90 text-sm font-medium">{f.label}</span>
               </div>
             ))}
           </div>
           <div className="flex gap-8">
             {stats.map((s) => (
               <div key={s.label} className="text-center">
-                <div className="text-2xl font-bold text-text-inverse">{s.value}</div>
-                <div className="text-xs text-text-inverse/70 mt-0.5">{s.label}</div>
+                <div className="text-2xl font-bold text-white">{s.value}</div>
+                <div className="text-xs text-white/70 mt-0.5">{s.label}</div>
               </div>
             ))}
           </div>
@@ -181,7 +181,7 @@ export function UnifiedLoginPage() {
       <div className="flex-1 flex flex-col">
         <div className="lg:hidden bg-gradient-to-r from-brand-primary to-brand-primary/90 px-6 py-5 flex items-center justify-center gap-3">
           <img src="/images/logo-white.svg" alt="Prime7 ERP" className="h-10 w-auto" />
-          <span className="text-text-inverse font-semibold text-lg">Prime7 ERP</span>
+          <span className="text-white font-semibold text-lg">Prime7 ERP</span>
         </div>
         <div className="flex-1 flex items-center justify-center relative px-6 py-10 bg-gradient-to-b from-surface-subtle to-surface-raised min-h-[60vh]">
           <div

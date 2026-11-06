@@ -144,6 +144,16 @@ async def create_structure_assignment(
         effective_from=effective_from,
         effective_to=effective_to,
     )
+    from app.modules.hr_localization.enforcement_service import assert_base_salary_meets_grade
+
+    tenant_row = await db.get(Tenant, tenant_id)
+    await assert_base_salary_meets_grade(
+        db,
+        tenant=tenant_row,
+        employee_id=employee_id,
+        base_salary=api_money_to_decimal(base_salary) if base_salary is not None else None,
+        as_of=effective_from,
+    )
 
     row = PayrollEmployeeStructureAssignment(
         tenant_id=tenant_id,
@@ -374,6 +384,7 @@ async def preview_auto_calculate(
             has_manual_override=has_manual,
             apply_lop=apply_lop,
             ot_from_salary=apply_ot_from_salary,
+            run_line_id=existing_line.id if existing_line is not None else None,
         )
         previews.append(row)
         if row.skipped and row.skip_reason == "missing_assignment":
@@ -433,6 +444,19 @@ async def apply_auto_calculate(
 
     selected: set[int] | None = set(employee_ids) if employee_ids is not None else None
 
+    from app.modules.hr_localization.enforcement_service import assert_minimum_wage_for_payroll
+    from app.modules.hr_localization.payroll_extras import link_extras
+
+    await assert_minimum_wage_for_payroll(
+        db,
+        tenant=tenant,
+        as_of=run.run_date,
+        employee_ids=[
+            p.employee_id for p in preview.employees
+            if not p.skipped and (selected is None or p.employee_id in selected)
+        ],
+    )
+
     applied = 0
     skipped = 0
     skip_warnings: list[str] = list(preview.warnings)
@@ -478,6 +502,12 @@ async def apply_auto_calculate(
             db.add(line)
             await db.flush()
 
+        await link_extras(
+            db,
+            tenant_id=tenant.id,
+            run_line_id=line.id,
+            sources=(emp_prev.trace or {}).get("bd_extra_sources") or {},
+        )
         snap = PayrollCalculationSnapshot(
             tenant_id=tenant.id,
             payroll_run_line_id=line.id,

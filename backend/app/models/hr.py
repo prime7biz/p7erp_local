@@ -136,6 +136,10 @@ class Employee(Base):
     city: Mapped[str | None] = mapped_column(String(128), nullable=True)
     country: Mapped[str | None] = mapped_column(String(128), nullable=True)
     national_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # Migration 284. Either NID or birth registration is required when Bangladesh identity rules are on.
+    birth_registration_no: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    # Tenant-relative storage path from FileStorageService (module ``employee_photos``).
+    photo_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     employment_type: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     confirmation_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     exit_date: Mapped[date | None] = mapped_column(Date, nullable=True)

@@ -109,7 +109,7 @@ export function SignUp() {
             <source srcSet="/images/auth-bg-register.webp" type="image/webp" />
             <img src="/images/auth-bg-register.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
           </picture>
-          <div className="absolute inset-0 bg-gradient-to-br from-surface-inverse/80 via-surface-inverse/60 to-primary/25" />
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/80 via-gray-900/60 to-primary/25" />
           <div className="absolute top-1/4 -left-20 w-64 h-64 bg-primary/20 rounded-full blur-3xl" />
           <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
           <div className="relative z-10 text-center max-w-md">
@@ -186,7 +186,7 @@ export function SignUp() {
           <source srcSet="/images/auth-bg-register.webp" type="image/webp" />
           <img src="/images/auth-bg-register.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
         </picture>
-        <div className="absolute inset-0 bg-gradient-to-br from-surface-inverse/80 via-surface-inverse/60 to-primary/25" />
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/80 via-gray-900/60 to-primary/25" />
         <div className="absolute top-1/4 -left-20 w-64 h-64 bg-primary/20 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-primary/10 rounded-full blur-3xl" />
         <div className="relative z-10 text-center max-w-md">

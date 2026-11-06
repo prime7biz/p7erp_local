@@ -59,14 +59,14 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
       "Estimate how many admin hours and how much salary cost your garment team could save by moving off spreadsheets. Your numbers, transparent formula.",
   },
   "/garments-erp": {
-    title: "Garments ERP – Prime7 ERP",
+    title: "Garments ERP Software for RMG Factories – Prime7 ERP",
     description:
-      "End-to-end ERP for garment manufacturers: merchandising, production, inventory, quality, accounting, and HR in one system.",
+      "End-to-end garments ERP for RMG factories: merchandising, costing, BOM, TNA, production, inventory, quality, accounting and HR in one cloud system.",
   },
   "/buying-house-erp": {
-    title: "Buying House ERP – Prime7 ERP",
+    title: "Buying House ERP Software – Prime7 ERP",
     description:
-      "ERP built for buying houses: order management, supplier coordination, LC tracking, and commercial operations.",
+      "ERP for buying houses and sourcing offices: buyer orders, supplier follow-up, sample approvals, LC tracking, commission and commercial documents.",
   },
   "/legal/privacy": {
     title: "Privacy Policy – Prime7 ERP",
@@ -112,24 +112,24 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
     description: "Redirect to the Prime7 ERP terms of service.",
   },
   "/how-it-works": {
-    title: "How It Works – Prime7 ERP",
+    title: "How It Works: ERP Setup and Onboarding – Prime7 ERP",
     description:
-      "How Prime7 ERP works: implementation, onboarding, and getting started for garment manufacturers and buying houses.",
+      "How Prime7 ERP goes live: sign-up, data migration from Excel, configuration, user training and go-live support for garment and buying house teams.",
   },
   "/security": {
-    title: "Security – Prime7 ERP",
+    title: "ERP Security & Data Protection – Prime7 ERP",
     description:
-      "Prime7 ERP security: encryption, access control, compliance, and data protection for your business.",
+      "How Prime7 ERP protects your data: encryption in transit, role-based access, audit logs, tenant data isolation, backups and responsible disclosure.",
   },
   "/erp-bangladesh": {
-    title: "ERP Bangladesh – Prime7 ERP",
+    title: "ERP Software in Bangladesh for RMG – Prime7 ERP",
     description:
-      "Prime7 ERP for Bangladesh garment and buying house industry. Local support and compliance.",
+      "Cloud ERP built in Bangladesh for RMG factories and buying houses: BDT and multi-currency, export LC and BTB LC workflows, and local support in Dhaka.",
   },
   "/erp-comparison": {
-    title: "ERP Comparison – Prime7 ERP",
+    title: "Why Prime7 ERP: Garment ERP vs Generic ERP",
     description:
-      "Compare Prime7 ERP with other garment and buying house ERP solutions. Features and pricing comparison.",
+      "Why a purpose-built garment ERP beats generic ERP and spreadsheets: industry workflows, AI insights, transparent pricing, fast setup and tenant security.",
   },
   "/blog": {
     title: "Blog – Prime7 ERP",
@@ -143,7 +143,8 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
   },
   "/support": {
     title: "Support – Prime7 ERP",
-    description: "Prime7 ERP support: help center, documentation, and contact options.",
+    description:
+      "Get help with Prime7 ERP: contact our support team, reach technical support for your account or implementation, and find guides for common tasks.",
   },
   "/sitemap": {
     title: "Site map – Prime7 ERP",
@@ -152,7 +153,8 @@ export const SEO_BY_PATH: Record<string, SeoMeta> = {
   },
   "/login": {
     title: "Login – Prime7 ERP",
-    description: "Sign in to Prime7 ERP. Company code, username, and password.",
+    description:
+      "Sign in to Prime7 ERP with your company code, email and password. Staff, tenant admins, customers, financiers and suppliers use one login page.",
   },
   "/signup": {
     title: "Sign Up – Prime7 ERP",

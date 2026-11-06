@@ -66,6 +66,7 @@ from app.modules.hr_recruitment.router import router as hr_recruitment_router
 from app.modules.hr_ess.router import router as hr_ess_router
 from app.modules.hr_reports.router import router as hr_reports_router
 from app.modules.hr_compliance.router import router as hr_compliance_router
+from app.modules.hr_localization.routers import BD_HR_ROUTERS
 from app.modules.settings.router import router as settings_router
 from app.modules.commercial.router import router as commercial_router
 from app.modules.commercial.lc_performance_router import router as lc_performance_router
@@ -426,6 +427,12 @@ app.include_router(
     prefix=settings.api_v1_prefix,
     dependencies=[Depends(require_internal_permission("hr.access"))],
 )
+for _bd_hr_router in BD_HR_ROUTERS:
+    app.include_router(
+        _bd_hr_router,
+        prefix=settings.api_v1_prefix,
+        dependencies=[Depends(require_internal_permission("hr.access"))],
+    )
 app.include_router(settings_router, prefix=settings.api_v1_prefix)
 app.include_router(
     commercial_router,

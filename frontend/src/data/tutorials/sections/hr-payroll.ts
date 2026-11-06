@@ -1058,7 +1058,7 @@ When statutory payroll is on and the run is posted, a statutory remittance journ
       id: "hr-pay-final-settlement",
       title: "Final settlement when an employee leaves",
       summary:
-        "Checklist for paying a resigning, terminated or retiring employee: last salary, overtime, leave, advances and one-off dues.",
+        "Separation, department clearance and the calculated final settlement (salary to the last day, leave encashment, service benefit, notice pay, advances), then approve, post and pay.",
       tags: ["HR", "payroll", "final settlement", "resignation", "separation"],
       keywords: [
         "final settlement",
@@ -1074,78 +1074,67 @@ When statutory payroll is on and the run is posted, a statutory remittance journ
         "gratuity",
         "clearance",
       ],
-      estimatedMinutes: 6,
-      lastUpdated: "2026-11-06",
+      estimatedMinutes: 8,
+      lastUpdated: "2026-11-07",
       audience: "hr",
       coverImage: `${S}/hr-payroll-assignments.jpg`,
       content: `## Overview
 
-When someone leaves, they must receive everything owed: salary up to the last working day, approved overtime, and any other dues (leave encashment, notice pay, service benefit or gratuity), minus any unpaid advance.
+When someone leaves, they must receive everything owed: salary up to the last working day, approved overtime and allowances, earned-leave encashment, notice pay and the service benefit (gratuity / resignation / termination / death benefit), minus notice recovery, unpaid advances and clearance recoveries.
 
-P7 ERP does **not** have a separate "final settlement" screen yet. Use this checklist with the existing screens so nothing is missed.
+**HR → Core HR → Separations & Settlement** (\`/app/hr/separations\`) calculates all of this from attendance, the approved Bangladesh rule set and the employee's pay, and posts one balanced voucher.
+
+**Who uses it:** HR officers (create, clearance, calculate), a manager or admin (approve, post, mark paid, reverse).
 
 ## Before you start
 
-- Confirm the **last working day** and the reason (resignation, termination, retirement).
-- Get the agreed settlement figures approved by management.
+- Attendance is entered up to the last day and overtime is **approved**.
+- If the month's payroll run already includes the person, the settlement does **not** pay that salary again (you see a warning). Salary for days not in any run is paid by the settlement.
+- Unauthorised absence is different: start it on **Notices & Cases** (s.27(3A)). Its decision creates the separation here.
 
 ## Steps
 
-1. **Attendance & overtime** — make sure attendance is entered up to the last day and overtime is **approved** (HR → Time & Attendance).
-2. **Leave** — approve or reject open leave requests; note the remaining earned-leave balance (HR → Leave → Balances).
-3. **Keep the employee in the last run** — leave the employee **active** and the **Structure Assignment** open until the month's run is applied. Auto-calculate only includes active employees whose assignment is effective on the **run date**.
-4. **Run payroll** for the month as usual — see [Run monthly payroll](/app/tutorials/hr-pay-monthly-run). The last salary comes out with everyone else's.
-5. **Advances** — on **HR → Payroll → Advances & Loans** check the **Outstanding** column; recover the balance from the settlement.
-6. **One-off dues** — leave encashment, notice pay and service benefit / gratuity are **not calculated automatically**. Work them out with HR and accounts (Statutory Config's **Run preview** can give a sample gratuity figure if Statutory payroll is on), and pay them with a payment voucher in Finance — see [Voucher entry](/app/tutorials/fin-voucher-entry).
-7. **Close the record** — after the run is applied, open **Structure Assignments**, choose **Actions → End assignment** on the person's row, then mark the employee inactive on the employee record.
+1. Open **HR → Core HR → Separations & Settlement** and click **New separation**.
+2. Choose the employee and the **Type** (resignation, termination, retrenchment, dismissal, retirement, death), then the **Request / notice date**, **Last working day**, **Effective date** and **Notice days served**. Click **Create** (status **DRAFT**).
+3. On the row click **Actions → Approve** (manager / admin).
+4. **Actions → Open** shows two panels. In **Clearance** add one item per department (ID card, tools, locker key…) with any **Recoverable (Tk)** amount, then **Actions → Mark cleared** or **Waive** on each.
+5. In **Final settlement** click **Preview** to see the figures and warnings, then **Calculate & save** (status **DRAFT**). You can **Recalculate** while it is a draft.
+6. **Approve** (needs every clearance item done), then **Post voucher** — one balanced journal is posted to the books.
+7. After paying, click **Mark paid** and type the payment reference (cheque, bank, bKash or cash receipt). The separation shows **SETTLED**.
 
 ## What happens next
 
-- The ended assignment shows **Ended**; the employee no longer appears in later Auto-calculate previews.
-- The last payslip stays available in **Payslips**.
+- Approved tiffin / dinner / night bills, production bonus, festival bonus lines and festival-work compensation not yet in payroll are paid once, inside the settlement.
+- A posted settlement can be corrected only with **Reverse** (a new reversal voucher); posted vouchers are never edited.
+- End the person's **Structure Assignment** and deactivate the employee record when everything is paid.
 
-## Bangladesh labour law notes (general guidance)
+## Bangladesh labour law notes
 
-- Final dues should normally be paid within **30 working days** of the end of employment.
-- Unused earned (annual) leave is usually paid out on separation.
-- Notice periods and service benefits differ for resignation, termination, discharge and retirement — check the Labour Act and your company policy with your compliance team.
+- Final dues are payable within **30 working days** of separation (s.30).
+- Service benefit depends on the reason and length of service; the **Bangladesh Rules → Checks & calculators** tab shows the legal section used for each amount.
 
 ## Common problems
 
-- **Employee missing from the last run** → the assignment was ended or the employee made inactive **before** the run date. Re-open by adding a new assignment covering the run date (or re-activate), recalculate, then end it again.
-- **Settlement paid twice** → pay one-off dues only by voucher, not also as a component in the run.`,
+- **"Approve the separation first"** → the separation is still DRAFT.
+- **"Clearance is not complete"** → an item is still **PENDING**.
+- **Salary shows 0 with a warning** → the salary is already in a payroll run (paid once, through payroll), or the person has no salary assignment on the last day.
+- **"Recoveries exceed the amount payable"** → the employee still owes the remainder; recover it separately.`,
       infographics: [
         {
-          type: "steps",
-          title: "Final settlement checklist",
+          type: "flow",
+          title: "Separation to payment",
           steps: [
-            { title: "Attendance and OT up to the last day", href: "/app/hr/attendance/overtime" },
-            { title: "Include in the month's payroll run", href: "/app/hr/payroll/runs" },
-            {
-              title: "Check outstanding advance",
-              href: "/app/hr/payroll/advances",
-              imageSrc: `${S}/hr-payroll-advances.jpg`,
-              imageAlt: "Advances and loans list with Outstanding column",
-            },
-            { title: "Pay one-off dues by voucher", href: "/app/accounts/vouchers" },
-            {
-              title: "End assignment",
-              body: "**Structure Assignments → Actions → End assignment**.",
-              href: "/app/hr/payroll/assignments",
-              imageSrc: `${S}/hr-payroll-assignments.jpg`,
-              imageAlt: "Structure assignments table with Actions menu",
-            },
+            { label: "New separation", href: "/app/hr/separations" },
+            { label: "Approve" },
+            { label: "Clearance" },
+            { label: "Calculate settlement" },
+            { label: "Approve & post voucher" },
+            { label: "Mark paid" },
           ],
         },
       ],
-      relatedAppRoutes: [
-        "/app/hr/payroll/assignments",
-        "/app/hr/payroll/advances",
-        "/app/hr/payroll/runs",
-        "/app/hr/employees",
-        "/app/accounts/vouchers",
-      ],
-      relatedArticleIds: ["hr-pay-monthly-run", "hr-pay-bonus-advances", "fin-voucher-entry", "hr-overview"],
+      relatedAppRoutes: ["/app/hr/separations", "/app/hr/payroll/assignments", "/app/hr/payroll/advances", "/app/accounts/vouchers"],
+      relatedArticleIds: ["hr-pay-monthly-run", "hr-pay-bonus-advances", "hr-cases-notices", "hr-bd-setup", "fin-voucher-entry", "hr-overview"],
     },
 
     // ------------------------------------------------------------------ 10. Troubleshooting
@@ -1276,6 +1265,106 @@ After fixing, re-apply and finalize. If the run was already **approved** but not
         "hr-pay-setup",
         "hr-overview",
       ],
+    },
+
+    // ------------------------------------------------------------------ 11. Salary sheets & registers
+    {
+      id: "hr-pay-salary-registers",
+      title: "Department salary sheets, top sheet, wage register and private wage slips",
+      summary:
+        "Freeze a finalized payroll run, then print the department-wise salary sheet with its top sheet, the wage register and one private wage slip per employee, and record how each worker was paid.",
+      tags: ["HR", "payroll", "salary sheet", "wage register", "payslip"],
+      keywords: ["salary sheet", "top sheet", "department wise", "wage register", "form 38", "wage slip", "payslip zip", "acknowledgement", "revenue stamp", "bKash salary"],
+      estimatedMinutes: 6,
+      lastUpdated: "2026-11-07",
+      audience: "hr",
+      content: `## Overview
+
+**Salary Sheets & Registers** prints everything from one frozen copy of a payroll run, so every sheet and slip shows the same figures even if someone edits the run later.
+
+**Who uses it:** payroll officers and HR managers (\`hr.payroll.manage\`).
+
+## Before you start
+
+- The payroll run is **FINALIZED**, **APPROVED** or **POSTED**. Close every day on **Manual IN / OUT → Missing OUT** first — a run cannot be finalized while days are open.
+
+## Steps
+
+1. Open **HR → Payroll → Salary Sheets & Registers** (\`/app/hr/payroll/registers\`) and choose the **Payroll run**.
+2. If it says the run is not frozen, click **Freeze documents**.
+3. **Top sheet** tab: one line per department with employees, present / absent / paid-leave days, OT hours and amount, allowances, gross, deductions and net pay, plus the grand total.
+4. **Department sheets** tab: every employee in each department. Pick a **Department** to see only one.
+5. Print with **Print salary sheet + top sheet** (all departments, or the chosen one), **Wage register (Form 38)** and **Private wage slips (ZIP)** — one PDF per employee to hand out individually.
+6. **Payments** tab: choose the **Payment method** (cash with signature, mobile financial service, or bank transfer) and click **Actions → Record payment** on each row. Cash needs the worker's signature; MFS and bank need the transaction reference.
+
+> **Warning:** Wage slips are private. Do not pin individual salaries on the notice board; give each worker their own slip.
+
+## Common problems
+
+- **"Freeze the payroll documents first"** → click **Freeze documents**.
+- **"Totals do not match the run"** → finalize the run again, then freeze.
+- **A run is missing from the list** → it is still DRAFT; finalize it first.`,
+      infographics: [
+        {
+          type: "flow",
+          title: "From run to payment",
+          steps: [
+            { label: "Finalize run", href: "/app/hr/payroll/runs" },
+            { label: "Freeze documents", href: "/app/hr/payroll/registers" },
+            { label: "Print sheets & slips" },
+            { label: "Record payments" },
+          ],
+        },
+      ],
+      relatedAppRoutes: ["/app/hr/payroll/registers"],
+      relatedArticleIds: ["hr-pay-monthly-run", "hr-pay-payslips-bank", "hr-manual-attendance"],
+    },
+
+    // ------------------------------------------------------------------ 12. Allowances & bonuses
+    {
+      id: "hr-pay-allowances-bonuses",
+      title: "Tiffin, dinner and night bills, production bonus and Eid bonus",
+      summary:
+        "Set bill rules from attendance, calculate production bonus from output and allocate the festival bonus; each is approved by a manager and paid once in the next payroll run.",
+      tags: ["HR", "payroll", "allowance", "bonus", "tiffin bill", "night bill"],
+      keywords: ["tiffin bill", "dinner bill", "night bill", "production bonus", "piece rate bonus", "efficiency bonus", "eid bonus", "festival bonus", "utsob bonus"],
+      estimatedMinutes: 6,
+      lastUpdated: "2026-11-07",
+      audience: "hr",
+      content: `## Overview
+
+**Allowances & Bonuses** (\`/app/hr/payroll/allowances\`) has three tabs. Each item is generated, checked, approved by a manager or admin, then added to the next payroll run (or a final settlement) exactly once.
+
+## Before you start
+
+An admin turns on the parts you use under **Settings → Configuration**: **HR tiffin / dinner / night bills**, **HR production bonus**, **HR Eid / festival bonus**. They are off by default and the menu item appears once one is on.
+
+## Tiffin / dinner / night bills
+
+1. Add a **Bill rule**: code, name, bill type, **Who gets it** (every present day, night-shift day, worked at least N minutes, or overtime at least N minutes), the amount per day and the start date. A manager clicks **Actions → Approve**.
+2. Choose **From / To**, click **Preview** to see the count and totals, then **Generate**.
+3. Review the **Bills** list (**Actions → Correct amount** with a reason, or **Reject**), then **Approve all pending**.
+
+## Production bonus
+
+1. Add a scheme: per piece, efficiency above a threshold, or a fixed bonus for reaching a target, with an optional cap. A manager approves it.
+2. Choose the scheme, a **Period code** and dates, and click **Calculate**.
+3. Check the entries and click **Approve all pending**.
+
+## Eid / festival bonus
+
+1. Create the bonus declaration on **HR → Payroll → Bonuses**.
+2. On the **Eid / festival bonus** tab choose the declaration, the **Service cut-off date** and **% of basic** (up to 100), then **Allocate**. Employees with less than one year of service are listed as not eligible.
+3. Check the lines and the total, then **Approve**.
+
+> **Tip:** The festival bonus is set up as company policy; Prime7 does not label it as a statutory amount.
+
+## Common problems
+
+- **"… is switched off for this company (Settings > Configuration)"** → an admin must turn the switch on.
+- **An approved bill is not in payroll** → it is paid in the next run that covers its date; items already in a run or settlement are not paid again.`,
+      relatedAppRoutes: ["/app/hr/payroll/allowances", "/app/hr/payroll/bonuses", "/app/settings/config"],
+      relatedArticleIds: ["hr-pay-bonus-advances", "hr-pay-monthly-run", "hr-pay-final-settlement"],
     },
   ],
 };

@@ -78,7 +78,20 @@
   --shadow-card-hover: 0 12px 24px -8px rgba(28, 25, 23, 0.18), 0 4px 8px -4px rgba(28, 25, 23, 0.08);
 
   --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Crimson Pro", "Playfair Display", Georgia, serif;
+  --font-display: "Crimson Pro Variable", "Crimson Pro", "Playfair Display", Georgia, serif;
+}
+
+/*
+  Public marketing + legal pages (wrapper in PublicLayout), light mode only.
+  #ea580c with white text is 3.56:1 and #a8a29e on white is 2.52:1, both below WCAG AA (4.5:1) for normal text.
+  These values reach 5.18:1 (white on brand) and 5.16:1 (muted on white). The logged-in app keeps the original tokens.
+*/
+:root:not(.dark) .public-site {
+  --color-brand-primary: #c2410c;
+  --color-brand-hover: #9a3412;
+  --color-brand-pressed: #7c2d12;
+  --color-focus-ring: #c2410c;
+  --color-text-muted: #736c67;
 }
 
 .dark {
@@ -390,6 +403,32 @@ body {
   animation: sparkle-pulse 1.8s ease-in-out infinite;
 }
 
+/* Public site logo / segment strip: the track holds the list twice, so -50% loops seamlessly. */
+@keyframes marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 40s linear infinite;
+}
+
+.marquee-viewport:hover .marquee-track,
+.marquee-viewport:focus-within .marquee-track {
+  animation-play-state: paused;
+}
+
+.marquee-viewport {
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;
@@ -445,7 +484,16 @@ body {
   .skeleton-shimmer,
   .sparkle-pulse,
   .toast-enter,
-  .page-enter {
+  .page-enter,
+  .marquee-track {
     animation: none;
+  }
+  .marquee-track {
+    width: auto;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .marquee-track [data-marquee-copy="true"] {
+    display: none;
   }
 }

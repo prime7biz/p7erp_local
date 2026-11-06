@@ -36,11 +36,11 @@ The **HR** section of the sidebar holds everything about your people: who works 
 
 The HR sidebar has eight groups. Open **HR** in the sidebar and expand the group you need.
 
-1. **Overview → HR Dashboard** (\`/app/hr\`) — counts of employees, pending leave, payroll queue, open hiring and today's attendance, plus quick links. **Overview → HR Settings** (\`/app/hr/settings\`) — weekend days and overtime pay from salary.
-2. **Core HR** — **Departments**, **Designations**, **Sections & Lines**, **Employees**, **AI Onboarding**. Set these up first.
-3. **Time & Attendance** — **Shifts**, **Holidays**, **Roster**, **Daily Entry**, **Attendance Devices** (\`/app/hr/attendance/devices\`, for fingerprint / card machines), **Regularizations**, **Overtime Rules**, **Overtime**, **Summary**.
+1. **Overview → HR Dashboard** (\`/app/hr\`) — counts of employees, pending leave, payroll queue, open hiring and today's attendance, plus quick links. **Overview → HR Settings** (\`/app/hr/settings\`) — weekend days, overtime pay from salary and the employee number format. **Bangladesh Setup** and **Bangladesh Rules** — official RMG wage grades, leave and labour-law rules (see **Configure HR for Bangladesh**).
+2. **Core HR** — **Departments**, **Designations**, **Sections & Lines**, **Employees**, **Notices & Cases**, **Separations & Settlement**, **Gate Passes**, **Gate Scan**, **AI Onboarding**. Set up the first four before anything else.
+3. **Time & Attendance** — **Shifts**, **Holidays**, **Roster**, **Daily Entry**, **Manual IN / OUT**, **Attendance Devices** (\`/app/hr/attendance/devices\`, for fingerprint / face / card machines), **Regularizations**, **Overtime Rules**, **Overtime**, **Summary**.
 4. **Leave** — **Leave Types**, **Policies**, **Balances**, **Requests**, **Approvals**, **Calendar**.
-5. **Payroll** — **Components**, **Salary Structures**, **Structure Assignments**, **Periods**, **Runs**, **Advances & Loans**, **Bonuses**, **Accounting Config**, **Statutory Config**, **Approvals**, **Payslips**. Step-by-step help is in the **HR — Payroll & compliance** section: **Payroll module map**, **Payroll setup**, **Run monthly payroll**, **Piece-rate and daily-wage workers**, **Overtime**, **Festival bonus, advances and loans**, **Payslips, bank advice file and posting to Finance**, **Statutory deductions and tax**, **Final settlement** and **Payroll troubleshooting** (all linked at the bottom of this page).
+5. **Payroll** — **Components**, **Salary Structures**, **Structure Assignments**, **Periods**, **Runs**, **Advances & Loans**, **Bonuses**, **Allowances & Bonuses** (when switched on), **Accounting Config**, **Statutory Config**, **Approvals**, **Payslips**, **Salary Sheets & Registers**. Step-by-step help is in the **HR — Payroll & compliance** section: **Payroll module map**, **Payroll setup**, **Run monthly payroll**, **Piece-rate and daily-wage workers**, **Overtime**, **Festival bonus, advances and loans**, **Payslips, bank advice file and posting to Finance**, **Statutory deductions and tax**, **Final settlement** and **Payroll troubleshooting** (all linked at the bottom of this page).
 6. **Talent** — **Performance Cycles**, **Goals**, **Reviews**, **Performance Dashboard**, **Job Requisitions**, **Candidates**, **Interviews**, **Offers**.
 7. **Self-Service** — **My Profile**, **My Attendance**, **My Leave**, **My Payslips**, **My Tickets** (for every employee).
 8. **Analytics** — **Compliance**, **AI Insights**, **HR Reports**.
@@ -64,13 +64,13 @@ The HR sidebar has eight groups. Open **HR** in the sidebar and expand the group
 - Monthly: payroll reads approved overtime and approved leave (paid or unpaid) for the period and creates payslips. Employees see them in **My Payslips**.
 - At exit: the employee's status history, exit date and final settlement close the record. See **Employee exit (resignation or termination)**.
 
-There is **no separate Training or Disciplinary screen** yet. Keep certificates and warning letters as document records on the employee's **Documents** tab, and record status changes on **Status history**.
+Warning letters, memos, show-cause letters and unauthorised-absence cases are handled on **Notices & Cases**. There is no separate Training screen yet; keep certificates as files on the employee's **Documents** tab.
 
 ## Tips
 
 - Every list uses one **Actions** button per row (View, Edit, Approve…). See **Row actions**.
 - Several forms ask for an **Employee ID**. This is the system number, not the employee code. Open the employee (**Actions → View**) and read the number at the end of the web address, for example \`/app/hr/employees/12\` → Employee ID **12**.
-- **বাংলা / Bangla** — **My Leave**, **My Attendance** and **My Payslips** have an **English / বাংলা** switch at the top right. The choice is remembered on that device. Other HR screens are in English.
+- **বাংলা / Bangla** — **My Leave**, **My Attendance**, **My Payslips**, **Manual IN / OUT** and **Gate Scan** have an **English / বাংলা** switch at the top right. The choice is remembered on that device. Notices print in both English and Bangla. Other HR screens are in English.
 
 ## Common problems
 
@@ -97,8 +97,9 @@ There is **no separate Training or Disciplinary screen** yet. Keep certificates 
         "permission",
         "hr.attendance.manage",
         "hr.leave.types.manage",
+        "Bangladesh",
       ],
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-07",
       coverImage: "/tutorials/screens/hr.jpg",
       infographics: [
         {
@@ -175,9 +176,13 @@ There is **no separate Training or Disciplinary screen** yet. Keep certificates 
         "/app/hr/reports",
       ],
       relatedArticleIds: [
+        "hr-bd-setup",
         "hr-org-setup",
         "hr-add-employee",
         "hr-ai-onboarding",
+        "hr-manual-attendance",
+        "hr-gate-passes",
+        "hr-cases-notices",
         "hr-shifts-roster-holidays",
         "hr-settings-weekend",
         "hr-daily-attendance",
@@ -200,6 +205,8 @@ There is **no separate Training or Disciplinary screen** yet. Keep certificates 
         "hr-pay-payslips-bank",
         "hr-pay-statutory-tax",
         "hr-pay-final-settlement",
+        "hr-pay-salary-registers",
+        "hr-pay-allowances-bonuses",
         "hr-pay-troubleshooting",
         "gs-row-actions",
       ],
@@ -305,9 +312,9 @@ HR officers usually do this once, then add new items when the factory grows.
       id: "hr-add-employee",
       title: "Add an employee and complete the profile",
       summary:
-        "Create a new employee, link their login for Self-Service, then fill the Personal, Job and Documents tabs and print an ID card.",
+        "Create a new employee (the employee number is given automatically), link their login, then fill the Personal, Job, Photo & biometrics and Documents tabs and print an ID card.",
       featured: true,
-      estimatedMinutes: 8,
+      estimatedMinutes: 10,
       content: `## Overview
 
 The **Employees** list is the master record of every worker and staff member. Attendance, leave, payroll, production crew sheets and the Scan station all point to it.
@@ -317,7 +324,8 @@ The **Employees** list is the master record of every worker and staff member. At
 ## Before you start
 
 - Departments and designations exist (see **Set up departments, designations and sections & lines**).
-- Decide the **Employee code** format. Use the number on the factory ID card — the same code is typed at the **Scan station** for piece-rate pay.
+- The **employee number** is given automatically when you save, for example **EMP-0000001**, then **EMP-0000002**. A number is used once only: it is never given to another person, even after someone leaves or the prefix changes. Change the prefix and digits under **HR → HR Settings → Employee number format**. The same number is printed on the ID card and typed at the **Scan station**.
+- After **Bangladesh setup**, every employee needs a Bangladesh **mobile number** (like 01712345678) and either an **NID** (10, 13 or 17 digits) or a **birth registration number** (17 digits). The same NID or birth registration number cannot be used for two employees.
 - If the person will use **My Leave / My Attendance / My Payslips**, create their login first under **Settings → User Mgmt**.
 
 ## Steps
@@ -325,26 +333,28 @@ The **Employees** list is the master record of every worker and staff member. At
 ### A. Add the employee
 
 1. Open **HR → Core HR → Employees** (\`/app/hr/employees\`).
-2. Type the code or name in **Search by code/name** to make sure the person is not already there (tick **Show inactive** to search old staff too).
-3. Click **Add employee**.
-4. Fill **Employee code** and **First name** (both required), then **Last name**, **Email** and **Phone**.
+2. Type the number or name in **Search by code/name** to make sure the person is not already there (tick **Show inactive** to search old staff too). If they worked here before, reactivate the old record instead of adding a new one.
+3. Click **Add employee**. The top box shows the next employee number ("New number on save, never reused").
+4. Fill **First name** (required), then **Last name**, **Email**, **Mobile**, **NID** or **Birth registration no.**
 5. Pick the department (**No department** by default) and the designation (**No designation** by default).
 6. In **Linked app user (ESS / login)** choose the person's login, or leave **None**.
 7. Pick the joining date in the date box at the bottom.
-8. Click **Save**. The new row appears in the list with status **Active**.
+8. Click **Save**. The new row appears in the list with its new number and status **Active**.
 
 ### B. Complete the profile
 
 1. On the employee's row click **Actions → View**.
-2. **Personal** tab — date of birth, **Gender**, **Marital status**, **Blood group**, **Emergency contact name / phone**, **Address**, **City**, **Country**, **National ID**. Click **Save personal**.
-3. **Job** tab — **Employee code**, **Employment type** (for example Permanent, Probation, Contract), department, designation, **No section / line**, **Category** (**WORKER**, **STAFF**, **MANAGEMENT**) and **Reporting manager**. The three date boxes are, in order: **joining date**, **confirmation date** and (full width) **exit date**. Click **Save job**.
-4. **Documents** tab — for each paper you hold (NID, birth certificate, certificates, warning letters): **Document type**, **Document number**, issue date, expiry date, **Notes**, then **Add document record**.
-5. Click **Generate document** (top right) → **ID card (PDF)**, **Appointment letter** or **Age verification cert** to download a PDF.
+2. **Personal** tab — date of birth, **Gender**, **Marital status**, **Blood group**, **Emergency contact name / phone**, **Address**, **City**, **Country**, **NID** and **Birth registration no.** Click **Save personal**.
+3. **Job** tab — the employee number is shown but cannot be changed. Fill **Employment type** (for example Permanent, Probation, Contract), department, designation, **No section / line**, **Category** (**WORKER**, **STAFF**, **MANAGEMENT**) and **Reporting manager**. The three date boxes are, in order: **joining date**, **confirmation date** and (full width) **exit date**. Click **Save job**.
+4. **Photo & biometrics** tab — take the photo with **Open webcam** (choose the external USB camera under **Camera** if you have one), **Take photo with phone**, or **Upload file**. Tick the privacy-notice box and click **Save photo**. Then record fingerprint / face consent with **Record consent**, enroll the person on the attendance terminal using the **Device user no.** shown, and click **Actions → Confirm test punch**.
+5. **Documents** tab — **Upload CV or scanned document**: choose the type (CV, NID scan, birth registration scan, certificate…), then **Choose file** or **Scan with camera** on a phone, and **Upload**. Uploaded files have **Actions → Download** in the list. You can still add a paper record without a file with **Add document record**.
+6. Click **Generate document** (top right) → **ID card (PDF)** (with photo and a secure QR), **Appointment letter** or **Age verification cert**. Every ID card print is recorded in the ID card issue register.
 
 ### C. Many employees at once
 
 - **Export Excel** downloads the current list (\`employees.xlsx\`) — use it as the template.
-- **Import Excel** uploads a filled sheet. The message shows how many were created and updated.
+- **Import Excel** uploads a filled sheet. The message shows how many were created and updated. After Bangladesh setup, import only **updates** existing employees; add new people through **Add employee** so the number, mobile and NID / birth registration checks run.
+- **Print all ID cards** downloads a ZIP with one ID card per active employee.
 
 ## What happens next
 
@@ -361,8 +371,11 @@ The **Employees** list is the master record of every worker and staff member. At
 
 ## Common problems
 
-- **Save does nothing** → **Employee code** or **First name** is empty.
-- **"Save failed" / code already exists** → another employee (maybe inactive) has that code. Tick **Show inactive** and search.
+- **Save does nothing** → **First name** is empty.
+- **"Required for every employee file: NID or birth registration number and mobile number"** → Bangladesh setup is on; fill the mobile and one of the two ID numbers.
+- **"An employee file with this NID already exists (EMP-…)"** → the person already has a record (maybe inactive). Reactivate it instead of creating a new number.
+- **"The employee number is permanent and cannot be changed"** → numbers never change after creation.
+- **Camera does not open** → allow camera access in the browser (the live site needs HTTPS), or use **Take photo with phone** / **Upload file**.
 - **The person's login is not in Linked app user** → create the user under **Settings → User Mgmt** first, then edit the employee again.
 - **Generate document fails** → your role may lack the HR documents permission; ask your admin.`,
       tags: ["HR", "employees", "onboarding", "employee master", "ESS"],
@@ -373,23 +386,31 @@ The **Employees** list is the master record of every worker and staff member. At
         "onboard",
         "hire",
         "employee code",
+        "employee number",
+        "employee ID",
         "ID card",
         "appointment letter",
         "NID",
         "national ID",
+        "birth registration",
+        "photo",
+        "webcam",
+        "fingerprint",
+        "face",
+        "CV upload",
         "import employees",
         "excel",
         "link user",
         "karmi",
       ],
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-07",
       coverImage: "/tutorials/screens/hr-employees.jpg",
       videos: [
         {
           src: "/tutorials/videos/hr-add-employee.webm",
           poster: "/tutorials/videos/hr-add-employee-poster.jpg",
           title: "Add a new employee",
-          caption: "Search first, open Add employee, fill code, name, phone and department, link the login, then Save (the demo cancels).",
+          caption: "Search first, open Add employee, fill name, phone and department, link the login, then Save (the demo cancels). Recorded before automatic employee numbers; the number is now filled in for you.",
           durationSeconds: 49,
         },
       ],
@@ -400,7 +421,7 @@ The **Employees** list is the master record of every worker and staff member. At
           steps: [
             {
               title: "Fill the Add employee form",
-              body: "**Employee code** and **First name** are required. Choose department, designation and **Linked app user (ESS / login)**, then **Save**.",
+              body: "**First name** is required; the employee number is given on save. After Bangladesh setup also fill **Mobile** and **NID** or **Birth registration no.** Choose department, designation and **Linked app user (ESS / login)**, then **Save**. (Screenshot from before automatic numbering.)",
               imageSrc: "/tutorials/screens/hr-emp-add-form.jpg",
               imageAlt: "Add employee dialog filled with code EMP-0201, Rahima Akter, phone and department D-PROD Production",
               href: "/app/hr/employees",
@@ -424,8 +445,8 @@ The **Employees** list is the master record of every worker and staff member. At
               imageAlt: "Employee profile Job tab with department D-HR and designation DS-HRM HR Manager",
             },
             {
-              title: "Documents tab",
-              body: "Record NID, certificates and expiry dates with **Add document record**.",
+              title: "Photo & biometrics, then Documents",
+              body: "Take the photo (webcam, phone or file) and record fingerprint / face consent on **Photo & biometrics**. On **Documents** upload the CV or scans, or record papers with **Add document record**.",
               imageSrc: "/tutorials/screens/hr-emp-detail-documents.jpg",
               imageAlt: "Employee Documents tab with document type NID and the Add document record button",
             },
@@ -439,7 +460,7 @@ The **Employees** list is the master record of every worker and staff member. At
         },
       ],
       relatedAppRoutes: ["/app/hr/employees", "/app/settings/users"],
-      relatedArticleIds: ["hr-org-setup", "hr-ai-onboarding", "hr-ess", "hr-employee-exit", "hr-pay-setup", "hr-overview", "mfg-scan-station"],
+      relatedArticleIds: ["hr-org-setup", "hr-bd-setup", "hr-ai-onboarding", "hr-ess", "hr-employee-exit", "hr-pay-setup", "hr-overview", "mfg-scan-station"],
     },
     {
       id: "hr-ai-onboarding",
@@ -464,7 +485,7 @@ The **Employees** list is the master record of every worker and staff member. At
 2. In a card (**CV / Resume**, **National ID**, **Birth certificate**, **Medical certificate**) choose the file and wait for the reading to finish.
 3. Click **Apply … fields to form** under the card. The message "Extracted fields applied — review before creating employee." appears.
 4. Repeat for the other papers.
-5. In **Employee details (edit before save)** check every field. Type the **Employee code** and **First name** (both required) if they are empty, and correct anything the AI misread.
+5. In **Employee details (edit before save)** check every field. Type the **First name** (required) if it is empty, and correct anything the AI misread. The employee number is assigned automatically on save.
 6. Click **Confirm & create employee**. The new employee profile opens.
 
 Click **Cancel** to go back to Employees without saving.
@@ -481,11 +502,11 @@ The employee is created like a normal **Add employee**. Continue on the profile:
 ## Common problems
 
 - **AI Onboarding is not in the sidebar** → no OCR flag is on for your company.
-- **Confirm & create employee is greyed out** → **Employee code** or **First name** is empty.
+- **Confirm & create employee is greyed out** → **First name** is empty.
 - **Reading fails** → the file is too dark, blurred or not a supported image/PDF. Scan again.`,
       tags: ["HR", "AI", "OCR", "onboarding", "employees"],
       keywords: ["scan CV", "resume", "NID scan", "national ID", "birth certificate", "medical certificate", "OCR", "auto fill", "AI onboard"],
-      lastUpdated: "2026-11-06",
+      lastUpdated: "2026-11-07",
       coverImage: "/tutorials/screens/hr-employees-ai-onboard.jpg",
       images: [
         {
@@ -1498,8 +1519,8 @@ When someone leaves, HR closes the record in a fixed order so pay, attendance an
 2. **Documents** tab — add a record for the resignation letter or termination order (**Document type**, **Document number**, date, **Notes**) and click **Add document record**.
 3. **Status history** tab — type the **Status label** (for example \`RESIGNED\`, \`TERMINATED\`, \`RETIRED\`), pick the effective date, write **Remarks**, then click **Add status change**.
 4. **Job** tab — set the third date box (full width) to the **exit date** and click **Save job**.
-5. Process the final settlement (last salary, leave encashment, dues and deductions) in **Payroll** — see **Final settlement when an employee leaves** (linked below).
-6. Back on the profile, click **Deactivate** (top right). The header now shows **Inactive** and the person disappears from normal lists.
+5. Create the separation, clearance and final settlement on **HR → Core HR → Separations & Settlement** — see **Final settlement when an employee leaves** (linked below). For unauthorised absence (a worker who stopped coming), start on **Notices & Cases** instead; the s.27(3A) decision creates the separation for you.
+6. Back on the profile, click **Deactivate** (top right). The header now shows **Inactive** and the person disappears from normal lists. The employee number stays with this person and is never given to anyone else.
 
 To bring someone back (re-join), open them with **Show inactive** ticked on Employees and click **Activate**.
 
@@ -1520,8 +1541,8 @@ To bring someone back (re-join), open them with **Show inactive** ticked on Empl
 - **I cannot find a person who left** → tick **Show inactive** on Employees.
 - **The leaver still logs in** → disable their user in **Settings → User Mgmt**.`,
       tags: ["HR", "exit", "separation", "resignation", "termination", "employees"],
-      keywords: ["resign", "resignation", "termination", "separation", "exit", "left job", "final settlement", "deactivate", "inactive", "absconding", "retire", "chakri chhara"],
-      lastUpdated: "2026-11-06",
+      keywords: ["resign", "resignation", "termination", "separation", "exit", "left job", "final settlement", "deactivate", "inactive", "absconding", "lefty", "unauthorised absence", "retire", "chakri chhara"],
+      lastUpdated: "2026-11-07",
       coverImage: "/tutorials/screens/hr-emp-detail-history.jpg",
       infographics: [
         {
@@ -1541,17 +1562,17 @@ To bring someone back (re-join), open them with **Show inactive** ticked on Empl
               imageAlt: "Employee Job tab with joining, confirmation and exit date boxes",
             },
             {
-              title: "Final pay, then Deactivate",
-              body: "Settle final pay in Payroll, then click **Deactivate** at the top right of the profile.",
+              title: "Final settlement, then Deactivate",
+              body: "Settle final pay on **Separations & Settlement**, then click **Deactivate** at the top right of the profile.",
               imageSrc: "/tutorials/screens/hr-emp-detail-personal.jpg",
               imageAlt: "Employee profile header with Generate document and Deactivate buttons",
-              href: "/app/hr/payroll/runs",
+              href: "/app/hr/separations",
             },
           ],
         },
       ],
-      relatedAppRoutes: ["/app/hr/employees", "/app/hr/payroll/runs", "/app/settings/users"],
-      relatedArticleIds: ["hr-pay-final-settlement", "hr-add-employee", "hr-leave-setup", "hr-overview"],
+      relatedAppRoutes: ["/app/hr/employees", "/app/hr/separations", "/app/settings/users"],
+      relatedArticleIds: ["hr-pay-final-settlement", "hr-cases-notices", "hr-add-employee", "hr-leave-setup", "hr-overview"],
     },
     {
       id: "hr-reports-analytics",
@@ -1650,6 +1671,196 @@ Use the findings to act: chase missing attendance, approve leave, fix documents 
       ],
       relatedAppRoutes: ["/app/hr", "/app/hr/reports", "/app/hr/compliance", "/app/hr/ai-insights", "/app/reports/employee", "/app/reports/payroll"],
       relatedArticleIds: ["hr-overview", "hr-daily-attendance", "hr-add-employee", "reports-hr", "reports-overview", "ai-tools-overview"],
+    },
+    {
+      id: "hr-bd-setup",
+      title: "Configure HR for Bangladesh (RMG wage grades, leave and labour-law rules)",
+      summary:
+        "One click adds the official 2023 garments minimum-wage grades, designations, salary structures, leave types and settings; then review the rules and switch on enforcement area by area.",
+      featured: true,
+      estimatedMinutes: 10,
+      audience: "hr",
+      content: `## Overview
+
+**Bangladesh setup** prepares HR and payroll for a Bangladesh garments (RMG) factory using the official minimum-wage Gazette (notification 40.00.0000.016.32.021.13.30, effective 1 December 2023) and the Bangladesh Labour Act 2006 as amended in 2026.
+
+It only **adds** what is missing. Records you already have, or have edited, are never overwritten, and you can edit every amount afterwards.
+
+**Who uses it:** HR manager / admin (or a role with \`hr.payroll.manage\`).
+
+## What it adds
+
+- **Wage grades:** worker grades 1–4 and worker apprentice, employee (staff) grades 1–4 and employee apprentice, with the Gazette basic, house rent (50% of basic), medical 750, transport 450 and food 1,250.
+- **Designations** for each grade (for example Senior Operator, Operator, Junior Operator, Line Ironman) with codes like \`BD-W-G2-01\`.
+- **Salary structures** \`BD-W-G1\` … \`BD-E-APP\` and pay components \`BD-BASIC\`, \`BD-HRENT\`, \`BD-MEDICAL\`, \`BD-TRANSPORT\`, \`BD-FOOD\`.
+- **Leave types:** casual 10 days, sick 14 days, earned leave (1 day per 18 days worked, up to 40) and maternity.
+- **Settings:** Friday weekend, overtime from salary at 2 × basic ÷ 208 per hour, and the rule that every employee needs a mobile number plus NID or birth registration number.
+
+## Steps
+
+1. Open **HR → Overview → Bangladesh Setup** (\`/app/hr/bangladesh-setup\`).
+2. Read the counts: **to add**, **present**, **edited by you**, **conflicts**. The **Setup items** list shows every grade, designation, leave type and setting; filter by area or **Conflicts only**.
+3. Click **Configure for Bangladesh**, read the summary, then **Yes, apply**. You see how many records were created and how many were already present.
+4. Check **Employee number format** at the bottom (default **EMP-** + 7 digits, so the first employee is EMP-0000001).
+5. Open **Bangladesh Rules** (\`/app/hr/bangladesh-rules\`) → **Rule sets & wage schedule** → **Create official rule set**. Review **View values** and the wage schedule, then **Actions → Approve** (manager / admin).
+6. **Checks & calculators** tab: run the **Minimum wage check** (who is below their grade, who has no grade), the **Festival holidays** check (13 paid festival holidays per year), and the **Service benefit** and **Maternity benefit** calculators. Nothing on this tab changes data.
+7. **Wage grades** tab: give each employee their Gazette grade from a date.
+8. When the checks are clean, open **Enforcement** and switch on one area at a time: **Minimum wage**, **Earned leave accrual**, **Maternity benefit**, **Festival-day work**, **Service benefits**. All are **off** by default.
+
+## What happens next
+
+- With **Minimum wage** on, a salary assignment or payroll line below the employee's grade is refused.
+- **Maternity**, **Earned leave & festival work** and **Service benefits** tabs become usable for their workflows; each approval is manager / admin only and written to the audit log.
+
+> **Warning:** Amounts are copied from the official Gazette and were independently checked against the Gazette pages, but your compliance officer or labour counsel should sign off before you switch enforcement on in production.
+
+## Common problems
+
+- **Configure button says "Already configured"** → every item is present; nothing to add.
+- **Conflict on a designation** → you already have a designation with the same title under another code. Rename one of them, then apply again.
+- **Enforcement switch is greyed out** → approve a rule set that covers today first.
+- **"Only manager/admin can approve or switch enforcement"** → ask a manager or admin.`,
+      tags: ["HR", "Bangladesh", "labour law", "minimum wage", "setup", "payroll"],
+      keywords: [
+        "configure for Bangladesh",
+        "Bangladesh setup",
+        "garments minimum wage",
+        "wage board",
+        "gazette 2023",
+        "grade 1",
+        "grade 4",
+        "apprentice",
+        "labour act",
+        "maternity 120 days",
+        "earned leave",
+        "festival holiday",
+        "gratuity",
+        "shromo ain",
+        "nimno mojuri",
+      ],
+      lastUpdated: "2026-11-07",
+      infographics: [
+        {
+          type: "flow",
+          title: "From setup to enforcement",
+          steps: [
+            { label: "Configure for Bangladesh", href: "/app/hr/bangladesh-setup" },
+            { label: "Create & approve rule set", href: "/app/hr/bangladesh-rules" },
+            { label: "Run checks" },
+            { label: "Assign wage grades" },
+            { label: "Switch on enforcement" },
+          ],
+        },
+      ],
+      relatedAppRoutes: ["/app/hr/bangladesh-setup", "/app/hr/bangladesh-rules"],
+      relatedArticleIds: ["hr-add-employee", "hr-pay-setup", "hr-leave-setup", "hr-pay-final-settlement", "hr-overview"],
+    },
+    {
+      id: "hr-manual-attendance",
+      title: "Manual attendance: record IN now, OUT later",
+      summary: "When the fingerprint or face machine is down, type the employee number (or scan the ID card) and the IN time, then add the OUT later from the Missing OUT list.",
+      estimatedMinutes: 4,
+      content: `## Overview
+
+**Manual IN / OUT** records attendance in two steps. The day stays **open** after the IN; it counts as present (with late, early-out and overtime minutes) only after the OUT is added. These days appear in the attendance summary and the salary sheet like machine punches.
+
+**Who uses it:** attendance clerks and HR officers (\`hr.attendance.manage\`). The screen has an English / বাংলা switch.
+
+## Steps
+
+1. Open **HR → Time & Attendance → Manual IN / OUT** (\`/app/hr/attendance/manual\`).
+2. **Record IN** tab: type the employee number (for example EMP-0000001) or scan the ID-card QR, click **Check** to see the name, pick the **Work date** and **IN time**, write a **Reason** (for example "Device was offline") and click **Save IN**.
+3. Later, open **Missing OUT**. Every open day is listed; click **Actions → Add OUT** on the row. The OUT form opens with the number and date filled in.
+4. Enter the **OUT time**. For a night shift that ends after midnight tick **OUT is after midnight (night shift)**. Click **Save OUT**. The message shows the day's result (for example PRESENT or LATE).
+
+## What happens next
+
+- Payroll cannot be finalized while any day in its period is still open, so clear **Missing OUT** before month end.
+- To change a closed day, use **Regularizations**.
+
+## Common problems
+
+- **"already has an open IN (add the OUT instead)"** → the IN for that day exists; use **Missing OUT**.
+- **"This day is already closed; use regularization"** → the OUT is already recorded.
+- **"OUT must be after IN"** → tick the night-shift box if the OUT is after midnight.
+- **"Employee is not active"** → the person was deactivated.`,
+      tags: ["HR", "attendance", "manual attendance", "missing out"],
+      keywords: ["manual punch", "in time", "out time", "missing out", "device offline", "hajira", "night shift"],
+      lastUpdated: "2026-11-07",
+      relatedAppRoutes: ["/app/hr/attendance/manual"],
+      relatedArticleIds: ["hr-daily-attendance", "hr-attendance-devices", "hr-pay-monthly-run"],
+    },
+    {
+      id: "hr-gate-passes",
+      title: "Temporary gate passes and the gate scan screen",
+      summary: "Print a pass with a secure QR for a visitor, contractor or new joiner; the guard scans passes and employee ID cards and every scan is logged.",
+      estimatedMinutes: 4,
+      content: `## Overview
+
+A **temporary gate pass** lets someone without an ID card enter for a set time. The printed QR can only be checked by Prime7, so a photocopied or edited pass is refused. Guards use **Gate Scan** for both passes and employee ID cards.
+
+**Who uses it:** HR / admin office (\`hr.gate_pass.manage\`) and gate guards (\`hr.gate_pass.scan\`).
+
+## Steps
+
+1. Open **HR → Core HR → Gate Passes** (\`/app/hr/gate-passes\`).
+2. Fill **Name on pass**, **Mobile**, optional last digits of the NID / birth registration, the host employee, **Valid from / to**, optional **Allowed zones** and the **Purpose**. Click **Create pass** (status **DRAFT**).
+3. On the row click **Actions → Activate**, then **Actions → Print**. Hand the printed pass to the person.
+4. At the gate, the guard opens **Gate Scan** (\`/app/hr/gate-scan\`), sets the **Gate** name and **Direction**, and scans the QR with a USB or Bluetooth scanner. The screen turns green (**ALLOWED**) or red (**DENIED**) with the reason.
+5. To cancel a pass early: **Actions → Revoke** and type the reason.
+
+## What happens next
+
+- Every scan, allowed or denied, appears in the **Gate log**.
+- A pass stops working after **Valid to**, after **Revoke**, or outside its allowed zones.
+
+## Common problems
+
+- **DENIED "Pass is DRAFT"** → it was not activated.
+- **DENIED "Unknown pass"** → the QR is damaged or not from this company.
+- **DENIED "Zone not allowed for this pass"** → type the zone on the scan screen or issue a new pass with that zone.`,
+      tags: ["HR", "gate pass", "security", "visitor"],
+      keywords: ["visitor pass", "temporary pass", "gate", "guard", "QR scan", "entry exit"],
+      lastUpdated: "2026-11-07",
+      relatedAppRoutes: ["/app/hr/gate-passes", "/app/hr/gate-scan"],
+      relatedArticleIds: ["hr-add-employee", "hr-overview"],
+    },
+    {
+      id: "hr-cases-notices",
+      title: "Notices, memos, show-cause and unauthorised absence (s.27(3A))",
+      summary: "Issue printed notices in English and Bangla, record delivery, replies and hearings, and follow the 10-day + 7-day procedure for a worker absent without leave.",
+      estimatedMinutes: 6,
+      content: `## Overview
+
+**Notices & Cases** keeps every letter to an employee with its full history: office memos, notices, warnings, show-cause letters, disciplinary cases (s.24) and **unauthorised absence** (s.27(3A)). Each case prints in English and Bangla.
+
+**Who uses it:** HR officers (\`hr.discipline.manage\`); decisions are manager / admin only.
+
+## Steps (any notice)
+
+1. Open **HR → Core HR → Notices & Cases** (\`/app/hr/cases\`) and click **New notice / case**.
+2. Choose the employee and **Type**, write the **Subject**, the English text and the Bangla text. Click **Create draft**.
+3. In the case panel click **Issue notice** and enter the issue date. **Print notice (English + Bangla)** downloads the letter.
+4. Record what happens with **Record event** (delivered, response, hearing, rejoined…).
+5. A manager chooses the **Decision** and clicks **Record decision**.
+
+## Unauthorised absence (s.27(3A))
+
+1. Workers absent more than **10 days** with no attendance or approved leave appear in **Absent more than 10 days**. Click **Actions → Start absence case** — the Bangla and English text is filled in for you.
+2. **Issue notice**: the worker has **10 days** to explain in writing and rejoin.
+3. If the worker does not rejoin, click **Issue 7-day defence notice** after the 10 days.
+4. After the 7 days, a manager records **deemed resignation**. Prime7 creates a DRAFT separation on **Separations & Settlement** for the final dues.
+
+## Common problems
+
+- **"the explain-and-rejoin notice can be issued only after more than 10 days of absence"** → wait until the 11th day.
+- **"The employee rejoined; close the case instead"** → record the decision **rejoined**.
+- **"Record the hearing (s.24 procedure) before a dismissal"** → add a **hearing** event first.`,
+      tags: ["HR", "discipline", "notice", "absence", "show cause"],
+      keywords: ["memo", "warning letter", "show cause", "lefty", "absconding", "unauthorised absence", "27(3A)", "deemed resignation", "disciplinary", "hearing", "notish"],
+      lastUpdated: "2026-11-07",
+      relatedAppRoutes: ["/app/hr/cases"],
+      relatedArticleIds: ["hr-pay-final-settlement", "hr-employee-exit", "hr-overview"],
     },
   ],
 };

@@ -73,8 +73,11 @@ from app.modules.hr_payroll.schemas import (
     PayrollStructureCreate,
     PayrollStructureLineBody,
     PayrollStructureLineOut,
+    PayrollStructureLineUpdate,
     PayrollStructureOut,
+    PayrollStructureUpdate,
 )
+from app.modules.audit.service import log_action
 from app.modules.hr_payroll import service as payroll_service
 from app.modules.hr_payroll.formula_engine import quantize_money
 
@@ -197,6 +200,10 @@ def _structure_line_out(row: PayrollStructureLine) -> PayrollStructureLineOut:
         amount=decimal_to_money_response(row.amount),
         formula=row.formula,
         sort_order=row.sort_order,
+        is_pf_component=bool(row.is_pf_component),
+        is_esi_component=bool(row.is_esi_component),
+        is_pt_component=bool(row.is_pt_component),
+        is_gratuity_component=bool(row.is_gratuity_component),
         created_at=row.created_at.isoformat(),
     )
 
@@ -695,6 +702,149 @@ async def create_structure_line(
     return _structure_line_out(row)
 
 
+async def _lock_structure(db: AsyncSession, tenant_id: int, structure_id: int) -> PayrollStructure:
+    row = (
+        await db.execute(
+            select(PayrollStructure)
+            .where(PayrollStructure.id == structure_id, PayrollStructure.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Payroll structure not found")
+    return row
+
+
+async def _structure_line_or_404(
+    db: AsyncSession, tenant_id: int, structure_id: int, line_id: int
+) -> PayrollStructureLine:
+    row = await db.get(PayrollStructureLine, line_id)
+    if not row or row.tenant_id != tenant_id or row.structure_id != structure_id:
+        raise HTTPException(status_code=404, detail="Payroll structure line not found")
+    return row
+
+
+def _changes_text(before: dict, after: dict) -> str:
+    return "; ".join(f"{k}: {before[k]} -> {after[k]}" for k in after if before.get(k) != after[k])
+
+
+@router.patch("/structures/{structure_id}", response_model=PayrollStructureOut)
+async def update_structure(
+    structure_id: int,
+    body: PayrollStructureUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
+    row = await _lock_structure(db, tenant.id, structure_id)
+    payload = body.model_dump(exclude_unset=True)
+    if payload.get("name") is not None:
+        payload["name"] = payload["name"].strip()
+    if "description" in payload:
+        payload["description"] = payload["description"].strip() if payload["description"] else None
+    if "is_active" in payload and payload["is_active"] is None:
+        payload.pop("is_active")
+    before = {k: getattr(row, k) for k in payload}
+    for key, value in payload.items():
+        setattr(row, key, value)
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="HR_PAYROLL_STRUCTURE_UPDATED",
+        resource=f"hr.payroll.structure:{row.id}",
+        details=_changes_text(before, payload) or "no change",
+    )
+    await db.commit()
+    await db.refresh(row)
+    return _structure_out(row)
+
+
+@router.patch("/structures/{structure_id}/lines/{line_id}", response_model=PayrollStructureLineOut)
+async def update_structure_line(
+    structure_id: int,
+    line_id: int,
+    body: PayrollStructureLineUpdate,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
+    await _lock_structure(db, tenant.id, structure_id)
+    row = await _structure_line_or_404(db, tenant.id, structure_id, line_id)
+    payload = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None or k == "formula"}
+    if "amount" in payload:
+        payload["amount"] = Decimal(payload["amount"])
+    before = {k: getattr(row, k) for k in payload}
+    for key, value in payload.items():
+        setattr(row, key, value)
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="HR_PAYROLL_STRUCTURE_LINE_UPDATED",
+        resource=f"hr.payroll.structure:{structure_id}:line:{line_id}",
+        details=_changes_text(before, payload) or "no change",
+    )
+    await db.commit()
+    await db.refresh(row)
+    return _structure_line_out(row)
+
+
+@router.delete("/structures/{structure_id}/lines/{line_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_structure_line(
+    structure_id: int,
+    line_id: int,
+    confirm: bool = Query(default=False, description="Must be true"),
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _ensure_tenant(user, tenant)
+    await _require_payroll_manage(db, user, tenant.id)
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Pass confirm=true to delete a structure line")
+    await _lock_structure(db, tenant.id, structure_id)
+    row = await _structure_line_or_404(db, tenant.id, structure_id, line_id)
+    today = today_local(tenant)
+    in_use = (
+        await db.execute(
+            select(func.count())
+            .select_from(PayrollEmployeeStructureAssignment)
+            .where(
+                PayrollEmployeeStructureAssignment.tenant_id == tenant.id,
+                PayrollEmployeeStructureAssignment.structure_id == structure_id,
+                (PayrollEmployeeStructureAssignment.effective_to.is_(None))
+                | (PayrollEmployeeStructureAssignment.effective_to >= today),
+            )
+        )
+    ).scalar_one()
+    if in_use:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{in_use} employee assignment(s) still use this structure. End or move them in "
+                "Payroll > Assignments before deleting a line."
+            ),
+        )
+    component_id = row.component_id
+    await db.delete(row)
+    await log_action(
+        db,
+        tenant_id=tenant.id,
+        user_id=user.id,
+        action="HR_PAYROLL_STRUCTURE_LINE_DELETED",
+        resource=f"hr.payroll.structure:{structure_id}:line:{line_id}",
+        details=f"component {component_id}",
+    )
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/periods", response_model=list[PayrollPeriodOut])
 async def list_periods(
     limit: int = Query(default=HR_LIST_DEFAULT_LIMIT, ge=1, le=HR_LIST_MAX_LIMIT, description="Safety cap (Finding #3)"),
@@ -936,6 +1086,18 @@ async def finalize_run(
     ).scalars().all()
     if not lines:
         raise HTTPException(status_code=400, detail="Cannot finalize run without payroll lines")
+    from app.modules.hr_attendance.manual_router import count_open_entries
+
+    period = await _period_or_404(db, tenant.id, run.period_id)
+    open_days = await count_open_entries(db, tenant.id, period.start_date, period.end_date)
+    if open_days:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{open_days} attendance day(s) in this period have an IN without an OUT. Close them in "
+                "HR > Attendance > Missing OUT (or approve a regularization) before finalizing payroll."
+            ),
+        )
     zero = Decimal("0")
     run.gross_total = quantize_money(sum((api_money_to_decimal(x.gross_pay) for x in lines), zero))
     run.deduction_total = quantize_money(sum((api_money_to_decimal(x.deductions) for x in lines), zero))
@@ -999,6 +1161,9 @@ async def reject_run(
         raise HTTPException(status_code=404, detail="Payroll run not found")
     if run.status not in {"FINALIZED", "CHECKED", "APPROVED"}:
         raise HTTPException(status_code=400, detail=f"Cannot reject a {run.status} payroll run")
+    from app.modules.hr_payroll.register_service import invalidate_snapshots
+
+    await invalidate_snapshots(db, tenant.id, run.id, "Run rejected; regenerate documents after correction")
     run.status = "REJECTED"
     db.add(
         PayrollApproval(
@@ -1233,6 +1398,19 @@ async def generate_payslips(
     run = await _run_or_404(db, tenant.id, run_id)
     if run.status not in {"APPROVED", "POSTED"}:
         raise HTTPException(status_code=400, detail="Payslips can be generated for approved/posted runs only")
+    from app.modules.hr_payroll import register_service as reg
+
+    # Slips are printed from the frozen copy, so freeze the run (once) before issuing them.
+    locked_run = (
+        await db.execute(
+            select(PayrollRun).where(PayrollRun.id == run.id, PayrollRun.tenant_id == tenant.id).with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+    snap, frozen_now = await reg.freeze_run(db, tenant, locked_run, user.id)
+    if frozen_now:
+        await log_action(db, tenant_id=tenant.id, user_id=user.id, action="HR_PAYROLL_DOCUMENTS_FROZEN",
+                         resource=f"hr.payroll.run:{run.id}", details=snap.content_sha256)
     run_lines = (
         await db.execute(
             select(PayrollRunLine).where(PayrollRunLine.tenant_id == tenant.id, PayrollRunLine.run_id == run.id)
@@ -1324,6 +1502,10 @@ async def decide_approval(
             status_code=400,
             detail=f"Cannot mark a {run.status} payroll run as {decision}",
         )
+    if decision == "REJECTED":
+        from app.modules.hr_payroll.register_service import invalidate_snapshots
+
+        await invalidate_snapshots(db, tenant.id, run.id, "Run rejected; regenerate documents after correction")
     run.status = "APPROVED" if decision == "APPROVED" else "REJECTED"
     approval.action = decision
     approval.action_by = user.id
@@ -1560,8 +1742,20 @@ async def download_payslip_pdf(
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
     run = await db.get(PayrollRun, line.run_id)
+    from app.modules.hr_payroll import register_service as reg
+
+    frozen = await reg.active_snapshot(db, tenant.id, line.run_id)
+    frozen_line = next((x for x in (frozen.snapshot_json or {}).get("lines", []) if x["run_line_id"] == line.id), None) if frozen else None
+    if frozen_line is not None:
+        # Issued slips come from the frozen snapshot, so later edits cannot change them.
+        return Response(
+            reg.payslip_pdf(frozen.snapshot_json, frozen_line),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="payslip-{slip.slip_number or payslip_id}.pdf"'},
+        )
     from app.modules.hr.hr_document_generator_service import generate_payslip_pdf
 
+    # Only slips issued before document freezing existed have no snapshot; they keep the old live layout.
     pdf = generate_payslip_pdf(
         emp,
         run=run,

@@ -25,12 +25,12 @@ export function TrustCenterPage() {
 
   return (
     <div className="bg-surface-raised">
-      <section className="relative overflow-hidden border-b border-border bg-gradient-to-br from-surface-inverse via-surface-inverse to-brand-primary/25 text-text-inverse">
+      <section className="relative overflow-hidden border-b border-border bg-gradient-to-br from-gray-900 via-gray-900 to-brand-primary/25 text-white">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_70%_0%,rgba(249,115,22,0.15),transparent)] pointer-events-none" />
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-20">
           <TrustBadge variant="inverse">Security · Privacy · Reliability</TrustBadge>
           <h1 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">{heroTitle}</h1>
-          <p className="mt-4 text-lg text-text-inverse/85 max-w-2xl leading-relaxed">{heroSubtitle}</p>
+          <p className="mt-4 text-lg text-white/85 max-w-2xl leading-relaxed">{heroSubtitle}</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
               to="/contact"
@@ -41,12 +41,12 @@ export function TrustCenterPage() {
             </Link>
             <Link
               to="/support"
-              className="inline-flex items-center gap-2 rounded-lg border border-white/40 bg-white/10 px-5 py-2.5 text-sm font-semibold text-text-inverse hover:bg-white/15 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/40 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/15 transition-colors"
             >
               Support
             </Link>
           </div>
-          <p className="mt-8 text-xs text-text-inverse/60">
+          <p className="mt-8 text-xs text-white/60">
             Hub version {version} · Last updated {formatLegalDate(lastUpdated)}
           </p>
         </div>

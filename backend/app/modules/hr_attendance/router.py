@@ -618,6 +618,12 @@ async def approve_regularization(
         entry.in_time = req.requested_in_time
     if req.requested_out_time is not None:
         entry.out_time = req.requested_out_time
+    if entry.status == "OPEN" and entry.in_time is not None and entry.out_time is not None:
+        # Closing a missing-OUT day through regularization: compute status / minutes like a manual OUT.
+        from app.modules.hr_attendance.manual_router import _shift_for, recompute_closed_entry
+
+        shift = await _shift_for(db, tenant.id, entry.employee_id, entry.attendance_date)
+        recompute_closed_entry(entry, shift, entry.out_time <= entry.in_time)
     req.status = "APPROVED"
     req.approved_by = user.id
     req.decision_note = body.decision_note.strip() if body.decision_note else None

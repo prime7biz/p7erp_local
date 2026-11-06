@@ -678,6 +678,29 @@ const HrAttendanceDevicesPage = lazy(() =>
   import("@/pages/app/hr/attendance/HrAttendanceDevicesPage").then((m) => ({ default: m.HrAttendanceDevicesPage })),
 );
 const HrSettingsPage = lazy(() => import("@/pages/app/hr/HrSettingsPage").then((m) => ({ default: m.HrSettingsPage })));
+const HrBangladeshSetupPage = lazy(() =>
+  import("@/pages/app/hr/bangladesh/HrBangladeshSetupPage").then((m) => ({ default: m.HrBangladeshSetupPage })),
+);
+const HrBangladeshRulesPage = lazy(() =>
+  import("@/pages/app/hr/bangladesh/HrBangladeshRulesPage").then((m) => ({ default: m.HrBangladeshRulesPage })),
+);
+const HrManualAttendancePage = lazy(() =>
+  import("@/pages/app/hr/attendance/HrManualAttendancePage").then((m) => ({ default: m.HrManualAttendancePage })),
+);
+const HrGatePassesPage = lazy(() => import("@/pages/app/hr/gate/HrGatePassesPage").then((m) => ({ default: m.HrGatePassesPage })));
+const HrGateScanPage = lazy(() => import("@/pages/app/hr/gate/HrGateScanPage").then((m) => ({ default: m.HrGateScanPage })));
+const HrPayrollRegistersPage = lazy(() =>
+  import("@/pages/app/hr/payroll/HrPayrollRegistersPage").then((m) => ({ default: m.HrPayrollRegistersPage })),
+);
+const HrAllowancesBonusesPage = lazy(() =>
+  import("@/pages/app/hr/payroll/HrAllowancesBonusesPage").then((m) => ({ default: m.HrAllowancesBonusesPage })),
+);
+const HrEmployeeCasesPage = lazy(() =>
+  import("@/pages/app/hr/cases/HrEmployeeCasesPage").then((m) => ({ default: m.HrEmployeeCasesPage })),
+);
+const HrSeparationsPage = lazy(() =>
+  import("@/pages/app/hr/separation/HrSeparationsPage").then((m) => ({ default: m.HrSeparationsPage })),
+);
 const HrLeavePoliciesPage = lazy(() =>
   import("@/pages/app/hr/leave/HrLeavePoliciesPage").then((m) => ({ default: m.HrLeavePoliciesPage })),
 );
@@ -1130,6 +1153,13 @@ export function AppProtectedRouter() {
           <Route path="hr/attendance/entries" element={<HrAttendanceEntryPage />} />
           <Route path="hr/attendance/devices" element={<HrAttendanceDevicesPage />} />
           <Route path="hr/settings" element={<HrSettingsPage />} />
+          <Route path="hr/bangladesh-setup" element={<HrBangladeshSetupPage />} />
+          <Route path="hr/bangladesh-rules" element={<HrBangladeshRulesPage />} />
+          <Route path="hr/attendance/manual" element={<HrManualAttendancePage />} />
+          <Route path="hr/gate-passes" element={<HrGatePassesPage />} />
+          <Route path="hr/gate-scan" element={<HrGateScanPage />} />
+          <Route path="hr/cases" element={<HrEmployeeCasesPage />} />
+          <Route path="hr/separations" element={<HrSeparationsPage />} />
           <Route path="hr/attendance/regularizations" element={<HrRegularizationsPage />} />
           <Route path="hr/attendance/overtime-rules" element={<HrOvertimeRulesPage />} />
           <Route path="hr/attendance/overtime" element={<HrOvertimePage />} />
@@ -1151,6 +1181,8 @@ export function AppProtectedRouter() {
           <Route path="hr/payroll/statutory" element={<PayrollStatutoryConfigPage />} />
           <Route path="hr/payroll/approvals" element={<HrPayrollApprovalsPage />} />
           <Route path="hr/payroll/payslips" element={<HrPayslipsPage />} />
+          <Route path="hr/payroll/registers" element={<HrPayrollRegistersPage />} />
+          <Route path="hr/payroll/allowances" element={<HrAllowancesBonusesPage />} />
           <Route path="hr/performance/cycles" element={<HrPerformanceCyclesPage />} />
           <Route path="hr/performance/goals" element={<HrGoalsPage />} />
           <Route path="hr/performance/reviews" element={<HrReviewsPage />} />

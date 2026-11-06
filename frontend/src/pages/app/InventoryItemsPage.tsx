@@ -1496,7 +1496,7 @@ export function InventoryItemsPage() {
       {/* Edit Item modal */}
       {editingItem && editForm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-inverse/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={closeEdit}
           role="dialog"
           aria-modal="true"
@@ -1749,7 +1749,7 @@ export function InventoryItemsPage() {
       {/* Edit Unit modal */}
       {editingUnit && unitEditForm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-inverse/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={closeUnitEdit}
           role="dialog"
           aria-modal="true"
@@ -1819,7 +1819,7 @@ export function InventoryItemsPage() {
       {/* Edit Warehouse modal */}
       {editingWarehouse && warehouseEditForm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-inverse/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={closeWarehouseEdit}
           role="dialog"
           aria-modal="true"
@@ -1899,7 +1899,7 @@ export function InventoryItemsPage() {
 
       {editingCategory && categoryEditForm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-inverse/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={closeCategoryModal}
           role="dialog"
           aria-modal="true"
@@ -1979,7 +1979,7 @@ export function InventoryItemsPage() {
 
       {editingSubcategory && subcategoryEditForm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-inverse/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={closeSubcategoryModal}
           role="dialog"
           aria-modal="true"

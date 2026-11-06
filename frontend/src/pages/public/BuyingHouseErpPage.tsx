@@ -152,7 +152,7 @@ export function BuyingHouseErpPage() {
               <br />
               <span className="text-primary">Purpose-Built ERP Software</span>
             </h1>
-            <p className="text-lg md:text-xl text-text-inverse max-w-3xl mx-auto mb-8">
+            <p className="text-lg md:text-xl text-white max-w-3xl mx-auto mb-8">
               From PO receipt to shipment delivery — manage T&A calendars, track orders across multiple factories,
               coordinate samples, and handle LC documentation in one integrated platform.
             </p>
@@ -169,7 +169,7 @@ export function BuyingHouseErpPage() {
       </section>
 
       {/* Global Buying House Operations Image Section */}
-      <section className="relative py-16 lg:py-24 bg-surface-inverse overflow-hidden">
+      <section className="relative py-16 lg:py-24 bg-gray-900 overflow-hidden">
         <div className="absolute top-10 -right-20 w-72 h-72 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-10 -left-20 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -177,7 +177,7 @@ export function BuyingHouseErpPage() {
             <h2 className="text-3xl md:text-4xl font-semibold text-white mb-4">
               Global Buying House Operations
             </h2>
-            <p className="text-lg text-text-inverse max-w-2xl mx-auto">
+            <p className="text-lg text-white max-w-2xl mx-auto">
               Manage international trade operations across multiple countries, buyers, and factories from a single platform.
             </p>
           </div>
@@ -323,7 +323,7 @@ export function BuyingHouseErpPage() {
       </section>
 
       {/* CTA */}
-      <section className="relative py-16 lg:py-24 bg-surface-inverse overflow-hidden">
+      <section className="relative py-16 lg:py-24 bg-gray-900 overflow-hidden">
         <img src="/images/tech-pattern.svg" alt="" width={1920} height={1080} className="absolute inset-0 w-full h-full object-cover opacity-[0.05] pointer-events-none" loading="lazy" />
         <div className="absolute top-10 -left-20 w-72 h-72 bg-primary/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-10 -right-20 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
@@ -335,7 +335,7 @@ export function BuyingHouseErpPage() {
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
             Ready to Transform Your Buying House Operations?
           </h2>
-          <p className="text-lg text-text-inverse max-w-2xl mx-auto mb-8">
+          <p className="text-lg text-white max-w-2xl mx-auto mb-8">
             Manage T&A, POs, samples, and shipments in one platform. Start a free trial or see it with your own orders in a live demo.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">

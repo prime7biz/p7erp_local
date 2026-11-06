@@ -22,7 +22,7 @@ export function PageSection({
       <Link to={backTo} className="text-sm text-brand-primary hover:underline mb-6 inline-flex items-center gap-1">
         ← {backLabel}
       </Link>
-      <h1 className="text-3xl lg:text-4xl font-bold text-text-primary mb-2">{title}</h1>
+      <h1 className="font-display text-4xl lg:text-5xl font-semibold tracking-tight text-text-primary mb-2">{title}</h1>
       {subtitle && <p className="text-lg text-text-secondary mb-10 max-w-3xl leading-relaxed">{subtitle}</p>}
       <div className="text-text-secondary space-y-6 leading-relaxed">{children}</div>
       {showCta && (

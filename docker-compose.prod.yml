@@ -97,6 +97,10 @@ services:
       AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
       # ZKTeco cloud push (/iclock/*); only devices with serial + allowed IPs. false = kill switch.
       ATTENDANCE_ICLOCK_ENABLED: ${ATTENDANCE_ICLOCK_ENABLED:-true}
+      # HR photo / CV encryption key (Fernet). Empty = derived from JWT_SECRET. Never change after files exist.
+      HR_FILE_ENCRYPTION_KEY: ${HR_FILE_ENCRYPTION_KEY:-}
+      # Optional ClamAV host:port for HR uploads; empty = no virus scan.
+      HR_CLAMAV_HOST: ${HR_CLAMAV_HOST:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       GEMINI_ENABLED: ${GEMINI_ENABLED:-false}

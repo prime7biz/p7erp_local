@@ -248,6 +248,14 @@ async def import_employees_excel(db: AsyncSession, tenant: Tenant, user: User, f
                     existing.date_of_birth = dob
                 updated += 1
             else:
+                from app.modules.hr.employee_identity import identity_required
+
+                if identity_required(tenant.feature_flags):
+                    errors.append(
+                        f"Row {idx}: Bangladesh identity rules are on; add new employees through the employee form "
+                        "(NID or birth registration number and mobile are required)"
+                    )
+                    continue
                 try:
                     assert_dob_allowed(dob, required=age_required)
                 except HTTPException as he:

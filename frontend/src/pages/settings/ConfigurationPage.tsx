@@ -713,6 +713,21 @@ export function ConfigurationPage() {
                 "Export & Import → Bond & VAT registers: UD entitlements and utilization, bond register, and Mushak 6.1 / 6.2 style registers with spreadsheet export.",
               ],
               [
+                "hr_meal_night_bills_enabled",
+                "HR tiffin / dinner / night bills",
+                "HR → Allowances & bonuses: daily bills generated from attendance by approved rules, approved by a manager, then paid once in payroll.",
+              ],
+              [
+                "hr_production_bonus_enabled",
+                "HR production bonus",
+                "HR → Allowances & bonuses: piece-rate, efficiency or target bonus from recorded output, approved before payroll.",
+              ],
+              [
+                "hr_festival_bonus_enabled",
+                "HR Eid / festival bonus",
+                "HR → Allowances & bonuses: company festival bonus (percentage of basic for employees with one year of service), approved before payroll.",
+              ],
+              [
                 "ai_exception_agents_enabled",
                 "AI exception agents",
                 "AI Tools → Exception agents: finds overdue TNA actions, expiring LCs and BOM materials not on PO, plus an owner brief. Nothing is sent until a manager confirms.",

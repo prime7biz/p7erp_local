@@ -44,6 +44,15 @@ from app.models import (
     User,
 )
 from app.modules.hr import service as hr_domain
+from app.modules.hr.employee_identity import (
+    assert_identity_complete,
+    assert_identity_unique,
+    identity_required,
+    next_employee_code,
+    normalize_digits,
+    normalize_mobile,
+    validate_identity_values,
+)
 from app.modules.hr.schemas import (
     DepartmentCreate,
     DepartmentResponse,
@@ -98,14 +107,21 @@ async def _next_designation_code(db: AsyncSession, tenant_id: int) -> str:
     )
 
 
-async def _next_employee_code(db: AsyncSession, tenant_id: int) -> str:
-    return await next_tenant_code(
-        db,
-        model=Employee,
-        tenant_id=tenant_id,
-        prefix="EMP-",
-        width=5,
-    )
+async def _next_employee_code(db: AsyncSession, tenant_id: int, feature_flags=None) -> str:
+    return await next_employee_code(db, tenant_id, feature_flags)
+
+
+def _identity_inputs(tenant: Tenant, national_id, birth_registration_no, phone):
+    """Normalized (national_id, birth_registration_no, phone); validated under Bangladesh identity rules."""
+    if not identity_required(tenant.feature_flags):
+        return (
+            national_id.strip() if national_id else None,
+            birth_registration_no.strip() if birth_registration_no else None,
+            phone.strip() if phone else None,
+        )
+    nid, brn, mobile = normalize_digits(national_id), normalize_digits(birth_registration_no), normalize_mobile(phone)
+    validate_identity_values(national_id=nid, birth_registration_no=brn, phone=mobile)
+    return nid, brn, mobile
 
 
 def _department_to_response(row: Department) -> DepartmentResponse:
@@ -135,7 +151,7 @@ def _designation_to_response(row: Designation) -> DesignationResponse:
     )
 
 
-EMPLOYEE_SENSITIVE_FIELDS = ("date_of_birth", "address_line", "national_id")
+EMPLOYEE_SENSITIVE_FIELDS = ("date_of_birth", "address_line", "national_id", "birth_registration_no")
 
 
 async def _can_view_employee_sensitive(db: AsyncSession, user: User, tenant_id: int) -> bool:
@@ -195,6 +211,8 @@ def _employee_to_response_full(row: Employee) -> EmployeeResponse:
         created_at=row.created_at.isoformat(),
         updated_at=row.updated_at.isoformat(),
         attendance_device_pin=row.attendance_device_pin,
+        birth_registration_no=row.birth_registration_no,
+        has_photo=bool(row.photo_path),
     )
 
 
@@ -573,7 +591,11 @@ async def create_employee(
     if body.user_id is not None:
         await assert_hr_manager_or_permission(db, user, tenant.id, permission_key=PERMISSION_HR_PAYROLL_MANAGE)
     assert_dob_allowed(body.date_of_birth, required=is_age_verification_required(tenant.feature_flags))
-    employee_code = await _next_employee_code(db, tenant.id)
+    national_id, birth_reg, phone = _identity_inputs(tenant, body.national_id, body.birth_registration_no, body.phone)
+    if identity_required(tenant.feature_flags):
+        assert_identity_complete(national_id=national_id, birth_registration_no=birth_reg, phone=phone)
+        await assert_identity_unique(db, tenant.id, national_id=national_id, birth_registration_no=birth_reg)
+    employee_code = await _next_employee_code(db, tenant.id, tenant.feature_flags)
     await _validate_fk_values(
         db,
         tenant.id,
@@ -589,7 +611,7 @@ async def create_employee(
         first_name=body.first_name.strip(),
         last_name=body.last_name.strip() if body.last_name else None,
         email=body.email.strip() if body.email else None,
-        phone=body.phone.strip() if body.phone else None,
+        phone=phone,
         joining_date=body.joining_date,
         date_of_birth=body.date_of_birth,
         gender=body.gender.strip() if body.gender else None,
@@ -600,7 +622,8 @@ async def create_employee(
         address_line=body.address_line.strip() if body.address_line else None,
         city=body.city.strip() if body.city else None,
         country=body.country.strip() if body.country else None,
-        national_id=body.national_id.strip() if body.national_id else None,
+        national_id=national_id,
+        birth_registration_no=birth_reg,
         employment_type=body.employment_type.strip() if body.employment_type else None,
         confirmation_date=body.confirmation_date,
         exit_date=body.exit_date,
@@ -661,7 +684,24 @@ async def update_employee(
         section_id=payload.get("section_id"),
     )
     if "employee_code" in payload and payload["employee_code"] is not None:
-        row.employee_code = payload["employee_code"].strip()
+        if payload["employee_code"].strip() != row.employee_code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The employee number is permanent and cannot be changed",
+            )
+    new_nid = payload["national_id"] if "national_id" in payload else row.national_id
+    new_brn = payload["birth_registration_no"] if "birth_registration_no" in payload else row.birth_registration_no
+    new_phone = payload["phone"] if "phone" in payload else row.phone
+    if any(k in payload for k in ("national_id", "birth_registration_no", "phone")):
+        new_nid, new_brn, new_phone = _identity_inputs(tenant, new_nid, new_brn, new_phone)
+        if identity_required(tenant.feature_flags):
+            assert_identity_complete(national_id=new_nid, birth_registration_no=new_brn, phone=new_phone)
+            await assert_identity_unique(
+                db, tenant.id, national_id=new_nid, birth_registration_no=new_brn, exclude_id=row.id
+            )
+        payload["national_id"], payload["birth_registration_no"], payload["phone"] = new_nid, new_brn, new_phone
+    if "birth_registration_no" in payload:
+        row.birth_registration_no = payload["birth_registration_no"] or None
     if "first_name" in payload and payload["first_name"] is not None:
         row.first_name = payload["first_name"].strip()
     if "last_name" in payload:
@@ -977,7 +1017,8 @@ async def create_employee_document(
         document_number=body.document_number.strip() if body.document_number else None,
         issue_date=body.issue_date,
         expiry_date=body.expiry_date,
-        file_path=body.file_path,
+        # A client-supplied path is never trusted; files come only from the upload endpoint.
+        file_path=None,
         notes=body.notes.strip() if body.notes else None,
         created_by=user.id,
     )
@@ -1078,10 +1119,48 @@ async def generate_id_card(
     _ensure_user_tenant(user, tenant)
     _require_doc_gen(tenant)
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_DOCUMENTS_GENERATE)
-    await _get_employee_or_404(db, tenant.id, employee_id)
+    emp = await _get_employee_or_404(db, tenant.id, employee_id)
     company = getattr(tenant, "name", None) or "Company"
     pdf = await hr_pdf.build_id_card_for_employee(db, tenant.id, employee_id, company)
+    await _record_id_card_issues(db, tenant.id, user.id, [(emp.id, emp.employee_code)])
+    await db.commit()
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=id-card.pdf"})
+
+
+ID_CARD_ISSUE_TYPE = "ID_CARD_ISSUE"
+
+
+async def _record_id_card_issues(db: AsyncSession, tenant_id: int, user_id: int, employees: list[tuple[int, str]]) -> None:
+    """ID-card issue / reprint register (Labour Rules Form 6/6A). The number printed never changes."""
+    if not employees:
+        return
+    counts = dict(
+        (
+            await db.execute(
+                select(EmployeeDocument.employee_id, func.count(EmployeeDocument.id))
+                .where(
+                    EmployeeDocument.tenant_id == tenant_id,
+                    EmployeeDocument.document_type == ID_CARD_ISSUE_TYPE,
+                    EmployeeDocument.employee_id.in_([e for e, _c in employees]),
+                )
+                .group_by(EmployeeDocument.employee_id)
+            )
+        ).all()
+    )
+    today = date.today()
+    for emp_id, code in employees:
+        n = int(counts.get(emp_id, 0))
+        db.add(
+            EmployeeDocument(
+                tenant_id=tenant_id,
+                employee_id=emp_id,
+                document_type=ID_CARD_ISSUE_TYPE,
+                document_number=code,
+                issue_date=today,
+                notes="First issue" if n == 0 else f"Reprint #{n}",
+                created_by=user_id,
+            )
+        )
 
 
 @router.post("/employees/{employee_id}/documents/appointment-letter")
@@ -1199,6 +1278,8 @@ async def generate_bulk_id_cards(
     _require_doc_gen(tenant)
     await assert_soft_permission_allowed(db, user, tenant.id, permission_key=PERMISSION_HR_DOCUMENTS_GENERATE)
     data = await hr_pdf.build_bulk_id_cards_zip(db, tenant.id, getattr(tenant, "name", None) or "Company")
+    await _record_id_card_issues(db, tenant.id, user.id, await hr_pdf.employee_ids_for_bulk_cards(db, tenant.id))
+    await db.commit()
     return Response(
         data,
         media_type="application/zip",

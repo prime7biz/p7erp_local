@@ -8,8 +8,10 @@ import {
   CheckCircle2,
   ChevronUp,
   Clock3,
+  Factory,
   MessageCircle,
   PlayCircle,
+  Quote,
   ShieldCheck,
   Users,
   WalletCards,
@@ -17,6 +19,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
+import { customerLogos, industrySegments, testimonials } from "@/data/marketing/socialProof";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,7 +100,7 @@ export function DemoVideoDialog({ open, onClose }: { open: boolean; onClose: () 
 export function HeroEnhancedSection() {
   const [demoOpen, setDemoOpen] = useState(false);
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-surface-inverse via-surface-inverse to-surface-inverse text-text-inverse">
+    <section className="relative overflow-hidden bg-gradient-to-br from-gray-900 via-gray-900 to-gray-900 text-white">
       {/* Background layers */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(249,115,22,0.2),transparent),radial-gradient(ellipse_60%_80%_at_80%_50%,rgba(249,115,22,0.08),transparent),radial-gradient(ellipse_40%_60%_at_20%_80%,rgba(255,255,255,0.05),transparent)]" />
       <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.03\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-80" aria-hidden="true" />
@@ -107,10 +110,10 @@ export function HeroEnhancedSection() {
             <Badge variant="accent" className="mb-5 sm:mb-6">
               AI-Powered ERP for Garment & Apparel
             </Badge>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight leading-[1.15] text-white">
+            <h1 className="font-display text-4xl sm:text-5xl lg:text-[3.5rem] font-semibold tracking-tight leading-[1.08] text-white">
               The AI-Powered Cloud ERP Built Exclusively for Garment Manufacturers.
             </h1>
-            <p className="mt-5 sm:mt-6 text-sm sm:text-base md:text-lg text-text-inverse/90 leading-relaxed max-w-xl mx-auto lg:mx-0">
+            <p className="mt-5 sm:mt-6 text-sm sm:text-base md:text-lg text-white/90 leading-relaxed max-w-xl mx-auto lg:mx-0">
               Manage merchandising, production, inventory, LC processing, and accounting in one unified platform. Stop relying on disconnected Excel sheets.
             </p>
             <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -135,7 +138,7 @@ export function HeroEnhancedSection() {
                 Watch Demo
               </Button>
             </div>
-            <p className="mt-4 text-sm text-text-inverse/80">
+            <p className="mt-4 text-sm text-white/80">
               Prefer a guided tour?{" "}
               <Link
                 to="/book-demo"
@@ -161,14 +164,14 @@ export function HeroEnhancedSection() {
             className="relative order-1 lg:order-2"
           >
             <div className="rounded-xl border border-border bg-surface-raised/5 shadow-2xl overflow-hidden">
-              <div className="rounded-xl overflow-hidden bg-surface-inverse/90 border border-border/50">
-                <div className="h-8 sm:h-10 border-b border-border/50 bg-surface-inverse/80 px-3 sm:px-4 flex items-center gap-2">
+              <div className="rounded-xl overflow-hidden bg-gray-900/90 border border-border/50">
+                <div className="h-8 sm:h-10 border-b border-border/50 bg-gray-900/80 px-3 sm:px-4 flex items-center gap-2">
                   <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-status-danger" />
                   <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-status-warning" />
                   <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-status-success" />
-                  <span className="ml-2 sm:ml-3 text-xs font-medium text-text-muted">Prime7 ERP Dashboard</span>
+                  <span className="ml-2 sm:ml-3 text-xs font-medium text-white/70">Prime7 ERP Dashboard</span>
                 </div>
-                <div className="relative aspect-video sm:aspect-[16/10] bg-gradient-to-br from-surface-inverse to-surface-inverse">
+                <div className="relative aspect-video sm:aspect-[16/10] bg-gradient-to-br from-gray-900 to-gray-900">
                   <picture className="contents">
                     <source srcSet="/images/prime7-dashboard.webp" type="image/webp" />
                     <img
@@ -186,8 +189,8 @@ export function HeroEnhancedSection() {
                       }}
                     />
                   </picture>
-                  <div className="absolute inset-0 hidden flex items-center justify-center bg-gradient-to-br from-surface-inverse to-surface-inverse" aria-hidden="true">
-                    <span className="text-sm font-medium text-text-inverse/80">Dashboard preview</span>
+                  <div className="absolute inset-0 hidden flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-900" aria-hidden="true">
+                    <span className="text-sm font-medium text-white/80">Dashboard preview</span>
                   </div>
                 </div>
               </div>
@@ -197,7 +200,7 @@ export function HeroEnhancedSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: 0.25, duration: 0.45 }}
-              className="hidden sm:flex absolute -bottom-6 lg:-bottom-10 left-2 right-2 lg:left-auto lg:right-0 lg:max-w-[220px] rounded-xl border border-white/20 bg-surface-inverse/95 backdrop-blur-md px-3 py-2.5 sm:px-4 sm:py-3 items-center gap-3 shadow-xl"
+              className="hidden sm:flex absolute -bottom-6 lg:-bottom-10 left-2 right-2 lg:left-auto lg:right-0 lg:max-w-[220px] rounded-xl border border-white/20 bg-gray-900/95 backdrop-blur-md px-3 py-2.5 sm:px-4 sm:py-3 items-center gap-3 shadow-xl"
             >
               <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-brand-primary/20 text-brand-primary flex items-center justify-center shrink-0">
                 <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -211,14 +214,84 @@ export function HeroEnhancedSection() {
   );
 }
 
-/** Positioning line; customer names or logos go here only with their written permission. */
+function MarqueeItems({ copy }: { copy: boolean }) {
+  const items =
+    customerLogos.length > 0
+      ? customerLogos.map((logo) => (
+          <img
+            key={logo.name}
+            src={logo.src}
+            alt={copy ? "" : logo.name}
+            className="h-8 w-auto opacity-60 grayscale transition hover:opacity-100 hover:grayscale-0"
+            loading="lazy"
+          />
+        ))
+      : industrySegments.map((segment) => (
+          <span
+            key={segment}
+            className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-border bg-surface-subtle px-4 py-1.5 text-sm font-medium text-text-secondary"
+          >
+            <Factory className="h-3.5 w-3.5 text-text-muted" aria-hidden />
+            {segment}
+          </span>
+        ));
+  return (
+    <div className="flex shrink-0 items-center gap-4 pr-4" data-marquee-copy={copy} aria-hidden={copy || undefined}>
+      {items}
+    </div>
+  );
+}
+
+/** Scrolling strip: approved customer logos when `customerLogos` has entries, otherwise the segments we serve. */
 export function LandingTrustLogoStrip() {
+  const heading =
+    customerLogos.length > 0
+      ? "Trusted by garment and apparel businesses"
+      : "Built in Bangladesh for garment manufacturers, buying houses and export-oriented apparel businesses";
   return (
     <section className="py-8 bg-surface-raised border-b border-border-subtle" aria-label="Who Prime7 ERP is for">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <p className="text-text-muted text-sm">
-          Built in Bangladesh for garment manufacturers, buying houses and export-oriented apparel businesses
-        </p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <p className="text-center text-text-secondary text-sm mb-5">{heading}</p>
+        <div className="marquee-viewport overflow-hidden">
+          <div className="marquee-track">
+            <MarqueeItems copy={false} />
+            <MarqueeItems copy />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Customer quotes from `testimonials`; renders nothing until approved quotes are added. */
+export function TestimonialsSection() {
+  if (testimonials.length === 0) return null;
+  return (
+    <section className="py-20 lg:py-24 bg-surface-subtle" aria-labelledby="testimonials-heading">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-12">
+          <p className="text-sm font-medium text-brand-pressed uppercase tracking-wide mb-2">Customer stories</p>
+          <h2 id="testimonials-heading" className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-text-primary">
+            What garment teams say about Prime7
+          </h2>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {testimonials.map((t) => (
+            <figure
+              key={`${t.company}-${t.role}`}
+              className="flex h-full flex-col rounded-2xl border border-border bg-surface-raised p-6 shadow-card"
+            >
+              <Quote className="h-6 w-6 text-brand-primary" aria-hidden />
+              <blockquote className="mt-4 flex-1 text-text-secondary leading-relaxed">&ldquo;{t.quote}&rdquo;</blockquote>
+              <figcaption className="mt-6 border-t border-border-subtle pt-4 text-sm">
+                {t.name ? <p className="font-semibold text-text-primary">{t.name}</p> : null}
+                <p className="text-text-secondary">
+                  {t.role}, {t.company}
+                </p>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -226,7 +299,7 @@ export function LandingTrustLogoStrip() {
 
 export function TrustBadgesBar() {
   return (
-    <section className="bg-surface-inverse text-text-inverse py-6">
+    <section className="bg-gray-900 text-white py-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {productFacts.map((fact) => (
@@ -262,10 +335,10 @@ const afterPoints = [
 
 export function BeforeAfterSection() {
   return (
-    <section className="py-20 lg:py-28 bg-white">
+    <section className="py-20 lg:py-28 bg-white overflow-x-clip">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-14">
-          <h2 className="text-3xl sm:text-4xl font-bold text-text-primary">Before vs After Prime7 ERP</h2>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-text-primary">Before vs After Prime7 ERP</h2>
           <p className="mt-5 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">See the difference between fragmented tools and one unified ERP workflow.</p>
         </div>
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
@@ -354,12 +427,12 @@ export function InteractiveProcessFlowSection() {
     <section className="py-20 lg:py-24 bg-surface-subtle">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
-          <h2 className="text-2xl sm:text-3xl font-bold text-text-primary">Interactive Process Flow</h2>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-text-primary">Interactive Process Flow</h2>
           <p className="mt-4 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">Hover or tap each stage to view how Prime7 ERP keeps teams aligned from first inquiry to shipment.</p>
         </div>
         <div className="relative">
           <div className="absolute top-4 left-0 right-0 h-0.5 bg-brand-primary/30 hidden lg:block" aria-hidden />
-          <div className="grid lg:grid-cols-5 gap-4 relative">
+          <div className="grid lg:grid-cols-5 gap-3 sm:gap-4 relative">
           {processSteps.map((step, idx) => {
             const active = idx === activeIndex;
             return (
@@ -369,7 +442,8 @@ export function InteractiveProcessFlowSection() {
                 onMouseEnter={() => setActiveIndex(idx)}
                 onFocus={() => setActiveIndex(idx)}
                 onClick={() => setActiveIndex(idx)}
-                className={`text-left rounded-xl border p-4 transition-all relative ${
+                aria-expanded={active}
+                className={`text-left rounded-xl border p-5 lg:p-4 min-h-[56px] transition-all relative ${
                   active ? "bg-surface-raised border-brand-primary/50 shadow-lg shadow-brand-primary/10" : "bg-surface-raised/80 border-border hover:border-brand-primary/30"
                 }`}
                 whileTap={{ scale: 0.99 }}
@@ -382,8 +456,8 @@ export function InteractiveProcessFlowSection() {
                 </div>
                 <motion.p
                   initial={false}
-                  animate={{ height: active ? "auto" : 0, opacity: active ? 1 : 0, marginTop: active ? 12 : 0 }}
-                  className="overflow-hidden text-sm text-text-secondary leading-relaxed"
+                  animate={{ height: active ? "auto" : 0, opacity: active ? 1 : 0, marginTop: active ? 16 : 0 }}
+                  className="overflow-hidden pl-9 text-sm text-text-secondary leading-relaxed lg:pl-0"
                 >
                   {step.detail}
                 </motion.p>
@@ -414,7 +488,7 @@ export function StickyCtaBar() {
   if (!visible || dismissed) return null;
 
   return (
-    <div className="fixed z-40 inset-x-0 bottom-0 md:top-0 md:bottom-auto bg-white/95 backdrop-blur border-t md:border-b md:border-t-0 border-border shadow-lg">
+    <div className="xl:hidden fixed z-40 inset-x-0 bottom-0 bg-white/95 backdrop-blur border-t border-border shadow-lg pb-[env(safe-area-inset-bottom)]">
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
         <p className="hidden sm:block text-sm text-text-secondary">Ready to modernize your factory operations?</p>
         <div className="ml-auto flex items-center gap-2">
@@ -474,7 +548,7 @@ export function FloatingActions() {
   if (!showFab) return null;
 
   return (
-    <div ref={containerRef} className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
+    <div ref={containerRef} className="fixed bottom-20 right-4 xl:bottom-5 xl:right-5 z-40 flex flex-col items-end gap-2">
       {menuOpen && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}

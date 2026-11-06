@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type HrSettings, type HrWeekday } from "@/api/client";
+import { EmployeeNumberFormatCard } from "@/components/hr/bd/EmployeeNumberFormatCard";
 import { HrPageHeader } from "@/components/hr/HrPageHeader";
 import { logApiError } from "@/utils/logApiError";
 
@@ -228,9 +229,17 @@ export function HrSettingsPage() {
             )}
           </section>
 
+          <EmployeeNumberFormatCard />
+
           <section className="rounded-xl border border-border bg-surface-raised p-4 text-sm">
             <h2 className="text-base font-semibold text-text-primary">Related setup</h2>
             <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>
+                <Link to={`${PREFIX}/bangladesh-setup`} className="underline">
+                  Bangladesh setup
+                </Link>{" "}
+                — official RMG wage grades, leave types and labour-law rules in one step
+              </li>
               <li>
                 <Link to={`${PREFIX}/attendance/devices`} className="underline">
                   Attendance devices

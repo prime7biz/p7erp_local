@@ -4,7 +4,7 @@
  */
 import { request } from "@/api/core";
 
-export type HrAttendanceDeviceType = "GENERIC" | "ZKTECO";
+export type HrAttendanceDeviceType = "GENERIC" | "ZKTECO" | "FINGERPRINT" | "FACE";
 export type HrPunchFileFormat = "csv" | "json" | "zkteco";
 
 export interface HrAttendanceDevice {

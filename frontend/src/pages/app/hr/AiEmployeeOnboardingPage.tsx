@@ -123,8 +123,8 @@ export function AiEmployeeOnboardingPage() {
   const [success, setSuccess] = useState("");
 
   const canSubmit = useMemo(
-    () => form.employee_code.trim().length > 0 && form.first_name.trim().length > 0,
-    [form.employee_code, form.first_name],
+    () => form.first_name.trim().length > 0,
+    [form.first_name],
   );
 
   const onMerged = useCallback((response: HrDocExtractionResponse) => {
@@ -141,7 +141,7 @@ export function AiEmployeeOnboardingPage() {
     try {
       const created = await api.createHrEmployee({
         ...form,
-        employee_code: form.employee_code.trim(),
+        employee_code: undefined,
         first_name: form.first_name.trim(),
         last_name: form.last_name?.trim() || null,
         email: form.email?.trim() || null,
@@ -233,13 +233,9 @@ export function AiEmployeeOnboardingPage() {
       <form onSubmit={onConfirm} className="rounded-xl border border-border bg-surface-raised p-4 space-y-4">
         <p className="text-sm font-medium text-text-primary">Employee details (edit before save)</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <input
-            className="rounded border border-border px-3 py-2 text-sm"
-            placeholder="Employee code *"
-            value={form.employee_code}
-            onChange={(e) => setForm((p) => ({ ...p, employee_code: e.target.value }))}
-            required
-          />
+          <div className="rounded border border-border bg-surface-subtle px-3 py-2 text-sm text-text-secondary" aria-label="Employee number">
+            Employee number: assigned automatically on save (never reused)
+          </div>
           <input
             className="rounded border border-border px-3 py-2 text-sm"
             placeholder="First name *"

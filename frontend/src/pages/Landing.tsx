@@ -25,7 +25,9 @@ import {
   ChevronDown,
   BarChart3,
   Clock,
+  type LucideIcon,
 } from "lucide-react";
+import { ModuleCardMotif, type ModuleMotif } from "@/components/public/landing/ModuleCardMotif";
 import {
   BeforeAfterSection,
   HeroEnhancedSection,
@@ -33,21 +35,22 @@ import {
   LandingTrustHighlights,
   LandingTrustLogoStrip,
   StickyCtaBar,
+  TestimonialsSection,
   TrustBadgesBar,
   FloatingActions,
 } from "@/components/public/landing/LandingEnhancements";
 
-const modules = [
+const modules: { icon: LucideIcon; title: string; description: string; href: string; motif: ModuleMotif }[] = [
   // Anchors match FeaturesPage section ids (title lowercased, non-letters → "-").
-  { icon: Palette, title: "Merchandising & Styles", description: "Manage style libraries, tech packs, BOMs, and buyer requirements in a centralized hub.", href: "/features#merchandising" },
-  { icon: FileText, title: "Order & Commercial", description: "Handle purchase orders, LC documentation, amendments, and commercial correspondence seamlessly.", href: "/features#commercial---lc" },
-  { icon: Package, title: "Inventory & Warehouse", description: "Real-time stock tracking, lot traceability, GRN processing, and multi-warehouse management.", href: "/features#inventory-management" },
-  { icon: Factory, title: "Production & WIP", description: "Track cutting, sewing, finishing, and packing with real-time WIP visibility across lines.", href: "/features#production---wip" },
-  { icon: Calculator, title: "Accounting & Finance", description: "Double-entry bookkeeping, voucher management, financial statements, and tax compliance.", href: "/features#accounting---finance" },
-  { icon: Users, title: "HR & Payroll", description: "Employee records, attendance, leave management, and automated payroll with compliance.", href: "/features#hr---payroll" },
-  { icon: ShieldCheck, title: "Quality Management", description: "Inline, endline, and final inspections with AQL standards, CAPA tracking, and audit reports.", href: "/features#quality-management" },
-  { icon: Brain, title: "AI Analytics", description: "Demand forecasting, anomaly detection, smart recommendations powered by machine learning.", href: "/features#ai---analytics" },
-  { icon: Landmark, title: "Bank Reconciliation", description: "Automated bank statement matching, reconciliation reports, and cash flow monitoring.", href: "/features#banking---reconciliation" },
+  { icon: Palette, title: "Merchandising & Styles", description: "Manage style libraries, tech packs, BOMs, and buyer requirements in a centralized hub.", href: "/features#merchandising", motif: "swatches" },
+  { icon: FileText, title: "Order & Commercial", description: "Handle purchase orders, LC documentation, amendments, and commercial correspondence seamlessly.", href: "/features#commercial---lc", motif: "document" },
+  { icon: Package, title: "Inventory & Warehouse", description: "Real-time stock tracking, lot traceability, GRN processing, and multi-warehouse management.", href: "/features#inventory-management", motif: "grid" },
+  { icon: Factory, title: "Production & WIP", description: "Track cutting, sewing, finishing, and packing with real-time WIP visibility across lines.", href: "/features#production---wip", motif: "flow" },
+  { icon: Calculator, title: "Accounting & Finance", description: "Double-entry bookkeeping, voucher management, financial statements, and tax compliance.", href: "/features#accounting---finance", motif: "bars" },
+  { icon: Users, title: "HR & Payroll", description: "Employee records, attendance, leave management, and automated payroll with compliance.", href: "/features#hr---payroll", motif: "people" },
+  { icon: ShieldCheck, title: "Quality Management", description: "Inline, endline, and final inspections with AQL standards, CAPA tracking, and audit reports.", href: "/features#quality-management", motif: "checklist" },
+  { icon: Brain, title: "AI Analytics", description: "Demand forecasting, anomaly detection, smart recommendations powered by machine learning.", href: "/features#ai---analytics", motif: "nodes" },
+  { icon: Landmark, title: "Bank Reconciliation", description: "Automated bank statement matching, reconciliation reports, and cash flow monitoring.", href: "/features#banking---reconciliation", motif: "ledger" },
 ];
 
 const faqs = [
@@ -96,7 +99,7 @@ function DashboardSection() {
     <section ref={ref} className="py-20 lg:py-28 bg-surface-subtle" aria-labelledby="dashboard-heading">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <p className="text-sm font-medium text-brand-primary uppercase tracking-wide mb-3 text-center">Your command center</p>
-        <h2 id="dashboard-heading" className="text-2xl sm:text-3xl font-bold text-text-primary mb-5 text-center">Prime7 ERP Dashboard</h2>
+        <h2 id="dashboard-heading" className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-text-primary mb-5 text-center">Prime7 ERP Dashboard</h2>
         <p className="text-lg text-text-secondary max-w-2xl mx-auto text-center mb-12 leading-relaxed">
           Live production snapshots, line efficiency, and unified insights across operations, finance, and planning — in one place.
         </p>
@@ -171,6 +174,7 @@ export function Landing() {
       <LandingTrustLogoStrip />
       <TrustBadgesBar />
       <BeforeAfterSection />
+      <TestimonialsSection />
 
       {/* Dashboard preview — Prime7 ERP at a glance */}
       <DashboardSection />
@@ -179,11 +183,11 @@ export function Landing() {
       <section className="py-20 lg:py-28 bg-surface-raised" aria-labelledby="demo-heading">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-sm font-medium text-brand-primary uppercase tracking-wide mb-3">See it in action</p>
-          <h2 id="demo-heading" className="text-2xl sm:text-3xl font-bold text-text-primary mb-5">See Prime7 ERP in Action</h2>
+          <h2 id="demo-heading" className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-text-primary mb-5">See Prime7 ERP in Action</h2>
           <p className="text-lg text-text-secondary mb-10 max-w-2xl mx-auto leading-relaxed">
             A short walkthrough of how garment manufacturers run their operation — from order to shipment — in one platform.
           </p>
-          <div className="relative bg-surface-inverse rounded-2xl overflow-hidden aspect-video shadow-2xl border border-border">
+          <div className="relative bg-gray-900 rounded-2xl overflow-hidden aspect-video shadow-2xl border border-border">
             {/* preload="metadata" avoids downloading the ~11 MB file until the visitor presses play. */}
             <video
               className="w-full h-full object-contain"
@@ -204,7 +208,7 @@ export function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <p className="text-sm font-medium text-brand-primary uppercase tracking-wide mb-2">Why choose Prime7</p>
-            <h2 id="why-prime7-heading" className="text-2xl sm:text-3xl font-bold text-text-primary">Why Garment Factories Choose Prime7</h2>
+            <h2 id="why-prime7-heading" className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-text-primary">Why Garment Factories Choose Prime7</h2>
             <p className="mt-4 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">
               We understand the unique challenges of the garment industry and built solutions that address them head-on.
             </p>
@@ -282,22 +286,28 @@ export function Landing() {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <p className="text-sm font-medium text-brand-primary uppercase tracking-wide mb-2">Integrated platform</p>
-            <h2 id="modules-heading" className="text-2xl sm:text-3xl font-bold text-text-primary">Everything You Need, All in One Place</h2>
+            <h2 id="modules-heading" className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-text-primary">Everything You Need, All in One Place</h2>
             <p className="mt-4 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">
               9 integrated modules covering every aspect of garment manufacturing and export operations.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {modules.map((mod) => (
-              <Link key={mod.title} to={mod.href}>
-                <div className="bg-surface-raised rounded-xl p-6 border-0 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1 group cursor-pointer h-full">
+              <Link
+                key={mod.title}
+                to={mod.href}
+                className="group relative block h-full overflow-hidden rounded-xl border border-border-subtle bg-surface-raised p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-brand-primary/30 hover:shadow-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
+              >
+                <ModuleCardMotif motif={mod.motif} />
+                <div className="relative">
                   <div className="h-12 w-12 rounded-xl bg-brand-primary/10 flex items-center justify-center mb-4 group-hover:bg-brand-primary/15 transition-colors">
-                    <mod.icon className="h-6 w-6 text-brand-primary" />
+                    <mod.icon className="h-6 w-6 text-brand-primary" aria-hidden />
                   </div>
                   <h3 className="text-lg font-semibold text-text-primary">{mod.title}</h3>
-                  <p className="mt-2 text-sm text-text-muted leading-relaxed">{mod.description}</p>
-                  <span className="inline-flex items-center gap-1 mt-3 text-sm text-brand-primary font-medium group-hover:underline">
-                    Learn more <ArrowRight className="h-3.5 w-3.5" />
+                  <p className="mt-2 text-sm text-text-secondary leading-relaxed">{mod.description}</p>
+                  <span className="inline-flex items-center gap-1 mt-3 text-sm text-brand-pressed font-medium group-hover:underline">
+                    Learn more <span className="sr-only">about {mod.title}</span>
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden />
                   </span>
                 </div>
               </Link>
@@ -323,7 +333,7 @@ export function Landing() {
       <GradientDivider />
 
       {/* AI Highlights */}
-      <section className="relative py-16 lg:py-24 bg-gradient-to-br from-surface-inverse via-surface-inverse to-surface-inverse text-text-inverse overflow-hidden">
+      <section className="relative py-16 lg:py-24 bg-gradient-to-br from-gray-900 via-gray-900 to-gray-900 text-white overflow-hidden">
         <div className="absolute inset-0 pointer-events-none opacity-[0.07]" style={{ backgroundImage: "url(/images/tech-pattern.svg)", backgroundSize: "cover", backgroundPosition: "center" }} />
         <div className="absolute top-10 left-[10%] w-2 h-2 bg-brand-primary/50 rounded-full pointer-events-none animate-pulse" />
         <div className="absolute top-[30%] right-[8%] w-2.5 h-2.5 bg-brand-primary/40 rounded-full pointer-events-none animate-pulse" style={{ animationDelay: "1s" }} />
@@ -332,10 +342,10 @@ export function Landing() {
             <div>
               <div className="inline-flex items-center gap-2 bg-brand-primary/15 border border-brand-primary/20 rounded-full px-4 py-1.5 mb-6">
                 <Brain className="h-4 w-4 text-brand-primary" />
-                <span className="text-sm text-brand-primary/90 font-medium">Artificial Intelligence</span>
+                <span className="text-sm text-brand-muted font-medium">Artificial Intelligence</span>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-bold">AI That Understands Your Business</h2>
-              <p className="mt-4 text-lg text-text-inverse/90 max-w-xl leading-relaxed">
+              <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight">AI That Understands Your Business</h2>
+              <p className="mt-4 text-lg text-white/90 max-w-xl leading-relaxed">
                 Leverage machine learning trained on garment industry data to make smarter, faster decisions.
               </p>
             </div>
@@ -357,7 +367,7 @@ export function Landing() {
                   <item.icon className="h-7 w-7 text-white" />
                 </div>
                 <h3 className="text-xl font-semibold mb-3">{item.title}</h3>
-                <p className="text-text-inverse/90 leading-relaxed">{item.description}</p>
+                <p className="text-white/90 leading-relaxed">{item.description}</p>
               </div>
             ))}
           </div>
@@ -370,7 +380,7 @@ export function Landing() {
       <section className="py-20 lg:py-24 bg-surface-raised">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-xl sm:text-2xl font-semibold text-text-primary">Enterprise-Grade Security</h2>
+            <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-text-primary">Enterprise-Grade Security</h2>
             <p className="mt-4 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">
               Your business data is protected with industry-leading security measures at every layer.
             </p>
@@ -398,12 +408,33 @@ export function Landing() {
       <section className="py-20 lg:py-28 bg-surface-subtle">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-2xl sm:text-3xl font-bold text-text-primary">Simple, Transparent Pricing</h2>
+            <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-text-primary">Simple, Transparent Pricing</h2>
             <p className="mt-5 text-lg text-text-secondary max-w-2xl mx-auto leading-relaxed">
               Choose the plan that fits your factory. No hidden fees — no long-term contracts.
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto items-stretch">
+          <div className="max-w-5xl mx-auto mb-12 flex flex-col gap-4 rounded-2xl border border-accent-secondary/30 bg-accent-secondary-subtle p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-secondary text-accent-secondary-foreground">
+                <Calculator className="h-5 w-5" aria-hidden />
+              </div>
+              <div>
+                <p className="font-semibold text-text-primary">Not sure which plan pays off?</p>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Enter your admin team size, weekly admin hours and salaries to estimate the time your team could get back.
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/roi-calculator"
+              onClick={() => trackEvent("cta_click", { cta: "roi_calculator", from: "landing_pricing" })}
+              className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-900/85"
+            >
+              Calculate your ROI
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-md lg:max-w-5xl mx-auto items-stretch">
             {[
               { name: "Starter", price: "BDT 15,000", period: "/mo", users: "Up to 10 users", features: ["Core ERP modules", "Merchandising & orders", "Basic inventory", "Email support"], highlighted: false },
               { name: "Growth", price: "BDT 35,000", period: "/mo", users: "Up to 50 users", features: ["All Starter features", "AI analytics & forecasting", "Production tracking", "Priority support", "Includes Free Data Migration from Excel"], highlighted: true },
@@ -413,7 +444,7 @@ export function Landing() {
                 key={plan.name}
                 className={`relative rounded-xl border bg-surface-raised p-8 lg:p-10 flex flex-col ${
                   plan.highlighted
-                    ? "ring-2 ring-brand-primary shadow-xl shadow-border/60 md:scale-105 z-10"
+                    ? "ring-2 ring-brand-primary shadow-xl shadow-border/60 lg:scale-105 z-10"
                     : "border-border shadow-sm"
                 }`}
               >
@@ -423,8 +454,8 @@ export function Landing() {
                   </div>
                 )}
                 <h3 className="text-lg font-semibold text-text-primary">{plan.name}</h3>
-                <div className="mt-4 flex items-baseline gap-1">
-                  <span className="text-4xl font-extrabold text-text-primary">{plan.price}</span>
+                <div className="mt-4 flex items-baseline gap-1 whitespace-nowrap">
+                  <span className="text-3xl xl:text-4xl font-extrabold tracking-tight text-text-primary">{plan.price}</span>
                   {plan.period && <span className="text-sm text-text-muted">{plan.period}</span>}
                 </div>
                 <p className="mt-2 text-sm text-text-muted">{plan.users}</p>
@@ -473,7 +504,7 @@ export function Landing() {
       <section className="py-20 lg:py-24 bg-surface-raised">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-xl sm:text-2xl font-semibold text-text-primary">Frequently Asked Questions</h2>
+            <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-text-primary">Frequently Asked Questions</h2>
             <p className="mt-4 text-lg text-text-secondary max-w-3xl mx-auto leading-relaxed">Common questions from garment manufacturers considering Prime7 ERP.</p>
           </div>
           <div className="space-y-4">
@@ -488,7 +519,7 @@ export function Landing() {
       <section className="py-20 lg:py-24 bg-surface-subtle border-t border-border-subtle">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8">
-            <h2 className="text-xl sm:text-2xl font-semibold text-text-primary">Explore More</h2>
+            <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-text-primary">Explore More</h2>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
             <Link to="/garments-erp" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-surface-raised border border-brand-primary/20 text-sm font-medium text-text-secondary hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-colors shadow-sm">
@@ -508,17 +539,17 @@ export function Landing() {
       </section>
 
       {/* Final CTA — clear next step */}
-      <section className="relative py-20 lg:py-24 bg-gradient-to-br from-gray-900 via-gray-900 to-surface-inverse overflow-hidden" aria-labelledby="cta-heading">
+      <section className="relative py-20 lg:py-24 bg-gradient-to-br from-gray-900 via-gray-900 to-gray-900 overflow-hidden" aria-labelledby="cta-heading">
         <img src="/images/hero-factory.svg" alt="" className="absolute inset-0 w-full h-full object-cover opacity-[0.12] pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-t from-surface-inverse/80 via-transparent to-surface-inverse/80 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-transparent to-gray-900/80 pointer-events-none" />
         <div className="absolute top-10 -left-32 w-80 h-80 bg-brand-primary/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-10 -right-32 w-80 h-80 bg-brand-primary/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-sm font-medium text-brand-primary/90 uppercase tracking-wide mb-2">Get started</p>
-          <h2 id="cta-heading" className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight">
+          <p className="text-sm font-medium text-brand-muted uppercase tracking-wide mb-2">Get started</p>
+          <h2 id="cta-heading" className="font-display text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-white leading-tight">
             Ready to Transform Your Garment Business?
           </h2>
-          <p className="mt-6 text-lg text-text-inverse/90 max-w-2xl mx-auto">
+          <p className="mt-6 text-lg text-white/90 max-w-2xl mx-auto">
             Replace disconnected spreadsheets with one system for merchandising, production, commercial and finance — set up with local support in Bangladesh.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -534,7 +565,7 @@ export function Landing() {
               Book a Demo
             </Link>
           </div>
-          <div className="mt-10 flex flex-col items-center justify-center gap-3 text-sm text-text-inverse/80 sm:flex-row sm:gap-8">
+          <div className="mt-10 flex flex-col items-center justify-center gap-3 text-sm text-white/80 sm:flex-row sm:gap-8">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-brand-primary" />
               <span>No credit card required</span>

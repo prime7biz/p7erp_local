@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -402,6 +403,78 @@ async def update_candidate_stage(
     await db.commit()
     await db.refresh(row)
     return _candidate_to_response(row)
+
+
+class CandidateHireBody(BaseModel):
+    joining_date: date
+    national_id: str | None = Field(None, max_length=64)
+    birth_registration_no: str | None = Field(None, max_length=32)
+    phone: str | None = Field(None, max_length=32)
+    department_id: int | None = None
+    designation_id: int | None = None
+    gender: str | None = Field(None, max_length=32)
+
+
+@router.post("/candidates/{candidate_id}/hire", status_code=status.HTTP_201_CREATED)
+async def hire_candidate(
+    candidate_id: int,
+    body: CandidateHireBody,
+    tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create the employee file from an approved candidate (manager/admin).
+
+    The candidate row is locked and marked hired in the same commit as the new employee, so a double
+    click cannot create two employee numbers. The CV is uploaded to the employee file afterwards.
+    """
+    from app.models.hr import EmployeeDocument
+    from app.modules.hr.router import create_employee
+    from app.modules.hr.schemas import EmployeeCreate
+
+    _ensure_user_tenant(user, tenant)
+    await _require_manager_or_admin(db, user, tenant.id)
+    cand = (
+        await db.execute(
+            select(Candidate)
+            .where(Candidate.id == candidate_id, Candidate.tenant_id == tenant.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if cand is None:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    if (cand.stage or "").lower() == "hired":
+        raise HTTPException(status_code=409, detail="Candidate is already hired")
+    parts = cand.full_name.strip().split(" ", 1)
+    cand.stage, cand.status = "hired", "closed"
+    emp = await create_employee(
+        EmployeeCreate(
+            first_name=parts[0],
+            last_name=parts[1] if len(parts) > 1 else None,
+            email=cand.email,
+            phone=body.phone or cand.phone,
+            national_id=body.national_id,
+            birth_registration_no=body.birth_registration_no,
+            joining_date=body.joining_date,
+            department_id=body.department_id,
+            designation_id=body.designation_id,
+            gender=body.gender,
+        ),
+        tenant=tenant,
+        user=user,
+        db=db,
+    )
+    cand = await _get_candidate_or_404(db, tenant.id, candidate_id)
+    cand.notes = ((cand.notes or "") + f"\nHired as {emp.employee_code} on {body.joining_date}").strip()
+    db.add(
+        EmployeeDocument(
+            tenant_id=tenant.id, employee_id=emp.id, document_type="CANDIDATE_LINK",
+            document_number=str(cand.id), notes=f"Recruitment candidate #{cand.id}", created_by=user.id,
+        )
+    )
+    await db.commit()
+    return {"employee_id": emp.id, "employee_code": emp.employee_code, "candidate_id": cand.id}
 
 
 @router.get("/interviews", response_model=list[InterviewResponse])

@@ -14,6 +14,11 @@ from app.common.username import generate_unique_username_for_tenant
 from app.common.authz import ensure_user_is_tenant_admin
 from app.common.tenant import require_tenant
 from app.common.tenant_feature_keys import normalize_feature_flags, with_effective_default_flags
+from app.modules.hr.employee_identity import EMPLOYEE_NUMBER_FORMAT_KEY
+from app.modules.hr_localization.enforcement_flags import ENFORCEMENT_FLAGS
+from app.modules.hr_localization.preset_service import PRESET_MARKER_KEY
+
+HR_BD_MANAGED_FLAG_KEYS: tuple[str, ...] = (*ENFORCEMENT_FLAGS, PRESET_MARKER_KEY, EMPLOYEE_NUMBER_FORMAT_KEY)
 from app.database import get_db
 from app.models import AuditLog, BackupJob, CommissionMode, Role, Tenant, User
 from app.modules.audit.service import log_action
@@ -123,9 +128,17 @@ async def update_settings_config(
         tenant.default_commission_mode = body.default_commission_mode
     if body.feature_flags is not None:
         try:
-            tenant.feature_flags = normalize_feature_flags(body.feature_flags)
+            new_flags = normalize_feature_flags(body.feature_flags) or {}
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        # Keys with their own guarded endpoint (approval checks + audit) keep their stored value here.
+        current = tenant.feature_flags if isinstance(tenant.feature_flags, dict) else {}
+        for key in HR_BD_MANAGED_FLAG_KEYS:
+            if key in current:
+                new_flags[key] = current[key]
+            else:
+                new_flags.pop(key, None)
+        tenant.feature_flags = new_flags
     if body.country_code is not None:
         cc = (body.country_code or "").strip().upper() or None
         tenant.country_code = cc

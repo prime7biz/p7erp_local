@@ -80,6 +80,9 @@ services:
     environment: &backend_env
       APP_ENV: ${APP_ENV:-production}
       APP_VERSION: ${APP_VERSION:-dev}
+      # true = backend/worker/beat run as the unprivileged "app" user (uid 10001). On start the
+      # entrypoint fixes ownership of backend_media once (old root-owned files). false = run as root.
+      RUN_AS_NON_ROOT: ${RUN_AS_NON_ROOT:-true}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       DATABASE_URL: postgresql://${POSTGRES_USER:-p7erp}:${POSTGRES_PASSWORD:-p7erp}@postgres:5432/${POSTGRES_DB:-p7erp}

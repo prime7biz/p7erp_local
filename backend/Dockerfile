@@ -19,6 +19,29 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     && python -c "import torch, sys; v = torch.__version__; print('torch', v); sys.exit(0 if '+cpu' in v else 'CUDA torch was installed; expected CPU-only build')" \
     && ! pip list 2>/dev/null | grep -Ei '^(nvidia-|triton )'
 
+# Unprivileged runtime user (added after pip so the big dependency layer stays cached).
+# Fixed IDs keep volume ownership the same across rebuilds and hosts
+# (manual fix if ever needed: chown -R 10001:10001 <volume path>).
+ARG APP_UID=10001
+ARG APP_GID=10001
+RUN groupadd --system --gid "${APP_GID}" app \
+    && useradd --system --uid "${APP_UID}" --gid app --home-dir /home/app --create-home \
+       --shell /usr/sbin/nologin app
+
+# Lives outside /app so the dev compose bind mount (./backend:/app) cannot hide it.
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
 COPY . .
+# Code stays root-owned (read-only for the app user); only runtime data folders are writable.
+# Bytecode is compiled here because the app user cannot write __pycache__ next to the code.
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
+    && chmod 0755 /usr/local/bin/docker-entrypoint.sh \
+    && mkdir -p /app/media /app/backups \
+    && chown app:app /app/media /app/backups \
+    && python -m compileall -q -j 0 app alembic
+
+# true = entrypoint drops from root to the "app" user; false = run as root (old behaviour).
+ENV RUN_AS_NON_ROOT=true
 EXPOSE 8000
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
